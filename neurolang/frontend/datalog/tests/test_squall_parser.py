@@ -1129,7 +1129,7 @@ def test_adjective_with_complement_keeps_complement():
         "obtain every Voxel that is reported by a Study "
         "and that is a Schaefer_voxels."
     )
-    voxel = atoms[Symbol("schaefer_voxels")][0]
+    voxel = atoms[Symbol("voxel")][0]
     study = atoms[Symbol("study")][0]
     assert atoms[Symbol("reported")] == (voxel, study)
 

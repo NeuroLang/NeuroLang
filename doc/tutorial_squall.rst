@@ -398,6 +398,26 @@ general form of this in section 7.1.
     calls** with the syntax ``PredicateName (?a, ?b, ?c)`` without a verb —
     which is used in the Bayes Factor rule body.
 
+3.8 Verbs with Several Objects
+-------------------------------
+
+A verb followed by several objects, joined by prepositions, maps to a
+relation with one column per argument, in order: subject first, then each
+object.  With ``weighs(study, term, weight)``:
+
+.. code-block:: squall
+
+    obtain every Study ?s that weighs 'pain' with ?w.
+
+reads ``weighs(s, 'pain', w)``.  The prepositions (``with``, ``by``,
+``to``, …) only separate the objects; they do not select columns.  An
+adjective takes objects in the same way: ``every Voxel that is reported
+by a Study`` reads ``reported(voxel, study)``.
+
+The relation must have exactly that many columns.  To match a ternary
+relation without a verb, use the noun with a tuple subject instead
+(section 10.4): ``where (?s; ?t; ?w) is a Term_weight``.
+
 
 Part 4: Defining Rules
 ========================
@@ -1230,7 +1250,13 @@ tuple belongs to the relation named by ``Noun``:
     define as SelectedPeak every Peak_reported (?i; ?j; ?k; ?s)
         where (?i; ?j; ?k; ?s) is an Activation.
 
-The scalar form works too: ``where ?s is a Selected_study``.
+The scalar form works too: ``where ?s is a Selected_study``.  The tuple
+form can be combined with other conditions in the same ``where`` clause:
+
+.. code-block:: squall
+
+    obtain every Study ?s
+        where (?s; ?t; ?w) is a Term_weight and ?t is 'pain'.
 
 10.5 Nested Relative Clauses
 -----------------------------

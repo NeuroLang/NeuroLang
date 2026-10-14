@@ -70,6 +70,7 @@ from ...datalog.expressions import AggregationApplication as _AggApp
 from ...exceptions import SquallSemanticError
 from ...expressions import (
     Constant,
+    Expression,
     FunctionApplication,
     Query,
     Symbol,
@@ -1877,8 +1878,17 @@ class SquallTransformer(Transformer):
         return ('_rel', lambda x: noun(*body_syms))
 
     def rel_adj1(self, args):
+        """
+        Handle ``adj1 [cp]``: ``reported`` or ``reported by a Study``.
+
+        With a complement the adjective is n-ary like a verb:
+        ``x is reported by a Study`` builds ``reported(x, study)``.
+        """
         adj = args[0]
-        return ('_rel', adj)
+        cp = args[1] if len(args) > 1 else None
+        if cp is None:
+            return ('_rel', adj)
+        return ('_rel', lambda x: _apply_ops(cp, adj, x))
 
     def comparison(self, args):
         tokens = []
@@ -1970,10 +1980,22 @@ class SquallTransformer(Transformer):
         return rel
 
     def vpbe_npc(self, args):
+        """
+        Handle ``is a Noun`` / ``is 'value'``.
+
+        A tuple subject, ``(?s; ?t; ?w) is a Term_weight``, fills the
+        noun's columns: ``term_weight(s, t, w)``.
+        """
         npc = args[0]
-        if callable(npc) and not isinstance(npc, (Symbol, Constant)):
-            return lambda x: npc(lambda y: Constant(eq)(x, y))
-        return lambda x: Constant(eq)(x, npc)
+        if not callable(npc) or isinstance(npc, (Symbol, Constant)):
+            return lambda x: Constant(eq)(x, npc)
+        ng1 = getattr(npc, '_npc_ng1', None)
+
+        def vp(x):
+            if isinstance(x, tuple) and ng1 is not None:
+                return ng1(x)
+            return npc(lambda y: Constant(eq)(x, y))
+        return vp
 
     def vphave_noun2(self, args):
         noun2 = args[0]
@@ -2006,20 +2028,23 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def npc_det(self, args):
+        """
+        Handle ``det ng1`` complements; the CPS keeps ``ng1`` as ``_npc_ng1``.
+        """
         items = [a for a in args if a is not None]
-        if len(items) >= 2:
-            det_val = items[0]
-            ng1 = items[1]
-            if callable(det_val) and not isinstance(det_val, (Symbol, Constant)):
-                return det_val(ng1)
-            return self.det_the([])(ng1)
-        elif len(items) == 1:
-            ng1 = items[0]
-            return self.det_the([])(ng1)
-        raise self._make_error(
-            "Empty noun phrase complement — expected a noun or determiner "
-            "+ noun after the verb."
-        )
+        if not items:
+            raise self._make_error(
+                "Empty noun phrase complement — expected a noun or "
+                "determiner + noun after the verb."
+            )
+        ng1 = items[-1]
+        det_val = items[0] if len(items) >= 2 else None
+        if callable(det_val) and not isinstance(det_val, (Symbol, Constant)):
+            npc = det_val(ng1)
+        else:
+            npc = self.det_the([])(ng1)
+        npc._npc_ng1 = ng1
+        return npc
 
     # ---- Operations / Prepositional Phrases ----
 
@@ -2033,14 +2058,17 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def ops_rec(self, args):
+        """
+        Chain the objects of an n-ary verb: ``weighs ?t with ?w``.
+
+        The result is a CPS over all the objects, so ``x weighs ?t with ?w``
+        builds ``weighs(x, t, w)``.
+        """
         prev = args[0]
         new_op = args[-1]
         if callable(prev) and callable(new_op):
             def combined(f):
-                return lambda x: _conj_flat(
-                    prev(f)(x) if callable(prev(f)) else prev(f),
-                    new_op(f)(x) if callable(new_op(f)) else new_op(f)
-                )
+                return prev(lambda *ys: new_op(lambda z: f(*ys, z)))
             return combined
         return new_op
 
@@ -2056,28 +2084,12 @@ class SquallTransformer(Transformer):
     def bool_disjunction(self, args):
         if len(args) == 1:
             return args[0]
-        formulas = []
-        for a in args:
-            if isinstance(a, tuple) and a[0] == '_rel':
-                formulas.append(a[1])
-            else:
-                formulas.append(a)
-        if all(callable(f) and not isinstance(f, (Symbol, Constant, FunctionApplication)) for f in formulas):
-            return lambda x: Disjunction(tuple(f(x) for f in formulas))
-        return Disjunction(tuple(formulas))
+        return _combine_bool(args, Disjunction)
 
     def bool_conjunction(self, args):
         if len(args) == 1:
             return args[0]
-        formulas = []
-        for a in args:
-            if isinstance(a, tuple) and a[0] == '_rel':
-                formulas.append(a[1])
-            else:
-                formulas.append(a)
-        if all(callable(f) and not isinstance(f, (Symbol, Constant, FunctionApplication)) for f in formulas):
-            return lambda x: Conjunction(tuple(f(x) for f in formulas))
-        return Conjunction(tuple(formulas))
+        return _combine_bool(args, Conjunction)
 
     def bool_negation(self, args):
         inner = args[0]
@@ -2126,7 +2138,7 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def expr_atom_tuple(self, args):
-        return tuple(args)
+        return tuple(_unwrap_label(a) for a in args)
 
     def expr_atom_fun(self, args):
         func = args[0]
@@ -2655,6 +2667,53 @@ def _extract_datalog_body(cps_np, head_args):
     extracted = _flatten_to_datalog(result)
     body_parts.extend(extracted)
     return body_parts
+
+
+def _as_predicate(item):
+    """
+    Unwrap a ``('_rel', f)`` item and turn a bare verb Symbol into a predicate.
+    """
+    if isinstance(item, tuple) and len(item) == 2 and item[0] == '_rel':
+        item = item[1]
+    if isinstance(item, Symbol):
+        return lambda x, _verb=item: (
+            _verb(*x) if isinstance(x, tuple) else _verb(x)
+        )
+    return item
+
+
+def _is_predicate(item):
+    return callable(item) and not isinstance(item, Expression)
+
+
+def _combine_bool(args, operation):
+    """
+    Combine the operands of ``and`` / ``or``.
+
+    Predicates (verb phrases, relative clauses) are combined into one
+    predicate; formulas (sentences) into one formula.
+    """
+    predicates = [_as_predicate(a) for a in args]
+    if all(_is_predicate(f) for f in predicates):
+        return lambda x: operation(tuple(f(x) for f in predicates))
+    return operation(_bool_formulas(args))
+
+
+def _bool_formulas(args):
+    """
+    Return the operands of a sentence-level ``and`` / ``or`` as formulas.
+    """
+    formulas = tuple(
+        a[1] if isinstance(a, tuple) and a[0] == '_rel' else a for a in args
+    )
+    if any(_is_predicate(f) for f in formulas):
+        raise SquallSemanticError(
+            "Cannot combine a relative clause or verb phrase with a full "
+            "sentence using 'and'/'or'.  Repeat the relative pronoun "
+            "('that …' / 'where …') before each part, e.g. "
+            "'every Study that mentions a Term and where ?x is …'."
+        )
+    return formulas
 
 
 def _with_group_vars(head_vars):
