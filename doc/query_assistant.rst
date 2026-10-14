@@ -103,8 +103,9 @@ order:
         api: openai
         base_url: https://albert.api.etalab.gouv.fr/v1
         api_key_env: ALBERT_API_KEY
-        model: albert-large
+        model: gemma-4-31b-it
         tool_calling: text
+        requests_per_minute: 24       # the key's rate limit
       openrouter:
         api: openai
         base_url: https://openrouter.ai/api/v1

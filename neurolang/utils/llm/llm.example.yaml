@@ -18,7 +18,7 @@
 #   text    a Thought / Action / Observation protocol that any chat
 #           model can follow
 
-default_provider: openrouter
+default_provider: albert
 
 providers:
   openrouter:
@@ -30,16 +30,16 @@ providers:
     headers:
       X-Title: NeuroLang
 
-  # Albert, the LLM service of the French State (DINUM / Etalab).
-  # List the models available to your key with GET /v1/models and pick
-  # one of type text-generation.
+  # Albert, the LLM service of the French State (DINUM / Etalab), with
+  # Gemma 4 31B: the default. List the models available to your key with
+  # GET /v1/models.
   albert:
     api: openai
     base_url: https://albert.api.etalab.gouv.fr/v1
     api_key_env: ALBERT_API_KEY
-    model: albert-large
+    model: gemma-4-31b-it
     tool_calling: text
-    requests_per_minute: 20     # the key's rate limit, if any
+    requests_per_minute: 24     # Albert keys allow 25 a minute
 
   anthropic:
     api: anthropic

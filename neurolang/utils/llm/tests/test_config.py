@@ -22,7 +22,8 @@ PROVIDERS = {
 
 def test_example_configuration_is_valid():
     config = load_config(EXAMPLE_CONFIG)
-    assert config.default_provider == "openrouter"
+    assert config.default_provider == "albert"
+    assert config.provider().model == "gemma-4-31b-it"
     assert {"openrouter", "albert", "anthropic", "claude-code"} <= set(
         config.providers
     )
