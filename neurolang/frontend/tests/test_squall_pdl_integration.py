@@ -1089,7 +1089,7 @@ def test_execute_squall_count_message_uses_squall_name(nl_study_tfidf):
         nl_study_tfidf.execute_squall_program(
             "obtain every Count of the Term_in_study_tfidf."
         )
-    assert "len" not in str(info.value)
+    assert "'len'" not in str(info.value)
 
 
 def test_execute_squall_count_of_probabilistic_facts_is_not_multicolumn():

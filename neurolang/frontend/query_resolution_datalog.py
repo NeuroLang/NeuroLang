@@ -7,8 +7,7 @@ as well as Region and Neurosynth capabilities
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
-    ForbiddenDisjunctionError, NeuroLangException, SquallSemanticError,
-    UnsupportedProgramError,
+    ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
 from typing import (
     AbstractSet,
@@ -23,6 +22,9 @@ from typing import (
 from uuid import uuid1
 
 import pandas as pd
+
+from ..exceptions import SquallSemanticError
+from ..logic.expression_processing import extract_logic_atoms
 
 from .. import datalog
 from .. import expressions as ir
@@ -40,7 +42,6 @@ from ..datalog.expressions import (
     AggregationApplication,
     predicate_identity,
 )
-from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
@@ -64,26 +65,6 @@ from .show_ra import (
 )
 
 __all__ = ["QueryBuilderDatalog"]
-
-
-def _aggregation_column_message(aggregation, functor, arity):
-    """
-    Explain how to name the aggregated column of a multi-column relation.
-    """
-    func = aggregation.functor
-    func = getattr(func, 'value', func)
-    func_name = getattr(func, '__name__', getattr(func, 'name', str(func)))
-    noun = functor.name[:1].upper() + functor.name[1:]
-    blanks = '; '.join(['_'] * (arity - 1))
-    return (
-        f"Cannot aggregate '{func_name}' over '{noun}': the relation has "
-        f"{arity} columns but the aggregation names a single one, so it "
-        "would silently aggregate the first column.  Name the column to "
-        "aggregate with a tuple label, using _ for the other columns, "
-        f"e.g. 'the {func_name.capitalize()} of the {noun} ({blanks}; ?v)'; "
-        "add 'per ?x' to aggregate per value of a labelled column, e.g. "
-        f"'every {func_name.capitalize()} of the {noun} (?x; ...; ?v) per ?x'."
-    )
 
 
 def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
@@ -443,48 +424,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                         "e.g. #set_backend('pandas')."
                     )
 
-    def _relation_arity(self, functor):
-        """
-        Return the number of columns of ``functor``, or 0 if unknown.
-        """
-        try:
-            return len(self.program_ir.predicate_terms(functor))
-        except NeuroLangException:
-            return 0
-
-    def _check_squall_aggregation_columns(self, head_args, body):
-        """
-        Reject a one-variable aggregation over a multi-column relation.
-
-        ``the Max of the R`` with a 3-column ``R`` binds only ``R``'s first
-        column, so the aggregate would be computed over it without warning.
-        """
-        for aggregation in head_args:
-            if not (
-                isinstance(aggregation, AggregationApplication)
-                and len(aggregation.args) == 1
-            ):
-                continue
-            for atom in extract_logic_atoms(body):
-                if atom.args != aggregation.args:
-                    continue
-                arity = self._relation_arity(atom.functor)
-                if arity > 1:
-                    raise SquallSemanticError(_aggregation_column_message(
-                        aggregation, atom.functor, arity
-                    ))
-
-    def _check_squall_rule_body(self, rule):
-        """
-        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
-        """
-        if isinstance(rule, datalog.Implication) and isinstance(
-            rule.consequent, ir.FunctionApplication
-        ):
-            self._check_squall_aggregation_columns(
-                rule.consequent.args, rule.antecedent
-            )
-
     def _walk_squall_rule(self, rule):
         """Walk a single SQUALL rule or choice definition into the engine."""
         self._check_squall_rule_body(rule)
@@ -795,6 +734,84 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             "expressions) are not yet implemented. "
             "Use 'define as X as an equiprobable choice over every Y' for now."
         )
+
+    @staticmethod
+    def _aggregation_column_message(aggregation, functor, arity):
+        """
+        Explain how to name the aggregated column of a multi-column relation.
+        """
+        func = aggregation.functor
+        func = getattr(func, 'value', func)
+        name = getattr(func, '__name__', getattr(func, 'name', str(func)))
+        name = {'len': 'count', 'mean': 'average'}.get(name, name)
+        name = name[:1].upper() + name[1:]
+        noun = functor.name[:1].upper() + functor.name[1:]
+        blanks = '; '.join(['_'] * (arity - 1))
+        return (
+            f"Cannot aggregate '{name}' over '{noun}': the relation has "
+            f"{arity} columns but the aggregation names a single one, so "
+            "it would silently aggregate the first column.  Name the column "
+            "to aggregate with a tuple label, using _ for the other "
+            f"columns, e.g. 'the {name} of the {noun} ({blanks}; ?v)'; add "
+            "'per ?x' to aggregate per value of a labelled column, e.g. "
+            f"'every {name} of the {noun} (?x; ...; ?v) per ?x'."
+        )
+
+    def _relation_columns(self, functor):
+        """
+        Return the number of value columns of ``functor``, or 0 if unknown.
+
+        The probability column of stored probabilistic facts and choices
+        is not counted.
+        """
+        try:
+            columns = len(self.program_ir.predicate_terms(functor))
+        except NeuroLangException:
+            return 0
+        probabilistic = (
+            getattr(self.program_ir, 'pfact_pred_symbs', set())
+            | getattr(self.program_ir, 'pchoice_pred_symbs', set())
+        )
+        if functor in probabilistic and isinstance(
+            self.program_ir.symbol_table[functor], ir.Constant
+        ):
+            columns -= 1
+        return columns
+
+    def _check_squall_aggregation_columns(self, head_args, body):
+        """
+        Reject a one-variable aggregation over a multi-column relation.
+
+        ``the Max of the R`` with a 3-column ``R`` binds only ``R``'s first
+        column, so the aggregate would be computed over it without warning.
+        """
+        for aggregation in head_args:
+            if not (
+                isinstance(aggregation, AggregationApplication)
+                and len(aggregation.args) == 1
+            ):
+                continue
+            for atom in extract_logic_atoms(body):
+                if atom.args != aggregation.args:
+                    continue
+                columns = self._relation_columns(atom.functor)
+                if columns > 1:
+                    raise SquallSemanticError(
+                        self._aggregation_column_message(
+                            aggregation, atom.functor, columns
+                        )
+                    )
+
+    def _check_squall_rule_body(self, rule):
+        """
+        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
+        """
+        if isinstance(rule, datalog.Implication) and isinstance(
+            rule.consequent, ir.FunctionApplication
+        ):
+            self._check_squall_aggregation_columns(
+                rule.consequent.args, rule.antecedent
+            )
 
     def query(
         self, *args, show_rewritten: bool = False, dry_run: bool = False,
