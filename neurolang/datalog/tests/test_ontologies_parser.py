@@ -905,3 +905,16 @@ def test_load_individuals_with_subclass_reasoning():
     assert not any(
         getattr(s, "name", "").startswith("fresh") for s in nl.symbol_table
     )
+
+
+def test_negation_beside_a_class_with_subclasses():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(KNOWLEDGE_GRAPH), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    unmanaged = nl.execute_datalog_program(
+        "managed(x) :- pv:manages(m, x)\n"
+        "ans(e) :- pv:Employee(e), ~managed(e)"
+    )
+    assert set(unmanaged) == {("http://example.org/m1",)}
