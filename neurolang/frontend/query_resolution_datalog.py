@@ -105,21 +105,6 @@ def _aggregation_column_message(aggregation, functor, arity):
     )
 
 
-def _too_many_arguments_message(atom, arity):
-    """
-    Explain an atom with more arguments than its relation has columns.
-    """
-    name = atom.functor.name
-    return (
-        f"'{name}' has {arity} column{'s' if arity != 1 else ''} but the "
-        f"sentence gives it {len(atom.args)} arguments.  A verb with "
-        "several objects ('?s weighs ?t with ?w') needs one column per "
-        "argument.  To use a value stored in another relation, name that "
-        "relation with a tuple subject, e.g. "
-        "'where (?s; ?t; ?w) is a Term_in_study_tfidf'."
-    )
-
-
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     """
     Complements QueryBuilderBase with query capabilities,
@@ -489,27 +474,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                         aggregation, atom.functor, arity
                     ))
 
-    def _check_squall_atom_arities(self, body):
-        """
-        Reject atoms with more arguments than their relation has columns.
-        """
-        for atom in extract_logic_atoms(body):
-            if not isinstance(atom.functor, ir.Symbol):
-                continue
-            arity = self._relation_arity(atom.functor)
-            if 0 < arity < len(atom.args):
-                raise SquallSemanticError(
-                    _too_many_arguments_message(atom, arity)
-                )
-
     def _check_squall_rule_body(self, rule):
         """
-        Apply the SQUALL body checks to a rule definition.
+        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
         """
         if isinstance(rule, datalog.Implication) and isinstance(
             rule.consequent, ir.FunctionApplication
         ):
-            self._check_squall_atom_arities(rule.antecedent)
             self._check_squall_aggregation_columns(
                 rule.consequent.args, rule.antecedent
             )
@@ -562,7 +533,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             head_vars = tuple(head)
 
         body = query.body
-        self._check_squall_atom_arities(body)
         self._check_squall_aggregation_columns(head_vars, body)
         if (
             len(head_vars) == 1

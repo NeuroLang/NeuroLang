@@ -5,6 +5,7 @@ import pytest
 
 from neurolang.exceptions import (
     ForbiddenDisjunctionError, SquallSemanticError,
+    WrongArgumentsInPredicateError,
 )
 from neurolang.expressions import Symbol as ir_Symbol
 
@@ -490,10 +491,12 @@ def test_execute_squall_prepositional_ternary_verb(nl_ternary):
     assert _column0_set(result) == {1, 2}
 
 
-def test_execute_squall_too_many_verb_objects_is_explained(nl_ternary):
-    """A ternary use of a binary relation names it and the noun form."""
+def test_execute_squall_too_many_verb_objects_is_an_arity_error(
+    nl_ternary
+):
+    """A ternary use of a binary relation is reported as an arity error."""
     nl_ternary.add_tuple_set([(1, "pain")], name="mentions")
-    with pytest.raises(SquallSemanticError, match=r"'mentions' has 2"):
+    with pytest.raises(WrongArgumentsInPredicateError):
         nl_ternary.execute_squall_program(
             "obtain every Study ?s that mentions 'pain' with ?w."
         )
