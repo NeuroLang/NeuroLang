@@ -1527,7 +1527,6 @@ def test_tuple_label_with_constant_and_relative_clause():
     ) in atoms
 
 
-
 def _counting_parts(result):
     """Split a counting-quantifier program into its count rule and query."""
     assert isinstance(result, SquallProgram)

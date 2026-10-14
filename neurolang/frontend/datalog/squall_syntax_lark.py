@@ -284,6 +284,7 @@ _COUNT_COMPARISONS = {
     ("at", "most"): (gt, True),
 }
 
+
 def _count_rows(*columns):
     """Count the rows of a group of several columns (a tuple count)."""
     return len(columns[0])

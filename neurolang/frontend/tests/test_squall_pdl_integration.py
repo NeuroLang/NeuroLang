@@ -888,7 +888,6 @@ def test_execute_squall_tuple_label_constant_in_rule(nl_tfidf):
     assert set(map(tuple, df.values.tolist())) == {("s1", 0.5), ("s2", 0.2)}
 
 
-
 # ---------------------------------------------------------------------------
 # Counting quantifiers: more than / at least / fewer than / at most
 # ---------------------------------------------------------------------------
@@ -916,7 +915,7 @@ def nl_mentions():
     return engine
 
 
-def _first_column(result):
+def _first_column_values(result):
     return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
 
 
@@ -936,7 +935,7 @@ def test_execute_squall_counting_quantifier_subject(
     result = nl_mentions.execute_squall_program(
         f"obtain every Term that {quantifier} Studies mention."
     )
-    assert _first_column(result) == expected
+    assert _first_column_values(result) == expected
 
 
 @pytest.mark.parametrize("sentence,expected", [
@@ -948,7 +947,7 @@ def test_execute_squall_counting_quantifier_object(
     nl_mentions, sentence, expected
 ):
     result = nl_mentions.execute_squall_program(sentence)
-    assert _first_column(result) == expected
+    assert _first_column_values(result) == expected
 
 
 @pytest.mark.parametrize("voxels", ["Voxels (?x; ?y; ?z)", "Voxels in 3D"])
@@ -964,7 +963,7 @@ def test_execute_squall_counting_quantifier_counts_tuples(voxels):
     result = engine.execute_squall_program(
         f"obtain every Study that reports at least 2 {voxels}."
     )
-    assert _first_column(result) == {"s1"}
+    assert _first_column_values(result) == {"s1"}
 
 
 def test_execute_squall_counting_quantifier_in_rule(nl_mentions):
@@ -972,7 +971,7 @@ def test_execute_squall_counting_quantifier_in_rule(nl_mentions):
         "define as Popular every Term that at least 2 Studies mention. "
         "obtain every Popular."
     )
-    assert _first_column(result) == {"t1", "t2"}
+    assert _first_column_values(result) == {"t1", "t2"}
 
 
 # ---------------------------------------------------------------------------
