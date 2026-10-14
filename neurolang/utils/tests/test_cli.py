@@ -1691,3 +1691,76 @@ def test_squall_column_names_keep_user_variables():
     )
     df = pd.DataFrame({"s": [1]})
     assert list(_rename_unnamed_columns(df, names.get("obtain_0")).columns) == ["s"]
+
+
+_PAIN_STUDY = "define as Pain_study every Study that mentions 'pain'.\n"
+_SELECTED = (
+    "define as Selected with inferred probability every Study that is a "
+    "Selected_study and that mentions 'pain'.\n"
+)
+
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        (_PAIN_STUDY + "obtain every Pain_study.", {"obtain_0": ["study_id"]}),
+        (
+            "obtain the Count of the Study that mentions 'pain'.",
+            {"obtain_0": ["count"]},
+        ),
+        (
+            "obtain the Count of the Study ?s that mentions 'pain'.",
+            {"obtain_0": ["count"]},
+        ),
+        ("obtain every Study that mentions 'pain' as Pain.", {"pain": ["pain"]}),
+        (
+            _SELECTED + "obtain every Selected.",
+            {"obtain_0": ["study_id", "probability"]},
+        ),
+        (
+            "obtain every Voxel in 3D that a Study reports.",
+            {"obtain_0": ["i", "j", "k"]},
+        ),
+        (
+            "obtain every Voxel (?x; ?y; ?z) that a Study reports.",
+            {"obtain_0": ["x", "y", "z"]},
+        ),
+        (
+            "define as Pain_voxel every Voxel in 3D that a Study reports.\n"
+            "obtain every Pain_voxel.",
+            {"obtain_0": ["i", "j", "k"]},
+        ),
+    ],
+)
+def test_squall_column_names_of_generated_columns(program, expected):
+    """Check no result keeps a generated column name."""
+    from neurolang.utils.cli import squall_column_names
+
+    assert squall_column_names("neurosynth", program) == expected
+
+
+def test_squall_column_names_of_rules_defined_before():
+    """Check a rule defined by an earlier program names its columns."""
+    from neurolang.utils.cli import squall_column_names
+
+    rules = squall_parser(_PAIN_STUDY + _SELECTED).formulas
+    assert squall_column_names(
+        "neurosynth", "obtain every Pain_study.", rules=rules
+    ) == {"obtain_0": ["study_id"]}
+    assert squall_column_names(
+        "neurosynth", "obtain every Selected.", rules=rules
+    ) == {"obtain_0": ["study_id", "probability"]}
+
+
+@pytest.mark.parametrize(
+    "column, generated",
+    [
+        (0, True), ("c0", True), ("c12", True), ("fresh_00000001", True),
+        ("3", True), ("count", False), ("cs", False), ("c", False),
+    ],
+)
+def test_generated_columns(column, generated):
+    """Check only positions and fresh names count as generated."""
+    from neurolang.utils.cli import _is_generated_column
+
+    assert _is_generated_column(column) is generated
