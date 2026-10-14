@@ -2,6 +2,7 @@
 
 import gzip
 import io
+import re
 
 import pytest
 
@@ -103,10 +104,13 @@ def test_datalog_shows_squall_translation(app, capsys):
     assert "── query (obtain_0) ──" in capsys.readouterr().out
 
 
-def test_datalog_needs_squall_query(app):
-    app._execute_and_display("ans(x) :- active(x)")
-    app._handle_dot_command(".datalog")
-    assert "use .rewritten for a Datalog query" in _output(app)
+def test_datalog_prints_the_last_datalog_query(app, capsys):
+    app._execute_and_display("fan(x) :- active(x)\nans(x) :- fan(x)")
+    capsys.readouterr()
+    out = _command(app, ".datalog") + capsys.readouterr().out
+    assert "use .rewritten" not in out
+    assert "── rule ──\nfan(x) :-\n    active(x)" in out
+    assert "── query ──\nans(x) :-\n    fan(x)" in out
 
 
 def _command(app, line):
@@ -621,3 +625,47 @@ def test_facts_added_to_an_engine_relation(app, capsys):
     assert sets.count("person") == 1
     _command(app, ".clear")
     assert _query(app, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+@pytest.fixture
+def likes(app):
+    """Return the REPL *app* where ``likes`` is a rule of the session."""
+    app._execute_and_display("likes(x, y) :- person(x), plays(y)")
+    return app
+
+
+@pytest.mark.parametrize(
+    "squall, query",
+    [
+        (False, "ans(x) :- likes(x, 'alice')"),
+        (True, "obtain every Person that likes 'alice'."),
+    ],
+)
+def test_rewritten_shows_the_magic_sets_of_a_query(
+    likes, capsys, squall, query
+):
+    likes.settings.squall = squall
+    likes._execute_and_display(query)
+    capsys.readouterr()
+    out = _command(likes, ".rewritten") + capsys.readouterr().out
+    assert "── rewritten program ──" in out
+    assert "likes" in out and "plays(" in out
+    assert not likes.failed
+
+
+@pytest.mark.parametrize(
+    "squall, program",
+    [
+        (False, "fan(x) :- person(x), plays(x)\nans(x) :- fan(x)"),
+        (True, "define as Fan every person that plays. obtain every Fan."),
+    ],
+)
+def test_rewritten_has_the_rules_of_the_last_query_once(
+    app, capsys, squall, program
+):
+    app.settings.squall = squall
+    app._execute_and_display(program)
+    capsys.readouterr()
+    out = _command(app, ".rewritten") + capsys.readouterr().out
+    assert len(re.findall(r"^fan\(", out, re.MULTILINE)) == 1
+    assert _command(app, ".idb fan").count("fan(") == 1
