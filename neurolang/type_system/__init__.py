@@ -410,9 +410,34 @@ def replace_type_variable_fix_python36_37(type_hint, new_args):
     return new_type
 
 
+def _function_signature(function):
+    """
+    Return the signature of *function*, with its annotations evaluated.
+
+    Annotations written as strings (e.g. under ``from __future__ import
+    annotations``) are evaluated; those that cannot be are left out.
+    """
+    try:
+        return inspect.signature(function, eval_str=True)
+    except Exception:
+        signature = inspect.signature(function)
+        return signature.replace(
+            parameters=[
+                p.replace(annotation=inspect.Parameter.empty)
+                if isinstance(p.annotation, str) else p
+                for p in signature.parameters.values()
+            ],
+            return_annotation=(
+                inspect.Parameter.empty
+                if isinstance(signature.return_annotation, str)
+                else signature.return_annotation
+            ),
+        )
+
+
 def typing_callable_from_annotated_function(function):
     """Get typing.Callable type representing the annotated function type."""
-    signature = inspect.signature(function)
+    signature = _function_signature(function)
     parameter_types = [
         v.annotation if v.annotation is not inspect.Parameter.empty
         else Unknown
