@@ -15,8 +15,8 @@ engines:
         resolution_mm: 2
         yeo_networks: 17
     datalog_init: |
-      study_with_peaks(S) :- peak_reported(I, J, K, S).
-      schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
+      study_with_peaks(s) :- peak_reported(i, j, k, s).
+      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
@@ -26,46 +26,91 @@ engines:
       # selected_study:
       #  source: study
       #  description: "Uniform probabilistic choice over studies"
+    # Symbols withheld from the SQUALL completion: their argument order
+    # breaks sentences (``a Study peak_reported …`` binds the study to a
+    # voxel index).  They stay usable when typed; ``reports`` and
+    # ``labels`` are the forms that read as SQUALL verbs.
+    hidden_predicates: [peak_reported, schaefer_voxels]
+    # Each predicate declares its arguments, in column order: the entities
+    # it relates, each a sort over the columns it spans.  A voxel (i, j, k)
+    # is one argument, so ``reports`` relates a study and a voxel.  The
+    # probability column of a probabilistic symbol (``probability: true``)
+    # is not an argument.  ``columns`` and ``arity`` (the number of
+    # columns) are derived from the arguments.
     predicates:
       peak_reported:
-        arity: 4
-        columns: [i, j, k, study_id]
         description: "Reported activation peaks in voxel coordinates"
+        arguments:
+          - {sort: voxel, columns: [i, j, k], type: int}
+          - {sort: study, columns: [study_id], type: int}
       study:
-        arity: 1
-        columns: [study_id]
         description: "All study identifiers"
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
       term_in_study_tfidf:
-        arity: 3
-        columns: [study_id, term, tfidf]
         description: "Term frequency–inverse document frequency values"
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
+          - {sort: term, columns: [term], type: str}
+          - {sort: tfidf, columns: [tfidf], type: float}
       selected_study:
-        arity: 1
-        columns: [study_id]
         description: "Uniform probabilistic choice over studies"
+        probability: true
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
       voxel:
-        arity: 3
-        columns: [i, j, k]
         description: "Every voxel index (i, j, k) of the MNI template grid"
+        arguments:
+          - {sort: voxel, columns: [i, j, k], type: int}
       term:
-        arity: 1
-        columns: [term]
         description: "Every term of the TF-IDF vocabulary"
+        arguments:
+          - {sort: term, columns: [term], type: str}
+      study_with_peaks:
+        description: "Studies reporting at least one activation peak"
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
       mentions:
-        arity: 2
-        columns: [study_id, term]
         description: "Studies mentioning a term (TF-IDF above 0.03)"
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
+          - {sort: term, columns: [term], type: str}
       reports:
-        arity: 4
-        columns: [study_id, i, j, k]
         description: "Studies reporting an activation peak at a voxel"
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
+          - {sort: voxel, columns: [i, j, k], type: int}
       weighted_mention:
-        arity: 3
-        columns: [study_id, term, tfidf]
         description: >-
           Every TF-IDF weight of a term in a study, as term_in_study_tfidf;
           reads in SQUALL as
           every Weighted_mention (?s; ?t; ?w) such that ?w is greater than 0.1
+        arguments:
+          - {sort: study, columns: [study_id], type: int}
+          - {sort: term, columns: [term], type: str}
+          - {sort: tfidf, columns: [tfidf], type: float}
+      schaefer:
+        description: "Schaefer 2018 parcel label and its region"
+        arguments:
+          - {sort: label, columns: [label], type: str}
+          - {sort: region, columns: [region], type: ExplicitVBR}
+      schaefer_label:
+        description: "Every Schaefer 2018 parcel label"
+        arguments:
+          - {sort: label, columns: [label], type: str}
+      schaefer_voxels:
+        description: >-
+          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
+        arguments:
+          - {sort: atlas_voxel, columns: [i, j, k], type: int}
+          - {sort: label, columns: [label], type: str}
+      labels:
+        description: >-
+          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
+          grid (not the grid of voxel and reports)
+        arguments:
+          - {sort: label, columns: [label], type: str}
+          - {sort: atlas_voxel, columns: [i, j, k], type: int}
     examples:
       datalog:
         - "ans(s) :- mentions(s, 'pain')"
@@ -92,9 +137,20 @@ engines:
       right_region(N, R) :- destrieux(N, R), startswith('rh', N)
     predicates:
       destrieux:
-        arity: 2
-        columns: [name, region]
         description: "Cortical region name and ExplicitVBR geometry"
+        arguments:
+          - {sort: label, columns: [name], type: str}
+          - {sort: region, columns: [region], type: ExplicitVBR}
+      left_region:
+        description: "Left-hemisphere Destrieux regions"
+        arguments:
+          - {sort: label, columns: [name], type: str}
+          - {sort: region, columns: [region], type: ExplicitVBR}
+      right_region:
+        description: "Right-hemisphere Destrieux regions"
+        arguments:
+          - {sort: label, columns: [name], type: str}
+          - {sort: region, columns: [region], type: ExplicitVBR}
 
   # Example template usage (commented out — uncomment to enable):
   #

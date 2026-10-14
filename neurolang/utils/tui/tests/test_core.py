@@ -478,11 +478,23 @@ def test_batch_stops_at_quit(small_app):
 
 
 def test_banner_shows_relations_without_columns_by_name(engine):
+    from unittest.mock import patch
+
     from neurolang.utils.tui.commands import engine_relations
 
-    relations = engine_relations("neurosynth")
-    assert "schaefer" in relations
-    assert "schaefer()" not in relations
+    predicates = {"schaefer": {"columns": []}, "p": {"columns": ["x"]}}
+    with patch(
+        "neurolang.utils.engine_registry.get_predicates",
+        return_value=predicates,
+    ):
+        relations = engine_relations("neurosynth")
+    assert relations == ["schaefer", "p(x)"]
+
+
+def test_banner_shows_the_atlas_columns():
+    from neurolang.utils.tui.commands import engine_relations
+
+    assert "schaefer(label, region)" in engine_relations("neurosynth")
 
 
 def test_no_sort_warning_on_empty_result(engine, capsys):

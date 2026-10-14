@@ -69,7 +69,7 @@ Usage
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -261,7 +261,7 @@ def get_predicates(
 
     """
     cfg = get_engine_config(name, yaml_path)
-    predicates = dict(cfg.get("predicates", {}))
+    predicates = _declared_predicates(cfg)
 
     for rel_key, rel_cfg in cfg.get("relations", {}).items():
         if isinstance(rel_cfg, str):
@@ -309,6 +309,105 @@ def get_predicates(
             )
 
     return predicates
+
+
+class Argument(NamedTuple):
+    """
+    An argument of a predicate: an entity of a *sort* over *columns*.
+
+    A voxel is one argument of sort ``voxel`` over the columns ``i, j,
+    k``; *type* names the type of the values of its columns.
+    """
+
+    sort: str
+    columns: Tuple[str, ...]
+    type: str = ""
+
+
+def _declared_predicate(name: str, info: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return the metadata *info* of *name* completed from its arguments.
+
+    When *info* declares ``arguments``, its ``columns`` are theirs in
+    order, its ``arity`` their number of columns and its ``entities``
+    their number; declared ``columns`` or ``arity`` must agree with them.
+    """
+    info = dict(info or {})
+    arguments = info.get("arguments")
+    if not arguments:
+        return info
+    columns = [
+        column for argument in arguments for column in argument["columns"]
+    ]
+    if list(info.get("columns", columns)) != columns:
+        raise ValueError(
+            f"predicate {name!r} declares the columns {info['columns']} "
+            f"but its arguments span {columns}"
+        )
+    if info.get("arity", len(columns)) != len(columns):
+        raise ValueError(
+            f"predicate {name!r} declares the arity {info['arity']} "
+            f"but its arguments span {len(columns)} columns"
+        )
+    info.update(columns=columns, arity=len(columns), entities=len(arguments))
+    return info
+
+
+def _declared_predicates(cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return the ``predicates`` of the engine *cfg*, completed."""
+    return {
+        name: _declared_predicate(name, info)
+        for name, info in (cfg.get("predicates") or {}).items()
+    }
+
+
+def get_signatures(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Tuple[Argument, ...]]:
+    """
+    Return the arguments of the predicates of an engine, by predicate.
+
+    Only the predicates declaring their ``arguments`` are returned. A
+    sort spans the same number of columns wherever it appears, or a
+    :class:`ValueError` is raised.
+    """
+    signatures = {}
+    widths: Dict[str, int] = {}
+    for pname, info in get_predicates(name, yaml_path).items():
+        arguments = tuple(
+            Argument(
+                arg["sort"], tuple(arg["columns"]), str(arg.get("type", ""))
+            )
+            for arg in info.get("arguments") or ()
+        )
+        for argument in arguments:
+            width = widths.setdefault(argument.sort, len(argument.columns))
+            if width != len(argument.columns):
+                raise ValueError(
+                    f"sort {argument.sort!r} spans {width} columns elsewhere "
+                    f"but {len(argument.columns)} in {pname!r}"
+                )
+        if arguments:
+            signatures[pname] = arguments
+    return signatures
+
+
+def get_hidden_predicates(
+    name: str, yaml_path: Optional[Path] = None
+) -> frozenset:
+    """Return the predicates of an engine its SQUALL completion withholds."""
+    cfg = get_engine_config(name, yaml_path)
+    return frozenset(cfg.get("hidden_predicates") or ())
+
+
+def get_probabilistic_predicates(
+    name: str, yaml_path: Optional[Path] = None
+) -> frozenset:
+    """Return the predicates of an engine declared with a probability."""
+    return frozenset(
+        pname for pname, info in get_predicates(name, yaml_path).items()
+        if info.get("probability")
+    )
 
 
 # ---------------------------------------------------------------------------
