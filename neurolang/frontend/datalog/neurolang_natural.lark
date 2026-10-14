@@ -243,10 +243,12 @@ identifier : LOWER_NAME
 label_identifier : CNAME
 
 ?literal : "'"string"'"
+         | "\""dq_string"\""  -> literal
          | number
          | "^"NAME      -> external_literal
 
 string : STRING
+dq_string : DQ_STRING -> string
 number : SIGNED_INT
        | SIGNED_FLOAT
 
@@ -357,6 +359,7 @@ NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|de
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/
+DQ_STRING : /[^"]+/
 COMMENT : /\%\%[^\n]*/ NEWLINE
 
 %import common._STRING_ESC_INNER
