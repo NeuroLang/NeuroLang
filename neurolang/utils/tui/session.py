@@ -18,6 +18,7 @@ Datalog, and the Datalog rules of a predicate (``.datalog``).
 import re
 import shlex
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +29,7 @@ from neurolang.datalog import Union as DatalogUnion
 from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
 from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
-from neurolang.expressions import Symbol
+from neurolang.expressions import Query, Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
@@ -447,6 +448,57 @@ def _no_last_query(app) -> bool:
     return False
 
 
+def _replace(symbol_table, symbol, value) -> None:
+    """Set *symbol* to *value* in *symbol_table*, or remove it if None."""
+    if symbol in symbol_table._symbols:
+        del symbol_table[symbol]
+    if value is not None:
+        symbol_table[symbol] = value
+
+
+@contextmanager
+def last_query_scope(app):
+    """
+    Open a scope of the program where the last query can run again.
+
+    The rules that its submission added are taken out of the session
+    while the block runs: running the query again adds them again, and
+    SQUALL gives them new variables, so that they would be there twice.
+    """
+    session = app._nl.program_ir.symbol_table
+    saved = {}
+    for symbol, added in app.last_added_rules.items():
+        value = session._symbols.get(symbol)
+        if isinstance(value, DatalogUnion):
+            saved[symbol] = value
+            rules = tuple(r for r in value.formulas if r not in added)
+            _replace(session, symbol, DatalogUnion(rules) if rules else None)
+    try:
+        with app._nl.scope:
+            yield
+    finally:
+        for symbol, value in saved.items():
+            _replace(session, symbol, value)
+
+
+def rerun_last_query(app, **flags) -> None:
+    """
+    Run the last query again, in a scope, with the execution *flags*.
+
+    The flags are those of :func:`~neurolang.utils.cli._execute_program`,
+    such as ``dry_run``; errors are reported as when it first ran.
+    """
+    if _no_last_query(app):
+        return
+    program, squall = app.last_query
+    execute = _execute_squall_program if squall else _execute_program
+    try:
+        with last_query_scope(app):
+            execute(app._nl, program, **flags)
+    except Exception as exc:
+        app._report_error(exc, program)
+
+
 @command(
     ".rewritten",
     "Show the rewritten program of the last query, or of every query",
@@ -457,15 +509,7 @@ def cmd_rewritten(app, arg: str) -> None:
     if arg.strip():
         _switch(app, arg, "show_rewritten", "Rewritten program")
         return
-    if _no_last_query(app):
-        return
-    program, squall = app.last_query
-    execute = _execute_squall_program if squall else _execute_program
-    try:
-        with app._nl.scope:
-            execute(app._nl, program, dry_run=True)
-    except Exception as exc:
-        app._report_error(exc, program)
+    rerun_last_query(app, dry_run=True)
 
 
 def _parsed_rules(parsed) -> tuple:
@@ -516,16 +560,29 @@ def _print_datalog_of(app, name: str) -> None:
     )
 
 
+def _print_datalog_program(app, program: str) -> None:
+    """Print the rules and the query of the Datalog *program*."""
+    printer = DatalogPrettyPrinter()
+    parsed = app._nl.datalog_parser(program)
+    for formula in getattr(parsed, "formulas", (parsed,)):
+        label = "query" if isinstance(formula, Query) else "rule"
+        app.console.print(
+            f"── {label} ──\n{printer.walk(formula)}\n", markup=False,
+            highlight=False, soft_wrap=True,
+        )
+
+
 @command(
-    ".datalog", "Show the Datalog translation of the last SQUALL query, or "
-    "the Datalog rules of a predicate", ".datalog [PREDICATE]",
+    ".datalog", "Show the Datalog program of the last query, translated "
+    "from SQUALL, or the Datalog rules of a predicate",
+    ".datalog [PREDICATE]",
 )
 def cmd_datalog(app, arg: str) -> None:
     """
     Print the Datalog rules of the predicate in *arg*.
 
-    Without a predicate, print the Datalog program the last SQUALL query
-    compiles to.
+    Without a predicate, print the Datalog program of the last query,
+    as the SQUALL of a SQUALL query translates to.
     """
     if arg.strip():
         _print_datalog_of(app, arg.strip())
@@ -533,13 +590,10 @@ def cmd_datalog(app, arg: str) -> None:
     if _no_last_query(app):
         return
     program, squall = app.last_query
-    if not squall:
-        app.console.print(
-            "[yellow].datalog shows the Datalog translation of a SQUALL "
-            "query; use .rewritten for a Datalog query.[/yellow]"
-        )
-        return
     try:
-        _show_squall_datalog(program)
+        if squall:
+            _show_squall_datalog(program)
+        else:
+            _print_datalog_program(app, program)
     except Exception as exc:
         app._report_error(exc, program)

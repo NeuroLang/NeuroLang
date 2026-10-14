@@ -145,6 +145,8 @@ class InteractiveTuiApp:
         self._tee_consoles(console, err_console)
         self.results: list = []
         self.last_query = None
+        # The rules added by the submission of the last query, by symbol.
+        self.last_added_rules: dict = {}
         self.failed = False
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
@@ -310,8 +312,12 @@ class InteractiveTuiApp:
         """
         Print what the committed *submission* defined, per predicate.
 
-        A submission without a *query* that defined nothing says so.
+        A submission without a *query* that defined nothing says so. The
+        rules added by a *query*'s submission are kept, to run it again
+        as it ran (see :func:`~.session.last_query_scope`).
         """
+        if query:
+            self.last_added_rules = submission.added_rules()
         lines = submission.definitions()
         if not (lines or query):
             lines = ["(nothing defined)"]
@@ -354,6 +360,7 @@ class InteractiveTuiApp:
         )
         if query:
             self.last_query = (program, self.settings.squall)
+            self.last_added_rules = {}
             self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         if self._run_submission(program, query, facts) and query:

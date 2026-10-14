@@ -191,6 +191,22 @@ class Submission:
             and bool(self.scope._symbols)
         )
 
+    def added_rules(self) -> dict:
+        """
+        Return the rules the committed submission added, by symbol.
+
+        They are the rules of the predicates it defined, helpers
+        included, that the predicates did not have before.
+        """
+        added = {}
+        for symbol, value in self.scope._symbols.items():
+            if isinstance(value, DatalogUnion):
+                before = getattr(self.previous.get(symbol), "formulas", ())
+                added[symbol] = tuple(
+                    rule for rule in value.formulas if rule not in before
+                )
+        return added
+
     def definitions(self) -> list:
         """
         Return a line per predicate the committed submission defined.
