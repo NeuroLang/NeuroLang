@@ -469,7 +469,7 @@ def nl_ternary():
     return engine
 
 
-def _first_column(result):
+def _first_column_values(result):
     return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
 
 
@@ -479,7 +479,7 @@ def test_execute_squall_tuple_is_a_noun_in_where_conjunction(nl_ternary):
         "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
         "and ?t is 'pain'."
     )
-    assert _first_column(result) == {1}
+    assert _first_column_values(result) == {1}
 
 
 def test_execute_squall_prepositional_ternary_verb(nl_ternary):
@@ -487,7 +487,7 @@ def test_execute_squall_prepositional_ternary_verb(nl_ternary):
     result = nl_ternary.execute_squall_program(
         "obtain every Study ?s that weighs 'fear' with ?w."
     )
-    assert _first_column(result) == {1, 2}
+    assert _first_column_values(result) == {1, 2}
 
 
 def test_execute_squall_too_many_verb_objects_is_explained(nl_ternary):
@@ -505,7 +505,7 @@ def test_execute_squall_adjective_complement_and_noun(nl_ternary):
         "obtain every Voxel that is reported by a Study "
         "and that is a Schaefer_voxels."
     )
-    assert _first_column(result) == {"v1"}
+    assert _first_column_values(result) == {"v1"}
 
 
 def test_execute_squall_where_tuple_is_noun():
