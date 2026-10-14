@@ -10,6 +10,7 @@ follows the command name.
 import difflib
 from typing import Callable, NamedTuple
 
+from rich.markup import escape
 from rich.panel import Panel
 
 from neurolang.utils import engine_registry
@@ -125,7 +126,7 @@ def help_text(engine_name: str = "") -> str:
         "[bold cyan]Dot commands:[/bold cyan]",
     ]
     lines += [
-        f"  [green]{cmd.usage:<20}[/green] {cmd.help}"
+        f"  [green]{escape(f'{cmd.usage:<20}')}[/green] {escape(cmd.help)}"
         for cmd in COMMANDS.values()
     ]
     examples = engine_examples(engine_name)
@@ -165,6 +166,13 @@ def cmd_mode(app, arg: str) -> None:
         )
 
 
+def sort_spec_text(sort_by, separator: str = ", ") -> str:
+    """Return the ``COL:asc|desc`` specs of the sort order *sort_by*."""
+    return separator.join(
+        f"{col}:{'asc' if asc else 'desc'}" for col, asc in sort_by
+    )
+
+
 @command(
     ".sort", "Show or set the sort of the results (none: unsorted)",
     ".sort [COL[:asc|desc] ...|none]",
@@ -173,10 +181,7 @@ def cmd_sort(app, arg: str) -> None:
     """Set the sort order of the results and re-sort the last one."""
     specs = arg.split()
     if not specs:
-        sort_by = app.settings.sort_by
-        current = ", ".join(
-            f"{col}:{'asc' if asc else 'desc'}" for col, asc in sort_by
-        )
+        current = sort_spec_text(app.settings.sort_by)
         app.console.print(f"Sort: {current or 'none'}", markup=False)
         return
     if specs == ["none"]:
@@ -267,24 +272,6 @@ def _switch(app, arg: str, attribute: str, label: str) -> None:
         return
     state = "on" if getattr(app.settings, attribute) else "off"
     app.console.print(f"{label}: {state}")
-
-
-@command(
-    ".ra", "Print the relational algebra plans instead of running queries",
-    ".ra [on|off]",
-)
-def cmd_ra(app, arg: str) -> None:
-    """Toggle the display of the relational algebra plans."""
-    _switch(app, arg, "show_ra", "RA plans")
-
-
-@command(
-    ".rewritten", "Print the magic-sets rewritten program of each query",
-    ".rewritten [on|off]",
-)
-def cmd_rewritten(app, arg: str) -> None:
-    """Toggle the display of the rewritten program."""
-    _switch(app, arg, "show_rewritten", "Rewritten program")
 
 
 @command(".quit", "Exit the REPL (also Ctrl+D)")
