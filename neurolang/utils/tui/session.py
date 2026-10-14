@@ -6,8 +6,8 @@ The rules defined during a session, and the relations loaded with
 starts (:func:`open_session_scope`), so that ``.idb`` lists the rules,
 ``.drop`` removes a rule, a predicate or a relation, and ``.clear``
 removes them all. Each submission runs in a scope of its own, committed
-to the session's only if the whole submission succeeds
-(:class:`Submission`). The columns of the loaded relations, named by the
+to the session's only if the whole submission succeeds (see
+:mod:`.submission`). The columns of the loaded relations, named by the
 header of their file, are kept in the application's ``loaded_relations``
 to name the columns of the results and of ``.sets``. The other commands
 list the engines and the engine's sets and predicates, and show how the
@@ -49,63 +49,6 @@ from .commands import _switch, command
 def open_session_scope(nl) -> None:
     """Open the scope of the program of *nl* holding the session's rules."""
     nl.program_ir.push_scope()
-
-
-def _commit(scope, session) -> None:
-    """
-    Move the symbols of *scope* into the enclosing scope *session*.
-
-    A symbol already in *session* gets the value it has in *scope*: a
-    rule added to a predicate gives *scope* the union of all its rules.
-    """
-    for symbol, value in scope._symbols.items():
-        if session._symbols.get(symbol) is not None:
-            del session[symbol]
-        session[symbol] = value
-
-
-class Submission:
-    """
-    The scope of the program of an engine where one submission runs.
-
-    A submission, an input of one or more Datalog rules or SQUALL
-    sentences, runs in a scope of its own, opened in the session's when
-    the ``with`` block starts. If the block succeeds, what the
-    submission defined is committed to the session's scope; if it fails,
-    including on KeyboardInterrupt, it is discarded, so that the session
-    is exactly as before. The session's scope is restored even when the
-    failure left a scope of the engine open.
-    """
-
-    def __init__(self, nl):
-        """Prepare a submission to the program of the engine *nl*."""
-        self._program_ir = nl.program_ir
-        self.session = None
-        self.scope = None
-        self.committed = False
-
-    def __enter__(self):
-        """Open the submission's scope and return the submission."""
-        self.session = self._program_ir.symbol_table
-        self._program_ir.push_scope()
-        self.scope = self._program_ir.symbol_table
-        return self
-
-    def __exit__(self, exc_type, exc, traceback_) -> bool:
-        """Commit the scope if the block succeeded, discard it otherwise."""
-        self._program_ir.symbol_table = self.session
-        if exc_type is None:
-            _commit(self.scope, self.session)
-            self.committed = True
-        return False
-
-    @property
-    def discarded(self) -> bool:
-        """Return whether the submission failed after defining symbols."""
-        return (
-            not self.committed and self.scope is not None
-            and bool(self.scope._symbols)
-        )
 
 
 def session_idb_symbols(nl) -> set:

@@ -36,7 +36,8 @@ from .commands import (
 )
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import Submission, open_session_scope, record_squall_rules
+from .session import open_session_scope, record_squall_rules
+from .submission import Submission, submission_outline
 from .statements import is_complete, split_statements
 from .transcript import Transcript, is_transcript_command
 
@@ -289,7 +290,7 @@ class InteractiveTuiApp:
         Run *program* as the *submission* and return its result.
 
         What it defines is kept only if it succeeds (see
-        :class:`~.session.Submission`).
+        :class:`~.submission.Submission`).
         """
         with submission:
             result = self._execute_noting_warnings(program)
@@ -305,29 +306,61 @@ class InteractiveTuiApp:
                 markup=False,
             )
 
-    def _execute_and_display(self, program: str) -> None:
-        """Run a Datalog or SQUALL query and print its result."""
-        self.last_query = (program, self.settings.squall)
-        self.err_console.print("[dim]Running query...[/dim]")
-        t0 = time.perf_counter()
-        submission = Submission(self._nl)
+    def _print_definitions(self, submission: Submission, query: bool):
+        """
+        Print what the committed *submission* defined, per predicate.
+
+        A submission without a *query* that defined nothing says so.
+        """
+        lines = submission.definitions()
+        if not (lines or query):
+            lines = ["(nothing defined)"]
+        for line in lines:
+            self.console.print(line, style="green", markup=False)
+
+    def _run_submission(self, program: str, query: bool, facts) -> bool:
+        """
+        Run *program*, print what it defined and its result if a *query*.
+
+        *facts* are the predicates it adds facts to. Return whether it
+        succeeded.
+        """
+        submission = Submission(self._nl, facts)
         try:
             result = self._submit(program, submission)
-            if not self.settings.show_ra:
+            self._print_definitions(submission, query)
+            if query and not self.settings.show_ra:
                 self._show_result(result, self._column_names(program))
         except KeyboardInterrupt:
             self.failed = True
             self.err_console.print("[yellow]Query interrupted[/yellow]")
             self._note_discarded(submission)
-            return
+            return False
         except Exception as exc:
             self._report_error(exc, program)
             self._note_discarded(submission)
-            return
-        elapsed = time.perf_counter() - t0
-        self.err_console.print(
-            f"[dim]Query completed in {elapsed:.2f} s[/dim]"
+            return False
+        return True
+
+    def _execute_and_display(self, program: str) -> None:
+        """
+        Run a Datalog or SQUALL submission and print what it gives.
+
+        A query is announced, then its result and time are printed; what
+        the submission defined is printed in any case.
+        """
+        query, facts = submission_outline(
+            self._nl, program, self.settings.squall
         )
+        if query:
+            self.last_query = (program, self.settings.squall)
+            self.err_console.print("[dim]Running query...[/dim]")
+        t0 = time.perf_counter()
+        if self._run_submission(program, query, facts) and query:
+            elapsed = time.perf_counter() - t0
+            self.err_console.print(
+                f"[dim]Query completed in {elapsed:.2f} s[/dim]"
+            )
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""
