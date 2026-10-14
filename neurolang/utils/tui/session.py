@@ -46,6 +46,7 @@ from neurolang.utils.cli import (
 )
 
 from .commands import _switch, command
+from .submission import is_user_symbol, predicate_extent
 
 def open_session_scope(nl) -> None:
     """Open the scope of the program of *nl* holding the session's rules."""
@@ -176,16 +177,29 @@ def _engine_rules(app, name: str) -> tuple:
     return value.formulas if isinstance(value, DatalogUnion) else ()
 
 
+def _removal_message(name: str, unit: str, size: int, kept: int) -> str:
+    """
+    Return the message telling that the predicate *name* was removed.
+
+    It had *size* rules or facts, as *unit* names them, *kept* of which
+    are the engine's and remain.
+    """
+    message = f"removed {name} ({_plural(size - kept, unit)})"
+    if kept:
+        message += f"; its {_plural(kept, f'engine {unit}')} remain"
+    return message
+
+
 def _drop_all_rules(app, name: str, rules: tuple) -> None:
     """Remove the session's rules of the predicate *name*."""
     del app._nl.program_ir.symbol_table[Symbol(name)]
     _drop_helpers(app, name)
     app.squall_rules.pop(name, None)
     kept = len(_engine_rules(app, name))
-    message = f"removed {name} ({_plural(len(rules) - kept, 'rule')})"
-    if kept:
-        message += f"; its {_plural(kept, 'engine rule')} remain"
-    app.console.print(message, style="green", markup=False)
+    app.console.print(
+        _removal_message(name, "rule", len(rules), kept), style="green",
+        markup=False,
+    )
 
 
 def _drop_rule(app, name: str, rules: tuple, number: int) -> None:
@@ -274,6 +288,34 @@ def cmd_drop(app, arg: str) -> None:
     drop(app, words[0], number)
 
 
+def _cleared_line(app, symbol, value):
+    """
+    Return the line telling that ``.clear`` removes *symbol*, or None.
+
+    *value* is its value in the session's scope. None is returned for
+    the symbols NeuroLang generates and those that are not predicates.
+    """
+    extent = predicate_extent(value)
+    if extent is None or not is_user_symbol(symbol):
+        return None
+    if symbol.name in app.loaded_relations:
+        return f"removed relation {symbol.name}"
+    enclosing = app._nl.program_ir.symbol_table.enclosing_scope
+    engine = predicate_extent(enclosing.get(symbol)) if enclosing else None
+    kept = engine[1] if engine else 0
+    return _removal_message(symbol.name, extent[2], extent[1], kept)
+
+
+def _cleared_lines(app) -> list:
+    """Return the lines telling what ``.clear`` removes, by name."""
+    session = app._nl.program_ir.symbol_table._symbols
+    lines = {
+        symbol.name: _cleared_line(app, symbol, value)
+        for symbol, value in session.items()
+    }
+    return [line for _, line in sorted(lines.items()) if line]
+
+
 @command(
     ".clear", "Clear the predicates and relations of this session, or one",
     ".clear [PREDICATE]",
@@ -284,14 +326,13 @@ def cmd_clear(app, arg: str) -> None:
     if name:
         drop(app, name)
         return
+    lines = _cleared_lines(app)
     app._nl.program_ir.pop_scope()
     open_session_scope(app._nl)
     app.loaded_relations.clear()
     app.squall_rules.clear()
-    app.console.print(
-        "[green]All session-defined IDB predicates and loaded relations "
-        "cleared.[/green]"
-    )
+    for line in lines or ["nothing to clear"]:
+        app.console.print(line, style="green", markup=False)
 
 
 def default_relation_name(path) -> str:

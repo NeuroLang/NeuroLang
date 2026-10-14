@@ -46,7 +46,7 @@ def relation_rows(value):
     return rows if isinstance(rows, WrappedRelationalAlgebraSet) else None
 
 
-def _extent(value):
+def predicate_extent(value):
     """
     Return the arity, size and unit of the predicate *value*, or None.
 
@@ -67,7 +67,7 @@ def definition_line(name: str, extent, previous) -> str:
     Return the line telling that the predicate *name* was defined.
 
     *extent* and *previous* are the arity, size and unit of the
-    predicate after and before the submission (see :func:`_extent`);
+    predicate after and before the submission (see :func:`predicate_extent`);
     *previous* is None for a new predicate.
     """
     arity, size, unit = extent
@@ -216,8 +216,8 @@ class Submission:
         """
         lines = []
         for symbol, value in self.scope._symbols.items():
-            extent = _extent(value)
+            extent = predicate_extent(value)
             if extent is not None and is_user_symbol(symbol):
-                previous = _extent(self.previous.get(symbol))
+                previous = predicate_extent(self.previous.get(symbol))
                 lines.append(definition_line(symbol.name, extent, previous))
         return lines
