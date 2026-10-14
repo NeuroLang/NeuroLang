@@ -1076,6 +1076,64 @@ def test_rel_body_function_call_parses():
     )
 
 
+def _query_atoms(code):
+    query = parser(code).formulas[0]
+    return {
+        atom.functor: atom.args for atom in _collect_atoms(query.body)
+    }
+
+
+def test_prepositional_ternary_verb_builds_ternary_atom():
+    """``?s weighs ?t with ?w`` is ``weighs(s, t, w)``."""
+    res = parser("squall ?s weighs ?t with ?w")
+    assert res == Symbol("weighs")(Symbol("s"), Symbol("t"), Symbol("w"))
+
+
+def test_prepositional_ternary_verb_in_relative_clause():
+    """``every Study ?s that weighs 'pain' with ?w`` parses to an atom."""
+    atoms = _query_atoms("obtain every Study ?s that weighs 'pain' with ?w.")
+    assert atoms[Symbol("weighs")] == (
+        Symbol("s"), Constant("pain"), Symbol("w")
+    )
+
+
+def test_tuple_subject_is_a_noun_in_where_conjunction():
+    """``where (?s; ?t; ?w) is a T and ?t is 'pain'`` builds ``T(s, t, w)``."""
+    atoms = _query_atoms(
+        "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
+        "and ?t is 'pain'."
+    )
+    assert atoms[Symbol("term_weight")] == (
+        Symbol("s"), Symbol("t"), Symbol("w")
+    )
+
+
+def test_relative_clause_conjunction_with_bare_verb():
+    """``that activates and that is a S`` keeps both conjuncts."""
+    atoms = _query_atoms(
+        "obtain every Voxel that activates and that is a Schaefer_voxels."
+    )
+    assert Symbol("activates") in atoms
+    assert Symbol("schaefer_voxels") in atoms
+
+
+def test_vp_conjunction_of_bare_verbs():
+    """``that activates and plays`` applies each verb to the subject."""
+    atoms = _query_atoms("obtain every Voxel that activates and plays.")
+    assert atoms[Symbol("activates")] == atoms[Symbol("plays")]
+
+
+def test_adjective_with_complement_keeps_complement():
+    """``is reported by a Study`` builds ``reported(voxel, study)``."""
+    atoms = _query_atoms(
+        "obtain every Voxel that is reported by a Study "
+        "and that is a Schaefer_voxels."
+    )
+    voxel = atoms[Symbol("schaefer_voxels")][0]
+    study = atoms[Symbol("study")][0]
+    assert atoms[Symbol("reported")] == (voxel, study)
+
+
 def test_rel_comp_variable_rhs_parses():
     """'that has an item_weight ?w greater than ?threshold' — variable RHS comparison."""
 

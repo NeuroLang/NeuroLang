@@ -455,6 +455,50 @@ def test_execute_squall_compact_per_list():
     )
 
 
+@pytest.fixture
+def nl_ternary():
+    """Engine with ternary weighs/term_weight and voxel relations."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    rows = [(1, "pain", 0.5), (2, "fear", 0.9), (1, "fear", 0.1)]
+    engine.add_tuple_set(rows, name="term_weight")
+    engine.add_tuple_set(rows, name="weighs")
+    engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
+    engine.add_tuple_set([("v1", 1), ("v2", 2)], name="reported")
+    engine.add_tuple_set([("v1",)], name="schaefer_voxels")
+    return engine
+
+
+def _first_column(result):
+    return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+
+
+def test_execute_squall_tuple_is_a_noun_in_where_conjunction(nl_ternary):
+    """``where (?s; ?t; ?w) is a T and ?t is 'pain'`` filters on ``T``."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
+        "and ?t is 'pain'."
+    )
+    assert _first_column(result) == {1}
+
+
+def test_execute_squall_prepositional_ternary_verb(nl_ternary):
+    """``that weighs 'fear' with ?w`` reads ``weighs(s, 'fear', w)``."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Study ?s that weighs 'fear' with ?w."
+    )
+    assert _first_column(result) == {1, 2}
+
+
+def test_execute_squall_adjective_complement_and_noun(nl_ternary):
+    """``that is reported by a Study and that is a S`` keeps both."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Voxel that is reported by a Study "
+        "and that is a Schaefer_voxels."
+    )
+    assert _first_column(result) == {"v1"}
+
+
 def test_execute_squall_where_tuple_is_noun():
     """
     'where (?i; ?j; ?k) is a Noun' expands to Noun(i, j, k) in rule body.
