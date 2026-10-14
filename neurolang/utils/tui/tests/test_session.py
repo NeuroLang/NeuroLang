@@ -669,3 +669,42 @@ def test_rewritten_has_the_rules_of_the_last_query_once(
     out = _command(app, ".rewritten") + capsys.readouterr().out
     assert len(re.findall(r"^fan\(", out, re.MULTILINE)) == 1
     assert _command(app, ".idb fan").count("fan(") == 1
+
+
+@pytest.mark.parametrize(
+    "squall, query",
+    [
+        (False, "ans(x) :- active(x)"),
+        (True, "obtain every Person that plays."),
+    ],
+)
+def test_ra_prints_the_plans_of_the_last_query(app, capsys, squall, query):
+    app.settings.squall = squall
+    app._execute_and_display(query)
+    rows = list(app.results[0].frame.itertuples(index=False, name=None))
+    capsys.readouterr()
+    out = _command(app, ".ra") + capsys.readouterr().out
+    assert "── deterministic stratum ──" in out
+    assert not app.settings.show_ra
+    assert not app.failed
+    assert list(app.results[0].frame.itertuples(index=False, name=None)) == (
+        rows
+    )
+    assert sorted(_idb_names(app)) == ["active"]
+
+
+def test_ra_without_a_query(app):
+    assert "No query has been run yet." in _command(app, ".ra")
+    assert not app.settings.show_ra
+
+
+def test_ra_of_a_query_with_its_rules(app, capsys):
+    app.settings.squall = True
+    app._execute_and_display(
+        "define as Fan every person that plays. obtain every Fan."
+    )
+    capsys.readouterr()
+    out = _command(app, ".ra") + capsys.readouterr().out
+    assert "fan" in out
+    assert not app.failed
+    assert _command(app, ".idb fan").count("fan(") == 1
