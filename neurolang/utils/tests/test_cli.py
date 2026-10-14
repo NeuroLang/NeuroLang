@@ -1713,7 +1713,10 @@ _SELECTED = (
             "obtain the Count of the Study ?s that mentions 'pain'.",
             {"obtain_0": ["count"]},
         ),
-        ("obtain every Study that mentions 'pain' as Pain.", {"pain": ["pain"]}),
+        (
+            "obtain every Study that mentions 'pain' as Pain.",
+            {"pain": ["pain"]},
+        ),
         (
             _SELECTED + "obtain every Selected.",
             {"obtain_0": ["study_id", "probability"]},
