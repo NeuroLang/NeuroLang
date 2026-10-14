@@ -51,6 +51,9 @@ Usage
 
     # ... or run REPL statements and dot-commands from a pipe
     echo 'ans(x) :- study(x)' | neurolang-query -i
+
+    # Write a query with an LLM (needs ``pip install "neurolang[llm]"``)
+    neurolang-query --squall --ask "Which studies mention pain?" --run
 """
 
 import argparse
@@ -461,6 +464,43 @@ def _build_parser() -> argparse.ArgumentParser:
         "every query of the session. If stdin is not a terminal, its "
         "statements and dot-commands are run as a batch (exit status 1 "
         "if one fails).",
+    )
+    parser.add_argument(
+        "--ask",
+        metavar="QUESTION",
+        default=None,
+        help="Write a query answering QUESTION with an LLM and print it "
+        "(SQUALL with --squall, else Datalog, unless the configuration "
+        "sets the language). Needs the llm extra: pip install "
+        "'neurolang[llm]'.",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="With --ask, also run the query and print its result.",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=("react", "icl"),
+        default=None,
+        help="With --ask, the strategy of the LLM assistant: react (an "
+        "agent exploring the engine with tools) or icl (few-shot prompt, "
+        "then validation and repair). Default: the configuration's.",
+    )
+    parser.add_argument(
+        "--llm-config",
+        metavar="PATH",
+        default=None,
+        help="Configuration file of the LLM providers (default: "
+        "$NEUROLANG_LLM_CONFIG, then ~/.config/neurolang/llm.yaml, then "
+        "the example shipped with NeuroLang).",
+    )
+    parser.add_argument(
+        "--llm-provider",
+        metavar="NAME",
+        default=None,
+        help="LLM provider of the configuration to use with --ask and "
+        ".ask (default: its default_provider).",
     )
     parser.add_argument(
         "--debug",
@@ -999,6 +1039,8 @@ def _tui_settings(args, tui, argv=()):
         history_path=str(Path.home() / ".neurolang_query_history"),
         data_dir=str(Path(args.data_dir).expanduser().resolve()),
         command_line=shlex.join(["neurolang-query", *argv]),
+        llm_config=args.llm_config,
+        llm_provider=args.llm_provider,
     )
 
 
@@ -1060,6 +1102,86 @@ def _run_interactive(args, argv=()) -> None:
         sys.exit(status)
 
 
+def _ask_language(args, config) -> str:
+    """Return the language of the query of ``--ask``."""
+    if args.squall:
+        return "squall"
+    if config.assistant.language != "auto":
+        return config.assistant.language
+    return "datalog"
+
+
+def _print_step(step) -> None:
+    """Print a step of the LLM assistant on stderr."""
+    if step.action and step.action != "answer":
+        observation = step.observation.strip().splitlines()
+        print(
+            f"  → {step.action}: {observation[0] if observation else ''}",
+            file=sys.stderr, flush=True,
+        )
+
+
+def _run_ask(args) -> None:
+    """
+    Write the query answering ``--ask`` with an LLM and print it.
+
+    With ``--run`` the query is also run and its result printed. Exits
+    with status 1 when no valid query is found.
+    """
+    try:
+        from neurolang.utils.llm import (
+            LLMConfigError,
+            LLMError,
+            load_config,
+            make_agent,
+        )
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] != "httpx":
+            raise
+        print(
+            "Error: --ask needs the optional dependency httpx. Install it "
+            'with:\n    pip install "neurolang[llm]"', file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        config = load_config(args.llm_config)
+        provider = config.provider(args.llm_provider)
+    except LLMConfigError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    language = _ask_language(args, config)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    agent = make_agent(
+        nl, provider, config.assistant, language, args.strategy,
+        engine_name=args.engine, on_step=_print_step,
+    )
+    try:
+        result = agent.run(args.ask)
+    except LLMError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not result.valid:
+        print(f"Error: no valid query: {result.error}", file=sys.stderr)
+        if result.query:
+            print(f"Last attempt:\n{result.query}", file=sys.stderr)
+        sys.exit(1)
+    print(result.query)
+    if result.explanation:
+        print(f"-- {result.explanation}", file=sys.stderr)
+    if args.run:
+        args.squall = language == "squall"
+        execute = _execute_squall_program if args.squall else _execute_program
+        output = _run_reporting_errors(
+            lambda: execute(nl, result.query), result.query, args, nl
+        )
+        _print_result(
+            output, args, _parse_sort_spec(args.sort),
+            _result_column_names(args, result.query),
+        )
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -1067,6 +1189,10 @@ def main(argv: Optional[list] = None) -> None:
 
     if args.interactive:
         _run_interactive(args, sys.argv[1:] if argv is None else argv)
+        return
+    if args.ask:
+        _check_engine_name(args)
+        _run_ask(args)
         return
     if _run_engineless_command(args):
         return

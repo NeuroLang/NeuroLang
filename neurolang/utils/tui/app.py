@@ -27,6 +27,7 @@ from neurolang.utils.cli import (
     squall_column_names,
 )
 
+from .assistant import AssistantState
 from .commands import (
     QuitRepl,
     engine_examples,
@@ -79,7 +80,9 @@ class TuiSettings:
     They are initialised from the command line options and some of them
     can be changed with dot-commands during the session. The data
     directory and the command line describe the session in its
-    transcript.
+    transcript. *llm_config* and *llm_provider* are the configuration
+    file and the provider of the LLM assistant (``.ask``), by default
+    those the configuration gives.
     """
 
     engine_name: str = ""
@@ -95,6 +98,8 @@ class TuiSettings:
     history_path: Optional[str] = None
     data_dir: str = ""
     command_line: str = ""
+    llm_config: Optional[str] = None
+    llm_provider: Optional[str] = None
 
 
 class InteractiveTuiApp:
@@ -125,6 +130,11 @@ class InteractiveTuiApp:
         self.completer = None
         self.last_query = None
         self.failed = False
+        # The input put in the next prompt, e.g. the query of .ask.
+        self.pending_input = ""
+        self.assistant = AssistantState(
+            self.settings.llm_config, self.settings.llm_provider
+        )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
         open_session_scope(nl)
@@ -374,8 +384,12 @@ class InteractiveTuiApp:
         interrupts it; both keep the session. Return False when the REPL
         must end, on Ctrl+D or ``.quit``.
         """
+        options = {}
+        if self.pending_input:
+            options["default"] = self.pending_input
+            self.pending_input = ""
         try:
-            line = session.prompt(self._get_prompt())
+            line = session.prompt(self._get_prompt(), **options)
         except KeyboardInterrupt:
             return True
         except EOFError:
