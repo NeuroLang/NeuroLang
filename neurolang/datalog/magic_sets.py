@@ -573,31 +573,33 @@ def adorn_code(
                         rule.consequent, Conjunction(formulas)
                     )
             new_consequent = consequent.functor(*rule.consequent.args)
-            adorned_antecedent, to_adorn = adorn_antecedent(
-                rule, new_consequent, rewritten_rules, sips
+            adorned_antecedent, predicates = adorn_antecedent(
+                rule, new_consequent, sips
             )
-            adorn_stack += to_adorn
+            adorn_stack += [
+                predicate for predicate in predicates
+                if predicate.functor not in rewritten_rules
+            ]
             rewritten_program.append(
                 Implication(new_consequent, adorned_antecedent)
             )
             rewritten_rules.add(consequent.functor)
-            for predicate in to_adorn:
+            # Predicates already adorned still need the magic init of
+            # their constants, e.g. r(2, y) after r(1, y) was adorned.
+            for predicate in predicates:
                 if any([isinstance(arg, Constant) for arg in predicate.args]):
                     constant_predicates.add(predicate)
 
     return Union(rewritten_program), constant_predicates
 
 
-def adorn_antecedent(
-    rule, adorned_head, rewritten_rules, sips: SIPS
-):
-    to_adorn = []
+def adorn_antecedent(rule, adorned_head, sips: SIPS):
+    predicates = []
     arcs, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
     for adorned_predicate in arcs.keys():
         if isinstance(adorned_predicate, Negation):
             adorned_predicate = adorned_predicate.formula
-        if adorned_predicate.functor not in rewritten_rules:
-            to_adorn.append(adorned_predicate)
+        predicates.append(adorned_predicate)
 
     antecedent = rule.antecedent
 
@@ -610,7 +612,7 @@ def adorn_antecedent(
         )
     else:
         adorned_antecedent = Conjunction(adorned_antecedent)
-    return adorned_antecedent, to_adorn
+    return adorned_antecedent, predicates
 
 
 def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:
