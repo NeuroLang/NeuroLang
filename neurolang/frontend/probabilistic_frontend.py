@@ -62,6 +62,7 @@ from ..probabilistic import (
     small_dichotomy_theorem_based_solver,
 )
 from ..probabilistic.cplogic.program import CPLogicMixin
+from ..probabilistic.expressions import PROB
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -434,10 +435,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         #   1. EDB predicates — symbol entry is a Constant (no .formulas).
         #   2. Conjunction queries (p(x), q(y)) — functor is `and_`, which
         #      is not in the symbol table at all.
-        # In both cases fall through to the base QueryBuilderDatalog
+        #   3. Heads computing a term, such as count(s): the path below
+        #      only restricts the predicate's relation to its variables.
+        # In these cases fall through to the base QueryBuilderDatalog
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
-        if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+        if _solved_as_query_rule(head, symbol_entry):
             return super()._execute_query(
                 head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
@@ -1067,3 +1070,21 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
+
+
+
+def _solved_as_query_rule(head, symbol_entry) -> bool:
+    """
+    Return whether a query is solved as a rule of its own.
+
+    It is when its predicate is not defined by rules (*symbol_entry* is
+    not a union of rules) or when its *head* computes a term other than
+    a probability, such as the aggregate ``count(s)``.
+    """
+    if not hasattr(symbol_entry, "formulas"):
+        return True
+    return isinstance(head, tuple) and any(
+        isinstance(h.expression, ir.FunctionApplication)
+        and h.expression.functor != PROB
+        for h in head
+    )
