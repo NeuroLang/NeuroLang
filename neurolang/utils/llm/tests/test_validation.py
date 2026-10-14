@@ -96,8 +96,8 @@ def test_schema_summary_uses_the_engine_configuration(nl, monkeypatch):
     )
     context = EngineContext(nl, "neurosynth")
     assert (
-        "- mentions(study_id, term) — Studies and terms [stored, 4 rows]"
-        in context.schema_summary()
+        "- mentions(study(study_id), term) — Studies and terms "
+        "[stored, 4 rows]" in context.schema_summary()
     )
     assert "matching 'pain'" in context.search_values(
         "mentions", "term", "pain"

@@ -70,6 +70,13 @@ only one.
 
 REFERENCES = {"squall": SQUALL_REFERENCE, "datalog": DATALOG_REFERENCE}
 
+SCHEMA_NOTE = """\
+Each predicate is listed with its columns, in order. An entity spanning
+several columns is written sort(columns): reports(study(study_id),
+voxel(i, j, k)) has the four columns study_id, i, j, k, used as
+reports(s, i, j, k) in Datalog and as the verb `reports` between a Study
+and a Voxel in SQUALL."""
+
 ROLE = """\
 You translate questions on neuroimaging data into queries of NeuroLang,
 a probabilistic logic programming language. Answer in {language} only,
@@ -205,7 +212,7 @@ def system_prompt(
     if engine_description:
         parts.append(f"The engine: {' '.join(engine_description.split())}")
     parts.append(f"# {name} syntax\n{REFERENCES[language]}")
-    parts.append(f"# Predicates of the engine\n{schema}")
+    parts.append(f"# Predicates of the engine\n{SCHEMA_NOTE}\n{schema}")
     if examples:
         parts.append(
             f"# Examples\n{format_examples(examples, language)}"

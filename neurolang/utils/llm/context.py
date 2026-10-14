@@ -57,6 +57,10 @@ class EngineContext:
         self.engine_name = engine_name
         self.loaded = loaded or {}
         self.declared = declared_predicates(engine_name)
+        self.signatures = (
+            engine_registry.get_signatures(engine_name)
+            if self.declared else {}
+        )
 
     def catalog(self) -> dict:
         """
@@ -67,7 +71,8 @@ class EngineContext:
         replace the names of the variables of their head.
         """
         catalog = predicate_catalog(
-            self.nl, _declared_columns(self.declared), self.loaded
+            self.nl, _declared_columns(self.declared), self.loaded,
+            self.signatures,
         )
         for name, info in catalog.items():
             if info.kind in RULE_KINDS:
