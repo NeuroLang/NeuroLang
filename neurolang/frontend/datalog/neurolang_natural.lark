@@ -104,6 +104,7 @@ app : _IN number"D" _WITH intransitive -> app_dimension_with
     | _IN number"D" -> app_dimension
     | _WITH intransitive -> app_dimension_only
     | label          -> app_label
+    | "(" ( label_tuple_item ";" )* tuple_constant ( ";" ( label_tuple_item | tuple_constant ) )* ")" -> app_label_constants
 
 dims : dim                    -> dims_base
      | dim _CONJUNCTION dims  -> dims_rec
@@ -228,6 +229,10 @@ label : _LABEL_MARKER label_identifier
 
 label_tuple_item : _LABEL_MARKER label_identifier
                  | ANONYMOUS_LABEL
+
+tuple_constant : "'" string "'"
+               | "\"" dq_string "\""
+               | number
 
 _LABEL_MARKER : "?"
               | "@"

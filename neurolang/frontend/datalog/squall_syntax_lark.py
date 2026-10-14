@@ -188,6 +188,20 @@ class _AnonymousVar:
         return self._sym
 
 
+class _ConstantSlot(_AnonymousVar):
+
+    """
+    Constant in a tuple label, as ``'pain'`` in ``(?s; 'pain'; ?w)``.
+
+    Like ``_``, the position appears in the rule *body* (holding the
+    constant) but not in the *head*, so every consumer of anonymous
+    wildcards handles constants unchanged.
+    """
+
+    def __init__(self, constant):
+        self._sym = constant
+
+
 GRAMMAR_PATH = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     "neurolang_natural.lark"
@@ -2534,6 +2548,18 @@ class SquallTransformer(Transformer):
                 return result
             return result
         return label
+
+    def app_label_constants(self, args):
+        """
+        Handle a tuple label holding constants, e.g. ``(?s; 'pain'; ?w)``.
+
+        Equivalent to ``(?s; ?t; ?w) such that ?t is 'pain'``: the
+        constant fills its column in the body and is left out of the head.
+        """
+        return tuple(args)
+
+    def tuple_constant(self, args):
+        return _ConstantSlot(args[0])
 
     def dims_base(self, args):
         d = args[0]

@@ -224,6 +224,20 @@ want to match but not project into the rule head:
 Each ``_`` creates a distinct fresh variable that exists in the query body
 but is dropped from the head.
 
+A column can also be fixed to a constant — a string in single or double
+quotes, or a number — written in place of its label:
+
+.. code-block:: squall
+
+    obtain every Term_in_study_tfidf (?s; 'pain'; ?w).
+    obtain every Peak_reported (?i; ?j; 0; ?s).
+
+The first query is the same as
+``obtain every Term_in_study_tfidf (?s; ?t; ?w) such that ?t is 'pain'``:
+only the rows whose term is ``'pain'`` match, and like ``_`` the constant
+column is dropped from the head, so the result has the columns ``?s`` and
+``?w``.
+
 2.5 String Literals
 --------------------
 
