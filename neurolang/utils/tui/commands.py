@@ -171,12 +171,89 @@ def _example_lines(engine_name: str) -> list:
     ]
 
 
-@command(".help", "Show this help message")
+SQUALL_PRIMER = """[bold yellow]SQUALL primer[/bold yellow]
+  obtain every Study that mentions 'pain'.     a query; a sentence ends with .
+  define as Pain_study every Study that mentions 'pain'.
+                         a rule, then: obtain every Pain_study.
+  [cyan]Nouns[/cyan]      capitalised predicates, folded to lowercase: Study is study
+  [cyan]Verbs[/cyan]      relate two things, subject first: a Study mentions a Term
+  [cyan]Variables[/cyan]  ?s names a column: every Study ?s that mentions 'pain';
+             a tuple names several: every Weighted_mention (?s; ?t; ?w)
+  [cyan]Strings[/cyan]    'pain' or "working memory"
+  [cyan]in ND[/cyan]      a noun of N columns: every Voxel in 3D, or (?i; ?j; ?k)
+  [cyan]Results[/cyan]    obtain the Count of the Study that mentions 'pain'.
+             obtain every Study that mentions 'pain' as Pain.
+  [cyan]Probability[/cyan]
+    define as Pain_selected with inferred probability every Study that is
+      a Selected_study and that mentions 'pain'.   adds a probability
+    define as Activation with probability every Voxel in 3D that a
+      Selected_study reports conditioned to every Selected_study that
+      mentions 'pain'."""
+
+
+def squall_primer(engine_name: str = "") -> str:
+    """
+    Return the SQUALL primer, with the engine's sorts and examples.
+
+    The sorts shown are those of several columns, which nouns read
+    ``in ND``; the examples are the engine's SQUALL examples.
+    """
+    lines = [SQUALL_PRIMER]
+    sorts = _sorts_in_nd(engine_name)
+    if sorts:
+        lines.append(f"[bold cyan]Entities in ND ({engine_name}):[/bold cyan]")
+        lines += [_sort_line(sort) for sort in sorts]
+    examples = engine_examples(engine_name).get("squall", [])
+    if examples:
+        lines.append(f"[bold cyan]Examples ({engine_name}):[/bold cyan]")
+        lines += [f"  {escape(query)}" for query in examples]
+    return "\n".join(lines)
+
+
+def _sorts_in_nd(engine_name: str) -> list:
+    """Return the sorts of several columns the engine declares."""
+    if not engine_name:
+        return []
+    return [
+        sort for sort in engine_registry.get_sorts(engine_name).values()
+        if len(sort.columns) > 1
+    ]
+
+
+def _sort_line(sort) -> str:
+    """Return the primer's line on the *sort* of several columns."""
+    signature = f"{sort.name}({', '.join(sort.columns)})"
+    dimension = f"in {len(sort.columns)}D"
+    description = sort.description or dimension
+    if dimension not in description:
+        description = f"{dimension} · {description}"
+    return escape(f"  {signature:<22} {description}")
+
+
+def _print_panel(app, text: str) -> None:
+    """Print *text* in the help's panel."""
+    app.console.print(Panel(text, border_style="cyan"))
+
+
+@command(".help", "Show this help, or a primer on SQUALL", ".help [squall]")
 def cmd_help(app, arg: str) -> None:
-    """Print the help text."""
-    app.console.print(
-        Panel(help_text(app.settings.engine_name), border_style="cyan")
-    )
+    """
+    Print the help text, and the SQUALL primer in SQUALL mode.
+
+    ``.help squall`` prints the primer alone.
+    """
+    topic = arg.strip().lower()
+    engine = app.settings.engine_name
+    if topic not in ("", "squall"):
+        app.console.print(
+            f"No help on {topic!r}: use .help or .help squall.",
+            style="yellow", markup=False,
+        )
+        return
+    if not topic:
+        _print_panel(app, help_text(engine))
+    if topic or app.settings.squall:
+        _print_panel(app, squall_primer(engine))
 
 
 def _language(squall: bool):
