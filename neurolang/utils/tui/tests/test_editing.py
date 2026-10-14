@@ -773,3 +773,38 @@ def test_squall_error_notes_the_entities(sorts_app, monkeypatch):
     out = sorts_app.console.file.getvalue()
     assert '"every Voxel in 3D" or "every Voxel (?i; ?j; ?k)"' in out
     assert '"a Study reports a Voxel in 3D"' in out
+
+
+def test_one_declaration_of_the_sorts(monkeypatch, tmp_path):
+    """Check completion, .predicates and the primer read the same sorts."""
+    from neurolang.utils import engine_registry
+
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n  grid:\n"
+        "    sorts:\n"
+        "      voxel: {columns: [x, y, z], type: int, description: a cell}\n"
+        "      study: {columns: [study_id], type: int}\n"
+        "    predicates:\n"
+        "      voxel: {arguments: [voxel]}\n"
+        "      reports: {arguments: [study, voxel]}\n"
+    )
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3)], name="voxel")
+    nl.add_tuple_set([(10, 1, 2, 3)], name="reports")
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="grid", squall=True), console=console,
+        err_console=console,
+    )
+    app._make_session()
+    assert _metas(app, "obtain every ")["Voxel"].startswith(
+        "voxel(x, y, z) · in 3D"
+    )
+    assert _words(app, "obtain every Voxel (?x; ") == ["?y", "?y; ?z)"]
+    app._handle_dot_command(".predicates")
+    app._handle_dot_command(".help squall")
+    out = console.file.getvalue()
+    assert "reports(study(study_id), voxel(x, y, z))" in out
+    assert "voxel(x, y, z)         in 3D · a cell" in out
