@@ -10,6 +10,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..optimisers import (
     EliminateTrivialProjections,
+    FlattenAndReorderJoins,
     GreedyJoinOrdering,
     PushInSelections,
     PushProjectionsDown,
@@ -17,7 +18,9 @@ from ..optimisers import (
     RenameOptimizations,
     RewriteSelections,
     SimplifyExtendedProjectionsWithConstants,
-    _ra_columns
+    _estimated_size,
+    _ra_columns,
+    _sort_join_operands
 )
 from ..relational_algebra import (
     ColumnInt,
@@ -29,6 +32,7 @@ from ..relational_algebra import (
     GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
+    NaryNaturalJoin,
     NaturalJoin,
     Product,
     Projection,
@@ -1116,8 +1120,8 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
     and eliminates the outer projection boundary.
 
     π[b,d](R(a,b)⋈S(c,b)) ⋈ T(b,d)
-    → after pipeline: all operands flattened in an NaryNaturalJoin
-      with column-a pruned from R.
+    → after pipeline: π[b,d](π[b](R)⋈π[b](S)) ⋈ T with column-a pruned
+      from R.
     """
     a, b, c, d, _ = str_columns
 
@@ -1140,11 +1144,19 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
         "Cross product still present after optimisation"
     )
 
-    # Verify the tree converged to an NaryNaturalJoin (the flattening
-    # step absorbed the projection barrier into the join operands).
-    assert type(result).__name__ == "NaryNaturalJoin", (
-        "Expected flattened NaryNaturalJoin, got " + type(result).__name__
+    # Verify the tree converged to a join of T and of the projection of
+    # R⋈S with column a pruned from R. Joins of two operands are not
+    # flattened.
+    assert type(result).__name__ == "NaturalJoin", (
+        "Expected NaturalJoin, got " + type(result).__name__
     )
+    inner = result.relation_left
+    assert type(inner).__name__ == "Projection"
+    assert type(inner.relation).__name__ == "NaturalJoin"
+    assert all(
+        a not in _ra_columns(op)
+        for op in (inner.relation.relation_left, inner.relation.relation_right)
+    ), "Column a should have been pruned from R"
 
 
 def test_push_projection_eliminates_cross_product_across_projection():
@@ -1230,6 +1242,10 @@ def test_push_projections_down_full_pipeline():
     assert not _has_cross_product(curr), f"Cross product still present:\n{curr!r}"
 
 
+class GreedyJoinOrderingWalker(GreedyJoinOrdering, ExpressionWalker):
+    """GreedyJoinOrdering walking the expressions it does not rewrite."""
+
+
 def test_greedy_join_ordering_reorders_mixed_product_join():
     """
     Check that greedy join ordering joins shared-column operands first.
@@ -1252,7 +1268,7 @@ def test_greedy_join_ordering_reorders_mixed_product_join():
     # NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
     tree = NaturalJoin(Product((r1_named, r2_named)), r3_named)
 
-    opt = GreedyJoinOrdering()
+    opt = GreedyJoinOrderingWalker()
     result = opt.walk(tree)
 
     # The result must NOT be a bare Product — the cross product should
@@ -1300,7 +1316,7 @@ def test_greedy_join_ordering_preserves_disconnected_product():
     """
     tree = Product((_named_symbol('R1', 'ab'), _named_symbol('R2', 'cd')))
 
-    opt = GreedyJoinOrdering()
+    opt = GreedyJoinOrderingWalker()
     result = opt.walk(tree)
 
     # Must remain a Product — no shared columns means no join possible.
@@ -1339,3 +1355,265 @@ def test_push_projections_down_terminates_when_nothing_to_push():
     expected = RelationalAlgebraSolver().walk(plan).value
     result = RelationalAlgebraSolver().walk(optimised).value
     assert result == expected
+
+
+def _sized_constant(columns, n_rows):
+    """Build a named relation constant with ``n_rows`` distinct rows."""
+    return C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns, [(i,) * len(columns) for i in range(n_rows)]
+        )
+    )
+
+
+def _left_deep_operands(expression):
+    """Return the operands of a left-deep NaturalJoin tree in join order."""
+    operands = []
+    while isinstance(expression, NaturalJoin):
+        operands.append(expression.relation_right)
+        expression = expression.relation_left
+    return [expression] + operands[::-1]
+
+
+def test_estimated_size_of_wrapped_constants():
+    """
+    Check the size estimation of constant relations.
+
+    Renames, projections and selections are estimated with the size of
+    their input; other expressions and symbols have an unknown size.
+    """
+    r = _sized_constant(("a", "b"), 7)
+    a, b, c = (str2columnstr_constant(n) for n in "abc")
+    assert _estimated_size(r) == 7
+    assert _estimated_size(Projection(RenameColumn(r, b, c), (a,))) == 7
+    assert _estimated_size(Selection(r, eq_(a, C_(1)))) == 7
+    assert _estimated_size(_named_symbol("R", "ab")) is None
+    assert _estimated_size(NaturalJoin(r, r)) is None
+
+
+def test_row_count_estimate_does_not_drop_duplicates():
+    """Check that the pandas row count estimate does not deduplicate."""
+    ras = NamedRelationalAlgebraFrozenSet(("a",), [(1,), (1,), (2,)])
+    assert ras.row_count_estimate() == 3
+    assert ras.might_have_duplicates
+    assert len(ras) == 2
+
+
+def test_sort_join_operands_prefers_small_connected_operands():
+    """
+    Check that known sizes drive the greedy order of join operands.
+
+    The smallest operand sharing columns with the others starts the
+    order, then the smallest operand connected to the placed ones is
+    picked, never introducing a cross product. Without sizes the order
+    only depends on column overlap.
+    """
+    reports = _sized_constant(("s", "x"), 50)
+    voxel = _sized_constant(("x",), 100)
+    labels = _sized_constant(("l", "x"), 5)
+    label = _sized_constant(("l",), 2)
+    operands = [reports, voxel, labels, label]
+    sizes = [50, 100, 5, 2]
+
+    assert _sort_join_operands(operands, sizes) == [
+        label, labels, reports, voxel
+    ]
+    assert _sort_join_operands(operands) == [labels, reports, voxel, label]
+    assert _sort_join_operands(operands, [None, None, None, 2]) == (
+        _sort_join_operands(operands)
+    )
+
+
+def test_greedy_join_ordering_joins_small_relation_first():
+    """
+    Check that GreedyJoinOrdering joins the smallest relations first.
+
+    In ``(R(a, b) ⋈ V(b)) ⋈ L(b, c)`` with sizes 50, 100 and 5, joining
+    the small relation ``L`` with ``R`` before the large ``V`` keeps the
+    intermediate results small. The result of the plan is unchanged.
+    """
+    r = _sized_constant(("a", "b"), 50)
+    v = _sized_constant(("b",), 100)
+    l_ = _sized_constant(("b", "c"), 5)
+    tree = NaturalJoin(NaturalJoin(r, v), l_)
+
+    result = GreedyJoinOrderingWalker().walk(tree)
+
+    assert _left_deep_operands(result) == [l_, r, v]
+    assert (
+        RelationalAlgebraSolver().walk(result).value
+        == RelationalAlgebraSolver().walk(tree).value
+    )
+    assert GreedyJoinOrderingWalker().walk(result) is result
+
+
+def test_greedy_join_ordering_unknown_sizes_keep_order():
+    """
+    Check that joins of relations of unknown size are not reordered.
+
+    Symbols have no known size, and a single known size is not enough to
+    compare operands, so the join trees are left untouched.
+    """
+    tree = NaturalJoin(
+        NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
+        _named_symbol("L", "bc"),
+    )
+    assert GreedyJoinOrderingWalker().walk(tree) is tree
+
+    tree = NaturalJoin(
+        NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
+        _sized_constant(("b", "c"), 5),
+    )
+    assert GreedyJoinOrderingWalker().walk(tree) is tree
+
+
+def test_greedy_join_ordering_resolves_symbol_sizes():
+    """
+    Check that subclasses can resolve the size of symbols.
+
+    Overriding ``resolve_relation`` with a symbol table lookup lets
+    GreedyJoinOrdering order joins of symbols by the size of their values.
+    """
+    table = {
+        Symbol[AbstractSet]("R"): _sized_constant(("0", "1"), 50),
+        Symbol[AbstractSet]("V"): _sized_constant(("0",), 100),
+        Symbol[AbstractSet]("L"): _sized_constant(("0", "1"), 5),
+    }
+
+    class SymbolTableJoinOrdering(GreedyJoinOrdering, ExpressionWalker):
+        def resolve_relation(self, expression):
+            return table.get(expression)
+
+    r = _named_symbol("R", "ab")
+    v = _named_symbol("V", "b")
+    l_ = _named_symbol("L", "bc")
+    tree = NaturalJoin(NaturalJoin(r, v), l_)
+
+    result = SymbolTableJoinOrdering().walk(tree)
+
+    assert _left_deep_operands(result) == [l_, r, v]
+
+
+def test_greedy_join_ordering_sizes_order_product_components():
+    """
+    Check that sizes order the joins built when removing a cross product.
+
+    ``Product(A(a), B(b)) ⋈ C(a, b) ⋈ D(b)``: the cross product is
+    eliminated and, within the connected group, the smallest operand
+    ``D`` starts the join, followed by the smallest connected ones.
+    """
+    a = _sized_constant(("a",), 40)
+    b = _sized_constant(("b",), 30)
+    c = _sized_constant(("a", "b"), 20)
+    d = _sized_constant(("b",), 3)
+    tree = NaturalJoin(NaturalJoin(Product((a, b)), c), d)
+
+    result = GreedyJoinOrderingWalker().walk(tree)
+
+    assert _left_deep_operands(result) == [d, c, b, a]
+    assert (
+        RelationalAlgebraSolver().walk(result).value
+        == RelationalAlgebraSolver().walk(tree).value
+    )
+
+
+def _relation(columns, rows):
+    """Build a named relation constant with integer columns."""
+    return C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+        NamedRelationalAlgebraFrozenSet(columns, rows)
+    )
+
+
+def _same_result(expression, optimised):
+    """Check that two plans evaluate to the same relation."""
+    solver = RelationalAlgebraSolver()
+    return solver.walk(optimised).value == solver.walk(expression).value
+
+
+def test_push_selection_into_join_of_constants():
+    """
+    Check that a selection is pushed into the operand holding its column.
+
+    The operands are constant relations, which mention no column.
+    """
+    class Opt(PushInSelections, ExpressionWalker):
+        pass
+
+    left = _relation(("g", "e"), [(0, 1), (1, 1)])
+    right = _relation(("g", "f", "c"), [(0, 2, 0), (1, 2, 1)])
+    c = str2columnstr_constant("c")
+    tree = Selection(NaturalJoin(left, right), eq_(c, C_(0)))
+
+    result = Opt().walk(tree)
+
+    assert result == NaturalJoin(left, Selection(right, eq_(c, C_(0))))
+    assert _same_result(tree, result)
+
+
+def test_rename_not_pushed_below_projection_dropping_its_target():
+    """
+    Check that a renaming is not pushed where its target column exists.
+
+    The projected relation already has the column ``g`` that ``c`` is
+    renamed into.
+    """
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    f, c, g = (str2columnstr_constant(n) for n in "fcg")
+    tree = RenameColumn(
+        Projection(_relation(("f", "c", "g"), [(0, 1, 2), (1, 0, 0)]), (f, c)),
+        c, g
+    )
+
+    result = Opt().walk(tree)
+
+    assert result == RenameColumns(tree.relation, ((c, g),))
+    assert _same_result(tree, result)
+
+
+def test_greedy_join_ordering_keeps_projection_not_distributing():
+    """
+    Check that a projection which does not distribute is kept whole.
+
+    In ``π[e](F(f, g) ⋈ G(g, e)) ⋈ (H(e, f) × K(b))`` the projection drops
+    the column ``f`` of ``F`` which ``H`` also has: pushing it onto the
+    join operands would join ``F`` and ``H`` on ``f``.
+    """
+    e = str2columnstr_constant("e")
+    left = Projection(
+        NaturalJoin(_relation("fg", [(0, 0)]), _relation("ge", [(0, 1)])),
+        (e,)
+    )
+    h = _relation("ef", [(1, 5)])
+    k = _relation("b", [(7,)])
+    tree = NaturalJoin(left, Product((h, k)))
+
+    result = GreedyJoinOrderingWalker().walk(tree)
+
+    assert result == Product((NaturalJoin(left, h), k))
+    assert _same_result(tree, result)
+
+
+def test_flatten_and_reorder_joins_only_rewrites_nested_joins():
+    """
+    Check that only nested joins are flattened and reordered.
+
+    A join of two relations is left untouched, a join chain becomes an
+    NaryNaturalJoin, which is a fixpoint of the optimiser.
+    """
+    class Opt(FlattenAndReorderJoins, ExpressionWalker):
+        pass
+
+    a = _relation("ab", [(0, 1)])
+    b = _relation("bc", [(1, 2)])
+    c = _relation("cd", [(2, 3)])
+    binary = NaturalJoin(a, b)
+    assert Opt().walk(binary) is binary
+
+    chain = NaturalJoin(NaturalJoin(a, b), c)
+    result = Opt().walk(chain)
+    assert isinstance(result, NaryNaturalJoin)
+    assert sorted(map(id, result.relations)) == sorted(map(id, (a, b, c)))
+    assert Opt().walk(result) is result
+    assert _same_result(chain, result)

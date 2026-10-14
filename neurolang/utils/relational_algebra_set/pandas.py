@@ -179,6 +179,23 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         else:
             return tuple()
 
+    def row_count_estimate(self):
+        """
+        Return the number of rows of the container.
+
+        Duplicates are not dropped, so this is an upper bound of
+        ``len(self)`` obtained without any computation.
+
+        Returns
+        -------
+        int
+            Number of rows of the underlying ``pandas.DataFrame``.
+
+        """
+        if self._container is None:
+            return 0
+        return len(self._container)
+
     def as_numpy_array(self):
         self._drop_duplicates_if_needed()
         res = self._container.values.view()

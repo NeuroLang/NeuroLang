@@ -48,6 +48,11 @@ from .expression_processing import (
     within_language_succ_query_to_intensional_rule
 )
 from .expressions import Condition, ProbabilisticPredicate
+from .probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet
+)
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
@@ -56,7 +61,54 @@ class RAQueryGOOOptimiser(
     GreedyJoinOrdering,
     ExpressionWalker,
 ):
-    pass
+    """
+    Greedy join ordering of provenance RA queries.
+
+    Symbols are resolved through ``symbol_table``, and probabilistic or
+    deterministic sets through their relation, so that the sizes of the
+    sets they stand for drive the join order.
+    """
+
+    _sets_with_relation = (
+        DeterministicFactSet,
+        ProbabilisticChoiceSet,
+        ProbabilisticFactSet,
+        ProvenanceAlgebraSet,
+    )
+
+    def __init__(self, symbol_table=None):
+        """
+        Create the optimiser.
+
+        Parameters
+        ----------
+        symbol_table : Mapping, optional
+            Mapping from symbols to the sets they stand for, used to
+            estimate the size of join operands.
+
+        """
+        self.symbol_table = symbol_table
+
+    def resolve_relation(self, expression):
+        """
+        Resolve symbols and probabilistic sets into their relation.
+
+        Parameters
+        ----------
+        expression : Expression
+            Leaf of a relational algebra expression.
+
+        Returns
+        -------
+        Expression or None
+            Expression for the same relation, or ``None``.
+
+        """
+        if isinstance(expression, self._sets_with_relation):
+            return expression.relation
+        if isinstance(expression, Symbol) and self.symbol_table is not None:
+            return self.symbol_table.get(expression)
+        return None
 
 
 AND = Constant(operator.and_)
@@ -481,7 +533,7 @@ def generate_provenance_query_solver(
             return expression
 
     steps = [
-        RAQueryGOOOptimiser(),
+        RAQueryGOOOptimiser(symbol_table=symbol_table),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),

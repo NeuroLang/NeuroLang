@@ -227,11 +227,19 @@ but is dropped from the head.
 2.5 String Literals
 --------------------
 
-String literals use single quotes:
+String literals use single or double quotes; both mean the same:
 
 .. code-block:: squall
 
     obtain every study that is 'neuro study'.
+    obtain every study that is "neuro study".
+
+Use double quotes for a string containing an apostrophe, and single
+quotes for one containing double quotes:
+
+.. code-block:: squall
+
+    obtain every Study that mentions "Parkinson's disease".
 
 This is the syntax we will later use to select the target region:
 
