@@ -824,6 +824,69 @@ def test_rule_op_marg_produces_prob_query_in_head():
     )
 
 
+def _renumber_fresh(text):
+    """Number the fresh variables of *text* in order of appearance."""
+    import re
+
+    names = {}
+    return re.sub(
+        r"fresh_\d+",
+        lambda m: names.setdefault(m.group(0), f"fresh_{len(names)}"),
+        text,
+    )
+
+
+def _string_constants(expression):
+    """Return the string values of the constants in *expression*."""
+    values = []
+
+    def visit(node):
+        if isinstance(node, Constant) and isinstance(node.value, str):
+            values.append(node.value)
+        for child in getattr(node, "unapply", lambda: ())():
+            if isinstance(child, tuple):
+                for item in child:
+                    visit(item)
+            else:
+                visit(child)
+
+    visit(expression)
+    return values
+
+
+@pytest.mark.parametrize(
+    "double, single",
+    [
+        (
+            'obtain every Study that mentions "working memory".',
+            "obtain every Study that mentions 'working memory'.",
+        ),
+        (
+            'define as wm every Study that mentions "working memory".',
+            "define as wm every Study that mentions 'working memory'.",
+        ),
+    ],
+)
+def test_double_quoted_strings_parse_like_single_quoted(double, single):
+    """Check "…" strings mean the same as '…' strings."""
+    assert _renumber_fresh(repr(parser(double))) == _renumber_fresh(
+        repr(parser(single))
+    )
+
+
+def test_double_quoted_string_value_and_apostrophe():
+    """Check a "…" string keeps its text, apostrophes included."""
+    result = parser(
+        "define as pd every Study that mentions \"Parkinson's disease\"."
+    )
+    assert "Parkinson's disease" in _string_constants(result)
+
+
+def test_single_quoted_string_may_hold_double_quotes():
+    """Check a '…' string may still contain double quotes."""
+    result = parser("define as q every Study that mentions 'say \"hi\"'.")
+    assert 'say "hi"' in _string_constants(result)
+
 
 def test_ng1_agg_npc_arbitrary_functor():
     """'every Custom_func of the Relation' uses Symbol as aggregation functor."""
