@@ -433,7 +433,10 @@ class DatalogTransformer(Transformer):
 
         if isinstance(body_or_cond, tuple):
             group_vars, conjunction, agg_fn_call, result_var = body_or_cond
-            return self._build_aggregate_rule(head, group_vars, conjunction, agg_fn_call, result_var)
+            result = self._build_aggregate_rule(
+                head, group_vars, conjunction, agg_fn_call, result_var
+            )
+            return self._ans_main_rule_as_query(head, result)
 
         if isinstance(body_or_cond, Conjunction):
             regular, prob_specs = self._extract_special_body_atoms(
@@ -442,23 +445,47 @@ class DatalogTransformer(Transformer):
             if prob_specs:
                 new_body = Conjunction(regular) if regular else Constant(True)
                 result = self._build_prob_rule(head, prob_specs, new_body)
-                # PROB body desugaring now produces an Implication for the
-                # main formula.  Wrap as Query when the head is ans so that
-                # execute_datalog_program can dispatch it as a query.
-                if isinstance(head, Expression) and head.functor == Symbol("ans"):
-                    formulas = list(result.formulas)
-                    main = formulas[-1]
-                    if isinstance(main, Implication):
-                        formulas[-1] = Query(
-                            main.consequent, main.antecedent
-                        )
-                        return Union(tuple(formulas))
-                return result
+                return self._ans_main_rule_as_query(head, result)
 
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
             return Query(ast[0], body_or_cond)
         else:
             return Implication(ast[0], body_or_cond)
+
+    @staticmethod
+    def _ans_main_rule_as_query(head, result):
+        """
+        PROB and AGGREGATE body desugaring produce an Implication for the
+        main formula, alone or last in a Union. Wrap it as Query when the
+        head is ans so that execute_datalog_program can dispatch it as a
+        query. A query head cannot hold an aggregation, so a main formula
+        ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
+        queried as ``ans(t, n) :- fresh(t, n)``.
+        """
+        if not (
+            isinstance(head, Expression) and head.functor == Symbol("ans")
+        ):
+            return result
+        if isinstance(result, Implication):
+            result = Union((result,))
+        formulas = list(result.formulas)
+        main = formulas[-1]
+        if not isinstance(main, Implication):
+            return result
+        if any(
+            isinstance(arg, AggregationApplication)
+            for arg in main.consequent.args
+        ):
+            fresh_pred_sym = Symbol.fresh()
+            formulas[-1] = Implication(
+                fresh_pred_sym(*main.consequent.args), main.antecedent
+            )
+            formulas.append(
+                Query(head, Conjunction((fresh_pred_sym(*head.args),)))
+            )
+        else:
+            formulas[-1] = Query(main.consequent, main.antecedent)
+        return Union(tuple(formulas))
 
     @staticmethod
     def _classify_prob_predicate(pred):
