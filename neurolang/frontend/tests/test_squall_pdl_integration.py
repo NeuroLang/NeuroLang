@@ -890,6 +890,76 @@ def test_execute_squall_tuple_label_constant_in_rule(nl_tfidf):
 
 
 # ---------------------------------------------------------------------------
+# Counting quantifiers: more than / at least / fewer than / at most
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_mentions():
+    """
+    Studies mentioning terms: t1 by 3 studies, t2 by 2, t3 by 1, t4 by 0.
+
+    The relation is registered as ``mention`` and ``mentions`` because
+    SQUALL uses the verb form as typed (lemma matching is separate).
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    engine.add_tuple_set(
+        [("t1",), ("t2",), ("t3",), ("t4",)], name="term"
+    )
+    pairs = [
+        ("s1", "t1"), ("s1", "t2"), ("s1", "t3"),
+        ("s2", "t1"), ("s2", "t2"),
+        ("s3", "t1"),
+    ]
+    engine.add_tuple_set(pairs, name="mention")
+    engine.add_tuple_set(pairs, name="mentions")
+    return engine
+
+
+def _first_column(result):
+    return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+
+
+@pytest.mark.parametrize("quantifier,expected", [
+    ("more than 1", {"t1", "t2"}),
+    ("more than 2", {"t1"}),
+    ("at least 2", {"t1", "t2"}),
+    ("at least 1", {"t1", "t2", "t3"}),
+    ("fewer than 2", {"t3", "t4"}),
+    ("less than 3", {"t2", "t3", "t4"}),
+    ("at most 1", {"t3", "t4"}),
+    ("at most 0", {"t4"}),
+])
+def test_execute_squall_counting_quantifier_subject(
+    nl_mentions, quantifier, expected
+):
+    result = nl_mentions.execute_squall_program(
+        f"obtain every Term that {quantifier} Studies mention."
+    )
+    assert _first_column(result) == expected
+
+
+@pytest.mark.parametrize("sentence,expected", [
+    ("obtain every Study that mentions more than 1 Terms.", {"s1", "s2"}),
+    ("obtain every Study that mentions at most 1 Term.", {"s3"}),
+    ("obtain every Study that mentions at least 3 Terms.", {"s1"}),
+])
+def test_execute_squall_counting_quantifier_object(
+    nl_mentions, sentence, expected
+):
+    result = nl_mentions.execute_squall_program(sentence)
+    assert _first_column(result) == expected
+
+
+def test_execute_squall_counting_quantifier_in_rule(nl_mentions):
+    result = nl_mentions.execute_squall_program(
+        "define as Popular every Term that at least 2 Studies mention. "
+        "obtain every Popular."
+    )
+    assert _first_column(result) == {"t1", "t2"}
+
+
+# ---------------------------------------------------------------------------
 # Probabilistic choice syntax
 # ---------------------------------------------------------------------------
 
