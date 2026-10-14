@@ -419,6 +419,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @staticmethod
     def process_equality_formulas_constant(output, left, right, named_columns):
         if isinstance(output, Constant[AbstractSet]) and output.value.is_dum():
+            named_columns.add(left)
             return Constant[AbstractSet[Tuple[right.type]]](
                 NamedRelationalAlgebraFrozenSet(
                     (left.value,), [(REBV.walk(right),)]

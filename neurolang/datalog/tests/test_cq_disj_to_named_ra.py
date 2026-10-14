@@ -17,6 +17,7 @@ from ...relational_algebra import (
     NameColumns,
     NaturalJoin,
     Projection,
+    RelationalAlgebraSolver,
     Selection,
     Union,
     str2columnstr_constant,
@@ -386,6 +387,20 @@ def test_only_equality():
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
+
+
+def test_only_equalities_to_constants_keep_all_columns():
+    exp = Conjunction((
+        C_(eq)(S_("x"), C_(1)),
+        C_(eq)(S_("y"), C_(2)),
+        C_(eq)(S_("z"), C_(3)),
+    ))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(1, 2, 3)]
+    )
 
 
 def test_disjunction():
