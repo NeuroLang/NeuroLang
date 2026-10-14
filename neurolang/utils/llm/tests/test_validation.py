@@ -129,3 +129,15 @@ def test_rows_of_a_rule(nl):
     assert list(frame.columns) == ["s"] and list(frame["s"]) == [1]
     with pytest.raises(ValueError, match="Unknown predicate"):
         context.frame("nothing")
+
+
+def test_arity_errors_skip_iris_and_read_prefixed_names(nl):
+    nl.add_tuple_set([("a", "b")], name="pv:name")
+    text = (
+        "ans(n) :- pv:name(<http://x.org/Python_(language)>, n), "
+        "mentions(n, 'a (b, c)')"
+    )
+    assert arity_errors(nl, text) == []
+    assert arity_errors(nl, "ans(n) :- pv:name(n)") == [
+        "pv:name has 2 columns, not 1: use it as pv:name/2"
+    ]

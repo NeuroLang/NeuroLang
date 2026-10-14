@@ -27,7 +27,14 @@ from neurolang.utils.predicate_catalog import predicate_catalog
 
 LANGUAGE_NAMES = {"squall": "SQUALL", "datalog": "Datalog"}
 _DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*\(")
-_CALL = re.compile(r"(?<![\w.'\"])([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+_CALL = re.compile(
+    r"(?<![\w.:'\"])([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_-]*)?)"
+    r"\s*\("
+)
+# String literals and IRIs, whose characters are not syntax.
+_OPAQUE = re.compile(
+    r"'[^'\n]*'|\"[^\"\n]*\"|<[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*>"
+)
 
 
 class QueryCheckError(Exception):
@@ -125,6 +132,7 @@ def arity_errors(nl, datalog: str) -> list:
     predicates the engine *nl* defines with a known arity.
     """
     catalog = predicate_catalog(nl)
+    datalog = _OPAQUE.sub(lambda m: "_" * len(m.group(0)), datalog)
     errors = []
     for match in _CALL.finditer(datalog):
         info = catalog.get(match.group(1))

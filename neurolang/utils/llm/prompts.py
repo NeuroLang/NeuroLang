@@ -49,9 +49,8 @@ DATALOG_REFERENCE = """\
 NeuroLang Datalog: a program is a sequence of rules `head :- body`, one
 per line; the query is the rule whose head is `ans(...)`, and there is
 only one.
-- Variables are lower-case identifiers; strings are in single quotes
-  ('pain') and hold only letters, digits and spaces; numbers are
-  written as is.
+- Variables are lower-case identifiers; numbers are written as is.
+- {strings}.
 - The body is a conjunction separated by `,`: `ans(s) :- study(s),
   mentions(s, 'pain')`. Disjunction: several rules with the same head.
 - Negation: `~mentions(s, 'pain')`; its variables must be bound by a
@@ -68,7 +67,34 @@ only one.
   `PROB[a(x) // b(x)] = p`.
 """
 
-REFERENCES = {"squall": SQUALL_REFERENCE, "datalog": DATALOG_REFERENCE}
+RESTRICTED_STRINGS = (
+    "Strings are in single quotes ('pain') and hold only letters, digits\n"
+    "  and spaces"
+)
+RDF_STRINGS = (
+    "Strings are in single quotes ('pain') and hold any character but\n"
+    "  the quote. An IRI is written <http://example.org/a>, and a\n"
+    "  predicate named prefix:local is written as is: pv:name(e, n)"
+)
+
+
+def rdf_syntax() -> bool:
+    """Whether the Datalog grammar has IRIs and prefixed names."""
+    from neurolang.frontend.datalog import standard_syntax
+    return "IRI :" in standard_syntax.GRAMMAR
+
+
+def datalog_reference() -> str:
+    """Return the Datalog reference, for the grammar installed."""
+    strings = RDF_STRINGS if rdf_syntax() else RESTRICTED_STRINGS
+    return DATALOG_REFERENCE.replace("{strings}", strings)
+
+
+def reference(language: str) -> str:
+    """Return the syntax reference of *language*."""
+    if language == "datalog":
+        return datalog_reference()
+    return SQUALL_REFERENCE
 
 SCHEMA_NOTE = """\
 Each predicate is listed with its columns, in order. An entity spanning
@@ -211,7 +237,7 @@ def system_prompt(
     parts = [ROLE.format(language=name)]
     if engine_description:
         parts.append(f"The engine: {' '.join(engine_description.split())}")
-    parts.append(f"# {name} syntax\n{REFERENCES[language]}")
+    parts.append(f"# {name} syntax\n{reference(language)}")
     parts.append(f"# Predicates of the engine\n{SCHEMA_NOTE}\n{schema}")
     if examples:
         parts.append(
