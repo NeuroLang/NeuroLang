@@ -299,16 +299,21 @@ mentions(s, t)"*.
 3.2 Argument Order and the ``~`` Inverse
 ------------------------------------------
 
-When the EDB relation stores its arguments in the **reverse** order — for
-instance ``reports`` stores ``(study, voxel)`` but you want to query from
-the voxel's perspective — use the ``~`` prefix to swap them:
+The ``~`` prefix swaps the arguments of a verb: the **subject** is matched
+to the **second** column and the **object** to the **first**.  Use it when
+the sentence reads naturally from the other side of the relation.  With
+``mentions(study, term)``:
 
 .. code-block:: squall
 
-    every Voxel that a Study ~reports.
+    obtain every Term that ~mentions a Study.
 
-This maps to ``reports(voxel, study)`` — the ``~`` inverts the arguments
-so the subject is matched to the second column and the object to the first.
+reads *"every term t such that some study s has mentions(s, t)"*: the
+term is the subject of ``~mentions`` and lands in the second column.  The
+same holds when the verb follows its object, as in
+``every Voxel that a Study ~reports`` which maps to
+``reports(voxel, study)`` — useful when the EDB stores the voxel first.
+With more than two arguments, ``~`` reverses all of them.
 
 Our Bayes Factor data stores ``activates(study, region)`` in natural order
 (study first, region second), so no ``~`` is needed.

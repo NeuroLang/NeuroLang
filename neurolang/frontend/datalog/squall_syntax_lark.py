@@ -16,7 +16,7 @@ Basic sentences::
 Relative clauses::
 
     every study that plays        →  ∀x. study(x) ∧ plays(x)
-    every study that ~reports X   →  ∀x. study(x) ∧ reports(x, X)
+    every study that ~reports X   →  ∀x. study(x) ∧ reports(X, x)
 
 Negation-as-failure (Datalog \\+)::
 
@@ -2775,26 +2775,19 @@ def _conj_flat(a, b):
 
 
 def _apply_ops(ops, verb, subject):
-    """Apply operation arguments to a transitive verb."""
-    # When verb is an _InverseVerbSymbol (from the ``~`` prefix), the
-    # ResolveInvertedFunctionApplicationMixin walker will reverse the
-    # argument tuple.  In relative-clause context the caller already
-    # supplies (object, subject) so the reversal is correct, but in
-    # ``such that`` sentence context the caller supplies (subject, object)
-    # and the reversal would swap them.  We detect the wrapper here and
-    # pre-swap so the final result is (subject, object) in both cases.
-    is_inverse = isinstance(verb, _InverseVerbSymbol)
+    """
+    Apply operation arguments to a transitive verb.
+
+    The subject always comes first in the surface order.  When ``verb`` is
+    an ``_InverseVerbSymbol`` (``~`` prefix) the resulting
+    ``InvertedFunctionApplication`` is reversed later, so ``x ~v y``
+    becomes ``v(y, x)``.
+    """
     if callable(ops) and not isinstance(ops, (Symbol, Constant)):
-        if is_inverse:
-            return ops(lambda *objs: verb(*objs, subject))
         return ops(lambda *objs: verb(subject, *objs))
     elif isinstance(ops, tuple):
-        if is_inverse:
-            return verb(*ops, subject)
         return verb(subject, *ops)
     else:
-        if is_inverse:
-            return verb(ops, subject)
         return verb(subject, ops)
 
 
