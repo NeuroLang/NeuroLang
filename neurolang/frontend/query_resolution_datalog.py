@@ -66,25 +66,6 @@ from .show_ra import (
 __all__ = ["QueryBuilderDatalog"]
 
 
-def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
-    orig = exc.__cause__
-    if orig and "Variables in head" in str(orig):
-        new_msg = (
-            f"SQUALL semantic error: Variable mismatch between rule definition and query.\n\n"
-            f"The rule head uses a variable that doesn't appear in the body, "
-            f"or the query uses variables that don't match the rule head.\n\n"
-            f"Common fixes:\n"
-            f"1. Add explicit labels in rule definitions:\n"
-            f"   'define as X for every Noun ?x that...' (not just 'every Noun')\n"
-            f"2. Ensure query variables match rule head variables:\n"
-            f"   'obtain every X (?x; ?y)' must match the rule head\n"
-            f"3. Check that rule body variables are used in the head\n\n"
-            f"Original error: {orig}"
-        )
-        exc.args = (new_msg,)
-    return exc
-
-
 def _aggregation_column_message(aggregation, functor, arity):
     """
     Explain how to name the aggregated column of a multi-column relation.
@@ -103,6 +84,25 @@ def _aggregation_column_message(aggregation, functor, arity):
         "add 'per ?x' to aggregate per value of a labelled column, e.g. "
         f"'every {func_name.capitalize()} of the {noun} (?x; ...; ?v) per ?x'."
     )
+
+
+def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
+    orig = exc.__cause__
+    if orig and "Variables in head" in str(orig):
+        new_msg = (
+            f"SQUALL semantic error: Variable mismatch between rule definition and query.\n\n"
+            f"The rule head uses a variable that doesn't appear in the body, "
+            f"or the query uses variables that don't match the rule head.\n\n"
+            f"Common fixes:\n"
+            f"1. Add explicit labels in rule definitions:\n"
+            f"   'define as X for every Noun ?x that...' (not just 'every Noun')\n"
+            f"2. Ensure query variables match rule head variables:\n"
+            f"   'obtain every X (?x; ?y)' must match the rule head\n"
+            f"3. Check that rule body variables are used in the head\n\n"
+            f"Original error: {orig}"
+        )
+        exc.args = (new_msg,)
+    return exc
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -522,6 +522,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         delegates to _execute_query, exactly as execute_datalog_program
         does for ans(...) :- R(...).
         """
+        self._check_squall_aggregation_columns(
+            query.head if isinstance(query.head, tuple) else (query.head,),
+            query.body,
+        )
         head = query.head
         if isinstance(head, AggregationApplication):
             head_vars = (head,)
@@ -533,7 +537,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             head_vars = tuple(head)
 
         body = query.body
-        self._check_squall_aggregation_columns(head_vars, body)
         if (
             len(head_vars) == 1
             and isinstance(head_vars[0], ir.Symbol)
