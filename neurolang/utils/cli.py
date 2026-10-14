@@ -22,13 +22,13 @@ Usage
     neurolang-query --engine neurosynth --list-sets
 
     # Inline query
-    neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+    neurolang-query "ans(t) :- term_in_study_tfidf(s, t, w)"
 
     # Query from file
     neurolang-query -f query.dl
 
     # Query from stdin
-    echo "ans(t) :- term_in_study_tfidf(t, f, s)" | neurolang-query
+    echo "ans(t) :- term_in_study_tfidf(s, t, w)" | neurolang-query
 
     # Destrieux atlas engine
     neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
@@ -45,6 +45,12 @@ Usage
 
     # ... annotated with the number of rows each plan node produces
     neurolang-query --show-ra --ra-analyze "ans(x) :- P(x)"
+
+    # Interactive REPL (needs ``pip install "neurolang[tui]"``)
+    neurolang-query -i --engine neurosynth
+
+    # ... or run REPL statements and dot-commands from a pipe
+    echo 'ans(x) :- study(x)' | neurolang-query -i
 """
 
 import argparse
@@ -126,7 +132,7 @@ def _rename_unnamed_columns(df, column_names):
     if column_names is not None and len(column_names) == len(df.columns):
         unnamed = all(
             isinstance(c, int)
-            or (isinstance(c, str) and c.startswith("c"))
+            or (isinstance(c, str) and (c.startswith("c") or c.isdigit()))
             for c in df.columns
         )
         if unnamed:
@@ -134,28 +140,108 @@ def _rename_unnamed_columns(df, column_names):
     return df
 
 
-def _emit(df, fmt, sort_by=None):
-    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
-    if df.empty:
-        return "(empty)"
-    if sort_by:
-        columns, ascending = zip(*sort_by)
-        valid = [(c, a) for c, a in sort_by if c in df.columns]
-        invalid = [c for c, _ in sort_by if c not in df.columns]
-        for col in invalid:
+def sort_dataframe(df, sort_by):
+    """
+    Return *df* sorted by the ``(column, ascending)`` pairs of *sort_by*.
+
+    Columns that *df* lacks are ignored with a warning on stderr.
+    """
+    if not sort_by:
+        return df
+    for col, _ in sort_by:
+        if col not in df.columns:
             print(
                 f"Warning: sort column {col!r} not found in result, "
                 f"ignoring.",
                 file=sys.stderr,
             )
-        if valid:
-            cols, asc = zip(*valid)
-            df = df.sort_values(by=list(cols), ascending=list(asc))
+    valid = [(c, a) for c, a in sort_by if c in df.columns]
+    if not valid:
+        return df
+    cols, asc = zip(*valid)
+    return df.sort_values(by=list(cols), ascending=list(asc))
+
+
+def squall_column_names(engine_name: str, program: str) -> dict:
+    """
+    Return the declared columns of the relations a SQUALL program obtains.
+
+    ``obtain every R.`` returns the whole relation ``R`` with positional
+    column names. The result is a dict from the key of each such
+    ``obtain`` (as in the results of
+    :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
+    to the columns that the engine configuration declares for ``R``.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        SquallProgram,
+        parser as squall_parser,
+    )
+
+    predicates = engine_registry.get_predicates(engine_name)
+    try:
+        parsed = squall_parser(program)
+    except Exception:
+        return {}
+    if not (predicates and isinstance(parsed, SquallProgram)):
+        return {}
+    names = {}
+    for i, query in enumerate(parsed.queries):
+        functor = getattr(query.body, "functor", None)
+        info = predicates.get(getattr(functor, "name", None))
+        if info and info.get("columns"):
+            key = parsed.query_names.get(i, f"obtain_{i}")
+            names[key] = list(info["columns"])
+    return names
+
+
+def _emit(df, fmt, sort_by=None):
+    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
+    if df.empty:
+        return "(empty)"
+    df = sort_dataframe(df, sort_by)
     if fmt == "csv":
         return df.to_csv(index=False)
     if fmt == "json":
         return df.to_json(orient="records", indent=2)
     return df.to_string(index=False)
+
+
+def _set_frame(ra_set, columns: list) -> pd.DataFrame:
+    """
+    Return the rows of *ra_set*, whose columns are *columns*, as a DataFrame.
+
+    The backend's own DataFrame is used, when it has these columns,
+    rather than copying the rows one by one.
+    """
+    if hasattr(ra_set, "as_pandas_dataframe"):
+        df = ra_set.as_pandas_dataframe()
+        if list(df.columns) == columns:
+            return df.copy(deep=False)
+    return pd.DataFrame(iter(ra_set), columns=columns)
+
+
+def result_to_dataframe(result, column_names=None) -> pd.DataFrame:
+    """
+    Return the rows of a query *result* as a DataFrame.
+
+    *result* is a relational algebra set, possibly wrapped in a
+    ``Constant``. Auto-generated column names are replaced by
+    *column_names* when given.
+    """
+    if hasattr(result, "value") and hasattr(result.value, "unwrap"):
+        result = result.value.unwrap()
+        if hasattr(result, "as_pandas_dataframe"):
+            return _rename_unnamed_columns(
+                result.as_pandas_dataframe().copy(deep=False), column_names
+            )
+    columns = list(getattr(result, "columns", ()))
+    if columns:
+        df = _set_frame(result, columns)
+    else:
+        rows = list(iter(result))
+        arity = getattr(result, "arity", len(rows[0]) if rows else 0)
+        df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
+    return _rename_unnamed_columns(df, column_names)
 
 
 def _format_result(
@@ -167,34 +253,9 @@ def _format_result(
         return ""
     if isinstance(result, bool):
         return "true" if result else "false"
-
     try:
-        # Unwrap Constant -> concrete set when chase produced wrapped result
-        if hasattr(result, "value") and hasattr(result.value, "unwrap"):
-            inner = result.value.unwrap()
-            if hasattr(inner, "as_pandas_dataframe"):
-                return _emit(
-                    _rename_unnamed_columns(
-                        inner.as_pandas_dataframe(), column_names
-                    ),
-                    fmt,
-                    sort_by=sort_by,
-                )
-            result = inner
-
-        # Get a DataFrame from the bare set (named or unnamed columns)
-        if hasattr(result, "columns") and len(result.columns) > 0:
-            df = pd.DataFrame(iter(result), columns=result.columns)
-        else:
-            rows = list(iter(result))
-            if not rows:
-                return "(empty)"
-            arity = result.arity if hasattr(result, "arity") else len(rows[0])
-            df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
-
-        return _emit(
-            _rename_unnamed_columns(df, column_names), fmt, sort_by=sort_by
-        )
+        df = result_to_dataframe(result, column_names)
+        return _emit(df, fmt, sort_by=sort_by)
     except Exception as exc:
         print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)
@@ -330,6 +391,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Sort output by COL (ascending by default). "
         "Append ':desc' for descending, ':asc' for ascending. "
         "Repeatable for multi-key sorts (first key has highest priority).",
+    )
+    parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        dest="interactive",
+        help="Start an interactive REPL on the engine, rendering the "
+        "query results as tables. A query given as argument or with "
+        "--file is run first; --show-ra and --show-rewritten apply to "
+        "every query of the session. If stdin is not a terminal, its "
+        "statements and dot-commands are run as a batch (exit status 1 "
+        "if one fails).",
     )
     parser.add_argument(
         "--debug",
@@ -573,6 +646,36 @@ def _debug_enabled(args) -> bool:
     )
 
 
+def report_error(
+    exc: Exception, program: str, *, squall: bool, debug: bool, nl=None,
+    file=None,
+) -> None:
+    """
+    Print the query error *exc* as a formatted message.
+
+    The message shows the location of the error in *program*, hints and
+    the symbols of the engine *nl* close to an unknown one. In *debug*
+    mode the traceback is printed first; otherwise unexpected errors get
+    a hint to use ``--debug``. *file* defaults to ``sys.stderr``.
+    """
+    stream = sys.stderr if file is None else file
+    if debug:
+        traceback.print_exception(
+            type(exc), exc, exc.__traceback__, file=stream
+        )
+    print_formatted_error(
+        exc, program,
+        language="SQUALL" if squall else "Datalog",
+        known_symbols=_known_symbol_names(nl),
+        file=stream,
+    )
+    if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+        print(
+            "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
+            "traceback.", file=stream,
+        )
+
+
 def _run_reporting_errors(action, program: str, args, nl=None):
     """
     Run *action* and report any failure as a formatted error.
@@ -584,19 +687,10 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     try:
         return action()
     except Exception as exc:
-        debug = _debug_enabled(args)
-        if debug:
-            traceback.print_exc()
-        print_formatted_error(
-            exc, program,
-            language="SQUALL" if args.squall else "Datalog",
-            known_symbols=_known_symbol_names(nl),
+        report_error(
+            exc, program, squall=args.squall, debug=_debug_enabled(args),
+            nl=nl,
         )
-        if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
-            print(
-                "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
-                "traceback.", file=sys.stderr,
-            )
         sys.exit(1)
 
 
@@ -717,21 +811,35 @@ def _run_dry_run_command(args) -> bool:
     return False
 
 
-def _print_result(result, args, sort_by) -> None:
-    """Print a query ``result``, one block per ``obtain`` when a dict."""
+def _result_column_names(args, program: str) -> dict:
+    """Return the column names of the results of ``program``, by key."""
+    if not args.squall:
+        return {}
+    return squall_column_names(args.engine, program)
+
+
+def _print_result(result, args, sort_by, column_names=None) -> None:
+    """
+    Print a query ``result``, one block per ``obtain`` when a dict.
+
+    ``column_names`` maps result keys to the names of their columns, as
+    returned by :func:`squall_column_names`.
+    """
+    column_names = column_names or {}
     if isinstance(result, dict):
         for key, sub_result in result.items():
             output = _format_result(
-                sub_result, fmt=args.format, column_names=None,
-                sort_by=sort_by,
+                sub_result, fmt=args.format,
+                column_names=column_names.get(key), sort_by=sort_by,
             )
             if output:
                 print(f"── {key} ──")
                 print(output)
                 print()
         return
+    names = next(iter(column_names.values()), None)
     output = _format_result(
-        result, fmt=args.format, column_names=None, sort_by=sort_by,
+        result, fmt=args.format, column_names=names, sort_by=sort_by,
     )
     if output:
         print(output)
@@ -755,10 +863,103 @@ def _run_query(args) -> None:
     result = _run_reporting_errors(
         lambda: execute(nl, program), program, args, nl
     )
-    _print_result(result, args, sort_by)
+    _print_result(
+        result, args, sort_by, _result_column_names(args, program)
+    )
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
+
+
+_NOT_INTERACTIVE_FLAGS = (
+    ("--list-engines", "list_engines"),
+    ("--grammar-json", "grammar_json"),
+    ("--show-datalog", "show_datalog"),
+    ("--list-predicates", "list_predicates"),
+    ("--list-sets", "list_sets"),
+)
+
+
+def _check_interactive_flags(args) -> None:
+    """Exit with an error when ``args`` combines -i with a listing flag."""
+    for flag, dest in _NOT_INTERACTIVE_FLAGS:
+        if getattr(args, dest):
+            print(
+                f"Error: {flag} cannot be used with --interactive.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+def _tui_settings(args, tui):
+    """Return the REPL settings ``tui.TuiSettings`` requested by ``args``."""
+    return tui.TuiSettings(
+        engine_name=args.engine,
+        squall=args.squall,
+        output_format=args.format,
+        sort_by=_parse_sort_spec(args.sort),
+        show_ra=args.show_ra,
+        ra_options=_show_ra_options(args),
+        show_rewritten=args.show_rewritten,
+        debug=_debug_enabled(args),
+        history_path=str(Path.home() / ".neurolang_query_history"),
+    )
+
+
+TUI_DEPENDENCIES = ("prompt_toolkit", "rich")
+
+
+def _import_tui():
+    """
+    Return the :mod:`neurolang.utils.tui` module of the interactive REPL.
+
+    If its optional dependencies are missing, exit with status 1 and a
+    message telling how to install them.
+    """
+    try:
+        from neurolang.utils import tui
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] not in TUI_DEPENDENCIES:
+            raise
+        print(
+            "Error: the interactive mode needs the optional dependencies "
+            f"{' and '.join(TUI_DEPENDENCIES)}. Install them with:\n"
+            '    pip install "neurolang[tui]"',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return tui
+
+
+def _program_argument(args) -> str:
+    """Return the query given as argument or with ``--file``, or ''."""
+    if args.file:
+        return Path(args.file).read_text(encoding="utf-8")
+    return args.query or ""
+
+
+def _run_interactive(args) -> None:
+    """
+    Build the engine once and start the interactive REPL on it.
+
+    A query given as argument or with ``--file`` is run in the session
+    before the first prompt. ``--show-ra`` and ``--show-rewritten``
+    apply to every query of the session. When the standard input is not
+    a terminal, its statements are run as a batch and the CLI exits with
+    status 1 if one of them failed.
+    """
+    _check_interactive_flags(args)
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    tui = _import_tui()
+
+    program = _program_argument(args)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    status = tui.main(nl, _tui_settings(args, tui), initial_program=program)
+    if status:
+        sys.exit(status)
 
 
 def main(argv: Optional[list] = None) -> None:
@@ -766,6 +967,9 @@ def main(argv: Optional[list] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.interactive:
+        _run_interactive(args)
+        return
     if _run_engineless_command(args):
         return
     _check_flag_dependencies(args)

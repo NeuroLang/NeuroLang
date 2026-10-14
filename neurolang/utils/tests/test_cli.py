@@ -1453,3 +1453,139 @@ class TestErrorReporting:
         err = self.run_failing(capsys, "ans(x) :- item(x)")
         assert err.startswith("Internal error — ValueError: boom")
         assert "--debug" in err
+
+
+# ---------------------------------------------------------------------------
+# Result helpers shared with the interactive REPL
+# ---------------------------------------------------------------------------
+
+
+class TestResultToDataFrame:
+
+    def test_wrapped_constant_renamed(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(42,)])
+        df = result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(df.columns) == ["val"]
+        assert df.iloc[0, 0] == 42
+
+    def test_named_set(self):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+
+    def test_sort_dataframe_warns_on_unknown_column(self, capsys):
+        from neurolang.utils.cli import sort_dataframe
+
+        import pandas as pd
+
+        df = pd.DataFrame({"x": [1, 3, 2]})
+        out = sort_dataframe(df, [("y", True), ("x", False)])
+        assert list(out["x"]) == [3, 2, 1]
+        assert "sort column 'y' not found" in capsys.readouterr().err
+
+
+def test_squall_obtain_relation_uses_declared_column_names(
+    monkeypatch, capsys
+):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3, 10)], name="peak_reported")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main(["--squall", "obtain every peak_reported."])
+    header = capsys.readouterr().out.splitlines()[0].split()
+    assert header == ["i", "j", "k", "study_id"]
+
+
+@pytest.mark.parametrize("missing", ["prompt_toolkit", "rich"])
+def test_interactive_without_tui_dependencies(missing, monkeypatch, capsys):
+    """Check that -i without the tui extra exits with an install hint."""
+    import sys
+
+    import neurolang.utils
+
+    monkeypatch.setitem(sys.modules, missing, None)
+    for name in list(sys.modules):
+        if name.startswith("neurolang.utils.tui"):
+            monkeypatch.delitem(sys.modules, name)
+    monkeypatch.delattr(neurolang.utils, "tui", raising=False)
+
+    def fail_build(*args, **kwargs):
+        raise AssertionError("the engine must not be built")
+
+    monkeypatch.setattr(engine_registry, "build_engine", fail_build)
+    with pytest.raises(SystemExit) as exc_info:
+        main(["-i"])
+    assert exc_info.value.code == 1
+    assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
+
+
+class TestResultToDataFrameUsesBackendFrame:
+
+    def test_named_set_not_iterated(self, monkeypatch):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a"), (2, "b")]
+        )
+
+        def no_iteration(self):
+            raise AssertionError("rows must not be iterated")
+
+        monkeypatch.setattr(
+            NamedRelationalAlgebraFrozenSet, "__iter__", no_iteration
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+        assert len(df) == 2
+
+    def test_renaming_does_not_change_the_set(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(1,)])
+        result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(inner.as_pandas_dataframe().columns) == [0]
+
+    def test_polars_empty_named_set_keeps_columns(self):
+        pytest.importorskip("polars")
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.polars import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        empty = NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+        df = result_to_dataframe(empty)
+        assert list(df.columns) == ["x", "y"]
+        assert df.empty
+        full = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        assert result_to_dataframe(full).values.tolist() == [[1, "a"]]
