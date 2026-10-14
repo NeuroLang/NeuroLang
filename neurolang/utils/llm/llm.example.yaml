@@ -51,7 +51,8 @@ providers:
   claude-code:
     api: command
     command: [claude, -p, --model, sonnet, --tools, "",
-              --no-session-persistence, --system-prompt, "{system}"]
+              --no-session-persistence, --setting-sources, "",
+              --system-prompt, "{system}"]
     model: sonnet
     tool_calling: text
 

@@ -82,7 +82,7 @@ def test_schema_summary(nl):
     lines = summary.splitlines()
     assert "- mentions(c0, c1) [stored, 4 rows]" in lines
     assert "- study(c0) [stored, 3 rows]" in lines
-    assert any(line.startswith("- pain_study(s) [") for line in lines)
+    assert "- pain_study(s) [rule]" in lines
     assert lines[-1].startswith("Functions: ") and "exp" in lines[-1]
 
 

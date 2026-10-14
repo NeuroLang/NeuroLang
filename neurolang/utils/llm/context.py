@@ -18,7 +18,8 @@ from neurolang.utils.cli import result_to_dataframe
 from neurolang.utils.predicate_catalog import predicate_catalog
 
 # Order in which the kinds of predicates are listed.
-KIND_ORDER = ("stored", "derived", "probabilistic", "loaded", "session")
+KIND_ORDER = ("stored", "rule", "probabilistic", "loaded")
+RULE_KINDS = frozenset({"derived", "session"})
 MAX_VALUES_SCANNED = 200_000
 
 
@@ -58,18 +59,25 @@ class EngineContext:
         self.declared = declared_predicates(engine_name)
 
     def catalog(self) -> dict:
-        """Return the predicates of the engine, by name."""
+        """
+        Return the predicates of the engine, by name.
+
+        The rules are of kind ``rule``, whether the engine or the
+        session defines them, and the columns the configuration declares
+        replace the names of the variables of their head.
+        """
         catalog = predicate_catalog(
             self.nl, _declared_columns(self.declared), self.loaded
         )
         for name, info in catalog.items():
+            if info.kind in RULE_KINDS:
+                info = info._replace(kind="rule")
             columns = self.declared.get(name, {}).get("columns")
-            if columns and info.columns is None and (
-                info.arity is None or info.arity == len(columns)
-            ):
-                catalog[name] = info._replace(
+            if columns and (info.arity is None or info.arity == len(columns)):
+                info = info._replace(
                     columns=tuple(columns), arity=len(columns)
                 )
+            catalog[name] = info
         return catalog
 
     def columns(self, name: str) -> Optional[list]:
