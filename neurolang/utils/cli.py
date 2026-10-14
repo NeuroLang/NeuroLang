@@ -79,6 +79,7 @@ from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.logic import ExistentialPredicate
+from neurolang.probabilistic.expressions import Condition
 from neurolang.utils import engine_registry
 
 
@@ -153,14 +154,18 @@ def _rename_unnamed_columns(df, column_names):
     """
     Replace auto-generated column names with *column_names* when safe.
 
-    A None in *column_names* keeps the column's name.
+    Only the generated columns are renamed, each after the name of
+    *column_names* at its position, unless that name is None or another
+    column's.
     """
-    if column_names is not None and len(column_names) == len(df.columns):
-        if all(_is_generated_column(c) for c in df.columns):
-            df.columns = [
-                old if new is None else new
-                for old, new in zip(df.columns, column_names)
-            ]
+    if column_names is None or len(column_names) != len(df.columns):
+        return df
+    taken = set(df.columns)
+    df.columns = [
+        new if _is_generated_column(old) and new not in taken | {None}
+        else old
+        for old, new in zip(df.columns, column_names)
+    ]
     return df
 
 
@@ -309,14 +314,25 @@ def _aggregate_name(function) -> str:
 
 
 def _body_atoms(formula):
-    """Yield the predicates of *formula*, in order, but negated ones."""
+    """
+    Yield the predicates of *formula*, in order, but negated ones.
+
+    They are those of its conjunctions, existentials and conditions.
+    """
     functor = getattr(formula, "functor", None)
     if isinstance(functor, Symbol):
         yield formula
-    for sub in getattr(formula, "formulas", ()):
+    for sub in _subformulas(formula):
         yield from _body_atoms(sub)
+
+
+def _subformulas(formula) -> tuple:
+    """Return the formulas of a conjunction, existential or condition."""
     if isinstance(formula, ExistentialPredicate):
-        yield from _body_atoms(formula.body)
+        return (formula.body,)
+    if isinstance(formula, Condition):
+        return (formula.conditioned, formula.conditioning)
+    return tuple(getattr(formula, "formulas", ()))
 
 
 def _variable_column(variable, atoms, columns: dict):
