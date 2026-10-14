@@ -110,6 +110,10 @@ def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
     assert len(datalog.symbol_table[destrieux].value) == 2
 
 
+@pytest.mark.skip(
+    reason="nitrc.org, which hosts the Destrieux atlas, serves an expired "
+    "TLS certificate (since 2026-10-06)"
+)
 def test_command_end2end():
     """
     Create a PDL engine and use the .load_atlas command to load the data.

@@ -555,6 +555,10 @@ def destrieux():
     return destrieux
 
 
+@pytest.mark.skip(
+    reason="nitrc.org, which hosts the Destrieux atlas, serves an expired "
+    "TLS certificate (since 2026-10-06)"
+)
 def test_destrieux_cardinal_directions_anterior(destrieux):
     """
     Test that CD relations between brain regions from destrieux atlas
@@ -592,6 +596,10 @@ def test_destrieux_cardinal_directions_anterior(destrieux):
         assert not cardinal_relation(r, r45, "A", refine_overlapping=True), n
 
 
+@pytest.mark.skip(
+    reason="nitrc.org, which hosts the Destrieux atlas, serves an expired "
+    "TLS certificate (since 2026-10-06)"
+)
 def test_destrieux_cardinal_directions_inferior(destrieux):
     """
     Test that CD relations between brain regions from destrieux atlas
