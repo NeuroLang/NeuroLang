@@ -10,6 +10,7 @@ pytest.importorskip("rich")
 
 from rich.console import Console  # noqa: E402
 
+from neurolang.expressions import Symbol  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 
@@ -417,3 +418,116 @@ def test_help_lists_new_commands(app):
     for usage in (".idb [PREDICATE]", ".drop PREDICATE [N]",
                   ".load PATH [NAME]", ".format [table|csv|json]"):
         assert usage in out
+
+
+def _submit(app, program):
+    """Run *program* as typed at the prompt and return what it printed."""
+    app.console.file.seek(0)
+    app.console.file.truncate()
+    app.console.width = 1000
+    app._run_line(program)
+    return _output(app)
+
+
+def _session_symbols(app):
+    """Return the symbols of the session's scope and their values."""
+    return list(app._nl.program_ir.symbol_table._symbols.items())
+
+
+def _same_symbols(before, after):
+    """Return whether *after* has exactly the symbols and values *before*."""
+    return len(before) == len(after) and all(
+        k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(before, after)
+    )
+
+
+@pytest.mark.parametrize(
+    "squall, program",
+    [
+        (False, "bar(x) :- person(x)\nans(x) :- bar(x, y)"),
+        (False, "bar(x) :- person(x)\nbaz(x) :- bar(x, y)\nans(x) :- baz(x)"),
+        (
+            True,
+            "define as Bar every person that plays. "
+            "obtain every Bar (?x; ?y).",
+        ),
+        (
+            True,
+            "define as Bar every person that plays. "
+            "obtain every Person that bars a person.",
+        ),
+    ],
+)
+def test_failed_submission_defines_nothing(app, squall, program):
+    app.settings.squall = squall
+    session = app._nl.program_ir.symbol_table
+    before = _session_symbols(app)
+    out = _submit(app, program)
+    assert "nothing defined: the submission failed" in out
+    assert app.failed
+    assert app._nl.program_ir.symbol_table is session
+    assert _same_symbols(before, _session_symbols(app))
+    assert sorted(_idb_names(app)) == ["active"]
+    assert "'bar' is not an IDB predicate" in _command(app, ".datalog bar")
+    assert app.squall_rules == {}
+
+
+def test_failed_rule_of_a_predicate_is_not_added(app):
+    _submit(app, "active(x) :- sings(x)\nans(x) :- active(x, y)")
+    assert _command(app, ".idb active").splitlines() == [
+        "1  active(x) :- person(x), plays(x)"
+    ]
+
+
+def test_rule_added_to_a_predicate_replaces_its_rules(app):
+    _submit(app, "active(x) :- person(x), sings(x)")
+    session = app._nl.program_ir.symbol_table
+    assert len(session._symbols[Symbol("active")].formulas) == 2
+    assert Symbol("active") not in session.enclosing_scope
+    assert len(_command(app, ".idb active").splitlines()) == 2
+    assert _query(app, "ans(x) :- active(x)") == {("alice",), ("bob",)}
+
+
+def test_failed_query_without_definitions_says_nothing_more(app):
+    out = _submit(app, "ans(x) :- person(x, y)")
+    assert app.failed
+    assert "nothing defined" not in out
+
+
+def test_interrupted_submission_defines_nothing(app, monkeypatch):
+    nl = app._nl
+
+    def interrupted(program):
+        nl.execute_datalog_program("bar(x) :- person(x)")
+        nl.program_ir.push_scope()
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(app, "_execute", interrupted)
+    session = nl.program_ir.symbol_table
+    before = _session_symbols(app)
+    out = _submit(app, "bar(x) :- person(x)\nans(x) :- bar(x)")
+    assert "Query interrupted" in out
+    assert "nothing defined: the submission failed" in out
+    assert nl.program_ir.symbol_table is session
+    assert _same_symbols(before, _session_symbols(app))
+
+
+def test_session_works_after_a_failed_submission(app, tmp_path):
+    path = _write(tmp_path / "scores.csv", "Name\nalice\n")
+    app._handle_dot_command(f".load {path}")
+    _submit(app, "bar(x) :- scores(x)\nans(x) :- bar(x, y)")
+    assert "scores" in app.loaded_relations
+    _submit(app, "bar(x) :- scores(x)")
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+    assert "removed bar (1 rule)" in _command(app, ".drop bar")
+    assert "removed relation scores" in _command(app, ".drop scores")
+
+
+def test_failed_submission_is_left_out_of_the_replay_script(app, tmp_path):
+    _submit(app, "bar(x) :- person(x)\nans(x) :- bar(x, y)")
+    _submit(app, "baz(x) :- person(x)")
+    path = tmp_path / "replay.nl"
+    _command(app, f".transcript {path} --inputs")
+    script = path.read_text()
+    assert "baz(x) :- person(x)" in script
+    assert "bar" not in script
