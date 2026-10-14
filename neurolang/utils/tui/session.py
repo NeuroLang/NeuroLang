@@ -10,7 +10,7 @@ header of their file, are kept in the application's ``loaded_relations``
 to name the columns of the results and of ``.sets``. The other commands
 list the engines and the engine's sets and predicates, and show how the
 last query is rewritten (``.rewritten``) or translated from SQUALL to
-Datalog (``.datalog``).
+Datalog, and the Datalog rules of a predicate (``.datalog``).
 """
 
 import re
@@ -28,6 +28,11 @@ from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.datalog.squall_syntax_lark import (
+    SquallProgram,
+    parser as squall_parser,
+)
+from neurolang.logic import Implication
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
     _execute_program,
@@ -175,6 +180,7 @@ def _drop_all_rules(app, name: str, rules: tuple) -> None:
     """Remove the session's rules of the predicate *name*."""
     del app._nl.program_ir.symbol_table[Symbol(name)]
     _drop_helpers(app, name)
+    app.squall_rules.pop(name, None)
     kept = len(_engine_rules(app, name))
     message = f"removed {name} ({_plural(len(rules) - kept, 'rule')})"
     if kept:
@@ -194,6 +200,8 @@ def _drop_rule(app, name: str, rules: tuple, number: int) -> None:
         _warn(app, f"Rule {number} of {name} is part of the engine.")
         return
     remaining = rules[:number - 1] + rules[number:]
+    # its rules as compiled are not numbered as those SQUALL translated
+    app.squall_rules.pop(name, None)
     symbol_table = app._nl.program_ir.symbol_table
     if remaining:
         symbol = Symbol(name).cast(UnionOfConjunctiveQueries)
@@ -279,6 +287,7 @@ def cmd_clear(app, arg: str) -> None:
     app._nl.program_ir.pop_scope()
     open_session_scope(app._nl)
     app.loaded_relations.clear()
+    app.squall_rules.clear()
     app.console.print(
         "[green]All session-defined IDB predicates and loaded relations "
         "cleared.[/green]"
@@ -460,9 +469,68 @@ def cmd_rewritten(app, arg: str) -> None:
         app._report_error(exc, program)
 
 
-@command(".datalog", "Show the Datalog translation of the last SQUALL query")
+def _parsed_rules(parsed) -> tuple:
+    """Return the rules of the parsed SQUALL program *parsed*."""
+    if isinstance(parsed, SquallProgram):
+        formulas = parsed.rules
+    else:
+        formulas = getattr(parsed, "formulas", None) or (parsed,)
+    return tuple(f for f in formulas if isinstance(f, Implication))
+
+
+def record_squall_rules(app, program: str) -> None:
+    """
+    Keep the Datalog rules of the SQUALL *program*, which just ran.
+
+    They are kept by predicate name in the application's
+    ``squall_rules``, as SQUALL translated them, for ``.datalog
+    PREDICATE``: NeuroLang compiles some of them further, for instance a
+    conditional probability into the predicate and two helpers.
+    """
+    if "define" not in program.lower():
+        return
+    for rule in _parsed_rules(squall_parser(program)):
+        name = rule.consequent.functor.name
+        app.squall_rules.setdefault(name, []).append(rule)
+
+
+def _print_datalog_of(app, name: str) -> None:
+    """
+    Print the Datalog rules of the predicate *name*.
+
+    A predicate defined in SQUALL during the session has its rules as
+    SQUALL translated them; any other has its rules as the engine holds
+    them.
+    """
+    rules = app.squall_rules.get(name)
+    if rules is None:
+        symbol_table = app._nl.program_ir.symbol_table
+        value = symbol_table.get(Symbol(name))
+        if not isinstance(value, DatalogUnion):
+            _warn(app, f"{name!r} is not an IDB predicate.")
+            return
+        rules = value.formulas
+    printer = DatalogPrettyPrinter()
+    app.console.print(
+        "\n\n".join(printer.walk(rule) for rule in rules), markup=False,
+        highlight=False, soft_wrap=True,
+    )
+
+
+@command(
+    ".datalog", "Show the Datalog translation of the last SQUALL query, or "
+    "the Datalog rules of a predicate", ".datalog [PREDICATE]",
+)
 def cmd_datalog(app, arg: str) -> None:
-    """Print the Datalog program the last SQUALL query compiles to."""
+    """
+    Print the Datalog rules of the predicate in *arg*.
+
+    Without a predicate, print the Datalog program the last SQUALL query
+    compiles to.
+    """
+    if arg.strip():
+        _print_datalog_of(app, arg.strip())
+        return
     if _no_last_query(app):
         return
     program, squall = app.last_query

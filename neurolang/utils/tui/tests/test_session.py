@@ -178,6 +178,7 @@ def test_idb_lists_a_conditional_predicate_once(conditional):
 def test_drop_removes_the_helpers_of_a_conditional(conditional):
     _command(conditional, ".drop marg")
     assert "marg" not in _idb_names(conditional)
+    assert "not an IDB predicate" in _command(conditional, ".datalog marg")
 
 
 def test_datalog_of_a_squall_predicate(conditional):

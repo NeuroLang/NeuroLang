@@ -36,7 +36,7 @@ from .commands import (
 )
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import open_session_scope
+from .session import open_session_scope, record_squall_rules
 from .statements import is_complete, split_statements
 from .transcript import Transcript, is_transcript_command
 
@@ -147,6 +147,7 @@ class InteractiveTuiApp:
         self.failed = False
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
+        self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
@@ -290,6 +291,8 @@ class InteractiveTuiApp:
         t0 = time.perf_counter()
         try:
             result = self._execute_noting_warnings(program)
+            if self.settings.squall:
+                record_squall_rules(self, program)
             if not self.settings.show_ra:
                 self._show_result(result, self._column_names(program))
         except KeyboardInterrupt:
