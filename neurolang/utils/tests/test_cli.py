@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from neurolang.exceptions import NeuroLangException
+from neurolang.exceptions import NeuroLangException, SymbolNotFoundError
 from neurolang.expressions import Constant, Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
@@ -1771,3 +1771,94 @@ def test_generated_columns(column, generated):
     from neurolang.utils.cli import _is_generated_column
 
     assert _is_generated_column(column) is generated
+
+
+class PredicateArityError(NeuroLangException):
+    """Stand-in of the frontend's error on a predicate's arity."""
+
+    def __init__(self, predicate, arity, used):
+        super().__init__(f"{predicate} has {arity} columns, not {used}")
+        self.predicate = predicate
+        self.arity = arity
+        self.used = used
+
+
+_VOXEL_NOTE = (
+    'note: voxel is voxel(i, j, k), a 3-column entity: write '
+    '"every Voxel in 3D" or "every Voxel (?i; ?j; ?k)"'
+)
+_REPORTS_NOTE = (
+    'note: reports relates study(study_id) to voxel(i, j, k): write '
+    '"a Study reports a Voxel in 3D"'
+)
+
+
+class TestSortHints:
+    """Check the notes on the entities of several columns."""
+
+    @pytest.mark.parametrize(
+        "exc, program, notes",
+        [
+            (
+                PredicateArityError(Symbol("voxel"), 3, 1),
+                "obtain every Voxel.", [_VOXEL_NOTE],
+            ),
+            (
+                PredicateArityError("reports", 4, 2),
+                "obtain every Study that reports a Voxel.", [_REPORTS_NOTE],
+            ),
+            (
+                ValueError("Relations must have the same arity"),
+                "obtain every Study that reports a Voxel.",
+                [_REPORTS_NOTE, _VOXEL_NOTE],
+            ),
+            (
+                SymbolNotFoundError("Symbol not found voxels"),
+                "obtain every Voxels.", [_VOXEL_NOTE],
+            ),
+            (
+                SymbolNotFoundError("Symbol not found pain"),
+                "obtain every Pain.", [],
+            ),
+            (
+                ValueError("Relations must have the same arity"),
+                "obtain every Study that mentions 'pain'.", [],
+            ),
+            (ValueError("bad value"), "obtain every Voxel.", []),
+        ],
+    )
+    def test_squall_notes(self, exc, program, notes):
+        from neurolang.utils.sort_hints import sort_notes
+
+        assert sort_notes(exc, program, "neurosynth", squall=True) == notes
+
+    def test_datalog_notes(self):
+        from neurolang.utils.sort_hints import sort_notes
+
+        notes = sort_notes(
+            ValueError("Relations must have the same arity"),
+            "ans(s) :- reports(s, i)", "neurosynth", squall=False,
+        )
+        assert notes == [
+            "note: reports relates study(study_id) to voxel(i, j, k): "
+            "write reports(study_id, i, j, k)"
+        ]
+
+    def test_no_notes_without_engine(self):
+        from neurolang.utils.sort_hints import sort_notes
+
+        exc = PredicateArityError("voxel", 3, 1)
+        assert sort_notes(exc, "obtain every Voxel.", "", squall=True) == []
+
+    def test_report_error_adds_the_notes(self):
+        import io
+
+        from neurolang.utils.cli import report_error
+
+        stream = io.StringIO()
+        report_error(
+            ValueError("Relations must have the same arity"),
+            "obtain every Study that reports a Voxel.", squall=True,
+            debug=False, file=stream, engine_name="neurosynth",
+        )
+        assert _REPORTS_NOTE in stream.getvalue()

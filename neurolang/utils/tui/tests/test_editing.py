@@ -750,3 +750,26 @@ class TestTupleVariables:
 
     def test_nothing_after_the_last_column(self, sorts_app):
         assert _words(sorts_app, "obtain every Voxel (?i; ?j; ?k; ") == []
+
+
+def test_arity_error_notes_the_entities(sorts_app):
+    """Check a wrong arity on a voxel predicate tells its columns."""
+    sorts_app.settings.squall = False
+    sorts_app._execute_and_display("ans(s) :- reports(s, i)")
+    out = sorts_app.console.file.getvalue()
+    assert (
+        "note: reports relates study(study_id) to voxel(i, j, k): "
+        "write reports(study_id, i, j, k)"
+    ) in out
+
+
+def test_squall_error_notes_the_entities(sorts_app, monkeypatch):
+    """Check an error on a SQUALL noun of several columns tells how."""
+    def failing(program):
+        raise ValueError("Relations must have the same arity")
+
+    monkeypatch.setattr(sorts_app, "_execute", failing)
+    sorts_app._execute_and_display("obtain every Voxel that a Study reports.")
+    out = sorts_app.console.file.getvalue()
+    assert '"every Voxel in 3D" or "every Voxel (?i; ?j; ?k)"' in out
+    assert '"a Study reports a Voxel in 3D"' in out
