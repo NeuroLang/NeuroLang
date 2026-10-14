@@ -25,6 +25,7 @@ from ....logic import (
 from ....probabilistic.expressions import Condition, ProbabilisticFact
 from ..squall import LogicSimplifier, InvertedFunctionApplication, ResolveInvertedFunctionApplicationMixin
 from ..squall_syntax_lark import (
+    compiled_grammar,
     parser,
     EquiprobableChoiceDef,
     SquallProgram,
@@ -36,6 +37,7 @@ from ....datalog.expressions import AggregationApplication
 from ....datalog.aggregation import AggregationApplication as AggApp
 from ....datalog.negation import is_conjunctive_negation
 from ....expressions import ExpressionBlock, Query
+from ....logic.expression_processing import extract_logic_atoms
 from ....logic.horn_clauses import fol_query_to_datalog_program
 from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import PROB, ProbabilisticQuery
@@ -1477,6 +1479,62 @@ def test_obtain_unnamed_with_tuple_label_parses():
     assert len(q.head) == 2, f"Expected 2 head vars, got {len(q.head)}"
     head_names = [h.name for h in q.head]
     assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"
+
+
+def _functor_names(expression):
+    return {
+        a.functor.name
+        for a in extract_logic_atoms(expression)
+        if isinstance(a.functor, Symbol)
+    }
+
+
+def test_does_not_is_not_split_into_keyword_fragments():
+    """
+    Regression: ``does`` must not lex as ``do`` + ``es`` nor ``not`` as
+    ``no`` + ``t``. ``does not <verb>`` is the auxiliary negation form.
+    """
+    result = parser("obtain every Study that does not mention 'fear'.")
+    q = result.queries[0]
+    assert _functor_names(q.body) == {"study", "mention"}, repr(q.body)
+    x = q.head
+    expected = Conjunction((
+        Symbol("study")(x),
+        Negation(Symbol("mention")(x, Constant("fear"))),
+    ))
+    assert weak_logic_eq(q.body, expected), repr(q.body)
+
+
+def test_and_is_not_split_into_keyword_fragments():
+    """
+    Regression: ``and`` must not lex as ``an`` + ``d``, which produced a
+    spurious ``d`` predicate.
+    """
+    result = parser(
+        "obtain every Voxel that a Study reports "
+        "and that is a Schaefer_voxels."
+    )
+    names = _functor_names(result.queries[0].body)
+    assert "d" not in names, repr(result.queries[0].body)
+    assert {"voxel", "study", "reports", "schaefer_voxels"} <= names
+
+
+@pytest.mark.parametrize("sentence", [
+    "obtain every Study that does not mention 'fear'.",
+    "obtain every Voxel that a Study reports and that is a Schaefer_voxels.",
+    "define as Active every Study that does not report a Voxel.",
+    "obtain every Item that isn't a Thing.",
+])
+def test_name_terminals_do_not_start_inside_a_word(sentence):
+    """No LOWER_NAME / UPPER_NAME token may start in the middle of a word."""
+    tree = compiled_grammar().parse(sentence)
+    name_tokens = tree.scan_values(
+        lambda v: getattr(v, "type", None) in ("LOWER_NAME", "UPPER_NAME")
+    )
+    for token in name_tokens:
+        assert token.start_pos == 0 or not (
+            sentence[token.start_pos - 1].isalnum()
+        ), f"name {token!r} starts inside a word in {sentence!r}"
 
 
 def test_probably_prefix_in_wlq_head_is_preserved():
