@@ -512,6 +512,18 @@ def cmd_rewritten(app, arg: str) -> None:
     rerun_last_query(app, dry_run=True)
 
 
+@command(
+    ".ra", "Print the relational algebra plans of the last query, or of "
+    "every query instead of running it", ".ra [on|off]",
+)
+def cmd_ra(app, arg: str) -> None:
+    """Print the plans of the last query, or toggle printing them."""
+    if arg.strip():
+        _switch(app, arg, "show_ra", "RA plans")
+        return
+    rerun_last_query(app, show_ra=app.settings.ra_options)
+
+
 def _parsed_rules(parsed) -> tuple:
     """Return the rules of the parsed SQUALL program *parsed*."""
     if isinstance(parsed, SquallProgram):
