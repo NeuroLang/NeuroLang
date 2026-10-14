@@ -196,11 +196,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         flat_query = Implication(query.consequent, flat_query_body)
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
-        ucq_shattered_query = convert_rule_to_ucq(shattered_query)
-        ucq_shattered_query = MNTA.walk(
-            MQU.walk(ucq_shattered_query)
+        ra_query = lift_with_negation_subtraction(
+            shattered_query, symbol_table
         )
-        ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
@@ -239,8 +237,6 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
     unified_query = UnifyVariableEqualities().walk(flat_query)
-    if config.get_probabilistic_solver_check_unate():
-        _verify_that_the_query_has_one_quantifier(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
@@ -256,7 +252,15 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query_body
     )
     _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
-    if config.get_probabilistic_solver_check_unate():
+    if (
+        config.get_probabilistic_solver_check_unate() and
+        _split_dependent_negation(
+            RTO.walk(shattered_query.antecedent), symbol_table
+        ) is None
+    ):
+        # Otherwise the checks are applied by
+        # `lift_with_negation_subtraction` to each query it lifts.
+        _verify_that_the_query_has_one_quantifier(flat_query)
         _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
         convert_rule_to_ucq(shattered_query)
@@ -316,6 +320,110 @@ def _verify_that_the_query_has_one_quantifier(query):
         query_act = query_act.body
 
 
+def lift_with_negation_subtraction(rule, symbol_table, check=False):
+    """Lift a shattered rule, first removing the negated conjuncts
+    that share probabilistic symbols with the rest of the rule, using
+
+        P[A ∧ ¬N] = P[A] - P[A ∧ N]
+
+    which is sound for any `A` and `N`, as `A ∧ N` implies `A`. Both
+    `A` and `A ∧ N` have one negation less than `A ∧ ¬N`; they are
+    lifted recursively, and then by `dalvi_suciu_lift`. When the
+    unate check is enabled, it is applied to each of these queries.
+
+    When `N` shares no probabilistic symbol with `A` the rule is not
+    used: `dalvi_suciu_lift` lifts the query with the independent
+    difference P[A] (1 - P[N]), and the query is liftable if and only
+    if `A` and `N` are, being #P-hard otherwise [1]. When they share
+    symbols, the subtraction rule is sound, but not known to be
+    complete: there could be liftable queries for which `A ∧ N`
+    is not liftable.
+
+    [1] Fink, R. & Olteanu, D. Dichotomies for queries with negation in
+    probabilistic databases. ACM TODS 41, 1–47 (2016).
+
+    Parameters
+    ----------
+    rule : Implication
+        shattered and ranked rule.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+    check : bool
+        whether to apply the unate check, if enabled, before lifting
+        a query with `dalvi_suciu_lift`.
+
+    Returns
+    -------
+    RelationalAlgebraOperation
+        lifted plan, possibly containing `NonLiftable` nodes.
+    """
+    consequent, antecedent = rule.unapply()
+    antecedent = RTO.walk(antecedent)
+    split = _split_dependent_negation(antecedent, symbol_table)
+    if split is None:
+        rule = Implication(consequent, antecedent)
+        if check and config.get_probabilistic_solver_check_unate():
+            _verify_that_the_query_has_one_quantifier(rule)
+            _verify_that_the_query_is_unate(rule, symbol_table)
+        ucq_rule = MNTA.walk(MQU.walk(convert_rule_to_ucq(rule)))
+        return dalvi_suciu_lift(ucq_rule, symbol_table)
+
+    remainder, negated_formula = split
+    plan_remainder = lift_with_negation_subtraction(
+        Implication(consequent, remainder), symbol_table, check=True
+    )
+    plan_both = lift_with_negation_subtraction(
+        Implication(
+            consequent,
+            Conjunction(remainder.formulas + (negated_formula,))
+        ),
+        symbol_table, check=True
+    )
+    if not (
+        is_pure_lifted_plan(plan_remainder) and
+        is_pure_lifted_plan(plan_both)
+    ):
+        return NonLiftable(antecedent)
+    return rap.Subtraction(plan_remainder, plan_both)
+
+
+def _split_dependent_negation(antecedent, symbol_table):
+    """Find a negated conjunct sharing probabilistic symbols
+    with the rest of the conjunction.
+
+    Returns
+    -------
+    Optional[Tuple[Conjunction, LogicExpression]]
+        the conjunction without the negated conjunct and the formula
+        under the negation, or None if there is no such conjunct.
+    """
+    if not isinstance(antecedent, Conjunction):
+        return None
+    for i, formula in enumerate(antecedent.formulas):
+        if not isinstance(formula, Negation):
+            continue
+        remainder = Conjunction(
+            antecedent.formulas[:i] + antecedent.formulas[i + 1:]
+        )
+        if not (
+            extract_logic_free_variables(formula) <=
+            extract_logic_free_variables(remainder)
+        ):
+            continue
+        if not _probabilistic_symbols(formula, symbol_table).isdisjoint(
+            _probabilistic_symbols(remainder, symbol_table)
+        ):
+            return remainder, formula.formula
+    return None
+
+
+def _probabilistic_symbols(formula, symbol_table):
+    return set(
+        atom.functor for atom in extract_logic_atoms(formula)
+        if not is_atom_a_deterministic_relation(atom, symbol_table)
+    )
+
+
 def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
@@ -335,8 +443,15 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_safe_plan:
         return res
 
+    deterministic_symbols = _deterministic_symbols(rule, symbol_table)
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
-    connected_components = symbol_connected_components(rule_cnf)
+    if len(extract_logic_atoms(rule_cnf)) < len(extract_logic_atoms(rule)):
+        # Minimisation removed redundant atoms: the base cases
+        # might apply to the minimised rule.
+        return dalvi_suciu_lift(RTO.walk(rule_cnf), symbol_table)
+    connected_components = symbol_connected_components(
+        rule_cnf, ignore_symbols=deterministic_symbols
+    )
     if len(connected_components) > 1:
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
@@ -344,7 +459,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
-    connected_components = symbol_connected_components(rule_dnf)
+    connected_components = symbol_connected_components(
+        rule_dnf, ignore_symbols=deterministic_symbols
+    )
     if len(connected_components) > 1:
         return components_plan(
             connected_components, rap.Union, symbol_table
@@ -359,10 +476,20 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_safe_plan:
         return plan
 
-    if len(rule_cnf.formulas) > 1:
+    if (
+        len(rule_cnf.formulas) > 1 and
+        _have_the_same_free_variables(rule_cnf.formulas)
+    ):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
+
+
+def _deterministic_symbols(rule, symbol_table):
+    return frozenset(
+        atom.functor for atom in extract_logic_atoms(rule)
+        if is_atom_a_deterministic_relation(atom, symbol_table)
+    )
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
@@ -537,13 +664,15 @@ def calc_new_fresh_symbol(formula, existential_vars):
     return new_symbol
 
 
-def symbol_connected_components(expression):
+def symbol_connected_components(expression, ignore_symbols=frozenset()):
     if not isinstance(expression, NaryLogicOperator):
         raise ValueError(
             "Connected components can only be computed "
             "for n-ary logic operators."
         )
-    c_matrix = symbol_co_occurence_graph(expression)
+    c_matrix = symbol_co_occurence_graph(
+        expression, ignore_symbols=ignore_symbols
+    )
     components = connected_components(c_matrix)
 
     operation = type(expression)
@@ -553,7 +682,7 @@ def symbol_connected_components(expression):
     ]
 
 
-def symbol_co_occurence_graph(expression):
+def symbol_co_occurence_graph(expression, ignore_symbols=frozenset()):
     """Symbol co-ocurrence graph expressed as
     an adjacency matrix.
 
@@ -561,6 +690,10 @@ def symbol_co_occurence_graph(expression):
     ----------
     expression : NAryLogicExpression
         logic expression for which the adjacency matrix is computed.
+    ignore_symbols : AbstractSet[Symbol]
+        predicate symbols which do not make two subformulas adjacent,
+        e.g. deterministic relations, whose tuples are not random
+        and therefore do not introduce dependencies.
 
     Returns
     -------
@@ -571,11 +704,13 @@ def symbol_co_occurence_graph(expression):
     """
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
-        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
+        atom_symbols = set(
+            a.functor for a in extract_logic_atoms(formula)
+        ) - ignore_symbols
         for j, formula_ in enumerate(expression.formulas[i + 1:]):
             atom_symbols_ = set(
                 a.functor for a in extract_logic_atoms(formula_)
-            )
+            ) - ignore_symbols
             if not atom_symbols.isdisjoint(atom_symbols_):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1
@@ -1094,6 +1229,19 @@ def components_plan(
             complemented_negative_formulas[0]
         )
     return output
+
+
+def _have_the_same_free_variables(formulas):
+    """Inclusion-exclusion is only sound when all conjuncts have the same
+    free variables: the disjunctions in the expansion are otherwise
+    not range-restricted and the containment test used to compute the
+    Möbius weights does not apply.
+    """
+    free_variables = extract_logic_free_variables(formulas[0])
+    return all(
+        extract_logic_free_variables(formula) == free_variables
+        for formula in formulas[1:]
+    )
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):

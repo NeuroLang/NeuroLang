@@ -27,7 +27,8 @@ from ..relational_algebra_provenance import (
     BuildProvenanceAlgebraSetWalkIntoMixin,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
-    RelationalAlgebraSolver
+    RelationalAlgebraSolver,
+    Subtraction
 )
 
 EQ = Constant(operator.eq)
@@ -383,6 +384,47 @@ def test_difference():
         Difference(r_left, r_right),
         tuple(str2columnstr_constant(c) for c in ("x", "y", "w"))
     )
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
+
+
+def test_subtraction():
+    r_left = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y"),
+            iterable=[
+                (0.5, "a", "b"),
+                (0.7, "a", "a"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p1_"),
+    )
+
+    r_right = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p2_", "x", "y"),
+            iterable=[
+                (0.2, "a", "b"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p2_"),
+    )
+
+    r_expected = ProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y"),
+            iterable=[
+                (0.3, "a", "b"),
+                (0.7, "a", "a"),
+                (0.0, "b", "b"),
+            ],
+        )),
+        str2columnstr_constant("_p1_"),
+    )
+
+    op = Subtraction(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
     assert testing.eq_prov_relations(result, r_expected)
 
