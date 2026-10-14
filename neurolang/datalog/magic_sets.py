@@ -339,6 +339,10 @@ def magic_rewrite(
     magic_rules = create_balbin_magic_rules(
         adorned_code.formulas[:-1], sips
     )
+    query_arcs, _ = sips.creates_arcs(adorned_query, adorned_query.consequent)
+    magic_rules += create_magic_arc_rules(
+        query_arcs, adorned_query.consequent, None
+    )
     magic_inits = create_magic_query_inits(constant_predicates)
 
     # 4. Unadorn the magic rules + query to replace AdornedSymbols by
@@ -373,12 +377,12 @@ def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
     """
     magic_init_rules = []
     for predicate in constant_predicates:
-        magic_init_rules.append(
-            Implication(
-                magic_predicate(predicate, adorned=False),
-                Conjunction(()),
+        magic_head = magic_predicate(predicate, adorned=False)
+        # bound variables get their magic set from the SIPS arc instead
+        if all(isinstance(arg, Constant) for arg in magic_head.args):
+            magic_init_rules.append(
+                Implication(magic_head, Conjunction(()))
             )
-        )
     return magic_init_rules
 
 
@@ -403,34 +407,49 @@ def create_balbin_magic_rules(adorned_rules, sips):
     for rule in adorned_rules:
         consequent = rule.consequent
         magic_head = magic_predicate(consequent, adorned=False)
+        arcs, adorned_antecedent = sips.creates_arcs(rule, consequent)
         if len(magic_head.args) == 0:
             magic_rules.append(rule)
-            continue
-
-        arcs, adorned_antecedent = sips.creates_arcs(rule, consequent)
-
-        # Add the rule head :- magic(head), body
-        magic_rules.append(
-            Implication(
-                rule.consequent,
-                Conjunction((magic_head,) + adorned_antecedent),
+            magic_head = None
+        else:
+            # Add the rule head :- magic(head), body
+            magic_rules.append(
+                Implication(
+                    rule.consequent,
+                    Conjunction((magic_head,) + adorned_antecedent),
+                )
             )
-        )
-        # Add the magic rules for each arc of the sips
-        for head, tail in arcs.items():
-            if isinstance(head, Negation):
-                head = head.formula
-            if "b" in head.functor.adornment:
-                new_predicate = magic_predicate(head, adorned=False)
-                body_lits = [
-                    p if p != consequent else magic_head for p in tail
-                ]
-                if not (len(body_lits) == 1 and new_predicate == body_lits[0]):
-                    # avoid adding rules of the form magic_p(x) :- magic_p(x)
-                    magic_rules.append(
-                        Implication(new_predicate, Conjunction(body_lits))
-                    )
+        magic_rules += create_magic_arc_rules(arcs, consequent, magic_head)
 
+    return magic_rules
+
+
+def create_magic_arc_rules(arcs, consequent, magic_head):
+    """
+    Create the rule Magic(p) :- Magic(h), ^(body predicates left of p)
+    for each adorned predicate p heading an arc of the sips.
+
+    When magic_head is None, the rule head h is not bound and Magic(h)
+    is left out of the rule bodies. Arcs whose body is then empty are
+    skipped, their magic predicate being seeded by the magic
+    initialization rules.
+    """
+    magic_rules = []
+    for head, tail in arcs.items():
+        if isinstance(head, Negation):
+            head = head.formula
+        if "b" in head.functor.adornment:
+            new_predicate = magic_predicate(head, adorned=False)
+            body_lits = [p for p in tail if p != consequent]
+            if magic_head is not None:
+                body_lits = [magic_head] + body_lits
+            elif len(body_lits) == 0:
+                continue
+            if not (len(body_lits) == 1 and new_predicate == body_lits[0]):
+                # avoid adding rules of the form magic_p(x) :- magic_p(x)
+                magic_rules.append(
+                    Implication(new_predicate, Conjunction(body_lits))
+                )
     return magic_rules
 
 

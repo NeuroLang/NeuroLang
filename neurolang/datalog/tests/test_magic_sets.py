@@ -346,6 +346,73 @@ def test_resolution_works_builtin():
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
 
+def test_resolution_works_repeated_predicate_different_constants():
+    """
+    Calling the same IDB predicate twice with different constants on a
+    shared variable adorns the second call with the variable bound, e.g.
+    anc^bb(x, d). Its magic set must be derived from the first call,
+    not seeded as a non range restricted fact magic_anc^bb(x, d) :- ().
+    """
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, c) & anc(x, d)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (a, b)}
+
+
+def test_resolution_works_repeated_predicate_different_constants_nested():
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(y), anc2(a, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, y), anc(x, y) & anc(y, c) & anc(y, d)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((b,))}
+
+
 def test_resolution_works_aggregation():
     edb = Eb_(
         [
