@@ -735,6 +735,21 @@ def test_datalog_conditional_query_with_probability_in_its_head():
 
 
 
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "ans(t, PROB) :- mentions(s, t), selected_study(s)",
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)",
+    ],
+)
+def test_datalog_query_with_implicit_probability_in_its_head(query):
+    """``PROB`` alone in the head stands for ``PROB`` of the other terms."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(query)
+    assert res.columns == ("t", "PROB")
+    assert _rows(res) == {("pain", 1.0), ("fear", 0.5)}
+
 @pytest.mark.parametrize(
     "option", [{"dry_run": True}, {"show_rewritten": True}, {"show_ra": True}]
 )
