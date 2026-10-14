@@ -598,3 +598,26 @@ def test_squall_conditional_is_defined_once(conditional):
     assert "defined marg/2" in out
     assert out.count("defined marg") == 1
     assert "(no result)" not in out
+
+
+def test_failed_facts_are_discarded(app):
+    _submit(app, "person('carol')\nans(x) :- person(x, y)")
+    assert app.failed
+    assert _query(app, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+def test_facts_added_to_an_engine_relation(app, capsys):
+    out = _submit(app, "person('carol')")
+    assert _messages(out) == ["defined person/1 (now 3 facts)"]
+    assert _query(app, "ans(x) :- person(x)") == {
+        ("alice",), ("bob",), ("carol",)
+    }
+    capsys.readouterr()
+    app._handle_dot_command(".sets")
+    sets = [
+        line.split()[0] for line in capsys.readouterr().out.splitlines()
+        if line.strip()
+    ]
+    assert sets.count("person") == 1
+    _command(app, ".clear")
+    assert _query(app, "ans(x) :- person(x)") == {("alice",), ("bob",)}
