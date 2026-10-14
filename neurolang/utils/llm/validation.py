@@ -12,8 +12,13 @@ rules of the query never stay in the session.
 import contextlib
 import ctypes
 import io
+import os
+import pickle
 import re
+import signal
+import subprocess
 import threading
+import time
 import warnings
 from dataclasses import dataclass
 from typing import Optional
@@ -29,6 +34,7 @@ from neurolang.utils.cli import (
 from neurolang.utils.predicate_catalog import predicate_catalog
 
 LANGUAGE_NAMES = {"squall": "SQUALL", "datalog": "Datalog"}
+CHILD_POLL_SECONDS = 0.25
 _DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*\(")
 _CALL = re.compile(
     r"(?<![\w.:'\"])([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_-]*)?)"
@@ -298,20 +304,106 @@ def _frames(result, column_names: dict) -> list:
     return [("", result_to_dataframe(result, names))]
 
 
+class QueryTooLarge(Exception):
+    """Raised for a query using more memory than its limit."""
+
+
+def _memory_mb(pid: int) -> float:
+    """Return the resident memory of the process *pid*, in MB."""
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        return int(out) / 1024 if out else 0.0
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0.0
+
+
+def _in_child(function, timeout, memory_mb):
+    """
+    Return ``function()``, run in a forked child process.
+
+    The child shares the engine's memory with the parent until it
+    writes, so forking is cheap. It is killed when it runs longer than
+    *timeout* seconds (QueryTimeout) or uses more than *memory_mb* MB
+    (QueryTooLarge), so that a runaway query cannot bring the parent
+    down. Without fork, *function* runs in a thread with *timeout*.
+    """
+    if not hasattr(os, "fork"):
+        return _with_timeout(function, timeout)
+    read, write = os.pipe()
+    with warnings.catch_warnings():
+        # A child deadlocked by a lock of another thread is killed at
+        # the timeout like any other stuck query.
+        warnings.filterwarnings(
+            "ignore", message=".*multi-threaded, use of fork",
+            category=DeprecationWarning,
+        )
+        pid = os.fork()
+    if pid == 0:  # the child
+        os.close(read)
+        try:
+            payload = ("value", function())
+        except BaseException as exc:
+            payload = ("error", exc)
+        try:
+            data = pickle.dumps(payload)
+        except Exception:
+            data = pickle.dumps(("error", RuntimeError(repr(payload[1]))))
+        with os.fdopen(write, "wb") as stream:
+            stream.write(data)
+        os._exit(0)
+    os.close(write)
+    received = {}
+    reader = threading.Thread(
+        target=lambda: received.setdefault(
+            "data", os.fdopen(read, "rb").read()
+        ),
+        daemon=True,
+    )
+    reader.start()
+    start, stop = time.monotonic(), None
+    while reader.is_alive():
+        reader.join(CHILD_POLL_SECONDS)
+        if not reader.is_alive():
+            break
+        if timeout and time.monotonic() - start > timeout:
+            stop = QueryTimeout
+        elif memory_mb and _memory_mb(pid) > memory_mb:
+            stop = QueryTooLarge
+        if stop is not None:
+            os.kill(pid, signal.SIGKILL)
+            reader.join()
+            break
+    os.waitpid(pid, 0)
+    if stop is not None:
+        raise stop()
+    if not received.get("data"):
+        raise QueryTooLarge()
+    kind, value = pickle.loads(received["data"])
+    if kind == "error":
+        raise value
+    return value
+
+
 def run_preview(
     nl, text: str, language: str, rows: int = 10, engine_name: str = "",
-    timeout: Optional[float] = None,
+    timeout: Optional[float] = None, memory_mb: Optional[float] = None,
 ) -> Preview:
     """
     Run the query *text* and return the first *rows* rows of its result.
 
-    The rules it defines are discarded with the scope it runs in. A query
-    running longer than *timeout* seconds is stopped.
+    The rules it defines are discarded with the scope it runs in. With a
+    *timeout* (seconds) or a *memory_mb* limit, the query runs in a child
+    process stopped when it exceeds them.
     """
+    if not (timeout or memory_mb):
+        return _preview(nl, text, language, rows, engine_name)
     try:
-        result = _with_timeout(
-            lambda: _execute(nl, text.strip(), language, dry_run=False),
-            timeout,
+        return _in_child(
+            lambda: _preview(nl, text, language, rows, engine_name),
+            timeout, memory_mb,
         )
     except QueryTimeout:
         return Preview(
@@ -319,6 +411,19 @@ def run_preview(
             f"The query ran for more than {timeout:.0f} s and was stopped: "
             "restrict it with constants or joins before running it again.",
         )
+    except QueryTooLarge:
+        return Preview(
+            False,
+            "The query was stopped: it used too much memory, e.g. joining "
+            "large relations without a shared variable. Restrict it, e.g. "
+            "with the class of its entities, before running it again.",
+        )
+
+
+def _preview(nl, text, language, rows, engine_name) -> Preview:
+    """Run the query *text* and return its preview (see run_preview)."""
+    try:
+        result = _execute(nl, text.strip(), language, dry_run=False)
     except Exception as exc:
         return Preview(False, error_message(nl, exc, text, language))
     if result is None:

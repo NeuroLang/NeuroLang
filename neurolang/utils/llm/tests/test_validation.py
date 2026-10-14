@@ -214,3 +214,31 @@ def test_search_matches_iris_and_shows_varied_predicates(nl):
     illustrated = [f for f in found if f.startswith("dbo:illustrator(")]
     assert len(illustrated) == 3
     assert found[-1] == "… and 3 more"
+
+
+def test_previews_in_a_child_process(nl):
+    preview = run_preview(
+        nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,
+        memory_mb=4096,
+    )
+    assert preview.ok and preview.rows == 4
+    assert list(preview.frame.columns) == ["s", "t"]
+    failed = run_preview(nl, "ans(s) :- mentions(s", "datalog", timeout=30)
+    assert not failed.ok and "parse error" in failed.text
+
+
+def test_previews_stop_queries_using_too_much_memory(nl, monkeypatch):
+    import time
+
+    from .. import validation
+
+    def greedy(*args, **kwargs):
+        hoard = bytearray(400 * 2 ** 20)
+        hoard[::4096] = b"x" * len(hoard[::4096])
+        time.sleep(30)
+
+    monkeypatch.setattr(validation, "_execute", greedy)
+    preview = run_preview(
+        nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=200
+    )
+    assert not preview.ok and "too much memory" in preview.text

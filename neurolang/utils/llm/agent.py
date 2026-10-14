@@ -227,11 +227,13 @@ class Toolbox:
     def __init__(
         self, context: EngineContext, language: str, preview_rows: int = 10,
         query_timeout: Optional[float] = None,
+        query_memory_mb: Optional[float] = None,
     ):
         self.context = context
         self.language = language
         self.preview_rows = preview_rows
         self.query_timeout = query_timeout
+        self.query_memory_mb = query_memory_mb
         # Queries whose answer of no rows has been confirmed.
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
@@ -277,7 +279,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
-            self.query_timeout,
+            self.query_timeout, self.query_memory_mb,
         )
         if preview.ok and preview.rows:
             self.queries_with_rows.append(query.strip())
@@ -294,7 +296,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
-            self.query_timeout,
+            self.query_timeout, self.query_memory_mb,
         )
         if not preview.ok:
             return (
@@ -450,6 +452,7 @@ class IclAgent(Agent):
         preview = run_preview(
             self.nl, query, self.language, 0,
             timeout=self.config.query_timeout,
+            memory_mb=self.config.query_memory_mb,
         )
         if preview.ok and preview.frame is not None:
             rows = preview.frame.astype(str).itertuples(index=False)
@@ -487,7 +490,7 @@ class ReactAgent(Agent):
         result = AgentResult(language=self.language)
         toolbox = Toolbox(
             self.context, self.language, self.config.preview_rows,
-            self.config.query_timeout,
+            self.config.query_timeout, self.config.query_memory_mb,
         )
         messages = [
             {"role": "system", "content": self.system_prompt(
