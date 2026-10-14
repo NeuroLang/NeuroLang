@@ -1,5 +1,4 @@
 import logging
-import operator
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -97,7 +96,7 @@ from .query_resolution import (
     lift_solve_marg_query
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
-from .shattering import shatter_constants
+from .shattering import NE, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -117,8 +116,6 @@ __all__ = [
     "solve_marg_query",
 ]
 
-
-NE = Constant(operator.ne)
 
 GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
@@ -199,7 +196,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         flat_query = Implication(query.consequent, flat_query_body)
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
-        ra_query = lift_with_negation_subtraction(
+        ra_query = lift_with_dependent_negations(
             shattered_query, symbol_table
         )
         if not is_pure_lifted_plan(ra_query):
@@ -262,7 +259,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         ) is None
     ):
         # Otherwise the checks are applied by
-        # `lift_with_negation_subtraction` to each query it lifts.
+        # `lift_with_dependent_negations` to each query it lifts.
         _verify_that_the_query_has_one_quantifier(flat_query)
         _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
@@ -323,24 +320,20 @@ def _verify_that_the_query_has_one_quantifier(query):
         query_act = query_act.body
 
 
-def lift_with_negation_subtraction(rule, symbol_table, check=False):
-    """Lift a shattered rule, first removing the negated conjuncts
-    that share probabilistic symbols with the rest of the rule, using
+def lift_with_dependent_negations(rule, symbol_table, check=False):
+    """Lift a shattered rule whose negated conjuncts can share
+    probabilistic symbols with the rest of the rule.
 
-        P[A ∧ ¬N] = P[A] - P[A ∧ N]
-
-    which is sound for any `A` and `N`, as `A ∧ N` implies `A`. Both
-    `A` and `A ∧ N` have one negation less than `A ∧ ¬N`; they are
-    lifted recursively, and then by `dalvi_suciu_lift`. When the
-    unate check is enabled, it is applied to each of these queries.
-
-    When `N` shares no probabilistic symbol with `A` the rule is not
-    used: `dalvi_suciu_lift` lifts the query with the independent
-    difference P[A] (1 - P[N]), and the query is liftable if and only
-    if `A` and `N` are, being #P-hard otherwise [1]. When they share
-    symbols, the subtraction rule is sound, but not known to be
-    complete: there could be liftable queries for which `A ∧ N`
-    is not liftable.
+    A negated conjunct `¬N` sharing no probabilistic symbol with the rest
+    `A` of the rule is left to `dalvi_suciu_lift`, which lifts the
+    query as P[A] (1 - P[N]): the query is liftable if and only if `A`
+    and `N` are, being #P-hard otherwise [1]. Otherwise, if the shared
+    relations are tuple-independent, `free_variable_shattering_plan`
+    and `negation_subtraction_plan` are tried in turn. They are sound
+    but not known to be complete. Shared probabilistic choices are not
+    supported, as the queries these rules build would conjoin atoms of
+    the same choice relation, which the choice optimisations applied
+    before shattering expect to have unified.
 
     [1] Fink, R. & Olteanu, D. Dichotomies for queries with negation in
     probabilistic databases. ACM TODS 41, 1–47 (2016).
@@ -372,172 +365,181 @@ def lift_with_negation_subtraction(rule, symbol_table, check=False):
         return dalvi_suciu_lift(ucq_rule, symbol_table)
 
     remainder, negated_formula = split
-    plan = _free_variable_shattering_plan(
-        consequent, remainder, negated_formula, symbol_table
-    )
-    if plan is not None:
-        return plan
-
-    plan_remainder = lift_with_negation_subtraction(
-        Implication(consequent, remainder), symbol_table, check=True
-    )
-    plan_both = lift_with_negation_subtraction(
-        Implication(
-            consequent,
-            Conjunction(remainder.formulas + (negated_formula,))
-        ),
-        symbol_table, check=True
-    )
-    if not (
-        is_pure_lifted_plan(plan_remainder) and
-        is_pure_lifted_plan(plan_both)
+    if any(
+        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        for atom in extract_logic_atoms(negated_formula)
+        if atom.functor in _functors(remainder)
     ):
         return NonLiftable(antecedent)
-    return rap.Subtraction(plan_remainder, plan_both)
+    for plan_rule in (
+        free_variable_shattering_plan, negation_subtraction_plan
+    ):
+        plan = plan_rule(consequent, remainder, negated_formula, symbol_table)
+        if plan is not None:
+            return plan
+    return NonLiftable(antecedent)
 
 
-def _free_variable_shattering_plan(
+def negation_subtraction_plan(
     consequent, remainder, negated_formula, symbol_table
 ):
-    """Lift `A ∧ ¬∃t ψ(t)` when the dependency between `A` and `ψ`
-    comes from atoms in which a free variable `x` of `A` takes the place
-    of `t`, such as `R(x) ∧ ¬∃t (R(t) ∧ S(x, t))`, using
+    """Plan for `A ∧ ¬N` as P[A] - P[A ∧ N], which is sound for any `A`
+    and `N`, as `A ∧ N` implies `A`.
 
-        ∃t ψ(t) ≡ ψ(x) ∨ ∃t (t ≠ x ∧ ψ(t))
-
-    so that `A ∧ ¬∃t ψ(t) ≡ (A ∧ ¬ψ(x)) ∧ ¬∃t (t ≠ x ∧ ψ(t))`.
-    The plan is
-
-        Difference(lift(A ∧ ¬ψ(x)), ind-π σ_{t ≠ x}(lift(ψ(t))))
-
-    which requires
-
-    * `t` to be a separator variable of `ψ`: it occurs in every
-      probabilistic atom, at the same position for all the atoms of a
-      relation, so that the events ψ(t) for different `t` are
-      independent;
-    * every probabilistic atom of `ψ(t)` to be disjoint, when t ≠ x,
-      from the atoms with the same symbol in `A` and `ψ(x)`: there is
-      a position holding `t` in the former and `x` in the latter;
-    * `x` to be a free variable of `ψ(t)`.
+    Parameters
+    ----------
+    consequent : FunctionApplication
+        head of the rule.
+    remainder : Conjunction
+        the conjunction `A`.
+    negated_formula : LogicExpression
+        the formula `N`, whose free variables are those of `A` or a
+        subset.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
 
     Returns
     -------
     Optional[RelationalAlgebraOperation]
-        the plan, or None if the conditions do not hold or the
-        resulting queries are not liftable.
+        the plan, or None if `A` or `A ∧ N` is not liftable.
     """
-    existential_variables = []
+    plans = _lift_pure(
+        (
+            Implication(consequent, remainder),
+            Implication(
+                consequent,
+                Conjunction(remainder.formulas + (negated_formula,))
+            ),
+        ),
+        symbol_table
+    )
+    if plans is None:
+        return None
+    return rap.Subtraction(*plans)
+
+
+def free_variable_shattering_plan(
+    consequent, remainder, negated_formula, symbol_table
+):
+    """Plan for `A ∧ ¬∃t ψ(t)` when the dependency between `A` and `ψ`
+    comes from atoms in which a free variable `x` of `ψ` takes the place
+    of `t`, such as `R(x) ∧ ¬∃t (R(t) ∧ S(x, t))`. As
+
+        ∃t ψ(t) ≡ ψ(x) ∨ ∃t (t ≠ x ∧ ψ(t))
+
+    the plan is
+
+        Difference(lift(A ∧ ¬ψ(x)), ind-π σ_{t ≠ x}(lift(ψ(t))))
+
+    which is sound when
+
+    * `t` is a separator variable of `ψ`, so that the events ψ(t) for
+      different `t` are independent;
+    * when t ≠ x, every probabilistic atom of `ψ(t)` is a different
+      tuple from the atoms of the same relation in `A` and `ψ(x)`: it
+      has `t` in a position where they have `x`.
+
+    Parameters
+    ----------
+    consequent : FunctionApplication
+        head of the rule.
+    remainder : Conjunction
+        the conjunction `A`.
+    negated_formula : LogicExpression
+        the formula `∃t ψ(t)`, whose free variables are those of `A` or
+        a subset.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+
+    Returns
+    -------
+    Optional[RelationalAlgebraOperation]
+        the plan, or None if the rule does not apply.
+    """
+    free_variables = extract_logic_free_variables(negated_formula)
     body = negated_formula
     while isinstance(body, ExistentialPredicate):
-        existential_variables.append(body.head)
         body = body.body
-    free_variables = extract_logic_free_variables(remainder)
-    for t in existential_variables:
-        psi_t = body
-        for v in reversed(existential_variables):
-            if v != t:
-                psi_t = ExistentialPredicate(v, psi_t)
-        psi_free_variables = extract_logic_free_variables(psi_t)
+    for t in extract_logic_free_variables(body) - free_variables:
+        psi_t = add_existentials_except(body, free_variables | {t})
+        separator_variables, _ = find_separator_variables(
+            ExistentialPredicate(t, psi_t), symbol_table
+        )
+        if t not in separator_variables:
+            continue
         for x in sorted(free_variables, key=lambda v: v.name):
-            if x not in psi_free_variables:
-                continue
             psi_x = ReplaceExpressionWalker({t: x}).walk(psi_t)
-            if not _shattering_conditions_hold(
-                t, x, psi_t, remainder, psi_x, symbol_table
+            if not _are_different_tuples_when_different(
+                psi_t, t, Conjunction(remainder.formulas + (psi_x,)), x,
+                symbol_table
             ):
                 continue
-            plan = _shattered_plan(
-                consequent, remainder, psi_t, psi_x, t, x,
-                psi_free_variables, symbol_table
+            plans = _lift_pure(
+                (
+                    Implication(
+                        consequent,
+                        Conjunction(remainder.formulas + (Negation(psi_x),))
+                    ),
+                    Implication(
+                        Symbol.fresh()(*free_variables | {t}), psi_t
+                    ),
+                ),
+                symbol_table
             )
-            if plan is not None:
-                return plan
+            if plans is None:
+                continue
+            remainder_plan, psi_plan = plans
+            return rap.Difference(
+                remainder_plan,
+                rap.IndependentProjection(
+                    rap.Selection(
+                        psi_plan,
+                        NE(
+                            str2columnstr_constant(t.name),
+                            str2columnstr_constant(x.name)
+                        )
+                    ),
+                    tuple(
+                        str2columnstr_constant(v.name)
+                        for v in free_variables
+                    )
+                )
+            )
     return None
 
 
-def _shattering_conditions_hold(t, x, psi_t, remainder, psi_x, symbol_table):
-    psi_t_atoms = [
-        atom for atom in extract_logic_atoms(psi_t)
-        if not is_atom_a_deterministic_relation(atom, symbol_table)
-    ]
-    positions = {}
-    for atom in psi_t_atoms:
-        atom_positions = {i for i, arg in enumerate(atom.args) if arg == t}
-        common = positions.setdefault(atom.functor, atom_positions)
-        positions[atom.functor] = common & atom_positions
-        if len(positions[atom.functor]) == 0:
-            return False
-
-    other_atoms = [
-        atom for atom in (
-            extract_logic_atoms(remainder) | extract_logic_atoms(psi_x)
-        )
-        if not is_atom_a_deterministic_relation(atom, symbol_table)
-    ]
-    for atom in psi_t_atoms:
-        for other in other_atoms:
-            if (
-                other.functor == atom.functor and
-                not _atoms_are_disjoint(atom, other, t, x)
-            ):
-                return False
-    return True
-
-
-def _atoms_are_disjoint(atom, other, t, x):
-    if len(atom.args) != len(other.args):
-        return True
-    for arg, other_arg in zip(atom.args, other.args):
-        if arg == t and other_arg == x:
-            return True
-        if (
-            isinstance(arg, Constant) and isinstance(other_arg, Constant)
-            and arg != other_arg
-        ):
-            return True
-    return False
-
-
-def _shattered_plan(
-    consequent, remainder, psi_t, psi_x, t, x, psi_free_variables,
-    symbol_table
+def _are_different_tuples_when_different(
+    formula, t, other_formula, x, symbol_table
 ):
-    plan_remainder = lift_with_negation_subtraction(
-        Implication(
-            consequent,
-            Conjunction(remainder.formulas + (Negation(psi_x),))
-        ),
-        symbol_table, check=True
-    )
-    psi_head_variables = tuple(sorted(
-        psi_free_variables, key=lambda v: v.name
-    ))
-    plan_psi = lift_with_negation_subtraction(
-        Implication(Symbol.fresh()(*psi_head_variables), psi_t),
-        symbol_table, check=True
-    )
-    if not (
-        is_pure_lifted_plan(plan_remainder) and
-        is_pure_lifted_plan(plan_psi)
-    ):
-        return None
-    plan_t_not_x = rap.IndependentProjection(
-        rap.Selection(
-            plan_psi,
-            FunctionApplication(
-                NE, (
-                    str2columnstr_constant(t.name),
-                    str2columnstr_constant(x.name)
-                )
-            )
-        ),
-        tuple(
-            str2columnstr_constant(v.name)
-            for v in psi_head_variables if v != t
+    """Whether, when t ≠ x, every probabilistic atom of `formula` is a
+    different tuple from the atoms of the same relation in `other_formula`,
+    because it has `t` in a position where they have `x`.
+    """
+    deterministic_symbols = _deterministic_symbols(formula, symbol_table)
+    other_atoms = extract_logic_atoms(other_formula)
+    return all(
+        any(
+            arg == t and other_arg == x
+            for arg, other_arg in zip(atom.args, other_atom.args)
         )
+        for atom in extract_logic_atoms(formula)
+        if atom.functor not in deterministic_symbols
+        for other_atom in other_atoms
+        if other_atom.functor == atom.functor
     )
-    return rap.Difference(plan_remainder, plan_t_not_x)
+
+
+def _lift_pure(rules, symbol_table):
+    """Lift each rule, returning the plans if all of them are pure,
+    None otherwise.
+    """
+    plans = tuple(
+        lift_with_dependent_negations(rule, symbol_table, check=True)
+        for rule in rules
+    )
+    if all(is_pure_lifted_plan(plan) for plan in plans):
+        return plans
+    return None
 
 
 def _split_dependent_negation(antecedent, symbol_table):
@@ -552,29 +554,21 @@ def _split_dependent_negation(antecedent, symbol_table):
     """
     if not isinstance(antecedent, Conjunction):
         return None
+    deterministic_symbols = _deterministic_symbols(antecedent, symbol_table)
     for i, formula in enumerate(antecedent.formulas):
         if not isinstance(formula, Negation):
             continue
         remainder = Conjunction(
             antecedent.formulas[:i] + antecedent.formulas[i + 1:]
         )
-        if not (
+        if (
             extract_logic_free_variables(formula) <=
-            extract_logic_free_variables(remainder)
-        ):
-            continue
-        if not _probabilistic_symbols(formula, symbol_table).isdisjoint(
-            _probabilistic_symbols(remainder, symbol_table)
+            extract_logic_free_variables(remainder) and
+            (_functors(formula) & _functors(remainder)) -
+            deterministic_symbols
         ):
             return remainder, formula.formula
     return None
-
-
-def _probabilistic_symbols(formula, symbol_table):
-    return set(
-        atom.functor for atom in extract_logic_atoms(formula)
-        if not is_atom_a_deterministic_relation(atom, symbol_table)
-    )
 
 
 def solve_marg_query(rule, cpl):
@@ -636,6 +630,10 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
+
+
+def _functors(formula):
+    return set(atom.functor for atom in extract_logic_atoms(formula))
 
 
 def _deterministic_symbols(rule, symbol_table):
@@ -857,13 +855,9 @@ def symbol_co_occurence_graph(expression, ignore_symbols=frozenset()):
     """
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
-        atom_symbols = set(
-            a.functor for a in extract_logic_atoms(formula)
-        ) - ignore_symbols
+        atom_symbols = _functors(formula) - ignore_symbols
         for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            atom_symbols_ = set(
-                a.functor for a in extract_logic_atoms(formula_)
-            ) - ignore_symbols
+            atom_symbols_ = _functors(formula_) - ignore_symbols
             if not atom_symbols.isdisjoint(atom_symbols_):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1

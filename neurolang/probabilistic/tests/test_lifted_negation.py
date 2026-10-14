@@ -266,6 +266,21 @@ def test_negation_sharing_a_symbol_through_free_variables():
     )
 
 
+def test_negation_sharing_a_choice_relation_not_liftable():
+    """R(x) ∧ ¬∃t (R(t) ∧ S(x, t)) with R a probabilistic choice: R(t)
+    and R(x) are mutually exclusive, not independent, when t ≠ x, and
+    negations sharing a choice relation are not supported."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        R, {(0.3, "a"), (0.6, "b"), (0.1, "c")}
+    )
+    cpl.add_probabilistic_facts_from_tuples(S, SL)
+    cpl.walk(Implication(N(x), Conjunction((R(t), S(x, t)))))
+    query = Implication(ans(x), Conjunction((R(x), Negation(N(x)))))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
 def test_negation_sharing_a_symbol_through_an_existential_not_liftable():
     """R(x) ∧ S(x, y) ∧ ¬∃t (R(t) ∧ S(x, t)) is not lifted: S(x, y) and
     S(x, t) are the same tuple when t = y, an existential variable."""
@@ -345,7 +360,7 @@ def _lifted_plan(query, cpl):
     shattered_query, symbol_table = (
         dalvi_suciu_lift._prepare_and_optimise_query(flat_query, cpl)
     )
-    plan = dalvi_suciu_lift.lift_with_negation_subtraction(
+    plan = dalvi_suciu_lift.lift_with_dependent_negations(
         shattered_query, symbol_table
     )
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
