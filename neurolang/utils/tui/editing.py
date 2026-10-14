@@ -20,6 +20,7 @@ from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
 from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
+from neurolang.utils import engine_registry
 from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
@@ -146,14 +147,32 @@ def make_completer(app) -> NeuroLangReplCompleter:
     except Exception:
         lark = None
     declared = _declared_columns(app.settings.engine_name)
+    signatures, hidden = _engine_sorts(app.settings.engine_name)
     return NeuroLangReplCompleter(
         lark_completer=lark,
         predicates=lambda: predicate_catalog(
-            app._nl, declared, app.loaded_relations
+            app._nl, declared, app.loaded_relations, signatures
         ),
         squall_keywords=squall_keywords(),
         is_squall=lambda: app.settings.squall,
         squall_grammar=SquallGrammarOptions(),
+        hidden=hidden,
+    )
+
+
+def _engine_sorts(engine_name: str):
+    """
+    Return the arguments of the engine's predicates and the hidden ones.
+
+    The result is ``(signatures, hidden)`` (see
+    :func:`~neurolang.utils.engine_registry.get_signatures`), empty for
+    no engine.
+    """
+    if not engine_name:
+        return {}, frozenset()
+    return (
+        engine_registry.get_signatures(engine_name),
+        engine_registry.get_hidden_predicates(engine_name),
     )
 
 

@@ -304,7 +304,9 @@ class TestDynamicCompletion:
 
     def test_engine_idb_offered(self, neurosynth_app):
         metas = _metas(neurosynth_app, "ans(x) :- me")
-        assert metas["mentions"] == "mentions(s, t) · derived"
+        assert metas["mentions"] == (
+            "mentions(study(study_id), term) · derived"
+        )
 
     def test_session_rule_offered_once_defined(self, neurosynth_app):
         assert "myp" not in _metas(neurosynth_app, "ans(x) :- my")
@@ -327,11 +329,11 @@ class TestDynamicCompletion:
     def test_declared_columns_and_meta(self, neurosynth_app):
         metas = _metas(neurosynth_app, "ans(x) :- pe")
         assert metas["peak_reported"] == (
-            "peak_reported(i, j, k, study_id) · stored"
+            "peak_reported(voxel(i, j, k), study(study_id)) · stored"
         )
         assert _metas(neurosynth_app, "ans(x) :- te")[
             "term_in_study_tfidf"
-        ] == "term_in_study_tfidf(study_id, term, tfidf) · stored"
+        ] == "term_in_study_tfidf(study(study_id), term, tfidf) · stored"
 
     def test_unknown_columns_shown_as_arity(self, neurosynth_app):
         neurosynth_app._nl.add_tuple_set([(1, 2)], name="pairs")
@@ -358,8 +360,13 @@ class TestDynamicCompletion:
         assert "peak_reported" not in texts
 
     def test_idb_parameters_as_columns(self, neurosynth_app):
+        neurosynth_app._execute_and_display("myp(a, b) :- mentions(a, b)")
+        texts = _words(neurosynth_app, "q(y) :- myp(")
+        assert texts[:2] == ["a", "y"]
+
+    def test_declared_columns_of_engine_rules(self, neurosynth_app):
         texts = _words(neurosynth_app, "q(y) :- mentions(")
-        assert texts[:2] == ["s", "y"]
+        assert texts[:2] == ["study_id", "y"]
 
     def test_aggregations_in_rule_head(self, neurosynth_app):
         metas = _metas(neurosynth_app, "q(x, co")
@@ -387,9 +394,12 @@ class TestDynamicCompletion:
 
     def test_squall_offers_predicates_and_keywords(self, neurosynth_app):
         neurosynth_app.settings.squall = True
-        metas = _metas(neurosynth_app, "obtain every pe")
-        assert list(metas)[0] == "peak_reported"
-        assert metas["peak_reported"].endswith("· stored")
+        metas = _metas(neurosynth_app, "obtain every Te")
+        assert list(metas)[0] == "Term_in_study_tfidf"
+        assert metas["Term_in_study_tfidf"] == "study, term, tfidf · stored"
+        assert _words(neurosynth_app, "obtain every te") == [
+            "term_in_study_tfidf"
+        ]
 
     def test_completion_is_fast(self, neurosynth_app):
         # On the full neurosynth engine a completion takes about 1 ms.
@@ -449,13 +459,13 @@ class TestSquallGrammarCompletion:
 
     def test_after_obtain(self, squall_app):
         words = _words(squall_app, "obtain ")
-        assert words[0] == "mentions"
+        assert "mentions" not in words
         assert {"every", "the", "a"} <= set(words)
         assert _words(squall_app, "obtain ev") == ["every"]
 
     def test_after_every_predicates_first(self, squall_app):
         words = _words(squall_app, "obtain every ")
-        assert words.index("peak_reported") < words.index("top")
+        assert words.index("Term_in_study_tfidf") < words.index("top")
         assert "every" not in words
 
     def test_verbs_after_that(self, squall_app):
@@ -479,8 +489,8 @@ class TestSquallGrammarCompletion:
 
     def test_invalid_sentence_falls_back(self, squall_app):
         # "count" is reserved: after "the" a noun is expected.
-        words = _words(squall_app, "obtain the count of every pe")
-        assert words[0] == "peak_reported"
+        words = _words(squall_app, "obtain the count of every te")
+        assert words[0] == "term_in_study_tfidf"
         assert _words(squall_app, "obtain the count of ev") == ["every"]
         assert _words(squall_app, "obtain the count of every ") == []
 
@@ -521,3 +531,112 @@ def test_squall_keywords_from_grammar():
     words = squall_keywords()
     assert {"obtain", "every", "all", "an", "count", "probably"} <= set(words)
     assert not {"(", "D", "_", "--", "n't"} & set(words)
+
+
+@pytest.fixture
+def sorts_app():
+    """Return a SQUALL REPL on the vocabulary of the neurosynth engine."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(10,), (11,)], name="study")
+    nl.add_tuple_set([("pain",)], name="term")
+    nl.add_tuple_set([(1, 2, 3)], name="voxel")
+    nl.add_tuple_set([(1, 2, 3, 10)], name="peak_reported")
+    nl.add_tuple_set([(10, "pain", 0.5)], name="term_in_study_tfidf")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(10,), (11,)], name="selected_study"
+    )
+    nl.execute_datalog_program(
+        "mentions(s, t) :- term_in_study_tfidf(s, t, v)\n"
+        "reports(s, i, j, k) :- peak_reported(i, j, k, s)"
+    )
+    console = Console(file=io.StringIO(), width=100)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="neurosynth", squall=True),
+        console=console, err_console=console,
+    )
+    app._make_session()
+    return app
+
+
+class TestSquallSorts:
+    def test_nouns_are_capitalised_with_their_entities(self, sorts_app):
+        metas = _metas(sorts_app, "obtain every ")
+        assert metas["Voxel"] == "voxel(i, j, k) · in 3D · stored"
+        assert metas["Study"] == "study · stored"
+        assert "cos" not in metas and "voxel" not in metas
+        assert _words(sorts_app, "obtain every Stu") == ["Study"]
+
+    def test_verbs_by_the_sort_of_their_subject(self, sorts_app):
+        metas = _metas(sorts_app, "obtain every Study that ")
+        verbs = [word for word, meta in metas.items() if "→" in meta]
+        assert verbs == ["mentions", "reports"]
+        assert metas["reports"] == "study → voxel(i, j, k) · derived"
+        assert "is" in metas
+
+    def test_no_verb_from_another_sort(self, sorts_app):
+        words = _words(sorts_app, "obtain every Term that ")
+        assert "mentions" not in words and "reports" not in words
+
+    def test_object_clause_on_the_object_sort(self, sorts_app):
+        assert "a Study mentions" in _words(sorts_app, "obtain every Term that ")
+        metas = _metas(sorts_app, "obtain every Voxel in 3D that ")
+        assert metas["a Study reports"] == (
+            "object clause · study → voxel(i, j, k) · derived"
+        )
+
+    def test_verb_of_an_object_clause(self, sorts_app):
+        words = _words(sorts_app, "obtain every Voxel that a Study ")
+        assert "reports" in words and "mentions" not in words
+
+    def test_inverse_verbs_are_not_offered(self, sorts_app):
+        for text in ("obtain every Term that ", "obtain every Voxel that "):
+            assert not any(
+                word.startswith("~") for word in _words(sorts_app, text)
+            )
+
+    def test_in_3d_after_a_multi_column_noun(self, sorts_app):
+        words = _words(sorts_app, "obtain every Voxel ")
+        assert words[:2] == ["in 3D", "(?i; ?j; ?k)"]
+        assert _words(sorts_app, "obtain every Voxel i")[0] == "in 3D"
+        assert "in 1D" not in _words(sorts_app, "obtain every Study ")
+
+    def test_with_probability_after_an_inferred_probability(self, sorts_app):
+        sorts_app._execute_and_display(
+            "define as Active_voxel with inferred probability "
+            "every Voxel in 3D that a Selected_study reports."
+        )
+        words = _words(sorts_app, "obtain every Active_voxel ")
+        assert words[:2] == ["in 3D", "in 3D with Probability"]
+        assert "with Probability" not in _words(
+            sorts_app, "obtain every Selected_study "
+        )
+
+    def test_hidden_predicates_not_offered_in_squall(self, sorts_app):
+        assert "Peak_reported" not in _words(sorts_app, "obtain every ")
+        assert "peak_reported" not in _words(sorts_app, "obtain every pe")
+        sorts_app.settings.squall = False
+        assert "peak_reported" in _words(sorts_app, "ans(x) :- pe")
+
+    def test_entity_columns_completed_together_in_datalog(self, sorts_app):
+        sorts_app.settings.squall = False
+        completions = _completions(sorts_app, "ans(s) :- reports(s, ")
+        assert completions[0].text == "i, j, k"
+        assert completions[0].display_meta_text == "voxel(i, j, k) of reports"
+        assert completions[1].text == "i"
+        first = _words(sorts_app, "ans(s) :- peak_reported(")
+        assert first[:2] == ["i, j, k", "i"]
+        assert "i, j, k" not in _words(sorts_app, "ans(s) :- reports(")
+        assert _metas(sorts_app, "ans(s) :- rep")["reports"] == (
+            "reports(study(study_id), voxel(i, j, k)) · derived"
+        )
+
+    def test_suggested_sentences_run(self, sorts_app):
+        for sentence in (
+            "obtain every Voxel in 3D that a Study reports.",
+            "obtain every Term that a Study mentions.",
+            "obtain every Study that reports a Voxel in 3D.",
+            "obtain every Voxel (?i; ?j; ?k) that a Study reports.",
+        ):
+            sorts_app._execute_and_display(sentence)
+            assert not sorts_app.failed, sentence
+            assert len(sorts_app.results[-1].frame) == 1, sentence

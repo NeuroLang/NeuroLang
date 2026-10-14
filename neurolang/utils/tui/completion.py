@@ -16,12 +16,18 @@ from typing import Callable, NamedTuple, Optional
 from prompt_toolkit.completion import Completer, Completion
 
 from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
+from neurolang.probabilistic.expressions import ProbabilisticQuery
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.frontend.datalog.standard_syntax import AGGREGATION_FUNCS
 from neurolang.utils.interactive_parsing import LarkCompleter
 
 from .commands import COMMANDS
-from .squall_completion import SquallGrammarOptions
+from . import squall_sorts
+from .squall_completion import (
+    SquallGrammarOptions,
+    allowed_terminals,
+    current_sentence,
+)
 
 
 class PredicateInfo(NamedTuple):
@@ -33,16 +39,34 @@ class PredicateInfo(NamedTuple):
     in the session), ``loaded`` (relation loaded with ``.load``),
     ``probabilistic`` or ``function``. *columns* are the names of its
     columns, or None when they are unknown, and *arity* its number of
-    columns, or None when it is unknown.
+    columns, or None when it is unknown. *arguments* are the
+    :class:`~neurolang.utils.engine_registry.Argument` the engine
+    declares, the entities it relates, or None. A *probabilistic*
+    predicate has a probability column besides its *arity* columns.
     """
 
     name: str
     kind: str
     columns: Optional[tuple] = None
     arity: Optional[int] = None
+    arguments: Optional[tuple] = None
+    probabilistic: bool = False
 
     def signature(self) -> str:
-        """Return ``name(col, ...)``, ``name/arity`` or ``name``."""
+        """
+        Return ``name(entity, ...)``, ``name(col, ...)``, ``name/arity``.
+
+        The entities of several columns, or of a column not named after
+        their sort, show their columns: ``reports(study(study_id),
+        voxel(i, j, k))``.
+        """
+        arguments = self.arguments or ()
+        if len(arguments) > 1:
+            entities = ", ".join(
+                squall_sorts.argument_text(argument, columns=True)
+                for argument in arguments
+            )
+            return f"{self.name}({entities})"
         if self.columns:
             return f"{self.name}({', '.join(self.columns)})"
         if self.arity is not None:
@@ -82,15 +106,49 @@ def _rule_columns(union) -> Optional[tuple]:
     return None
 
 
-def _relation_info(name, value, kind, columns) -> PredicateInfo:
+def _declared_arguments(name, arity, signatures) -> Optional[tuple]:
+    """Return the arguments *signatures* gives *name*, if they fit."""
+    arguments = signatures.get(name)
+    if arguments is None:
+        return None
+    if sum(len(argument.columns) for argument in arguments) != arity:
+        return None
+    return tuple(arguments)
+
+
+def _relation_info(name, value, kind, columns, signatures) -> PredicateInfo:
     """Return the info of the relation *name* whose set is *value*."""
     arity = value.arity
-    if kind == "probabilistic":
+    probabilistic = kind == "probabilistic"
+    if probabilistic:
         arity -= 1
     columns = columns.get(name)
     if columns is not None and len(columns) != arity:
         columns = None
-    return PredicateInfo(name, kind, columns and tuple(columns), arity)
+    return PredicateInfo(
+        name, kind, columns and tuple(columns), arity,
+        _declared_arguments(name, arity, signatures), probabilistic,
+    )
+
+
+def _rule_info(name, union, kind, columns, signatures) -> PredicateInfo:
+    """
+    Return the info of the rules *union* of *name*.
+
+    Its columns are those *columns* declares for it, or else the
+    parameters of its first rule. A rule with a probability in its
+    head, as ``with inferred probability`` defines, is probabilistic.
+    """
+    args = union.formulas[0].consequent.args
+    probabilistic = any(isinstance(arg, ProbabilisticQuery) for arg in args)
+    arity = len(args) - probabilistic
+    declared = columns.get(name)
+    if declared is None or len(declared) != arity:
+        declared = _rule_columns(union)
+    return PredicateInfo(
+        name, kind, declared and tuple(declared), arity,
+        _declared_arguments(name, arity, signatures), probabilistic,
+    )
 
 
 def _function_arity(symbol) -> Optional[int]:
@@ -104,10 +162,12 @@ def _function_arity(symbol) -> Optional[int]:
 class _CatalogBuilder:
     """Collect the :class:`PredicateInfo` of the symbols of an engine."""
 
-    def __init__(self, nl, columns: dict, loaded: dict):
+    def __init__(self, nl, columns, loaded, signatures):
         """Set up the collection on *nl* with the known *columns*."""
+        loaded = loaded or {}
         self.program_ir = nl.program_ir
-        self.columns = {**columns, **loaded}
+        self.columns = {**(columns or {}), **loaded}
+        self.signatures = signatures or {}
         self.loaded = loaded
         self.probabilistic = _probabilistic_symbols(self.program_ir)
         self.protected = getattr(self.program_ir, "protected_keywords", ())
@@ -120,13 +180,14 @@ class _CatalogBuilder:
         inner = getattr(value, "value", None)
         if isinstance(inner, WrappedRelationalAlgebraSet):
             return _relation_info(
-                name, inner, self._relation_kind(symbol), self.columns
+                name, inner, self._relation_kind(symbol), self.columns,
+                self.signatures,
             )
         if symbol.type is UnionOfConjunctiveQueries:
-            columns = _rule_columns(value)
-            arity = len(value.formulas[0].consequent.args)
             kind = "session" if session else "derived"
-            return PredicateInfo(name, kind, columns, arity)
+            return _rule_info(
+                name, value, kind, self.columns, self.signatures
+            )
         if callable(inner):
             return PredicateInfo(
                 name, "function", None, _function_arity(symbol)
@@ -142,7 +203,7 @@ class _CatalogBuilder:
         return "stored"
 
 
-def predicate_catalog(nl, columns=None, loaded=None) -> dict:
+def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
     """
     Return the predicates defined in the engine *nl*, by name.
 
@@ -150,9 +211,11 @@ def predicate_catalog(nl, columns=None, loaded=None) -> dict:
     when the session opened one, being the session's), its probabilistic
     facts and choices and its functions. *columns* maps relation names to
     their declared columns (e.g. from the engine's configuration) and
-    *loaded* those of the relations loaded with ``.load``.
+    *loaded* those of the relations loaded with ``.load``. *signatures*
+    maps predicate names to the arguments the engine declares (see
+    :func:`~neurolang.utils.engine_registry.get_signatures`).
     """
-    builder = _CatalogBuilder(nl, columns or {}, loaded or {})
+    builder = _CatalogBuilder(nl, columns, loaded, signatures)
     scopes = list(_scopes(nl.program_ir.symbol_table))
     catalog = {}
     for depth, scope in enumerate(scopes):
@@ -239,8 +302,10 @@ def argument_candidates(text, prefix, catalog, context) -> list:
     functions come last. The result is a list of ``(word, meta)``.
     """
     name, position = context
-    columns = list(getattr(catalog.get(name), "columns", None) or ())
-    candidates = [
+    info = catalog.get(name)
+    columns = list(getattr(info, "columns", None) or ())
+    candidates = _entity_candidates(info, position)
+    candidates += [
         (word, f"column {position + 1} of {name}")
         for word in columns[position:position + 1]
     ]
@@ -254,6 +319,23 @@ def argument_candidates(text, prefix, catalog, context) -> list:
             (word, "aggregation") for word in sorted(AGGREGATION_FUNCS)
         ]
     return candidates
+
+
+def _entity_candidates(info, position: int) -> list:
+    """
+    Return the columns of the entity starting at column *position*.
+
+    When the predicate *info* declares that an entity of several
+    columns, as a voxel ``i, j, k``, starts there, they are offered
+    together, as ``(word, meta)``.
+    """
+    start = 0
+    for argument in getattr(info, "arguments", None) or ():
+        if start == position and len(argument.columns) > 1:
+            meta = f"{squall_sorts.argument_text(argument)} of {info.name}"
+            return [(", ".join(argument.columns), meta)]
+        start += len(argument.columns)
+    return []
 
 
 def wants_completion(text: str, prefix: str, complete_event) -> bool:
@@ -290,6 +372,9 @@ class NeuroLangReplCompleter(Completer):
     :mod:`~.squall_completion`). Without them, or where the input is
     invalid, the predicates and *squall_keywords* starting with the word
     being typed are offered. *is_squall* tells whether the input is SQUALL.
+    The predicates named in *hidden* are not offered in SQUALL, and
+    their declared arguments choose the nouns and verbs offered (see
+    :mod:`~.squall_sorts`).
 
     While typing, completions are offered only for a word being typed;
     Tab also offers them after a space or an opening bracket.
@@ -302,8 +387,10 @@ class NeuroLangReplCompleter(Completer):
         squall_keywords: Optional[list] = None,
         is_squall: Optional[Callable[[], bool]] = None,
         squall_grammar: Optional[SquallGrammarOptions] = None,
+        hidden: frozenset = frozenset(),
     ):
         """Set up the completion sources."""
+        self._hidden = hidden
         self._lark = lark_completer
         self._predicates = predicates or dict
         self._squall_keywords = squall_keywords or []
@@ -364,19 +451,28 @@ class NeuroLangReplCompleter(Completer):
         """
         Yield the predicates and keywords SQUALL accepts before *prefix*.
 
-        If the sentence is invalid, yield the predicates and the
-        *squall_keywords* starting with *prefix*, if any.
+        Where a name is allowed, the nouns or the verbs that fit (see
+        :func:`~.squall_sorts.name_slot`) are offered; after a noun, the
+        phrases naming its columns. If the sentence is invalid, yield
+        the predicates and the *squall_keywords* starting with *prefix*.
         """
+        catalog = {
+            name.lower(): info for name, info in catalog.items()
+            if name not in self._hidden
+        }
         options = self._squall_options(text, prefix)
         if options is None:
             if prefix:
-                yield from self._predicate_completions(catalog, prefix)
+                yield from _squall_names(catalog.values(), prefix, "")
                 yield from _keyword_completions(
                     self._squall_keywords, prefix
                 )
             return
+        before = text[:len(text) - len(prefix)]
+        slot = squall_sorts.name_slot(before, catalog)
+        yield from _phrase_completions(before, prefix, slot, catalog)
         if options.names:
-            yield from self._predicate_completions(catalog, prefix)
+            yield from _slot_completions(slot, catalog, prefix)
         yield from _keyword_completions(options.keywords, prefix)
         if options.end and not prefix:
             yield Completion(".", display_meta="end of the sentence")
@@ -433,3 +529,145 @@ class NeuroLangReplCompleter(Completer):
             yield Completion(
                 value, start_position=-len(prefix), display_meta=meta
             )
+
+
+def _matches(word: str, prefix: str) -> bool:
+    """Return True if *word* starts with *prefix*, ignoring the case."""
+    return word.lower().startswith(prefix.lower())
+
+
+def _ranked(infos) -> list:
+    """Return the predicates *infos* sorted by name, functions left out."""
+    return sorted(
+        (info for info in infos if info.kind not in _LATE_KINDS),
+        key=lambda info: info.name,
+    )
+
+
+def _noun_meta(info) -> str:
+    """Return the meta of the noun *info*: its entities and its kind."""
+    if not info.arguments:
+        return info.meta()
+    meta = squall_sorts.entities_text(info.arguments)
+    phrases = squall_sorts.noun_phrases(info)
+    if len(info.arguments) == 1 and phrases:
+        meta += f" · {phrases[0]}"
+    return f"{meta} · {info.kind}"
+
+
+def _verb_meta(info) -> str:
+    """Return the meta of the verb *info*: ``study → voxel(i, j, k)``."""
+    if not info.arguments:
+        return info.meta()
+    entities = squall_sorts.entities_text(info.arguments, " → ")
+    return f"{entities} · {info.kind}"
+
+
+def _squall_names(infos, prefix: str, kind: str):
+    """
+    Yield the predicates *infos* starting with *prefix*, as a *kind*.
+
+    Nouns are capitalised; verbs, and the names of an unknown *kind*,
+    are offered as they are, the latter with the functions, last.
+    """
+    infos = list(infos)
+    late = [info for info in infos if info.kind in _LATE_KINDS]
+    for info in _ranked(infos) + (late if not kind else []):
+        if not _matches(info.name, prefix):
+            continue
+        if kind == "noun":
+            text = squall_sorts.capitalised(info.name, prefix)
+            meta = _noun_meta(info)
+        else:
+            text = info.name
+            meta = _verb_meta(info) if kind == "verb" else info.meta()
+        yield Completion(
+            text, start_position=-len(prefix), display_meta=meta
+        )
+
+
+def _sort(catalog: dict, noun: Optional[str]) -> Optional[str]:
+    """Return the sort of the entities of *noun*, if it is known."""
+    info = catalog.get(noun) if noun else None
+    return squall_sorts.sort_of(info) if info else None
+
+
+def _slot_completions(slot, catalog: dict, prefix: str):
+    """Yield the names fitting *slot* (see :func:`name_slot`)."""
+    if slot.kind == "noun":
+        yield from _squall_names(catalog.values(), prefix, "noun")
+    elif slot.kind == "verb":
+        subject = _sort(catalog, slot.subject)
+        object_ = _sort(catalog, slot.object)
+        verbs = [
+            info for info in catalog.values()
+            if squall_sorts.is_verb(info, subject, object_)
+        ]
+        yield from _squall_names(verbs, prefix, "verb")
+        if slot.noun is None:
+            yield from _object_clauses(catalog, subject, prefix)
+    elif slot.kind not in ("after_noun", "determiner"):
+        yield from _squall_names(catalog.values(), prefix, "")
+
+
+def _object_clause(info, sort: str, catalog: dict) -> Optional[str]:
+    """
+    Return the object clause of the verb *info*, if its object is *sort*.
+
+    ``a Study mentions``: the subject is the plainest noun of the verb's
+    first entity.
+    """
+    arguments = info.arguments or ()
+    if len(arguments) != 2 or arguments[1].sort != sort:
+        return None
+    noun = squall_sorts.plainest_noun(arguments[0].sort, catalog.values())
+    if noun is None:
+        return None
+    noun = squall_sorts.capitalised(noun)
+    return f"{squall_sorts.article(noun)} {noun} {info.name}"
+
+
+def _object_clauses(catalog: dict, sort: Optional[str], prefix: str):
+    """Yield the object clauses (``a Study mentions``) on a *sort*."""
+    if sort is None:
+        return
+    for info in _ranked(catalog.values()):
+        text = _object_clause(info, sort, catalog)
+        if text and _matches(text, prefix):
+            yield Completion(
+                text, start_position=-len(prefix),
+                display_meta=f"object clause · {_verb_meta(info)}",
+            )
+
+
+def _noun_phrase_texts(info) -> list:
+    """Return the phrases naming the columns of the noun *info*."""
+    phrases = squall_sorts.noun_phrases(info)
+    columns = info.columns or ()
+    if len(columns) > 1:
+        phrases.append(
+            "(" + "; ".join(f"?{column}" for column in columns) + ")"
+        )
+    return phrases
+
+
+def _phrase_completions(text: str, prefix: str, slot, catalog: dict):
+    """
+    Yield the phrases naming the columns of the noun ending *text*.
+
+    ``in 3D`` after ``every Voxel``, ``with Probability`` after a
+    probabilistic noun, and the tuple of its columns; only those the
+    grammar accepts there are offered.
+    """
+    if slot.kind != "after_noun" or slot.noun not in catalog:
+        return
+    sentence = current_sentence(text)
+    for phrase in _noun_phrase_texts(catalog[slot.noun]):
+        if not _matches(phrase, prefix):
+            continue
+        if allowed_terminals(f"{sentence}{phrase} ") is None:
+            continue
+        yield Completion(
+            phrase, start_position=-len(prefix),
+            display_meta=f"columns of {slot.noun}",
+        )

@@ -36,7 +36,11 @@ may specify the following keys, all of them optional:
   ``description``)
 - ``ontologies`` — list of ``{url}`` entries for OWL/RDF ontologies to load
 - ``predicates`` — schema metadata (arity, column names, description) used
-  by ``--list-predicates`` and the web UI
+  by ``--list-predicates``, the interactive REPL and the web UI; see
+  :ref:`predicate-arguments` below
+- ``hidden_predicates`` — predicates the interactive REPL does not offer
+  in SQUALL, because their argument order breaks sentences (they remain
+  usable when typed)
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
@@ -98,6 +102,43 @@ variables, in the order of its columns::
 SQUALL verbs relate two arguments (``a Study mentions a Term``), so a
 relation of three columns cannot be a verb.  The ``selected_study`` uniform choice over studies is
 registered by the Python init module.
+
+.. _predicate-arguments:
+
+Predicate arguments and sorts
+-----------------------------
+
+A predicate may declare its ``arguments``: the entities it relates, in
+column order, each of a ``sort`` spanning one or more ``columns`` of a
+``type``.  The arity of a predicate, in the sense of the entities it
+relates, is the number of its arguments, not of its columns: a voxel
+``(i, j, k)`` is one argument, so ``reports(study_id, i, j, k)`` relates
+a study and a voxel::
+
+    reports:
+      description: "Studies reporting an activation peak at a voxel"
+      arguments:
+        - {sort: study, columns: [study_id], type: int}
+        - {sort: voxel, columns: [i, j, k], type: int}
+
+``columns`` and ``arity`` (the number of columns) are then derived from
+the arguments, and ``entities`` holds the number of arguments; declared
+``columns`` or ``arity`` must agree with them.  A sort spans the same
+columns everywhere.  ``probability: true`` marks a probabilistic symbol,
+whose probability column is not an argument.
+:func:`~neurolang.utils.engine_registry.get_signatures` returns the
+arguments of each predicate.
+
+The interactive REPL completes SQUALL from the sorts: after ``every`` it
+offers the nouns, capitalised; after ``every Study that`` the verbs whose
+first entity is a study (``mentions``, ``reports``); after ``every Term
+that`` the object clause ``a Study mentions``; after a noun of several
+columns ``in 3D`` and the tuple ``(?i; ?j; ?k)``, and ``with Probability``
+after a relation defined ``with inferred probability``.  In Datalog,
+the columns of an entity are completed together (``i, j, k``).  The
+inverse verb form ``~verb`` is not offered, as SQUALL does not invert
+its arguments in a relative clause; ``every Term that a Study mentions``
+reads the same.
 
 A note on the ``datalog_init`` syntax: the text Datalog parser does not
 distinguish variables from predicate names by case, so ``S`` and ``s`` are

@@ -126,7 +126,8 @@ KEYS_HELP = """
                        continues on a new line, an empty line runs it
   Alt+Enter, Ctrl+J    insert a newline (write a multi-line statement)
   Tab                  complete commands, predicates, their columns and
-                       the Datalog syntax; Shift+Tab goes back
+                       the syntax; in SQUALL, the nouns and the verbs
+                       that fit; Shift+Tab goes back
   Right arrow          accept the suggestion from the history (grey text)
   Up/Down              previous/next line or history entry
   Ctrl+R               search the history backwards (Ctrl+S forwards)
