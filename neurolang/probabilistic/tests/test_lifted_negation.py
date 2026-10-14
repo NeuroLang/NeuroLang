@@ -11,6 +11,7 @@ from ...exceptions import NonLiftableException
 from ...expression_walker import expression_iterator
 from ...expressions import Symbol
 from ...logic import Conjunction, Implication, Negation, Union
+from ...relational_algebra import Selection
 from ...relational_algebra_provenance import Difference, Subtraction
 from .. import dalvi_suciu_lift
 from ..cplogic.program import CPLogicProgram
@@ -20,6 +21,7 @@ A = Symbol("A")
 B = Symbol("B")
 C = Symbol("C")
 D = Symbol("D")
+E = Symbol("E")
 M = Symbol("M")
 N = Symbol("N")
 Q = Symbol("Q")
@@ -213,15 +215,67 @@ def test_hard_negated_subquery_is_not_liftable():
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 
 
-def test_negation_sharing_a_symbol_through_a_free_variable_not_liftable():
-    """R(x) ∧ ¬∃t (R(t) ∧ S(x, t)) is not lifted: R(x) and R(t) refer to
-    the same tuple when t = x, which would require shattering on the
-    free variable x."""
+SL = {
+    (0.6, "a", "b"), (0.5, "a", "a"), (0.9, "b", "a"),
+    (0.4, "c", "c"), (0.3, "c", "a"),
+}
+
+
+def test_negation_sharing_a_symbol_through_a_free_variable():
+    """R(x) ∧ ¬∃t (R(t) ∧ S(x, t)): R(x) and R(t) are the same tuple
+    when t = x, it is lifted as R(x) ∧ ¬S(x, x) ∧ ¬∃t≠x (R(t) ∧ S(x, t)).
+    """
+    check(
+        {R: R1, S: SL}, {},
+        [Implication(N(x), Conjunction((R(t), S(x, t))))],
+        Implication(ans(x), Conjunction((R(x), Negation(N(x))))),
+        lambda db: {
+            (a,) for (a,) in db[R]
+            if not exists(db[S], lambda c, d: c == a and (d,) in db[R])
+        },
+    )
+
+
+def test_negation_sharing_symbols_through_a_free_variable():
+    """R(x) ∧ T(x) ∧ ¬∃t (R(t) ∧ E(t, t) ∧ S(t, x) ∧ T(t))."""
+    check(
+        {R: R1, S: SL, E: SL, T: T1}, {},
+        [Implication(N(x), Conjunction((R(t), E(t, t), S(t, x), T(t))))],
+        Implication(ans(x), Conjunction((R(x), T(x), Negation(N(x))))),
+        lambda db: {
+            (a,) for (a,) in db[R]
+            if (a,) in db[T] and not exists(
+                db[S],
+                lambda c, d: d == a and (c,) in db[R] and (c,) in db[T]
+                and (c, c) in db[E]
+            )
+        },
+    )
+
+
+def test_negation_sharing_a_symbol_through_free_variables():
+    """R(x, y) ∧ ¬∃t (R(t, y) ∧ S(x, t))."""
+    check(
+        {R: R2, S: SL}, {},
+        [Implication(N(x, y), Conjunction((R(t, y), S(x, t))))],
+        Implication(ans(x, y), Conjunction((R(x, y), Negation(N(x, y))))),
+        lambda db: {
+            (a, b) for (a, b) in db[R]
+            if not exists(db[S], lambda c, d: c == a and (d, b) in db[R])
+        },
+    )
+
+
+def test_negation_sharing_a_symbol_through_an_existential_not_liftable():
+    """R(x) ∧ S(x, y) ∧ ¬∃t (R(t) ∧ S(x, t)) is not lifted: S(x, y) and
+    S(x, t) are the same tuple when t = y, an existential variable."""
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(R, R1)
-    cpl.add_probabilistic_facts_from_tuples(S, S2)
+    cpl.add_probabilistic_facts_from_tuples(S, SL)
     cpl.walk(Implication(N(x), Conjunction((R(t), S(x, t)))))
-    query = Implication(ans(x), Conjunction((R(x), Negation(N(x)))))
+    query = Implication(
+        ans(x), Conjunction((R(x), S(x, y), Negation(N(x))))
+    )
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 
@@ -258,6 +312,17 @@ def test_plan_uses_difference_for_independent_negation():
     plan = _lifted_plan(query, cpl)
     assert _contains(plan, Difference)
     assert not _contains(plan, Subtraction)
+
+
+def test_plan_uses_free_variable_shattering():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(R, R1)
+    cpl.add_probabilistic_facts_from_tuples(S, SL)
+    cpl.walk(Implication(N(x), Conjunction((R(t), S(x, t)))))
+    query = Implication(ans(x), Conjunction((R(x), Negation(N(x)))))
+    plan = _lifted_plan(query, cpl)
+    assert _contains(plan, Selection)
+    assert _contains(plan, Difference)
 
 
 def test_plan_uses_subtraction_for_dependent_negation():

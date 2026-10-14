@@ -1,4 +1,5 @@
 import logging
+import operator
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -116,6 +117,8 @@ __all__ = [
     "solve_marg_query",
 ]
 
+
+NE = Constant(operator.ne)
 
 GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
@@ -369,6 +372,12 @@ def lift_with_negation_subtraction(rule, symbol_table, check=False):
         return dalvi_suciu_lift(ucq_rule, symbol_table)
 
     remainder, negated_formula = split
+    plan = _free_variable_shattering_plan(
+        consequent, remainder, negated_formula, symbol_table
+    )
+    if plan is not None:
+        return plan
+
     plan_remainder = lift_with_negation_subtraction(
         Implication(consequent, remainder), symbol_table, check=True
     )
@@ -385,6 +394,150 @@ def lift_with_negation_subtraction(rule, symbol_table, check=False):
     ):
         return NonLiftable(antecedent)
     return rap.Subtraction(plan_remainder, plan_both)
+
+
+def _free_variable_shattering_plan(
+    consequent, remainder, negated_formula, symbol_table
+):
+    """Lift `A ∧ ¬∃t ψ(t)` when the dependency between `A` and `ψ`
+    comes from atoms in which a free variable `x` of `A` takes the place
+    of `t`, such as `R(x) ∧ ¬∃t (R(t) ∧ S(x, t))`, using
+
+        ∃t ψ(t) ≡ ψ(x) ∨ ∃t (t ≠ x ∧ ψ(t))
+
+    so that `A ∧ ¬∃t ψ(t) ≡ (A ∧ ¬ψ(x)) ∧ ¬∃t (t ≠ x ∧ ψ(t))`.
+    The plan is
+
+        Difference(lift(A ∧ ¬ψ(x)), ind-π σ_{t ≠ x}(lift(ψ(t))))
+
+    which requires
+
+    * `t` to be a separator variable of `ψ`: it occurs in every
+      probabilistic atom, at the same position for all the atoms of a
+      relation, so that the events ψ(t) for different `t` are
+      independent;
+    * every probabilistic atom of `ψ(t)` to be disjoint, when t ≠ x,
+      from the atoms with the same symbol in `A` and `ψ(x)`: there is
+      a position holding `t` in the former and `x` in the latter;
+    * `x` to be a free variable of `ψ(t)`.
+
+    Returns
+    -------
+    Optional[RelationalAlgebraOperation]
+        the plan, or None if the conditions do not hold or the
+        resulting queries are not liftable.
+    """
+    existential_variables = []
+    body = negated_formula
+    while isinstance(body, ExistentialPredicate):
+        existential_variables.append(body.head)
+        body = body.body
+    free_variables = extract_logic_free_variables(remainder)
+    for t in existential_variables:
+        psi_t = body
+        for v in reversed(existential_variables):
+            if v != t:
+                psi_t = ExistentialPredicate(v, psi_t)
+        psi_free_variables = extract_logic_free_variables(psi_t)
+        for x in sorted(free_variables, key=lambda v: v.name):
+            if x not in psi_free_variables:
+                continue
+            psi_x = ReplaceExpressionWalker({t: x}).walk(psi_t)
+            if not _shattering_conditions_hold(
+                t, x, psi_t, remainder, psi_x, symbol_table
+            ):
+                continue
+            plan = _shattered_plan(
+                consequent, remainder, psi_t, psi_x, t, x,
+                psi_free_variables, symbol_table
+            )
+            if plan is not None:
+                return plan
+    return None
+
+
+def _shattering_conditions_hold(t, x, psi_t, remainder, psi_x, symbol_table):
+    psi_t_atoms = [
+        atom for atom in extract_logic_atoms(psi_t)
+        if not is_atom_a_deterministic_relation(atom, symbol_table)
+    ]
+    positions = {}
+    for atom in psi_t_atoms:
+        atom_positions = {i for i, arg in enumerate(atom.args) if arg == t}
+        common = positions.setdefault(atom.functor, atom_positions)
+        positions[atom.functor] = common & atom_positions
+        if len(positions[atom.functor]) == 0:
+            return False
+
+    other_atoms = [
+        atom for atom in (
+            extract_logic_atoms(remainder) | extract_logic_atoms(psi_x)
+        )
+        if not is_atom_a_deterministic_relation(atom, symbol_table)
+    ]
+    for atom in psi_t_atoms:
+        for other in other_atoms:
+            if (
+                other.functor == atom.functor and
+                not _atoms_are_disjoint(atom, other, t, x)
+            ):
+                return False
+    return True
+
+
+def _atoms_are_disjoint(atom, other, t, x):
+    if len(atom.args) != len(other.args):
+        return True
+    for arg, other_arg in zip(atom.args, other.args):
+        if arg == t and other_arg == x:
+            return True
+        if (
+            isinstance(arg, Constant) and isinstance(other_arg, Constant)
+            and arg != other_arg
+        ):
+            return True
+    return False
+
+
+def _shattered_plan(
+    consequent, remainder, psi_t, psi_x, t, x, psi_free_variables,
+    symbol_table
+):
+    plan_remainder = lift_with_negation_subtraction(
+        Implication(
+            consequent,
+            Conjunction(remainder.formulas + (Negation(psi_x),))
+        ),
+        symbol_table, check=True
+    )
+    psi_head_variables = tuple(sorted(
+        psi_free_variables, key=lambda v: v.name
+    ))
+    plan_psi = lift_with_negation_subtraction(
+        Implication(Symbol.fresh()(*psi_head_variables), psi_t),
+        symbol_table, check=True
+    )
+    if not (
+        is_pure_lifted_plan(plan_remainder) and
+        is_pure_lifted_plan(plan_psi)
+    ):
+        return None
+    plan_t_not_x = rap.IndependentProjection(
+        rap.Selection(
+            plan_psi,
+            FunctionApplication(
+                NE, (
+                    str2columnstr_constant(t.name),
+                    str2columnstr_constant(x.name)
+                )
+            )
+        ),
+        tuple(
+            str2columnstr_constant(v.name)
+            for v in psi_head_variables if v != t
+        )
+    )
+    return rap.Difference(plan_remainder, plan_t_not_x)
 
 
 def _split_dependent_negation(antecedent, symbol_table):
