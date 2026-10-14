@@ -116,11 +116,15 @@ cannot be answered with these predicates, say so instead of writing a
 query."""
 
 REACT_INSTRUCTIONS = """\
-Use the tools to look at the predicates and their values, check your
-query and run it before answering: check that constants such as terms
-exist with search_values, and that the query gives the expected kind of
-result with run_query. Give the query with final_answer, once it passes
-check_query."""
+Work in steps:
+1. Find how the entities and values the question names are stored:
+   search_values with a word of the question shows the facts holding it,
+   with the IRIs of their entities, in every stored relation.
+2. Write the query with these constants, and run it with run_query: check
+   that it gives the kind of rows the question asks for, and correct it
+   otherwise.
+3. As soon as run_query shows the right rows, give the query with
+   final_answer. Return only what the question asks for."""
 
 TEXT_PROTOCOL = """\
 You can call these tools:
@@ -131,7 +135,11 @@ Thought: <your reasoning, briefly>
 Action: <the tool's name>
 Action Input: <a JSON object with its arguments>
 and stop there: its result is given back to you as `Observation: ...`.
-Call one tool at a time. To answer, call final_answer, e.g.
+Call one tool at a time, e.g.
+Thought: I need how the person named Ann is stored.
+Action: search_values
+Action Input: {{"pattern": "Ann"}}
+and to answer:
 Action: final_answer
 Action Input: {{"query": "...", "explanation": "..."}}"""
 
@@ -153,17 +161,19 @@ TOOLS = [
     },
     {
         "name": "search_values",
-        "description": "Find the values of a column of a predicate that "
-        "contain a word, ignoring case, or the closest ones: use it to "
-        "write constants as they are stored.",
+        "description": "Find the stored facts with a value containing a "
+        "word, ignoring case, with the IRIs of their entities: use it to "
+        "write constants and IRIs as they are stored. All the stored "
+        "relations are searched, or only the predicate given (and its "
+        "column, by name or number).",
         "parameters": {
             "type": "object",
             "properties": {
+                "pattern": {"type": "string"},
                 "predicate": {"type": "string"},
                 "column": {"type": "string"},
-                "pattern": {"type": "string"},
             },
-            "required": ["predicate", "column", "pattern"],
+            "required": ["pattern"],
         },
     },
     {

@@ -99,8 +99,8 @@ def test_schema_summary_uses_the_engine_configuration(nl, monkeypatch):
         "- mentions(study(study_id), term) — Studies and terms "
         "[stored, 4 rows]" in context.schema_summary()
     )
-    assert "matching 'pain'" in context.search_values(
-        "mentions", "term", "pain"
+    assert "mentions(1, 'pain')" in context.search_values(
+        "pain", "mentions", "term"
     )
 
 
@@ -110,16 +110,42 @@ def test_describe_and_search(nl):
     assert description.startswith("mentions(c0, c1) [stored, 4 rows]")
     assert "4 rows, e.g.:" in description
     assert "Did you mean mentions" in context.describe("mention")
-    assert context.search_values("mentions", "c1", "PAIN") == (
-        "Values of mentions.c1 matching 'PAIN': 'pain', 'chronic pain'"
+    assert context.search_values("PAIN", "mentions", "c1") == (
+        "Facts with values containing 'PAIN':\n"
+        "mentions(1, 'pain')\nmentions(2, 'chronic pain')"
     )
+    assert context.search_values("pain", "mentions", 1).splitlines()[1:] \
+        == ["mentions(1, 'pain')", "mentions(2, 'chronic pain')"]
     assert "closest are: 'memory'" in context.search_values(
-        "mentions", "c1", "memroy"
+        "memroy", "mentions", "c1"
     )
     assert "no column 'term'" in context.search_values(
-        "mentions", "term", "x"
+        "x", "mentions", "term"
     )
-    assert "matches" in context.search_values("mentions", "c1", "zzzzzz")
+    assert "matches" in context.search_values("zzzzzz", "mentions", "c1")
+    assert "Unknown predicate 'nothing'" in context.search_values(
+        "x", "nothing"
+    )
+
+
+def test_search_all_stored_relations(nl):
+    nl.add_tuple_set(
+        [("http://x.org/ann", "Ann Lee"), ("_:b0", "fear")], name="pv:name"
+    )
+    found = EngineContext(nl).search_values("fear")
+    assert found.splitlines() == [
+        "Facts with values containing 'fear':",
+        "mentions(1, 'fear')",
+        "pv:name(<_:b0>, 'fear')",
+    ]
+    by_word = EngineContext(nl).search_values("Professor Lee")
+    assert by_word.splitlines() == [
+        "Facts with values containing 'Lee':",
+        "pv:name(<http://x.org/ann>, 'Ann Lee')",
+    ]
+    assert "No stored value contains 'zzz'" in (
+        EngineContext(nl).search_values("zzz")
+    )
 
 
 def test_rows_of_a_rule(nl):

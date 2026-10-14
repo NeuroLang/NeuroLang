@@ -12,11 +12,16 @@ written as the engine stores it.
 import difflib
 from typing import Optional
 
+from pandas.api.types import is_object_dtype, is_string_dtype
+
 from neurolang.expressions import Symbol
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import result_to_dataframe
 from neurolang.utils.predicate_catalog import predicate_catalog
 
+# Kinds of the predicates searched by search_values when none is given.
+SEARCHED_KINDS = frozenset({"stored", "loaded", "probabilistic"})
+MAX_FACTS_PER_COLUMN = 50
 # Order in which the kinds of predicates are listed.
 KIND_ORDER = ("stored", "rule", "probabilistic", "loaded")
 RULE_KINDS = frozenset({"derived", "session"})
@@ -61,6 +66,7 @@ class EngineContext:
         self.engine_name = engine_name
         self.loaded = loaded or {}
         self.declared = declared_predicates(engine_name)
+        self._frames = {}
         self.signatures = (
             engine_registry.get_signatures(engine_name)
             if self.declared else {}
@@ -169,8 +175,15 @@ class EngineContext:
         Return the rows of the predicate *name* as a DataFrame.
 
         A stored relation is read as it is; a rule is evaluated with a
-        query in a scope that is discarded afterwards.
+        query in a scope that is discarded afterwards. The rows are kept
+        for the next calls.
         """
+        if name not in self._frames:
+            self._frames[name] = self._read_frame(name)
+        return self._frames[name]
+
+    def _read_frame(self, name: str):
+        """Return the rows of the predicate *name* (see :meth:`frame`)."""
         columns = self.columns(name)
         relation = self._stored_relation(name)
         if relation is not None:
@@ -210,41 +223,137 @@ class EngineContext:
             index=False
         )
 
+    def _column(self, frame, column):
+        """
+        Return the name of *column* of *frame*, given by name or number.
+
+        Raise ValueError when *frame* has no such column.
+        """
+        columns = [str(c) for c in frame.columns]
+        if isinstance(column, int) or str(column).isdigit():
+            index = int(column)
+            if 0 <= index < len(columns):
+                return frame.columns[index]
+        elif str(column) in columns:
+            return frame.columns[columns.index(str(column))]
+        raise ValueError(
+            f"no column {column!r}; its columns are {', '.join(columns)}"
+        )
+
+    def _searched_predicates(self) -> list:
+        """Return the stored relations, searched when none is given."""
+        return [
+            name for name, info in sorted(self.catalog().items())
+            if info.kind in SEARCHED_KINDS
+        ]
+
     def search_values(
-        self, name: str, column: str, pattern: str, limit: int = 10
+        self, pattern: str, name: Optional[str] = None, column=None,
+        limit: int = 10,
     ) -> str:
         """
-        Return the values of *column* of *name* matching *pattern*.
+        Return the facts whose values contain *pattern*, ignoring case.
 
-        Values containing *pattern* (ignoring case) come first; when
-        there are none, the values closest to it are given instead.
+        The facts searched are those of the predicate *name*, by default
+        of all the stored relations, and the values those of its *column*
+        (a name or a number), by default of all its columns of strings.
+        The facts whose value is *pattern* come first. When none matches,
+        the words of *pattern* are searched for, then the values closest
+        to it.
         """
-        frame = self.frame(name)
-        if column not in frame.columns:
-            return (
-                f"{name} has no column {column!r}; its columns are "
-                f"{', '.join(map(str, frame.columns))}."
-            )
-        values = frame[column].drop_duplicates().head(MAX_VALUES_SCANNED)
-        strings = values.astype(str)
+        pattern = str(pattern).strip()
+        if not pattern:
+            return "Give a pattern to search for."
+        names = [name] if name else self._searched_predicates()
+        if name and name not in self.catalog():
+            return self.describe(name)
+        try:
+            found = self._matching_facts(names, pattern, column)
+        except ValueError as exc:
+            return f"{name} has {exc}."
+        words = [w for w in pattern.split() if len(w) > 2]
+        if not found and len(words) > 1:
+            for word in sorted(words, key=len, reverse=True):
+                found = self._matching_facts(names, word, column)
+                if found:
+                    pattern = word
+                    break
+        if found:
+            shown = found[:limit]
+            text = "\n".join(fact for _, fact in shown)
+            if len(found) > limit:
+                text += f"\n… and {len(found) - limit} more"
+            return f"Facts with values containing {pattern!r}:\n{text}"
+        if name:
+            return self._closest_values(name, column, pattern, limit)
+        return f"No stored value contains {pattern!r}."
+
+    def _matching_facts(self, names, pattern: str, column) -> list:
+        """Return ``(rank, fact)`` of the facts with a value matching."""
         needle = pattern.lower()
-        matching = list(strings[strings.str.lower().str.contains(
-            needle, regex=False
-        )])
-        matching.sort(key=lambda value: (value.lower() != needle, len(value)))
-        if matching:
-            shown = matching[:limit]
-            more = len(matching) - len(shown)
-            text = ", ".join(repr(v) for v in shown)
-            if more > 0:
-                text += f" and {more} more"
-            return f"Values of {name}.{column} matching {pattern!r}: {text}"
-        close = difflib.get_close_matches(
-            pattern, list(strings), n=limit, cutoff=0.6
-        )
+        found = []
+        for name in names:
+            frame = self.frame(name)
+            if frame.empty:
+                continue
+            if column is not None and len(names) == 1:
+                columns = [self._column(frame, column)]
+            else:
+                columns = _string_columns(frame)
+            for c in columns:
+                values = frame[c].astype(str)
+                lowered = values.str.lower()
+                mask = lowered.str.contains(needle, regex=False)
+                for index in frame.index[mask][:MAX_FACTS_PER_COLUMN]:
+                    value = lowered[index]
+                    rank = (value != needle, len(value))
+                    found.append(
+                        (rank, _fact(name, frame.loc[index].tolist()))
+                    )
+        found.sort(key=lambda item: item[0])
+        return list(dict.fromkeys(found))
+
+    def _closest_values(self, name, column, pattern, limit) -> str:
+        """Return the values of a predicate closest to *pattern*."""
+        frame = self.frame(name)
+        try:
+            columns = (
+                [self._column(frame, column)] if column is not None
+                else _string_columns(frame)
+            )
+        except ValueError as exc:
+            return f"{name} has {exc}."
+        strings = sorted({
+            str(v) for c in columns
+            for v in frame[c].drop_duplicates().head(MAX_VALUES_SCANNED)
+        })
+        close = difflib.get_close_matches(pattern, strings, n=limit,
+                                          cutoff=0.6)
         if close:
             return (
-                f"No value of {name}.{column} contains {pattern!r}; the "
-                f"closest are: {', '.join(repr(v) for v in close)}"
+                f"No value of {name} contains {pattern!r}; the closest "
+                f"are: {', '.join(repr(v) for v in close)}"
             )
-        return f"No value of {name}.{column} matches {pattern!r}."
+        return f"No value of {name} matches {pattern!r}."
+
+
+def _string_columns(frame) -> list:
+    """Return the columns of *frame* holding strings."""
+    return [
+        c for c in frame.columns
+        if is_object_dtype(frame[c]) or is_string_dtype(frame[c])
+    ]
+
+
+def _term(value) -> str:
+    """Return *value* as written in Datalog: <IRI>, 'string' or number."""
+    if isinstance(value, str):
+        if value.startswith(("http://", "https://", "_:")):
+            return f"<{value}>"
+        return repr(value)
+    return str(value)
+
+
+def _fact(name: str, values) -> str:
+    """Return the fact *name*(*values*) as written in Datalog."""
+    return f"{name}({', '.join(_term(v) for v in values)})"

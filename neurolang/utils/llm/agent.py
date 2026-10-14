@@ -34,13 +34,37 @@ from .validation import check_query, run_preview
 
 MAX_OBSERVATION = 2000
 _FENCE = re.compile(r"```[ \t]*([A-Za-z]*)[ \t]*\n(.*?)```", re.DOTALL)
-_ACTION = re.compile(r"^\s*Action\s*:\s*`?([A-Za-z_]+)`?", re.MULTILINE)
-_ACTION_INPUT = re.compile(r"^\s*Action\s+Input\s*:", re.MULTILINE)
-_THOUGHT = re.compile(
-    r"^\s*Thought\s*:\s*(.*?)(?=^\s*Action\s*:|\Z)", re.MULTILINE | re.DOTALL
+_ACTION = re.compile(
+    r"^\s*Action\s*:\s*([A-Za-z_]+)", re.MULTILINE | re.IGNORECASE
 )
-_FINAL = re.compile(r"^\s*Final\s+Answer\s*:", re.MULTILINE)
+_ACTION_INPUT = re.compile(
+    r"^\s*Action[ _]Input\s*:", re.MULTILINE | re.IGNORECASE
+)
+_THOUGHT = re.compile(
+    r"^\s*Thought\s*:\s*(.*?)(?=^\s*Action\s*:|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
+_FINAL = re.compile(r"^\s*Final\s+Answer\s*:", re.MULTILINE | re.IGNORECASE)
 _OBSERVATION = re.compile(r"^\s*Observation\s*:", re.MULTILINE)
+# A keyword line as models write it, emphasis included: **Action:** x
+_KEYWORD_LINE = re.compile(
+    r"^[\s*_`#>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
+    r"[*_`\s]*:[*_`\s]*(.*)$",
+    re.IGNORECASE,
+)
+
+
+def _normalise_keywords(text: str) -> str:
+    """Return *text* with its keyword lines without markdown emphasis."""
+    lines = []
+    for line in text.splitlines():
+        match = _KEYWORD_LINE.match(line)
+        if match:
+            keyword = match.group(1).replace("_", " ")
+            value = match.group(2).strip().strip("`*_").strip()
+            line = f"{keyword}: {value}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 @dataclass
@@ -134,6 +158,7 @@ def parse_text_action(text: str, language: str) -> TextAction:
     observed = _OBSERVATION.search(text)
     if observed:
         text = text[:observed.start()]
+    text = _normalise_keywords(text)
     thought = _THOUGHT.search(text)
     thought = thought.group(1).strip() if thought else ""
     action = _ACTION.search(text)
@@ -159,6 +184,16 @@ def parse_text_action(text: str, language: str) -> TextAction:
     name = action.group(1)
     arguments_start = _ACTION_INPUT.search(text, action.end())
     if arguments_start is None:
+        # Action: tool({...}) or Action: tool {...} on one line
+        line_end = text.find("\n", action.end())
+        rest = text[action.end():] if line_end < 0 else text[
+            action.end():line_end
+        ]
+        if "{" in rest:
+            try:
+                return TextAction(thought, name, _json_object(rest))
+            except ValueError:
+                pass
         return TextAction(thought, name, {})
     try:
         arguments = _json_object(text[arguments_start.end():])
@@ -169,6 +204,11 @@ def parse_text_action(text: str, language: str) -> TextAction:
             'line, e.g. Action Input: {"query": "obtain every Study."}',
         )
     return TextAction(thought, name, arguments)
+
+
+def _gave_rows(observation: str) -> bool:
+    """Whether the observation of run_query shows rows."""
+    return bool(re.match(r"(\w+: )?[1-9]\d* rows", observation))
 
 
 class Toolbox:
@@ -207,8 +247,8 @@ class Toolbox:
     def tool_describe_predicate(self, name: str):
         return self.context.describe(name), None
 
-    def tool_search_values(self, predicate: str, column: str, pattern: str):
-        return self.context.search_values(predicate, column, pattern), None
+    def tool_search_values(self, pattern: str, predicate=None, column=None):
+        return self.context.search_values(pattern, predicate, column), None
 
     def tool_check_query(self, query: str):
         result = check_query(self.context.nl, query, self.language)
@@ -420,6 +460,19 @@ class ReactAgent(Agent):
                 result.query, result.explanation = final
                 result.valid = True
                 return result
+        ran = next((
+            s for s in reversed(result.steps)
+            if s.action == "run_query" and _gave_rows(s.observation)
+        ), None)
+        if ran is not None:
+            # Out of steps, the last query that gave rows is the answer.
+            result.query = ran.arguments["query"]
+            result.valid = True
+            result.explanation = (
+                f"The last query that gave rows, after "
+                f"{self.config.max_steps} steps."
+            )
+            return result
         last = next(
             (s for s in reversed(result.steps) if "query" in s.arguments), None
         )

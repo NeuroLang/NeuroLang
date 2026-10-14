@@ -147,14 +147,14 @@ def test_react_text_protocol(nl):
     assert [s.action for s in steps] == [
         "search_values", "final_answer", "", "run_query", "final_answer",
     ]
-    assert "'pain', 'chronic pain'" in steps[0].observation
+    assert "mentions(2, 'chronic pain')" in steps[0].observation
     assert "rejected" in steps[1].observation
     assert "no action" in steps[2].observation
     assert "1 rows" in steps[3].observation
     messages = react.client.requests[-1]["messages"]
     assert "Action Input:" in messages[0]["content"]
     assert messages[2]["role"] == "assistant"
-    assert messages[3]["content"].startswith("Observation: Values")
+    assert messages[3]["content"].startswith("Observation: Facts")
     assert react.client.requests[0]["tools"] is None
 
 
@@ -179,7 +179,7 @@ def test_react_native_tools(nl):
     assert [m["role"] for m in request["messages"]] == [
         "system", "user", "assistant", "tool", "tool"
     ]
-    assert request["messages"][4]["content"].startswith("Values")
+    assert request["messages"][4]["content"].startswith("Facts with")
 
 
 def test_react_native_text_answer(nl):
@@ -251,3 +251,33 @@ def test_examples_and_description_can_be_given(nl):
     system = icl.system_prompt("Which studies?")
     assert "Question: Which studies?\nans(s) :- study(s)" in system
     assert "The engine: A tiny engine." in system
+
+
+@pytest.mark.parametrize("text, name, arguments", [
+    ('**Thought:** look\n**Action:** search_values\n**Action Input:** '
+     '{"pattern": "pain"}', "search_values", {"pattern": "pain"}),
+    ('Action: `search_values`\naction input: ```json\n'
+     '{"pattern": "pain"}\n```',
+     "search_values", {"pattern": "pain"}),
+    ('Thought: x\nAction: search_values({"pattern": "pain"})',
+     "search_values", {"pattern": "pain"}),
+    ('### Action: run_query\n- Action_Input: {"query": "ans(x) :- p(x)"}',
+     "run_query", {"query": "ans(x) :- p(x)"}),
+])
+def test_parse_text_action_formatting_slips(text, name, arguments):
+    action = parse_text_action(text, "datalog")
+    assert not action.error
+    assert (action.name, action.arguments) == (name, arguments)
+
+
+def test_react_answers_the_last_query_with_rows_when_out_of_steps(nl):
+    replies = [
+        'Action: run_query\nAction Input: {"query": "ans(s) :- study(s)"}',
+        'Action: run_query\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'zzz\')"}',
+        "Action: list_predicates\nAction Input: {}",
+    ]
+    react, _ = agent(nl, ReactAgent, replies, language="datalog", max_steps=3)
+    result = react.run("Which studies?")
+    assert result.valid and result.query == "ans(s) :- study(s)"
+    assert "after 3 steps" in result.explanation
