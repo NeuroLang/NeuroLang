@@ -661,3 +661,92 @@ class TestSquallSorts:
             sorts_app._execute_and_display(sentence)
             assert not sorts_app.failed, sentence
             assert len(sorts_app.results[-1].frame) == 1, sentence
+
+
+@pytest.fixture
+def values_app(sorts_app):
+    """Return the SQUALL REPL of :func:`sorts_app` with several terms."""
+    sorts_app._nl.add_tuple_set(
+        [("pain",), ("parietal",), ("fear",), ("working memory",),
+         ("alzheimer's",)],
+        name="term",
+    )
+    return sorts_app
+
+
+class TestQuotedValues:
+    def test_terms_after_mentions(self, values_app):
+        metas = _metas(values_app, "obtain every Study that mentions '")
+        assert list(metas) == [
+            "fear'", "pain'", "parietal'", "working memory'"
+        ]
+        assert metas["pain'"] == "term"
+
+    def test_terms_filtered_by_their_prefix(self, values_app):
+        assert _words(values_app, "obtain every Study that mentions 'pa") == [
+            "pain'", "parietal'"
+        ]
+        assert _words(
+            values_app, "obtain every Study that mentions 'working m"
+        ) == ["working memory'"]
+
+    def test_double_quotes(self, values_app):
+        words = _words(values_app, 'obtain every Study that mentions "al')
+        assert words == ["alzheimer's\""]
+
+    def test_the_completion_replaces_the_quoted_text(self, values_app):
+        (completion,) = _completions(
+            values_app, "obtain every Study that mentions 'working m"
+        )
+        assert completion.start_position == -len("working m")
+
+    def test_while_typing_after_the_quote_alone(self, values_app):
+        text = "obtain every Study that mentions '"
+        assert _words(values_app, text) and not [
+            c.text for c in _completions(values_app, text, requested=False)
+        ]
+        assert _completions(values_app, text + "p", requested=False)
+
+    def test_values_in_datalog(self, values_app):
+        values_app.settings.squall = False
+        assert _words(values_app, "ans(s) :- mentions(s, 'pa") == [
+            "pain'", "parietal'"
+        ]
+
+    def test_no_values_for_an_unknown_verb(self, values_app):
+        assert _words(values_app, "obtain every Study that plays '") == []
+
+    def test_values_are_read_once(self, values_app, monkeypatch):
+        from neurolang.utils.tui import value_completion
+
+        calls = []
+        read = value_completion.ColumnValues._read
+
+        def counting(self, name, position):
+            calls.append(name)
+            return read(self, name, position)
+
+        monkeypatch.setattr(value_completion.ColumnValues, "_read", counting)
+        for prefix in ("", "p", "pa"):
+            _words(values_app, "obtain every Study that mentions '" + prefix)
+        assert calls == ["term"]
+
+
+class TestTupleVariables:
+    def test_the_next_columns_of_the_noun(self, sorts_app):
+        metas = _metas(sorts_app, "obtain every Voxel (?i; ")
+        assert list(metas) == ["?j", "?j; ?k)"]
+        assert metas["?j"] == "column 2 of voxel"
+
+    def test_filtered_by_the_variable_typed(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (?i; ?j; ?") == [
+            "?k", "?k)"
+        ]
+
+    def test_from_the_first_column(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (") == [
+            "?i", "?i; ?j; ?k)"
+        ]
+
+    def test_nothing_after_the_last_column(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (?i; ?j; ?k; ") == []
