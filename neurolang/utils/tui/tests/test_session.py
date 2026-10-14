@@ -840,3 +840,19 @@ def test_results_have_no_generated_column_names(
         _headers(studies, definition)
     assert _headers(studies, query) == headers
     assert "fresh_" not in _output(studies)
+
+
+def test_rewritten_shows_a_squall_query_on_a_rule(studies, capsys):
+    """Check ``.rewritten`` prints the magic-sets rewriting of SQUALL."""
+    studies.settings.squall = False
+    studies._execute_and_display("ment(s, t) :- mentions(s, t)")
+    studies.settings.squall = True
+    studies._execute_and_display("obtain every Study that ment 'pain'.")
+    capsys.readouterr()
+    studies.console.file.seek(0)
+    studies.console.file.truncate()
+    studies._handle_dot_command(".rewritten")
+    out = capsys.readouterr().out + _output(studies)
+    assert "── rewritten program ──" in out
+    assert "ment^bf" in out or "ment^fb" in out
+    assert "error" not in out.lower()
