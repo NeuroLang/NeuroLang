@@ -734,6 +734,17 @@ def test_datalog_conditional_query_with_probability_in_its_head():
     assert _rows(res) == {("pain", 1.0), ("fear", 1.0)}
 
 
+
+@pytest.mark.parametrize(
+    "option", [{"dry_run": True}, {"show_rewritten": True}, {"show_ra": True}]
+)
+def test_query_with_probability_in_its_head_printed(option, capsys):
+    nl = _mentions_engine()
+    nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)", **option
+    )
+    assert "mentions(s, t)" in capsys.readouterr().out
+
 def test_query_with_probability_in_its_head_leaves_program_unchanged():
     nl = _mentions_engine()
     before = set(nl.symbol_table.symbols_by_type(object))

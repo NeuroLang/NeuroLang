@@ -62,6 +62,7 @@ from ..probabilistic import (
     small_dichotomy_theorem_based_solver,
 )
 from ..probabilistic.cplogic.program import CPLogicMixin
+from ..probabilistic.expressions import PROB, Condition
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -420,6 +421,11 @@ class NeurolangPDL(QueryBuilderDatalog):
             S{Z: Unknown}
         )
         """
+        if _has_probability(head):
+            return self._execute_probabilistic_head_query(
+                head, predicate, show_rewritten=show_rewritten,
+                dry_run=dry_run, show_ra=show_ra,
+            )
         query_pred_symb = predicate.expression.functor
         query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
@@ -437,7 +443,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         # In both cases fall through to the base QueryBuilderDatalog
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
-        if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+        if not hasattr(symbol_entry, "formulas"):
             return super()._execute_query(
                 head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
@@ -475,6 +481,34 @@ class NeurolangPDL(QueryBuilderDatalog):
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    def _execute_probabilistic_head_query(self, head, predicate, **options):
+        """
+        Answer a query whose head has a probability, as ``ans(x, PROB(x))``.
+
+        Only a rule computes a probability: the query becomes the rule
+        ``q(x, PROB(x)) :- predicate`` of a fresh ``q``, which is queried
+        in a scope closed on return, and whose columns are named after
+        the query's head.
+        """
+        if isinstance(predicate, Condition):
+            # a conditional body reaches the query as a Condition of
+            # front-end expressions; '//' builds it as a rule body
+            predicate = predicate.conditioned // predicate.conditioning
+        variables = tuple(self.new_symbol() for _ in head)
+        with self.scope:
+            rule_symbol = self.new_symbol()
+            self._declare_implication(rule_symbol(*head), predicate)
+            solution, _ = self._execute_query(
+                variables, rule_symbol(*variables), **options
+            )
+        if isinstance(solution, ir.Constant):
+            # nothing was solved: the rules or their plans were printed
+            return solution, None
+        names = self._parameter_names(h.expression for h in head)
+        return solution.rename_columns(
+            {v.expression.name: name for v, name in zip(variables, names)}
+        ), None
 
     @staticmethod
     def _query_head_symbols(head):
@@ -1067,3 +1101,11 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
+
+
+def _has_probability(head) -> bool:
+    """Return whether the query *head*, a tuple, has a ``PROB(…)``."""
+    return isinstance(head, tuple) and any(
+        getattr(getattr(h, "expression", None), "functor", None) == PROB
+        for h in head
+    )
