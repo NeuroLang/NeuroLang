@@ -142,6 +142,63 @@ def test_idb_of_unknown_predicate(app):
     assert "'nope' is not an IDB predicate" in _command(app, ".idb nope")
 
 
+
+@pytest.fixture
+def conditional(app):
+    """
+    Return the REPL *app* where SQUALL defined the conditional ``marg``.
+
+    NeuroLang compiles ``marg`` into three rules: one of ``marg`` and one
+    of each of its helpers ``marg^cond_num`` and ``marg^cond_den``,
+    whose symbols have the name ``marg`` too.
+    """
+    nl = app._nl
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s1", "memory"), ("s2", "pain")], name="mentions"
+    )
+    nl.add_tuple_set([("pain",), ("memory",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    app._handle_dot_command(".mode squall")
+    app._execute_and_display(
+        "define as marg with inferred probability every Term where a "
+        "Selected_study mentions the Term conditioned to the "
+        "Selected_study that mentions 'pain'."
+    )
+    return app
+
+
+def test_idb_lists_a_conditional_predicate_once(conditional):
+    output = _command(conditional, ".idb")
+    assert output.count("marg") == 1
+    assert "Total session IDB predicates: 2" in output
+
+
+def test_drop_removes_the_helpers_of_a_conditional(conditional):
+    _command(conditional, ".drop marg")
+    assert "marg" not in _idb_names(conditional)
+    assert "not an IDB predicate" in _command(conditional, ".datalog marg")
+
+
+def test_datalog_of_a_squall_predicate(conditional):
+    output = _command(conditional, ".datalog marg")
+    assert "marg(s₀, PROB(s₀)) :-" in output
+    assert " | " in output
+    assert "cond_num" not in output and "cond_den" not in output
+
+
+def test_datalog_of_a_datalog_predicate(app):
+    output = _command(app, ".datalog active")
+    assert "active(x) :-" in output
+    assert "plays(x)" in output
+
+
+def test_datalog_of_an_unknown_predicate(app):
+    assert "'nothing' is not an IDB predicate" in _command(
+        app, ".datalog nothing"
+    )
+
 def test_drop_rule_removes_exactly_it(two_rules):
     out = _command(two_rules, ".drop both 1")
     assert "removed rule 1 of both (1 rule left)" in out
