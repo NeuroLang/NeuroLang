@@ -277,6 +277,44 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     )
 
 
+class PredicateArityError(WrongArgumentsInPredicateError):
+    """
+    A predicate is used with a number of arguments other than its columns.
+
+    Parameters
+    ----------
+    predicate : str
+        Name of the predicate.
+    arity : int
+        Number of columns of the predicate.
+    used : int
+        Number of arguments the predicate is used with.
+
+    Notes
+    -----
+    The message only states the counts. When a single argument is used for
+    a predicate with several columns, as a SQUALL noun without ``in ND``
+    does, `suggestion` tells how to use all its columns.
+    """
+
+    def __init__(self, predicate, arity, used):
+        """Build the message from the predicate name and the counts."""
+        columns = "column" if arity == 1 else "columns"
+        super().__init__(
+            f"`{predicate}` has {arity} {columns} but is used with {used}"
+        )
+        self.predicate = predicate
+        self.arity = arity
+        self.used = used
+        if used == 1 and arity > 1:
+            self.suggestion = (
+                f"If `{predicate}` is a noun, use `in {arity}D` or a tuple "
+                f"of {arity} variables such as `("
+                + "; ".join(f"?x{i}" for i in range(1, arity + 1))
+                + ")`."
+            )
+
+
 class TranslateToNamedRAException(NeuroLangException):
     """
     Base exception for errors translating Datalog to Named Relational Algebra.
