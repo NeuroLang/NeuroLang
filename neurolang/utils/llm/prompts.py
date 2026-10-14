@@ -61,11 +61,14 @@ only one.
 - A yes/no question is a query without variables: `ans() :- body`.
 - When the question names the kind of its answers (a country, a book),
   restrict them with their class: `ans(c) :- located(x, c), Country(c)`.
-- The k largest (or smallest) by a value: rank by counting the larger
-  values, `larger(x, y) :- value(x, v), value(y, w), (w > v)` and
+- The largest (or smallest) by a value: compare with the max (min),
+  `top(m) :- AGGREGATE[](value(x, v) @ max(v)) = m` and
+  `ans(x) :- value(x, m), top(m)`.
+- Only for the k largest with k > 1, rank by counting the larger values
+  among the candidates of the question (never a whole large relation):
+  `larger(x, y) :- value(x, v), value(y, w), (w > v)`,
   `rank(x, r) :- AGGREGATE[x](larger(x, y) @ count(y)) = r`, keep
-  `(r < k)` and add the largest, which no value beats: `~beaten(x)` with
-  `beaten(x) :- larger(x, y)`; for k = 1, compare with the max.
+  `(r < k)`, and add the largest, which no value beats.
 - Aggregation, in a rule of its own that the query then reads, over a
   single atom (define a conjunction in a rule first), grouped by the
   variables other than the aggregated one:
