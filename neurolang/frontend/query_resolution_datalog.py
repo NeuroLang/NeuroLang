@@ -41,10 +41,11 @@ from ..datalog.expressions import (
     predicate_identity,
 )
 from ..logic.transformations import RemoveTrivialOperations
+from ..probabilistic.expressions import ProbabilisticPredicate
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.pretty_printer import DatalogPrettyPrinter
-from .datalog.squall import ResolvePredicateLemmas
+from .datalog.squall import ResolvePredicateLemmas, atom_arity
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -75,11 +76,22 @@ def _squall_rules(parsed):
     return [parsed]
 
 
-def _squall_rule_head(rule):
-    """Return the predicate symbol a SQUALL rule or choice defines."""
+def _squall_rule_signature(rule):
+    """
+    Return the predicate a SQUALL rule or choice defines and its arity.
+
+    The arity counts the arguments of the head as written: the PROB term
+    of a ``with probability`` head counts, the probability of a
+    ``probably`` fact or of a choice does not.
+    """
     if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
-        return rule.head_symbol
-    return getattr(getattr(rule, "consequent", None), "functor", None)
+        return rule.head_symbol, atom_arity(rule.head_vars)
+    head = getattr(rule, "consequent", None)
+    if isinstance(head, ProbabilisticPredicate):
+        head = head.body
+    if not isinstance(head, ir.FunctionApplication):
+        return None, None
+    return head.functor, atom_arity(head.args)
 
 
 def _name_lemma_candidates(exc, ambiguous):
@@ -476,17 +488,46 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Build the walker matching SQUALL verb forms to defined predicates.
 
         Predicates are defined by the engine's symbol table or by the
-        program's own rules and choice definitions.
+        program's own rules and choice definitions, whose head arity
+        takes precedence.
         """
         defined = {
             symbol.name for symbol in self.program_ir.symbol_table
             if isinstance(symbol, ir.Symbol) and not symbol.is_fresh
         }
+        head_arities = {}
         for rule in _squall_rules(parsed):
-            head = _squall_rule_head(rule)
+            head, arity = _squall_rule_signature(rule)
             if isinstance(head, ir.Symbol):
-                defined.add(head.name)
-        return ResolvePredicateLemmas(defined)
+                head_arities[head.name] = arity or None
+
+        def arity(name):
+            if name in head_arities:
+                return head_arities[name]
+            return self._predicate_arity(ir.Symbol(name))
+
+        return ResolvePredicateLemmas(defined | head_arities.keys(), arity)
+
+    def _predicate_arity(self, symbol):
+        """
+        Return the arity of an engine predicate, or None when unknown.
+
+        The probability column of stored probabilistic facts and choices
+        is not an argument of their atoms, so it is not counted.
+        """
+        try:
+            arity = len(self.program_ir.predicate_terms(symbol))
+        except NeuroLangException:
+            return None
+        probabilistic = (
+            getattr(self.program_ir, "pfact_pred_symbs", set())
+            | getattr(self.program_ir, "pchoice_pred_symbs", set())
+        )
+        if symbol in probabilistic and isinstance(
+            self.program_ir.symbol_table[symbol], ir.Constant
+        ):
+            arity -= 1
+        return arity or None
 
     def _execute_single_squall_query(self, query, rules_and_choice_defs,
                                      show_rewritten=False, dry_run=False,

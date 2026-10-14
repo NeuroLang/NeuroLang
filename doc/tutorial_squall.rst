@@ -372,9 +372,10 @@ Verb and noun forms are matched to predicates by their lemma, so ``play``,
 ``plays``, ``played`` and ``playing`` all refer to the ``plays`` relation,
 and ``studies`` to ``study``.  The word is replaced only when it is not
 itself a defined predicate (an engine relation or a ``define as`` head of
-the program) and exactly one defined predicate shares its lemma: with both
-``reports`` and ``reported`` defined, ``report`` is left undefined and the
-error lists both candidates.  For names with underscores only the last
+the program) and exactly one defined predicate shares its lemma and its
+number of arguments: with both ``reports`` and ``reported`` defined with
+the same arity, ``report`` is left undefined and the error lists both
+candidates.  For names with underscores only the last
 word is lemmatised (``peak_reports`` refers to ``peak_reported``).
 
 3.7 Function-Call Guard — ``Predicate(?x, ?y) holds``
