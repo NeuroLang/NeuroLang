@@ -966,6 +966,42 @@ def test_det_every_agg_free_var_fallback():
     )
 
 
+def _obtained_aggregation(code):
+    query = parser(code).formulas[0]
+    assert isinstance(query.head, AggregationApplication)
+    return query.head
+
+
+def test_agg_tuple_label_skips_anonymous_columns():
+    """``the Max of the T (_; _; ?w)`` aggregates only the named column."""
+    head = _obtained_aggregation(
+        "obtain the Max of the Term_in_study_tfidf (_; _; ?w)."
+    )
+    assert head.args == (Symbol("w"),)
+
+
+def test_agg_tuple_label_per_aggregates_value_not_group():
+    """With ``per ?s`` the aggregated column is the named non-group one."""
+    head = _obtained_aggregation(
+        "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    )
+    assert head.args == (Symbol("w"),)
+
+
+def test_agg_tuple_label_per_in_rule_aggregates_value():
+    """``for every Study ?s ; where every Max of … (?s; _; ?w) per ?s``."""
+    rule = parser(
+        "define as Peak for every Study ?s ; "
+        "where every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    )
+    agg = [
+        a for a in rule.consequent.args
+        if isinstance(a, AggregationApplication)
+    ]
+    assert len(agg) == 1
+    assert agg[0].args == (Symbol("w"),)
+
+
 def test_ng1_tail_npc_parses_parameterized_functors():
     """'Top/Bottom n[%] of the Relation' builds parameterized aggregate functors."""
 

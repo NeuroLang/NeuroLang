@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from neurolang.exceptions import ForbiddenDisjunctionError
+from neurolang.exceptions import (
+    ForbiddenDisjunctionError, SquallSemanticError,
+)
 from neurolang.expressions import Symbol as ir_Symbol
 
 from ..probabilistic_frontend import NeurolangPDL
@@ -993,6 +995,53 @@ def test_execute_squall_count_over_nary_relation():
     df = result.as_pandas_dataframe()
     assert df.shape == (1, 1), f"got {df.shape}"
     assert df.iloc[0, 0] == 2
+
+
+@pytest.fixture
+def nl_tfidf():
+    """Engine with a 3-column term_in_study_tfidf(study, term, tfidf)."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    engine.add_tuple_set(
+        [(1, "pain", 0.5), (2, "fear", 0.9), (1, "fear", 0.1)],
+        name="term_in_study_tfidf",
+    )
+    return engine
+
+
+def test_execute_squall_max_of_multicolumn_relation_asks_for_column(
+    nl_tfidf
+):
+    """Unlabelled Max over a 3-column relation must not use column 0."""
+    with pytest.raises(SquallSemanticError, match=r"\(_; _; \?\w+\)"):
+        nl_tfidf.execute_squall_program(
+            "obtain the Max of the Term_in_study_tfidf."
+        )
+
+
+def test_execute_squall_max_of_multicolumn_rule_asks_for_column(nl_tfidf):
+    """The same ambiguity in a rule definition is reported too."""
+    with pytest.raises(SquallSemanticError, match="3 columns"):
+        nl_tfidf.execute_squall_program(
+            "define as Top_tfidf every Max of the Term_in_study_tfidf."
+        )
+
+
+def test_execute_squall_max_of_named_column(nl_tfidf):
+    """``(_; _; ?w)`` selects the value column to aggregate."""
+    result = nl_tfidf.execute_squall_program(
+        "obtain the Max of the Term_in_study_tfidf (_; _; ?w)."
+    )
+    assert result.as_pandas_dataframe().values.tolist() == [[0.9]]
+
+
+def test_execute_squall_max_of_named_column_per_group(nl_tfidf):
+    """``(?s; _; ?w) per ?s`` aggregates ``?w`` for each study."""
+    result = nl_tfidf.execute_squall_program(
+        "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {(1, 0.5), (2, 0.9)}
 
 
 def test_execute_squall_issue879_anaphora_and_conjunction():
