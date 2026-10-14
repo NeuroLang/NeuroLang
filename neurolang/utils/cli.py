@@ -608,10 +608,13 @@ def _ra_sets(nl: NeurolangPDL, column_names: dict) -> list:
     Return ``(name, columns, size, arity)`` for each RA set of *nl*.
 
     *column_names* maps set names to the columns shown instead of the
-    set's own column names.
+    set's own column names. A set redefined in an inner scope of the
+    program is listed once, as the inner scope defines it.
     """
     sets_found = []
-    for sym_name, sym_val in nl.program_ir.symbol_table.items():
+    symbol_table = nl.program_ir.symbol_table
+    for sym_name in dict.fromkeys(symbol_table):
+        sym_val = symbol_table[sym_name]
         val = getattr(sym_val, "value", sym_val)
         if not isinstance(val, WrappedRelationalAlgebraSet):
             continue
