@@ -1083,6 +1083,24 @@ def test_execute_squall_max_of_multicolumn_rule_asks_for_column(nl_study_tfidf):
         )
 
 
+def test_execute_squall_count_message_uses_squall_name(nl_study_tfidf):
+    """The aggregation is named as written, 'Count', not 'len'."""
+    with pytest.raises(SquallSemanticError, match="'Count' over") as info:
+        nl_study_tfidf.execute_squall_program(
+            "obtain every Count of the Term_in_study_tfidf."
+        )
+    assert "len" not in str(info.value)
+
+
+def test_execute_squall_count_of_probabilistic_facts_is_not_multicolumn():
+    """The probability column of a fact set is not an aggregated column."""
+    engine = NeurolangPDL()
+    engine.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.2, "b")], name="pf"
+    )
+    engine.execute_squall_program("define as Pf_count every Count of the Pf.")
+
+
 def test_execute_squall_max_of_named_column(nl_study_tfidf):
     """``(_; _; ?w)`` selects the value column to aggregate."""
     result = nl_study_tfidf.execute_squall_program(
