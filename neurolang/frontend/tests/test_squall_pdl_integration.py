@@ -1038,6 +1038,31 @@ def test_execute_squall_issue879_anaphora_and_conjunction():
     assert df.shape == (24, 3), f"got {df.shape}"
 
 
+
+def test_execute_squall_derived_predicate_with_two_constants():
+    """'every Study that mentions 'pain' and that mentions 'fear'' over a
+    derived ``mentions`` relation completes instead of raising.
+
+    The second ``mentions`` call is adorned with the study bound by the
+    first one; the magic-sets rewrite used to seed it with a free study
+    variable and an empty antecedent, rejected by the negation mixin as
+    "All variables on the consequent need to be on the antecedent".
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("s1", "pain", 0.5), ("s1", "fear", 0.2), ("s2", "pain", 0.3)],
+        name="tfidf",
+    )
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.execute_datalog_program(
+        "mentions(s, t) :- tfidf(s, t, w), (w > 0.01)"
+    )
+    result = engine.execute_squall_program(
+        "obtain every Study that mentions 'pain' and that mentions 'fear'."
+    )
+    df = result.as_pandas_dataframe()
+    assert set(df.iloc[:, 0]) == {"s1"}
+
 # ---------------------------------------------------------------------------
 # Top / Bottom aggregations (percentile- and count-based thresholds)
 # ---------------------------------------------------------------------------
