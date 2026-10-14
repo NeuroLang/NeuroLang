@@ -413,6 +413,66 @@ def test_help_examples_match_engine_columns(small_app):
     assert ".more" in out
 
 
+
+def _primer_lines(out):
+    """Return the lines of the SQUALL primer panel in *out*."""
+    lines = out.splitlines()
+    start = next(
+        n for n, line in enumerate(lines) if "SQUALL primer" in line
+    )
+    end = next(
+        n for n in range(start, len(lines)) if lines[n].startswith("╰")
+    )
+    return lines[start:end]
+
+
+def test_help_squall_is_a_primer(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    out = _output(small_app)
+    assert "Dot commands" not in out
+    lines = _primer_lines(out)
+    assert len(lines) <= 30
+    primer = "\n".join(lines)
+    for text in (
+        "obtain every", "define as", "lowercase", "a Study mentions a Term",
+        "?s", "(?i; ?j; ?k)", "'pain'", '"working memory"', "in 3D",
+        "with inferred probability", "conditioned to",
+        "every Weighted_mention (?s; ?t; ?w) such that",
+    ):
+        assert text in primer, text
+
+
+def test_primer_shows_the_declared_sorts_of_several_columns(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "voxel(i, j, k)" in primer
+    assert "atlas_voxel(i, j, k)" in primer
+    assert "a voxel of the MNI template grid" in primer
+    assert "study(study_id)" not in primer
+
+
+def test_help_in_squall_mode_adds_the_primer(small_app):
+    small_app._handle_dot_command(".help")
+    assert "SQUALL primer" not in _output(small_app)
+    small_app.settings.squall = True
+    small_app._handle_dot_command(".help")
+    out = _output(small_app)
+    assert "Dot commands" in out and "SQUALL primer" in out
+
+
+def test_primer_without_engine(small_app):
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "obtain every" in primer and "Examples" not in primer
+
+
+def test_help_of_an_unknown_topic(small_app):
+    small_app._handle_dot_command(".help sql")
+    out = _output(small_app)
+    assert "No help on 'sql'" in out and ".help squall" in out
+
 def test_squall_obtain_shows_declared_column_names(peaks_engine):
     app = _app(peaks_engine, engine_name="neurosynth", squall=True)
     app._execute_and_display("obtain every peak_reported.")
