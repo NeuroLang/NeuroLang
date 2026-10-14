@@ -104,6 +104,7 @@ def test_datalog_shows_squall_translation(app, capsys):
 
 
 def test_datalog_needs_squall_query(app):
+    app._execute_and_display("ans(x) :- active(x)")
     app._handle_dot_command(".datalog")
     assert "use .rewritten for a Datalog query" in _output(app)
 
@@ -531,3 +532,69 @@ def test_failed_submission_is_left_out_of_the_replay_script(app, tmp_path):
     script = path.read_text()
     assert "baz(x) :- person(x)" in script
     assert "bar" not in script
+
+
+def _messages(out):
+    """Return the lines of *out* that are not part of a table."""
+    return [
+        line.strip() for line in out.splitlines()
+        if line.strip() and line.strip()[0] not in "│╭╰├┃┏┗┡"
+    ]
+
+
+@pytest.mark.parametrize(
+    "program, messages",
+    [
+        ("bar(x) :- person(x)", ["defined bar/1"]),
+        ("active(x) :- person(x), sings(x)",
+         ["defined active/1 (now 2 rules)"]),
+        ("active(x) :- person(x), plays(x)",
+         ["active/1 unchanged (1 rule)"]),
+        ("two(x, y) :- person(x), plays(y)\n"
+         "two(x, y) :- person(x), sings(y)",
+         ["defined two/2 (2 rules)"]),
+        ("a1(x) :- person(x)\na2(x) :- a1(x)",
+         ["defined a1/1", "defined a2/1"]),
+        ("foo(1)\nfoo(2)", ["defined foo/1 (2 facts)"]),
+    ],
+)
+def test_definition_says_what_it_defined(app, program, messages):
+    out = _submit(app, program)
+    assert _messages(out) == messages
+    assert not app.failed
+
+
+def test_facts_added_to_a_relation(app):
+    _submit(app, "foo(1)")
+    assert _messages(_submit(app, "foo(2)\nfoo(3)")) == [
+        "defined foo/1 (now 3 facts)"
+    ]
+
+
+def test_definition_with_a_query_shows_both(app):
+    out = _submit(app, "bar(x) :- plays(x)\nans(x) :- bar(x)")
+    messages = _messages(out)
+    assert messages[:2] == ["Running query...", "defined bar/1"]
+    assert messages[-1].startswith("Query completed in")
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+
+
+def test_query_says_nothing_about_definitions(app):
+    out = _submit(app, "ans(x) :- person(x)")
+    assert "Running query..." in out and "Query completed in" in out
+    assert "defined" not in out
+
+
+def test_squall_definitions_say_what_they_defined(app):
+    app.settings.squall = True
+    out = _submit(app, "define as Bar every person that plays.")
+    assert _messages(out) == ["defined bar/1"]
+    out = _submit(app, "define as Bar every person that sings.")
+    assert _messages(out) == ["defined bar/1 (now 2 rules)"]
+
+
+def test_squall_conditional_is_defined_once(conditional):
+    out = _output(conditional)
+    assert "defined marg/2" in out
+    assert out.count("defined marg") == 1
+    assert "(no result)" not in out
