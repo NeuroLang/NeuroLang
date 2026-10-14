@@ -600,14 +600,21 @@ def test_conditional_query_header(capsys):
 
 
 def test_conditional_query_header_shares_variable_names(capsys):
-    """Check the header and both parts name fresh variables alike."""
+    """
+    Check the header and both parts name fresh variables alike.
+
+    The constant 'memory' reaches the conditional query through magic
+    sets, whose adorned predicates are shown.
+    """
     out = forward_inference_output(capsys)
     header = out.split("── conditional query ")[1].split(" ──\n")[0]
-    assert header.startswith("label_reports(s₀, p) = P(\n")
-    assert "  | selected_study(s₁), mentions(s₁, 'memory')\n)" in header
-    assert "schaefer_label(s₀)" in header
-    assert "── rule label_reports^cond_den(PROB()) :-\n" \
-        "    selected_study(s₁),\n" in out
+    assert header.startswith("label_reports_0(s₀, p) = P(\n")
+    assert (
+        "  | mentions^fb_0(s₁, 'memory'), selected_study(s₁)\n)" in header
+    )
+    assert "schaefer_label^b_0(s₀)" in header
+    assert "── rule label_reports_0^cond_den(PROB()) :-\n" \
+        "    mentions^fb_0(s₁, 'memory'),\n" in out
 
 
 ANALYZE = ShowRAOptions(analyze=True)

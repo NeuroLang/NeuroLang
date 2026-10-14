@@ -501,7 +501,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
             with self.scope:
-                self.program_ir.walk(magic_rules)
+                self._walk_magic_rules(magic_rules)
                 if self._handle_rewritten_output(
                     magic_query, show_rewritten, dry_run
                 ):
@@ -540,7 +540,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             goal, magic_rules = magic_rewrite(
                 query.consequent, self.program_ir
             )
-            self.program_ir.walk(magic_rules)
+            self._walk_magic_rules(magic_rules)
             magic_query = self.program_ir.symbol_table[goal].formulas[0]
             return probabilistic_postprocess_magic_rules(
                 self.program_ir, magic_query, magic_rules
@@ -564,7 +564,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
             with self.scope:
-                self.program_ir.walk(magic_rules)
+                self._walk_magic_rules(magic_rules)
                 self._handle_rewritten_output(
                     magic_query, show_rewritten, dry_run, show_ra=True
                 )

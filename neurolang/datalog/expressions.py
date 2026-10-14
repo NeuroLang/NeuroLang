@@ -29,8 +29,8 @@ def predicate_identity(expr):
     name. For plain `Symbol`s this returns ``expr.name``.
 
     This helper must only be used where the pipeline needs to distinguish
-    distinct predicate symbols. It must not be used for EDB/IDB *lookup*
-    by base name (e.g. in magic-sets), where ``.name`` is the intended key.
+    distinct predicate symbols, e.g. to name the predicates rewritten by
+    magic sets. EDB/IDB entries are looked up by symbol, not by this name.
     """
     if isinstance(expr, AdornedSymbol):
         return str(expr)

@@ -7,6 +7,7 @@ from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
     conjunct_formulas,
+    extract_logic_atoms,
     extract_logic_free_variables
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
@@ -39,6 +40,7 @@ from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet
 )
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -425,8 +427,34 @@ def _build_probabilistic_program(
     # and transformed into probabilistic tables based on the deterministic
     # solution of their probability and antecedent
     prob_idb = _discard_query_based_probpredicates(prob_idb)
+    _add_empty_deterministic_predicates(cpl, prob_idb)
     cpl.walk(prob_idb)
     return cpl, prob_idb
+
+
+def _add_empty_deterministic_predicates(cpl, prob_idb):
+    """
+    Add an empty relation for each predicate of ``prob_idb`` without one.
+
+    A deterministic predicate without tuples, e.g. one restricted by
+    magic sets to a constant that matches nothing, has no relation in
+    the deterministic solution; its arity is that of its atoms.
+    """
+    heads = {rule.consequent.functor for rule in prob_idb.formulas}
+    for rule in prob_idb.formulas:
+        for atom in extract_logic_atoms(rule.antecedent):
+            functor = atom.functor
+            if (
+                isinstance(functor, Symbol)
+                and functor not in heads
+                and functor not in cpl.symbol_table
+            ):
+                empty = NamedRelationalAlgebraFrozenSet(
+                    columns=tuple(str(i) for i in range(len(atom.args)))
+                )
+                cpl.add_extensional_predicate_from_tuples(
+                    functor, empty.to_unnamed()
+                )
 
 
 class FloatArithmeticSimplifier(PatternWalker):

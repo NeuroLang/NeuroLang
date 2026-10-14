@@ -354,6 +354,47 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
         self.output = output
 
 
+class UnboundVariableException(CouldNotTranslateConjunctionException):
+
+    """
+    A variable of a rule body is bound by no predicate or constant.
+
+    It is a variable of a comparison or of a function call, and a
+    function can only be applied to known values. In
+
+    .. code-block:: text
+
+        close(q, s) :- study(s) & (sim == f(q, s)) & (sim > .75)
+
+    ``q`` is not bound by ``study(s)``. It can be bound by a predicate of
+    the body, e.g. ``topic(q)``, or by a constant reaching the rule from
+    the query or from another rule, e.g. ``ans(s) :- close('math', s)``,
+    or ``ans(i, p) :- p_given_close('math', i, p)`` on a probabilistic
+    rule ``p_given_close(q, i, PROB) :- ... // (close(q, s) & ...)``.
+    """
+
+    suggestion = (
+        "Bind each such variable with a predicate of the rule body, or "
+        "query the rule (or a rule using it) with a constant in its place."
+    )
+
+    def __init__(self, output, variables):
+        """Store the formula and the names of its unbound variables."""
+        names = ", ".join(sorted(variables))
+        plural = "s" if len(variables) > 1 else ""
+        TranslateToNamedRAException.__init__(
+            self,
+            f"Variable{plural} {names} must be bound by a predicate or a "
+            f"constant in: {output}"
+        )
+        self.output = output
+        self.variables = variables
+
+    def __reduce__(self):
+        """Pickle the exception with its formula and variables."""
+        return type(self), (self.output, self.variables)
+
+
 class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
     """
     This rule is not *range restricted* and cannot be solved in

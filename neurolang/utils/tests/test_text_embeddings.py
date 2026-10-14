@@ -4,7 +4,7 @@ import urllib.parse
 import numpy as np
 import pytest
 
-from neurolang.exceptions import CouldNotTranslateConjunctionException
+from neurolang.exceptions import UnboundVariableException
 from neurolang.frontend import NeurolangDL, NeurolangPDL
 from neurolang.utils import engine_registry
 from neurolang.utils import text_embeddings as te
@@ -266,7 +266,7 @@ def test_similarity_function_query_bound_by_magic_sets(frontend, index):
 def test_similarity_function_unbound_query(frontend, index):
     nl = _engine(frontend, index)
     nl.execute_datalog_program(BOUND_BY_QUERY.splitlines()[1])
-    with pytest.raises(CouldNotTranslateConjunctionException):
+    with pytest.raises(UnboundVariableException, match="Variable w must"):
         nl.execute_datalog_program("ans(w, s) :- qqqq(w, s)")
 
 

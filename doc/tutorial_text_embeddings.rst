@@ -60,8 +60,28 @@ to the rule.  In the ``neurolang-query`` interactive mode::
     close(w, s) :- study(s) & (sim == query_similarity(w, s)) & (sim > .78)
     ans(s) :- close('visual word form reading', s)
 
-Querying ``close(w, s)`` without a constant for ``w`` fails: the
-similarity cannot be computed without a query text.
+Querying ``close(w, s)`` without a constant for ``w`` fails with an
+:class:`~neurolang.exceptions.UnboundVariableException`: the similarity
+cannot be computed without a query text.
+
+The query text can also flow through a probabilistic rule.  Here ``q`` is
+a variable of the conditional rule ``voxel_given_sim``, bound by the
+constant of the query and passed to ``close``::
+
+    close(q, s) :- study(s) & (sim == query_similarity(q, s)) & (sim > .75)
+    voxel_given_sim(q, i, j, k, PROB) :- (peak_reported(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+    ans(i, j, k, p) :- voxel_given_sim('math', i, j, k, p)
+
+Each query text, e.g. ``'math'`` and ``'reading'`` in
+``both(i, j, k, p, r) :- voxel_given_sim('math', i, j, k, p) &
+voxel_given_sim('reading', i, j, k, r)``, gets its own conditional
+probabilities.  A constant written in a rule works as well, e.g.
+``math_study(s) :- close('math', s)`` used in the condition
+``// (math_study(s) & selected_study(s))``.  A relation of query texts
+must bind ``q`` in the body of ``close`` itself, e.g.
+``close(q, s) :- topic(q) & study(s) & ...``: a predicate joined with the
+probabilistic rule, as in ``ans(q, i, j, k, p) :- topic(q) &
+voxel_given_sim(q, i, j, k, p)``, does not pass its values to ``close``.
 
 SPECTER2 similarities fall in a narrow range: for this query they average
 0.71 with a standard deviation of 0.03 over NeuroSynth, and 0.78 keeps

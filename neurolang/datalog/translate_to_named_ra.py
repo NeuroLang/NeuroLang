@@ -6,7 +6,8 @@ from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenExpressionError,
     NegativeFormulaNotNamedRelationException,
-    NegativeFormulaNotSafeRangeException
+    NegativeFormulaNotSafeRangeException,
+    UnboundVariableException,
 )
 from ..expression_walker import (
     ExpressionBasicEvaluator,
@@ -271,10 +272,38 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 )
 
             if new_output is output:
-                raise CouldNotTranslateConjunctionException(expression)
+                raise self.untranslatable_conjunction(
+                    expression, classified_formulas
+                )
             output = new_output
 
         return output
+
+    @staticmethod
+    def untranslatable_conjunction(expression, classified_formulas):
+        """
+        Return the exception of a conjunction that cannot be translated.
+
+        It is an :class:`UnboundVariableException` when some variables
+        of the formulas left are bound by no formula, e.g. ``q`` in
+        ``study(s) & (sim == f(q, s))``.
+        """
+        defined = set()
+        columns = set()
+        for key in (
+            "destroy_formulas", "selection_formulas",
+            "eq_formulas", "ext_proj_formulas",
+        ):
+            for formula in classified_formulas[key]:
+                columns |= get_expression_columns(formula)
+                if key in ("eq_formulas", "ext_proj_formulas"):
+                    defined.add(formula.args[0])
+        unbound = columns - classified_formulas["named_columns"] - defined
+        if unbound:
+            return UnboundVariableException(
+                expression, {column.value for column in unbound}
+            )
+        return CouldNotTranslateConjunctionException(expression)
 
     @add_match(ExistentialPredicate)
     def translate_existential_predicate(self, expression):

@@ -10,6 +10,7 @@ from ...exceptions import (
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
     SymbolNotFoundError,
+    UnboundVariableException,
     UnsupportedProgramError,
     UnsupportedQueryError,
     WrongArgumentsInPredicateError
@@ -286,6 +287,120 @@ def test_query_constant_binds_function_argument_through_magic_sets():
     assert set(res) == {(1, 10), (2, 20), (3, 30)}
     res = nl.execute_datalog_program("ans(y) :- scaled(2, 3, y)")
     assert set(res) == {(6,)}
+
+
+SIMILARITIES = {
+    ("math", "a"): .9, ("math", "b"): .8, ("math", "c"): .1,
+    ("lang", "c"): .9,
+}
+
+CLOSE = "close(q, s) :- study(s) & (sim == f(q, s)) & (sim > .5)\n"
+P_GIVEN_CLOSE = (
+    "p_given_close(q, i, PROB) :- (peak(i, s) & selected_study(s)) "
+    "// (close(q, s) & selected_study(s))\n"
+)
+
+
+def build_similarity_engine():
+    """
+    Build an engine with a scalar function ``f(q, s)`` of a query text.
+
+    ``close(q, s)`` holds for the studies ``s`` similar to ``q``: a and b
+    for 'math', c for 'lang'. Study a reports peaks 1 and 2, b reports
+    3 and c reports 1.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "a"), (3, "b"), (1, "c")], name="peak")
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="study")
+    nl.add_tuple_set([("math",)], name="topic")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="selected_study"
+    )
+
+    @nl.add_symbol
+    def f(q: str, s: str) -> float:
+        return SIMILARITIES.get((q, s), 0.)
+
+    return nl
+
+
+def test_marg_query_constant_flows_through_rule_head():
+    """
+    Check that a constant of a query binds a variable of a MARG rule.
+
+    ``q`` is bound only by the constant 'math' of the query, which magic
+    sets carry through the head of ``p_given_close`` into ``close``. The
+    result is that of binding ``q`` with ``topic(q)`` in ``close``.
+    """
+    expected = {(1, .5), (2, .5), (3, .5)}
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE + P_GIVEN_CLOSE + "ans(i, p) :- p_given_close('math', i, p)"
+    )
+    assert set(res) == expected
+
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE.replace("study(s)", "topic(q) & study(s)") + P_GIVEN_CLOSE
+        + "ans(i, p) :- p_given_close('math', i, p)"
+    )
+    assert set(res) == expected
+
+
+def test_marg_query_conditioned_on_rule_with_constant():
+    """Check a MARG rule conditioned on a rule with a constant."""
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE
+        + "math_study(s) :- close('math', s)\n"
+        + "p_given_math(i, PROB) :- (peak(i, s) & selected_study(s)) "
+        "// (math_study(s) & selected_study(s))\n"
+        + "ans(i, p) :- p_given_math(i, p)"
+    )
+    assert set(res) == {(1, .5), (2, .5), (3, .5)}
+
+
+def test_marg_query_several_constants():
+    """
+    Check a MARG rule called with two constants in one rule.
+
+    The probabilities of 'math' cannot bind the call for 'lang', as they
+    are computed after the magic sets.
+    """
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE + P_GIVEN_CLOSE
+        + "both(i, p, r) :- p_given_close('math', i, p) "
+        "& p_given_close('lang', i, r)\n"
+        + "ans(i, p, r) :- both(i, p, r)"
+    )
+    assert set(res) == {(1, .5, 1.)}
+
+
+def test_marg_query_constant_matching_nothing():
+    """
+    Check a MARG query whose deterministic part is empty.
+
+    No tuple of ``close`` is computed for 'none', and the constant of
+    ``close('none', s)`` selects on its columns.
+    """
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE
+        + "p_given_none(i, PROB) :- (peak(i, s) & selected_study(s)) "
+        "// (close('none', s) & selected_study(s))\n"
+        + "ans(i, p) :- p_given_none(i, p)"
+    )
+    assert len(res) == 0
+
+
+def test_marg_query_unbound_variable():
+    """Check the error of a MARG query leaving a function argument free."""
+    nl = build_similarity_engine()
+    with pytest.raises(UnboundVariableException, match="Variable q must"):
+        nl.execute_datalog_program(
+            CLOSE + P_GIVEN_CLOSE + "ans(q, i, p) :- p_given_close(q, i, p)"
+        )
 
 
 def test_deterministic_query():

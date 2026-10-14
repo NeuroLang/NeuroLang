@@ -27,9 +27,11 @@ from .expressions import (
     Conjunction,
     Implication,
     Union,
+    predicate_identity,
 )
 from .constraints_representation import RightImplication, reachable_code
 from .expression_processing import (
+    extract_logic_atoms,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
 )
@@ -81,26 +83,91 @@ def order_conjunction_constant_atoms_first(
     )
 
 
+def adorned_predicate(symbol: Symbol) -> Symbol:
+    """
+    Return the predicate symbol that ``symbol`` adorns.
+
+    The magic-sets adornments of ``symbol``, which are numbered, are
+    removed; other adornments are kept, e.g. ``q^cond_num`` for the
+    numerator of a conditional query ``q``, whose ``name`` is ``q``.
+    """
+    while (
+        isinstance(symbol, AdornedSymbol)
+        and symbol.number is not None
+        and isinstance(symbol.expression, Symbol)
+    ):
+        symbol = symbol.expression
+    return symbol
+
+
+def adorned_predicate_name(symbol: Symbol) -> str:
+    """Return the name of the predicate that ``symbol`` adorns."""
+    return predicate_identity(adorned_predicate(symbol))
+
+
 class ReplaceAdornedSymbolWalker(ExpressionWalker):
-    @add_match(Symbol)
+
+    """
+    Replace the magic-sets adorned symbols by symbols named after them.
+
+    ``p`` adorned with ``bf`` in its first occurrence becomes
+    ``p^bf_0``. The adornment of a predicate that is itself adorned,
+    e.g. the numerator ``q^cond_num`` of a conditional query, is kept
+    outermost: it becomes ``q^bf_0`` adorned with ``cond_num``.
+    """
+
+    @add_match(AdornedSymbol)
     def replace_adorned_symbol(self, symbol):
-        if isinstance(symbol, AdornedSymbol) and isinstance(
-            symbol.expression, Symbol
-        ):
-            superindex = (
-                f"^{symbol.adornment}" if len(symbol.adornment) > 0 else ""
-            )
-            subindex = f"_{symbol.number}" if symbol.number is not None else ""
-            new_name = f"{symbol.name}{superindex}{subindex}"
-            return Symbol(new_name)
-        else:
+        predicate = adorned_predicate(symbol)
+        if predicate is symbol:
             return symbol
+        superindex = (
+            f"^{symbol.adornment}" if len(symbol.adornment) > 0 else ""
+        )
+        subindex = f"_{symbol.number}" if symbol.number is not None else ""
+        if isinstance(predicate, AdornedSymbol):
+            return AdornedSymbol(
+                Symbol(f"{predicate.expression.name}{superindex}{subindex}"),
+                predicate.adornment,
+                predicate.number,
+            )
+        return Symbol(f"{predicate.name}{superindex}{subindex}")
 
     @add_match(Implication)
     def implication(self, exp):
         return Implication(
             self.walk(exp.consequent), self.walk(exp.antecedent)
         )
+
+
+def symbols_depending_on(datalog, symbols):
+    """
+    Return ``symbols`` and the predicates of rules depending on them.
+
+    The magic sets are solved before any probabilistic rule, so the
+    predicates depending on a probabilistic predicate, e.g. ``q`` in
+    ``q(x, p) :- q^cond_num(x, p1) & q^cond_den(p2) & (p == p1 / p2)``,
+    cannot pass their bindings to other predicates.
+    """
+    symbols = set(symbols)
+    rules = [
+        rule
+        for union in datalog.intensional_database().values()
+        for rule in getattr(union, "formulas", ())
+        if not isinstance(rule, RightImplication)
+    ]
+    changed = bool(symbols)
+    while changed:
+        changed = False
+        for rule in rules:
+            functor = rule.consequent.functor
+            if functor not in symbols and any(
+                atom.functor in symbols
+                for atom in extract_logic_atoms(rule.antecedent)
+            ):
+                symbols.add(functor)
+                changed = True
+    return symbols
 
 
 class SIPS(ABC):
@@ -116,7 +183,9 @@ class SIPS(ABC):
         self.datalog = datalog
         self.edb = edb_with_prob_symbols(datalog)
         try:
-            self.prob_symbols = datalog.probabilistic_predicate_symbols
+            self.prob_symbols = symbols_depending_on(
+                datalog, datalog.probabilistic_predicate_symbols
+            )
         except AttributeError:
             self.prob_symbols = set()
 
@@ -288,7 +357,10 @@ class LeftToRightSIPS(SIPS):
         # 4. Update the tail_predicates and list of bound_variables with the
         # variables of this predicate. We only add bound variables for
         # positive, non probabilistic predicates
-        if p.functor.name not in self.prob_symbols and not is_neg:
+        if (
+            adorned_predicate(p.functor) not in self.prob_symbols
+            and not is_neg
+        ):
             bound_variables.update(
                 arg for arg in predicate.args if isinstance(arg, Symbol)
                 and arg in [a for t in tail for a in t.args]
@@ -474,7 +546,7 @@ def magic_predicate(predicate, i=None, adorned=True):
     Expression
         a new predicate.
     """
-    name = predicate.functor.name
+    name = adorned_predicate_name(predicate.functor)
     adornment = predicate.functor.adornment
     if i is not None:
         new_name = f"magic_r{i}_{name}"
@@ -550,14 +622,13 @@ def adorn_code(
     while adorn_stack:
         consequent = adorn_stack.pop()
 
-        if isinstance(consequent.functor, AdornedSymbol):
-            adornment = consequent.functor.adornment
-            name = consequent.functor.expression.name
-        else:
-            adornment = ''
-            name = consequent.functor.name
+        # rules are looked up by symbol: an adorned symbol, such as the
+        # numerator q^cond_num of a conditional query, has the name of q
+        symbol = consequent.functor
+        if isinstance(symbol, AdornedSymbol):
+            symbol = symbol.expression
 
-        rules = idb.get(name, None)
+        rules = idb.get(symbol, None)
         if rules is None:
             continue
 

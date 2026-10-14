@@ -108,6 +108,21 @@ Unreleased
   of a query with two constants, e.g. ``ans(z) :- r(1, 2, z)``, lost all
   but the last column.
 
+* Magic sets now rewrite conditional (MARG, ``//``) rules, so a constant
+  of a query or of a rule body reaches the deterministic rules a
+  probabilistic rule calls.  E.g. with
+  ``p(q, i, PROB) :- (peak(i, s) & selected(s)) // (close(q, s) & selected(s))``
+  the query ``ans(i, p) :- p('math', i, p)`` binds ``q`` of
+  ``close(q, s) :- study(s) & (sim == f(q, s))``.  Magic sets took the
+  numerator ``p^cond_num`` of a conditional rule ``p`` for ``p`` itself and
+  fell back to solving the whole program, which failed when a function
+  needed ``q``.  Predicates computed from probabilities no longer pass
+  bindings to magic sets, which are solved before them, and a
+  deterministic predicate left without tuples by magic sets is an empty
+  relation, not a missing one, in probabilistic rules.  A variable that a
+  function or comparison needs and no predicate or constant binds now
+  raises :class:`~neurolang.exceptions.UnboundVariableException` naming it.
+
 * The ``neurosynth`` engine stored study ids as floats in ``study`` and
   ``peak_reported`` but as ``StudyID`` strings in ``term_in_study_tfidf``,
   so joining them failed.  All three now use ``StudyID``, and the documented

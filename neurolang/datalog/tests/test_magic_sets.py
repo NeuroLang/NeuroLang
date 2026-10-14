@@ -785,3 +785,38 @@ def test_magic_init_rules_walk_twice_no_crash():
         "Magic init rules are not idempotent: symbol table changed after "
         "walking magic rules a second time"
     )
+
+
+def test_resolution_keeps_adorned_predicates_apart():
+    """
+    Check that a predicate adorned outside magic sets keeps its rules.
+
+    ``anc^cond`` (e.g. the numerator of a conditional query on ``anc``)
+    has the name of ``anc``; its rules must not be taken for those of
+    ``anc``, and it must stay adorned with ``cond`` once rewritten.
+    """
+    anc_cond = AdornedSymbol(anc, "cond", None)
+    edb = Eb_([F_(par(a, b)), F_(par(b, c))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(a, x)),
+            Imp_(anc(x, y), anc_cond(x, y)),
+            Imp_(anc_cond(x, y), par(x, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+
+    heads = {rule.consequent.functor for rule in mr.formulas}
+    assert any(
+        isinstance(head, AdornedSymbol) and head.adornment == "cond"
+        for head in heads
+    )
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((b,))}

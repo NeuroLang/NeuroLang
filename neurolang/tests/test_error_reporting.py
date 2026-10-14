@@ -18,6 +18,7 @@ from ..exceptions import (
     ProtectedKeywordError,
     SquallSemanticError,
     SymbolNotFoundError,
+    UnboundVariableException,
     WrongArgumentsInPredicateError,
 )
 from ..datalog.exceptions import InvalidMagicSetError
@@ -43,6 +44,7 @@ def test_base_exception_has_no_suggestion():
         (ProtectedKeywordError(), "reserved"),
         (NotConjunctiveExpressionNestedPredicates(), "separate rule"),
         (CouldNotTranslateConjunctionException("f"), "normal form"),
+        (UnboundVariableException("f", {"q"}), "constant"),
         (NegativeFormulaNotSafeRangeException("p(x)"), "non-negated"),
         (NegativeFormulaNotNamedRelationException("p(x)"), "own rule"),
     ],
@@ -92,6 +94,7 @@ class TestPickleRoundtrip:
             ProtectedKeywordError,
             NoValidChaseClassForStratumException,
             lambda: CouldNotTranslateConjunctionException("test"),
+            lambda: UnboundVariableException("test", {"q"}),
             lambda: NegativeFormulaNotSafeRangeException("p(x)"),
             lambda: NegativeFormulaNotNamedRelationException("p(x)"),
             lambda: SquallSemanticError("test"),

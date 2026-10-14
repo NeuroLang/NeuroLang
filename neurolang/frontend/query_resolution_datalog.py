@@ -4,6 +4,7 @@ Query Builder Datalog
 Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
+import warnings
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
@@ -975,9 +976,23 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def magic_sets_rewrite_program(self, query_expression):
         goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
-        self.program_ir.walk(mr)
+        self._walk_magic_rules(mr)
         new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
         return new_query_expression
+
+    def _walk_magic_rules(self, magic_rules):
+        """
+        Add the rules rewritten by magic sets to the program.
+
+        A rule may use a magic predicate defined by a later rule; the
+        warnings of predicates without an entry are not shown, as all of
+        them are defined once every rule is added.
+        """
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".* used in rule body has no entry"
+            )
+            self.program_ir.walk(magic_rules)
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
