@@ -70,6 +70,7 @@ from lark.exceptions import LarkError
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.exceptions import NeuroLangException
+from neurolang.expressions import Constant, Symbol
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
@@ -77,6 +78,7 @@ from neurolang.frontend.datalog import (
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
+from neurolang.logic import ExistentialPredicate
 from neurolang.utils import engine_registry
 
 
@@ -128,6 +130,10 @@ def _read_query(args) -> str:
     sys.exit(1)
 
 
+# Column names of positions (``c0``, ``0``) and of fresh variables.
+_GENERATED_COLUMN = re.compile(r"c\d+|fresh_\w+|\d+")
+
+
 def _is_generated_column(column) -> bool:
     """
     Return whether *column* is an auto-generated column name.
@@ -139,15 +145,22 @@ def _is_generated_column(column) -> bool:
     if isinstance(column, int):
         return True
     return isinstance(column, str) and (
-        column.startswith(("c", "fresh_")) or column.isdigit()
+        _GENERATED_COLUMN.fullmatch(column) is not None
     )
 
 
 def _rename_unnamed_columns(df, column_names):
-    """Replace auto-generated column names with *column_names* when safe."""
+    """
+    Replace auto-generated column names with *column_names* when safe.
+
+    A None in *column_names* keeps the column's name.
+    """
     if column_names is not None and len(column_names) == len(df.columns):
         if all(_is_generated_column(c) for c in df.columns):
-            df.columns = column_names
+            df.columns = [
+                old if new is None else new
+                for old, new in zip(df.columns, column_names)
+            ]
     return df
 
 
@@ -185,70 +198,150 @@ def _declared_columns(engine_name: str) -> dict:
 
 
 def squall_column_names(
-    engine_name: str, program: str, relations: Optional[dict] = None
+    engine_name: str, program: str, relations: Optional[dict] = None,
+    rules=(),
 ) -> dict:
     """
     Return column names for the results of a SQUALL program's queries.
 
-    ``obtain every R.`` returns the whole relation ``R``, and
-    ``obtain every R that ….`` the ``R`` satisfying the clause, under a
-    generated column name. The result is a dict from the key of each such
-    ``obtain`` (as in the results of
+    SQUALL names the columns of most results after fresh variables. The
+    result is a dict from the key of each ``obtain`` (as in the results
+    of
     :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
-    to the columns that the engine configuration declares for ``R``, or
-    that *relations*, a dict from relation names to their columns, gives
-    for it. For a single-column result over an undeclared ``R``, the
-    column is named ``R``.
+    to the names of its columns:
+
+    * ``obtain every R.`` takes the columns of ``R``: those the engine
+      configuration declares, those *relations* (a dict from relation
+      names to their columns) gives, or those of the rules defining
+      ``R``, in the program or among *rules*, the rules defined before;
+    * otherwise, a column is named after the user's variable (``?s``),
+      the aggregate (``count``), the ``as`` name of a single column, the
+      probability, or the column of the first relation of the body its
+      variable is in (``i, j, k`` for ``every Voxel in 3D``); an
+      undeclared unary relation names its column after itself.
     """
     from neurolang.frontend.datalog.squall_syntax_lark import (
         SquallProgram,
         parser as squall_parser,
     )
 
-    columns = {**_declared_columns(engine_name), **(relations or {})}
     try:
         parsed = squall_parser(program)
     except Exception:
         return {}
     if not isinstance(parsed, SquallProgram):
         return {}
+    columns = {**_declared_columns(engine_name), **(relations or {})}
+    for rule in (*rules, *parsed.rules):
+        _add_rule_columns(rule, columns)
     names = {}
     for i, query in enumerate(parsed.queries):
         query_columns = _query_columns(query, columns)
-        if query_columns:
+        if query_columns and any(query_columns):
             names[parsed.query_names.get(i, f"obtain_{i}")] = query_columns
     return names
 
 
-def _query_noun(query):
-    """
-    Return the name of the noun a SQUALL query obtains, if any.
-
-    That is ``R`` in ``obtain every R.`` (the body is ``R(x)``) and in
-    ``obtain every R that ….`` (the body is a conjunction starting with
-    ``R(x)``, ``x`` being the query's single head variable).
-    """
-    body = query.body
-    if getattr(body, "functor", None) is not None:
-        return getattr(body.functor, "name", None)
-    head = getattr(query, "head", None)
-    for formula in getattr(body, "formulas", ()):
-        args = getattr(formula, "args", ())
-        if len(args) == 1 and args[0] == head:
-            return getattr(formula.functor, "name", None)
-    return None
+def _add_rule_columns(rule, columns: dict) -> None:
+    """Add the columns of the head of *rule* to *columns*, if unknown."""
+    name = getattr(getattr(rule.consequent, "functor", None), "name", None)
+    if isinstance(name, str) and name not in columns:
+        names = _head_names(rule.consequent.args, rule.antecedent, columns)
+        if all(names):
+            columns[name] = names
 
 
 def _query_columns(query, columns: dict):
     """Return the column names of *query*'s result, or None if unknown."""
-    noun = _query_noun(query)
-    if noun is None:
-        return None
-    if noun in columns:
-        declared = list(columns[noun])
-        whole = getattr(query.body, "functor", None) is not None
-        return declared if whole or len(declared) == 1 else None
-    return [noun] if getattr(query.body, "functor", None) is None else None
+    head = query.head
+    named = isinstance(getattr(head, "functor", None), Symbol)
+    terms = head.args if named else head
+    terms = terms if isinstance(terms, tuple) else (terms,)
+    whole = _whole_relation(query.body, terms, columns)
+    if named and len(terms) == 1 and len(whole or ()) < 2:
+        return [head.functor.name]
+    if whole is not None:
+        return whole
+    return _head_names(terms, query.body, columns)
+
+
+def _whole_relation(body, terms: tuple, columns: dict):
+    """
+    Return the columns of ``R`` if *body* is ``R(x)`` and *terms* ``(x,)``.
+
+    That is the body of ``obtain every R.``, whatever the arity of R.
+    """
+    functor = getattr(body, "functor", None)
+    if isinstance(functor, Symbol) and body.args == terms == terms[:1]:
+        return list(columns[functor.name]) if functor.name in columns else None
+    return None
+
+
+def _head_names(head, body, columns: dict) -> list:
+    """Return the names of the *head* terms of a rule of *body*."""
+    atoms = list(_body_atoms(body))
+    names = [_term_name(term, atoms, columns) for term in head]
+    return _unique(names)
+
+
+def _term_name(term, atoms, columns: dict):
+    """Return the name of a column of the head *term*, or None."""
+    if isinstance(term, Symbol):
+        if not _is_generated_column(term.name):
+            return term.name
+        return _variable_column(term, atoms, columns)
+    functor = getattr(term, "functor", None)
+    if isinstance(functor, Symbol) and functor.name == "PROB":
+        return "probability"
+    if isinstance(functor, Constant):
+        return _aggregate_name(functor.value)
+    return None
+
+
+def _aggregate_name(function) -> str:
+    """Return the SQUALL name of the aggregate *function*."""
+    from neurolang.frontend.datalog.squall_syntax_lark import _AGG_FUNC_MAP
+
+    for name, constant in _AGG_FUNC_MAP.items():
+        if constant.value is function:
+            return name
+    return getattr(function, "__name__", None)
+
+
+def _body_atoms(formula):
+    """Yield the predicates of *formula*, in order, but negated ones."""
+    functor = getattr(formula, "functor", None)
+    if isinstance(functor, Symbol):
+        yield formula
+    for sub in getattr(formula, "formulas", ()):
+        yield from _body_atoms(sub)
+    if isinstance(formula, ExistentialPredicate):
+        yield from _body_atoms(formula.body)
+
+
+def _variable_column(variable, atoms, columns: dict):
+    """
+    Return the column of the first of *atoms* that *variable* is in.
+
+    An atom of an undeclared unary relation names it after the relation.
+    """
+    for atom in atoms:
+        if variable not in atom.args:
+            continue
+        known = columns.get(atom.functor.name)
+        if known is not None and len(known) == len(atom.args):
+            return known[atom.args.index(variable)]
+        if known is None and len(atom.args) == 1:
+            return atom.functor.name
+    return None
+
+
+def _unique(names: list) -> list:
+    """Return *names*, suffixing the repeated ones with their position."""
+    return [
+        f"{name}_{n}" if name is not None and names.count(name) > 1 else name
+        for n, name in enumerate(names)
+    ]
 
 
 def _emit(df, fmt, sort_by=None):

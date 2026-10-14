@@ -278,17 +278,20 @@ class InteractiveTuiApp:
 
     def _column_names(self, program: str) -> dict:
         """
-        Return the declared column names of the results of *program*.
+        Return the column names of the results of the SQUALL *program*.
 
-        They are those the engine declares and those of the header of
-        the files loaded with ``.load``.
+        They are those the engine declares, those of the header of the
+        files loaded with ``.load`` and those of the rules defined so far.
         """
         if not self.settings.squall:
             return {}
-        if not (self.settings.engine_name or self.loaded_relations):
-            return {}
+        rules = [
+            rule
+            for union in self._nl.program_ir.intensional_database().values()
+            for rule in union.formulas
+        ]
         return squall_column_names(
-            self.settings.engine_name, program, self.loaded_relations
+            self.settings.engine_name, program, self.loaded_relations, rules
         )
 
     def _submit(self, program: str, submission: Submission):
