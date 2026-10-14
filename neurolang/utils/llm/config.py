@@ -89,6 +89,7 @@ class AssistantConfig:
     *language* is ``auto`` (the language of the REPL), ``squall`` or
     ``datalog``. *samples* above 1 generate several ICL candidates and
     keep the one most of them agree on (self-consistency).
+    *query_timeout* stops a query the agent runs after that many seconds.
     """
 
     strategy: str = "react"
@@ -100,6 +101,7 @@ class AssistantConfig:
     temperature: float = 0.0
     timeout: float = 60.0
     preview_rows: int = 10
+    query_timeout: float = 30.0
 
 
 @dataclass

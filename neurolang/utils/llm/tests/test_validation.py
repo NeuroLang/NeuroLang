@@ -186,3 +186,17 @@ def test_aggregation_well_used(nl):
         "ans(t, c) :- n(t, c)"
     )
     assert check_query(nl, query, "datalog").ok
+
+
+def test_previews_stop_slow_queries(nl, monkeypatch):
+    import time
+
+    from .. import validation
+
+    def slow(*args, **kwargs):
+        while True:
+            time.sleep(0.01)
+
+    monkeypatch.setattr(validation, "_execute", slow)
+    preview = run_preview(nl, "ans(s) :- study(s)", "datalog", timeout=0.2)
+    assert not preview.ok and "more than 0 s and was stopped" in preview.text

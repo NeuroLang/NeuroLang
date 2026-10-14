@@ -225,11 +225,13 @@ class Toolbox:
     """
 
     def __init__(
-        self, context: EngineContext, language: str, preview_rows: int = 10
+        self, context: EngineContext, language: str, preview_rows: int = 10,
+        query_timeout: Optional[float] = None,
     ):
         self.context = context
         self.language = language
         self.preview_rows = preview_rows
+        self.query_timeout = query_timeout
         # Queries whose answer of no rows has been confirmed.
         self.confirmed_empty = set()
 
@@ -273,6 +275,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
+            self.query_timeout,
         )
         return preview.text, None
 
@@ -287,6 +290,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
+            self.query_timeout,
         )
         if not preview.ok:
             return (
@@ -433,7 +437,10 @@ class IclAgent(Agent):
 
     def _fingerprint(self, query: str):
         """Return what identifies the result of *query*, for the vote."""
-        preview = run_preview(self.nl, query, self.language, 0)
+        preview = run_preview(
+            self.nl, query, self.language, 0,
+            timeout=self.config.query_timeout,
+        )
         if preview.ok and preview.frame is not None:
             rows = preview.frame.astype(str).itertuples(index=False)
             return ("rows", frozenset(map(tuple, rows)))
@@ -469,7 +476,8 @@ class ReactAgent(Agent):
     def run(self, question: str) -> AgentResult:
         result = AgentResult(language=self.language)
         toolbox = Toolbox(
-            self.context, self.language, self.config.preview_rows
+            self.context, self.language, self.config.preview_rows,
+            self.config.query_timeout,
         )
         messages = [
             {"role": "system", "content": self.system_prompt(

@@ -10,10 +10,13 @@ rules of the query never stay in the session.
 """
 
 import contextlib
+import ctypes
 import io
 import re
+import threading
 import warnings
 from dataclasses import dataclass
+from typing import Optional
 
 from neurolang.frontend.error_formatting import format_error
 from neurolang.utils.cli import (
@@ -87,6 +90,43 @@ def _execute(nl, text: str, language: str, dry_run: bool):
     with contextlib.redirect_stdout(io.StringIO()):
         with nl.scope:
             return execute(text, dry_run=dry_run)
+
+
+class QueryTimeout(Exception):
+    """Raised in a query that ran longer than its time limit."""
+
+
+def _with_timeout(function, timeout):
+    """
+    Return ``function()``, interrupting it after *timeout* seconds.
+
+    It runs in a worker thread in which :class:`QueryTimeout` is raised
+    when the time is up; the query stops as soon as it runs Python code
+    again. Without *timeout*, *function* runs as it is.
+    """
+    if not timeout:
+        return function()
+    outcome = {}
+    done = threading.Event()
+
+    def target():
+        try:
+            outcome["value"] = function()
+        except BaseException as exc:
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    if not done.wait(timeout):
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_ulong(worker.ident), ctypes.py_object(QueryTimeout)
+        )
+        done.wait()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("value")
 
 
 def _undefined_predicates(caught, known) -> list:
@@ -260,14 +300,25 @@ def _frames(result, column_names: dict) -> list:
 
 def run_preview(
     nl, text: str, language: str, rows: int = 10, engine_name: str = "",
+    timeout: Optional[float] = None,
 ) -> Preview:
     """
     Run the query *text* and return the first *rows* rows of its result.
 
-    The rules it defines are discarded with the scope it runs in.
+    The rules it defines are discarded with the scope it runs in. A query
+    running longer than *timeout* seconds is stopped.
     """
     try:
-        result = _execute(nl, text.strip(), language, dry_run=False)
+        result = _with_timeout(
+            lambda: _execute(nl, text.strip(), language, dry_run=False),
+            timeout,
+        )
+    except QueryTimeout:
+        return Preview(
+            False,
+            f"The query ran for more than {timeout:.0f} s and was stopped: "
+            "restrict it with constants or joins before running it again.",
+        )
     except Exception as exc:
         return Preview(False, error_message(nl, exc, text, language))
     if result is None:
