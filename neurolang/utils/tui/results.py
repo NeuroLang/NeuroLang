@@ -24,7 +24,8 @@ DEFAULT_PAGE_SIZE = 20
 MAX_COLUMN_WIDTH = 40
 NARROW_COLUMN_WIDTH = 16
 BAR_WIDTH = 5
-HIDDEN_COLUMNS_HINT = ".format csv to see all"
+HIDDEN_COLUMNS_HINT = ".browse to see all"
+BROWSE_HINT = ".browse to explore"
 
 _BAR_EIGHTHS = " ▏▎▍▌▋▊▉"
 _PROBABILITY_NAME = re.compile("prob", re.IGNORECASE)
@@ -270,7 +271,7 @@ def hidden_columns_note(hidden: int) -> str:
     """
     Return the note on *hidden* columns of a caption.
 
-    For instance ``+2 columns · .format csv to see all``, or an empty
+    For instance ``+2 columns · .browse to see all``, or an empty
     string when no column is hidden.
     """
     if not hidden:
@@ -283,13 +284,18 @@ def page_caption(total: int, start: int, stop: int) -> str:
     """
     Return the one-line caption of the rows *start* to *stop* of *total*.
 
-    For instance ``3228 rows · showing 1–20 · .more for next``.
+    For instance ``3228 rows · showing 1–20 · .more for next · .browse
+    to explore``.
     """
     rows = "1 row" if total == 1 else f"{total} rows"
     if start == 0 and stop >= total:
         return rows
-    after = ".more for next" if stop < total else "end"
-    return f"{rows} · showing {start + 1}–{stop} · {after}"
+    if stop < total:
+        return (
+            f"{rows} · showing {start + 1}–{stop} · .more for next · "
+            + BROWSE_HINT
+        )
+    return f"{rows} · showing {start + 1}–{stop} · end"
 
 
 def _print_caption(console, caption: str) -> None:

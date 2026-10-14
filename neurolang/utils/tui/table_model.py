@@ -148,6 +148,7 @@ class TableModel:
         self._kinds: dict = {}
         self._probabilities: dict = {}
         self._texts_lock = threading.Lock()
+        self.search_ready = False
 
     @property
     def n_rows(self) -> int:
@@ -287,6 +288,7 @@ class TableModel:
         """
         for col in range(self.n_cols):
             self._text_index(col)
+        self.search_ready = True
 
     def column_masks(self, query: str) -> list:
         """

@@ -293,7 +293,9 @@ def test_caption_is_one_line_on_narrow_tables(long_app):
     caption = [
         line for line in _output(long_app).splitlines() if "rows" in line
     ]
-    assert caption == ["45 rows · showing 1–20 · .more for next"]
+    assert caption == [
+        "45 rows · showing 1–20 · .more for next · .browse to explore"
+    ]
 
 
 def test_small_result_caption(small_app):

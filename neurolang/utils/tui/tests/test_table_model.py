@@ -249,8 +249,10 @@ class TestSearch:
         assert model.column_masks("PAIN") is masks
 
     def test_prepare_search_builds_indexes(self, model):
+        assert not model.search_ready
         model.prepare_search()
         assert sorted(model._texts) == [0, 1, 2]
+        assert model.search_ready
 
 
 def test_kind_and_probability_are_per_column():

@@ -17,7 +17,9 @@ The REPL is organised in modules:
 - :mod:`.commands`: the dot-command registry and the core commands,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
 - :mod:`.results`: paged display of query results,
-- :mod:`.statements`: splitting of the input into statements.
+- :mod:`.statements`: splitting of the input into statements,
+- :mod:`.table_model` and :mod:`.table_view`: the full-screen viewer of
+  a result opened with ``.browse``.
 """
 
 from .app import InteractiveTuiApp, TuiSettings, main

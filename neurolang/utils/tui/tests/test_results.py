@@ -19,6 +19,7 @@ from neurolang.utils.tui.results import (  # noqa: E402
     format_value,
     hidden_columns_note,
     is_probability,
+    page_caption,
     print_all,
     print_next_page,
     probability_bar,
@@ -168,7 +169,7 @@ def test_columns_not_fitting_are_counted_in_caption():
     assert all(len(line) <= 80 for line in lines)
     assert lines[1].split() == ["│", "c0", "│", "c1", "│", "c2", "│", "c3",
                                 "│"]
-    assert lines[-2:] == ["+6 columns · .format csv to see all", "1 row"]
+    assert lines[-2:] == ["+6 columns · .browse to see all", "1 row"]
 
 
 def test_first_column_is_always_shown():
@@ -199,8 +200,8 @@ def test_fit_widths(widths, available, fitted):
 
 @pytest.mark.parametrize("hidden, note", [
     (0, ""),
-    (1, "+1 column · .format csv to see all"),
-    (3, "+3 columns · .format csv to see all"),
+    (1, "+1 column · .browse to see all"),
+    (3, "+3 columns · .browse to see all"),
 ])
 def test_hidden_columns_note(hidden, note):
     assert hidden_columns_note(hidden) == note
@@ -213,5 +214,16 @@ def test_print_all_notes_hidden_columns():
     print_all(console, block)
     out = console.file.getvalue()
     assert out.count("v" * 15 + "…") == 30 * 4
-    assert out.splitlines()[-1] == "+6 columns · .format csv to see all"
+    assert out.splitlines()[-1] == "+6 columns · .browse to see all"
     assert block.remaining == 0
+
+
+@pytest.mark.parametrize("args, caption", [
+    ((1, 0, 1), "1 row"),
+    ((45, 0, 45), "45 rows"),
+    ((45, 20, 40),
+     "45 rows · showing 21–40 · .more for next · .browse to explore"),
+    ((45, 40, 45), "45 rows · showing 41–45 · end"),
+])
+def test_page_caption(args, caption):
+    assert page_caption(*args) == caption
