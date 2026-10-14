@@ -921,7 +921,7 @@ def test_execute_squall_lemma_candidate_needs_same_arity(nl_studies):
     """A unary `mentioning` is not silently resolved to binary `mentions`."""
     with pytest.raises(SymbolNotFoundError, match="mentioning"):
         nl_studies.execute_squall_program(
-            "obtain every Study that is mentioning 'fear'."
+            "obtain every Study that is mentioning."
         )
 
 
