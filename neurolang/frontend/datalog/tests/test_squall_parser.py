@@ -2185,3 +2185,31 @@ def test_decompose_non_conjunctive_condition():
     assert isinstance(new_args[1], FunctionApplication)
     assert len(results) == 1
     assert isinstance(results[0], ExpressionBlock)
+
+
+@pytest.mark.parametrize("determiner", ["the", "every", "a"])
+@pytest.mark.parametrize("probability", ["with probability", "with inferred probability"])
+def test_where_anaphora_with_condition_does_not_recurse(determiner, probability):
+    """
+    Check a 'where … the X' rule with a 'conditioned to' clause translates.
+
+    ``every Term where a Selected_study mentions the Term conditioned to …``
+    made the post-parse simplification walk forever (RecursionError),
+    whatever the determiner of the conditioning noun phrase, while the
+    equivalent ``every Term that a Selected_study mentions conditioned
+    to …`` and the same rule without condition both worked.
+    """
+    result = parser(
+        f"define as term_marginal_working_memory {probability} every Term\n"
+        "where a Selected_study mentions the Term conditioned\n"
+        f"to {determiner} Selected_study that mentions 'working memory'."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent)}"
+    )
+    head_args = result.consequent.args
+    assert any(
+        isinstance(a, ProbabilisticQuery) and a.functor == PROB
+        for a in head_args
+    ), f"Expected ProbabilisticQuery(PROB, ...) in head args, got: {head_args}"
