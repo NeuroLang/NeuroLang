@@ -306,3 +306,19 @@ def test_fallback_prefers_the_most_detailed_query(nl):
     react, _ = agent(nl, ReactAgent, replies, language="datalog", max_steps=2)
     result = react.run("Which studies mention pain?")
     assert result.query == "ans(s) :- study(s), mentions(s, 'pain')"
+
+
+def test_empty_final_answer_recalls_the_query_with_rows(nl):
+    replies = [
+        'Action: run_query\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'pain\')"}',
+        'Action: final_answer\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'zzz\')"}',
+        'Action: final_answer\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'pain\')"}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert "Your query that gave rows was:\nans(s) :- mentions(s, 'pain')" \
+        in steps[1].observation
+    assert result.query == "ans(s) :- mentions(s, 'pain')"

@@ -234,6 +234,8 @@ class Toolbox:
         self.query_timeout = query_timeout
         # Queries whose answer of no rows has been confirmed.
         self.confirmed_empty = set()
+        # The queries run with run_query that gave rows, in order.
+        self.queries_with_rows = []
 
     def call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
@@ -277,6 +279,8 @@ class Toolbox:
             self.context.engine_name if self.context.declared else "",
             self.query_timeout,
         )
+        if preview.ok and preview.rows:
+            self.queries_with_rows.append(query.strip())
         return preview.text, None
 
     def tool_final_answer(self, query: str, explanation: str = ""):
@@ -299,11 +303,17 @@ class Toolbox:
             ), None
         if preview.rows == 0 and normalised not in self.confirmed_empty:
             self.confirmed_empty.add(normalised)
-            return (
+            message = (
                 "The query gives no rows. Check its constants with "
                 "search_values and its joins with run_query; if no rows is "
                 "the answer, call final_answer again with the same query."
-            ), None
+            )
+            if self.queries_with_rows:
+                message += (
+                    "\nYour query that gave rows was:\n"
+                    + self.queries_with_rows[-1]
+                )
+            return message, None
         return "Accepted.", (query.strip(), explanation.strip())
 
 

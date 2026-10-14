@@ -200,3 +200,17 @@ def test_previews_stop_slow_queries(nl, monkeypatch):
     monkeypatch.setattr(validation, "_execute", slow)
     preview = run_preview(nl, "ans(s) :- study(s)", "datalog", timeout=0.2)
     assert not preview.ok and "more than 0 s and was stopped" in preview.text
+
+
+def test_search_matches_iris_and_shows_varied_predicates(nl):
+    blake = "http://dbpedia.org/resource/Quentin_Blake"
+    nl.add_tuple_set(
+        [(f"http://x.org/book{i}", blake) for i in range(6)],
+        name="dbo:illustrator",
+    )
+    nl.add_tuple_set([(blake, "Quentin Blake")], name="rdfs:label")
+    found = EngineContext(nl).search_values("Quentin Blake").splitlines()
+    assert found[1] == f"rdfs:label(<{blake}>, 'Quentin Blake')"
+    illustrated = [f for f in found if f.startswith("dbo:illustrator(")]
+    assert len(illustrated) == 3
+    assert found[-1] == "… and 3 more"

@@ -262,7 +262,7 @@ class EngineContext:
 
     def search_values(
         self, pattern: str, name: Optional[str] = None, column=None,
-        limit: int = 10,
+        limit: int = 12,
     ) -> str:
         """
         Return the facts whose values contain *pattern*, ignoring case.
@@ -292,18 +292,25 @@ class EngineContext:
                     pattern = word
                     break
         if found:
-            shown = found[:limit]
-            text = "\n".join(fact for _, fact in shown)
-            if len(found) > limit:
-                text += f"\n… and {len(found) - limit} more"
+            shown = _diverse(found, limit)
+            text = "\n".join(shown)
+            if len(found) > len(shown):
+                text += f"\n… and {len(found) - len(shown)} more"
             return f"Facts with values containing {pattern!r}:\n{text}"
         if name:
             return self._closest_values(name, column, pattern, limit)
         return f"No stored value contains {pattern!r}."
 
     def _matching_facts(self, names, pattern: str, column) -> list:
-        """Return ``(rank, fact)`` of the facts with a value matching."""
+        """
+        Return ``(rank, fact)`` of the facts with a value matching.
+
+        A value matches when it contains *pattern*, ignoring case, or,
+        for an IRI, *pattern* with its spaces as underscores (the IRI of
+        DBpedia's Mount Everest ends with Mount_Everest).
+        """
         needle = pattern.lower()
+        iri_needle = "/" + needle.replace(" ", "_")
         found = []
         for name in names:
             frame = self.frame(name)
@@ -317,9 +324,11 @@ class EngineContext:
                 values = frame[c].astype(str)
                 lowered = values.str.lower()
                 mask = lowered.str.contains(needle, regex=False)
+                mask |= lowered.str.contains(iri_needle, regex=False)
                 for index in frame.index[mask][:MAX_FACTS_PER_COLUMN]:
                     value = lowered[index]
-                    rank = (value != needle, len(value))
+                    exact = value == needle or value.endswith(iri_needle)
+                    rank = (not exact, len(value))
                     found.append(
                         (rank, _fact(name, frame.loc[index].tolist()))
                     )
@@ -348,6 +357,23 @@ class EngineContext:
                 f"are: {', '.join(repr(v) for v in close)}"
             )
         return f"No value of {name} matches {pattern!r}."
+
+
+def _diverse(found, limit: int, per_predicate: int = 3) -> list:
+    """
+    Return at most *limit* facts of *found*, ranked, at most
+    *per_predicate* of each predicate, so that the properties of an
+    entity show.
+    """
+    shown, counts = [], {}
+    for _, fact in found:
+        predicate = fact.split("(", 1)[0]
+        if counts.get(predicate, 0) < per_predicate:
+            counts[predicate] = counts.get(predicate, 0) + 1
+            shown.append(fact)
+            if len(shown) == limit:
+                break
+    return shown
 
 
 def _string_columns(frame) -> list:

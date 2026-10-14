@@ -59,6 +59,13 @@ only one.
   `(bf == (a / b))` binds bf.
 - Functions are called as predicates: `startswith('lh', n)`.
 - A yes/no question is a query without variables: `ans() :- body`.
+- When the question names the kind of its answers (a country, a book),
+  restrict them with their class: `ans(c) :- located(x, c), Country(c)`.
+- The k largest (or smallest) by a value: rank by counting the larger
+  values, `larger(x, y) :- value(x, v), value(y, w), (w > v)` and
+  `rank(x, r) :- AGGREGATE[x](larger(x, y) @ count(y)) = r`, keep
+  `(r < k)` and add the largest, which no value beats: `~beaten(x)` with
+  `beaten(x) :- larger(x, y)`; for k = 1, compare with the max.
 - Aggregation, in a rule of its own that the query then reads, over a
   single atom (define a conjunction in a rule first), grouped by the
   variables other than the aggregated one:
@@ -123,9 +130,9 @@ Work in steps:
 1. Find how the entities and values the question names are stored:
    search_values with a word of the question shows the facts holding it,
    with the IRIs of their entities, in every stored relation.
-2. Write the query with these constants, and run it with run_query: check
-   that it gives the kind of rows the question asks for, and correct it
-   otherwise.
+2. Write the query with these constants and the classes of the answers
+   the question names, and run it with run_query: check that it gives
+   the kind of rows the question asks for, and correct it otherwise.
 3. As soon as run_query shows the right rows, give the query with
    final_answer. Return only what the question asks for."""
 
