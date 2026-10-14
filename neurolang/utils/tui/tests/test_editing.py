@@ -279,6 +279,29 @@ def _metas(app, text):
     return {c.text: c.display_meta_text for c in _completions(app, text)}
 
 
+
+def test_conditional_predicate_offered_with_its_own_arity(neurosynth_app):
+    """
+    A conditional is offered as itself, not as one of its helpers.
+
+    ``marg`` compiles to ``marg`` and the helpers ``marg^cond_num`` and
+    ``marg^cond_den``, also named ``marg`` but of other arities.
+    """
+    app = neurosynth_app
+    nl = app._nl
+    nl.add_tuple_set([("pain",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",)], name="selected_study"
+    )
+    app._handle_dot_command(".mode squall")
+    app._execute_and_display(
+        "define as marg with inferred probability every Term where a "
+        "Selected_study mentions the Term conditioned to the "
+        "Selected_study that mentions 'pain'."
+    )
+    app._handle_dot_command(".mode datalog")
+    assert _metas(app, "ans(t) :- mar")["marg"].endswith("/2 · session")
+
 class TestDynamicCompletion:
     def test_predicate_ranked_before_grammar(self, neurosynth_app):
         texts = _words(neurosynth_app, "ans(x) :- pe")
