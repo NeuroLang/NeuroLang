@@ -10,18 +10,29 @@ in the prompt, where it can be read, edited and run:
 
 .. code-block:: text
 
-    nl(neurosynth:SQ)> .ask Which voxels are reported by studies about fear?
+    nl(neurosynth:SQ)> .ask Which voxels are reported by studies about decision-making?
     Asking claude-code (sonnet, react)...
-      → search_values(predicate='term', column='term', pattern='fear')
-        Values of term.term matching 'fear': 'fear', 'fear conditioning', …
-      → check_query(query="obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'fear' reports.")
-        The query is valid. Its Datalog translation:
-      → final_answer(...)
-    ╭──────────────────── SQUALL query ────────────────────╮
-    │ obtain every Voxel (?i; ?j; ?k) that a Study that    │
-    │ mentions 'fear' reports.                             │
-    ╰──────────────────────────────────────────────────────╯
-    nl(neurosynth:SQ)> obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'fear' reports.
+      I need to check how the term for decision-making is stored.
+      → search_values(predicate='term', column='term', pattern='decision')
+        Values of term.term matching 'decision': 'decision', 'decisions',
+        'decision task', 'decision making', 'lexical decision'
+      The term is stored as 'decision making' (with a space), so I'll use that
+      constant and check the query.
+      → check_query(query="obtain every Voxel (?i; ?j; ?k) that a Study that
+        mentions 'decision making' reports.")
+        The query is valid. Its Datalog translation: (+4 lines)
+      → run_query(query="obtain every Voxel (?i; ?j; ?k) that a Study that
+        mentions 'decision making' reports.")
+        14926 rows; columns i, j, k (+11 lines)
+      → final_answer(query="obtain every Voxel (?i; ?j; ?k) that ...", ...)
+        Accepted.
+    ╭───────────────────────────── SQUALL query ─────────────────────────────╮
+    │ obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'decision   │
+    │ making' reports.                                                       │
+    ╰────────────────────────────────────────────────────────────────────────╯
+    4 LLM calls
+    The query is in the prompt: edit it or press Enter to run it.
+    nl(neurosynth:SQ)> obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'decision making' reports.
 
 From the command line, ``--ask`` prints the query, and ``--run`` also
 runs it:
