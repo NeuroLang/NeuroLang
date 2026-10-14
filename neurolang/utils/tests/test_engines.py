@@ -121,3 +121,35 @@ def test_ontologies_load_local_files_with_options(tmp_path):
         "ans(n, a) :- ex:Animal(x), ex:name(x, n), ex:age(x, a)"
     )
     assert set(animals) == {("Rex", "3")}
+
+
+def test_sparql_builtins(tmp_path):
+    """The SPARQL-like builtins apply to strings and numbers."""
+    from neurolang.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  words:\n"
+        "    builtins: [lcase, strlen, str_contains, regex, round, int,"
+        " strstarts]\n"
+    )
+    nl = engine_registry.build_engine(
+        "words", tmp_path / "cache", yaml_path=config
+    )
+    nl.add_tuple_set(
+        [("a", "Russia", "12", 2.5), ("b", "France", "7", -2.5)],
+        name="country",
+    )
+    result = nl.execute_datalog_program(
+        "ans(x, l, n, q, r) :- country(x, c, s, v), (l == lcase(c)), "
+        "(n == strlen(c)), (q == int(s)), (r == round(v))"
+    )
+    assert set(result) == {
+        ("a", "russia", 6, 12, 3.0), ("b", "france", 6, 7, -3.0)
+    }
+    matched = nl.execute_datalog_program(
+        "ans(x) :- country(x, c, s, v), str_contains(lcase(c), 'russ'), "
+        "regex(c, '(?i)^RU'), strstarts(c, 'R')"
+    )
+    assert set(matched) == {("a",)}

@@ -68,10 +68,12 @@ Usage
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import nibabel as nib
+
 import numpy as np
 import yaml
 
@@ -91,10 +93,85 @@ def _builtin_startswith(prefix: str, s: str) -> bool:
     return s.startswith(prefix)
 
 
+def _builtin_lcase(s) -> str:
+    """Return *s* in lower case, as SPARQL's ``LCASE``."""
+    return str(s).lower()
+
+
+def _builtin_ucase(s) -> str:
+    """Return *s* in upper case, as SPARQL's ``UCASE``."""
+    return str(s).upper()
+
+
+def _builtin_strlen(s) -> int:
+    """Return the number of characters of *s*, as SPARQL's ``STRLEN``."""
+    return len(str(s))
+
+
+def _builtin_strstarts(s, prefix) -> bool:
+    """Return True if *s* starts with *prefix*, as SPARQL's ``STRSTARTS``."""
+    return str(s).startswith(str(prefix))
+
+
+def _builtin_strends(s, suffix) -> bool:
+    """Return True if *s* ends with *suffix*, as SPARQL's ``STRENDS``."""
+    return str(s).endswith(str(suffix))
+
+
+def _builtin_str_contains(s, part) -> bool:
+    """Return True if *part* is in *s*, as SPARQL's ``CONTAINS``."""
+    return str(part) in str(s)
+
+
+def _builtin_regex(s, pattern) -> bool:
+    """
+    Return True if *pattern* matches in *s*, as SPARQL's ``REGEX``.
+
+    Flags are written in the pattern, e.g. ``(?i)`` for SPARQL's ``"i"``.
+    """
+    return re.search(str(pattern), str(s)) is not None
+
+
+def _builtin_round(x) -> float:
+    """Return *x* rounded to an integer, halves away from 0, as ``ROUND``."""
+    x = float(x)
+    return float(np.sign(x) * np.floor(abs(x) + 0.5))
+
+
+def _builtin_int(x) -> int:
+    """Return *x* as an integer, as SPARQL's ``xsd:integer`` cast."""
+    return int(float(x))
+
+
+def _builtin_float(x) -> float:
+    """Return *x* as a float, as SPARQL's ``xsd:double`` cast."""
+    return float(x)
+
+
+def _builtin_str(x) -> str:
+    """Return *x* as a string, as SPARQL's ``STR``."""
+    return str(x)
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
     "log": np.log,
     "startswith": _builtin_startswith,
+    # String and numeric functions of SPARQL, e.g. for RDF engines.
+    "lcase": _builtin_lcase,
+    "ucase": _builtin_ucase,
+    "strlen": _builtin_strlen,
+    "strstarts": _builtin_strstarts,
+    "strends": _builtin_strends,
+    "str_contains": _builtin_str_contains,
+    "regex": _builtin_regex,
+    "round": _builtin_round,
+    "abs": abs,
+    "floor": lambda x: float(np.floor(float(x))),
+    "ceil": lambda x: float(np.ceil(float(x))),
+    "int": _builtin_int,
+    "float": _builtin_float,
+    "str": _builtin_str,
 }
 
 
