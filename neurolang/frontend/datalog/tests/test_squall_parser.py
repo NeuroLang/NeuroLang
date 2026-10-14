@@ -25,6 +25,7 @@ from ....logic import (
 from ....probabilistic.expressions import Condition, ProbabilisticFact
 from ..squall import LogicSimplifier, InvertedFunctionApplication, ResolveInvertedFunctionApplicationMixin
 from ..squall_syntax_lark import (
+    compiled_grammar,
     parser,
     EquiprobableChoiceDef,
     SquallProgram,
@@ -36,6 +37,7 @@ from ....datalog.expressions import AggregationApplication
 from ....datalog.aggregation import AggregationApplication as AggApp
 from ....datalog.negation import is_conjunctive_negation
 from ....expressions import ExpressionBlock, Query
+from ....logic.expression_processing import extract_logic_atoms
 from ....logic.horn_clauses import fol_query_to_datalog_program
 from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import PROB, ProbabilisticQuery
@@ -824,6 +826,69 @@ def test_rule_op_marg_produces_prob_query_in_head():
     )
 
 
+def _renumber_fresh(text):
+    """Number the fresh variables of *text* in order of appearance."""
+    import re
+
+    names = {}
+    return re.sub(
+        r"fresh_\d+",
+        lambda m: names.setdefault(m.group(0), f"fresh_{len(names)}"),
+        text,
+    )
+
+
+def _string_constants(expression):
+    """Return the string values of the constants in *expression*."""
+    values = []
+
+    def visit(node):
+        if isinstance(node, Constant) and isinstance(node.value, str):
+            values.append(node.value)
+        for child in getattr(node, "unapply", lambda: ())():
+            if isinstance(child, tuple):
+                for item in child:
+                    visit(item)
+            else:
+                visit(child)
+
+    visit(expression)
+    return values
+
+
+@pytest.mark.parametrize(
+    "double, single",
+    [
+        (
+            'obtain every Study that mentions "working memory".',
+            "obtain every Study that mentions 'working memory'.",
+        ),
+        (
+            'define as wm every Study that mentions "working memory".',
+            "define as wm every Study that mentions 'working memory'.",
+        ),
+    ],
+)
+def test_double_quoted_strings_parse_like_single_quoted(double, single):
+    """Check "…" strings mean the same as '…' strings."""
+    assert _renumber_fresh(repr(parser(double))) == _renumber_fresh(
+        repr(parser(single))
+    )
+
+
+def test_double_quoted_string_value_and_apostrophe():
+    """Check a "…" string keeps its text, apostrophes included."""
+    result = parser(
+        "define as pd every Study that mentions \"Parkinson's disease\"."
+    )
+    assert "Parkinson's disease" in _string_constants(result)
+
+
+def test_single_quoted_string_may_hold_double_quotes():
+    """Check a '…' string may still contain double quotes."""
+    result = parser("define as q every Study that mentions 'say \"hi\"'.")
+    assert 'say "hi"' in _string_constants(result)
+
 
 def test_ng1_agg_npc_arbitrary_functor():
     """'every Custom_func of the Relation' uses Symbol as aggregation functor."""
@@ -1414,6 +1479,62 @@ def test_obtain_unnamed_with_tuple_label_parses():
     assert len(q.head) == 2, f"Expected 2 head vars, got {len(q.head)}"
     head_names = [h.name for h in q.head]
     assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"
+
+
+def _functor_names(expression):
+    return {
+        a.functor.name
+        for a in extract_logic_atoms(expression)
+        if isinstance(a.functor, Symbol)
+    }
+
+
+def test_does_not_is_not_split_into_keyword_fragments():
+    """
+    Regression: ``does`` must not lex as ``do`` + ``es`` nor ``not`` as
+    ``no`` + ``t``. ``does not <verb>`` is the auxiliary negation form.
+    """
+    result = parser("obtain every Study that does not mention 'fear'.")
+    q = result.queries[0]
+    assert _functor_names(q.body) == {"study", "mention"}, repr(q.body)
+    x = q.head
+    expected = Conjunction((
+        Symbol("study")(x),
+        Negation(Symbol("mention")(x, Constant("fear"))),
+    ))
+    assert weak_logic_eq(q.body, expected), repr(q.body)
+
+
+def test_and_is_not_split_into_keyword_fragments():
+    """
+    Regression: ``and`` must not lex as ``an`` + ``d``, which produced a
+    spurious ``d`` predicate.
+    """
+    result = parser(
+        "obtain every Voxel that a Study reports "
+        "and that is a Schaefer_voxels."
+    )
+    names = _functor_names(result.queries[0].body)
+    assert "d" not in names, repr(result.queries[0].body)
+    assert {"voxel", "study", "reports", "schaefer_voxels"} <= names
+
+
+@pytest.mark.parametrize("sentence", [
+    "obtain every Study that does not mention 'fear'.",
+    "obtain every Voxel that a Study reports and that is a Schaefer_voxels.",
+    "define as Active every Study that does not report a Voxel.",
+    "obtain every Item that isn't a Thing.",
+])
+def test_name_terminals_do_not_start_inside_a_word(sentence):
+    """No LOWER_NAME / UPPER_NAME token may start in the middle of a word."""
+    tree = compiled_grammar().parse(sentence)
+    name_tokens = tree.scan_values(
+        lambda v: getattr(v, "type", None) in ("LOWER_NAME", "UPPER_NAME")
+    )
+    for token in name_tokens:
+        assert token.start_pos == 0 or not (
+            sentence[token.start_pos - 1].isalnum()
+        ), f"name {token!r} starts inside a word in {sentence!r}"
 
 
 def test_probably_prefix_in_wlq_head_is_preserved():
@@ -2185,3 +2306,31 @@ def test_decompose_non_conjunctive_condition():
     assert isinstance(new_args[1], FunctionApplication)
     assert len(results) == 1
     assert isinstance(results[0], ExpressionBlock)
+
+
+@pytest.mark.parametrize("determiner", ["the", "every", "a"])
+@pytest.mark.parametrize("probability", ["with probability", "with inferred probability"])
+def test_where_anaphora_with_condition_does_not_recurse(determiner, probability):
+    """
+    Check a 'where … the X' rule with a 'conditioned to' clause translates.
+
+    ``every Term where a Selected_study mentions the Term conditioned to …``
+    made the post-parse simplification walk forever (RecursionError),
+    whatever the determiner of the conditioning noun phrase, while the
+    equivalent ``every Term that a Selected_study mentions conditioned
+    to …`` and the same rule without condition both worked.
+    """
+    result = parser(
+        f"define as term_marginal_working_memory {probability} every Term\n"
+        "where a Selected_study mentions the Term conditioned\n"
+        f"to {determiner} Selected_study that mentions 'working memory'."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent)}"
+    )
+    head_args = result.consequent.args
+    assert any(
+        isinstance(a, ProbabilisticQuery) and a.functor == PROB
+        for a in head_args
+    ), f"Expected ProbabilisticQuery(PROB, ...) in head args, got: {head_args}"

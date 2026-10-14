@@ -1323,6 +1323,35 @@ class TestExecuteSquallProgram:
 
 
 # ---------------------------------------------------------------------------
+# Aggregations in the head of the query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "aggregate, rows",
+    [
+        ("count", [["a", 2], ["b", 1]]),
+        ("sum", [["a", 3], ["b", 5]]),
+        ("max", [["a", 2], ["b", 5]]),
+    ],
+)
+def test_query_with_aggregation_in_head(aggregate, rows, monkeypatch, capsys):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main([
+        "--format", "json", "--sort", "t",
+        f"ans(t, {aggregate}(s)) :- hits(s, t)",
+    ])
+    out = json.loads(capsys.readouterr().out)
+    assert [[r["t"], r[aggregate]] for r in out] == rows
+
+
+# ---------------------------------------------------------------------------
 # Error reporting
 # ---------------------------------------------------------------------------
 
