@@ -1,0 +1,101 @@
+# Questions on the neurosynth engine with their SQUALL and Datalog
+# queries: the few-shot examples of the LLM query assistant, the most
+# similar to the user's question being put in the prompt. Every query is
+# checked against the engine by the tests (NEUROLANG_TEST_DATA_DIR).
+examples:
+  - question: Which studies mention pain?
+    squall: obtain every Study that mentions 'pain'.
+    datalog: ans(s) :- mentions(s, 'pain')
+
+  - question: List the terms of the vocabulary.
+    squall: obtain every Term.
+    datalog: ans(t) :- term(t)
+
+  - question: Which terms are mentioned by at least one study?
+    squall: obtain every Term that a Study mentions.
+    datalog: ans(t) :- mentions(s, t)
+
+  - question: Which voxels are reported by studies that mention pain?
+    squall: obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports.
+    datalog: ans(i, j, k) :- mentions(s, 'pain'), reports(s, i, j, k)
+
+  - question: Which studies mention either language or speech?
+    squall: obtain every Study that mentions 'language' or mentions 'speech'.
+    datalog: |-
+      language_or_speech(s) :- mentions(s, 'language')
+      language_or_speech(s) :- mentions(s, 'speech')
+      ans(s) :- language_or_speech(s)
+
+  - question: Which studies mention both pain and emotion?
+    datalog: |-
+      ans(s) :- term_in_study_tfidf(s, 'pain', v), term_in_study_tfidf(s, 'emotion', w), (v > 0.03), (w > 0.03)
+
+  - question: Which studies do not mention pain?
+    datalog: ans(s) :- study(s), ~mentions(s, 'pain')
+
+  - question: Give the TF-IDF weight of the term reward in each study where it is above 0.1.
+    squall: obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'reward' and ?w is greater than 0.1.
+    datalog: ans(s, w) :- weighted_mention(s, 'reward', w), (w > 0.1)
+
+  - question: Which terms does the study 10022492 mention?
+    squall: obtain every Term that 10022492 mentions.
+    datalog: ans(t) :- mentions(10022492, t)
+
+  - question: Which terms co-occur with fear in a study?
+    squall: obtain every Term that a Study that mentions 'fear' mentions.
+    datalog: ans(t) :- mentions(s, 'fear'), mentions(s, t)
+
+  - question: How many studies are there?
+    squall: obtain every Count of the Study.
+    datalog: |-
+      study_count(n) :- AGGREGATE[](study(s) @ count(s)) = n
+      ans(n) :- study_count(n)
+
+  - question: How many studies mention each term?
+    squall: |-
+      define as Term_study_count for every Term ;
+          where every Count of the Study that mentions the Term.
+      obtain every Term_study_count.
+    datalog: |-
+      term_study_count(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n
+      ans(t, n) :- term_study_count(t, n)
+
+  - question: How many terms does each study mention?
+    datalog: |-
+      study_term_count(s, n) :- AGGREGATE[s](mentions(s, t) @ count(t)) = n
+      ans(s, n) :- study_term_count(s, n)
+
+  - question: What is the highest TF-IDF weight of the term attention?
+    datalog: |-
+      attention_max(m) :- AGGREGATE[](weighted_mention(s, 'attention', w) @ max(w)) = m
+      ans(m) :- attention_max(m)
+
+  - question: Define the studies about faces, then list the voxels they report.
+    squall: |-
+      define as Face_study every Study that mentions 'face'.
+      obtain every Voxel (?i; ?j; ?k) that a Face_study reports.
+    datalog: |-
+      face_study(s) :- mentions(s, 'face')
+      ans(i, j, k) :- face_study(s), reports(s, i, j, k)
+
+  - question: What is the probability that a voxel is reported, given that the study mentions auditory?
+    squall: |-
+      define as Activation every Peak_reported (?i; ?j; ?k; ?s) such that ?s is a Selected_study.
+      define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf) such that ?s is a Selected_study.
+      define as Activation_given_term with probability
+          every Activation (?i; ?j; ?k; _)
+          conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+      obtain every Activation_given_term (?i; ?j; ?k; ?p).
+    datalog: |-
+      activation(i, j, k, s) :- peak_reported(i, j, k, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // term_association(s, 'auditory')] = p
+
+  - question: What is the probability that a study mentions each term?
+    squall: |-
+      define as Mentioned_term every Term that a Selected_study mentions.
+      define as Term_probability with inferred probability every Mentioned_term.
+      obtain every Term_probability (?t; ?p).
+    datalog: |-
+      mentioned_term(t) :- selected_study(s), mentions(s, t)
+      ans(t, p) :- PROB[mentioned_term(t)] = p
