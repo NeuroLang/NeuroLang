@@ -299,7 +299,7 @@ def test_execute_squall_body_function_call():
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
-    engine.add_tuple_set([("a", 1), ("b", 2)], name="item_val")
+    engine.add_tuple_set([("a",), ("b",)], name="item_val")
 
     def close_enough(x, y):
         return abs(x - y) < 0.5
@@ -638,11 +638,12 @@ def test_extension_d_for_each_integration(tmp_path):
         nl.add_tuple_set(
             [(1, 10, "s1"), (2, 20, "s2")], name="data"
         )
+        nl.add_tuple_set([(10, 1, "s1"), (20, 2, "s2")], name="indexed")
         nl.execute_squall_program(
             f"define as Result with a probability of "
             f"the Agg_collect of the Data (?v; _; ?s) "
             f"{keyword} ?i, ?s "
-            f"that data(?i, ?v, ?s) holds."
+            f"that indexed(?i, ?s) holds."
         )
         idb = nl.program_ir.intensional_database()
         # find the rule(s) whose consequent functor name contains "result"

@@ -239,6 +239,125 @@ def test_query_wrong_head_arguments():
             neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
 
 
+def _squall_voxel_engine(engine_class=frontend.NeurolangDL):
+    """Return an engine with neurosynth-like voxel, study and report facts."""
+    neurolang = engine_class()
+    neurolang.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="voxel")
+    neurolang.add_tuple_set([(10, 1, 2, 3), (11, 7, 8, 9)], name="reports")
+    neurolang.add_tuple_set([(10,), (11,)], name="study")
+    neurolang.add_tuple_set([(1, 2)], name="pair")
+    return neurolang
+
+
+def test_squall_noun_with_fewer_arguments_than_columns():
+    """
+    A SQUALL noun naming a 3-column relation without ``in 3D`` is an error.
+
+    It used to compile to ``voxel(v) ∧ reports(s, v)``, projecting the
+    first column of each relation and returning a meaningless result.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Voxel that a Study reports."
+        )
+    error = info.value
+    assert isinstance(error, WrongArgumentsInPredicateError)
+    assert (error.predicate, error.arity, error.used) == ("voxel", 3, 1)
+    assert str(error) == "`voxel` has 3 columns but is used with 1"
+    assert "in 3D" in error.suggestion
+    assert "3 variables" in error.suggestion
+
+    result = neurolang.execute_squall_program(
+        "obtain every Voxel in 3D that a Study reports."
+    )
+    assert set(result) == {(1, 2, 3)}
+
+
+def test_squall_wrong_arity_states_only_the_counts():
+    """
+    A predicate used with more arguments than its columns, or a verb used
+    with too few, reports the counts without guessing a fix.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program("obtain every Pair in 3D.")
+    assert (info.value.predicate, info.value.arity, info.value.used) == (
+        "pair", 2, 3
+    )
+    assert "in 3D" not in info.value.suggestion
+
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Study that reports a Voxel in 2D."
+        )
+    assert (info.value.predicate, info.value.arity, info.value.used) in {
+        ("reports", 4, 3), ("voxel", 3, 2)
+    }
+
+
+def test_squall_defined_relation_with_wrong_arity():
+    """
+    A relation defined with several columns and used as a unary noun is
+    an error, both in a query and in the body of a rule definition.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    neurolang.execute_squall_program("define as Region3 every Voxel in 3D.")
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Region3 that a Study reports."
+        )
+    assert (info.value.predicate, info.value.arity, info.value.used) == (
+        "region3", 3, 1
+    )
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "define as Active every Voxel that a Study reports."
+        )
+    assert info.value.predicate == "voxel"
+
+    # The whole relation is still obtained by naming it alone.
+    assert set(neurolang.execute_squall_program("obtain every Region3.")) == {
+        (1, 2, 3), (4, 5, 6)
+    }
+
+
+def test_squall_obtain_as_defines_the_whole_relation():
+    """
+    ``obtain every Voxel as Voxels`` defines ``voxels`` with every column
+    of ``voxel``, as the query itself obtains them, not only the first.
+    """
+    neurolang = _squall_voxel_engine()
+    result = neurolang.execute_squall_program("obtain every Voxel as Voxels.")
+    assert set(result) == {(1, 2, 3), (4, 5, 6)}
+    result = neurolang.execute_squall_program("obtain every Voxels.")
+    assert set(result) == {(1, 2, 3), (4, 5, 6)}
+
+
+def test_squall_probabilistic_predicate_arity_excludes_probability():
+    """
+    The probability column of probabilistic facts and choices is not an
+    argument, so using them with their other columns is not an error.
+    """
+    neurolang = _squall_voxel_engine(frontend.NeurolangPDL)
+    neurolang.add_uniform_probabilistic_choice_over_set(
+        [(10,), (11,)], name="selected_study"
+    )
+    neurolang.add_probabilistic_facts_from_tuples(
+        [(0.5, 10), (0.2, 11)], name="maybe_study"
+    )
+    neurolang.execute_squall_program(
+        "define as Chosen every Selected_study.\n"
+        "define as Maybe_chosen every Maybe_study."
+    )
+
+
 def test_query_with_constant():
     neurolang = frontend.NeurolangDL()
 
