@@ -167,3 +167,22 @@ def test_arity_errors_skip_iris_and_read_prefixed_names(nl):
     assert arity_errors(nl, "ans(n) :- pv:name(n)") == [
         "pv:name has 2 columns, not 1: use it as pv:name/2"
     ]
+
+
+@pytest.mark.parametrize("query, message", [
+    ("n(c) :- AGGREGATE[](mentions(s, t), study(s) @ count(s)) = c\n"
+     "ans(c) :- n(c)", "takes a single atom"),
+    ("n(s, c) :- AGGREGATE[s](mentions(s, t) @ count(s)) = c\n"
+     "ans(s, c) :- n(s, c)", "groups by s, the variable it aggregates"),
+])
+def test_aggregation_misuses(nl, query, message):
+    result = check_query(nl, query, "datalog")
+    assert not result.ok and message in result.message
+
+
+def test_aggregation_well_used(nl):
+    query = (
+        "n(t, c) :- AGGREGATE[t](mentions(s, t) @ count(s)) = c\n"
+        "ans(t, c) :- n(t, c)"
+    )
+    assert check_query(nl, query, "datalog").ok

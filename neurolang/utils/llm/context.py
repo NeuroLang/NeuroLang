@@ -219,9 +219,10 @@ class EngineContext:
         frame = self.frame(name)
         if frame.empty:
             return "(no rows)"
-        return f"{len(frame)} rows, e.g.:\n" + frame.head(rows).to_string(
-            index=False
+        facts = "\n".join(
+            _fact(name, row) for row in frame.head(rows).values.tolist()
         )
+        return f"{len(frame)} rows, e.g.:\n{facts}"
 
     def _column(self, frame, column):
         """

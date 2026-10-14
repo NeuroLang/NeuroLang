@@ -206,6 +206,11 @@ def parse_text_action(text: str, language: str) -> TextAction:
     return TextAction(thought, name, arguments)
 
 
+def _atom_count(query: str) -> int:
+    """Return the number of atoms of *query*, a measure of its detail."""
+    return len(re.findall(r"[\w:]+\s*\(", query))
+
+
 def _gave_rows(observation: str) -> bool:
     """Whether the observation of run_query shows rows."""
     return bool(re.match(r"(\w+: )?[1-9]\d* rows", observation))
@@ -225,6 +230,8 @@ class Toolbox:
         self.context = context
         self.language = language
         self.preview_rows = preview_rows
+        # Queries whose answer of no rows has been confirmed.
+        self.confirmed_empty = set()
 
     def call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
@@ -275,6 +282,23 @@ class Toolbox:
             return (
                 f"The answer is rejected: the query fails:\n{result.message}"
                 "\nCorrect it and call final_answer again."
+            ), None
+        normalised = " ".join(query.split())
+        preview = run_preview(
+            self.context.nl, query, self.language, self.preview_rows,
+            self.context.engine_name if self.context.declared else "",
+        )
+        if not preview.ok:
+            return (
+                f"The answer is rejected: running the query fails:\n"
+                f"{preview.text}\nCorrect it and call final_answer again."
+            ), None
+        if preview.rows == 0 and normalised not in self.confirmed_empty:
+            self.confirmed_empty.add(normalised)
+            return (
+                "The query gives no rows. Check its constants with "
+                "search_values and its joins with run_query; if no rows is "
+                "the answer, call final_answer again with the same query."
             ), None
         return "Accepted.", (query.strip(), explanation.strip())
 
@@ -460,10 +484,14 @@ class ReactAgent(Agent):
                 result.query, result.explanation = final
                 result.valid = True
                 return result
-        ran = next((
-            s for s in reversed(result.steps)
-            if s.action == "run_query" and _gave_rows(s.observation)
-        ), None)
+        ran = max(
+            (
+                s for s in reversed(result.steps)
+                if s.action == "run_query" and _gave_rows(s.observation)
+            ),
+            key=lambda s: _atom_count(s.arguments.get("query", "")),
+            default=None,
+        )
         if ran is not None:
             # Out of steps, the last query that gave rows is the answer.
             result.query = ran.arguments["query"]

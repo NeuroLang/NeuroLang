@@ -281,3 +281,28 @@ def test_react_answers_the_last_query_with_rows_when_out_of_steps(nl):
     result = react.run("Which studies?")
     assert result.valid and result.query == "ans(s) :- study(s)"
     assert "after 3 steps" in result.explanation
+
+
+def test_final_answer_runs_the_query(nl):
+    replies = [
+        'Action: final_answer\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'zzz\')"}',
+        'Action: final_answer\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'zzz\')"}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention zzz?")
+    assert "gives no rows" in steps[0].observation
+    assert result.valid and steps[1].observation == "Accepted."
+
+
+def test_fallback_prefers_the_most_detailed_query(nl):
+    replies = [
+        'Action: run_query\nAction Input: {"query": '
+        '"ans(s) :- study(s), mentions(s, \'pain\')"}',
+        'Action: run_query\nAction Input: {"query": '
+        '"ans(s, t) :- mentions(s, t)"}',
+    ]
+    react, _ = agent(nl, ReactAgent, replies, language="datalog", max_steps=2)
+    result = react.run("Which studies mention pain?")
+    assert result.query == "ans(s) :- study(s), mentions(s, 'pain')"

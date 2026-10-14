@@ -147,6 +147,45 @@ def arity_errors(nl, datalog: str) -> list:
     return list(dict.fromkeys(errors))
 
 
+_AGGREGATE = re.compile(r"AGGREGATE\s*\[([^\]]*)\]\s*\(")
+
+
+def aggregation_errors(text: str) -> list:
+    """
+    Return the misuses of AGGREGATE in the Datalog program *text*.
+
+    The aggregated relation must be a single atom (a rule of its own
+    otherwise), and the variable aggregated must not be a group key.
+    """
+    masked = _OPAQUE.sub(lambda m: "_" * len(m.group(0)), text)
+    errors = []
+    for match in _AGGREGATE.finditer(masked):
+        groups = {g.strip() for g in match.group(1).split(",") if g.strip()}
+        depth, start = 1, match.end()
+        for end in range(start, len(masked)):
+            depth += {"(": 1, ")": -1}.get(masked[end], 0)
+            if depth == 0:
+                break
+        body, _, function = masked[start:end].rpartition("@")
+        atoms = [a for a in re.split(r",(?![^()]*\))", body) if a.strip()]
+        if len(atoms) > 1:
+            errors.append(
+                "AGGREGATE[...](... @ f(x)) takes a single atom: define the "
+                "conjunction in a rule of its own, e.g. "
+                "item(g, x) :- p(g, y), q(y, x), and aggregate it: "
+                "AGGREGATE[g](item(g, x) @ count(x)) = n"
+            )
+        arguments = function.split("(", 1)[-1]
+        aggregated = set(re.findall(r"[A-Za-z_]\w*", arguments))
+        if groups & aggregated:
+            errors.append(
+                f"AGGREGATE groups by {', '.join(sorted(groups & aggregated))}"
+                ", the variable it aggregates: group by the other variables "
+                "of the atom, e.g. AGGREGATE[g](item(g, x) @ count(x)) = n"
+            )
+    return list(dict.fromkeys(errors))
+
+
 def error_message(nl, exc: BaseException, text: str, language: str) -> str:
     """Return the error *exc* of the query *text* formatted as for users."""
     if isinstance(exc, QueryCheckError):
@@ -191,6 +230,8 @@ def check_query(nl, text: str, language: str) -> CheckResult:
         except Exception:
             datalog = ""
     problems += arity_errors(nl, datalog or text)
+    if language == "datalog":
+        problems += aggregation_errors(text)
     if problems:
         return CheckResult(False, "\n".join(problems), datalog)
     return CheckResult(True, datalog=datalog)

@@ -58,7 +58,10 @@ only one.
 - Comparisons and arithmetic in parentheses: `(w > 0.1)`, `(c != 0)`,
   `(bf == (a / b))` binds bf.
 - Functions are called as predicates: `startswith('lh', n)`.
-- Aggregation, in a rule of its own that the query then reads:
+- A yes/no question is a query without variables: `ans() :- body`.
+- Aggregation, in a rule of its own that the query then reads, over a
+  single atom (define a conjunction in a rule first), grouped by the
+  variables other than the aggregated one:
   `term_count(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n` and
   `ans(t, n) :- term_count(t, n)`; without group
   `AGGREGATE[](study(s) @ count(s)) = n` (count, sum, max, min, mean).
