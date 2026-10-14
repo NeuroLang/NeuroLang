@@ -300,6 +300,25 @@ def test_squall_wrong_arity_states_only_the_counts():
     }
 
 
+def test_predicate_arity_error_suggests_tuple_subject_for_extra_objects():
+    """
+    A predicate used with more arguments than its columns, as a verb with
+    too many objects, suggests matching the extra value through a tuple
+    subject on the relation that stores it.
+    """
+    from ...exceptions import PredicateArityError
+
+    error = PredicateArityError("mentions", 2, 3)
+    assert "several objects" in error.suggestion
+    assert "(?s; ?t; ?w) is a" in error.suggestion
+    assert "in 2D" not in error.suggestion
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program("obtain every Pair in 3D.")
+    assert "several objects" in info.value.suggestion
+
+
 def test_squall_defined_relation_with_wrong_arity():
     """
     A relation defined with several columns and used as a unary noun is
