@@ -25,6 +25,13 @@ from .squall_completion import (
     allowed_terminals,
     current_sentence,
 )
+from .value_completion import (
+    open_quote,
+    squall_quoted_column,
+    tuple_completions,
+    value_completions,
+    value_source,
+)
 
 
 # Kinds of predicates offered after the relations and rules.
@@ -178,6 +185,11 @@ class NeuroLangReplCompleter(Completer):
     their declared arguments choose the nouns and verbs offered (see
     :mod:`~.squall_sorts`).
 
+    Inside a quoted string, the values of the column it fills are
+    offered, as *column_values* gives them (see
+    :class:`~.value_completion.ColumnValues`); inside a SQUALL tuple, the
+    variables of the noun's next columns.
+
     While typing, completions are offered only for a word being typed;
     Tab also offers them after a space or an opening bracket.
     """
@@ -190,8 +202,10 @@ class NeuroLangReplCompleter(Completer):
         is_squall: Optional[Callable[[], bool]] = None,
         squall_grammar: Optional[SquallGrammarOptions] = None,
         hidden: frozenset = frozenset(),
+        column_values: Optional[Callable[[str, int], tuple]] = None,
     ):
         """Set up the completion sources."""
+        self._column_values = column_values
         self._hidden = hidden
         self._lark = lark_completer
         self._predicates = predicates or dict
@@ -205,12 +219,24 @@ class NeuroLangReplCompleter(Completer):
         if text.startswith("."):
             yield from self._command_completions(text)
             return
-        prefix = identifier_prefix(text)
-        if not wants_completion(text, prefix, complete_event):
+        quote = open_quote(text)
+        if quote is not None:
+            yield from self._quoted_completions(text, quote, complete_event)
             return
-        catalog = self._predicates()
+        prefix = identifier_prefix(text)
+        if wants_completion(text, prefix, complete_event):
+            yield from self._completions(text, prefix, self._predicates())
+
+    def _completions(self, text: str, prefix: str, catalog: dict):
+        """Yield the completions of *text*, outside of strings."""
+        variables = (
+            tuple_completions(text, self._lowered(catalog))
+            if self._is_squall() else None
+        )
         context = argument_context(text)
-        if self._is_squall() or self._lark is None:
+        if variables is not None:
+            yield from variables
+        elif self._is_squall() or self._lark is None:
             yield from self._squall_completions(text, prefix, catalog)
         elif context is not None:
             yield from self._argument_completions(
@@ -218,6 +244,41 @@ class NeuroLangReplCompleter(Completer):
             )
         else:
             yield from self._datalog_completions(text, prefix, catalog)
+
+    def _lowered(self, catalog: dict) -> dict:
+        """Return the predicates of *catalog* SQUALL offers, lowercased."""
+        return {
+            name.lower(): info for name, info in catalog.items()
+            if name not in self._hidden
+        }
+
+    def _quoted_column(self, before: str, catalog: dict):
+        """Return the predicate and column a string after *before* fills."""
+        if self._is_squall():
+            return squall_quoted_column(before, self._lowered(catalog))
+        context = argument_context(before)
+        info = catalog.get(context[0]) if context else None
+        return (info, context[1]) if info else None
+
+    def _quoted_completions(self, text: str, quote, complete_event):
+        """
+        Yield the values of the column the string *quote* opens fills.
+
+        While typing, they are offered once a character is typed.
+        """
+        typed = text[quote.start + 1:]
+        requested = getattr(complete_event, "completion_requested", True)
+        if self._column_values is None or not (typed or requested):
+            return
+        catalog = self._predicates()
+        target = self._quoted_column(text[:quote.start], catalog)
+        source = value_source(*target, catalog) if target else None
+        if source is None:
+            return
+        name, position, meta = source
+        yield from value_completions(
+            self._column_values(name, position), typed, quote.quote, meta
+        )
 
     @staticmethod
     def _command_completions(text: str):
@@ -258,10 +319,7 @@ class NeuroLangReplCompleter(Completer):
         phrases naming its columns. If the sentence is invalid, yield
         the predicates and the *squall_keywords* starting with *prefix*.
         """
-        catalog = {
-            name.lower(): info for name, info in catalog.items()
-            if name not in self._hidden
-        }
+        catalog = self._lowered(catalog)
         options = self._squall_options(text, prefix)
         if options is None:
             if prefix:

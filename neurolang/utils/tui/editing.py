@@ -28,6 +28,7 @@ from .catalog import predicate_catalog
 from .commands import MODES, sort_spec_text
 from .completion import KEYWORDS as DATALOG_KEYWORDS, NeuroLangReplCompleter
 from .squall_completion import SquallGrammarOptions, squall_keywords
+from .value_completion import ColumnValues
 
 
 
@@ -154,6 +155,7 @@ def make_completer(app) -> NeuroLangReplCompleter:
         is_squall=lambda: app.settings.squall,
         squall_grammar=SquallGrammarOptions(),
         hidden=hidden,
+        column_values=ColumnValues(app._nl),
     )
 
 
