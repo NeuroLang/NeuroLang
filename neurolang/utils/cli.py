@@ -54,6 +54,7 @@ Usage
 """
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -703,6 +704,29 @@ def _known_symbol_names(nl: Optional[NeurolangPDL]) -> list:
         return []
     names = {getattr(s, "name", str(s)) for s in nl.symbol_table}
     return sorted(n for n in names if _IDENTIFIER.match(n))
+
+
+_UNDEFINED_PREDICATE = re.compile(
+    r"Symbol (\S+) used in rule body has no entry in the symbol table"
+)
+
+
+def warning_note(message: str, known_symbols) -> str:
+    """
+    Return a one-line note for a warning *message* raised by a query.
+
+    A predicate used without facts or rules is reported with the closest
+    of the *known_symbols*, if any.
+    """
+    match = _UNDEFINED_PREDICATE.match(message)
+    if match is None:
+        return f"note: {message.strip().splitlines()[0]}"
+    name = match.group(1)
+    note = f"note: predicate {name} has no facts or rules"
+    close = difflib.get_close_matches(name, known_symbols, n=1)
+    if close:
+        note += f" — did you mean {close[0]}?"
+    return note
 
 
 def _debug_enabled(args) -> bool:
