@@ -148,3 +148,48 @@ class TestNeurosynthEngineVocabulary:
             "mentions(s, t) :- term_in_study_tfidf(s, t, v)" in datalog_init
         )
         assert "reports(s, i, j, k) :- peak_reported(i, j, k, s)" in datalog_init
+
+    def test_weighted_mention_is_declared(self):
+        """Check ``weighted_mention`` has the columns of the TF-IDF."""
+        from neurolang.utils import engine_registry
+
+        config = engine_registry.get_engine_config("neurosynth")
+        info = engine_registry.get_predicates("neurosynth")["weighted_mention"]
+        assert info["columns"] == ["study_id", "term", "tfidf"]
+        assert info["arity"] == 3
+        assert "Weighted_mention" in info["description"]
+        assert (
+            "weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)"
+            in config["datalog_init"]
+        )
+        assert "term_in_study_tfidf" in engine_registry.get_predicates(
+            "neurosynth"
+        )
+
+    def test_weighted_mention_reads_in_squall(self):
+        """Check a SQUALL sentence on ``weighted_mention`` gets its rows."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils import engine_registry
+
+        datalog_init = engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ]
+        rule = next(
+            line.strip() for line in datalog_init.splitlines()
+            if line.strip().startswith("weighted_mention(")
+        )
+        nl = NeurolangPDL()
+        nl.add_tuple_set(
+            [(10, "pain", 0.5), (11, "pain", 0.05), (11, "fear", 0.4)],
+            name="term_in_study_tfidf",
+        )
+        nl.execute_datalog_program(rule)
+        result = nl.execute_squall_program(
+            "obtain every Weighted_mention (?s; ?t; ?w) "
+            "such that ?t is 'pain' and ?w is greater than 0.1."
+        )
+        rows = {
+            tuple(row)
+            for row in result.as_pandas_dataframe()[["s", "t", "w"]].values
+        }
+        assert rows == {(10, "pain", 0.5)}

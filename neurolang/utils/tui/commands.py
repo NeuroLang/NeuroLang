@@ -86,21 +86,35 @@ def engine_relations(engine_name: str) -> list:
 
 def engine_examples(engine_name: str) -> dict:
     """
-    Return an example query on the engine for each language.
+    Return example queries on the engine for each language.
 
-    The examples obtain the first relation declared by the engine, as
-    a dict from ``"datalog"`` and ``"squall"`` to the query text, or an
-    empty dict when the engine declares no relation.
+    The result is a dict from ``"datalog"`` and ``"squall"`` to a list
+    of queries, the first being the one to try first. They are those of
+    the engine's ``examples`` in its configuration, or else the query
+    obtaining the first relation it declares. It is empty when the
+    engine declares neither.
     """
     if not engine_name:
         return {}
+    config = engine_registry.get_engine_config(engine_name)
+    declared = config.get("examples") or {}
+    examples = {
+        language: list(declared[language])
+        for language in ("datalog", "squall")
+        if declared.get(language)
+    }
+    return {**_relation_examples(engine_name), **examples}
+
+
+def _relation_examples(engine_name: str) -> dict:
+    """Return the queries obtaining the first relation the engine declares."""
     predicates = engine_registry.get_predicates(engine_name)
     for name, info in predicates.items():
         columns = ", ".join(info.get("columns", []))
         if columns:
             return {
-                "datalog": f"ans({columns}) :- {name}({columns})",
-                "squall": f"obtain every {name}.",
+                "datalog": [f"ans({columns}) :- {name}({columns})"],
+                "squall": [f"obtain every {name}."],
             }
     return {}
 
@@ -136,16 +150,24 @@ def help_text(engine_name: str = "") -> str:
         f"  [green]{escape(f'{cmd.usage:<20}')}[/green] {escape(cmd.help)}"
         for cmd in COMMANDS.values()
     ]
-    examples = engine_examples(engine_name)
-    if examples:
-        lines += [
-            KEYS_HELP, f"[bold cyan]Examples ({engine_name}):[/bold cyan]",
-            f"  {examples['datalog']}", "  .more", "  .mode squall",
-            f"  {examples['squall']}",
-        ]
-    else:
-        lines.append(KEYS_HELP)
+    lines.append(KEYS_HELP)
+    lines += _example_lines(engine_name)
     return "\n".join(lines)
+
+
+def _example_lines(engine_name: str) -> list:
+    """Return the lines of the help showing the engine's examples."""
+    examples = engine_examples(engine_name)
+    if not examples:
+        return []
+    datalog = examples.get("datalog", [])
+    squall = examples.get("squall", [])
+    return [
+        f"[bold cyan]Examples ({engine_name}):[/bold cyan]",
+        *(f"  {escape(query)}" for query in datalog),
+        "  .more", "  .mode squall",
+        *(f"  {escape(query)}" for query in squall),
+    ]
 
 
 @command(".help", "Show this help message")

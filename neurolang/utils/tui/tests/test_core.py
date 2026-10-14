@@ -323,8 +323,40 @@ def peaks_engine(engine):
     return engine
 
 
-def test_banner_lists_relations_and_example(peaks_engine):
-    app = _app(peaks_engine, engine_name="neurosynth")
+def _vocabulary_rules() -> str:
+    """Return the neurosynth rules defining its vocabulary predicates."""
+    from neurolang.utils import engine_registry
+
+    datalog_init = engine_registry.get_engine_config("neurosynth")[
+        "datalog_init"
+    ]
+    return "\n".join(
+        line for line in datalog_init.splitlines()
+        if line.strip().startswith(("mentions(", "reports(", "weighted_"))
+    )
+
+
+@pytest.fixture
+def vocabulary_engine():
+    """Return a small engine with the neurosynth vocabulary predicates."""
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(10,), (11,)], name="study")
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="voxel")
+    nl.add_tuple_set(
+        [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
+    )
+    nl.add_tuple_set(
+        [(10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4)],
+        name="term_in_study_tfidf",
+    )
+    nl.execute_datalog_program(_vocabulary_rules())
+    return nl
+
+
+def test_banner_lists_relations_and_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth")
     app._print_banner()
     out = _output(app)
     assert "Engine: neurosynth" in out
@@ -333,17 +365,42 @@ def test_banner_lists_relations_and_example(peaks_engine):
         "Ctrl+D or .quit to exit"
     ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
-    example = "ans(i, j, k, study_id) :- peak_reported(i, j, k, study_id)"
+    assert "weighted_mention(study_id, term, tfidf)" in out
+    example = "ans(s) :- mentions(s, 'pain')"
     assert f"Try: {example}" in out
     app._execute_and_display(example)
-    assert list(app.results[0].frame.columns) == ["i", "j", "k", "study_id"]
-    assert len(app.results[0].frame) == 2
+    assert app.results[0].frame.iloc[:, 0].tolist() == [10]
 
 
-def test_banner_squall_example(peaks_engine):
-    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+def test_banner_squall_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth", squall=True)
     app._print_banner()
-    assert "Try: obtain every peak_reported." in _output(app)
+    assert "Try: obtain every Study that mentions 'pain'." in _output(app)
+
+
+def test_engine_examples_run_on_the_vocabulary(vocabulary_engine):
+    from neurolang.utils.tui.commands import engine_examples
+
+    examples = engine_examples("neurosynth")
+    for language in ("datalog", "squall"):
+        app = _app(
+            vocabulary_engine, engine_name="neurosynth",
+            squall=language == "squall",
+        )
+        for query in examples[language]:
+            app._execute_and_display(query)
+            assert not app.failed, query
+            assert len(app.results[-1].frame) > 0, query
+
+
+def test_engine_examples_default_to_the_first_relation():
+    from neurolang.utils.tui.commands import engine_examples
+
+    examples = engine_examples("destrieux")
+    assert examples["squall"] == ["obtain every destrieux."]
+    assert examples["datalog"] == [
+        "ans(name, region) :- destrieux(name, region)"
+    ]
 
 
 def test_help_examples_match_engine_columns(small_app):
@@ -351,7 +408,8 @@ def test_help_examples_match_engine_columns(small_app):
     small_app._handle_dot_command(".help")
     out = _output(small_app)
     assert "term_in_study_tfidf(t, w, s)" not in out
-    assert "obtain every peak_reported." in out
+    assert "obtain every Study that mentions 'pain'." in out
+    assert "every Weighted_mention (?s; ?t; ?w)" in out
     assert ".more" in out
 
 

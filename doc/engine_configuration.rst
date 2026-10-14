@@ -40,6 +40,10 @@ may specify the following keys, all of them optional:
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
+- ``examples`` — example queries, as lists under ``datalog`` and
+  ``squall``; the interactive REPL suggests the first one of its language
+  at startup and lists them all in ``.help`` (by default it suggests
+  obtaining the first declared predicate)
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
@@ -66,6 +70,7 @@ Example — the ``neurosynth`` engine (abridged)::
         datalog_init: |
           study_with_peaks(S) :- peak_reported(I, J, K, S)
           mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+          weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
         predicates:
           peak_reported:
             arity: 4
@@ -82,7 +87,16 @@ Example — the ``neurosynth`` engine (abridged)::
 
 In this engine ``term_in_study_tfidf`` has columns ``(study_id, term,
 tfidf)``, and the derived ``mentions(s, t)`` relation keeps the same
-order: ``(study_id, term)``.  The ``selected_study`` uniform choice over studies is
+order: ``(study_id, term)``.  ``weighted_mention(study_id, term, tfidf)``
+holds the same rows as ``term_in_study_tfidf`` under a name that reads
+better in SQUALL, where an n-ary relation is a noun followed by a tuple of
+variables, in the order of its columns::
+
+    obtain every Weighted_mention (?s; ?t; ?w)
+        such that ?t is 'pain' and ?w is greater than 0.1.
+
+SQUALL verbs relate two arguments (``a Study mentions a Term``), so a
+relation of three columns cannot be a verb.  The ``selected_study`` uniform choice over studies is
 registered by the Python init module.
 
 A note on the ``datalog_init`` syntax: the text Datalog parser does not

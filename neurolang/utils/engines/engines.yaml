@@ -21,6 +21,7 @@ engines:
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
+      weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -58,6 +59,21 @@ engines:
         arity: 4
         columns: [study_id, i, j, k]
         description: "Studies reporting an activation peak at a voxel"
+      weighted_mention:
+        arity: 3
+        columns: [study_id, term, tfidf]
+        description: >-
+          Every TF-IDF weight of a term in a study, as term_in_study_tfidf;
+          reads in SQUALL as
+          every Weighted_mention (?s; ?t; ?w) such that ?w is greater than 0.1
+    examples:
+      datalog:
+        - "ans(s) :- mentions(s, 'pain')"
+        - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+      squall:
+        - "obtain every Study that mentions 'pain'."
+        - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
+        - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
 
   destrieux:
     description: >

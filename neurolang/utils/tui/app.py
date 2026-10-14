@@ -340,9 +340,9 @@ class InteractiveTuiApp:
             self.console.print("Relations:")
             for relation in relations:
                 self.console.print(f"  {relation}", markup=False)
-        example = engine_examples(name).get(mode.lower())
-        if example:
-            self.console.print(f"Try: {example}", markup=False)
+        examples = engine_examples(name).get(mode.lower())
+        if examples:
+            self.console.print(f"Try: {examples[0]}", markup=False)
 
     def _make_session(self, **kwargs) -> PromptSession:
         """
