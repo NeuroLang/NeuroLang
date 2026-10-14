@@ -1544,7 +1544,8 @@ class TestResultToDataFrame:
         [
             (("fresh_00000002",), ["term"]),
             (("0", "1"), ["term", "weight"]),
-            (("fresh_00000002", "y"), ["fresh_00000002", "y"]),
+            (("fresh_00000002", "y"), ["term", "y"]),
+            (("fresh_00000002", "term"), ["fresh_00000002", "term"]),
         ],
     )
     def test_generated_columns_renamed(self, columns, renamed):
@@ -1729,6 +1730,12 @@ _SELECTED = (
             "define as Pain_voxel every Voxel in 3D that a Study reports.\n"
             "obtain every Pain_voxel.",
             {"obtain_0": ["i", "j", "k"]},
+        ),
+        (
+            "define as Activation with probability every Voxel in 3D that "
+            "a Selected_study reports conditioned to every Selected_study "
+            "that mentions 'pain'.\nobtain every Activation.",
+            {"obtain_0": ["i", "j", "k", "probability"]},
         ),
     ],
 )

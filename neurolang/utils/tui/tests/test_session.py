@@ -828,6 +828,12 @@ def _headers(app, program):
         ),
         (None, "obtain every Study that mentions 'pain' as Pain.", [["pain"]]),
         (
+            "define as Activation with probability every Voxel (?i; ?j; ?k) "
+            "that a Selected_study reports conditioned to every "
+            "Selected_study that mentions 'pain'.",
+            "obtain every Activation.", [["i", "j", "k", "probability"]],
+        ),
+        (
             None, "obtain every Voxel in 3D that a Study reports.",
             [["i", "j", "k"]],
         ),
