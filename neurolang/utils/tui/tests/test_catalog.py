@@ -74,6 +74,13 @@ def test_catalog_kinds_and_columns(session):
     assert catalog["inc"] == PredicateInfo("inc", "function", None, 1)
 
 
+def test_catalog_lists_builtin_euclidean_function(engine):
+    catalog = predicate_catalog(engine)
+    assert catalog["euclidean"] == PredicateInfo(
+        "euclidean", "function", None, 6
+    )
+
+
 def test_catalog_loaded_relation(session):
     session.add_tuple_set([("a", 1)], name="scores")
     catalog = predicate_catalog(session, loaded={"scores": ["Name", "Score"]})
