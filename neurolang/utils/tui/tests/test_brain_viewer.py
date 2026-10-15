@@ -135,7 +135,7 @@ class TestBackground:
     def test_capped_resolution(self):
         volume, factor = brain_viewer.resample_background(
             _image(np.ones((10, 10, 10), dtype=np.float32)), (40, 30, 20),
-            AFFINE, max_voxels=4000,
+            AFFINE, max_voxels=2000,
         )
         assert factor == 3 and volume.shape == (14, 10, 7)
 
@@ -257,10 +257,12 @@ brainViewer.ready.then(function () {
     var c = axial.getContext('2d');
     return Array.from(c.getImageData(0, 0, axial.width, axial.height).data);
   }
-  function changed(a, b) { return a.some(function (v, i) { return v !== b[i]; }); }
+  function changed(a, b) {
+    return a.some(function (v, i) { return v !== b[i]; });
+  }
   function set(id, value, kind) {
     var el = document.getElementById(id);
-    if (el.type === 'checkbox') { el.checked = value; } else { el.value = value; }
+    if (el.type === 'checkbox') el.checked = value; else el.value = value;
     el.dispatchEvent(new Event(kind || 'input', {bubbles: true}));
   }
   out.readout = document.getElementById('readout').textContent;

@@ -3,7 +3,9 @@ Saving and viewing of query results in the interactive REPL.
 
 ``.save PATH`` writes the last result as a table, or as a NIfTI image
 when PATH ends with ``.nii`` or ``.nii.gz``; ``.view PATH`` shows a NIfTI
-image in nilearn's viewer, in a browser.
+image, or the last result, in a browser: an HTML page of
+:mod:`~neurolang.utils.tui.brain_viewer`, whose controls change the
+threshold, the colormap and its symmetry live (see :data:`VIEW_HELP`).
 
 A NIfTI image is written on the grid of the engine's template, the MNI
 image its voxel indices refer to (the ``template`` of the engine
@@ -27,6 +29,7 @@ import pandas as pd
 
 from neurolang.utils import engine_registry
 
+from . import brain_viewer
 from .commands import HELP_TOPICS, command
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
@@ -427,6 +430,30 @@ VIEW_USAGE = (
     "[--symmetric | --one-sided]"
 )
 
+VIEW_HELP = """\
+[bold cyan].view [PATH][/bold cyan] shows a NIfTI image, or the last result, in
+a browser.
+
+Without a path, the last result is converted into an image as .save
+converts it, with its options --value, --voxel and --mm. The viewer is an
+HTML page, saved to a temporary file and opened in the browser when the
+REPL runs on a terminal; it needs no network. It shows the image over the
+MNI152 T1 in three slices (left hemisphere on the left): click or drag to
+move the cursor, whose MNI coordinates and value it tells. Its controls
+change, live, what these options start with:
+  --threshold T|P%      hide the voxels below T, or below the P-th
+                        percentile of the nonzero values (default: show
+                        every nonzero voxel)
+  --cmap NAME           the colormap, of matplotlib or nilearn (default:
+                        RdBu_r)
+  --symmetric           a colormap symmetric around 0, hiding |v| < T
+  --one-sided           a colormap from the threshold to the maximum
+Without either, the colormap is symmetric when the image has negative
+values. The page also sets the opacity of the image."""
+
+
+HELP_TOPICS["view"] = VIEW_HELP
+
 # The options of .view and the number of values each takes; without a
 # path, the options of .save tell how to convert the last result.
 _VIEW_OPTIONS = {
@@ -538,40 +565,35 @@ def _check_cmap(name: Optional[str]) -> None:
         raise SaveError(f"Unknown colormap {name!r}.")
 
 
-def _view_kwargs(app, path: Path, request: ViewRequest) -> dict:
-    """Return the arguments of nilearn's viewer for the image *path*."""
+def _viewer_page(app, path: Path, request: ViewRequest, title: str) -> str:
+    """
+    Return the viewer page, entitled *title*, of the image *path*.
+
+    It starts as *request* asks. The image is drawn over the MNI152 T1
+    template of nilearn, whatever the engine's template, a mask, is;
+    nilearn's warnings are kept off the prompt.
+    """
     _check_cmap(request.cmap)
-    template = getattr(app._nl, "template", None)
-    kwargs = {
-        "bg_img": "MNI152" if template is None else template,
-        "threshold": request.threshold, "title": path.name,
-        "symmetric_cmap": symmetry(app.console, path, request.symmetric),
-    }
-    if request.cmap is not None:
-        kwargs["cmap"] = request.cmap
-    return kwargs
+    symmetric = symmetry(app.console, path, request.symmetric)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return brain_viewer.viewer_html(
+            nib.load(path), brain_viewer.mni_background(),
+            title=title, threshold=request.threshold, cmap=request.cmap,
+            symmetric=symmetric,
+        )
 
 
-def _view_nifti(app, path: Path, request: ViewRequest) -> None:
+def _view_nifti(app, path: Path, request: ViewRequest, title: str) -> None:
     """
-    Show the NIfTI image *path* in nilearn's viewer, as *request* asks.
+    Show the NIfTI image *path* in the brain viewer, as *request* asks.
 
-    The viewer, over the engine's template (nilearn's MNI152 without
-    one), is saved as an HTML file whose path is printed, and opened in a
-    browser when the REPL runs on a terminal. nilearn's warnings are kept
-    off the prompt.
+    The viewer page, entitled *title*, is saved as an HTML file whose
+    path is printed, and opened in a browser when the REPL runs on a
+    terminal.
     """
     try:
-        from nilearn import plotting
-    except ImportError:
-        app.console.print("[red]nilearn is required for visualisation.[/red]")
-        return
-    try:
-        kwargs = _view_kwargs(app, path, request)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            view = plotting.view_img(str(path), **kwargs)
-        html = _html_file(view)
+        html = _html_file(_viewer_page(app, path, request, title))
     except Exception as exc:
         app.console.print(
             f"Visualisation failed: {exc}", style="red", markup=False
@@ -584,11 +606,11 @@ def _view_nifti(app, path: Path, request: ViewRequest) -> None:
     _open_in_browser(app.console, html)
 
 
-def _html_file(view) -> Path:
-    """Save the nilearn *view* in a new temporary HTML file, its path."""
+def _html_file(page: str) -> Path:
+    """Save the HTML *page* in a new temporary file, its path."""
     fd, html = tempfile.mkstemp(suffix=".html", prefix="neurolang_view_")
-    os.close(fd)
-    view.save_as_html(html)
+    with os.fdopen(fd, "w", encoding="utf-8") as file:
+        file.write(page)
     return Path(html)
 
 
@@ -740,12 +762,12 @@ def last_result_image(app, request: SaveRequest) -> Optional[Path]:
 
 
 @command(
-    ".view", "Show a NIfTI image, or the last result, in nilearn's viewer",
-    VIEW_USAGE,
+    ".view", "Show a NIfTI image, or the last result, in an interactive "
+    "viewer in the browser (.help view)", VIEW_USAGE,
 )
 def cmd_view(app, arg: str) -> None:
     """
-    Show the NIfTI image of *arg*, or the last result, in nilearn's viewer.
+    Show the NIfTI image of *arg*, or the last result, in the brain viewer.
 
     Without a path, the last result is converted as ``.save`` would, its
     options included, into a temporary ``.nii.gz`` file.
@@ -763,4 +785,12 @@ def cmd_view(app, arg: str) -> None:
             f"File not found: {path}", style="red", markup=False
         )
         return
-    _view_nifti(app, path, request)
+    _view_nifti(app, path, request, _view_title(app, request, path))
+
+
+def _view_title(app, request: ViewRequest, path: Path) -> str:
+    """Return the title of the viewer: the image's name, or the result's."""
+    if request.path is not None:
+        return path.name
+    block = app.results[-1].title
+    return f"Last result: {block}" if block else "Last result"

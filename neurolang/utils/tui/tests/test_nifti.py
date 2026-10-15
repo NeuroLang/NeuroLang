@@ -590,6 +590,7 @@ class TestViewLastResult:
         tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
         tiny._handle_dot_command(".view")
         assert len(view_calls) == 1
+        assert view_calls[0]["title"] == "Last result"
         out = _output(tiny)
         image = Path(out.split("image to: ")[1].split()[0])
         assert image.parent == Path(tempfile.gettempdir())
