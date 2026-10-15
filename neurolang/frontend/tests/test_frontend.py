@@ -1304,3 +1304,33 @@ def test_symbol_eq_user_function_extended_projection():
         ("Hello", "hello"),
         ("World", "world"),
     }
+
+
+def _count(x) -> int:
+    return len(x)
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("ans(n) :- AGGREGATE[](study(s) @ count(s)) = n", {(3,)}),
+        (
+            "ans(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n",
+            {("pain", 2), ("emotion", 1)},
+        ),
+    ],
+)
+def test_aggregate_in_ans_query(frontend_class, query, expected):
+    nl = frontend_class()
+    if frontend_class is frontend.NeurolangDL:
+        nl.add_symbol(_count, name="count")
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set(
+        [(1, "pain"), (2, "pain"), (1, "emotion")], name="mentions"
+    )
+    res = nl.execute_datalog_program(query)
+    assert res is not None
+    assert set(map(tuple, res.as_pandas_dataframe().values)) == expected

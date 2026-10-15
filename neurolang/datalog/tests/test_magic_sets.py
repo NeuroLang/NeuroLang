@@ -4,8 +4,8 @@ import pandas as pd
 import pytest
 from pytest import raises
 
-
 from ... import expression_walker, expressions
+from ...frontend import NeurolangDL
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from ...frontend.probabilistic_frontend import NeurolangPDL
 from ...logic import Negation, Union as LogicUnion
@@ -17,6 +17,7 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
+from ..expression_processing import extract_logic_free_variables
 from ..exceptions import (
     BoundAggregationApplicationError,
     NegationInMagicSetsRewriteError,
@@ -746,6 +747,104 @@ def test_magic_init_rules_walk_twice_no_crash():
         "Magic init rules are not idempotent: symbol table changed after "
         "walking magic rules a second time"
     )
+
+
+def _magic_rewrite_and_solve(code, edb, query):
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(query, dl)
+
+    for rule in mr.formulas:
+        assert (
+            extract_logic_free_variables(rule.consequent) <=
+            extract_logic_free_variables(rule.antecedent)
+        ), f"magic rule {rule} is not range restricted"
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    return Chase(dl).build_chase_solution()[goal].value
+
+
+def test_resolution_works_same_predicate_shared_variable_constants():
+    """
+    ``q(x) :- anc(x, b), anc(x, c)`` binds ``x`` of the second ``anc`` call
+    through the first one: its magic rule must be
+    ``magic_anc^bb(x, c) :- anc^fb(x, b)``, not the seed
+    ``magic_anc^bb(x, c) :- ()`` with ``x`` free.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(a, c)), F_(par(b, c)), F_(par(d, b))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, b) & anc(x, c)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    res = _magic_rewrite_and_solve(code, edb, q(x))
+    assert res == {C_((e,)) for e in (a, d)}
+
+
+def test_resolution_works_same_predicate_positive_and_negated():
+    edb = Eb_([F_(par(a, b)), F_(par(a, c)), F_(par(b, c)), F_(par(d, b))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, c) & Negation(anc(x, b))),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    res = _magic_rewrite_and_solve(code, edb, q(x))
+    assert res == {C_((b,))}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize(
+    "threshold,query,expected",
+    [
+        ("", "ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')", {1}),
+        (
+            ", (v > 0.03)",
+            "ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')",
+            {1},
+        ),
+        ("", "ans(s) :- mentions(s, 'pain'), ~mentions(s, 'emotion')", {2, 3}),
+        (
+            ", (v > 0.03)",
+            "ans(s) :- mentions(s, 'pain'), ~mentions(s, 'emotion')",
+            {3},
+        ),
+    ],
+)
+def test_frontend_same_idb_predicate_different_constants(
+    frontend, threshold, query, expected
+):
+    nl = frontend()
+    nl.add_tuple_set(
+        [(1, "pain", 0.5), (1, "emotion", 0.5), (2, "pain", 0.01),
+         (3, "pain", 0.5)],
+        name="tfidf",
+    )
+    nl.execute_datalog_program(
+        f"mentions(s, t) :- tfidf(s, t, v){threshold}"
+    )
+    res = nl.execute_datalog_program(query)
+    assert set(res.as_pandas_dataframe().s) == expected
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_idb_predicate_several_bound_constants(frontend):
+    nl = frontend()
+    nl.add_tuple_set(
+        [(10, 20, 30, 1), (11, 20, 30, 1), (10, 20, 30, 2)],
+        name="peak_reported",
+    )
+    res = nl.execute_datalog_program(
+        "reports(s, i, j, k) :- peak_reported(i, j, k, s)\n"
+        "ans(s) :- reports(s, 10, 20, 30)"
+    )
+    assert set(res.as_pandas_dataframe().s) == {1, 2}
 
 
 def test_adorned_symbol_predicates_keep_their_own_rules():
