@@ -1762,3 +1762,26 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
+
+
+def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
+    """
+    Solve a probabilistic rule over an empty deterministic predicate.
+
+    ``m`` has no tuple, and so no relation in the solution of the
+    deterministic stratum: selecting ``m(s, "memory")`` crashed.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "memory", 0.5), ("s2", "pain", 0.6)], name="tfidf"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.execute_datalog_program(
+        "m(s, t) :- tfidf(s, t, v) & (v > 100)\n"
+        "q(x, PROB(x)) :- m(s, 'memory'), selected_study(s), tfidf(s, x, v)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.x, e.p), e.q(e.x, e.p))
+    assert len(res) == 0
