@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul, not_
+from operator import add, contains, eq, gt, mul, not_
 from typing import AbstractSet, Callable, Tuple
 
 import numpy
@@ -325,6 +325,82 @@ def test_extended_projection_algebraic_expression():
     assert res == Selection(
         fa_trans, Constant(eq)(Constant(ColumnStr("y")), Constant(6))
     )
+
+
+@pytest.mark.parametrize("swap", [False, True])
+def test_equality_expression_with_bound_variable_is_selection(swap):
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    condition = (C_(mul)(x, C_(3)), y)
+    if not swap:
+        condition = condition[::-1]
+    exp = Conjunction((R1(x, y), C_(eq)(*condition)))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+
+    res = TranslateToNamedRA().walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_x, cs_y),
+    )
+    assert res == Selection(fa_trans, C_(eq)(cs_y, C_(mul)(cs_x, C_(3))))
+
+
+def test_equality_expression_with_variable_bound_by_other_atom():
+    i = S_("i")
+    i1 = S_("i1")
+    di = S_("di")
+    q = S_("q")
+    v = S_("v")
+    exp = Conjunction((q(i1, di), v(i), C_(eq)(i, C_(add)(i1, di))))
+    cs_i = C_(ColumnStr("i"))
+    cs_i1 = C_(ColumnStr("i1"))
+    cs_di = C_(ColumnStr("di"))
+
+    res = TranslateToNamedRA().walk(exp)
+    q_trans = NameColumns(
+        Projection(q, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_i1, cs_di),
+    )
+    v_trans = NameColumns(Projection(v, (C_(ColumnInt(0)),)), (cs_i,))
+    assert res == Selection(
+        NaturalJoin(q_trans, v_trans),
+        C_(eq)(cs_i, C_(add)(cs_i1, cs_di)),
+    )
+
+
+def test_two_equality_expressions_on_same_unbound_variable():
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    R1 = S_("R1")
+    exp = Conjunction(
+        (
+            R1(x, y),
+            C_(eq)(z, C_(mul)(x, C_(3))),
+            C_(eq)(z, C_(mul)(y, C_(2))),
+        )
+    )
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
+
+    res = TranslateToNamedRA().walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_x, cs_y),
+    )
+    assert isinstance(res, Selection)
+    assert res.formula == C_(eq)(cs_z, C_(mul)(cs_y, C_(2)))
+    assert isinstance(res.relation, ExtendedProjection)
+    assert res.relation.relation == fa_trans
+    new_column, *kept_columns = res.relation.projection_list
+    assert new_column == FunctionApplicationListMember(
+        C_(mul)(cs_x, C_(3)), cs_z
+    )
+    assert all(m.fun_exp == m.dst_column for m in kept_columns)
+    assert {m.dst_column for m in kept_columns} == {cs_x, cs_y}
 
 
 def test_set_destroy():

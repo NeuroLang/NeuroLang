@@ -794,6 +794,59 @@ def test_query_head_with_repeated_variable():
     assert sol.to_unnamed() == {("a", "a"), ("b", "b")}
 
 
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        ("q(i1, di), v(i), (i == i1 + di)", {(1,)}),
+        ("q(i1, di), (i == i1 + di), v(i)", {(1,)}),
+        ("q(i1, di), v(i), (i == (i1 + di))", {(1,)}),
+        ("q(i1, di), v(i), (i1 + di == i)", {(1,)}),
+        ("q(i1, di), v(i), (i == i1 * 2)", {(0,)}),
+        ("q(i1, di), v(i), (i == 2 + 3)", {(5,)}),
+        ("q(i1, di), v(i), (i == i1 + di), (i == di * 1)", {(1,)}),
+        ("q(i1, di), v(i), (i == i1 + di), (i == di * 5)", set()),
+        ("q(i1, di), (i == i1 + di), (i == di * 5)", set()),
+        ("q(i1, di), (i == i1 + di), (i == di * 1)", {(1,)}),
+        ("q(i1, di), (i == i1 + di)", {(1,)}),
+    ],
+)
+def test_equality_with_expression_on_bound_variable(
+    frontend_class, body, expected
+):
+    nl = frontend_class()
+    nl.add_tuple_set([(0,), (1,), (5,)], name="v")
+    nl.add_tuple_set([(0, 1)], name="q")
+    res = nl.execute_datalog_program(f"p(i) :- {body}\nans(i) :- p(i)")
+    assert res.to_unnamed() == expected
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+def test_equality_with_expression_3d_neighbourhood(frontend_class):
+    nl = frontend_class()
+    grid = [(i, j, k) for i in range(4) for j in range(4) for k in range(4)]
+    nl.add_tuple_set(grid, name="voxel")
+    nl.add_tuple_set([(1, 1, 1, "s1"), (3, 0, 2, "s2")], name="peak_reported")
+    nl.add_tuple_set([(0, 0, 0), (1, 0, 0), (0, 1, 0)], name="offset")
+    res = nl.execute_datalog_program(
+        "reports_close(i, j, k, s) :- peak_reported(i1, j1, k1, s), "
+        "offset(di, dj, dk), (i == i1 + di), (j == j1 + dj), "
+        "(k == k1 + dk), voxel(i, j, k)\n"
+        "ans(i, j, k, s) :- reports_close(i, j, k, s)"
+    )
+    assert res.to_unnamed() == {
+        (1, 1, 1, "s1"),
+        (2, 1, 1, "s1"),
+        (1, 2, 1, "s1"),
+        (3, 0, 2, "s2"),
+        (3, 1, 2, "s2"),
+    }
+
+
 def test_neurolang_dl_attribute_access():
     neurolang = frontend.NeurolangDL()
     one_element = namedtuple("t", ("x", "y"))(1, 2)
