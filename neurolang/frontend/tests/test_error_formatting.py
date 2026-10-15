@@ -11,7 +11,9 @@ import pytest
 from lark import Lark
 from lark.exceptions import UnexpectedInput
 
+from ... import exceptions
 from ...exceptions import (
+    CouldNotTranslateConjunctionException,
     NeuroLangException,
     ParserError,
     SquallSemanticError,
@@ -202,6 +204,38 @@ def test_arity_mismatch():
     out = format_error(exc, "ans(x) :- R(x, y, z)")
     assert out.startswith("Arity mismatch")
     assert f"Tip: {WrongArgumentsInPredicateError.suggestion}" in out
+
+
+def test_unbound_variables_tip_names_a_binding_atom():
+    exc = exceptions.UnboundVariablesError(
+        "reports_close", ("i1", "j1", "k1"),
+        ("euclidean(i, j, k, i1, j1, k1) < 2.0",), "voxel(i1, j1, k1)",
+    )
+    out = format_error(exc, "reports_close(i, j, k, s) :- ...")
+    assert out.startswith("Error — UnboundVariablesError")
+    assert (
+        "Error: In reports_close: the variables i1, j1, k1 appear only in "
+        "`euclidean(i, j, k, i1, j1, k1) < 2.0`"
+    ) in out
+    assert "Tip: Add a predicate over i1, j1, k1 to the rule body, such as " \
+        "voxel(i1, j1, k1)" in out
+    assert "normal form" not in out
+
+
+def test_unbound_variables_tip_without_example():
+    exc = exceptions.UnboundVariablesError(None, ("m",), ("i < m",))
+    out = format_error(exc)
+    assert "Error: In a rule body: the variable m appears only in `i < m`" \
+        in out
+    assert "Tip: Add a predicate over m to the rule body" in out
+    assert "equality" in out
+    assert "normal form" not in out
+
+
+def test_could_not_translate_conjunction_keeps_normal_form_tip():
+    out = format_error(CouldNotTranslateConjunctionException("f(x)"))
+    assert "Tip: Rewrite the formula in conjunctive or disjunctive normal " \
+        "form" in out
 
 
 def test_neurolang_exception_with_location():

@@ -4,6 +4,7 @@ from typing import AbstractSet, Callable, Tuple
 import numpy
 import pytest
 
+from ... import exceptions
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Disjunction, ExistentialPredicate
@@ -17,6 +18,7 @@ from ...relational_algebra import (
     NameColumns,
     NaturalJoin,
     Projection,
+    RelationalAlgebraSolver,
     Selection,
     Union,
     str2columnstr_constant,
@@ -232,6 +234,22 @@ def test_selection():
     assert res == Selection(fa_trans, expected_builtin_condition)
 
 
+def test_selection_over_unbound_variable():
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    exp = Conjunction((R1(x), C_(gt)(x, y)))
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        TranslateToNamedRA().walk(exp)
+    assert exc_info.value.variables == ("y",)
+    assert exc_info.value.rule is None
+    assert str(exc_info.value).startswith(
+        "In a rule body: the variable y appears only in `x > y`"
+    )
+    assert "normal form" not in exc_info.value.suggestion
+
+
 def test_extended_projection():
     x = S_("x")
     y = S_("y")
@@ -386,6 +404,31 @@ def test_only_equality():
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
+
+
+def test_only_equalities_to_constants_keep_all_columns():
+    exp = Conjunction((
+        C_(eq)(S_("x"), C_(1)),
+        C_(eq)(S_("y"), C_(2)),
+        C_(eq)(S_("z"), C_(3)),
+    ))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(1, 2, 3)]
+    )
+
+
+def test_only_equalities_to_constants():
+    """Translate ``x = 3 & y = 'a'``, as in ``magic_p(3, 'a') :- ()``."""
+    exp = Conjunction((C_(eq)(S_("x"), C_(3)), C_(eq)(S_("y"), C_("a"))))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(3, "a")]
+    )
 
 
 def test_disjunction():

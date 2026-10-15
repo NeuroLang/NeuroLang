@@ -21,7 +21,10 @@ from .datalog.sugar import (
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
-from .datalog.sugar.spatial import TranslateRegionDestroy
+from .datalog.sugar.spatial import (
+    TranslateEuclideanDistanceBoundMatrixMixin,
+    TranslateRegionDestroy,
+)
 from .type_resolution import TypeResolutionMixin
 from ..commands import CommandsMixin
 from .frontend_extensions import NumpyFunctionsMixin
@@ -79,6 +82,7 @@ class RegionFrontendDatalogSolver(
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,
+    TranslateEuclideanDistanceBoundMatrixMixin,
     TypeResolutionMixin,
     TranslateRegionDestroy,
     Fol2DatalogMixin,

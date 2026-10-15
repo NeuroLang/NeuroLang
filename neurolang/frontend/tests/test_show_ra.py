@@ -487,8 +487,9 @@ def test_query_with_constant_on_a_named_predicate(capsys):
         "reach(x, y) :- reach(x, z), edge(z, y).\n"
         "ans(y) :- reach(1, y).",
     )
-    assert "── query ans(y) :-\n    reach(1, y) ──" in out
-    assert "reach(1, y) ‹from 6 rows›" in out
+    # the constant is propagated by magic sets into the query rule
+    assert "── rule ans(y) :-\n    reach^bf_0(1, y) ──" in out
+    assert "reach^bf_0(1, y) ‹from 3 rows›" in out
 
 
 def test_query_on_a_probabilistic_predicate_has_no_size(capsys):
@@ -609,11 +610,13 @@ def test_conditional_query_header_shares_variable_names(capsys):
     """Check the header and both parts name fresh variables alike."""
     out = forward_inference_output(capsys)
     header = out.split("── conditional query ")[1].split(" ──\n")[0]
-    assert header.startswith("label_reports(s₀, p) = P(\n")
-    assert "  | selected_study(s₁), mentions(s₁, 'memory')\n)" in header
-    assert "schaefer_label(s₀)" in header
-    assert "── rule label_reports^cond_den(PROB()) :-\n" \
-        "    selected_study(s₁),\n" in out
+    # the rules are those rewritten with magic sets for 'memory'
+    assert header.startswith("label_reports_0(s₀, p) = P(\n")
+    assert "  | mentions^fb_0(s₁, 'memory'), selected_study(s₁)\n)" in header
+    assert "schaefer_label^b_0(s₀)" in header
+    assert "── rule label_reports_0^cond_den(PROB()) :-\n" \
+        "    mentions^fb_0(s₁, 'memory'),\n" \
+        "    selected_study(s₁) ──\n" in out
 
 
 ANALYZE = ShowRAOptions(analyze=True)

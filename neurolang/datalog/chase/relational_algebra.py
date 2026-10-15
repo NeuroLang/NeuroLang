@@ -6,7 +6,8 @@ from typing import AbstractSet, Callable
 
 
 from ...exceptions import (
-    ProjectionOverMissingColumnsError, WrongArgumentsInPredicateError
+    ProjectionOverMissingColumnsError, UnboundVariablesError,
+    WrongArgumentsInPredicateError,
 )
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
@@ -173,8 +174,8 @@ class ChaseNamedRelationalAlgebraMixin:
             else:
                 predicates = (rule.antecedent,)
 
-            substitutions = self.obtain_substitutions(
-                predicates, instance, restriction_instance
+            substitutions = self._rule_substitutions(
+                rule, predicates, instance, restriction_instance
             )
 
             if consequent.functor in instance:
@@ -332,6 +333,23 @@ class ChaseNamedRelationalAlgebraMixin:
                 if functor in restriction_instance:
                     symbol_table[functor] = restriction_instance[functor]
         return symbol_table
+
+    def _rule_substitutions(
+        self, rule, predicates, instance, restriction_instance
+    ):
+        """
+        Return the substitutions of the *predicates* of the body of
+        *rule*, naming the rule in the error if a variable is unbound.
+        """
+        try:
+            return self.obtain_substitutions(
+                predicates, instance, restriction_instance
+            )
+        except UnboundVariablesError as error:
+            functor = rule.consequent.functor
+            if error.rule is not None or functor.is_fresh:
+                raise
+            raise error.located(functor.name) from None
 
     def obtain_substitutions(
         self, rule_predicates_iterator, instance, restriction_instance

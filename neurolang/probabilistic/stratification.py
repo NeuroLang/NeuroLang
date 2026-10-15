@@ -7,22 +7,16 @@ from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
 )
-from ..datalog.constraints_representation import reachable_code
+from ..datalog.constraints_representation import (
+    RightImplication,
+    get_list_of_intensional_rules,
+    iter_implications,
+    reachable_code,
+)
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import TRUE, Implication, Union
-from ..datalog.constraints_representation import RightImplication
 from .expressions import ProbabilisticFact
-
-
-def _iter_implication_or_union_of_implications(expression):
-    if expression is None:
-        return
-    if isinstance(expression, Implication):
-        yield expression
-    elif isinstance(expression, Union):
-        for formula in expression.formulas:
-            yield formula
 
 
 def reachable_code_from_query(query, program):
@@ -43,7 +37,7 @@ def reachable_code_from_query(query, program):
     )
     reachable = set()
     for pred in predicates:
-        for rule in _iter_implication_or_union_of_implications(
+        for rule in iter_implications(
             program.intensional_database().get(pred.functor, None)
         ):
             if not isinstance(rule, RightImplication):
@@ -112,30 +106,6 @@ def stratify_program(query, program):
         for idb_type, idb_rules in grpd_idbs.items()
         if idb_rules
     }
-
-
-def get_list_of_intensional_rules(program):
-    '''
-    Given a program, it returns a list of intentional rules.
-
-    Parameters
-    ----------
-    program : CPLogicProgram
-        Program from which we want to obtain the list of intentional rules.
-
-    Returns
-    -------
-    list
-        list of intentional rules
-    '''
-
-    idb = [
-        rule
-        for exp in program.intensional_database().values()
-        for rule in _iter_implication_or_union_of_implications(exp)
-        if not isinstance(rule, RightImplication)
-    ]
-    return idb
 
 
 def _get_program_deterministic_symbols(program):
