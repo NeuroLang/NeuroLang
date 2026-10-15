@@ -402,3 +402,18 @@ class TestUnits:
         assert nifti.parse_save_args("'my out.csv'").path == Path(
             "my out.csv"
         )
+
+
+def test_help_save_tells_the_convention(tiny):
+    """Check ``.help save`` documents the voxels and their value."""
+    tiny._handle_dot_command(".help save")
+    out = _output(tiny)
+    assert "space: voxel" in out and "space: mm" in out
+    assert "--value COLUMN" in out and "maximum" in out
+    assert "mask" in out
+
+
+def test_help_lists_the_save_options(tiny):
+    tiny._handle_dot_command(".help")
+    assert ".save PATH [--value COLUMN]" in _output(tiny)
+    assert ".help save" in _output(tiny)
