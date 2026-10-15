@@ -1987,3 +1987,55 @@ def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
     with nl.scope as e:
         res = nl.query((e.x, e.p), e.q(e.x, e.p))
     assert len(res) == 0
+
+
+def test_forward_inference_given_a_single_term_is_lifted():
+    """The probability that the selected study reports a peak near a
+    voxel, given that it mentions t and no other term, is lifted: the
+    choice within the negation is absorbed by the one outside it.
+    """
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_tuple_set(
+        [(0, 0, 0, "s0"), (3, 3, 3, "s2"), (0, 0, 1, "s3")],
+        name="peak_reported",
+    )
+    nl.add_tuple_set([(0, 0, 0), (3, 3, 3)], name="voxel")
+    nl.add_tuple_set(
+        [
+            ("s0", "pain"), ("s1", "pain"), ("s1", "joy"),
+            ("s2", "joy"), ("s3", "joy"),
+        ],
+        name="mentions",
+    )
+    nl.add_tuple_set([("pain",), ("joy",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s0",), ("s1",), ("s2",), ("s3",)], name="selected_study"
+    )
+
+    @nl.add_symbol
+    def euclidean(
+        i: int, j: int, k: int, i1: int, j1: int, k1: int
+    ) -> float:
+        return float(np.sqrt((i - i1) ** 2 + (j - j1) ** 2 + (k - k1) ** 2))
+
+    nl.execute_datalog_program(
+        "near_peak(i, j, k, s) :- voxel(i, j, k) & "
+        "peak_reported(i1, j1, k1, s), "
+        "(euclidean(i, j, k, i1, j1, k1) <= 2)\n"
+        "activation(i, j, k, s) :- near_peak(i, j, k, s), "
+        "selected_study(s)\n"
+        "term_association(s, t) :- mentions(s, t), selected_study(s)\n"
+        "forward(i, j, k, t, PROB) :- activation(i, j, k, s) // "
+        "(term_association(s, t) & ~exists(t1; term(t1), "
+        "term_association(s, t1), (t1 != t)))\n"
+    )
+    res = nl.solve_all()["forward"].as_pandas_dataframe()
+
+    assert set(res.itertuples(index=False, name=None)) == {
+        (0, 0, 0, "pain", 1.0),
+        (0, 0, 0, "joy", 0.5),
+        (3, 3, 3, "joy", 0.5),
+    }

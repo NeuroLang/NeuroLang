@@ -1706,3 +1706,82 @@ def test_deterministic_simplification():
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y'])
     )
+
+
+def _studies_mentioning_one_term_program():
+    """Studies 0-5 uniformly selected, mentioning terms as follows:
+    0 pain; 1 pain, joy; 2 joy; 3 joy; 4 fear, pain; 5 none. Only
+    studies 0 (pain), 2 and 3 (joy) mention a single term.
+    """
+    Mentions = Symbol("Mentions")
+    Term = Symbol("Term")
+    Selected = Symbol("Selected")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        Selected, [(1 / 6, i) for i in range(6)]
+    )
+    mentions = (
+        (0, "pain"), (1, "pain"), (1, "joy"), (2, "joy"), (3, "joy"),
+        (4, "fear"), (4, "pain"),
+    )
+    cpl.walk(Union(
+        tuple(
+            Fact(Mentions(Constant(s), Constant(t))) for s, t in mentions
+        ) + tuple(
+            Fact(Term(Constant(t))) for t in ("pain", "joy", "fear")
+        )
+    ))
+    return cpl, Mentions, Term, Selected
+
+
+def test_choice_with_negated_deterministic_existential_comparison():
+    """P(the selected study mentions t and no other term), where the
+    negated existential, with a comparison, only has deterministic
+    relations and is lifted as a deterministic relation.
+    """
+    cpl, Mentions, Term, Selected = _studies_mentioning_one_term_program()
+    Other = Symbol("Other")
+    s, t, t1 = Symbol("s"), Symbol("t"), Symbol("t1")
+    cpl.walk(Union((
+        Implication(Other(s, t), Conjunction((
+            Mentions(s, t), Mentions(s, t1), Term(t1), NE(t1, t)
+        ))),
+        Implication(P(t), Conjunction((
+            Mentions(s, t), Selected(s), Negation(Other(s, t))
+        ))),
+    )))
+    query = Implication(ans(t), P(t))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = testing.make_prov_set(
+        [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_choice_asserted_outside_and_inside_negation_is_absorbed():
+    """As above, with the choice also within the negation, through
+    `T(s, t) :- Mentions(s, t), Selected(s)`. As `Selected(s)` is
+    asserted outside the negation, it is absorbed, by
+    A ∧ ¬(A ∧ B) ≡ A ∧ ¬B, leaving a deterministic negation.
+    """
+    cpl, Mentions, Term, Selected = _studies_mentioning_one_term_program()
+    T = Symbol("T")
+    Other = Symbol("Other")
+    s, t, t1 = Symbol("s"), Symbol("t"), Symbol("t1")
+    cpl.walk(Union((
+        Implication(T(s, t), Conjunction((Mentions(s, t), Selected(s)))),
+        Implication(Other(s, t), Conjunction((
+            T(s, t), T(s, t1), Term(t1), NE(t1, t)
+        ))),
+        Implication(P(t), Conjunction((T(s, t), Negation(Other(s, t))))),
+    )))
+    query = Implication(ans(t), P(t))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = testing.make_prov_set(
+        [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
+    )
+    assert testing.eq_prov_relations(result, expected)
