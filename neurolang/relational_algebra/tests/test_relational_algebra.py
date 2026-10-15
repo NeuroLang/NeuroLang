@@ -2,10 +2,8 @@ import operator
 from typing import AbstractSet, Tuple
 
 import numpy
-import pandas as pd
 import pytest
 
-from ...config import config
 from ...datalog.basic_representation import WrappedRelationalAlgebraSet
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -392,19 +390,11 @@ def test_extended_projection_divide_columns():
         dst_column
     )
     extended_proj_op = ExtendedProjection(relation, (proj, ))
-    if config["RAS"].get("backend") == "dask":
-        expected = Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                columns=("z",),
-                iterable=pd.DataFrame([(2.0,), (4.0,)]).convert_dtypes(),
-            )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("z",), iterable=[(2.0,), (4.0,)]
         )
-    else:
-        expected = Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                columns=("z",), iterable=[(2.0,), (4.0,)]
-            )
-        )
+    )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
     assert result == expected

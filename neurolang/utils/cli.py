@@ -22,13 +22,13 @@ Usage
     neurolang-query --engine neurosynth --list-sets
 
     # Inline query
-    neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+    neurolang-query "ans(t) :- term_in_study_tfidf(s, t, w)"
 
     # Query from file
     neurolang-query -f query.dl
 
     # Query from stdin
-    echo "ans(t) :- term_in_study_tfidf(t, f, s)" | neurolang-query
+    echo "ans(t) :- term_in_study_tfidf(s, t, w)" | neurolang-query
 
     # Destrieux atlas engine
     neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
@@ -45,12 +45,19 @@ Usage
 
     # ... annotated with the number of rows each plan node produces
     neurolang-query --show-ra --ra-analyze "ans(x) :- P(x)"
+
+    # Interactive REPL (needs ``pip install "neurolang[tui]"``)
+    neurolang-query -i --engine neurosynth
+
+    # ... or run REPL statements and dot-commands from a pipe
+    echo 'ans(x) :- study(x)' | neurolang-query -i
 """
 
 import argparse
 import json
 import os
 import re
+import shlex
 import sys
 import time
 import traceback
@@ -63,6 +70,7 @@ from lark.exceptions import LarkError
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.exceptions import NeuroLangException
+from neurolang.expressions import Constant, Symbol
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
@@ -70,7 +78,10 @@ from neurolang.frontend.datalog import (
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
+from neurolang.logic import ExistentialPredicate
+from neurolang.probabilistic.expressions import Condition
 from neurolang.utils import engine_registry
+from neurolang.utils.sort_hints import sort_notes
 
 
 def _parse_sort_spec(specs: list[str]) -> list[tuple[str, bool]]:
@@ -121,41 +132,283 @@ def _read_query(args) -> str:
     sys.exit(1)
 
 
+# Column names of positions (``c0``, ``0``) and of fresh variables.
+_GENERATED_COLUMN = re.compile(r"c\d+|fresh_\w+|\d+")
+
+
+def _is_generated_column(column) -> bool:
+    """
+    Return whether *column* is an auto-generated column name.
+
+    These are positions, ``c0``-like names, and the names of fresh
+    variables, such as the one SQUALL gives the column of
+    ``obtain every R.`` for a unary ``R``.
+    """
+    if isinstance(column, int):
+        return True
+    return isinstance(column, str) and (
+        _GENERATED_COLUMN.fullmatch(column) is not None
+    )
+
+
 def _rename_unnamed_columns(df, column_names):
-    """Replace auto-generated column names with *column_names* when safe."""
-    if column_names is not None and len(column_names) == len(df.columns):
-        unnamed = all(
-            isinstance(c, int)
-            or (isinstance(c, str) and c.startswith("c"))
-            for c in df.columns
-        )
-        if unnamed:
-            df.columns = column_names
+    """
+    Replace auto-generated column names with *column_names* when safe.
+
+    Only the generated columns are renamed, each after the name of
+    *column_names* at its position, unless that name is None or another
+    column's.
+    """
+    if column_names is None or len(column_names) != len(df.columns):
+        return df
+    taken = set(df.columns)
+    df.columns = [
+        new if _is_generated_column(old) and new not in taken | {None}
+        else old
+        for old, new in zip(df.columns, column_names)
+    ]
     return df
+
+
+def sort_dataframe(df, sort_by):
+    """
+    Return *df* sorted by the ``(column, ascending)`` pairs of *sort_by*.
+
+    Columns that *df* lacks are ignored with a warning on stderr.
+    """
+    if not sort_by:
+        return df
+    for col, _ in sort_by:
+        if col not in df.columns:
+            print(
+                f"Warning: sort column {col!r} not found in result, "
+                f"ignoring.",
+                file=sys.stderr,
+            )
+    valid = [(c, a) for c, a in sort_by if c in df.columns]
+    if not valid:
+        return df
+    cols, asc = zip(*valid)
+    return df.sort_values(by=list(cols), ascending=list(asc))
+
+
+def _declared_columns(engine_name: str) -> dict:
+    """Return the columns the engine *engine_name* declares, by relation."""
+    if not engine_name:
+        return {}
+    return {
+        name: list(info["columns"])
+        for name, info in engine_registry.get_predicates(engine_name).items()
+        if info.get("columns")
+    }
+
+
+def squall_column_names(
+    engine_name: str, program: str, relations: Optional[dict] = None,
+    rules=(),
+) -> dict:
+    """
+    Return column names for the results of a SQUALL program's queries.
+
+    SQUALL names the columns of most results after fresh variables. The
+    result is a dict from the key of each ``obtain`` (as in the results
+    of
+    :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
+    to the names of its columns:
+
+    * ``obtain every R.`` takes the columns of ``R``: those the engine
+      configuration declares, those *relations* (a dict from relation
+      names to their columns) gives, or those of the rules defining
+      ``R``, in the program or among *rules*, the rules defined before;
+    * otherwise, a column is named after the user's variable (``?s``),
+      the aggregate (``count``), the ``as`` name of a single column, the
+      probability, or the column of the first relation of the body its
+      variable is in (``i, j, k`` for ``every Voxel in 3D``); an
+      undeclared unary relation names its column after itself.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        SquallProgram,
+        parser as squall_parser,
+    )
+
+    try:
+        parsed = squall_parser(program)
+    except Exception:
+        return {}
+    if not isinstance(parsed, SquallProgram):
+        return {}
+    columns = {**_declared_columns(engine_name), **(relations or {})}
+    for rule in (*rules, *parsed.rules):
+        _add_rule_columns(rule, columns)
+    names = {}
+    for i, query in enumerate(parsed.queries):
+        query_columns = _query_columns(query, columns)
+        if query_columns and any(query_columns):
+            names[parsed.query_names.get(i, f"obtain_{i}")] = query_columns
+    return names
+
+
+def _add_rule_columns(rule, columns: dict) -> None:
+    """Add the columns of the head of *rule* to *columns*, if unknown."""
+    name = getattr(getattr(rule.consequent, "functor", None), "name", None)
+    if isinstance(name, str) and name not in columns:
+        names = _head_names(rule.consequent.args, rule.antecedent, columns)
+        if all(names):
+            columns[name] = names
+
+
+def _query_columns(query, columns: dict):
+    """Return the column names of *query*'s result, or None if unknown."""
+    head = query.head
+    named = isinstance(getattr(head, "functor", None), Symbol)
+    terms = head.args if named else head
+    terms = terms if isinstance(terms, tuple) else (terms,)
+    whole = _whole_relation(query.body, terms, columns)
+    if named and len(terms) == 1 and len(whole or ()) < 2:
+        return [head.functor.name]
+    if whole is not None:
+        return whole
+    return _head_names(terms, query.body, columns)
+
+
+def _whole_relation(body, terms: tuple, columns: dict):
+    """
+    Return the columns of ``R`` if *body* is ``R(x)`` and *terms* ``(x,)``.
+
+    That is the body of ``obtain every R.``, whatever the arity of R.
+    """
+    functor = getattr(body, "functor", None)
+    if isinstance(functor, Symbol) and body.args == terms == terms[:1]:
+        return list(columns[functor.name]) if functor.name in columns else None
+    return None
+
+
+def _head_names(head, body, columns: dict) -> list:
+    """Return the names of the *head* terms of a rule of *body*."""
+    atoms = list(_body_atoms(body))
+    names = [_term_name(term, atoms, columns) for term in head]
+    return _unique(names)
+
+
+def _term_name(term, atoms, columns: dict):
+    """Return the name of a column of the head *term*, or None."""
+    if isinstance(term, Symbol):
+        if not _is_generated_column(term.name):
+            return term.name
+        return _variable_column(term, atoms, columns)
+    functor = getattr(term, "functor", None)
+    if isinstance(functor, Symbol) and functor.name == "PROB":
+        return "probability"
+    if isinstance(functor, Constant):
+        return _aggregate_name(functor.value)
+    return None
+
+
+def _aggregate_name(function) -> str:
+    """Return the SQUALL name of the aggregate *function*."""
+    from neurolang.frontend.datalog.squall_syntax_lark import _AGG_FUNC_MAP
+
+    for name, constant in _AGG_FUNC_MAP.items():
+        if constant.value is function:
+            return name
+    return getattr(function, "__name__", None)
+
+
+def _body_atoms(formula):
+    """
+    Yield the predicates of *formula*, in order, but negated ones.
+
+    They are those of its conjunctions, existentials and conditions.
+    """
+    functor = getattr(formula, "functor", None)
+    if isinstance(functor, Symbol):
+        yield formula
+    for sub in _subformulas(formula):
+        yield from _body_atoms(sub)
+
+
+def _subformulas(formula) -> tuple:
+    """Return the formulas of a conjunction, existential or condition."""
+    if isinstance(formula, ExistentialPredicate):
+        return (formula.body,)
+    if isinstance(formula, Condition):
+        return (formula.conditioned, formula.conditioning)
+    return tuple(getattr(formula, "formulas", ()))
+
+
+def _variable_column(variable, atoms, columns: dict):
+    """
+    Return the column of the first of *atoms* that *variable* is in.
+
+    An atom of an undeclared unary relation names it after the relation.
+    """
+    for atom in atoms:
+        if variable not in atom.args:
+            continue
+        known = columns.get(atom.functor.name)
+        if known is not None and len(known) == len(atom.args):
+            return known[atom.args.index(variable)]
+        if known is None and len(atom.args) == 1:
+            return atom.functor.name
+    return None
+
+
+def _unique(names: list) -> list:
+    """Return *names*, suffixing the repeated ones with their position."""
+    return [
+        f"{name}_{n}" if name is not None and names.count(name) > 1 else name
+        for n, name in enumerate(names)
+    ]
 
 
 def _emit(df, fmt, sort_by=None):
     """Format a DataFrame in *fmt* mode (table, csv, or json)."""
     if df.empty:
         return "(empty)"
-    if sort_by:
-        columns, ascending = zip(*sort_by)
-        valid = [(c, a) for c, a in sort_by if c in df.columns]
-        invalid = [c for c, _ in sort_by if c not in df.columns]
-        for col in invalid:
-            print(
-                f"Warning: sort column {col!r} not found in result, "
-                f"ignoring.",
-                file=sys.stderr,
-            )
-        if valid:
-            cols, asc = zip(*valid)
-            df = df.sort_values(by=list(cols), ascending=list(asc))
+    df = sort_dataframe(df, sort_by)
     if fmt == "csv":
         return df.to_csv(index=False)
     if fmt == "json":
         return df.to_json(orient="records", indent=2)
     return df.to_string(index=False)
+
+
+def _set_frame(ra_set, columns: list) -> pd.DataFrame:
+    """
+    Return the rows of *ra_set*, whose columns are *columns*, as a DataFrame.
+
+    The backend's own DataFrame is used, when it has these columns,
+    rather than copying the rows one by one.
+    """
+    if hasattr(ra_set, "as_pandas_dataframe"):
+        df = ra_set.as_pandas_dataframe()
+        if list(df.columns) == columns:
+            return df.copy(deep=False)
+    return pd.DataFrame(iter(ra_set), columns=columns)
+
+
+def result_to_dataframe(result, column_names=None) -> pd.DataFrame:
+    """
+    Return the rows of a query *result* as a DataFrame.
+
+    *result* is a relational algebra set, possibly wrapped in a
+    ``Constant``. Auto-generated column names are replaced by
+    *column_names* when given.
+    """
+    if hasattr(result, "value") and hasattr(result.value, "unwrap"):
+        result = result.value.unwrap()
+        if hasattr(result, "as_pandas_dataframe"):
+            return _rename_unnamed_columns(
+                result.as_pandas_dataframe().copy(deep=False), column_names
+            )
+    columns = list(getattr(result, "columns", ()))
+    if columns:
+        df = _set_frame(result, columns)
+    else:
+        rows = list(iter(result))
+        arity = getattr(result, "arity", len(rows[0]) if rows else 0)
+        df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
+    return _rename_unnamed_columns(df, column_names)
 
 
 def _format_result(
@@ -167,34 +420,9 @@ def _format_result(
         return ""
     if isinstance(result, bool):
         return "true" if result else "false"
-
     try:
-        # Unwrap Constant -> concrete set when chase produced wrapped result
-        if hasattr(result, "value") and hasattr(result.value, "unwrap"):
-            inner = result.value.unwrap()
-            if hasattr(inner, "as_pandas_dataframe"):
-                return _emit(
-                    _rename_unnamed_columns(
-                        inner.as_pandas_dataframe(), column_names
-                    ),
-                    fmt,
-                    sort_by=sort_by,
-                )
-            result = inner
-
-        # Get a DataFrame from the bare set (named or unnamed columns)
-        if hasattr(result, "columns") and len(result.columns) > 0:
-            df = pd.DataFrame(iter(result), columns=result.columns)
-        else:
-            rows = list(iter(result))
-            if not rows:
-                return "(empty)"
-            arity = result.arity if hasattr(result, "arity") else len(rows[0])
-            df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
-
-        return _emit(
-            _rename_unnamed_columns(df, column_names), fmt, sort_by=sort_by
-        )
+        df = result_to_dataframe(result, column_names)
+        return _emit(df, fmt, sort_by=sort_by)
     except Exception as exc:
         print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)
@@ -330,6 +558,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Sort output by COL (ascending by default). "
         "Append ':desc' for descending, ':asc' for ascending. "
         "Repeatable for multi-key sorts (first key has highest priority).",
+    )
+    parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        dest="interactive",
+        help="Start an interactive REPL on the engine, rendering the "
+        "query results as tables. A query given as argument or with "
+        "--file is run first; --show-ra and --show-rewritten apply to "
+        "every query of the session. If stdin is not a terminal, its "
+        "statements and dot-commands are run as a batch (exit status 1 "
+        "if one fails).",
     )
     parser.add_argument(
         "--debug",
@@ -504,33 +744,45 @@ def _list_predicates(engine_name: str) -> None:
             print(f"    {desc}")
 
 
-def _list_sets(nl: NeurolangPDL) -> None:
+def _ra_sets(nl: NeurolangPDL, column_names: dict) -> list:
+    """
+    Return ``(name, columns, size, arity)`` for each RA set of *nl*.
+
+    *column_names* maps set names to the columns shown instead of the
+    set's own column names. A set redefined in an inner scope of the
+    program is listed once, as the inner scope defines it.
+    """
+    sets_found = []
+    symbol_table = nl.program_ir.symbol_table
+    for sym_name in dict.fromkeys(symbol_table):
+        sym_val = symbol_table[sym_name]
+        val = getattr(sym_val, "value", sym_val)
+        if not isinstance(val, WrappedRelationalAlgebraSet):
+            continue
+        ra_set = val.unwrap()
+        clean_name = getattr(sym_name, "name", str(sym_name))
+        columns = column_names.get(clean_name, list(ra_set.columns))
+        try:
+            size = len(ra_set)
+        except Exception:
+            size = "?"
+        sets_found.append((clean_name, columns, size, ra_set.arity))
+    return sets_found
+
+
+def _list_sets(nl: NeurolangPDL, column_names: Optional[dict] = None) -> None:
     """
     Print the actual Relational Algebra sets registered in the engine.
 
     Iterates over the engine's symbol table and displays every entry backed
     by a :class:`~neurolang.datalog.WrappedRelationalAlgebraSet` — i.e.,
     concrete extensional (EDB) relations loaded from CSV/TSV files or added
-    via the Python API.
+    via the Python API. *column_names* maps set names to the columns
+    shown for them instead of the set's own column names.
 
     """
     print()
-    st = nl.program_ir.symbol_table
-    sets_found = []
-
-    for sym_name, sym_val in st.items():
-        val = getattr(sym_val, "value", sym_val)
-        if not isinstance(val, WrappedRelationalAlgebraSet):
-            continue
-        ra_set = val.unwrap()
-        arity = ra_set.arity
-        columns = list(ra_set.columns)
-        try:
-            size = len(ra_set)
-        except Exception:
-            size = "?"
-        clean_name = getattr(sym_name, "name", str(sym_name))
-        sets_found.append((clean_name, columns, size, arity))
+    sets_found = _ra_sets(nl, column_names or {})
 
     if not sets_found:
         print("  (no RA sets registered)")
@@ -573,6 +825,41 @@ def _debug_enabled(args) -> bool:
     )
 
 
+def report_error(
+    exc: Exception, program: str, *, squall: bool, debug: bool, nl=None,
+    file=None, engine_name: str = "",
+) -> None:
+    """
+    Print the query error *exc* as a formatted message.
+
+    The message shows the location of the error in *program*, hints and
+    the symbols of the engine *nl* close to an unknown one. When the
+    error concerns a predicate of the engine *engine_name* that spans
+    entities of several columns, a note tells how to write it (see
+    :func:`~neurolang.utils.sort_hints.sort_notes`). In *debug* mode the
+    traceback is printed first; otherwise unexpected errors get a hint
+    to use ``--debug``. *file* defaults to ``sys.stderr``.
+    """
+    stream = sys.stderr if file is None else file
+    if debug:
+        traceback.print_exception(
+            type(exc), exc, exc.__traceback__, file=stream
+        )
+    print_formatted_error(
+        exc, program,
+        language="SQUALL" if squall else "Datalog",
+        known_symbols=_known_symbol_names(nl),
+        file=stream,
+    )
+    for note in sort_notes(exc, program, engine_name, squall):
+        print(note, file=stream)
+    if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+        print(
+            "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
+            "traceback.", file=stream,
+        )
+
+
 def _run_reporting_errors(action, program: str, args, nl=None):
     """
     Run *action* and report any failure as a formatted error.
@@ -584,19 +871,10 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     try:
         return action()
     except Exception as exc:
-        debug = _debug_enabled(args)
-        if debug:
-            traceback.print_exc()
-        print_formatted_error(
-            exc, program,
-            language="SQUALL" if args.squall else "Datalog",
-            known_symbols=_known_symbol_names(nl),
+        report_error(
+            exc, program, squall=args.squall, debug=_debug_enabled(args),
+            nl=nl, engine_name=getattr(args, "engine", ""),
         )
-        if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
-            print(
-                "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
-                "traceback.", file=sys.stderr,
-            )
         sys.exit(1)
 
 
@@ -717,21 +995,35 @@ def _run_dry_run_command(args) -> bool:
     return False
 
 
-def _print_result(result, args, sort_by) -> None:
-    """Print a query ``result``, one block per ``obtain`` when a dict."""
+def _result_column_names(args, program: str) -> dict:
+    """Return the column names of the results of ``program``, by key."""
+    if not args.squall:
+        return {}
+    return squall_column_names(args.engine, program)
+
+
+def _print_result(result, args, sort_by, column_names=None) -> None:
+    """
+    Print a query ``result``, one block per ``obtain`` when a dict.
+
+    ``column_names`` maps result keys to the names of their columns, as
+    returned by :func:`squall_column_names`.
+    """
+    column_names = column_names or {}
     if isinstance(result, dict):
         for key, sub_result in result.items():
             output = _format_result(
-                sub_result, fmt=args.format, column_names=None,
-                sort_by=sort_by,
+                sub_result, fmt=args.format,
+                column_names=column_names.get(key), sort_by=sort_by,
             )
             if output:
                 print(f"── {key} ──")
                 print(output)
                 print()
         return
+    names = next(iter(column_names.values()), None)
     output = _format_result(
-        result, fmt=args.format, column_names=None, sort_by=sort_by,
+        result, fmt=args.format, column_names=names, sort_by=sort_by,
     )
     if output:
         print(output)
@@ -755,10 +1047,111 @@ def _run_query(args) -> None:
     result = _run_reporting_errors(
         lambda: execute(nl, program), program, args, nl
     )
-    _print_result(result, args, sort_by)
+    _print_result(
+        result, args, sort_by, _result_column_names(args, program)
+    )
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
+
+
+_NOT_INTERACTIVE_FLAGS = (
+    ("--list-engines", "list_engines"),
+    ("--grammar-json", "grammar_json"),
+    ("--show-datalog", "show_datalog"),
+    ("--list-predicates", "list_predicates"),
+    ("--list-sets", "list_sets"),
+)
+
+
+def _check_interactive_flags(args) -> None:
+    """Exit with an error when ``args`` combines -i with a listing flag."""
+    for flag, dest in _NOT_INTERACTIVE_FLAGS:
+        if getattr(args, dest):
+            print(
+                f"Error: {flag} cannot be used with --interactive.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+def _tui_settings(args, tui, argv=()):
+    """
+    Return the REPL settings ``tui.TuiSettings`` requested by ``args``.
+
+    ``argv`` are the command-line arguments, shown in the transcript.
+    """
+    return tui.TuiSettings(
+        engine_name=args.engine,
+        squall=args.squall,
+        output_format=args.format,
+        sort_by=_parse_sort_spec(args.sort),
+        show_ra=args.show_ra,
+        ra_options=_show_ra_options(args),
+        show_rewritten=args.show_rewritten,
+        debug=_debug_enabled(args),
+        history_path=str(Path.home() / ".neurolang_query_history"),
+        data_dir=str(Path(args.data_dir).expanduser().resolve()),
+        command_line=shlex.join(["neurolang-query", *argv]),
+    )
+
+
+TUI_DEPENDENCIES = ("prompt_toolkit", "rich")
+
+
+def _import_tui():
+    """
+    Return the :mod:`neurolang.utils.tui` module of the interactive REPL.
+
+    If its optional dependencies are missing, exit with status 1 and a
+    message telling how to install them.
+    """
+    try:
+        from neurolang.utils import tui
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] not in TUI_DEPENDENCIES:
+            raise
+        print(
+            "Error: the interactive mode needs the optional dependencies "
+            f"{' and '.join(TUI_DEPENDENCIES)}. Install them with:\n"
+            '    pip install "neurolang[tui]"',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return tui
+
+
+def _program_argument(args) -> str:
+    """Return the query given as argument or with ``--file``, or ''."""
+    if args.file:
+        return Path(args.file).read_text(encoding="utf-8")
+    return args.query or ""
+
+
+def _run_interactive(args, argv=()) -> None:
+    """
+    Build the engine once and start the interactive REPL on it.
+
+    A query given as argument or with ``--file`` is run in the session
+    before the first prompt. ``--show-ra`` and ``--show-rewritten``
+    apply to every query of the session. When the standard input is not
+    a terminal, its statements are run as a batch and the CLI exits with
+    status 1 if one of them failed. ``argv`` are the command-line
+    arguments, shown in the session's transcript.
+    """
+    _check_interactive_flags(args)
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    tui = _import_tui()
+
+    program = _program_argument(args)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    settings = _tui_settings(args, tui, argv)
+    status = tui.main(nl, settings, initial_program=program)
+    if status:
+        sys.exit(status)
 
 
 def main(argv: Optional[list] = None) -> None:
@@ -766,6 +1159,9 @@ def main(argv: Optional[list] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.interactive:
+        _run_interactive(args, sys.argv[1:] if argv is None else argv)
+        return
     if _run_engineless_command(args):
         return
     _check_flag_dependencies(args)

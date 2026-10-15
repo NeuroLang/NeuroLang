@@ -15,37 +15,176 @@ engines:
         resolution_mm: 2
         yeo_networks: 17
     datalog_init: |
-      study_with_peaks(S) :- peak_reported(I, J, K, S).
-      schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
+      study_with_peaks(s) :- peak_reported(i, j, k, s).
+      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
+      weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+    text_embeddings:
+      study_abstracts:
+        ids_from: study
+        source: pubmed
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: query_similarity
+        description: >-
+          query_similarity(query, study) returns the cosine similarity
+          between a free-text query and the study's title and abstract
+          (PubMed), embedded with SPECTER2.
     #probabilistic_choice:
       # selected_study:
       #  source: study
       #  description: "Uniform probabilistic choice over studies"
+    # Symbols withheld from the SQUALL completion: their argument order
+    # breaks sentences (``a Study peak_reported …`` binds the study to a
+    # voxel index).  They stay usable when typed; ``reports`` and
+    # ``labels`` are the forms that read as SQUALL verbs.
+    hidden_predicates: [peak_reported, schaefer_voxels]
+    # The sorts of the entities the predicates relate, declared once: the
+    # columns an entity spans and their type.  A sort of N > 1 columns
+    # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+    #
+    # ``space`` tells what the columns of a sort of points are, for
+    # ``.save out.nii.gz`` in the REPL, which writes a result on a grid:
+    # ``space: voxel`` marks the indices (i, j, k) of the grid the sort
+    # names with ``grid`` (an atlas of the engine, by its key under
+    # ``atlases``), by default that of the engine's template (the MNI
+    # mask), written as they are; ``space: mm`` coordinates (x, y, z) in
+    # millimetres, converted to the nearest voxel of the template with
+    # the inverse of its affine.  A result's columns take the sort of the
+    # argument of the predicate their variable comes from in the query,
+    # else of the sort they are named as.  ``atlas_voxel`` indexes the
+    # grid of the 2 mm Schaefer atlas, not the template's.
+    sorts:
+      study:
+        columns: [study_id]
+        type: int
+        description: "a study of the Neurosynth database"
+      term:
+        columns: [term]
+        type: str
+        description: "a term of the TF-IDF vocabulary"
+      tfidf:
+        columns: [tfidf]
+        type: float
+        description: "a TF-IDF weight"
+      voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        description: "a voxel of the MNI template grid, in 3D"
+      mni:
+        columns: [x, y, z]
+        type: float
+        space: mm
+        description: "a point in MNI space, in millimetres, in 3D"
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+        description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
+      label:
+        columns: [label]
+        type: str
+        description: "a Schaefer 2018 parcel label"
+      region:
+        columns: [region]
+        type: ExplicitVBR
+        description: "a brain region"
+    # Each predicate declares its arguments, in column order: the entities
+    # it relates, each a sort over the columns it spans, named alone or as
+    # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
+    # (i, j, k) is one argument, so ``reports`` relates a study and a
+    # voxel.  The
+    # probability column of a probabilistic symbol (``probability: true``)
+    # is not an argument.  ``columns`` and ``arity`` (the number of
+    # columns) are derived from the arguments.
     predicates:
       peak_reported:
-        arity: 4
-        columns: [i, j, k, study_id]
         description: "Reported activation peaks in voxel coordinates"
+        arguments:
+          - voxel
+          - study
       study:
-        arity: 1
-        columns: [study_id]
         description: "All study identifiers"
+        arguments:
+          - study
       term_in_study_tfidf:
-        arity: 3
-        columns: [study_id, term, tfidf]
         description: "Term frequency–inverse document frequency values"
+        arguments:
+          - study
+          - term
+          - tfidf
       selected_study:
-        arity: 1
-        columns: [study_id]
         description: "Uniform probabilistic choice over studies"
+        probability: true
+        arguments:
+          - study
       voxel:
-        arity: 3
-        columns: [i, j, k]
-        description: "Every voxel inside the MNI mask"
+        description: "Every voxel index (i, j, k) of the MNI template grid"
+        arguments:
+          - voxel
+      term:
+        description: "Every term of the TF-IDF vocabulary"
+        arguments:
+          - term
+      study_with_peaks:
+        description: "Studies reporting at least one activation peak"
+        arguments:
+          - study
+      mentions:
+        description: "Studies mentioning a term (TF-IDF above 0.03)"
+        arguments:
+          - study
+          - term
+      reports:
+        description: "Studies reporting an activation peak at a voxel"
+        arguments:
+          - study
+          - voxel
+      weighted_mention:
+        description: >-
+          Every TF-IDF weight of a term in a study, as term_in_study_tfidf;
+          reads in SQUALL as
+          every Weighted_mention (?s; ?t; ?w) such that ?w is greater than 0.1
+        arguments:
+          - study
+          - term
+          - tfidf
+      schaefer:
+        description: "Schaefer 2018 parcel label and its region"
+        arguments:
+          - label
+          - region
+      schaefer_label:
+        description: "Every Schaefer 2018 parcel label"
+        arguments:
+          - label
+      schaefer_voxels:
+        description: >-
+          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
+        arguments:
+          - atlas_voxel
+          - label
+      labels:
+        description: >-
+          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
+          grid (not the grid of voxel and reports)
+        arguments:
+          - label
+          - atlas_voxel
+    examples:
+      datalog:
+        - "ans(s) :- mentions(s, 'pain')"
+        - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+      squall:
+        - "obtain every Study that mentions 'pain'."
+        - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
+        - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
 
   destrieux:
     description: >
@@ -62,11 +201,31 @@ engines:
     datalog_init: |
       left_region(N, R) :- destrieux(N, R), startswith('lh', N)
       right_region(N, R) :- destrieux(N, R), startswith('rh', N)
+    sorts:
+      label:
+        columns: [name]
+        type: str
+        description: "a Destrieux region name"
+      region:
+        columns: [region]
+        type: ExplicitVBR
+        description: "a brain region"
     predicates:
       destrieux:
-        arity: 2
-        columns: [name, region]
         description: "Cortical region name and ExplicitVBR geometry"
+        arguments:
+          - label
+          - region
+      left_region:
+        description: "Left-hemisphere Destrieux regions"
+        arguments:
+          - label
+          - region
+      right_region:
+        description: "Right-hemisphere Destrieux regions"
+        arguments:
+          - label
+          - region
 
   # Example template usage (commented out — uncomment to enable):
   #

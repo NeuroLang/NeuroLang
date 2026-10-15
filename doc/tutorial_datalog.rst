@@ -690,7 +690,7 @@ into a relation:
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend
-(``'pandas'``, ``'dask'`` or ``'polars'``) from Datalog code, use the SQUALL
+(``'pandas'`` or ``'polars'``) from Datalog code, use the SQUALL
 ``#set_backend`` directive or, from Python,
 ``neurolang.config.config.set_query_backend(...)``; see :doc:`performance`.
 Note that the backend is a process-wide setting.

@@ -3,7 +3,6 @@ import operator
 from typing import AbstractSet, Iterable
 
 import numpy
-from neurolang.datalog.constraints_representation import RightImplication
 
 from neurolang.relational_algebra import str2columnstr_constant
 
@@ -16,6 +15,7 @@ from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code
 )
+from ..datalog.magic_sets import random_predicate_symbols
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Negation, Union
@@ -437,32 +437,12 @@ def lift_optimization_for_choice_predicates(query, program):
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
-    wlq_symbs = set(program.within_language_prob_queries())
-    prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
-    visited = set()
-    stack = [pred_symb]
-    while stack:
-        pred_symb = stack.pop()
-        if pred_symb in visited:
-            continue
-        visited.add(pred_symb)
-        if pred_symb in prob_symbs:
-            return True
-        if (
-            pred_symb in wlq_symbs
-            or pred_symb not in program.intensional_database()
-        ):
-            continue
+    """
+    Whether ``pred_symb`` is a probabilistic predicate of ``program``.
 
-        if isinstance(program.symbol_table[pred_symb], Constant):
-            continue
-
-        for rule in program.symbol_table[pred_symb].formulas:
-            if isinstance(rule, RightImplication):
-                continue
-            stack += [
-                apred.functor
-                for apred in extract_logic_atoms(rule.antecedent)
-                if apred.functor not in wlq_symbs
-            ]
-    return False
+    It is one of the probabilistic facts or choices of ``program``, or an
+    intensional predicate depending on them other than through a
+    within-language probabilistic query: the predicates which magic sets
+    do not use to bind variables.
+    """
+    return pred_symb in random_predicate_symbols(program)
