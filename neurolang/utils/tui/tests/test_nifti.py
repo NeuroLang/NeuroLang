@@ -87,6 +87,7 @@ engines:
       mni: {columns: [x, y, z], type: float, space: mm}
     predicates:
       voxel: {arguments: [voxel]}
+      study: {arguments: [study]}
       reports: {arguments: [study, voxel]}
       weight: {arguments: [voxel, tfidf]}
       peak: {arguments: [mni, study]}
@@ -106,6 +107,7 @@ def tiny(monkeypatch, tmp_path):
         np.ones((4, 4, 4), dtype=np.uint8), TINY_AFFINE
     )
     nl.add_tuple_set([(1, 2, 3), (0, 0, 0)], name="voxel")
+    nl.add_tuple_set([(10,), (11,), (12,)], name="study")
     nl.add_tuple_set(
         [(10, 1, 2, 3), (11, 1, 2, 3), (12, 0, 0, 0)], name="reports"
     )
@@ -200,7 +202,7 @@ class TestSaveOnTheTemplate:
 
     def test_millimetres_converted_to_voxels(self, tiny, tmp_path):
         img = _saved(
-            tiny, tmp_path, "ans(x, y, z, s) :- peak(x, y, z, s)"
+            tiny, tmp_path, "ans(x, y, z, study_id) :- peak(x, y, z, study_id)"
         )
         data = np.asanyarray(img.dataobj)
         # (-1, -1, -1) mm is the centre of voxel (1, 2, 3);
@@ -246,7 +248,8 @@ class TestSaveOnTheTemplate:
 
     def test_explicit_mm_columns(self, tiny, tmp_path):
         img = _saved(
-            tiny, tmp_path, "ans(a, b, c, s) :- peak(a, b, c, s)",
+            tiny, tmp_path,
+            "ans(a, b, c, study_id) :- peak(a, b, c, study_id)",
             "--mm a b c",
         )
         assert np.asanyarray(img.dataobj)[1, 2, 3] == 1
