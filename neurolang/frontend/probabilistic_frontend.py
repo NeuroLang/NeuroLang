@@ -1178,6 +1178,9 @@ def _has_probability(head) -> bool:
     """Return whether the query *head*, a tuple, has a ``PROB(…)``."""
     return isinstance(head, tuple) and any(
         getattr(getattr(h, "expression", None), "functor", None) == PROB
+        for h in head
+    )
+
 
 def _solved_as_query_rule(head, symbol_entry) -> bool:
     """
