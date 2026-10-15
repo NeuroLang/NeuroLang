@@ -882,10 +882,10 @@ class DatalogTransformer(Transformer):
 
     def existential_predicate(self, ast):
         ast1 = ast[1].children
-        exp = []
-        for i in ast1:
-            if isinstance(i, FunctionApplication):
-                exp.append(i)
+        # Every predicate of the body: atoms and comparisons, but also
+        # negations and nested existentials, which are not function
+        # applications. The variables and the separator are left out.
+        exp = [i for i in ast1[1:] if isinstance(i, Expression)]
 
         if len(exp) == 1:
             exp = exp[0]
