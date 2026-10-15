@@ -121,6 +121,12 @@ class TestNiftiPaths:
     def test_nifti_suffixes(self, tiny, tmp_path, name):
         tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
         tiny._handle_dot_command(f".save {tmp_path / name}")
+        # the file has exactly the name asked for, whatever its case, so
+        # that it is found on case-sensitive file systems too
+        assert name in [p.name for p in tmp_path.iterdir()]
+        with open(tmp_path / name, "rb") as f:
+            compressed = f.read(2) == b"\x1f\x8b"
+        assert compressed == name.lower().endswith(".gz")
         img = nib.load(tmp_path / name)
         assert isinstance(img, nib.Nifti1Image)
         assert "NIfTI" in _output(tiny) and "CSV" not in _output(tiny)
