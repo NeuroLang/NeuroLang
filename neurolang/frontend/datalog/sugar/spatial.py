@@ -3,7 +3,7 @@ import numbers
 import operator
 import typing
 import warnings
-from typing import AbstractSet, Callable
+from typing import AbstractSet
 
 import numpy
 import pandas
@@ -24,6 +24,7 @@ from ....expression_walker import (
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....utils import log_performance
+from ...frontend_extensions import NumpyFunctionsMixin
 from ....utils.euclidean_join import (
     MAX_KEY,
     euclidean_distance,
@@ -38,9 +39,7 @@ EUCLIDEAN = Symbol("EUCLIDEAN")
 #: Name of the built-in Euclidean distance function.
 EUCLIDEAN_FUNCTION = Symbol("euclidean")
 #: Built-in Euclidean distance, registered by the frontends.
-EUCLIDEAN_BUILTIN = Constant[
-    Callable[[float, float, float, float, float, float], float]
-](euclidean_distance, verify_type=False)
+EUCLIDEAN_BUILTIN = NumpyFunctionsMixin.constant_euclidean
 
 _EUCLIDEAN_NAMES = (EUCLIDEAN.name, EUCLIDEAN_FUNCTION.name)
 _COMPARISONS = (operator.lt, operator.le, operator.gt, operator.ge)
@@ -889,41 +888,6 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         if hasattr(relation, "might_have_duplicates"):
             relation.might_have_duplicates = False
         return symbol
-
-    @staticmethod
-    def upper_bound_to_max_dist(upper_bound):
-        val = upper_bound.value
-        if isinstance(val, (int, float)):
-            return float(val)
-        raise ValueError("Unsupported distance expression")
-
-    @staticmethod
-    def solve_spatial_bound(first_coord_array, second_coord_array, max_dist):
-        """
-        Return the pairs of points within a distance, with their distance.
-
-        Parameters
-        ----------
-        first_coord_array, second_coord_array : numpy.ndarray
-            Point sets, one point per row.
-        max_dist : float
-            Inclusive distance bound.
-
-        Returns
-        -------
-        pandas.DataFrame
-            The coordinates of the first point, of the second one and
-            their distance, one pair per row.
-        """
-        first, second, distances = euclidean_pairs(
-            first_coord_array, second_coord_array, max_dist, strict=False
-        )
-        columns = (
-            list(numpy.asarray(first_coord_array)[first].T)
-            + list(numpy.asarray(second_coord_array)[second].T)
-            + [distances]
-        )
-        return pandas.DataFrame(dict(enumerate(columns)))
 
 
 class _PointRange(typing.NamedTuple):
