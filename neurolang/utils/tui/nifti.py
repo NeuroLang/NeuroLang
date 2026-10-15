@@ -126,20 +126,25 @@ def split_args(arg: str, widths: dict, usage: str) -> tuple:
     Return the paths and the options of the command arguments *arg*.
 
     *widths* gives the number of values each option takes; the options
-    are returned as a dict of their values. A :class:`SaveError` tells
-    why *arg* does not follow *usage*.
+    are returned as a dict of their values. Consecutive words that are
+    not options are one path, joined by a space, so that a path with
+    spaces need not be quoted. A :class:`SaveError` tells why *arg*
+    does not follow *usage*.
     """
     try:
         tokens = shlex.split(arg)
     except ValueError as exc:
         raise SaveError(f"{exc}. Usage: {usage}") from exc
-    paths, options = [], {}
+    paths, options, joining = [], {}, False
     while tokens:
         token = tokens.pop(0)
         if token.startswith("--"):
             options[token] = _option_values(token, tokens, widths)
+        elif joining:
+            paths[-1] = f"{paths[-1]} {token}"
         else:
             paths.append(token)
+        joining = not token.startswith("--")
     return paths, options
 
 
@@ -147,8 +152,8 @@ def parse_save_args(arg: str) -> SaveRequest:
     """
     Return the request of the arguments *arg* of ``.save``.
 
-    They are a path, quoted if it holds spaces, and the options of
-    :data:`SAVE_USAGE`; a :class:`SaveError` tells why they are not.
+    They are a path, quoted or not if it holds spaces, and the options
+    of :data:`SAVE_USAGE`; a :class:`SaveError` tells why they are not.
     """
     paths, options = split_args(arg, _SAVE_OPTIONS, SAVE_USAGE)
     if len(paths) != 1:
