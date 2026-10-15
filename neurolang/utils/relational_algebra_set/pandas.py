@@ -1131,7 +1131,7 @@ class NamedRelationalAlgebraFrozenSet(
         return next(container.itertuples(index=False, name="tuple"))
 
     def to_unnamed(self):
-        container = self._container[list(self.columns)].copy()
+        container = self._container[list(self.columns)]
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
