@@ -235,8 +235,8 @@ def test_rewritten_toggle(small_app, capsys):
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── rewritten program ──" in capsys.readouterr().out
     assert list(small_app.results[0].frame["x"]) == [1, 2]
-    small_app._handle_dot_command(".rewritten")
-    assert "Rewritten program: on" in _output(small_app)
+    small_app._handle_dot_command(".rewritten off")
+    assert "Rewritten program: off" in _output(small_app)
 
 
 @pytest.fixture
@@ -435,3 +435,26 @@ def test_no_sort_warning_on_empty_result(engine, capsys):
     app._execute_and_display("ans(x) :- P(x), Q(x)")
     assert "(empty)" in _output(app)
     assert "sort column" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "line, message",
+    [
+        (".mode prolog", "Unknown mode 'prolog'. Use 'datalog' or 'squall'."),
+        (".mode squall", "Mode: SQUALL"),
+        (".format", "Format: table"),
+        (".format json", "Format: json"),
+        (".ra maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".ra on", "RA plans: on"),
+        (".rewritten maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".rewritten on", "Rewritten program: on"),
+        (".head 0", "Page size must be a positive integer, not '0'."),
+        (".more", "No more rows."),
+        (".sort", "Sort: none"),
+        (".datalog", "No query has been run yet."),
+    ],
+)
+def test_command_messages(small_app, line, message):
+    small_app.console.width = 1000
+    small_app._handle_dot_command(line)
+    assert message in _output(small_app)

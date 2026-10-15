@@ -235,6 +235,36 @@ def test_show_rewritten_datalog_prints_all_rules(capsys):
     assert "fanatic" in captured.out
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [
+        dict(dry_run=True),
+        dict(show_rewritten=True),
+        dict(show_rewritten=True, show_ra=True),
+    ],
+)
+def test_show_rewritten_query_on_rule_with_constant(flags, capsys):
+    """
+    Check that the rewritten program of a query on a rule is printed.
+
+    The query on ``found`` is rewritten with magic sets, through the
+    constant ``'pain'``. Printing it used to fail with a KeyError on the
+    rewritten query predicate, whose rules were not in the program yet.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1", "pain"), ("s2", "noise")], name="mentions")
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.execute_datalog_program(
+        "talks(s, t) :- mentions(s, t)\n"
+        "found(s) :- study(s), talks(s, 'pain')"
+    )
+    with nl.scope as e:
+        nl.query((e.s,), e.found(e.s), **flags)
+    out = capsys.readouterr().out
+    assert "── rewritten program ──" in out
+    assert "magic_talks" in out
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
