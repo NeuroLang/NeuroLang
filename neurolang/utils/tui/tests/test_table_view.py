@@ -13,6 +13,7 @@ from prompt_toolkit.input import create_pipe_input  # noqa: E402
 from prompt_toolkit.output import DummyOutput  # noqa: E402
 from rich.console import Console  # noqa: E402
 
+from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui import commands, table_view  # noqa: E402
 from neurolang.utils.tui.results import ResultBlock  # noqa: E402
@@ -202,7 +203,7 @@ def test_status_bar(frame):
 
 def _repl(results):
     console = Console(file=io.StringIO(), width=100)
-    app = InteractiveTuiApp(None, TuiSettings(), console=console,
+    app = InteractiveTuiApp(NeurolangPDL(), TuiSettings(), console=console,
                             err_console=console)
     app.results = results
     return app

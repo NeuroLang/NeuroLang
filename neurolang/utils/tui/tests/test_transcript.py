@@ -93,7 +93,7 @@ def test_transcript_records_every_entry(session, scores, tmp_path):
     assert "```squall\nobtain every scores.\n```" in text
     assert f"```text\n.load {scores}\n```" in text
     assert f"loaded scores(name, score): 2 rows from {scores}" in text
-    assert re.search(r"│ alice\s*│ 3 │", text)
+    assert re.search(r"│ alice\s*│\s*3 │", text)
     assert "45 rows · showing 21–40 · .more for next" in text
 
 
