@@ -61,7 +61,7 @@ from ..relational_algebra.pretty_printer import (
     subscript,
 )
 from .datalog.pretty_printer import DatalogPrettyPrinter
-from .stratum_solver import StratumSolver
+from .stratum_solver import StratumSolver, with_empty_relations
 
 __all__ = [
     "ShowRAChaseMixin",
@@ -235,18 +235,35 @@ def conditional_parts(rule, queries):
         and functor.adornment in ("cond_num", "cond_den")
     ):
         return None
+    parts = _conditional_parts_by(functor, queries, lambda f: f.expression)
+    if len(parts) != 2:
+        # magic sets can adorn the numerator and the denominator apart
+        parts = _conditional_parts_by(functor, queries, _unadorned_name)
+    if len(parts) != 2:
+        return None
+    return parts["cond_num"], parts["cond_den"]
+
+
+_MAGIC_ADORNMENT = re.compile(r"(\^[bf]+)?_\d+$")
+
+
+def _unadorned_name(functor):
+    """Name the predicate of ``functor``'s part without magic adornment."""
+    return _MAGIC_ADORNMENT.sub("", functor.expression.name)
+
+
+def _conditional_parts_by(functor, queries, key):
+    """Map the roles to the ``queries`` whose ``key`` is ``functor``'s."""
     parts = {}
     for query in queries:
         other = query.consequent.functor
         if (
             isinstance(other, AdornedSymbol)
-            and other.expression == functor.expression
             and other.adornment in ("cond_num", "cond_den")
+            and key(other) == key(functor)
         ):
             parts[other.adornment] = query
-    if len(parts) != 2:
-        return None
-    return parts["cond_num"], parts["cond_den"]
+    return parts
 
 
 def _conjuncts(formula):
@@ -1122,6 +1139,23 @@ class ShowRAStratumSolver(StratumSolver):
             options, query_symbol, engine.program_ir.symbol_table
         )
 
+    def query_predicate(self, query, rewritten_query):
+        """
+        Return the predicate symbol of the query to print the restriction of.
+
+        ``rewritten_query`` is the query rule ``query`` rewritten with magic
+        sets. When the predicate of ``query`` is generated for the query,
+        that of ``rewritten_query`` is displayed as ``ans`` too, and the
+        predicate of ``query``, whose restriction is not printed, is
+        returned; otherwise the predicate of ``rewritten_query`` is.
+        """
+        symbol = generated_query_symbol(query)
+        rewritten_symbol = rewritten_query.consequent.functor
+        if symbol is None:
+            return rewritten_symbol
+        self.display.renames[rewritten_symbol] = self.display.renames[symbol]
+        return symbol
+
     def deterministic(self, det_idb):
         """Print the RA plan of every deterministic rule."""
         print("── deterministic stratum ──")
@@ -1143,7 +1177,7 @@ class ShowRAStratumSolver(StratumSolver):
         print("── probabilistic stratum ──")
         engine = self.engine
         cpl, prob_idb = _build_probabilistic_program(
-            solution,
+            with_empty_relations(solution, prob_idb, engine.program_ir),
             engine.program_ir.probabilistic_facts(),
             engine.program_ir.probabilistic_choices(),
             prob_idb,
