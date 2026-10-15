@@ -135,11 +135,25 @@ def _with_timeout(function, timeout):
     return outcome.get("value")
 
 
-def _undefined_predicates(caught, known) -> list:
-    """Return the notes of the *caught* warnings on undefined predicates."""
+_UNDEFINED = re.compile(r"Symbol (\S+) used in rule body has no entry")
+
+
+def _undefined_predicates(caught, known, text: str) -> list:
+    """
+    Return the notes of the *caught* warnings on undefined predicates.
+
+    Only the predicates written in the query *text* are reported: those
+    the engine generates while rewriting it (the magic sets'
+    ``magic_p^bf_0``, the rules SQUALL numbers) are defined when it runs.
+    """
+    written = {word.lower() for word in re.findall(r"[\w:]+", text)}
     notes = []
     for warning in caught:
-        note = warning_note(str(warning.message), known)
+        message = str(warning.message)
+        match = _UNDEFINED.match(message)
+        if match and match.group(1).lower() not in written:
+            continue
+        note = warning_note(message, known)
         if "has no facts or rules" in note:
             notes.append(note.removeprefix("note: "))
     return list(dict.fromkeys(notes))
@@ -268,7 +282,7 @@ def check_query(nl, text: str, language: str) -> CheckResult:
             _execute(nl, text, language, dry_run=True)
     except Exception as exc:
         return CheckResult(False, error_message(nl, exc, text, language))
-    problems = _undefined_predicates(caught, _known_symbol_names(nl))
+    problems = _undefined_predicates(caught, _known_symbol_names(nl), text)
     datalog = ""
     if language == "squall":
         try:

@@ -99,3 +99,92 @@ examples:
     datalog: |-
       mentioned_term(t) :- selected_study(s), mentions(s, t)
       ans(t, p) :- PROB[mentioned_term(t)] = p
+
+  # Euclidean distances: voxels are indices of the 1 mm MNI grid, the MNI
+  # point (x, y, z) being the voxel (x + 98, y + 134, z + 72), so that a
+  # distance between voxels is in mm. The left amygdala, MNI (-24, -4, -20),
+  # is the voxel (74, 130, 52).
+  - question: Which studies report an activation within 6 mm of the left amygdala, MNI (-24, -4, -20)?
+    squall: obtain every Study that reports a Voxel (?i; ?j; ?k) such that euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 6.
+    datalog: ans(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 6)
+
+  - question: Which terms are mentioned by more than 50 of the studies activating within 6 mm of the voxel (74, 130, 52), and by how many?
+    squall: |-
+      define as Roi_study every Study that reports a Voxel (?i; ?j; ?k) such that euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 6.
+      define as Roi_term_count for every Term ; where every Count of the Roi_study that mentions the Term.
+      obtain every Roi_term_count (?t; ?n) such that ?n is greater than 50.
+    datalog: |-
+      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 6)
+      roi_term(t, s) :- roi_study(s), mentions(s, t)
+      term_count(t, n) :- AGGREGATE[t](roi_term(t, s) @ count(s)) = n
+      ans(t, n) :- term_count(t, n), (n > 50)
+
+  - question: How many studies report each voxel within 5 mm of the MNI point (-24, -4, -20)?
+    datalog: |-
+      near_peak(i, j, k, s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 5)
+      voxel_count(i, j, k, n) :- AGGREGATE[i, j, k](near_peak(i, j, k, s) @ count(s)) = n
+      ans(i, j, k, n) :- voxel_count(i, j, k, n)
+
+  - question: What is the probability that a study activates within 10 mm of the left amygdala, voxel (74, 130, 52), given that it mentions fear?
+    datalog: |-
+      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
+      active_roi(s) :- roi_study(s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active_roi(s) // term_association(s, 'fear')] = p
+
+  # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
+  # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
+  # being over the uniform choice of a study, selected_study; a BF above
+  # sqrt(10), about 3.16, is substantial evidence.
+  - question: Decode the left amygdala with Bayes factors, which terms are associated with activations within 10 mm of the MNI point (-24, -4, -20), with a Bayes factor above 3.16?
+    squall: |-
+      define as Roi_study (?r; ?s) where Peak_reported (?i, ?j, ?k, ?s) and euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 10 and ?r is 'left amygdala'.
+      define as Active_region every Roi_study (?r; ?s) such that ?s is a Selected_study.
+      define as Region_probability with inferred probability every Active_region (?r; _).
+      define as Mentioned_term every Term that a Selected_study mentions.
+      define as Term_probability with inferred probability every Mentioned_term.
+      define as Cooccurrence (?r; ?t) where Roi_study (?r, ?s) and ?s is a Selected_study and ?s mentions ?t.
+      define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
+      define as Bayes_factor (?r; ?t; ?bf)
+          where Joint_probability (?r, ?t, ?p_rt)
+          and Region_probability (?r, ?p_r)
+          and Term_probability (?t, ?p_t)
+          and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+      obtain every Bayes_factor (?r; ?t; ?bf) such that ?bf is greater than 3.16.
+    datalog: |-
+      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
+      active_roi(s) :- selected_study(s), roi_study(s)
+      mentioned_term(t) :- selected_study(s), mentions(s, t)
+      cooccurrence(t, s) :- selected_study(s), roi_study(s), mentions(s, t)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      strong(t, bf) :- bayes_factor(t, bf), (bf > 3.16)
+      ans(t, bf) :- strong(t, bf)
+
+  - question: What is the Bayes factor of the term fear for activations within 10 mm of the voxel (74, 130, 52)?
+    squall: |-
+      define as Roi_study (?r; ?s) where Peak_reported (?i, ?j, ?k, ?s) and euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 10 and ?r is 'roi'.
+      define as Active_region every Roi_study (?r; ?s) such that ?s is a Selected_study.
+      define as Region_probability with inferred probability every Active_region (?r; _).
+      define as Mentioned_term every Term that a Selected_study mentions.
+      define as Term_probability with inferred probability every Mentioned_term.
+      define as Cooccurrence (?r; ?t) where Roi_study (?r, ?s) and ?s is a Selected_study and ?s mentions ?t.
+      define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
+      define as Bayes_factor (?r; ?t; ?bf)
+          where Joint_probability (?r, ?t, ?p_rt)
+          and Region_probability (?r, ?p_r)
+          and Term_probability (?t, ?p_t)
+          and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+      obtain every Bayes_factor (?r; ?t; ?bf) such that ?t is 'fear'.
+    datalog: |-
+      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
+      active_roi(s) :- selected_study(s), roi_study(s)
+      mentioned_term(t) :- selected_study(s), mentions(s, t)
+      cooccurrence(t, s) :- selected_study(s), roi_study(s), mentions(s, t)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(bf) :- bayes_factor('fear', bf)

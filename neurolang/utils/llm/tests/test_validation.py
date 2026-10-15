@@ -1,7 +1,14 @@
+import warnings
+
 import pytest
 
 from ..context import EngineContext
-from ..validation import arity_errors, check_query, run_preview
+from ..validation import (
+    _undefined_predicates,
+    arity_errors,
+    check_query,
+    run_preview,
+)
 
 
 def symbols(nl):
@@ -38,6 +45,28 @@ def test_invalid_queries(nl, query, language, message):
     result = check_query(nl, query, language)
     assert not result.ok
     assert message in result.message
+
+
+def test_predicates_generated_by_the_rewriting_are_not_undefined():
+    """
+    The warnings of a dry run name the predicates the rewriting of the
+    query generates (magic sets, numbered SQUALL rules): only those the
+    query writes are undefined.
+    """
+    def warning(name):
+        return warnings.WarningMessage(
+            f"Symbol {name} used in rule body has no entry in the symbol "
+            "table. Types cannot be inferred for this predicate.",
+            UserWarning, "", 0,
+        )
+
+    caught = [warning(name) for name in (
+        "magic_cooccurrence^fb_0", "roi_study_0", "mention",
+    )]
+    query = "define as Roi_study every Study that mention 'pain'."
+    assert _undefined_predicates(caught, ["mentions"], query) == [
+        "predicate mention has no facts or rules — did you mean mentions?"
+    ]
 
 
 def test_checks_leave_the_engine_unchanged(nl):
