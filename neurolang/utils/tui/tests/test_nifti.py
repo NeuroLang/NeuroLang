@@ -480,3 +480,16 @@ class TestView:
         assert "threshold" in kwargs
         path = _output(tiny).split("viewer to: ")[1].split()[0]
         Path(path).unlink()
+
+
+def test_view_keeps_nilearn_warnings_quiet(tiny, tiny_image):
+    """Check the warnings of nilearn's viewer do not reach the prompt."""
+    import warnings
+
+    pytest.importorskip("nilearn.plotting")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tiny._handle_dot_command(f".view {tiny_image}")
+    out = _output(tiny)
+    assert "Saved the viewer to" in out
+    Path(out.split("viewer to: ")[1].split()[0]).unlink()
