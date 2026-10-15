@@ -6,7 +6,6 @@ import numpy as np
 from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
-    extract_logic_predicates,
 )
 from ..datalog.constraints_representation import (
     RightImplication,
@@ -16,7 +15,7 @@ from ..datalog.constraints_representation import (
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import TRUE, Implication, Negation, Union
+from ..logic import TRUE, Implication, Union
 from .expressions import ProbabilisticFact
 
 
@@ -102,25 +101,11 @@ def stratify_program(query, program):
     _check_for_query_based_probfact_dependency_on_prob_relation(
         grpd_idbs["probabilistic"], grpd_symbs
     )
-    _check_no_negated_prob_idb_predicate(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
         if idb_rules
     }
-
-
-def _check_no_negated_prob_idb_predicate(prob_idb):
-    if any(
-        any(
-            isinstance(pred, Negation) and pred.formula.functor in prob_idb
-            for pred in extract_logic_predicates(rule.antecedent)
-        )
-        for rule in prob_idb
-    ):
-        raise UnsupportedProgramError(
-            "Negation not permitted in probabilistic rules"
-        )
 
 
 def _get_program_deterministic_symbols(program):
