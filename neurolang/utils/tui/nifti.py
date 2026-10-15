@@ -96,22 +96,73 @@ def _view_nifti(console, path: str) -> None:
         console.print(f"[red]Visualisation failed: {exc}[/red]")
 
 
+_COMPOUND_SUFFIXES = (".nii.gz", ".csv.gz", ".tsv.gz")
+
+
+def split_suffix(path: Path) -> tuple:
+    """
+    Return the name of *path* without its suffix, and its suffix.
+
+    The suffix of ``out.nii.gz`` is ``.nii.gz``, in its own case, as
+    are those of ``.csv.gz`` and ``.tsv.gz``.
+    """
+    name = path.name
+    for suffix in _COMPOUND_SUFFIXES:
+        if name.lower().endswith(suffix) and len(name) > len(suffix):
+            return name[:-len(suffix)], name[-len(suffix):]
+    return path.stem, path.suffix
+
+
+def is_nifti_path(path: Path) -> bool:
+    """Return whether *path* names a NIfTI file: ``.nii`` or ``.nii.gz``."""
+    return split_suffix(path)[1].lower() in (".nii", ".nii.gz")
+
+
 def _save_path(path: Path, title: str, several: bool) -> Path:
-    """Return where to save the block *title* of a result in *path*."""
+    """
+    Return where to save the block *title* of a result in *path*.
+
+    With *several* blocks, the block's title is added to the name, before
+    its suffix (``out_first.nii.gz``).
+    """
     if not several:
         return path
-    return path.with_name(f"{path.stem}_{title}{path.suffix}")
+    stem, suffix = split_suffix(path)
+    return path.with_name(f"{stem}_{title}{suffix}")
+
+
+def table_format(path: Path) -> tuple:
+    """
+    Return the separator of the table file *path* and its format's name.
+
+    A ``.tsv`` file, possibly gzipped, is tab-separated and any other
+    comma-separated; pandas compresses the file after its extension.
+    """
+    suffix = split_suffix(path)[1].lower()
+    sep, name = ("\t", "TSV") if suffix.startswith(".tsv") else (",", "CSV")
+    if suffix.endswith(".gz"):
+        name += " (gzip)"
+    return sep, name
+
+
+def _save_table(console, df: pd.DataFrame, path: Path) -> None:
+    """Save *df* as the CSV or TSV file *path* and tell what was written."""
+    sep, name = table_format(path)
+    df.to_csv(path, index=False, sep=sep)
+    rows = "1 row" if len(df) == 1 else f"{len(df)} rows"
+    console.print(
+        f"Saved {rows} as {name} to: {path}", style="green", markup=False
+    )
 
 
 def _save_frame(console, df: pd.DataFrame, path: Path) -> None:
-    """Save *df* in *path*, as NIfTI if it ends with ``.nii``, else CSV."""
+    """Save *df* in *path*: as NIfTI for ``.nii(.gz)``, else as a table."""
     try:
-        if path.suffix == ".nii":
+        if is_nifti_path(path):
             nib.save(_result_to_nifti(df), path)
             console.print(f"[green]NIfTI saved to: {path}[/green]")
         else:
-            df.to_csv(path, index=False)
-            console.print(f"[green]CSV saved to: {path}[/green]")
+            _save_table(console, df, path)
     except Exception as exc:
         console.print(f"[red]Save failed: {exc}[/red]")
 
