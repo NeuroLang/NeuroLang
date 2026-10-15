@@ -22,6 +22,18 @@ engines:
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+    text_embeddings:
+      study_abstracts:
+        ids_from: study
+        source: pubmed
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: query_similarity
+        description: >-
+          query_similarity(query, study) returns the cosine similarity
+          between a free-text query and the study's title and abstract
+          (PubMed), embedded with SPECTER2.
     #probabilistic_choice:
       # selected_study:
       #  source: study

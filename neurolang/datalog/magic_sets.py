@@ -649,31 +649,33 @@ def adorn_code(
                         rule.consequent, Conjunction(formulas)
                     )
             new_consequent = consequent.functor(*rule.consequent.args)
-            adorned_antecedent, to_adorn = adorn_antecedent(
-                rule, new_consequent, rewritten_rules, sips
+            adorned_antecedent, predicates = adorn_antecedent(
+                rule, new_consequent, sips
             )
-            adorn_stack += to_adorn
+            adorn_stack += [
+                predicate for predicate in predicates
+                if predicate.functor not in rewritten_rules
+            ]
             rewritten_program.append(
                 Implication(new_consequent, adorned_antecedent)
             )
             rewritten_rules.add(consequent.functor)
-            for predicate in to_adorn:
+            # Predicates already adorned still need the magic init of
+            # their constants, e.g. r(2, y) after r(1, y) was adorned.
+            for predicate in predicates:
                 if any([isinstance(arg, Constant) for arg in predicate.args]):
                     constant_predicates.add(predicate)
 
     return Union(rewritten_program), constant_predicates
 
 
-def adorn_antecedent(
-    rule, adorned_head, rewritten_rules, sips: SIPS
-):
-    to_adorn = []
+def adorn_antecedent(rule, adorned_head, sips: SIPS):
+    predicates = []
     arcs, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
     for adorned_predicate in arcs.keys():
         if isinstance(adorned_predicate, Negation):
             adorned_predicate = adorned_predicate.formula
-        if adorned_predicate.functor not in rewritten_rules:
-            to_adorn.append(adorned_predicate)
+        predicates.append(adorned_predicate)
 
     antecedent = rule.antecedent
 
@@ -686,15 +688,17 @@ def adorn_antecedent(
         )
     else:
         adorned_antecedent = Conjunction(adorned_antecedent)
-    return adorned_antecedent, to_adorn
+    return adorned_antecedent, predicates
 
 
 def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
     """
     Return the symbols of the predicates of ``datalog`` which are random.
 
-    These are the within-language probabilistic queries (WLQs) and the
-    :func:`random_predicate_symbols` of ``datalog``, none if it is not
+    These are the within-language probabilistic queries (WLQs), the
+    :func:`random_predicate_symbols` of ``datalog`` and the predicates
+    depending on them, e.g. ``q`` in ``q(x, p) :- q^cond_num(x, p1) &
+    q^cond_den(p2) & (p == p1 / p2)``; none if ``datalog`` is not
     probabilistic. Magic predicates derived from these would not be
     deterministic, and restricting a probabilistic rule by them could
     change probabilities.
@@ -703,7 +707,10 @@ def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
         wlq_symbols = set(datalog.within_language_prob_queries())
     except AttributeError:
         return set()
-    return random_predicate_symbols(datalog) | wlq_symbols
+    return _symbols_depending_on(
+        get_list_of_intensional_rules(datalog),
+        random_predicate_symbols(datalog) | wlq_symbols,
+    )
 
 
 def random_predicate_symbols(datalog) -> Set[Symbol]:
@@ -721,14 +728,19 @@ def random_predicate_symbols(datalog) -> Set[Symbol]:
         rule for rule in get_list_of_intensional_rules(datalog)
         if rule.consequent.functor not in wlq_symbols
     ]
-    new_symbols = random_symbols
+    return _symbols_depending_on(rules, random_symbols)
+
+
+def _symbols_depending_on(rules, symbols):
+    """Return ``symbols`` and the heads of ``rules`` depending on them."""
+    new_symbols = symbols
     while new_symbols:
         new_symbols = {
             rule.consequent.functor for rule in rules
-            if any_body_preds_in_set(rule, random_symbols)
-        } - random_symbols
-        random_symbols = random_symbols | new_symbols
-    return random_symbols
+            if any_body_preds_in_set(rule, symbols)
+        } - symbols
+        symbols = symbols | new_symbols
+    return symbols
 
 
 def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:

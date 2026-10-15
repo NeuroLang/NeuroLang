@@ -4,7 +4,6 @@ from typing import AbstractSet
 import numpy as np
 import pytest
 
-from ...config import config
 from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
@@ -417,10 +416,7 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 
 def test_large_probabilistic_choice(solver):
-    if (
-        config["RAS"].get("backend", "pandas") == "dask"
-        or solver is weighted_model_counting
-    ):
+    if solver is weighted_model_counting:
         n = int(1000)
     else:
         n = int(10000)

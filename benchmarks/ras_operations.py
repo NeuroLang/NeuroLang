@@ -5,6 +5,15 @@ from neurolang.config import config
 
 
 class TimeRASOperations:
+
+    """
+    Time relational algebra set operations on the pandas and polars backends.
+
+    Each benchmark builds its operands, applies one operation and takes the
+    length of the result: the polars backend evaluates lazily, so this
+    forces both backends to compute (and deduplicate) the result.
+    """
+
     params = (["pandas", "polars"], [1000, 10000, 100000, 1000000])
     param_names = ["backend", "n"]
     timeout = 300
@@ -31,18 +40,18 @@ class TimeRASOperations:
     def time_projection(self, backend, n):
         ras = self.RAS
         s = ras.RelationalAlgebraFrozenSet(self.tuples_a)
-        s.projection(0, 2)
+        len(s.projection(0, 2))
 
     def time_selection_callable(self, backend, n):
         ras = self.RAS
         s = ras.RelationalAlgebraFrozenSet(self.tuples_a)
-        s.selection(lambda t: t[0] % 2 == 0)
+        len(s.selection(lambda t: t[0] % 2 == 0))
 
     def time_cross_product(self, backend, n):
         ras = self.RAS
         sa = ras.RelationalAlgebraFrozenSet(self.tuples_a[: self.n_small])
         sb = ras.RelationalAlgebraFrozenSet(self.tuples_b[: self.n_small])
-        sa.cross_product(sb)
+        len(sa.cross_product(sb))
 
     def _named_xy_label(self, ras, data):
         return ras.NamedRelationalAlgebraFrozenSet(
@@ -58,29 +67,29 @@ class TimeRASOperations:
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sb = self._named_xz_tag(ras)
-        sa.naturaljoin(sb)
+        len(sa.naturaljoin(sb))
 
     def time_union(self, backend, n):
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sb = self._named_xy_label(ras, self.tuples_b)
-        _ = sa | sb
+        len(sa | sb)
 
     def time_difference(self, backend, n):
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sb = self._named_xy_label(ras, self.tuples_b)
-        _ = sa - sb
+        len(sa - sb)
 
     def time_groupby_agg(self, backend, n):
         ras = self.RAS
         sc = self._named_xy_label(ras, self.tuples_c)
-        sc.aggregate(["label"], {"x": sum})
+        len(sc.aggregate(["label"], {"x": sum}))
 
     def time_extended_projection(self, backend, n):
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
-        sa.extended_projection({"x": "x", "double_x": "x * 2"})
+        len(sa.extended_projection({"x": "x", "double_x": "x * 2"}))
 
 
 class TimeUnnamedDifference:

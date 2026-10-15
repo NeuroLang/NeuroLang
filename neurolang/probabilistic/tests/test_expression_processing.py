@@ -173,7 +173,9 @@ def test_probabilistic_predicate_symbols_agree_with_magic_sets():
     through a within-language probabilistic query (WLQ), are
     probabilistic, recursive ones included; the WLQs and the predicates
     depending on them are not. The frontend check of query predicates and
-    the magic sets must agree on these.
+    the magic sets must agree on these. The magic sets SIPS passes no
+    binding from the WLQs and the predicates depending on them either, as
+    they are solved after the magic predicates.
     """
     E, PF, PC, D, DR, R, PR, W, PW = (
         Symbol(name)
@@ -206,5 +208,5 @@ def test_probabilistic_predicate_symbols_agree_with_magic_sets():
 
     assert probabilistic == {PF, PC, R, PR}
     assert probabilistic == (
-        probabilistic_symbols(program) - {W}
+        probabilistic_symbols(program) - {W, PW}
     ).intersection(symbols)
