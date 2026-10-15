@@ -258,6 +258,33 @@ def test_plan_propagates_constant_to_term_association(nl, capsys):
     assert all("magic_" in body for body in numerator_rules), rules
 
 
+@pytest.mark.parametrize("predicate", ["r", "r_2"])
+def test_show_ra_pairs_parts_adorned_apart(predicate, capsys):
+    """
+    Display the parts of a conditional query adorned apart as one query.
+
+    With ``'pain'`` bound, magic sets adorn the numerator of ``r`` as
+    ``r^fffbf_0^cond_num`` and its denominator as ``r^bf_0^cond_den``;
+    the display pairs them all the same, also when the name of the
+    predicate ends as a magic sets adornment does, as ``r_2``.
+    """
+    nl = _engine()
+    nl.execute_datalog_program(
+        f"{predicate}(i, j, k, t, PROB(i, j, k, t)) :- "
+        "activation(i, j, k, s) // term_association(s, t)"
+    )
+    with nl.scope as e:
+        nl.query(
+            (e.i, e.p),
+            getattr(e, predicate)(e.i, e.j, e.k, "pain", e.p),
+            show_ra=True,
+        )
+    out = capsys.readouterr().out
+    assert out.count("── conditional query ") == 1, out
+    assert f"── conditional query {predicate}^fffbf_0(" in out
+    assert f"── rule {predicate}^bf_0^cond_den(" in out
+
+
 def test_constant_through_probabilistic_idb_equals_unrestricted(nl):
     """
     Restrict a probabilistic rule body by deterministic magic sets only.
