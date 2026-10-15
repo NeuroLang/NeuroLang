@@ -720,6 +720,26 @@ def _load_deterministic_atlas(
     rows = [(_label_name(v), regions[k]) for k, v in labels]
 
     nl.add_tuple_set(rows, name=pred_name)
+    _register_region_grid(nl, pred_name, img)
+
+
+def _register_region_grid(nl, pred_name: str, image) -> None:
+    """Record the grid of the regions of the atlas relation *pred_name*."""
+    grids = getattr(nl, "_region_grids", None)
+    if grids is None:
+        grids = nl._region_grids = {}
+    grids[pred_name] = (np.asarray(image.affine), tuple(image.shape[:3]))
+
+
+def region_grids(nl) -> dict:
+    """
+    Return the grids of the atlas relations of *nl*, by name: the affine
+    and the shape of the image whose voxels their regions list.
+
+    The engine may store a region as the list of its voxels, without its
+    grid, which this tells.
+    """
+    return dict(getattr(nl, "_region_grids", None) or {})
 
 
 def _load_probabilistic_atlas(
@@ -832,6 +852,16 @@ def _resolve_mask(
         # identity would also scale its homogeneous coordinate.
         mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
     return mask
+
+
+def engine_mask(
+    name: str, data_dir: Path, resolution: Optional[float] = None
+) -> Optional[nib.Nifti1Image]:
+    """
+    Return the MNI mask whose grid the voxels of engine *name* index, as
+    :func:`build_engine` gets it, or None when the engine has none.
+    """
+    return _resolve_mask(get_engine_config(name), Path(data_dir), resolution)
 
 
 def _phase_builtins(nl, cfg):

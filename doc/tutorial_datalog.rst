@@ -962,6 +962,43 @@ append ``:desc`` for descending order)::
         --sort "w:desc" \
         "ans(t, w) :- term_in_study_tfidf(s, t, w)"
 
+Saving and viewing the results
+------------------------------
+
+``--save PATH`` also writes the result in a file, in the format its
+extension names:
+
+* ``.csv``, ``.tsv`` or ``.json`` (optionally followed by ``.gz``): the
+  table of the result, sorted as ``--sort`` asks. Regions are written as
+  their size, ``<region of N voxels>``.
+* ``.nii`` or ``.nii.gz``: a NIfTI brain image, when the result has a
+  region column, or the voxel columns ``i``, ``j``, ``k`` of the engine's
+  MNI grid with at most one other, numeric column giving the value of each
+  voxel (1 without it), such as a probability or a count. Voxels outside
+  the grid, like the few peaks Neurosynth reports outside the template's
+  box, are left out, with a note. One region gives its image, in its own
+  grid (an overlay gives its values); several regions give a label image,
+  the region of row *n* having the value *n* + 1, and their other columns
+  are written beside it in ``<name>_labels.csv``.
+
+A SQUALL program of several ``obtain`` statements gives a file per
+statement, its name suffixed with the statement's.
+
+``--view`` opens the image of the result in the browser at the end, over
+the MNI template, with nilearn's viewer. For instance, the map of the
+number of studies mentioning pain that report each voxel::
+
+    neurolang-query --engine neurosynth --save pain.nii.gz --view \
+        "n_pain(i, j, k, count(s)) :- reports(s, i, j, k), mentions(s, 'pain').
+         ans(i, j, k, n) :- n_pain(i, j, k, n)"
+
+and the Schaefer parcels, as a label image::
+
+    neurolang-query --engine neurosynth --save schaefer.nii.gz \
+        "ans(l, r) :- schaefer(l, r)"
+
+Both work with ``--ask`` too, which then runs the query it writes.
+
 Inspecting query plans
 ----------------------
 

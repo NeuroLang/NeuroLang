@@ -86,6 +86,7 @@ a guided walkthrough.
    tutorial_datalog
    concepts
    engine_configuration
+   query_assistant
    performance
    auto_examples/index
    api

@@ -1,7 +1,5 @@
 """The interactive REPL loop and the execution of the queries it reads."""
 
-import difflib
-import re
 import sys
 import time
 import warnings
@@ -22,12 +20,14 @@ from neurolang.utils.cli import (
     _execute_program,
     _execute_squall_program,
     _known_symbol_names,
+    warning_note,
     report_error,
     result_to_dataframe,
     sort_dataframe,
     squall_column_names,
 )
 
+from .assistant import AssistantState
 from .commands import (
     QuitRepl,
     engine_examples,
@@ -81,7 +81,9 @@ class TuiSettings:
     They are initialised from the command line options and some of them
     can be changed with dot-commands during the session. The data
     directory and the command line describe the session in its
-    transcript.
+    transcript. *llm_config* and *llm_provider* are the configuration
+    file and the provider of the LLM assistant (``.ask``), by default
+    those the configuration gives.
     """
 
     engine_name: str = ""
@@ -97,29 +99,8 @@ class TuiSettings:
     history_path: Optional[str] = None
     data_dir: str = ""
     command_line: str = ""
-
-
-_UNDEFINED_PREDICATE = re.compile(
-    r"Symbol (\S+) used in rule body has no entry in the symbol table"
-)
-
-
-def warning_note(message: str, known_symbols) -> str:
-    """
-    Return a one-line note for a warning *message* raised by a query.
-
-    A predicate used without facts or rules is reported with the closest
-    of the *known_symbols*, if any.
-    """
-    match = _UNDEFINED_PREDICATE.match(message)
-    if match is None:
-        return f"note: {message.strip().splitlines()[0]}"
-    name = match.group(1)
-    note = f"note: predicate {name} has no facts or rules"
-    close = difflib.get_close_matches(name, known_symbols, n=1)
-    if close:
-        note += f" — did you mean {close[0]}?"
-    return note
+    llm_config: Optional[str] = None
+    llm_provider: Optional[str] = None
 
 
 class InteractiveTuiApp:
@@ -152,6 +133,11 @@ class InteractiveTuiApp:
         # The rules added by the submission of the last query, by symbol.
         self.last_added_rules: dict = {}
         self.failed = False
+        # The input put in the next prompt, e.g. the query of .ask.
+        self.pending_input = ""
+        self.assistant = AssistantState(
+            self.settings.llm_config, self.settings.llm_provider
+        )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
         self.squall_rules: dict = {}
@@ -467,8 +453,12 @@ class InteractiveTuiApp:
         interrupts it; both keep the session. Return False when the REPL
         must end, on Ctrl+D or ``.quit``.
         """
+        options = {}
+        if self.pending_input:
+            options["default"] = self.pending_input
+            self.pending_input = ""
         try:
-            line = session.prompt(self._get_prompt())
+            line = session.prompt(self._get_prompt(), **options)
         except KeyboardInterrupt:
             return True
         except EOFError:

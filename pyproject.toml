@@ -67,6 +67,10 @@ tui = [
     "rich>=13.0",
 ]
 
+llm = [
+    "httpx>=0.27",
+]
+
 doc = [
     "sphinx>=7.0",
     "pydata-sphinx-theme>=0.15",

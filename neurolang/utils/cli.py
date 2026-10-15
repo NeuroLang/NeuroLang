@@ -51,9 +51,13 @@ Usage
 
     # ... or run REPL statements and dot-commands from a pipe
     echo 'ans(x) :- study(x)' | neurolang-query -i
+
+    # Write a query with an LLM (needs ``pip install "neurolang[llm]"``)
+    neurolang-query --squall --ask "Which studies mention pain?" --run
 """
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -80,7 +84,7 @@ from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.logic import ExistentialPredicate
 from neurolang.probabilistic.expressions import Condition
-from neurolang.utils import engine_registry
+from neurolang.utils import engine_registry, query_highlight
 from neurolang.utils.sort_hints import sort_notes
 
 
@@ -479,6 +483,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output format (default: table).",
     )
     parser.add_argument(
+        "--save",
+        metavar="PATH",
+        default=None,
+        help="Also save the result in PATH: as a table in CSV, TSV or JSON "
+        "(.csv, .tsv, .json, optionally .gz), or as a NIfTI brain image "
+        "(.nii, .nii.gz) when it has a region column or the voxel columns "
+        "i, j, k (and at most one value column, e.g. a probability). A "
+        "result of several obtain statements gives a file per statement.",
+    )
+    parser.add_argument(
+        "--view",
+        action="store_true",
+        help="At the end, open the brain image of the result in the "
+        "browser, on the MNI template (nilearn's viewer).",
+    )
+    parser.add_argument(
         "--list-predicates",
         "-l",
         action="store_true",
@@ -570,6 +590,53 @@ def _build_parser() -> argparse.ArgumentParser:
         "every query of the session. If stdin is not a terminal, its "
         "statements and dot-commands are run as a batch (exit status 1 "
         "if one fails).",
+    )
+    parser.add_argument(
+        "--ask",
+        metavar="QUESTION",
+        default=None,
+        help="Write a query answering QUESTION with an LLM and print it "
+        "(SQUALL with --squall, else Datalog, unless the configuration "
+        "sets the language). Needs the llm extra: pip install "
+        "'neurolang[llm]'.",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="With --ask, also run the query and print its result.",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="With --ask, show how the query is found, on stderr: -v the "
+        "reasoning, tool calls and results of each step, -vv every "
+        "message sent to the LLM (the system prompt first) and its "
+        "replies.",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=("react", "icl"),
+        default=None,
+        help="With --ask, the strategy of the LLM assistant: react (an "
+        "agent exploring the engine with tools) or icl (few-shot prompt, "
+        "then validation and repair). Default: the configuration's.",
+    )
+    parser.add_argument(
+        "--llm-config",
+        metavar="PATH",
+        default=None,
+        help="Configuration file of the LLM providers (default: "
+        "$NEUROLANG_LLM_CONFIG, then ~/.config/neurolang/llm.yaml, then "
+        "the example shipped with NeuroLang).",
+    )
+    parser.add_argument(
+        "--llm-provider",
+        metavar="NAME",
+        default=None,
+        help="LLM provider of the configuration to use with --ask and "
+        ".ask (default: its default_provider).",
     )
     parser.add_argument(
         "--debug",
@@ -818,6 +885,29 @@ def _known_symbol_names(nl: Optional[NeurolangPDL]) -> list:
     return sorted(n for n in names if _IDENTIFIER.match(n))
 
 
+_UNDEFINED_PREDICATE = re.compile(
+    r"Symbol (\S+) used in rule body has no entry in the symbol table"
+)
+
+
+def warning_note(message: str, known_symbols) -> str:
+    """
+    Return a one-line note for a warning *message* raised by a query.
+
+    A predicate used without facts or rules is reported with the closest
+    of the *known_symbols*, if any.
+    """
+    match = _UNDEFINED_PREDICATE.match(message)
+    if match is None:
+        return f"note: {message.strip().splitlines()[0]}"
+    name = match.group(1)
+    note = f"note: predicate {name} has no facts or rules"
+    close = difflib.get_close_matches(name, known_symbols, n=1)
+    if close:
+        note += f" — did you mean {close[0]}?"
+    return note
+
+
 def _debug_enabled(args) -> bool:
     """Return True if ``--debug`` or ``NEUROLANG_DEBUG`` is set."""
     return args.debug or os.environ.get("NEUROLANG_DEBUG", "0") not in (
@@ -1029,6 +1119,113 @@ def _print_result(result, args, sort_by, column_names=None) -> None:
         print(output)
 
 
+def _result_frames(result, column_names) -> dict:
+    """
+    Return the DataFrames of a query *result*, by ``obtain`` statement
+    (the key ``None`` for a single result).
+    """
+    column_names = column_names or {}
+    if isinstance(result, dict):
+        return {
+            key: result_to_dataframe(sub_result, column_names.get(key))
+            for key, sub_result in result.items()
+        }
+    if result is None or isinstance(result, bool):
+        return {}
+    names = next(iter(column_names.values()), None)
+    return {None: result_to_dataframe(result, names)}
+
+
+def _keyed_path(path: Path, key) -> Path:
+    """Return *path* for the result of the statement *key*, if any."""
+    if key is None:
+        return path
+    name = path.name
+    stem, dot, rest = name.partition(".")
+    return path.with_name(f"{stem}_{key}{dot}{rest}")
+
+
+def _region_grid_lookup(nl):
+    """
+    Return the function giving the grid of a region of *nl* stored as its
+    voxels: the grid of the atlas relation holding it, else None.
+    """
+    index = None
+
+    def grid_of(value):
+        nonlocal index
+        if index is None:
+            index = {}
+            for name, grid in engine_registry.region_grids(nl).items():
+                relation = getattr(nl.symbols, name).value
+                rows = relation.unwrap() if hasattr(relation, "unwrap") \
+                    else relation
+                for row in rows:
+                    for cell in row:
+                        if isinstance(cell, tuple):
+                            index[cell] = grid
+        try:
+            return index.get(value)
+        except TypeError:
+            return None
+    return grid_of
+
+
+def _save_and_view(result, args, sort_by, column_names, nl=None) -> None:
+    """
+    Save the *result* in ``--save`` and open its image with ``--view``.
+
+    Problems are reported on stderr and exit with status 1, after the
+    result was printed.
+    """
+    if not (args.save or args.view):
+        return
+    from neurolang.utils import result_export
+
+    mask = None
+    grid_of = _region_grid_lookup(nl) if nl is not None else None
+
+    def image_of(df):
+        nonlocal mask
+        needs_grid = not result_export.region_columns(df)
+        if needs_grid and mask is None:
+            mask = engine_registry.engine_mask(
+                args.engine, Path(args.data_dir), args.resolution
+            )
+        image = result_export.result_image(df, mask, grid_of)
+        if image.outside:
+            print(
+                f"note: {image.outside} voxel(s) outside the engine's grid "
+                "are left out of the image", file=sys.stderr,
+            )
+        return image
+
+    try:
+        if args.save:
+            result_export.check_path(args.save)
+        frames = _result_frames(result, column_names)
+        if not frames:
+            raise result_export.ExportError("the query gave no rows.")
+        images = {}
+        for key, df in frames.items():
+            if args.save:
+                path = _keyed_path(Path(args.save), key)
+                if result_export.is_image_path(path):
+                    images[key] = image_of(df)
+                    written = result_export.save_image(images[key], path)
+                else:
+                    result_export.save_table(sort_dataframe(df, sort_by), path)
+                    written = [path]
+                for path in written:
+                    print(f"Saved {path}", file=sys.stderr)
+            if args.view:
+                image = images.get(key) or image_of(df)
+                result_export.view_image(image, title=key or "")
+    except result_export.ExportError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
 def _run_query(args) -> None:
     """Build the engine and run the query of ``args``, printing its result."""
     nl = engine_registry.build_engine(
@@ -1047,9 +1244,9 @@ def _run_query(args) -> None:
     result = _run_reporting_errors(
         lambda: execute(nl, program), program, args, nl
     )
-    _print_result(
-        result, args, sort_by, _result_column_names(args, program)
-    )
+    column_names = _result_column_names(args, program)
+    _print_result(result, args, sort_by, column_names)
+    _save_and_view(result, args, sort_by, column_names, nl)
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
@@ -1093,6 +1290,8 @@ def _tui_settings(args, tui, argv=()):
         history_path=str(Path.home() / ".neurolang_query_history"),
         data_dir=str(Path(args.data_dir).expanduser().resolve()),
         command_line=shlex.join(["neurolang-query", *argv]),
+        llm_config=args.llm_config,
+        llm_provider=args.llm_provider,
     )
 
 
@@ -1154,6 +1353,153 @@ def _run_interactive(args, argv=()) -> None:
         sys.exit(status)
 
 
+def _ask_language(args, config) -> str:
+    """Return the language of the query of ``--ask``."""
+    if args.squall:
+        return "squall"
+    if config.assistant.language != "auto":
+        return config.assistant.language
+    return "datalog"
+
+
+# The lines of an observation that ``--ask -v`` prints.
+VERBOSE_OBSERVATION_LINES = 12
+
+
+def _print_step(step) -> None:
+    """Print a step of the LLM assistant on stderr, in one line."""
+    if step.action and step.action != "answer":
+        observation = step.observation.strip().splitlines()
+        print(
+            f"  → {step.action}: {observation[0] if observation else ''}",
+            file=sys.stderr, flush=True,
+        )
+
+
+def _verbose_step_printer(language: str):
+    """
+    Return the function printing a step of the LLM assistant on stderr:
+    its thought, the tool called with its arguments, its query on its
+    lines and highlighted as *language*, and the start of what it
+    returned.
+    """
+    def print_step(step) -> None:
+        _print_step_verbose(step, language)
+    return print_step
+
+
+def _print_step_verbose(step, language: str = "datalog") -> None:
+    """Print a step of the LLM assistant: see :func:`_verbose_step_printer`."""
+    from neurolang.utils.llm.trace import query_lines
+
+    if not step.action:
+        return
+    lines = []
+    if step.thought.strip():
+        lines.append(f"  thought: {' '.join(step.thought.split())}")
+    arguments = ", ".join(
+        f"{name}={value!r}" for name, value in step.arguments.items()
+        if name != "query"
+    )
+    lines.append(f"  → {step.action}({arguments})")
+    query = step.arguments.get("query")
+    if isinstance(query, str) and query.strip():
+        lines += query_lines(
+            query, language, query_highlight.use_color(sys.stderr), "      "
+        )
+    observation = step.observation.strip().splitlines()
+    shown = observation[:VERBOSE_OBSERVATION_LINES]
+    lines += [f"    {line}" for line in shown]
+    if len(observation) > len(shown):
+        lines.append(f"    … ({len(observation) - len(shown)} more lines)")
+    print("\n".join(lines), file=sys.stderr, flush=True)
+
+
+def _ask_reporting(args, provider, config, language):
+    """
+    Return the chat client and the step callback of ``--ask``, as
+    ``--verbose`` asks: one line per step, the steps in full (-v), or
+    the messages to and from the model (-vv).
+    """
+    if args.verbose >= 2:
+        from neurolang.utils.llm import make_client
+        from neurolang.utils.llm.trace import Printer, TracingClient
+
+        client = TracingClient(
+            make_client(provider, config.assistant.timeout),
+            Printer(full=True, language=language).show,
+        )
+        return client, None
+    if args.verbose == 1:
+        return None, _verbose_step_printer(language)
+    return None, _print_step
+
+
+def _run_ask(args) -> None:
+    """
+    Write the query answering ``--ask`` with an LLM and print it.
+
+    With ``--run`` the query is also run and its result printed. Exits
+    with status 1 when no valid query is found.
+    """
+    try:
+        from neurolang.utils.llm import (
+            LLMConfigError,
+            LLMError,
+            load_config,
+            make_agent,
+        )
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] != "httpx":
+            raise
+        print(
+            "Error: --ask needs the optional dependency httpx. Install it "
+            'with:\n    pip install "neurolang[llm]"', file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        config = load_config(args.llm_config)
+        provider = config.provider(args.llm_provider)
+    except LLMConfigError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    language = _ask_language(args, config)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    client, on_step = _ask_reporting(args, provider, config, language)
+    agent = make_agent(
+        nl, provider, config.assistant, language, args.strategy,
+        engine_name=args.engine, client=client, on_step=on_step,
+    )
+    try:
+        result = agent.run(args.ask)
+    except LLMError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not result.valid:
+        print(f"Error: no valid query: {result.error}", file=sys.stderr)
+        if result.query:
+            query = query_highlight.highlight(
+                result.query, language, sys.stderr
+            )
+            print(f"Last attempt:\n{query}", file=sys.stderr)
+        sys.exit(1)
+    print(query_highlight.highlight(result.query, language, sys.stdout))
+    if result.explanation:
+        print(f"-- {result.explanation}", file=sys.stderr)
+    if args.run or args.save or args.view:
+        args.squall = language == "squall"
+        execute = _execute_squall_program if args.squall else _execute_program
+        output = _run_reporting_errors(
+            lambda: execute(nl, result.query), result.query, args, nl
+        )
+        sort_by = _parse_sort_spec(args.sort)
+        column_names = _result_column_names(args, result.query)
+        _print_result(output, args, sort_by, column_names)
+        _save_and_view(output, args, sort_by, column_names, nl)
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -1161,6 +1507,10 @@ def main(argv: Optional[list] = None) -> None:
 
     if args.interactive:
         _run_interactive(args, sys.argv[1:] if argv is None else argv)
+        return
+    if args.ask:
+        _check_engine_name(args)
+        _run_ask(args)
         return
     if _run_engineless_command(args):
         return
