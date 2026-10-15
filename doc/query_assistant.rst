@@ -35,7 +35,9 @@ in the prompt, where it can be read, edited and run:
     nl(neurosynth:SQ)> obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'decision making' reports.
 
 From the command line, ``--ask`` prints the query, and ``--run`` also
-runs it:
+runs it. ``--save PATH`` and ``--view`` run it too, and save its result
+as a table or a NIfTI image, or open its image in the browser (see
+"Saving and viewing the results" in the Datalog tutorial):
 
 .. code-block:: bash
 
