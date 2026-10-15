@@ -1413,11 +1413,39 @@ def test_dalvi_suciu_fails_unate():
         R,
         [(0.1, 'a'), (0.3, 'c')]
     )
-    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    rule = Implication(P(x), Conjunction((
+        R(y), A(y, z), R(z), Q(x), Negation(R(x))
+    )))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+def test_dalvi_suciu_non_unate_shattered_on_free_variable():
+    """Q(x) ∧ ¬R(x) ∧ ∃y R(y) is not unate, it is lifted by shattering
+    ∃y R(y) into R(x) ∨ ∃y≠x R(y)."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [
+            (0.2 * 0.9 * 0.3, "a"),
+            (0.1 * (1 - 0.9 * 0.7), "b"),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_dalvi_suciu_fails_single_quantifier():
