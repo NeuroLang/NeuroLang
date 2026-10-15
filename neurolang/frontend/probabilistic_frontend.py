@@ -454,22 +454,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 (self._query_head_symbols(head)[0], query_pred_args),
             )
 
-        try:
-            magic_query, magic_rules = self._magic_rewrite_query(query)
-            if self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run
-            ):
-                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
-            with self.scope:
-                self.program_ir.walk(magic_rules)
-                solution = self._solve(magic_query)
-                query_pred_symb = magic_query.consequent.functor
-        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            if self._handle_rewritten_output(
-                query, show_rewritten, dry_run
-            ):
-                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
-            solution = self._solve(query)
+        solved = self._solve_rewritten(query, show_rewritten, dry_run)
+        if solved is None:
+            return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+        solution, query_pred_symb = solved
 
         head_symbols, functor_orig = self._query_head_symbols(head)
         solution = self._restrict_to_query_solution(
@@ -478,6 +466,33 @@ class NeurolangPDL(QueryBuilderDatalog):
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    def _solve_rewritten(self, query, show_rewritten, dry_run):
+        """
+        Solve ``query``, rewritten with magic sets if it can be.
+
+        The rewritten program is printed, within the scope holding the
+        magic rules it needs, when ``show_rewritten`` or ``dry_run`` is
+        set. When the query cannot be rewritten, ``query`` itself is
+        printed and solved. Return the solution and the symbol of the
+        solved query predicate, or None for a dry run.
+        """
+        try:
+            magic_query, magic_rules = self._magic_rewrite_query(query)
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                if self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run
+                ):
+                    return None
+                solution = self._solve(magic_query)
+                return solution, magic_query.consequent.functor
+        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+            if self._handle_rewritten_output(
+                query, show_rewritten, dry_run
+            ):
+                return None
+            return self._solve(query), query.consequent.functor
 
     @staticmethod
     def _query_head_symbols(head):
@@ -530,11 +545,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
-            self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run, show_ra=True
-            )
             with self.scope:
                 self.program_ir.walk(magic_rules)
+                self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run, show_ra=True
+                )
                 solution = self._solve(
                     magic_query, stratum_solver=stratum_solver
                 )

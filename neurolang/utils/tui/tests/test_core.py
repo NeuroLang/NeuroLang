@@ -231,8 +231,8 @@ def test_rewritten_toggle(small_app, capsys):
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── rewritten program ──" in capsys.readouterr().out
     assert list(small_app.results[0].frame["x"]) == [1, 2]
-    small_app._handle_dot_command(".rewritten")
-    assert "Rewritten program: on" in _output(small_app)
+    small_app._handle_dot_command(".rewritten off")
+    assert "Rewritten program: off" in _output(small_app)
 
 
 @pytest.fixture
@@ -323,24 +323,84 @@ def peaks_engine(engine):
     return engine
 
 
-def test_banner_lists_relations_and_example(peaks_engine):
-    app = _app(peaks_engine, engine_name="neurosynth")
+def _vocabulary_rules() -> str:
+    """Return the neurosynth rules defining its vocabulary predicates."""
+    from neurolang.utils import engine_registry
+
+    datalog_init = engine_registry.get_engine_config("neurosynth")[
+        "datalog_init"
+    ]
+    return "\n".join(
+        line for line in datalog_init.splitlines()
+        if line.strip().startswith(("mentions(", "reports(", "weighted_"))
+    )
+
+
+@pytest.fixture
+def vocabulary_engine():
+    """Return a small engine with the neurosynth vocabulary predicates."""
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(10,), (11,)], name="study")
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="voxel")
+    nl.add_tuple_set(
+        [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
+    )
+    nl.add_tuple_set(
+        [(10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4)],
+        name="term_in_study_tfidf",
+    )
+    nl.execute_datalog_program(_vocabulary_rules())
+    return nl
+
+
+def test_banner_lists_relations_and_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth")
     app._print_banner()
     out = _output(app)
     assert "Engine: neurosynth" in out
-    assert "Mode: Datalog · .help for help · Ctrl+D or .quit to exit" in out
+    assert (
+        "Mode: Datalog · .help for help · Tab completes · "
+        "Ctrl+D or .quit to exit"
+    ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
-    example = "ans(i, j, k, study_id) :- peak_reported(i, j, k, study_id)"
+    assert "weighted_mention(study_id, term, tfidf)" in out
+    example = "ans(s) :- mentions(s, 'pain')"
     assert f"Try: {example}" in out
     app._execute_and_display(example)
-    assert list(app.results[0].frame.columns) == ["i", "j", "k", "study_id"]
-    assert len(app.results[0].frame) == 2
+    assert app.results[0].frame.iloc[:, 0].tolist() == [10]
 
 
-def test_banner_squall_example(peaks_engine):
-    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+def test_banner_squall_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth", squall=True)
     app._print_banner()
-    assert "Try: obtain every peak_reported." in _output(app)
+    assert "Try: obtain every Study that mentions 'pain'." in _output(app)
+
+
+def test_engine_examples_run_on_the_vocabulary(vocabulary_engine):
+    from neurolang.utils.tui.commands import engine_examples
+
+    examples = engine_examples("neurosynth")
+    for language in ("datalog", "squall"):
+        app = _app(
+            vocabulary_engine, engine_name="neurosynth",
+            squall=language == "squall",
+        )
+        for query in examples[language]:
+            app._execute_and_display(query)
+            assert not app.failed, query
+            assert len(app.results[-1].frame) > 0, query
+
+
+def test_engine_examples_default_to_the_first_relation():
+    from neurolang.utils.tui.commands import engine_examples
+
+    examples = engine_examples("destrieux")
+    assert examples["squall"] == ["obtain every destrieux."]
+    assert examples["datalog"] == [
+        "ans(name, region) :- destrieux(name, region)"
+    ]
 
 
 def test_help_examples_match_engine_columns(small_app):
@@ -348,9 +408,70 @@ def test_help_examples_match_engine_columns(small_app):
     small_app._handle_dot_command(".help")
     out = _output(small_app)
     assert "term_in_study_tfidf(t, w, s)" not in out
-    assert "obtain every peak_reported." in out
+    assert "obtain every Study that mentions 'pain'." in out
+    assert "every Weighted_mention (?s; ?t; ?w)" in out
     assert ".more" in out
 
+
+
+def _primer_lines(out):
+    """Return the lines of the SQUALL primer panel in *out*."""
+    lines = out.splitlines()
+    start = next(
+        n for n, line in enumerate(lines) if "SQUALL primer" in line
+    )
+    end = next(
+        n for n in range(start, len(lines)) if lines[n].startswith("╰")
+    )
+    return lines[start:end]
+
+
+def test_help_squall_is_a_primer(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    out = _output(small_app)
+    assert "Dot commands" not in out
+    lines = _primer_lines(out)
+    assert len(lines) <= 30
+    primer = "\n".join(lines)
+    for text in (
+        "obtain every", "define as", "lowercase", "a Study mentions a Term",
+        "?s", "(?i; ?j; ?k)", "'pain'", '"working memory"', "in 3D",
+        "with inferred probability", "conditioned to",
+        "every Weighted_mention (?s; ?t; ?w) such that",
+    ):
+        assert text in primer, text
+
+
+def test_primer_shows_the_declared_sorts_of_several_columns(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "voxel(i, j, k)" in primer
+    assert "atlas_voxel(i, j, k)" in primer
+    assert "a voxel of the MNI template grid" in primer
+    assert "study(study_id)" not in primer
+
+
+def test_help_in_squall_mode_adds_the_primer(small_app):
+    small_app._handle_dot_command(".help")
+    assert "SQUALL primer" not in _output(small_app)
+    small_app.settings.squall = True
+    small_app._handle_dot_command(".help")
+    out = _output(small_app)
+    assert "Dot commands" in out and "SQUALL primer" in out
+
+
+def test_primer_without_engine(small_app):
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "obtain every" in primer and "Examples" not in primer
+
+
+def test_help_of_an_unknown_topic(small_app):
+    small_app._handle_dot_command(".help sql")
+    out = _output(small_app)
+    assert "No help on 'sql'" in out and ".help squall" in out
 
 def test_squall_obtain_shows_declared_column_names(peaks_engine):
     app = _app(peaks_engine, engine_name="neurosynth", squall=True)
@@ -417,11 +538,23 @@ def test_batch_stops_at_quit(small_app):
 
 
 def test_banner_shows_relations_without_columns_by_name(engine):
+    from unittest.mock import patch
+
     from neurolang.utils.tui.commands import engine_relations
 
-    relations = engine_relations("neurosynth")
-    assert "schaefer" in relations
-    assert "schaefer()" not in relations
+    predicates = {"schaefer": {"columns": []}, "p": {"columns": ["x"]}}
+    with patch(
+        "neurolang.utils.engine_registry.get_predicates",
+        return_value=predicates,
+    ):
+        relations = engine_relations("neurosynth")
+    assert relations == ["schaefer", "p(x)"]
+
+
+def test_banner_shows_the_atlas_columns():
+    from neurolang.utils.tui.commands import engine_relations
+
+    assert "schaefer(label, region)" in engine_relations("neurosynth")
 
 
 def test_no_sort_warning_on_empty_result(engine, capsys):
@@ -429,3 +562,29 @@ def test_no_sort_warning_on_empty_result(engine, capsys):
     app._execute_and_display("ans(x) :- P(x), Q(x)")
     assert "(empty)" in _output(app)
     assert "sort column" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "line, message",
+    [
+        (
+            ".mode prolog",
+            "Unknown mode 'prolog'. Use one of: datalog, squall, vi, emacs.",
+        ),
+        (".mode squall", "Mode: SQUALL"),
+        (".format", "Format: table"),
+        (".format json", "Format: json"),
+        (".ra maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".ra on", "RA plans: on"),
+        (".rewritten maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".rewritten on", "Rewritten program: on"),
+        (".head 0", "Page size must be a positive integer, not '0'."),
+        (".more", "No more rows."),
+        (".sort", "Sort: none"),
+        (".datalog", "No query has been run yet."),
+    ],
+)
+def test_command_messages(small_app, line, message):
+    small_app.console.width = 1000
+    small_app._handle_dot_command(line)
+    assert message in _output(small_app)
