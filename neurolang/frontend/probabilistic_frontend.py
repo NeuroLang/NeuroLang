@@ -88,10 +88,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
-from ..datalog.wrapped_collections import (
-    WrappedRelationalAlgebraFrozenSet,
-    WrappedRelationalAlgebraSet,
-)
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..commands import CommandsMixin
 from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
@@ -113,42 +110,12 @@ from .show_ra import (
     generated_query_symbol,
     show_ra_options,
 )
-from .stratum_solver import StratumSolver
+from .stratum_solver import StratumSolver, with_empty_relations
 
 
 def _symbol_names(symbols):
     """Return the names of ``symbols``."""
     return tuple(symbol.name for symbol in symbols)
-
-
-def _with_empty_relations(solution, prob_idb, program):
-    """
-    Return the relations of ``solution`` and the empty ones ``prob_idb`` uses.
-
-    The chase leaves out of its solution the deterministic intensional
-    predicates of ``program`` without tuples; the rules of ``prob_idb``
-    need their relations, of their arity, to select constants from them.
-    """
-    idb = program.intensional_database()
-    relations = dict(solution.items())
-    heads = {rule.consequent.functor for rule in prob_idb.formulas}
-    for rule in prob_idb.formulas:
-        for atom in extract_logic_atoms(rule.antecedent):
-            if atom.functor in idb and not (
-                atom.functor in heads or atom.functor in relations
-            ):
-                relations[atom.functor] = _empty_relation(len(atom.args))
-    return relations
-
-
-def _empty_relation(arity):
-    """Return an empty relation of ``arity`` columns."""
-    columns = tuple(str(i) for i in range(arity))
-    return ir.Constant[AbstractSet](
-        WrappedRelationalAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(columns, []).to_unnamed()
-        )
-    )
 
 
 def instance_lru_cache(key_fn, maxsize=128):
@@ -748,7 +715,9 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_probabilistic_stratum(self, solution, prob_idb):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
-        det_solution = self._deterministic_relations(solution, prob_idb)
+        det_solution = with_empty_relations(
+            solution, prob_idb, self.program_ir
+        )
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
         ):
@@ -781,14 +750,6 @@ class NeurolangPDL(QueryBuilderDatalog):
             }
         )
         return solution
-
-    def _deterministic_relations(self, solution, prob_idb):
-        """
-        Return the relations of ``solution`` and the empty ones ``prob_idb``
-        uses: the chase leaves out of its solution the deterministic
-        intensional predicates without tuples.
-        """
-        return _with_empty_relations(solution, prob_idb, self.program_ir)
 
     def _build_postprobabilistic_solver(self, solution, postprob_idb):
         """

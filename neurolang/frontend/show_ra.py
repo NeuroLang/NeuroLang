@@ -61,7 +61,7 @@ from ..relational_algebra.pretty_printer import (
     subscript,
 )
 from .datalog.pretty_printer import DatalogPrettyPrinter
-from .stratum_solver import StratumSolver
+from .stratum_solver import StratumSolver, with_empty_relations
 
 __all__ = [
     "ShowRAChaseMixin",
@@ -1177,7 +1177,7 @@ class ShowRAStratumSolver(StratumSolver):
         print("── probabilistic stratum ──")
         engine = self.engine
         cpl, prob_idb = _build_probabilistic_program(
-            engine._deterministic_relations(solution, prob_idb),
+            with_empty_relations(solution, prob_idb, engine.program_ir),
             engine.program_ir.probabilistic_facts(),
             engine.program_ir.probabilistic_choices(),
             prob_idb,
