@@ -51,6 +51,7 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
+    AbsorbAssertedConjunctsInNegations,
     ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
@@ -75,14 +76,17 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
+from .deterministic_subqueries import materialise_deterministic_negations
 from .expression_processing import (
     is_builtin,
     lift_optimization_for_choice_predicates
 )
 from .probabilistic_ra_utils import (
+    DeterministicFactSet,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
+    classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
     is_atom_a_probabilistic_choice_relation
@@ -117,6 +121,7 @@ __all__ = [
 ]
 
 
+AACN = AbsorbAssertedConjunctsInNegations()
 GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
 MQU = MoveQuantifiersUp()
@@ -193,9 +198,14 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
+        flat_query_body, deterministic_relations = \
+            materialise_deterministic_negations(
+                AACN.walk(flat_query_body), cpl_program
+            )
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = \
-            _prepare_and_optimise_query(flat_query, cpl_program)
+        shattered_query, symbol_table = _prepare_and_optimise_query(
+            flat_query, cpl_program, deterministic_relations
+        )
         ra_query = lift_with_dependent_negations(
             shattered_query, symbol_table
         )
@@ -229,7 +239,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     return prob_set_result
 
 
-def _prepare_and_optimise_query(flat_query, cpl_program):
+def _prepare_and_optimise_query(
+    flat_query, cpl_program, deterministic_relations=None
+):
     flat_query_body = convert_to_dnf_existential_ucq(flat_query.antecedent)
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
@@ -239,6 +251,10 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     unified_query = UnifyVariableEqualities().walk(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
+    )
+    classify_and_wrap_symbols(
+        deterministic_relations or {}, unified_query.antecedent,
+        symbol_table, lambda s, _: DeterministicFactSet(s)
     )
     shattered_query_body = shatter_constants(
         convert_rule_to_ucq(unified_query),

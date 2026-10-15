@@ -571,6 +571,71 @@ class RemoveExistentialOnVariables(LogicExpressionWalker):
             return ExistentialPredicate(expression.head, body)
 
 
+def _without_asserted_conjuncts(formula, asserted, bound=frozenset()):
+    """
+    Remove from *formula*, a conjunction possibly within existentials,
+    the conjuncts in *asserted* not using the *bound* variables. The
+    formula is returned unchanged if no conjunct would be left.
+    """
+    if isinstance(formula, ExistentialPredicate):
+        body = _without_asserted_conjuncts(
+            formula.body, asserted, bound | {formula.head}
+        )
+        return formula.apply(formula.head, body)
+    if not isinstance(formula, Conjunction):
+        return formula
+    kept = tuple(
+        conjunct for conjunct in formula.formulas
+        if conjunct not in asserted
+        or extract_logic_free_variables(conjunct) & bound
+    )
+    if len(kept) in (0, len(formula.formulas)):
+        return formula
+    if len(kept) == 1:
+        return kept[0]
+    return Conjunction(kept)
+
+
+def _absorbed_negations(conjunction):
+    """The conjuncts of *conjunction*, with the conjuncts asserted by
+    *conjunction* removed from its negated conjunctions."""
+    asserted = frozenset(
+        formula for formula in conjunction.formulas
+        if not isinstance(formula, Negation)
+    )
+    return tuple(
+        Negation(_without_asserted_conjuncts(formula.formula, asserted))
+        if isinstance(formula, Negation) else formula
+        for formula in conjunction.formulas
+    )
+
+
+class AbsorbAssertedConjunctsInNegations(LogicExpressionWalker):
+    """
+    Remove from the negated conjunctions of a conjunction the conjuncts
+    it asserts, by the absorption law A ∧ ¬(A ∧ B) ≡ A ∧ ¬B. As
+    ∃y (A ∧ B) ≡ A ∧ ∃y B when y is not free in A, this also holds for
+    A ∧ ¬∃y (A ∧ B), the conjuncts in which y is free being kept.
+
+    The equivalence holds in every interpretation, hence in every
+    possible world of a probabilistic database. It removes, for
+    instance, a probabilistic atom repeated within a negation, which
+    can make a query liftable.
+
+    A negated conjunction all of whose conjuncts are asserted is left
+    unchanged, as it is a contradiction.
+    """
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: (
+            _absorbed_negations(conjunction) != conjunction.formulas
+        )
+    )
+    def absorb_in_negations(self, conjunction):
+        return self.walk(Conjunction(_absorbed_negations(conjunction)))
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
