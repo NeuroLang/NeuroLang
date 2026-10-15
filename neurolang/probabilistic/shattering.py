@@ -91,10 +91,14 @@ def conditions_per_symbol(ucq_query):
 
 
 def _formula_is_ne(formula):
+    """Whether `formula` is `variable ≠ constant`, inequalities between
+    variables are not shattered.
+    """
     return (
         isinstance(formula, FunctionApplication) and
         formula.functor == NE and
-        isinstance(formula.args[0], Symbol)
+        isinstance(formula.args[0], Symbol) and
+        isinstance(formula.args[1], Constant)
     )
 
 

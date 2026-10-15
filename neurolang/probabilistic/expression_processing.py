@@ -1,4 +1,5 @@
 import collections
+import operator
 from typing import AbstractSet, Iterable
 
 import numpy
@@ -247,11 +248,26 @@ def separate_deterministic_probabilistic_code(
     return Union(deterministic_program), Union(probabilistic_program)
 
 
+STRICT_COMPARISONS = (operator.ne, operator.lt, operator.gt)
+COMPARISONS = STRICT_COMPARISONS + (operator.le, operator.ge)
+
+
 def is_builtin(pred, known_builtins=None):
     if known_builtins is None:
         known_builtins = set()
 
     return isinstance(pred.functor, Constant) or pred.functor in known_builtins
+
+
+def is_comparison(pred):
+    """Whether `pred` is an inequality or order comparison, such as
+    `x != y` or `x < y`.
+    """
+    return (
+        isinstance(pred, FunctionApplication) and
+        isinstance(pred.functor, Constant) and
+        pred.functor.value in COMPARISONS
+    )
 
 
 def is_within_language_prob_query(implication):

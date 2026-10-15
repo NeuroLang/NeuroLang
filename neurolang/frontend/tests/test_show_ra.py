@@ -343,8 +343,8 @@ def test_probabilistic_plans_name_lifted_solver(capsys):
 def knows_engine():
     """Return an engine whose ``knowing`` query needs the WMC solver.
 
-    ``person`` is probabilistic, so that ``person(x)`` and ``person(y)``
-    are a self-join which can't be lifted.
+    ``person`` is probabilistic, and ``knowing`` contains the #P-hard
+    self-join ``∃z, w person(z) ∧ knows(z, w) ∧ person(w)``.
     """
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
@@ -360,7 +360,8 @@ def knows_engine():
 
 
 KNOWING = (
-    "knowing(x, PROB) :- knows(x, y), person(x), person(y).\n"
+    "knowing(x, PROB) :- knows(x, y), person(x), person(y), "
+    "knows(z, w), person(z), person(w).\n"
 )
 
 
