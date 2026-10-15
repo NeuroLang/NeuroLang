@@ -789,6 +789,17 @@ def test_named_to_unnamed(ra_module):
     assert ras_a.to_unnamed() == ras_b
 
 
+def test_named_to_unnamed_leaves_the_named_set_unchanged(ra_module):
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "x"), [(1, 2), (3, 4)]
+    )
+    unnamed = ras.to_unnamed()
+    assert unnamed.arity == 2
+    assert ras.columns == ("y", "x")
+    assert set(ras.projection("x")) == {(2,), (4,)}
+    assert set(unnamed) == {(1, 2), (3, 4)}
+
+
 def test_named_ra_set_from_other(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "n"), [(56, "bonjour"), (42, "aurevoir")]
