@@ -34,16 +34,16 @@ SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 SAVE_HELP = """\
 [bold cyan].save PATH[/bold cyan] writes the last result (a file per obtain block).
 
-  [green]out.csv[/green], [green]out.tsv[/green], [green]out.csv.gz[/green]  a table, comma- or tab-separated, gzipped
-                         for a .gz path; any other path is CSV
-  [green]out.nii[/green], [green]out.nii.gz[/green]       a NIfTI image on the grid of the engine's
-                         template (its shape and affine)
+  out.csv, out.tsv      a table, comma- or tab-separated, gzipped for a
+  out.csv.gz            .gz path; any other path is CSV
+  out.nii, out.nii.gz   a NIfTI image on the grid of the engine's
+                        template (its shape and affine)
 
 The voxels of a NIfTI image are the columns of the result named as those
 of a sort of the engine declaring a space (engines.yaml):
-  space: voxel           grid indices (i, j, k), written as they are
-  space: mm              millimetres (x, y, z), converted to the nearest
-                         voxel with the inverse of the template's affine
+  space: voxel          grid indices (i, j, k), written as they are
+  space: mm             millimetres (x, y, z), converted to the nearest
+                        voxel with the inverse of the template's affine
 or those given with --voxel I J K (indices) or --mm X Y Z (millimetres).
 In Datalog, name the variables of the head after the sort, e.g.
 ans(i, j, k) :- voxel(i, j, k).
