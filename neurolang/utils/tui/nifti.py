@@ -16,6 +16,7 @@ column holds their value; see :data:`SAVE_HELP`.
 import os
 import shlex
 import tempfile
+import warnings
 import webbrowser
 from pathlib import Path
 from typing import NamedTuple, Optional, Tuple
@@ -405,7 +406,8 @@ def _view_nifti(app, path: str) -> None:
 
     The viewer, over the engine's template (nilearn's MNI152 without
     one), is saved as an HTML file whose path is printed, and opened in a
-    browser when the REPL runs on a terminal.
+    browser when the REPL runs on a terminal. nilearn's warnings are kept
+    off the prompt.
     """
     try:
         from nilearn import plotting
@@ -414,10 +416,12 @@ def _view_nifti(app, path: str) -> None:
         return
     template = getattr(app._nl, "template", None)
     try:
-        view = plotting.view_img(
-            path, bg_img="MNI152" if template is None else template,
-            threshold=VIEW_THRESHOLD, title=Path(path).name,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            view = plotting.view_img(
+                path, bg_img="MNI152" if template is None else template,
+                threshold=VIEW_THRESHOLD, title=Path(path).name,
+            )
         html = _html_file(view)
     except Exception as exc:
         app.console.print(
