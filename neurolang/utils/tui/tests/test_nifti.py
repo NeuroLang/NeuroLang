@@ -127,9 +127,32 @@ class TestNiftiPaths:
         with open(tmp_path / name, "rb") as f:
             compressed = f.read(2) == b"\x1f\x8b"
         assert compressed == name.lower().endswith(".gz")
-        img = nib.load(tmp_path / name)
+        # nib.load would look for a lowercase suffix on Linux (Out.nii)
+        img = nifti.read_nifti(tmp_path / name)
         assert isinstance(img, nib.Nifti1Image)
         assert "NIfTI" in _output(tiny) and "CSV" not in _output(tiny)
+
+    @pytest.mark.parametrize("name", ["Out.Nii", "OUT.NII.GZ", "v.nii"])
+    def test_view_reads_any_case_of_suffix(
+        self, tiny, tmp_path, view_calls, monkeypatch, name
+    ):
+        """
+        Check .view reads the image itself, not through nib.load.
+
+        nib.load looks for a lowercase suffix on case-sensitive file
+        systems, so it cannot open 'Out.Nii' on Linux.
+        """
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / name}")
+
+        def no_load(*args, **kwargs):
+            raise AssertionError("nib.load cannot open every NIfTI name")
+
+        monkeypatch.setattr(nifti.nib, "load", no_load)
+        tiny._handle_dot_command(f".view {tmp_path / name}")
+        assert len(view_calls) == 1
+        out = _output(tiny)
+        Path(out.split("viewer to: ")[1].split()[0]).unlink()
 
     def test_nii_gz_is_compressed(self, tiny, tmp_path):
         tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
