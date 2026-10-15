@@ -38,8 +38,6 @@ STENCIL_MAX_CELLS = 1_000_000
 STENCIL_MIN_WORK = 20_000_000
 #: Number of stencil look-ups allowed per point of the larger set.
 STENCIL_WORK_PER_POINT = 32
-#: Number of point and offset combinations processed at once.
-STENCIL_CHUNK = 1 << 22
 #: Occupancy grids are used up to this many cells per point...
 GRID_CELLS_PER_POINT = 4
 #: ... or this many cells; sorted keys are searched otherwise.
@@ -534,17 +532,35 @@ def _stencil_pairs(small, large, offsets, lengths):
         ((small >= low + reach) & (small <= high - reach)).all(axis=1)
     )
     keys = (small[near] - low) @ strides
-    shifts = offsets @ strides
-    block = max(1, STENCIL_CHUNK // max(len(near), 1))
-    found = [(numpy.empty(0, dtype=int),) * 3]
-    for start in range(0, len(offsets), block):
-        index = lookup(keys[:, None] + shifts[None, start:start + block])
-        point, offset = numpy.nonzero(index >= 0)
-        found.append((near[point], index[point, offset], offset + start))
-    small_index, large_index, offset_index = (
+    found = [(numpy.empty(0, dtype=int),) * 2] + [
+        _found(lookup(keys + shift), near) for shift in offsets @ strides
+    ]
+    small_index, large_index = (
         numpy.concatenate(arrays) for arrays in zip(*found)
     )
-    return small_index, large_index, lengths[offset_index]
+    counts = [len(small_found) for small_found, _ in found[1:]]
+    return small_index, large_index, numpy.repeat(lengths, counts)
+
+
+def _found(index, near):
+    """
+    Return the points of a stencil look-up that found a neighbour.
+
+    Parameters
+    ----------
+    index : numpy.ndarray
+        Position of the neighbour of each looked-up point, -1 if missing.
+    near : numpy.ndarray
+        Index of each looked-up point.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The index of the points with a neighbour and the position of their
+        neighbour.
+    """
+    hit = index >= 0
+    return near[hit], index[hit]
 
 
 def _index_lookup(keys, size):
