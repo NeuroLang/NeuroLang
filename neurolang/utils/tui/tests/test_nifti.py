@@ -482,6 +482,164 @@ class TestView:
         Path(path).unlink()
 
 
+
+@pytest.fixture
+def view_calls(monkeypatch):
+    """Record the arguments of nilearn's viewer, which saves nothing."""
+    from nilearn import plotting
+
+    calls = []
+
+    class FakeView:
+        def save_as_html(self, path):
+            Path(path).write_text("<html></html>")
+
+    def view_img(img, **kwargs):
+        calls.append(kwargs)
+        return FakeView()
+
+    monkeypatch.setattr(plotting, "view_img", view_img)
+    return calls
+
+
+@pytest.fixture
+def signed_image(tmp_path):
+    """Return the path of a NIfTI image with negative and positive values."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 2, 3], data[0, 0, 0] = -2.0, 3.0
+    path = tmp_path / "signed.nii"
+    nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+    return path
+
+
+class TestViewOptions:
+    """Check the threshold and colormap options of .view."""
+
+    def _view(self, app, line, calls):
+        app._handle_dot_command(line)
+        out = _output(app)
+        if "viewer to: " in out:
+            Path(out.split("viewer to: ")[1].split()[0]).unlink()
+        return (calls[-1] if calls else None), out
+
+    def test_positive_image_gets_a_one_sided_colormap(
+        self, tiny, tiny_image, view_calls
+    ):
+        kwargs, out = self._view(tiny, f".view {tiny_image}", view_calls)
+        assert kwargs["symmetric_cmap"] is False
+        assert "one-sided" in out and "--symmetric" in out
+
+    def test_signed_image_gets_a_symmetric_colormap(
+        self, tiny, signed_image, view_calls
+    ):
+        kwargs, out = self._view(tiny, f".view {signed_image}", view_calls)
+        assert kwargs["symmetric_cmap"] is True
+        assert "symmetric" in out and "--one-sided" in out
+
+    @pytest.mark.parametrize(
+        "flag, symmetric", [("--symmetric", True), ("--one-sided", False)]
+    )
+    def test_symmetry_can_be_chosen(
+        self, tiny, signed_image, view_calls, flag, symmetric
+    ):
+        kwargs, _ = self._view(
+            tiny, f".view {signed_image} {flag}", view_calls
+        )
+        assert kwargs["symmetric_cmap"] is symmetric
+
+    @pytest.mark.parametrize(
+        "value, threshold", [("0.5", 0.5), ("2", 2.0), ("95%", "95%")]
+    )
+    def test_threshold(self, tiny, tiny_image, view_calls, value, threshold):
+        kwargs, _ = self._view(
+            tiny, f".view {tiny_image} --threshold {value}", view_calls
+        )
+        assert kwargs["threshold"] == threshold
+
+    def test_colormap(self, tiny, tiny_image, view_calls):
+        kwargs, _ = self._view(
+            tiny, f".view {tiny_image} --cmap viridis", view_calls
+        )
+        assert kwargs["cmap"] == "viridis"
+
+    @pytest.mark.parametrize(
+        "options, message",
+        [
+            ("--cmap no_such_map", "Unknown colormap"),
+            ("--threshold -1", "--threshold"),
+            ("--threshold abc", "--threshold"),
+            ("--threshold 101%", "--threshold"),
+            ("--symmetric --one-sided", "not both"),
+            ("--zoom 2", "Unknown option"),
+        ],
+    )
+    def test_bad_options(
+        self, tiny, tiny_image, view_calls, options, message
+    ):
+        kwargs, out = self._view(
+            tiny, f".view {tiny_image} {options}", view_calls
+        )
+        assert kwargs is None
+        assert message in out and "File not found" not in out
+
+    def test_help_lists_the_view_options(self, tiny):
+        tiny._handle_dot_command(".help")
+        out = _output(tiny)
+        assert "--threshold" in out and "--cmap" in out
+        assert "--symmetric" in out
+
+
+class TestViewLastResult:
+    """Check .view without a path shows the last result as an image."""
+
+    def test_shows_the_last_result(self, tiny, view_calls):
+        import tempfile
+
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(".view")
+        assert len(view_calls) == 1
+        out = _output(tiny)
+        image = Path(out.split("image to: ")[1].split()[0])
+        assert image.parent == Path(tempfile.gettempdir())
+        assert image.name.endswith(".nii.gz")
+        img = nib.load(image)
+        assert np.array_equal(img.affine, TINY_AFFINE)
+        assert img.get_fdata()[1, 2, 3] == 1 and img.get_fdata().sum() == 2
+        image.unlink()
+        Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+    def test_takes_the_save_and_view_options(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(i, j, k, n) :- reports(s, i, j, k), study(s), (n == 2.5)"
+        )
+        tiny._handle_dot_command(".view --value n --threshold 1 --cmap hot")
+        kwargs = view_calls[-1]
+        assert kwargs["threshold"] == 1.0 and kwargs["cmap"] == "hot"
+        out = _output(tiny)
+        image = Path(out.split("image to: ")[1].split()[0])
+        assert nib.load(image).get_fdata().max() == 2.5
+        image.unlink()
+        Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+    def test_without_a_result(self, tiny, view_calls):
+        tiny._handle_dot_command(".view")
+        assert view_calls == []
+        assert "run a query" in _output(tiny)
+
+    def test_result_without_voxels(self, tiny, view_calls):
+        tiny._execute_and_display("ans(s) :- study(s)")
+        tiny._handle_dot_command(".view")
+        assert view_calls == []
+        assert "voxel" in _output(tiny)
+
+    def test_save_options_need_the_last_result(
+        self, tiny, tiny_image, view_calls
+    ):
+        tiny._handle_dot_command(f".view {tiny_image} --value n")
+        assert view_calls == []
+        out = _output(tiny)
+        assert "--value" in out and "File not found" not in out
+
 def test_view_keeps_nilearn_warnings_quiet(tiny, tiny_image):
     """Check the warnings of nilearn's viewer do not reach the prompt."""
     import warnings
