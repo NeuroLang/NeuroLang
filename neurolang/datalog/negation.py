@@ -17,6 +17,7 @@ from ..logic import Conjunction, Implication, Negation, Union
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
+from .range_restriction import check_range_restriction
 
 
 class NegativeFact(Implication):
@@ -70,6 +71,7 @@ class DatalogProgramNegationMixin(PatternWalker):
             raise NeuroLangException(
                 "All variables on the consequent need to be on the antecedent"
             )
+        check_range_restriction(expression, self.symbol_table)
 
         if consequent.functor in self.symbol_table:
             value = self.symbol_table[consequent.functor]
