@@ -434,6 +434,28 @@ def test_prob_explicit():
     )
 
 
+
+def test_prob_implicit_in_query():
+    """``ans(x, PROB, y)`` is ``ans(x, PROB(x, y), y)``, as for a rule."""
+    ans = Symbol("ans")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Query(ans(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_implicit_in_conditional_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    res = parser("ans(x, PROB) :- B(x) // C(x)")
+    assert res.formulas[0].head == ans(x, PROB(x))
+    assert res.formulas[0].body == Condition(B(x), C(x))
+
 def test_lambda_definition():
     c = Symbol("c")
     x = Symbol("x")
