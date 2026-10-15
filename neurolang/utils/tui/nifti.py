@@ -15,6 +15,7 @@ are the voxels (:func:`point_columns`) and :func:`value_column` which
 column holds their value; see :data:`SAVE_HELP`.
 """
 
+import gzip
 import os
 import shlex
 import tempfile
@@ -409,13 +410,27 @@ def saved_image_message(path: Path, saved: SavedImage, shape) -> str:
     return message
 
 
+def write_nifti(image: nib.Nifti1Image, path) -> None:
+    """
+    Write *image* to exactly *path*, gzipped if it ends in ``.gz``.
+
+    ``nib.save`` may change the case of the suffix (``Out.Nii`` is
+    written as ``Out.nii``), which leaves no file under *path* on a
+    case-sensitive file system.
+    """
+    data = image.to_bytes()
+    if str(path).lower().endswith(".gz"):
+        data = gzip.compress(data)
+    Path(path).write_bytes(data)
+
+
 def _save_nifti(app, df: pd.DataFrame, request: SaveRequest) -> None:
     """Save *df* as the NIfTI image of *request* and tell what was written."""
     template = engine_template(app._nl)
     saved = result_to_nifti(
         df, template, _engine_sorts(app.settings.engine_name), request
     )
-    nib.save(saved.image, request.path)
+    write_nifti(saved.image, request.path)
     app.console.print(
         saved_image_message(request.path, saved, template.shape),
         style="green", markup=False,
@@ -753,7 +768,7 @@ def last_result_image(app, request: SaveRequest) -> Optional[Path]:
         return None
     fd, name = tempfile.mkstemp(suffix=".nii.gz", prefix="neurolang_view_")
     os.close(fd)
-    nib.save(saved.image, name)
+    write_nifti(saved.image, name)
     app.console.print(
         saved_image_message(Path(name), saved, template.shape),
         style="green", markup=False,
