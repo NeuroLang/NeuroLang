@@ -1,3 +1,4 @@
+import multiprocessing
 from collections import namedtuple
 from operator import add, contains
 from typing import AbstractSet, Callable, Tuple
@@ -855,6 +856,72 @@ def test_equality_with_expression_3d_neighbourhood(frontend_class):
         (3, 0, 2, "s2"),
         (3, 1, 2, "s2"),
     }
+
+
+GRID_SIDE = 60
+N_PEAKS = 2000
+
+
+def neighbourhood_peaks():
+    """Return ``N_PEAKS`` peaks spread over the ``GRID_SIDE`` grid."""
+    return [
+        (
+            (7 * n) % GRID_SIDE,
+            (13 * n) % GRID_SIDE,
+            (29 * n) % GRID_SIDE,
+            n,
+        )
+        for n in range(N_PEAKS)
+    ]
+
+
+def count_neighbourhood_rows(queue):
+    """
+    Put in ``queue`` the rows of the one-rule neighbourhood query.
+
+    The engine holds ``N_PEAKS`` peaks, the 27 offsets in
+    ``{-1, 0, 1}`` ^ 3 and a ``GRID_SIDE`` ^ 3 voxel grid, so a cross
+    product of the three relations would not finish.
+    """
+    nl = frontend.NeurolangPDL()
+    side = range(GRID_SIDE)
+    nl.add_tuple_set(
+        [(i, j, k) for i in side for j in side for k in side], name="voxel"
+    )
+    nl.add_tuple_set(neighbourhood_peaks(), name="peak_reported")
+    shifts = (-1, 0, 1)
+    nl.add_tuple_set(
+        [(a, b, c) for a in shifts for b in shifts for c in shifts],
+        name="offset",
+    )
+    res = nl.execute_datalog_program(
+        "reports_close(i, j, k, s) :- peak_reported(i1, j1, k1, s), "
+        "offset(di, dj, dk), (i == i1 + di), (j == j1 + dj), "
+        "(k == k1 + dk), voxel(i, j, k)\n"
+        "ans(i, j, k, s) :- reports_close(i, j, k, s)"
+    )
+    queue.put(len(res))
+
+
+def test_equality_with_expression_3d_neighbourhood_large_grid():
+    ctx = multiprocessing.get_context("spawn")
+    queue = ctx.Queue()
+    process = ctx.Process(target=count_neighbourhood_rows, args=(queue,))
+    process.start()
+    process.join(timeout=60)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        pytest.fail("the neighbourhood query did not finish in 60 s")
+
+    def in_grid(c):
+        return sum(0 <= c + d < GRID_SIDE for d in (-1, 0, 1))
+
+    expected = sum(
+        in_grid(i) * in_grid(j) * in_grid(k)
+        for i, j, k, _ in neighbourhood_peaks()
+    )
+    assert queue.get(timeout=5) == expected
 
 
 def test_neurolang_dl_attribute_access():
