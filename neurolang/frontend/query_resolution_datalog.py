@@ -55,6 +55,7 @@ from .datalog.squall_syntax_lark import (
     WeightedChoiceDef,
 )
 from .datalog.standard_syntax import parser as datalog_parser
+from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -86,6 +87,22 @@ def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exceptio
         )
         exc.args = (new_msg,)
     return exc
+
+
+def _names_whole_relation(head_vars, body):
+    """
+    Return whether *body* is a single atom on the only head variable.
+
+    Such a SQUALL clause, as ``every Voxel``, names a relation without a
+    tuple label.
+    """
+    if len(head_vars) != 1 or not isinstance(body, ir.FunctionApplication):
+        return False
+    return (
+        isinstance(head_vars[0], ir.Symbol)
+        and isinstance(body.functor, ir.Symbol)
+        and tuple(body.args) == tuple(head_vars)
+    )
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -404,6 +421,43 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def _expand_whole_relation(self, head_vars, body):
+        """
+        Make a SQUALL clause naming a relation alone use all its columns.
+
+        ``every Voxel`` without a tuple label stands for the whole
+        relation: the head variables and the body atom are expanded to
+        the columns of the relation instead of keeping only the first.
+        """
+        if not _names_whole_relation(head_vars, body):
+            return head_vars, body
+        arity = predicate_arity(self.program_ir, body.functor)
+        if arity is None or arity < 2:
+            return head_vars, body
+        terms = self.program_ir.predicate_terms(body.functor)[-arity:]
+        head_vars = tuple(
+            t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
+            for t in terms
+        )
+        return head_vars, body.functor(*head_vars)
+
+    def _expand_whole_relation_rule(self, rule):
+        """
+        Expand a SQUALL rule whose body names a relation alone.
+
+        ``obtain every Voxel as Voxels`` defines ``voxels`` with all the
+        columns of ``voxel``, as the query itself obtains them.
+        """
+        head = getattr(rule, "consequent", None)
+        if not isinstance(head, ir.FunctionApplication):
+            return rule
+        head_vars, body = self._expand_whole_relation(
+            tuple(head.args), rule.antecedent
+        )
+        if body is rule.antecedent:
+            return rule
+        return rule.apply(head.functor(*head_vars), body)
+
     @staticmethod
     def _process_squall_commands(parsed):
         """Process SQUALL directives (#set_backend, etc.)."""
@@ -434,6 +488,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         elif isinstance(rule, WeightedChoiceDef):
             self._handle_weighted_choice(rule)
         else:
+            rule = self._expand_whole_relation_rule(rule)
+            CheckPredicateArities(self.program_ir).walk(rule)
             try:
                 self.program_ir.walk(rule)
             except Fol2DatalogTranslationException as e:
@@ -477,27 +533,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             head_vars = tuple(head)
 
-        body = query.body
-        if (
-            len(head_vars) == 1
-            and isinstance(head_vars[0], ir.Symbol)
-            and isinstance(body, ir.FunctionApplication)
-            and isinstance(body.functor, ir.Symbol)
-            and len(body.args) == 1
-            and body.args[0] == head_vars[0]
-        ):
-            # "obtain every RelationName." without a tuple label projects
-            # the whole relation (all columns) instead of only the first.
-            try:
-                terms = self.program_ir.predicate_terms(body.functor)
-            except NeuroLangException:
-                terms = ()
-            if len(terms) > 1:
-                head_vars = tuple(
-                    t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
-                    for t in terms
-                )
-                body = body.functor(*head_vars)
+        head_vars, body = self._expand_whole_relation(head_vars, query.body)
+        CheckPredicateArities(self.program_ir).walk(body)
 
         h = ir.Symbol.fresh()
         query_impl = datalog.Implication(h(*head_vars), body)
