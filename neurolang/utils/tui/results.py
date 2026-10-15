@@ -2,9 +2,12 @@
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 from rich import box
 from rich.table import Table
+
+from neurolang.regions import ExplicitVBR
 
 DEFAULT_PAGE_SIZE = 20
 
@@ -27,13 +30,34 @@ class ResultBlock:
         return len(self.frame) - self.shown
 
 
+def cell_text(value) -> str:
+    """
+    Return the text of a cell of a result table holding *value*.
+
+    A region shows its number of voxels and its centroid in millimetres,
+    ``VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)``, rather than its
+    affine and voxel arrays.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, ExplicitVBR):
+        return region_text(value)
+    return str(value)
+
+
+def region_text(region: ExplicitVBR) -> str:
+    """Return the number of voxels of *region* and its centroid, in mm."""
+    centroid = ", ".join(f"{c:.1f}" for c in np.mean(region.to_xyz(), axis=0))
+    return f"VBR(n_voxels={len(region.voxels)}, centroid=({centroid}) mm)"
+
+
 def rows_table(df: pd.DataFrame) -> Table:
     """Return a rich Table with all the rows of *df*."""
     table = Table(box=box.ROUNDED, header_style="bold cyan")
     for col in df.columns:
         table.add_column(str(col), overflow="fold")
     for row in df.itertuples(index=False):
-        table.add_row(*["" if v is None else str(v) for v in row])
+        table.add_row(*[cell_text(v) for v in row])
     return table
 
 
