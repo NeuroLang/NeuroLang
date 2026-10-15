@@ -9,7 +9,7 @@ enumeration of the possible worlds.
 import pytest
 
 from ...exceptions import UnsupportedSolverError
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Negation, Union
 from .. import dalvi_suciu_lift
 from ..cplogic import testing
@@ -168,3 +168,38 @@ def test_non_hierarchical_query_is_not_lifted():
                 T: {(0.4, "a"), (0.9, "b"), (0.25, "c")},
             },
         )
+
+
+def test_constant_in_a_negated_existential():
+    """R(x) ∧ ¬∃z Q(x, 1, z): constants select the right column."""
+    Q = Symbol("Q")
+    z = Symbol("z")
+    rules = (
+        Implication(A(x), Q(x, Constant(1), z)),
+        Implication(Z(), Conjunction((R(x), Negation(A(x))))),
+    )
+    result = _solve(
+        rules, Implication(ans(), Z()),
+        pfacts={
+            R: {(0.1, "a"), (0.3, "c")},
+            Q: {(0.2, "a", 1, 2), (0.8, "b", 1, 5), (0.1, "b", 2, 2)},
+        },
+    )
+    expected = 1 - (1 - 0.1 * 0.8) * (1 - 0.3)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_repeated_variable_in_a_negation():
+    """∃x R(x) ∧ ¬S(x, x)"""
+    rules = (
+        Implication(Z(), Conjunction((R(x), Negation(S(x, x))))),
+    )
+    result = _solve(
+        rules, Implication(ans(), Z()), pfacts={R: R_FACTS, S: S_FACTS}
+    )
+    expected = 1 - (1 - 0.2 * 0.7) * (1 - 0.7) * (1 - 0.5 * 0.55)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )

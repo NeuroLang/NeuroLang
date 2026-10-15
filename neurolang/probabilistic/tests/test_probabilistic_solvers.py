@@ -1826,21 +1826,29 @@ def test_choice_asserted_outside_and_inside_negation_is_absorbed():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_choice_with_closed_negated_deterministic_query_is_not_lifted():
+@pytest.mark.parametrize("r_facts, expected", (
+    (((3, 3),), [(0.5, 1), (0.5, 2)]),
+    (((3, 3), (3, 4)), []),
+))
+def test_choice_with_closed_negated_deterministic_query(r_facts, expected):
     """A negated deterministic query without free variables has no
-    conjunct binding them to materialise it with, and is left to the
-    other solvers.
+    conjunct binding them to materialise it with. As no probabilistic
+    relation is repeated, it is lifted as a non-repeating query.
     """
     S = Symbol("S")
     Any_ = Symbol("Any")
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(S, [(0.5, 1), (0.5, 2)])
-    cpl.walk(Union((Fact(R(Constant(3), Constant(3))),)))
+    cpl.walk(Union(tuple(
+        Fact(R(Constant(a), Constant(b))) for a, b in r_facts
+    )))
     cpl.walk(Union((
         Implication(Any_(), Conjunction((R(y, z), NE(y, z)))),
         Implication(P(x), Conjunction((S(x), Negation(Any_())))),
     )))
     query = Implication(ans(x), P(x))
 
-    with pytest.raises(UnsupportedSolverError):
-        dalvi_suciu_lift.solve_succ_query(query, cpl)
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set(expected, ("_p_", "x"))
+    )

@@ -22,10 +22,12 @@ uses the first one which accepts the query:
 1. :mod:`neurolang.probabilistic.small_dichotomy_theorem_based_solver`, for
    hierarchical queries without self-joins (see `Hierarchical queries
    without self-joins`_);
-2. :mod:`neurolang.probabilistic.dalvi_suciu_lift`, for unions of
-   conjunctive queries with self-joins (see `Dalvi–Suciu lifting`_), extended
-   to negations and comparisons which share relations with the rest of the
-   query (see `Negations and comparisons sharing relations`_);
+2. :mod:`neurolang.probabilistic.dalvi_suciu_lift`, which first plans
+   non-repeating queries with negation (see `Non-repeating queries with
+   negation`_), and otherwise lifts unions of conjunctive queries with
+   self-joins (see `Dalvi–Suciu lifting`_), extended to negations and
+   comparisons which share relations with the rest of the query (see
+   `Negations and comparisons sharing relations`_);
 3. :mod:`neurolang.probabilistic.weighted_model_counting`, which is not
    lifted: it compiles the provenance of the query into a sentential
    decision diagram (SDD) [Darwiche2011]_ with pysdd and computes its
@@ -182,10 +184,51 @@ in polynomial time if it is *hierarchical*, that is if for any two variables
    at(x) \cap at(y) = \emptyset,
 
 and is #P-hard otherwise. The plan is built from the independent join
-and existential projection only. Fink and Olteanu extend the theorem to
-non-repeating queries with negation [Fink2014]_; this solver declines
-queries with negations or disjunctions, which are left to the next
-solver.
+and existential projection only. This solver declines queries with
+negations or disjunctions, which are left to the next solver; Fink and
+Olteanu's extension of the theorem to negation is described in the next
+section.
+
+Non-repeating queries with negation
+-----------------------------------
+
+A query is *non-repeating* when none of its probabilistic relations
+occurs twice in it. Fink and Olteanu show that a non-repeating query with
+negations can be computed in polynomial time if it is hierarchical, and is
+#P-hard otherwise [Fink2014]_. Before Dalvi–Suciu lifting,
+:func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
+plans the non-repeating queries with a negation in this way. The negations
+can be nested and can quantify variables, as in
+:math:`\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land \lnot U(x,
+y))`, whose quantifiers are mixed once the negations are moved to the
+atoms, which the checks of Dalvi–Suciu lifting decline.
+
+As the subformulas of a non-repeating query have different relations, they
+are independent, and the plan is built with the independent operations
+only:
+
+* a conjunction is the join of its positive conjuncts, filtered by its
+  comparisons, from which its negated conjuncts are removed with
+  ``Difference``, :math:`P[A \land \lnot B] = P[A]\,(1 - P[B])`;
+* a disjunction of formulas with the same free variables is their
+  independent union;
+* :math:`\exists \bar v\, \varphi` is first split into the groups of
+  conjuncts of :math:`\varphi` connected by the variables of
+  :math:`\bar v`, the other conjuncts being moved out of the quantifier.
+  Each group is then projected on one of its variables :math:`v` that
+  occurs in every probabilistic atom of the group, including those within
+  its negations: the events :math:`\varphi(a)` for different values
+  :math:`a` concern different tuples, and the projection is independent,
+  :math:`1 - \prod_a (1 - P[\varphi(a)])`. When a probabilistic choice
+  conjunct of the group has :math:`v`, the events are mutually exclusive
+  instead, and the projection is disjoint, :math:`\sum_a P[\varphi(a)]`.
+  If no variable of the group occurs in all of its probabilistic atoms, the
+  query is not hierarchical, for instance
+  :math:`\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land T(y))`,
+  and it is left to Dalvi–Suciu lifting.
+
+Deterministic relations do not count as repetitions, and do not need to
+have the projected variable.
 
 Dalvi–Suciu lifting
 -------------------
