@@ -1546,7 +1546,7 @@ def test_query_based_spatial_prior():
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-            & (e.d < 1)
+            & (e.d <= 1)
         )
         e.Activation[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.VoxelReported(
             e.i, e.j, e.k, e.s

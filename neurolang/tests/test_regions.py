@@ -532,12 +532,42 @@ def test_cardinal_relation_prepare_regions():
     assert r2 is sphere_2_evbr
 
 
+
+def test_destrieux_download_failure_skips(monkeypatch):
+    """
+    A failed download of the Destrieux atlas skips the tests using it.
+
+    The atlas comes from www.nitrc.org, which is sometimes unreachable or
+    serves an expired certificate; that is not a failure of NeuroLang.
+    """
+    import requests
+
+    def fail(*args, **kwargs):
+        raise requests.exceptions.SSLError("certificate has expired")
+
+    monkeypatch.setattr(datasets, "fetch_atlas_destrieux_2009", fail)
+    with pytest.raises(pytest.skip.Exception, match="Destrieux"):
+        _fetch_destrieux(Path("unused"))
+
+def _fetch_destrieux(data_dir):
+    """
+    Return the Destrieux atlas, downloading it into *data_dir* if needed.
+
+    Skip the calling test when it cannot be downloaded: www.nitrc.org is
+    sometimes unreachable or serves an expired certificate.
+    """
+    import requests
+
+    try:
+        return datasets.fetch_atlas_destrieux_2009(data_dir=str(data_dir))
+    except (requests.exceptions.RequestException, OSError) as error:
+        pytest.skip(f"Destrieux atlas unavailable: {error}")
+
+
 @pytest.fixture
 def destrieux():
     data_dir = Path.home() / "neurolang_data"
-    destrieux_atlas = datasets.fetch_atlas_destrieux_2009(
-        data_dir=str(data_dir / "destrieux")
-    )
+    destrieux_atlas = _fetch_destrieux(data_dir / "destrieux")
     destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
     labels = destrieux_atlas["labels"]
     # Handle both old format (list of tuples) and new format (list of strings)
