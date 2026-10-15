@@ -431,8 +431,8 @@ VIEW_USAGE = (
 )
 
 VIEW_HELP = """\
-[bold cyan].view [PATH][/bold cyan] shows a NIfTI image, or the last result, in
-a browser.
+[bold cyan].view [PATH][/bold cyan] shows a NIfTI image, or the last result,
+in a browser.
 
 Without a path, the last result is converted into an image as .save
 converts it, with its options --value, --voxel and --mm. The viewer is an
