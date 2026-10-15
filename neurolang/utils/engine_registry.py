@@ -69,7 +69,7 @@ Usage
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -261,7 +261,7 @@ def get_predicates(
 
     """
     cfg = get_engine_config(name, yaml_path)
-    predicates = dict(cfg.get("predicates", {}))
+    predicates = _declared_predicates(cfg)
 
     for rel_key, rel_cfg in cfg.get("relations", {}).items():
         if isinstance(rel_cfg, str):
@@ -309,6 +309,182 @@ def get_predicates(
             )
 
     return predicates
+
+
+class Argument(NamedTuple):
+    """
+    An argument of a predicate: an entity of a *sort* over *columns*.
+
+    A voxel is one argument of sort ``voxel`` over the columns ``i, j,
+    k``; *type* names the type of the values of its columns.
+    """
+
+    sort: str
+    columns: Tuple[str, ...]
+    type: str = ""
+
+
+class Sort(NamedTuple):
+    """
+    A sort of entities an engine declares once, in its ``sorts`` section.
+
+    Its entities span *columns*, whose values are of the *type*; a sort of
+    N > 1 columns reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+    """
+
+    name: str
+    columns: Tuple[str, ...]
+    type: str = ""
+    description: str = ""
+
+
+def _declared_sorts(cfg: Dict[str, Any]) -> Dict[str, Sort]:
+    """Return the sorts the engine *cfg* declares, by name."""
+    return {
+        name: Sort(
+            name, tuple(info["columns"]), str(info.get("type", "")),
+            str(info.get("description", "")).strip(),
+        )
+        for name, info in (cfg.get("sorts") or {}).items()
+    }
+
+
+def get_sorts(name: str, yaml_path: Optional[Path] = None) -> Dict[str, Sort]:
+    """Return the sorts an engine declares, by name."""
+    return _declared_sorts(get_engine_config(name, yaml_path))
+
+
+def _resolved_argument(
+    name: str, argument: Any, sorts: Dict[str, Sort]
+) -> Dict[str, Any]:
+    """
+    Return the *argument* of the predicate *name* with its columns and type.
+
+    A sort's name alone, or ``{sort: …}`` without columns, references a
+    declared sort, whose columns and type it takes; declared columns or
+    type override the sort's.
+    """
+    if isinstance(argument, str):
+        argument = {"sort": argument}
+    sort = sorts.get(argument["sort"])
+    if sort is None and "columns" not in argument:
+        raise ValueError(
+            f"predicate {name!r} references the sort {argument['sort']!r}, "
+            f"which the engine does not declare"
+        )
+    if sort is None:
+        return dict(argument)
+    return {"columns": list(sort.columns), "type": sort.type, **argument}
+
+
+def _declared_predicate(
+    name: str, info: Dict[str, Any], sorts: Dict[str, Sort]
+) -> Dict[str, Any]:
+    """
+    Return the metadata *info* of *name* completed from its arguments.
+
+    When *info* declares ``arguments``, each a sort of *sorts* or a
+    ``{sort, columns, type}``, its ``arguments`` are completed with
+    their columns and type, its ``columns`` are theirs in order, its
+    ``arity`` their number of columns and its ``entities`` their number;
+    declared ``columns`` or ``arity`` must agree with them.
+    """
+    info = dict(info or {})
+    if not info.get("arguments"):
+        return info
+    arguments = [
+        _resolved_argument(name, argument, sorts)
+        for argument in info["arguments"]
+    ]
+    columns = [
+        column for argument in arguments for column in argument["columns"]
+    ]
+    if list(info.get("columns", columns)) != columns:
+        raise ValueError(
+            f"predicate {name!r} declares the columns {info['columns']} "
+            f"but its arguments span {columns}"
+        )
+    if info.get("arity", len(columns)) != len(columns):
+        raise ValueError(
+            f"predicate {name!r} declares the arity {info['arity']} "
+            f"but its arguments span {len(columns)} columns"
+        )
+    info.update(
+        arguments=arguments, columns=columns, arity=len(columns),
+        entities=len(arguments),
+    )
+    return info
+
+
+def _declared_predicates(cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return the ``predicates`` of the engine *cfg*, completed."""
+    sorts = _declared_sorts(cfg)
+    return {
+        name: _declared_predicate(name, info, sorts)
+        for name, info in (cfg.get("predicates") or {}).items()
+    }
+
+
+def _check_widths(pname: str, arguments, widths: Dict[str, int]) -> None:
+    """
+    Check each of the *arguments* of *pname* spans its sort's width.
+
+    *widths* holds the number of columns of each sort met so far.
+    """
+    for argument in arguments:
+        width = widths.setdefault(argument.sort, len(argument.columns))
+        if width != len(argument.columns):
+            raise ValueError(
+                f"sort {argument.sort!r} spans {width} columns elsewhere "
+                f"but {len(argument.columns)} in {pname!r}"
+            )
+
+
+def get_signatures(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Tuple[Argument, ...]]:
+    """
+    Return the arguments of the predicates of an engine, by predicate.
+
+    Only the predicates declaring their ``arguments`` are returned. A
+    sort spans the same number of columns wherever it appears, and as
+    many as the engine declares for it, or a :class:`ValueError` is
+    raised.
+    """
+    signatures = {}
+    widths = {
+        sort.name: len(sort.columns)
+        for sort in get_sorts(name, yaml_path).values()
+    }
+    for pname, info in get_predicates(name, yaml_path).items():
+        arguments = tuple(
+            Argument(
+                arg["sort"], tuple(arg["columns"]), str(arg.get("type", ""))
+            )
+            for arg in info.get("arguments") or ()
+        )
+        _check_widths(pname, arguments, widths)
+        if arguments:
+            signatures[pname] = arguments
+    return signatures
+
+
+def get_hidden_predicates(
+    name: str, yaml_path: Optional[Path] = None
+) -> frozenset:
+    """Return the predicates of an engine its SQUALL completion withholds."""
+    cfg = get_engine_config(name, yaml_path)
+    return frozenset(cfg.get("hidden_predicates") or ())
+
+
+def get_probabilistic_predicates(
+    name: str, yaml_path: Optional[Path] = None
+) -> frozenset:
+    """Return the predicates of an engine declared with a probability."""
+    return frozenset(
+        pname for pname, info in get_predicates(name, yaml_path).items()
+        if info.get("probability")
+    )
 
 
 # ---------------------------------------------------------------------------

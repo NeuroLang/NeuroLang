@@ -8,9 +8,13 @@ Registers the following predicates:
 * ``study(study_id)`` — all study identifiers.
 * ``term_in_study_tfidf(study_id, term, tfidf)`` — term frequency–inverse
   document frequency values.
+* ``term(term)`` — every term of the TF-IDF vocabulary.
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
+
+The ``datalog_init`` of the engine (``engines.yaml``) also derives
+``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
 
 Predicate names are lowercase to match SQUALL's case-folding convention
 (see ``intransitive`` in ``squall_syntax_lark.py``).
@@ -58,6 +62,12 @@ def init_engine(
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
     nl.add_tuple_set(term_data, name="term_in_study_tfidf")
+    # The vocabulary, stored once rather than derived from the 1M-row
+    # TF-IDF table in every query that uses it.
+    nl.add_tuple_set(
+        term_data[["term"]].drop_duplicates().reset_index(drop=True),
+        name="term",
+    )
     # Every (i, j, k) index of the mask grid. Use the image shape only:
     # ``get_fdata`` would load the full image as float64 to read it.
     nl.add_tuple_set(

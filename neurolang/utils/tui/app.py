@@ -34,6 +34,7 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .editing import session_options
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope, record_squall_rules
@@ -91,6 +92,7 @@ class TuiSettings:
     ra_options: ShowRAOptions = field(default_factory=ShowRAOptions)
     show_rewritten: bool = False
     page_size: int = DEFAULT_PAGE_SIZE
+    vi_mode: bool = False
     debug: bool = False
     history_path: Optional[str] = None
     data_dir: str = ""
@@ -144,6 +146,8 @@ class InteractiveTuiApp:
         self.err_console = err_console or Console(stderr=True)
         self._tee_consoles(console, err_console)
         self.results: list = []
+        self.session = None
+        self.completer = None
         self.last_query = None
         # The rules added by the submission of the last query, by symbol.
         self.last_added_rules: dict = {}
@@ -216,6 +220,7 @@ class InteractiveTuiApp:
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
             file=self.err_console.file,
+            engine_name=self.settings.engine_name,
         )
 
     def _result_block(self, result, title: str, column_names) -> ResultBlock:
@@ -274,17 +279,20 @@ class InteractiveTuiApp:
 
     def _column_names(self, program: str) -> dict:
         """
-        Return the declared column names of the results of *program*.
+        Return the column names of the results of the SQUALL *program*.
 
-        They are those the engine declares and those of the header of
-        the files loaded with ``.load``.
+        They are those the engine declares, those of the header of the
+        files loaded with ``.load`` and those of the rules defined so far.
         """
         if not self.settings.squall:
             return {}
-        if not (self.settings.engine_name or self.loaded_relations):
-            return {}
+        rules = [
+            rule
+            for union in self._nl.program_ir.intensional_database().values()
+            for rule in union.formulas
+        ]
         return squall_column_names(
-            self.settings.engine_name, program, self.loaded_relations
+            self.settings.engine_name, program, self.loaded_relations, rules
         )
 
     def _submit(self, program: str, submission: Submission):
@@ -393,6 +401,7 @@ class InteractiveTuiApp:
             self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
         self.console.print(
             f"Mode: {mode} · [green].help[/green] for help · "
+            "[green]Tab[/green] completes · "
             "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
         )
         relations = engine_relations(name)
@@ -400,9 +409,9 @@ class InteractiveTuiApp:
             self.console.print("Relations:")
             for relation in relations:
                 self.console.print(f"  {relation}", markup=False)
-        example = engine_examples(name).get(mode.lower())
-        if example:
-            self.console.print(f"Try: {example}", markup=False)
+        examples = engine_examples(name).get(mode.lower())
+        if examples:
+            self.console.print(f"Try: {examples[0]}", markup=False)
 
     def _make_session(self, **kwargs) -> PromptSession:
         """
@@ -413,6 +422,7 @@ class InteractiveTuiApp:
         """
         return PromptSession(
             **kwargs,
+            **session_options(self),
             history=self._history,
             key_bindings=_input_bindings(lambda: self.settings.squall),
             multiline=True,
@@ -487,6 +497,7 @@ class InteractiveTuiApp:
         self._print_banner()
         self._run_initial_program(initial_program)
         session = session or self._make_session()
+        self.session = session
         while self._read_and_run(session):
             pass
         self.console.print("[dim]Goodbye.[/dim]")

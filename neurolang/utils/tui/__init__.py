@@ -20,6 +20,7 @@ The REPL is organised in modules:
 
 - :mod:`.app`: the REPL loop and query execution,
 - :mod:`.commands`: the dot-command registry and the core commands,
+- :mod:`.editing`: completion, highlighting, toolbar and editing modes,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
 - :mod:`.nifti`: saving results as CSV or NIfTI and viewing images,
 - :mod:`.results`: paged display of query results,

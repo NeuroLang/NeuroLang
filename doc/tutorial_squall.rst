@@ -1679,7 +1679,15 @@ Running a SQUALL query from a file::
 Showing the Datalog IR for a SQUALL query (no execution)::
 
     neurolang-query --engine neurosynth --squall --show-datalog \
-        "obtain every Voxel in 3D that a Study reported."
+        "obtain every Voxel in 3D that a Study reports."
+
+The ``neurosynth`` engine names its relations so that they read as SQUALL:
+``a Study mentions a Term``, ``a Study reports a Voxel``, and the TF-IDF
+weight of each term in each study is a ``Weighted_mention``, a noun
+followed by the tuple of its columns ``(study; term; weight)``::
+
+    neurolang-query --engine neurosynth --squall \
+        "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
 
 The tool also supports plain Datalog queries (omit ``--squall``).  For the
 full list of options, see ``neurolang-query --help`` or the
