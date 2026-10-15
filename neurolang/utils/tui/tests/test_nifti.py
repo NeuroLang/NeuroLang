@@ -423,7 +423,7 @@ def _terminal_app(app):
 
 
 class TestView:
-    """Check .view shows an image in nilearn's viewer."""
+    """Check .view shows an image in the interactive brain viewer."""
 
     def test_missing_file(self, tiny, tmp_path):
         tiny._handle_dot_command(f".view {tmp_path / 'missing.nii'}")
@@ -456,48 +456,40 @@ class TestView:
         out = _output(tiny)
         path = out.split("viewer to: ")[1].split()[0]
         assert path.endswith(".html") and Path(path).exists()
+        page = Path(path).read_text()
+        assert 'id="threshold"' in page and 'id="cmap"' in page
         Path(path).unlink()
 
-    def test_the_template_is_the_background(
+    def test_the_background_is_the_mni_t1(
         self, tiny, tiny_image, monkeypatch
     ):
-        from nilearn import plotting
-
         calls = []
 
-        class FakeView:
-            def save_as_html(self, path):
-                Path(path).write_text("<html></html>")
+        def viewer_html(img, background, **kwargs):
+            calls.append((img, background, kwargs))
+            return "<html></html>"
 
-        def view_img(img, **kwargs):
-            calls.append((img, kwargs))
-            return FakeView()
-
-        monkeypatch.setattr(plotting, "view_img", view_img)
+        monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
         tiny._handle_dot_command(f".view {tiny_image}")
-        img, kwargs = calls[0]
-        assert kwargs["bg_img"] is tiny._nl.template
-        assert "threshold" in kwargs
+        img, background, kwargs = calls[0]
+        assert img.shape == (4, 4, 4)
+        assert np.array_equal(img.affine, TINY_AFFINE)
+        assert background.shape == (197, 233, 189)
+        assert kwargs["title"] == "v.nii" and "threshold" in kwargs
         path = _output(tiny).split("viewer to: ")[1].split()[0]
         Path(path).unlink()
 
 
 @pytest.fixture
 def view_calls(monkeypatch):
-    """Record the arguments of nilearn's viewer, which saves nothing."""
-    from nilearn import plotting
-
+    """Record the options of the viewer page, which is left empty."""
     calls = []
 
-    class FakeView:
-        def save_as_html(self, path):
-            Path(path).write_text("<html></html>")
-
-    def view_img(img, **kwargs):
+    def viewer_html(img, background, **kwargs):
         calls.append(kwargs)
-        return FakeView()
+        return "<html></html>"
 
-    monkeypatch.setattr(plotting, "view_img", view_img)
+    monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
     return calls
 
 
@@ -525,14 +517,14 @@ class TestViewOptions:
         self, tiny, tiny_image, view_calls
     ):
         kwargs, out = self._view(tiny, f".view {tiny_image}", view_calls)
-        assert kwargs["symmetric_cmap"] is False
+        assert kwargs["symmetric"] is False
         assert "one-sided" in out and "--symmetric" in out
 
     def test_signed_image_gets_a_symmetric_colormap(
         self, tiny, signed_image, view_calls
     ):
         kwargs, out = self._view(tiny, f".view {signed_image}", view_calls)
-        assert kwargs["symmetric_cmap"] is True
+        assert kwargs["symmetric"] is True
         assert "symmetric" in out and "--one-sided" in out
 
     @pytest.mark.parametrize(
@@ -544,7 +536,7 @@ class TestViewOptions:
         kwargs, _ = self._view(
             tiny, f".view {signed_image} {flag}", view_calls
         )
-        assert kwargs["symmetric_cmap"] is symmetric
+        assert kwargs["symmetric"] is symmetric
 
     @pytest.mark.parametrize(
         "value, threshold", [("0.5", 0.5), ("2", 2.0), ("95%", "95%")]
@@ -586,6 +578,7 @@ class TestViewOptions:
         out = _output(tiny)
         assert "--threshold" in out and "--cmap" in out
         assert "--symmetric" in out
+        assert "nilearn" not in out.split(".view")[1].splitlines()[0]
 
 
 class TestViewLastResult:
