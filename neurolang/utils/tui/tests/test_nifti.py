@@ -482,7 +482,6 @@ class TestView:
         Path(path).unlink()
 
 
-
 @pytest.fixture
 def view_calls(monkeypatch):
     """Record the arguments of nilearn's viewer, which saves nothing."""
@@ -639,6 +638,7 @@ class TestViewLastResult:
         assert view_calls == []
         out = _output(tiny)
         assert "--value" in out and "File not found" not in out
+
 
 def test_view_keeps_nilearn_warnings_quiet(tiny, tiny_image):
     """Check the warnings of nilearn's viewer do not reach the prompt."""
