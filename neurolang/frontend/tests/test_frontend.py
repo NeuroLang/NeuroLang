@@ -952,6 +952,66 @@ def test_neurolang_dl_region_destroy_tuple_coords():
     assert set(ans) == expected
 
 
+
+SCHAEFER_INIT = """
+schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
+schaefer_label(l) :- schaefer(l, r)
+labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+"""
+SCHAEFER_NAMES = {1: "17Networks_LH_A", 2: "17Networks_LH_B", 3: "17Networks_RH_C"}
+
+
+def _small_atlas_regions():
+    """
+    Return the labelled regions of a small 3-parcel atlas image.
+
+    Returns
+    -------
+    list of tuple
+        ``(label, region)`` rows, as the engines load deterministic
+        atlases.
+    """
+    import nibabel
+
+    data = np.zeros((4, 3, 2), dtype=np.int16)
+    data[0, :, 0] = 1
+    data[1:3, 0, :] = 2
+    data[3, 2, 1] = 3
+    image = nibabel.Nifti1Image(data, np.diag([2.0, 2.0, 2.0, 1.0]))
+    regions = ExplicitVBR.from_spatial_image_labels(image, [1, 2, 3])
+    return [(SCHAEFER_NAMES[k], regions[k]) for k in (1, 2, 3)], data
+
+
+def test_schaefer_shaped_engine_keeps_atlas_regions():
+    nl = frontend.NeurolangPDL()
+    rows, data = _small_atlas_regions()
+    nl.add_tuple_set(rows, name="schaefer")
+    declared_type = nl.symbol_table["schaefer"].type
+
+    nl.execute_datalog_program(SCHAEFER_INIT)
+
+    assert nl.symbol_table["schaefer"].type == declared_type
+    regions = nl.execute_datalog_program("ans(l, r) :- schaefer(l, r)")
+    assert set(regions.to_unnamed()) == set(rows)
+    assert all(
+        isinstance(region, ExplicitVBR) for _, region in regions.to_unnamed()
+    )
+
+    expected = {
+        (name, *map(int, voxel))
+        for label, name in SCHAEFER_NAMES.items()
+        for voxel in np.argwhere(data == label)
+    }
+    labels = nl.execute_datalog_program("ans(l, i, j, k) :- labels(l, i, j, k)")
+    assert set(labels.to_unnamed()) == expected
+    voxels = nl.execute_datalog_program(
+        "ans(i, j, k, l) :- schaefer_voxels(i, j, k, l)"
+    )
+    assert {(l, i, j, k) for i, j, k, l in voxels.to_unnamed()} == expected
+    label_names = nl.execute_datalog_program("ans(l) :- schaefer_label(l)")
+    assert set(label_names.to_unnamed()) == {(name,) for name in SCHAEFER_NAMES.values()}
+
+
 @pytest.mark.skip
 @patch(
     "neurolang.frontend.neurosynth_utils."
