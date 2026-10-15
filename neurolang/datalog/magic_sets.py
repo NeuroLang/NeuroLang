@@ -33,6 +33,7 @@ from .constraints_representation import (
     reachable_code,
 )
 from .expression_processing import (
+    any_body_preds_in_set,
     extract_logic_atoms,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
@@ -695,17 +696,30 @@ def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
     """
     Return the symbols of the predicates of ``datalog`` which are random.
 
-    These are the probabilistic facts and choices, the within-language
-    probabilistic queries (WLQs), and the intensional predicates which
-    depend on probabilistic facts or choices other than through a WLQ.
-    Magic predicates derived from these would not be deterministic, and
-    restricting a probabilistic rule by them could change probabilities.
+    These are the within-language probabilistic queries (WLQs) and the
+    :func:`random_predicate_symbols` of ``datalog``, none if it is not
+    probabilistic. Magic predicates derived from these would not be
+    deterministic, and restricting a probabilistic rule by them could
+    change probabilities.
     """
     try:
-        random_symbols = datalog.pfact_pred_symbs | datalog.pchoice_pred_symbs
         wlq_symbols = set(datalog.within_language_prob_queries())
     except AttributeError:
         return set()
+    return random_predicate_symbols(datalog) | wlq_symbols
+
+
+def random_predicate_symbols(datalog) -> Set[Symbol]:
+    """
+    Return the symbols of the probabilistic predicates of ``datalog``.
+
+    These are the probabilistic facts and choices, and the intensional
+    predicates which depend on probabilistic facts or choices other than
+    through a within-language probabilistic query (WLQ). ``datalog`` is a
+    probabilistic program: one with probabilistic facts, choices and WLQs.
+    """
+    random_symbols = datalog.pfact_pred_symbs | datalog.pchoice_pred_symbs
+    wlq_symbols = set(datalog.within_language_prob_queries())
     rules = [
         rule for rule in get_list_of_intensional_rules(datalog)
         if rule.consequent.functor not in wlq_symbols
@@ -714,10 +728,10 @@ def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
     while new_symbols:
         new_symbols = {
             rule.consequent.functor for rule in rules
-            if not _body_functors(rule).isdisjoint(random_symbols)
+            if any_body_preds_in_set(rule, random_symbols)
         } - random_symbols
         random_symbols = random_symbols | new_symbols
-    return random_symbols | wlq_symbols
+    return random_symbols
 
 
 def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:
