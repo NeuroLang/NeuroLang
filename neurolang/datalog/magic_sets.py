@@ -27,7 +27,11 @@ from .expressions import (
     Implication,
     Union,
 )
-from .constraints_representation import RightImplication, reachable_code
+from .constraints_representation import (
+    RightImplication,
+    get_list_of_intensional_rules,
+    reachable_code,
+)
 from .expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -703,7 +707,7 @@ def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
     except AttributeError:
         return set()
     rules = [
-        rule for rule in _intensional_rules(datalog)
+        rule for rule in get_list_of_intensional_rules(datalog)
         if rule.consequent.functor not in wlq_symbols
     ]
     new_symbols = random_symbols
@@ -714,16 +718,6 @@ def probabilistic_symbols(datalog: DatalogProgram) -> Set[Symbol]:
         } - random_symbols
         random_symbols = random_symbols | new_symbols
     return random_symbols | wlq_symbols
-
-
-def _intensional_rules(datalog):
-    """Return the rules of the intensional database of ``datalog``."""
-    return [
-        rule
-        for rules in datalog.intensional_database().values()
-        for rule in rules.formulas
-        if not isinstance(rule, RightImplication)
-    ]
 
 
 def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:
