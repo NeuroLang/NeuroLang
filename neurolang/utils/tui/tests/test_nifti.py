@@ -2,6 +2,7 @@
 
 import io
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -110,3 +111,108 @@ def test_view(app, tmp_path, monkeypatch):
     app._handle_dot_command(f".view {path}")
     assert "Saved visualisation to" in _output(app)
     assert opened and opened[0][1].endswith(".png")
+
+
+# A tiny engine: a 4×4×4 template grid of 2 mm voxels, its origin away
+# from the grid's corner, and the sorts declaring the voxel indices and
+# the millimetre coordinates on it.
+TINY_AFFINE = np.array([
+    [2.0, 0.0, 0.0, -3.0],
+    [0.0, 2.0, 0.0, -5.0],
+    [0.0, 0.0, 2.0, -7.0],
+    [0.0, 0.0, 0.0, 1.0],
+])
+
+TINY_ENGINE = """\
+engines:
+  tiny:
+    sorts:
+      study: {columns: [study_id], type: int}
+      tfidf: {columns: [tfidf], type: float}
+      voxel: {columns: [i, j, k], type: int, space: voxel}
+      mni: {columns: [x, y, z], type: float, space: mm}
+    predicates:
+      voxel: {arguments: [voxel]}
+      reports: {arguments: [study, voxel]}
+      weight: {arguments: [voxel, tfidf]}
+      peak: {arguments: [mni, study]}
+"""
+
+
+@pytest.fixture
+def tiny(monkeypatch, tmp_path):
+    """Return a REPL on the tiny engine, with its 4×4×4 template."""
+    from neurolang.utils import engine_registry
+
+    path = tmp_path / "engines.yaml"
+    path.write_text(TINY_ENGINE)
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    nl = NeurolangPDL()
+    nl.template = nib.Nifti1Image(
+        np.ones((4, 4, 4), dtype=np.uint8), TINY_AFFINE
+    )
+    nl.add_tuple_set([(1, 2, 3), (0, 0, 0)], name="voxel")
+    nl.add_tuple_set(
+        [(10, 1, 2, 3), (11, 1, 2, 3), (12, 0, 0, 0)], name="reports"
+    )
+    nl.add_tuple_set(
+        [(1, 2, 3, 0.25), (1, 2, 3, 0.75), (0, 0, 0, 0.5)], name="weight"
+    )
+    nl.add_tuple_set(
+        [(-1.0, -1.0, -1.0, 10), (-3.2, -4.9, -7.0, 11)], name="peak"
+    )
+    console = Console(file=io.StringIO(), width=200)
+    return InteractiveTuiApp(
+        nl, TuiSettings(engine_name="tiny"), console=console,
+        err_console=console,
+    )
+
+
+class TestNiftiPaths:
+    """Check the paths ending in .nii or .nii.gz are saved as NIfTI."""
+
+    @pytest.mark.parametrize("name", [
+        "out.nii", "out.nii.gz", "OUT.NII.GZ", "Out.Nii",
+    ])
+    def test_nifti_suffixes(self, tiny, tmp_path, name):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / name}")
+        img = nib.load(tmp_path / name)
+        assert isinstance(img, nib.Nifti1Image)
+        assert "NIfTI" in _output(tiny) and "CSV" not in _output(tiny)
+
+    def test_nii_gz_is_compressed(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.nii.gz'}")
+        with open(tmp_path / "out.nii.gz", "rb") as f:
+            assert f.read(2) == b"\x1f\x8b"
+        assert isinstance(nib.load(tmp_path / "out.nii.gz"), nib.Nifti1Image)
+
+    def test_csv_gz_stays_csv(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.csv.gz'}")
+        saved = pd.read_csv(tmp_path / "out.csv.gz")
+        assert list(saved.columns) == ["i", "j", "k"]
+        assert "CSV (gzip)" in _output(tiny)
+
+    def test_tsv_is_tab_separated(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.tsv'}")
+        saved = pd.read_csv(tmp_path / "out.tsv", sep="\t")
+        assert list(saved.columns) == ["i", "j", "k"]
+        assert "TSV" in _output(tiny)
+
+    def test_message_tells_what_was_written(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.csv'}")
+        assert "Saved 2 rows as CSV to" in _output(tiny)
+
+    def test_several_blocks_keep_the_nifti_suffix(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        tiny._execute_and_display(
+            "obtain every Voxel in 3D as First. "
+            "obtain every Voxel in 3D as Second."
+        )
+        tiny._handle_dot_command(f".save {tmp_path / 'out.nii.gz'}")
+        for name in ("out_first.nii.gz", "out_second.nii.gz"):
+            assert isinstance(nib.load(tmp_path / name), nib.Nifti1Image)
