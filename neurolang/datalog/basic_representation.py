@@ -42,6 +42,7 @@ from .expressions import (
     Union,
     predicate_identity,
 )
+from .range_restriction import check_range_restriction
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
 __all__ = [
@@ -166,6 +167,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         expression = Implication(consequent, antecedent)
 
         self._validate_implication_syntax(consequent, antecedent)
+        check_range_restriction(expression, self.symbol_table)
 
         symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
 

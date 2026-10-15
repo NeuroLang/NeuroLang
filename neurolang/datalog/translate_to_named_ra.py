@@ -34,6 +34,7 @@ from ..relational_algebra import (
 from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
+from .range_restriction import unbound_variables_error
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -271,10 +272,21 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 )
 
             if new_output is output:
-                raise CouldNotTranslateConjunctionException(expression)
+                raise self._untranslatable_conjunction_error(expression)
             output = new_output
 
         return output
+
+    @staticmethod
+    def _untranslatable_conjunction_error(expression):
+        """
+        Return the error for the conjunction *expression*, that cannot be
+        translated: its unbound variables, if it has any.
+        """
+        error = unbound_variables_error(expression)
+        if error is None:
+            error = CouldNotTranslateConjunctionException(expression)
+        return error
 
     @add_match(ExistentialPredicate)
     def translate_existential_predicate(self, expression):
