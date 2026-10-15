@@ -98,6 +98,43 @@ Flattening
    The rules the query depends on are unfolded into its body, giving a
    union of conjunctive queries in disjunctive normal form.
 
+Absorption in negations
+   Conjuncts asserted outside a negation are removed from it, by the
+   absorption law
+
+   .. math::
+
+      A \land \lnot(A \land B) \equiv A \land \lnot B, \qquad
+      A \land \lnot\exists y\,(A \land B) \equiv A \land \lnot\exists y\, B
+      \quad (y \text{ not free in } A).
+
+   The law holds in every interpretation, hence in every possible world.
+   It removes, for instance, a probabilistic atom repeated within a
+   negation, which can make the query non-repeating, the class of queries
+   with negation for which Fink and Olteanu characterise liftability
+   [Fink2016]_. A negated conjunction all of whose conjuncts are asserted
+   is a contradiction and is left unchanged
+   (:class:`~neurolang.logic.transformations.AbsorbAssertedConjunctsInNegations`).
+
+Deterministic negations
+   A negated conjunct :math:`\lnot N(\bar x)` whose atoms are all
+   deterministic relations or comparisons is the same relation in every
+   possible world. With :math:`G(\bar x)` the deterministic conjuncts of
+   the query whose variables are among :math:`\bar x`, it is replaced by a
+   fresh deterministic relation computed with relational algebra,
+
+   .. math::
+
+      D(\bar x) := G(\bar x) \land \lnot N(\bar x), \qquad
+      G \land \lnot N \equiv G \land D,
+
+   :math:`G` being conjoined within the existentials of :math:`N` so that
+   they are range-restricted, as in
+   :math:`\lnot\exists t_1\,(T(t_1) \land M(s, t_1) \land t_1 \neq t)`.
+   The negation is left unchanged when no non-empty :math:`G` binds all of
+   :math:`\bar x`, for instance when :math:`N` is closed
+   (:mod:`neurolang.probabilistic.deterministic_subqueries`).
+
 Probabilistic choices
    Two atoms of the same probabilistic choice relation are true together
    only if they are the same tuple, as exactly one tuple of the choice is
