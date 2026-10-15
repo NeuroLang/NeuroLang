@@ -1785,3 +1785,23 @@ def test_choice_asserted_outside_and_inside_negation_is_absorbed():
         [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_choice_with_closed_negated_deterministic_query_is_not_lifted():
+    """A negated deterministic query without free variables has no
+    conjunct binding them to materialise it with, and is left to the
+    other solvers.
+    """
+    S = Symbol("S")
+    Any_ = Symbol("Any")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(S, [(0.5, 1), (0.5, 2)])
+    cpl.walk(Union((Fact(R(Constant(3), Constant(3))),)))
+    cpl.walk(Union((
+        Implication(Any_(), Conjunction((R(y, z), NE(y, z)))),
+        Implication(P(x), Conjunction((S(x), Negation(Any_())))),
+    )))
+    query = Implication(ans(x), P(x))
+
+    with pytest.raises(UnsupportedSolverError):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
