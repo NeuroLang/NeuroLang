@@ -55,18 +55,6 @@ def test_save_every_obtain_block(app, tmp_path):
     assert (tmp_path / "out_second.csv").exists()
 
 
-def test_view(app, tmp_path, monkeypatch):
-    opened = []
-    monkeypatch.setattr(nifti.subprocess, "Popen", opened.append)
-    app._handle_dot_command(f".view {tmp_path / 'missing.nii'}")
-    assert "File not found" in _output(app)
-    path = tmp_path / "img.nii"
-    nib.save(nib.Nifti1Image(np.ones((4, 4, 4), np.float32), np.eye(4)), path)
-    app._handle_dot_command(f".view {path}")
-    assert "Saved visualisation to" in _output(app)
-    assert opened and opened[0][1].endswith(".png")
-
-
 # A tiny engine: a 4×4×4 template grid of 2 mm voxels, its origin away
 # from the grid's corner, and the sorts declaring the voxel indices and
 # the millimetre coordinates on it.
@@ -417,3 +405,78 @@ def test_help_lists_the_save_options(tiny):
     tiny._handle_dot_command(".help")
     assert ".save PATH [--value COLUMN]" in _output(tiny)
     assert ".help save" in _output(tiny)
+
+
+@pytest.fixture
+def tiny_image(tiny, tmp_path):
+    """Save the voxels of the tiny engine in a NIfTI image, its path."""
+    _saved(tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)", name="v.nii")
+    return tmp_path / "v.nii"
+
+
+def _terminal_app(app):
+    """Return a REPL on the engine of *app* whose console is a terminal."""
+    console = Console(file=io.StringIO(), width=200, force_terminal=True)
+    return InteractiveTuiApp(
+        app._nl, app.settings, console=console, err_console=console
+    )
+
+
+class TestView:
+    """Check .view shows an image in nilearn's viewer."""
+
+    def test_missing_file(self, tiny, tmp_path):
+        tiny._handle_dot_command(f".view {tmp_path / 'missing.nii'}")
+        assert "File not found" in _output(tiny)
+
+    def test_opens_the_viewer_in_a_browser(
+        self, tiny, tiny_image, monkeypatch
+    ):
+        pytest.importorskip("nilearn.plotting")
+        opened = []
+        monkeypatch.setattr(
+            nifti.webbrowser, "open", lambda url: opened.append(url) or True
+        )
+        app = _terminal_app(tiny)
+        app._handle_dot_command(f".view {tiny_image}")
+        assert len(opened) == 1 and opened[0].startswith("file://")
+        html = Path(opened[0][len("file://"):])
+        assert html.suffix == ".html" and html.stat().st_size > 0
+        assert str(html) in _output(app)
+        html.unlink()
+
+    def test_prints_the_path_without_a_terminal(
+        self, tiny, tiny_image, monkeypatch
+    ):
+        pytest.importorskip("nilearn.plotting")
+        opened = []
+        monkeypatch.setattr(nifti.webbrowser, "open", opened.append)
+        tiny._handle_dot_command(f".view {tiny_image}")
+        assert opened == []
+        out = _output(tiny)
+        path = out.split("viewer to: ")[1].split()[0]
+        assert path.endswith(".html") and Path(path).exists()
+        Path(path).unlink()
+
+    def test_the_template_is_the_background(
+        self, tiny, tiny_image, monkeypatch
+    ):
+        from nilearn import plotting
+
+        calls = []
+
+        class FakeView:
+            def save_as_html(self, path):
+                Path(path).write_text("<html></html>")
+
+        def view_img(img, **kwargs):
+            calls.append((img, kwargs))
+            return FakeView()
+
+        monkeypatch.setattr(plotting, "view_img", view_img)
+        tiny._handle_dot_command(f".view {tiny_image}")
+        img, kwargs = calls[0]
+        assert kwargs["bg_img"] is tiny._nl.template
+        assert "threshold" in kwargs
+        path = _output(tiny).split("viewer to: ")[1].split()[0]
+        Path(path).unlink()
