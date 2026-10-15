@@ -1,41 +1,48 @@
 """
-The catalog of the predicates defined in an engine.
+Catalog of the predicates of an engine.
 
-It lists the relations, the rules, the probabilistic facts and choices
-and the functions of an engine, with their columns and the entities they
-relate when they are known. The interactive REPL offers them in its
-completion and the LLM query assistant describes them to the model.
+:func:`predicate_catalog` reads the predicates the engine has, each
+time it is called, so that the relations and the rules added during the
+session are in it as soon as they exist: the relations stored in the
+engine, its rules, those of the session, the relations loaded with
+``.load``, its probabilistic facts and choices and its functions, each
+described by a :class:`PredicateInfo`. The completion and ``.predicates``
+share it.
 """
 
 from typing import NamedTuple, Optional
 
 from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
+from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.probabilistic.expressions import ProbabilisticQuery
+from neurolang.utils.cli import _is_generated_column
+
 from neurolang.utils import squall_sorts
 
 
 class PredicateInfo(NamedTuple):
     """
-    A predicate defined in an engine.
+    A predicate of an engine.
 
     *kind* tells where it comes from: ``stored`` (EDB relation),
     ``derived`` (IDB predicate of the engine), ``session`` (rule defined
     in the session), ``loaded`` (relation loaded with ``.load``),
-    ``probabilistic`` or ``function``. *columns* are the names of its
-    columns, or None when they are unknown, and *arity* its number of
-    columns, or None when it is unknown. *arguments* are the
+    ``probabilistic`` (probabilistic fact or choice) or ``function``.
+    *columns* are the names of its columns, or None when they are
+    unknown, and *arity* its number of columns, or None when it is
+    unknown. A *probabilistic* predicate has a probability column
+    besides its *arity* columns. *arguments* are the
     :class:`~neurolang.utils.engine_registry.Argument` the engine
-    declares, the entities it relates, or None. A *probabilistic*
-    predicate has a probability column besides its *arity* columns.
+    declares, the entities it relates, or None.
     """
 
     name: str
     kind: str
     columns: Optional[tuple] = None
     arity: Optional[int] = None
-    arguments: Optional[tuple] = None
     probabilistic: bool = False
+    arguments: Optional[tuple] = None
 
     def signature(self) -> str:
         """
@@ -43,7 +50,8 @@ class PredicateInfo(NamedTuple):
 
         The entities of several columns, or of a column not named after
         their sort, show their columns: ``reports(study(study_id),
-        voxel(i, j, k))``.
+        voxel(i, j, k))``. Without entities, the columns are shown, or
+        else the arity, or else the name alone.
         """
         arguments = self.arguments or ()
         if len(arguments) > 1:
@@ -59,8 +67,32 @@ class PredicateInfo(NamedTuple):
         return self.name
 
     def meta(self) -> str:
-        """Return the description shown next to the completion."""
+        """Return the signature and the kind, as the completion shows."""
         return f"{self.signature()} · {self.kind}"
+
+
+# The kinds of predicates, in the order they are listed.
+KINDS = (
+    "session", "loaded", "stored", "derived", "probabilistic", "function"
+)
+
+
+def is_user_symbol(symbol, protected=()) -> bool:
+    """
+    Return whether *symbol* names a predicate of the user or the engine.
+
+    The symbols NeuroLang generates are left out: fresh symbols, the
+    adorned symbols of magic sets and of the helpers of a conditional
+    probability (``P^cond_num`` of ``P``, named ``P`` too), private
+    names such as ``__constraints__`` and the *protected* keywords.
+    """
+    name = getattr(symbol, "name", None)
+    return bool(
+        isinstance(name, str) and name
+        and not name.startswith(("_", "fresh_"))
+        and not isinstance(symbol, AdornedSymbol)
+        and symbol not in protected
+    )
 
 
 def _scopes(symbol_table):
@@ -79,40 +111,39 @@ def _probabilistic_symbols(program_ir) -> set:
 
 
 def _rule_columns(union) -> Optional[tuple]:
-    """Return the parameter names of the first rule of *union*, if any."""
+    """
+    Return the parameter names of the first rule of *union*, if any.
+
+    A rule defined in SQUALL has generated names, such as
+    ``fresh_00000002``, which tell nothing: it has no column names then.
+    """
     args = union.formulas[0].consequent.args
     names = tuple(getattr(arg, "name", None) for arg in args)
-    if all(isinstance(name, str) for name in names):
+    if all(
+        isinstance(name, str) and not _is_generated_column(name)
+        for name in names
+    ):
         return names
     return None
 
 
-def _declared_arguments(name, arity, signatures) -> Optional[tuple]:
-    """Return the arguments *signatures* gives *name*, if they fit."""
-    arguments = signatures.get(name)
-    if arguments is None:
+def _fitting(columns, arity) -> Optional[tuple]:
+    """Return *columns* as a tuple if there are *arity* of them."""
+    if columns is None or len(columns) != arity:
         return None
-    if sum(len(argument.columns) for argument in arguments) != arity:
-        return None
-    return tuple(arguments)
+    return tuple(columns)
 
 
-def _relation_info(name, value, kind, columns, signatures) -> PredicateInfo:
-    """Return the info of the relation *name* whose set is *value*."""
-    arity = value.arity
+def _relation_info(name, rows, kind, columns) -> PredicateInfo:
+    """Return the info of the relation *name* whose set is *rows*."""
     probabilistic = kind == "probabilistic"
-    if probabilistic:
-        arity -= 1
-    columns = columns.get(name)
-    if columns is not None and len(columns) != arity:
-        columns = None
+    arity = rows.arity - probabilistic
     return PredicateInfo(
-        name, kind, columns and tuple(columns), arity,
-        _declared_arguments(name, arity, signatures), probabilistic,
+        name, kind, _fitting(columns.get(name), arity), arity, probabilistic
     )
 
 
-def _rule_info(name, union, kind, columns, signatures) -> PredicateInfo:
+def _rule_info(name, union, kind, columns) -> PredicateInfo:
     """
     Return the info of the rules *union* of *name*.
 
@@ -123,13 +154,20 @@ def _rule_info(name, union, kind, columns, signatures) -> PredicateInfo:
     args = union.formulas[0].consequent.args
     probabilistic = any(isinstance(arg, ProbabilisticQuery) for arg in args)
     arity = len(args) - probabilistic
-    declared = columns.get(name)
-    if declared is None or len(declared) != arity:
+    declared = _fitting(columns.get(name), arity)
+    if declared is None:
         declared = _rule_columns(union)
-    return PredicateInfo(
-        name, kind, declared and tuple(declared), arity,
-        _declared_arguments(name, arity, signatures), probabilistic,
-    )
+    return PredicateInfo(name, kind, declared, arity, probabilistic)
+
+
+def _declared_arguments(name, arity, signatures) -> Optional[tuple]:
+    """Return the arguments *signatures* gives *name*, if they fit."""
+    arguments = signatures.get(name)
+    if arguments is None or arity is None:
+        return None
+    if sum(len(argument.columns) for argument in arguments) != arity:
+        return None
+    return tuple(arguments)
 
 
 def _function_arity(symbol) -> Optional[int]:
@@ -140,38 +178,56 @@ def _function_arity(symbol) -> Optional[int]:
     return len(args) - 1
 
 
-class _CatalogBuilder:
+class CatalogBuilder:
     """Collect the :class:`PredicateInfo` of the symbols of an engine."""
 
-    def __init__(self, nl, columns, loaded, signatures):
-        """Set up the collection on *nl* with the known *columns*."""
+    def __init__(self, nl, columns=None, loaded=None, signatures=None):
+        """
+        Set up the collection on the engine *nl*.
+
+        See :func:`predicate_catalog` for the *columns*, the *loaded*
+        relations and the *signatures*.
+        """
         loaded = loaded or {}
         self.program_ir = nl.program_ir
         self.columns = {**(columns or {}), **loaded}
-        self.signatures = signatures or {}
         self.loaded = loaded
+        self.signatures = signatures or {}
         self.probabilistic = _probabilistic_symbols(self.program_ir)
         self.protected = getattr(self.program_ir, "protected_keywords", ())
 
     def info(self, symbol, value, session: bool):
-        """Return the info of *symbol* defined as *value*, or None."""
-        name = getattr(symbol, "name", None)
-        if not name or name.startswith("_") or symbol in self.protected:
+        """
+        Return the info of *symbol* defined as *value*, or None.
+
+        *session* tells whether it is defined in the session's scope.
+        None is returned for a symbol that is not a predicate or that
+        NeuroLang generates. The arguments are those the signatures
+        declare for it, if they fit its arity.
+        """
+        info = self._info(symbol, value, session)
+        if info is None:
+            return None
+        return info._replace(arguments=_declared_arguments(
+            info.name, info.arity, self.signatures
+        ))
+
+    def _info(self, symbol, value, session: bool):
+        """Return the info of *symbol* without its arguments, or None."""
+        if not is_user_symbol(symbol, self.protected):
             return None
         inner = getattr(value, "value", None)
         if isinstance(inner, WrappedRelationalAlgebraSet):
             return _relation_info(
-                name, inner, self._relation_kind(symbol), self.columns,
-                self.signatures,
+                symbol.name, inner, self._relation_kind(symbol),
+                self.columns,
             )
         if symbol.type is UnionOfConjunctiveQueries:
             kind = "session" if session else "derived"
-            return _rule_info(
-                name, value, kind, self.columns, self.signatures
-            )
+            return _rule_info(symbol.name, value, kind, self.columns)
         if callable(inner):
             return PredicateInfo(
-                name, "function", None, _function_arity(symbol)
+                symbol.name, "function", None, _function_arity(symbol)
             )
         return None
 
@@ -182,6 +238,28 @@ class _CatalogBuilder:
         if symbol.name in self.loaded:
             return "loaded"
         return "stored"
+
+
+def collect_catalog(builder, symbol_table) -> dict:
+    """
+    Return the :class:`PredicateInfo` that *builder* gives the symbols.
+
+    The symbols are those of *symbol_table* and its enclosing scopes;
+    a symbol defined in several scopes is described as the innermost
+    defines it. When there are several scopes, the innermost one is the
+    session's.
+    """
+    scopes = list(_scopes(symbol_table))
+    catalog = {}
+    for depth, scope in enumerate(scopes):
+        session = depth == 0 and len(scopes) > 1
+        for symbol, value in scope._symbols.items():
+            if getattr(symbol, "name", None) in catalog:
+                continue
+            info = builder.info(symbol, value, session)
+            if info is not None:
+                catalog[info.name] = info
+    return catalog
 
 
 def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
@@ -196,15 +274,14 @@ def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
     maps predicate names to the arguments the engine declares (see
     :func:`~neurolang.utils.engine_registry.get_signatures`).
     """
-    builder = _CatalogBuilder(nl, columns, loaded, signatures)
-    scopes = list(_scopes(nl.program_ir.symbol_table))
-    catalog = {}
-    for depth, scope in enumerate(scopes):
-        session = depth == 0 and len(scopes) > 1
-        for symbol, value in scope._symbols.items():
-            if getattr(symbol, "name", None) in catalog:
-                continue
-            info = builder.info(symbol, value, session)
-            if info is not None:
-                catalog[info.name] = info
-    return catalog
+    builder = CatalogBuilder(nl, columns, loaded, signatures)
+    return collect_catalog(builder, nl.program_ir.symbol_table)
+
+
+def listed(catalog: dict) -> list:
+    """Return the infos of *catalog* by kind, as :data:`KINDS`, and name."""
+    def order(info):
+        kind = KINDS.index(info.kind) if info.kind in KINDS else len(KINDS)
+        return kind, info.name
+
+    return sorted(catalog.values(), key=order)

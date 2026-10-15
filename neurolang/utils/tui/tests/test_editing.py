@@ -21,10 +21,8 @@ from neurolang.frontend.datalog.standard_syntax import (  # noqa: E402
 from neurolang.utils.interactive_parsing import LarkCompleter  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.commands import COMMANDS  # noqa: E402
-from neurolang.utils.tui.completion import (  # noqa: E402
-    PredicateInfo,
-    argument_context,
-)
+from neurolang.utils.predicate_catalog import PredicateInfo  # noqa: E402
+from neurolang.utils.tui.completion import argument_context  # noqa: E402
 from neurolang.utils.tui.editing import (  # noqa: E402
     NeuroLangLexer,
     STYLE,
@@ -278,6 +276,29 @@ def _words(app, text):
 def _metas(app, text):
     return {c.text: c.display_meta_text for c in _completions(app, text)}
 
+
+
+def test_conditional_predicate_offered_with_its_own_arity(neurosynth_app):
+    """
+    A conditional is offered as itself, not as one of its helpers.
+
+    ``marg`` compiles to ``marg`` and the helpers ``marg^cond_num`` and
+    ``marg^cond_den``, also named ``marg`` but of other arities.
+    """
+    app = neurosynth_app
+    nl = app._nl
+    nl.add_tuple_set([("pain",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",)], name="selected_study"
+    )
+    app._handle_dot_command(".mode squall")
+    app._execute_and_display(
+        "define as marg with inferred probability every Term where a "
+        "Selected_study mentions the Term conditioned to the "
+        "Selected_study that mentions 'pain'."
+    )
+    app._handle_dot_command(".mode datalog")
+    assert _metas(app, "ans(t) :- mar")["marg"].endswith("/2 · session")
 
 class TestDynamicCompletion:
     def test_predicate_ranked_before_grammar(self, neurosynth_app):
@@ -640,3 +661,150 @@ class TestSquallSorts:
             sorts_app._execute_and_display(sentence)
             assert not sorts_app.failed, sentence
             assert len(sorts_app.results[-1].frame) == 1, sentence
+
+
+@pytest.fixture
+def values_app(sorts_app):
+    """Return the SQUALL REPL of :func:`sorts_app` with several terms."""
+    sorts_app._nl.add_tuple_set(
+        [("pain",), ("parietal",), ("fear",), ("working memory",),
+         ("alzheimer's",)],
+        name="term",
+    )
+    return sorts_app
+
+
+class TestQuotedValues:
+    def test_terms_after_mentions(self, values_app):
+        metas = _metas(values_app, "obtain every Study that mentions '")
+        assert list(metas) == [
+            "fear'", "pain'", "parietal'", "working memory'"
+        ]
+        assert metas["pain'"] == "term"
+
+    def test_terms_filtered_by_their_prefix(self, values_app):
+        assert _words(values_app, "obtain every Study that mentions 'pa") == [
+            "pain'", "parietal'"
+        ]
+        assert _words(
+            values_app, "obtain every Study that mentions 'working m"
+        ) == ["working memory'"]
+
+    def test_double_quotes(self, values_app):
+        words = _words(values_app, 'obtain every Study that mentions "al')
+        assert words == ["alzheimer's\""]
+
+    def test_the_completion_replaces_the_quoted_text(self, values_app):
+        (completion,) = _completions(
+            values_app, "obtain every Study that mentions 'working m"
+        )
+        assert completion.start_position == -len("working m")
+
+    def test_while_typing_after_the_quote_alone(self, values_app):
+        text = "obtain every Study that mentions '"
+        assert _words(values_app, text) and not [
+            c.text for c in _completions(values_app, text, requested=False)
+        ]
+        assert _completions(values_app, text + "p", requested=False)
+
+    def test_values_in_datalog(self, values_app):
+        values_app.settings.squall = False
+        assert _words(values_app, "ans(s) :- mentions(s, 'pa") == [
+            "pain'", "parietal'"
+        ]
+
+    def test_no_values_for_an_unknown_verb(self, values_app):
+        assert _words(values_app, "obtain every Study that plays '") == []
+
+    def test_values_are_read_once(self, values_app, monkeypatch):
+        from neurolang.utils.tui import value_completion
+
+        calls = []
+        read = value_completion.ColumnValues._read
+
+        def counting(self, name, position):
+            calls.append(name)
+            return read(self, name, position)
+
+        monkeypatch.setattr(value_completion.ColumnValues, "_read", counting)
+        for prefix in ("", "p", "pa"):
+            _words(values_app, "obtain every Study that mentions '" + prefix)
+        assert calls == ["term"]
+
+
+class TestTupleVariables:
+    def test_the_next_columns_of_the_noun(self, sorts_app):
+        metas = _metas(sorts_app, "obtain every Voxel (?i; ")
+        assert list(metas) == ["?j", "?j; ?k)"]
+        assert metas["?j"] == "column 2 of voxel"
+
+    def test_filtered_by_the_variable_typed(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (?i; ?j; ?") == [
+            "?k", "?k)"
+        ]
+
+    def test_from_the_first_column(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (") == [
+            "?i", "?i; ?j; ?k)"
+        ]
+
+    def test_nothing_after_the_last_column(self, sorts_app):
+        assert _words(sorts_app, "obtain every Voxel (?i; ?j; ?k; ") == []
+
+
+def test_arity_error_notes_the_entities(sorts_app):
+    """Check a wrong arity on a voxel predicate tells its columns."""
+    sorts_app.settings.squall = False
+    sorts_app._execute_and_display("ans(s) :- reports(s, i)")
+    out = sorts_app.console.file.getvalue()
+    assert (
+        "note: reports relates study(study_id) to voxel(i, j, k): "
+        "write reports(study_id, i, j, k)"
+    ) in out
+
+
+def test_squall_error_notes_the_entities(sorts_app, monkeypatch):
+    """Check an error on a SQUALL noun of several columns tells how."""
+    def failing(program):
+        raise ValueError("Relations must have the same arity")
+
+    monkeypatch.setattr(sorts_app, "_execute", failing)
+    sorts_app._execute_and_display("obtain every Voxel that a Study reports.")
+    out = sorts_app.console.file.getvalue()
+    assert '"every Voxel in 3D" or "every Voxel (?i; ?j; ?k)"' in out
+    assert '"a Study reports a Voxel in 3D"' in out
+
+
+def test_one_declaration_of_the_sorts(monkeypatch, tmp_path):
+    """Check completion, .predicates and the primer read the same sorts."""
+    from neurolang.utils import engine_registry
+
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n  grid:\n"
+        "    sorts:\n"
+        "      voxel: {columns: [x, y, z], type: int, description: a cell}\n"
+        "      study: {columns: [study_id], type: int}\n"
+        "    predicates:\n"
+        "      voxel: {arguments: [voxel]}\n"
+        "      reports: {arguments: [study, voxel]}\n"
+    )
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3)], name="voxel")
+    nl.add_tuple_set([(10, 1, 2, 3)], name="reports")
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="grid", squall=True), console=console,
+        err_console=console,
+    )
+    app._make_session()
+    assert _metas(app, "obtain every ")["Voxel"].startswith(
+        "voxel(x, y, z) · in 3D"
+    )
+    assert _words(app, "obtain every Voxel (?x; ") == ["?y", "?y; ?z)"]
+    app._handle_dot_command(".predicates")
+    app._handle_dot_command(".help squall")
+    out = console.file.getvalue()
+    assert "reports(study(study_id), voxel(x, y, z))" in out
+    assert "voxel(x, y, z)         in 3D · a cell" in out

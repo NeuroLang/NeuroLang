@@ -24,13 +24,11 @@ from neurolang.utils import engine_registry
 from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
+from neurolang.utils.predicate_catalog import predicate_catalog
 from .commands import MODES, sort_spec_text
-from .completion import (
-    KEYWORDS as DATALOG_KEYWORDS,
-    NeuroLangReplCompleter,
-    predicate_catalog,
-)
+from .completion import KEYWORDS as DATALOG_KEYWORDS, NeuroLangReplCompleter
 from .squall_completion import SquallGrammarOptions, squall_keywords
+from .value_completion import ColumnValues
 
 
 
@@ -157,6 +155,7 @@ def make_completer(app) -> NeuroLangReplCompleter:
         is_squall=lambda: app.settings.squall,
         squall_grammar=SquallGrammarOptions(),
         hidden=hidden,
+        column_values=ColumnValues(app._nl),
     )
 
 

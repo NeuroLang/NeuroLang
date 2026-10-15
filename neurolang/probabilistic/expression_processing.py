@@ -90,8 +90,50 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
     return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
 
+def _probability_column_sum(ras):
+    """
+    Sum the first column of a relational algebra set.
+
+    The sum is computed on the numpy array of the deduplicated set, which
+    every backend provides, instead of iterating over the (wrapped) tuples
+    one by one. Named sets are first converted to unnamed ones so that the
+    first column follows the order of ``ras.columns``.
+
+    Parameters
+    ----------
+    ras : RelationalAlgebraFrozenSet
+        Set whose first column holds probabilities.
+
+    Returns
+    -------
+    float
+        The sum of the first column, 0 for an empty set.
+
+    """
+    if ras.is_empty():
+        return 0.
+    if hasattr(ras, "to_unnamed"):
+        ras = ras.to_unnamed()
+    return float(ras.as_numpy_array()[:, 0].astype(float).sum())
+
+
 def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
-    probs_sum = sum(v.value[0].value for v in ra_set.value)
+    """
+    Check that the probabilities of a probabilistic choice sum to one.
+
+    Parameters
+    ----------
+    ra_set : Constant[AbstractSet]
+        Constant wrapping the set of tuples of the probabilistic choice,
+        whose first column holds the probabilities.
+
+    Raises
+    ------
+    DistributionDoesNotSumToOneError
+        If the probabilities do not sum to one.
+
+    """
+    probs_sum = _probability_column_sum(ra_set.value)
     if not numpy.isclose(probs_sum, 1.0):
         raise DistributionDoesNotSumToOneError(
             "Probability labels of a probabilistic choice should sum to 1. "

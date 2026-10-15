@@ -2,6 +2,7 @@
 
 import gzip
 import io
+import re
 
 import pytest
 
@@ -10,6 +11,7 @@ pytest.importorskip("rich")
 
 from rich.console import Console  # noqa: E402
 
+from neurolang.expressions import Symbol  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 
@@ -45,7 +47,7 @@ def test_idb_lists_session_predicate(app):
 
 def test_clear_all_removes_session_idb(app):
     app._handle_dot_command(".clear")
-    assert "cleared" in _output(app)
+    assert "removed active (1 rule)" in _output(app)
     assert "active" not in _idb_names(app)
     app._execute_and_display("again(x) :- person(x)")
     assert "again" in _idb_names(app)
@@ -69,14 +71,32 @@ def test_sets_reuses_cli_listing(app, capsys):
     assert "person" in out and "Total RA sets" in out
 
 
-def test_predicates_reuses_cli_listing(app, capsys):
-    app._handle_dot_command(".predicates")
-    assert "peak_reported(i, j, k, study_id)" in capsys.readouterr().out
+def _plain_lines(out):
+    """Return the lines of *out* with their spaces collapsed."""
+    return [" ".join(line.split()) for line in out.splitlines()]
+
+
+def test_predicates_lists_the_session_and_loaded_ones(app, tmp_path):
+    path = _write(tmp_path / "scores.csv", "Name,Score\nalice,3\n")
+    app._handle_dot_command(f".load {path}")
+    app._execute_and_display("pair(x, y) :- person(x), scores(y, s)")
+    lines = _plain_lines(_command(app, ".predicates"))
+    assert lines[:4] == [
+        "Predicate Kind Columns",
+        "active session active(x)",
+        "pair session pair(x, y)",
+        "scores loaded scores(Name, Score)",
+    ]
+    assert "person stored person/1" in lines
 
 
 def test_engines(app, capsys):
     app._handle_dot_command(".engines")
-    assert "neurosynth" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Available engines:" in out
+    for name in ("destrieux", "neurosynth"):
+        assert f"  {name}\n" in out
+    assert "Destrieux 2009 cortical atlas" in out
 
 
 def test_rewritten_shows_last_query(app, capsys):
@@ -102,9 +122,13 @@ def test_datalog_shows_squall_translation(app, capsys):
     assert "── query (obtain_0) ──" in capsys.readouterr().out
 
 
-def test_datalog_needs_squall_query(app):
-    app._handle_dot_command(".datalog")
-    assert "use .rewritten for a Datalog query" in _output(app)
+def test_datalog_prints_the_last_datalog_query(app, capsys):
+    app._execute_and_display("fan(x) :- active(x)\nans(x) :- fan(x)")
+    capsys.readouterr()
+    out = _command(app, ".datalog") + capsys.readouterr().out
+    assert "use .rewritten" not in out
+    assert "── rule ──\nfan(x) :-\n    active(x)" in out
+    assert "── query ──\nans(x) :-\n    fan(x)" in out
 
 
 def _command(app, line):
@@ -141,6 +165,63 @@ def test_idb_numbers_the_rules(two_rules):
 def test_idb_of_unknown_predicate(app):
     assert "'nope' is not an IDB predicate" in _command(app, ".idb nope")
 
+
+
+@pytest.fixture
+def conditional(app):
+    """
+    Return the REPL *app* where SQUALL defined the conditional ``marg``.
+
+    NeuroLang compiles ``marg`` into three rules: one of ``marg`` and one
+    of each of its helpers ``marg^cond_num`` and ``marg^cond_den``,
+    whose symbols have the name ``marg`` too.
+    """
+    nl = app._nl
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s1", "memory"), ("s2", "pain")], name="mentions"
+    )
+    nl.add_tuple_set([("pain",), ("memory",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    app._handle_dot_command(".mode squall")
+    app._execute_and_display(
+        "define as marg with inferred probability every Term where a "
+        "Selected_study mentions the Term conditioned to the "
+        "Selected_study that mentions 'pain'."
+    )
+    return app
+
+
+def test_idb_lists_a_conditional_predicate_once(conditional):
+    output = _command(conditional, ".idb")
+    assert output.count("marg") == 1
+    assert "Total session IDB predicates: 2" in output
+
+
+def test_drop_removes_the_helpers_of_a_conditional(conditional):
+    _command(conditional, ".drop marg")
+    assert "marg" not in _idb_names(conditional)
+    assert "not an IDB predicate" in _command(conditional, ".datalog marg")
+
+
+def test_datalog_of_a_squall_predicate(conditional):
+    output = _command(conditional, ".datalog marg")
+    assert "marg(s₀, PROB(s₀)) :-" in output
+    assert " | " in output
+    assert "cond_num" not in output and "cond_den" not in output
+
+
+def test_datalog_of_a_datalog_predicate(app):
+    output = _command(app, ".datalog active")
+    assert "active(x) :-" in output
+    assert "plays(x)" in output
+
+
+def test_datalog_of_an_unknown_predicate(app):
+    assert "'nothing' is not an IDB predicate" in _command(
+        app, ".datalog nothing"
+    )
 
 def test_drop_rule_removes_exactly_it(two_rules):
     out = _command(two_rules, ".drop both 1")
@@ -340,7 +421,9 @@ def test_clear_removes_loaded_relations(app, tmp_path, capsys):
     path = _write(tmp_path / "scores.csv", "Name\nalice\n")
     app._handle_dot_command(f".load {path}")
     out = _command(app, ".clear")
-    assert "IDB predicates and loaded relations cleared" in out
+    assert out.splitlines() == [
+        "removed active (1 rule)", "removed relation scores"
+    ]
     assert "scores" not in [s.name for s in app._nl.program_ir.symbol_table]
     assert app.loaded_relations == {}
     assert "loaded scores" in _command(app, f".load {path}")
@@ -360,3 +443,422 @@ def test_help_lists_new_commands(app):
     for usage in (".idb [PREDICATE]", ".drop PREDICATE [N]",
                   ".load PATH [NAME]", ".format [table|csv|json]"):
         assert usage in out
+
+
+def _submit(app, program):
+    """Run *program* as typed at the prompt and return what it printed."""
+    app.console.file.seek(0)
+    app.console.file.truncate()
+    app.console.width = 1000
+    app._run_line(program)
+    return _output(app)
+
+
+def _session_symbols(app):
+    """Return the symbols of the session's scope and their values."""
+    return list(app._nl.program_ir.symbol_table._symbols.items())
+
+
+def _same_symbols(before, after):
+    """Return whether *after* has exactly the symbols and values *before*."""
+    return len(before) == len(after) and all(
+        k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(before, after)
+    )
+
+
+@pytest.mark.parametrize(
+    "squall, program",
+    [
+        (False, "bar(x) :- person(x)\nans(x) :- bar(x, y)"),
+        (False, "bar(x) :- person(x)\nbaz(x) :- bar(x, y)\nans(x) :- baz(x)"),
+        (
+            True,
+            "define as Bar every person that plays. "
+            "obtain every Bar (?x; ?y).",
+        ),
+        (
+            True,
+            "define as Bar every person that plays. "
+            "obtain every Person that bars a person.",
+        ),
+    ],
+)
+def test_failed_submission_defines_nothing(app, squall, program):
+    app.settings.squall = squall
+    session = app._nl.program_ir.symbol_table
+    before = _session_symbols(app)
+    out = _submit(app, program)
+    assert "nothing defined: the submission failed" in out
+    assert app.failed
+    assert app._nl.program_ir.symbol_table is session
+    assert _same_symbols(before, _session_symbols(app))
+    assert sorted(_idb_names(app)) == ["active"]
+    assert "'bar' is not an IDB predicate" in _command(app, ".datalog bar")
+    assert app.squall_rules == {}
+
+
+def test_failed_rule_of_a_predicate_is_not_added(app):
+    _submit(app, "active(x) :- sings(x)\nans(x) :- active(x, y)")
+    assert _command(app, ".idb active").splitlines() == [
+        "1  active(x) :- person(x), plays(x)"
+    ]
+
+
+def test_rule_added_to_a_predicate_replaces_its_rules(app):
+    _submit(app, "active(x) :- person(x), sings(x)")
+    session = app._nl.program_ir.symbol_table
+    assert len(session._symbols[Symbol("active")].formulas) == 2
+    assert Symbol("active") not in session.enclosing_scope
+    assert len(_command(app, ".idb active").splitlines()) == 2
+    assert _query(app, "ans(x) :- active(x)") == {("alice",), ("bob",)}
+
+
+def test_failed_query_without_definitions_says_nothing_more(app):
+    out = _submit(app, "ans(x) :- person(x, y)")
+    assert app.failed
+    assert "nothing defined" not in out
+
+
+def test_interrupted_submission_defines_nothing(app, monkeypatch):
+    nl = app._nl
+
+    def interrupted(program):
+        nl.execute_datalog_program("bar(x) :- person(x)")
+        nl.program_ir.push_scope()
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(app, "_execute", interrupted)
+    session = nl.program_ir.symbol_table
+    before = _session_symbols(app)
+    out = _submit(app, "bar(x) :- person(x)\nans(x) :- bar(x)")
+    assert "Query interrupted" in out
+    assert "nothing defined: the submission failed" in out
+    assert nl.program_ir.symbol_table is session
+    assert _same_symbols(before, _session_symbols(app))
+
+
+def test_session_works_after_a_failed_submission(app, tmp_path):
+    path = _write(tmp_path / "scores.csv", "Name\nalice\n")
+    app._handle_dot_command(f".load {path}")
+    _submit(app, "bar(x) :- scores(x)\nans(x) :- bar(x, y)")
+    assert "scores" in app.loaded_relations
+    _submit(app, "bar(x) :- scores(x)")
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+    assert "removed bar (1 rule)" in _command(app, ".drop bar")
+    assert "removed relation scores" in _command(app, ".drop scores")
+
+
+def test_failed_submission_is_left_out_of_the_replay_script(app, tmp_path):
+    _submit(app, "bar(x) :- person(x)\nans(x) :- bar(x, y)")
+    _submit(app, "baz(x) :- person(x)")
+    path = tmp_path / "replay.nl"
+    _command(app, f".transcript {path} --inputs")
+    script = path.read_text()
+    assert "baz(x) :- person(x)" in script
+    assert "bar" not in script
+
+
+def _messages(out):
+    """Return the lines of *out* that are not part of a table."""
+    return [
+        line.strip() for line in out.splitlines()
+        if line.strip() and line.strip()[0] not in "│╭╰├┃┏┗┡"
+    ]
+
+
+@pytest.mark.parametrize(
+    "program, messages",
+    [
+        ("bar(x) :- person(x)", ["defined bar/1"]),
+        ("active(x) :- person(x), sings(x)",
+         ["defined active/1 (now 2 rules)"]),
+        ("active(x) :- person(x), plays(x)",
+         ["active/1 unchanged (1 rule)"]),
+        ("two(x, y) :- person(x), plays(y)\n"
+         "two(x, y) :- person(x), sings(y)",
+         ["defined two/2 (2 rules)"]),
+        ("a1(x) :- person(x)\na2(x) :- a1(x)",
+         ["defined a1/1", "defined a2/1"]),
+        ("foo(1)\nfoo(2)", ["defined foo/1 (2 facts)"]),
+    ],
+)
+def test_definition_says_what_it_defined(app, program, messages):
+    out = _submit(app, program)
+    assert _messages(out) == messages
+    assert not app.failed
+
+
+def test_facts_added_to_a_relation(app):
+    _submit(app, "foo(1)")
+    assert _messages(_submit(app, "foo(2)\nfoo(3)")) == [
+        "defined foo/1 (now 3 facts)"
+    ]
+
+
+def test_definition_with_a_query_shows_both(app):
+    out = _submit(app, "bar(x) :- plays(x)\nans(x) :- bar(x)")
+    messages = _messages(out)
+    assert messages[:2] == ["Running query...", "defined bar/1"]
+    assert messages[-1].startswith("Query completed in")
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+
+
+def test_query_says_nothing_about_definitions(app):
+    out = _submit(app, "ans(x) :- person(x)")
+    assert "Running query..." in out and "Query completed in" in out
+    assert "defined" not in out
+
+
+def test_squall_definitions_say_what_they_defined(app):
+    app.settings.squall = True
+    out = _submit(app, "define as Bar every person that plays.")
+    assert _messages(out) == ["defined bar/1"]
+    out = _submit(app, "define as Bar every person that sings.")
+    assert _messages(out) == ["defined bar/1 (now 2 rules)"]
+
+
+def test_squall_conditional_is_defined_once(conditional):
+    out = _output(conditional)
+    assert "defined marg/2" in out
+    assert out.count("defined marg") == 1
+    assert "(no result)" not in out
+
+
+def test_failed_facts_are_discarded(app):
+    _submit(app, "person('carol')\nans(x) :- person(x, y)")
+    assert app.failed
+    assert _query(app, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+def test_facts_added_to_an_engine_relation(app, capsys):
+    out = _submit(app, "person('carol')")
+    assert _messages(out) == ["defined person/1 (now 3 facts)"]
+    assert _query(app, "ans(x) :- person(x)") == {
+        ("alice",), ("bob",), ("carol",)
+    }
+    capsys.readouterr()
+    app._handle_dot_command(".sets")
+    sets = [
+        line.split()[0] for line in capsys.readouterr().out.splitlines()
+        if line.strip()
+    ]
+    assert sets.count("person") == 1
+    _command(app, ".clear")
+    assert _query(app, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+@pytest.fixture
+def likes(app):
+    """Return the REPL *app* where ``likes`` is a rule of the session."""
+    app._execute_and_display("likes(x, y) :- person(x), plays(y)")
+    return app
+
+
+@pytest.mark.parametrize(
+    "squall, query",
+    [
+        (False, "ans(x) :- likes(x, 'alice')"),
+        (True, "obtain every Person that likes 'alice'."),
+    ],
+)
+def test_rewritten_shows_the_magic_sets_of_a_query(
+    likes, capsys, squall, query
+):
+    likes.settings.squall = squall
+    likes._execute_and_display(query)
+    capsys.readouterr()
+    out = _command(likes, ".rewritten") + capsys.readouterr().out
+    assert "── rewritten program ──" in out
+    assert "likes" in out and "plays(" in out
+    assert not likes.failed
+
+
+@pytest.mark.parametrize(
+    "squall, program",
+    [
+        (False, "fan(x) :- person(x), plays(x)\nans(x) :- fan(x)"),
+        (True, "define as Fan every person that plays. obtain every Fan."),
+    ],
+)
+def test_rewritten_has_the_rules_of_the_last_query_once(
+    app, capsys, squall, program
+):
+    app.settings.squall = squall
+    app._execute_and_display(program)
+    capsys.readouterr()
+    out = _command(app, ".rewritten") + capsys.readouterr().out
+    assert len(re.findall(r"^fan\(", out, re.MULTILINE)) == 1
+    assert _command(app, ".idb fan").count("fan(") == 1
+
+
+@pytest.mark.parametrize(
+    "squall, query",
+    [
+        (False, "ans(x) :- active(x)"),
+        (True, "obtain every Person that plays."),
+    ],
+)
+def test_ra_prints_the_plans_of_the_last_query(app, capsys, squall, query):
+    app.settings.squall = squall
+    app._execute_and_display(query)
+    rows = list(app.results[0].frame.itertuples(index=False, name=None))
+    capsys.readouterr()
+    out = _command(app, ".ra") + capsys.readouterr().out
+    assert "── deterministic stratum ──" in out
+    assert not app.settings.show_ra
+    assert not app.failed
+    assert list(app.results[0].frame.itertuples(index=False, name=None)) == (
+        rows
+    )
+    assert sorted(_idb_names(app)) == ["active"]
+
+
+def test_ra_without_a_query(app):
+    assert "No query has been run yet." in _command(app, ".ra")
+    assert not app.settings.show_ra
+
+
+def test_ra_of_a_query_with_its_rules(app, capsys):
+    app.settings.squall = True
+    app._execute_and_display(
+        "define as Fan every person that plays. obtain every Fan."
+    )
+    capsys.readouterr()
+    out = _command(app, ".ra") + capsys.readouterr().out
+    assert "fan" in out
+    assert not app.failed
+    assert _command(app, ".idb fan").count("fan(") == 1
+
+
+def test_clear_says_what_it_removed(two_rules, capsys):
+    _submit(two_rules, "foo(1)\nfoo(2)")
+    _submit(two_rules, "person('carol')")
+    assert _command(two_rules, ".clear").splitlines() == [
+        "removed active (1 rule)",
+        "removed both (2 rules)",
+        "removed foo (2 facts)",
+        "removed person (1 fact); its 2 engine facts remain",
+    ]
+    assert _command(two_rules, ".clear").splitlines() == ["nothing to clear"]
+    assert _query(two_rules, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+def test_clear_keeps_the_engine_rules():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    nl.execute_datalog_program("named(x) :- person(x)")
+    console = Console(file=io.StringIO(), width=100)
+    app = InteractiveTuiApp(nl, console=console, err_console=console)
+    app._execute_and_display("named(x) :- person(x), person(x)")
+    assert _command(app, ".clear").splitlines() == [
+        "removed named (1 rule); its 1 engine rule remain"
+    ]
+
+
+def test_clear_lists_a_conditional_once(conditional):
+    lines = _command(conditional, ".clear").splitlines()
+    assert [line for line in lines if "marg" in line] == [
+        "removed marg (1 rule)"
+    ]
+    assert "removed mentions (3 facts)" in lines
+
+
+@pytest.mark.parametrize("command", [".ra", ".rewritten"])
+def test_rerun_warnings_are_short_notes(app, capsys, command):
+    app._execute_and_display("fan(x) :- person(x)")
+    app._execute_and_display("ans(x) :- fan(x), plays(x)")
+    _command(app, ".drop fan")
+    capsys.readouterr()
+    out = _command(app, command)
+    captured = capsys.readouterr()
+    assert "note: predicate fan has no facts or rules" in out
+    assert "warnings.warn" not in out + captured.out + captured.err
+
+
+@pytest.fixture
+def studies():
+    """Return a SQUALL REPL over a small neurosynth-like engine."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set([(1, "pain"), (2, "pain"), (2, "fear")], name="mentions")
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1)], name="voxel")
+    nl.add_tuple_set([(1, 0, 0, 0), (2, 1, 1, 1)], name="reports")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,)], name="selected_study"
+    )
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="neurosynth", squall=True),
+        console=console, err_console=console,
+    )
+    return app
+
+
+def _headers(app, program):
+    """Run *program* and return the header rows of the tables it printed."""
+    app.console.file.seek(0)
+    app.console.file.truncate()
+    app._execute_and_display(program)
+    lines = _output(app).splitlines()
+    return [
+        " ".join(lines[n + 1].strip("│ ").split(" │ ")).split()
+        for n, line in enumerate(lines) if line.startswith("╭")
+    ]
+
+
+@pytest.mark.parametrize(
+    "definition, query, headers",
+    [
+        (
+            "define as Pain_study every Study that mentions 'pain'.",
+            "obtain every Pain_study.", [["study_id"]],
+        ),
+        (
+            "define as Selected with inferred probability every Study that "
+            "is a Selected_study and that mentions 'pain'.",
+            "obtain every Selected.", [["study_id", "probability"]],
+        ),
+        (
+            "define as Pain_voxel every Voxel in 3D that a Study reports.",
+            "obtain every Pain_voxel.", [["i", "j", "k"]],
+        ),
+        (
+            None, "obtain the Count of the Study that mentions 'pain'.",
+            [["count"]],
+        ),
+        (None, "obtain every Study that mentions 'pain' as Pain.", [["pain"]]),
+        (
+            "define as Activation with probability every Voxel (?i; ?j; ?k) "
+            "that a Selected_study reports conditioned to every "
+            "Selected_study that mentions 'pain'.",
+            "obtain every Activation.", [["i", "j", "k", "probability"]],
+        ),
+        (
+            None, "obtain every Voxel in 3D that a Study reports.",
+            [["i", "j", "k"]],
+        ),
+    ],
+)
+def test_results_have_no_generated_column_names(
+    studies, definition, query, headers
+):
+    if definition:
+        _headers(studies, definition)
+    assert _headers(studies, query) == headers
+    assert "fresh_" not in _output(studies)
+
+
+def test_rewritten_shows_a_squall_query_on_a_rule(studies, capsys):
+    """Check ``.rewritten`` prints the magic-sets rewriting of SQUALL."""
+    studies.settings.squall = False
+    studies._execute_and_display("ment(s, t) :- mentions(s, t)")
+    studies.settings.squall = True
+    studies._execute_and_display("obtain every Study that ment 'pain'.")
+    capsys.readouterr()
+    studies.console.file.seek(0)
+    studies.console.file.truncate()
+    studies._handle_dot_command(".rewritten")
+    out = capsys.readouterr().out + _output(studies)
+    assert "── rewritten program ──" in out
+    assert "ment^bf" in out or "ment^fb" in out
+    assert "error" not in out.lower()

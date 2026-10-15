@@ -206,6 +206,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 if iterable._container is not None:
                     self._container = iterable._container
+                    self._might_have_duplicates = (
+                        iterable._might_have_duplicates
+                    )
                 else:
                     self._container = None
             elif isinstance(iterable, pl.LazyFrame):
@@ -954,8 +957,27 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(columns)
         new_container = c.select(*[pl.col(col) for col in col_list])
         return self._light_init_same_structure(
-            new_container, might_have_duplicates=True, columns=columns
+            new_container, might_have_duplicates=(
+                self._projection_might_have_duplicates(columns)
+            ),
+            columns=columns
         )
+
+    def _projection_might_have_duplicates(self, columns):
+        """
+        Return whether projecting on *columns* might give duplicates.
+
+        Parameters
+        ----------
+        columns : tuple of str
+            Projected columns.
+
+        Returns
+        -------
+        bool
+            False when the set has no duplicates and every column is kept.
+        """
+        return self._might_have_duplicates or len(set(columns)) < self.arity
 
     def projection_to_unnamed(self, *columns):
         unnamed_self = self.to_unnamed()

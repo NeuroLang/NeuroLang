@@ -37,7 +37,8 @@ from .commands import (
 from .editing import session_options
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import open_session_scope
+from .session import open_session_scope, record_squall_rules
+from .submission import Submission, submission_outline
 from .statements import is_complete, split_statements
 from .transcript import Transcript, is_transcript_command
 
@@ -129,6 +130,8 @@ class InteractiveTuiApp:
         self.session = None
         self.completer = None
         self.last_query = None
+        # The rules added by the submission of the last query, by symbol.
+        self.last_added_rules: dict = {}
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
@@ -137,6 +140,7 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
+        self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
@@ -202,6 +206,7 @@ class InteractiveTuiApp:
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
             file=self.err_console.file,
+            engine_name=self.settings.engine_name,
         )
 
     def _result_block(self, result, title: str, column_names) -> ResultBlock:
@@ -260,39 +265,103 @@ class InteractiveTuiApp:
 
     def _column_names(self, program: str) -> dict:
         """
-        Return the declared column names of the results of *program*.
+        Return the column names of the results of the SQUALL *program*.
 
-        They are those the engine declares and those of the header of
-        the files loaded with ``.load``.
+        They are those the engine declares, those of the header of the
+        files loaded with ``.load`` and those of the rules defined so far.
         """
         if not self.settings.squall:
             return {}
-        if not (self.settings.engine_name or self.loaded_relations):
-            return {}
+        rules = [
+            rule
+            for union in self._nl.program_ir.intensional_database().values()
+            for rule in union.formulas
+        ]
         return squall_column_names(
-            self.settings.engine_name, program, self.loaded_relations
+            self.settings.engine_name, program, self.loaded_relations, rules
         )
 
-    def _execute_and_display(self, program: str) -> None:
-        """Run a Datalog or SQUALL query and print its result."""
-        self.last_query = (program, self.settings.squall)
-        self.err_console.print("[dim]Running query...[/dim]")
-        t0 = time.perf_counter()
-        try:
+    def _submit(self, program: str, submission: Submission):
+        """
+        Run *program* as the *submission* and return its result.
+
+        What it defines is kept only if it succeeds (see
+        :class:`~.submission.Submission`).
+        """
+        with submission:
             result = self._execute_noting_warnings(program)
-            if not self.settings.show_ra:
+            if self.settings.squall:
+                record_squall_rules(self, program)
+        return result
+
+    def _note_discarded(self, submission: Submission) -> None:
+        """Tell that the failed *submission* defined nothing, if it tried."""
+        if submission.discarded:
+            self.err_console.print(
+                "nothing defined: the submission failed", style="yellow",
+                markup=False,
+            )
+
+    def _print_definitions(self, submission: Submission, query: bool):
+        """
+        Print what the committed *submission* defined, per predicate.
+
+        A submission without a *query* that defined nothing says so. The
+        rules added by a *query*'s submission are kept, to run it again
+        as it ran (see :func:`~.session.last_query_scope`).
+        """
+        if query:
+            self.last_added_rules = submission.added_rules()
+        lines = submission.definitions()
+        if not (lines or query):
+            lines = ["(nothing defined)"]
+        for line in lines:
+            self.console.print(line, style="green", markup=False)
+
+    def _run_submission(self, program: str, query: bool, facts) -> bool:
+        """
+        Run *program*, print what it defined and its result if a *query*.
+
+        *facts* are the predicates it adds facts to. Return whether it
+        succeeded.
+        """
+        submission = Submission(self._nl, facts)
+        try:
+            result = self._submit(program, submission)
+            self._print_definitions(submission, query)
+            if query and not self.settings.show_ra:
                 self._show_result(result, self._column_names(program))
         except KeyboardInterrupt:
             self.failed = True
             self.err_console.print("[yellow]Query interrupted[/yellow]")
-            return
+            self._note_discarded(submission)
+            return False
         except Exception as exc:
             self._report_error(exc, program)
-            return
-        elapsed = time.perf_counter() - t0
-        self.err_console.print(
-            f"[dim]Query completed in {elapsed:.2f} s[/dim]"
+            self._note_discarded(submission)
+            return False
+        return True
+
+    def _execute_and_display(self, program: str) -> None:
+        """
+        Run a Datalog or SQUALL submission and print what it gives.
+
+        A query is announced, then its result and time are printed; what
+        the submission defined is printed in any case.
+        """
+        query, facts = submission_outline(
+            self._nl, program, self.settings.squall
         )
+        if query:
+            self.last_query = (program, self.settings.squall)
+            self.last_added_rules = {}
+            self.err_console.print("[dim]Running query...[/dim]")
+        t0 = time.perf_counter()
+        if self._run_submission(program, query, facts) and query:
+            elapsed = time.perf_counter() - t0
+            self.err_console.print(
+                f"[dim]Query completed in {elapsed:.2f} s[/dim]"
+            )
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""
