@@ -41,6 +41,24 @@ runs it:
 
     neurolang-query --engine neurosynth --squall --ask "Which studies mention pain?" --run
 
+While it works, a line per step is printed on the standard error: the
+tool called and the start of its result. ``-v`` prints the steps in
+full: the model's reasoning, the tool called with its arguments and the
+first lines of its result. ``-vv`` prints the conversation with the
+model instead: each request, with the messages added since the previous
+one (the system prompt and the question first, then the model's last
+reply and the result of its action), and each reply with its time and
+tokens.
+
+.. code-block:: text
+
+    $ neurolang-query --engine neurosynth --ask "Which studies mention pain?" -v
+      thought: The question asks for studies that mention the term 'pain'. I can use the `mentions` predicate which relates studies to terms they mention.
+      → final_answer(query="ans(s) :- mentions(s, 'pain')", explanation="This query retrieves all studies that mention the term 'pain' using the mentions predicate.")
+        Accepted.
+    -- This query retrieves all studies that mention the term 'pain' using the mentions predicate.
+    ans(s) :- mentions(s, 'pain')
+
 The assistant needs the ``llm`` extra: ``pip install "neurolang[llm]"``.
 
 Strategies

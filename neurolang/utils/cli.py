@@ -590,6 +590,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="With --ask, also run the query and print its result.",
     )
     parser.add_argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="With --ask, show how the query is found, on stderr: -v the "
+        "reasoning, tool calls and results of each step, -vv every "
+        "message sent to the LLM (the system prompt first) and its "
+        "replies.",
+    )
+    parser.add_argument(
         "--strategy",
         choices=("react", "icl"),
         default=None,
@@ -1229,14 +1239,60 @@ def _ask_language(args, config) -> str:
     return "datalog"
 
 
+# The lines of an observation that ``--ask -v`` prints.
+VERBOSE_OBSERVATION_LINES = 12
+
+
 def _print_step(step) -> None:
-    """Print a step of the LLM assistant on stderr."""
+    """Print a step of the LLM assistant on stderr, in one line."""
     if step.action and step.action != "answer":
         observation = step.observation.strip().splitlines()
         print(
             f"  → {step.action}: {observation[0] if observation else ''}",
             file=sys.stderr, flush=True,
         )
+
+
+def _print_step_verbose(step) -> None:
+    """
+    Print a step of the LLM assistant on stderr: its thought, the tool
+    called with its arguments and the start of what it returned.
+    """
+    if not step.action:
+        return
+    lines = []
+    if step.thought.strip():
+        lines.append(f"  thought: {' '.join(step.thought.split())}")
+    arguments = ", ".join(
+        f"{name}={value!r}" for name, value in step.arguments.items()
+    )
+    lines.append(f"  → {step.action}({arguments})")
+    observation = step.observation.strip().splitlines()
+    shown = observation[:VERBOSE_OBSERVATION_LINES]
+    lines += [f"    {line}" for line in shown]
+    if len(observation) > len(shown):
+        lines.append(f"    … ({len(observation) - len(shown)} more lines)")
+    print("\n".join(lines), file=sys.stderr, flush=True)
+
+
+def _ask_reporting(args, provider, config):
+    """
+    Return the chat client and the step callback of ``--ask``, as
+    ``--verbose`` asks: one line per step, the steps in full (-v), or
+    the messages to and from the model (-vv).
+    """
+    if args.verbose >= 2:
+        from neurolang.utils.llm import make_client
+        from neurolang.utils.llm.trace import Printer, TracingClient
+
+        client = TracingClient(
+            make_client(provider, config.assistant.timeout),
+            Printer(full=True).show,
+        )
+        return client, None
+    if args.verbose == 1:
+        return None, _print_step_verbose
+    return None, _print_step
 
 
 def _run_ask(args) -> None:
@@ -1271,9 +1327,10 @@ def _run_ask(args) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
+    client, on_step = _ask_reporting(args, provider, config)
     agent = make_agent(
         nl, provider, config.assistant, language, args.strategy,
-        engine_name=args.engine, on_step=_print_step,
+        engine_name=args.engine, client=client, on_step=on_step,
     )
     try:
         result = agent.run(args.ask)
