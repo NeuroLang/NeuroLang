@@ -2,8 +2,8 @@
 Saving and viewing of query results in the interactive REPL.
 
 ``.save PATH`` writes the last result as a table, or as a NIfTI image
-when PATH ends with ``.nii`` or ``.nii.gz``; ``.view PATH`` plots a NIfTI
-image with nilearn and opens the picture.
+when PATH ends with ``.nii`` or ``.nii.gz``; ``.view PATH`` shows a NIfTI
+image in nilearn's viewer, in a browser.
 
 A NIfTI image is written on the grid of the engine's template, the MNI
 image its voxel indices refer to (the ``template`` of the engine
@@ -15,9 +15,8 @@ column holds their value; see :data:`SAVE_HELP`.
 
 import os
 import shlex
-import subprocess
-import sys
 import tempfile
+import webbrowser
 from pathlib import Path
 from typing import NamedTuple, Optional, Tuple
 
@@ -396,27 +395,56 @@ def _save_nifti(app, df: pd.DataFrame, request: SaveRequest) -> None:
     )
 
 
-def _view_nifti(console, path: str) -> None:
-    """Plot the NIfTI image *path* with nilearn and open the picture."""
+# The threshold of the viewer: every nonzero voxel is shown.
+VIEW_THRESHOLD = 1e-6
+
+
+def _view_nifti(app, path: str) -> None:
+    """
+    Show the NIfTI image *path* in nilearn's viewer.
+
+    The viewer, over the engine's template (nilearn's MNI152 without
+    one), is saved as an HTML file whose path is printed, and opened in a
+    browser when the REPL runs on a terminal.
+    """
     try:
         from nilearn import plotting
     except ImportError:
-        console.print("[red]nilearn is required for visualisation.[/red]")
+        app.console.print("[red]nilearn is required for visualisation.[/red]")
         return
-    fd, png = tempfile.mkstemp(suffix=".png", prefix="neurolang_view_")
-    os.close(fd)
+    template = getattr(app._nl, "template", None)
     try:
-        display = plotting.plot_img(
-            path, display_mode="ortho", cut_coords=None, black_bg=True,
-            cmap="cold_hot",
+        view = plotting.view_img(
+            path, bg_img="MNI152" if template is None else template,
+            threshold=VIEW_THRESHOLD, title=Path(path).name,
         )
-        display.savefig(png, dpi=150)
-        display.close()
-        console.print(f"[green]Saved visualisation to: {png}[/green]")
-        opener = "open" if sys.platform == "darwin" else "xdg-open"
-        subprocess.Popen([opener, png])
+        html = _html_file(view)
     except Exception as exc:
-        console.print(f"[red]Visualisation failed: {exc}[/red]")
+        app.console.print(
+            f"Visualisation failed: {exc}", style="red", markup=False
+        )
+        return
+    app.console.print(
+        f"Saved the viewer to: {html}", style="green", markup=False,
+        highlight=False,
+    )
+    _open_in_browser(app.console, html)
+
+
+def _html_file(view) -> Path:
+    """Save the nilearn *view* in a new temporary HTML file, its path."""
+    fd, html = tempfile.mkstemp(suffix=".html", prefix="neurolang_view_")
+    os.close(fd)
+    view.save_as_html(html)
+    return Path(html)
+
+
+def _open_in_browser(console, html: Path) -> None:
+    """Open *html* in a browser on a terminal, else tell to open it."""
+    if console.is_terminal and webbrowser.open(html.as_uri()):
+        console.print("Opened it in the browser.", style="dim")
+    else:
+        console.print("Open it in a browser to see the image.", style="dim")
 
 
 _COMPOUND_SUFFIXES = (".nii.gz", ".csv.gz", ".tsv.gz")
@@ -525,13 +553,16 @@ def cmd_save(app, arg: str) -> None:
         _save_frame(app, block.frame, request._replace(path=path))
 
 
-@command(".view", "Plot a NIfTI image with nilearn", ".view PATH.nii")
+@command(
+    ".view", "Show a NIfTI image in nilearn's viewer, in a browser",
+    ".view PATH.nii[.gz]",
+)
 def cmd_view(app, arg: str) -> None:
-    """Plot the NIfTI image *arg* and open the picture."""
+    """Show the NIfTI image *arg* in nilearn's viewer."""
     path = os.path.expanduser(arg.strip())
     if not path:
-        app.console.print("[yellow]Usage: .view <path>.nii[/yellow]")
+        app.console.print("[yellow]Usage: .view <path>.nii[.gz][/yellow]")
     elif not os.path.isfile(path):
         app.console.print(f"[red]File not found: {path}[/red]")
     else:
-        _view_nifti(app.console, path)
+        _view_nifti(app, path)
