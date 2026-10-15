@@ -25,6 +25,9 @@ from uuid import uuid1
 
 import pandas as pd
 
+from ..exceptions import SquallSemanticError
+from ..logic.expression_processing import extract_logic_atoms
+
 from .. import datalog
 from .. import expressions as ir
 from .. import logic
@@ -425,6 +428,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def _walk_squall_rule(self, rule):
         """Walk a single SQUALL rule or choice definition into the engine."""
+        self._check_squall_rule_body(rule)
         if isinstance(rule, EquiprobableChoiceDef):
             self._handle_equiprobable_choice(rule)
         elif isinstance(rule, WeightedChoiceDef):
@@ -459,6 +463,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         delegates to _execute_query, exactly as execute_datalog_program
         does for ans(...) :- R(...).
         """
+        self._check_squall_aggregation_columns(
+            query.head if isinstance(query.head, tuple) else (query.head,),
+            query.body,
+        )
         head = query.head
         if isinstance(head, AggregationApplication):
             head_vars = (head,)
@@ -728,6 +736,84 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             "expressions) are not yet implemented. "
             "Use 'define as X as an equiprobable choice over every Y' for now."
         )
+
+    @staticmethod
+    def _aggregation_column_message(aggregation, functor, arity):
+        """
+        Explain how to name the aggregated column of a multi-column relation.
+        """
+        func = aggregation.functor
+        func = getattr(func, 'value', func)
+        name = getattr(func, '__name__', getattr(func, 'name', str(func)))
+        name = {'len': 'count', 'mean': 'average'}.get(name, name)
+        name = name[:1].upper() + name[1:]
+        noun = functor.name[:1].upper() + functor.name[1:]
+        blanks = '; '.join(['_'] * (arity - 1))
+        return (
+            f"Cannot aggregate '{name}' over '{noun}': the relation has "
+            f"{arity} columns but the aggregation names a single one, so "
+            "it would silently aggregate the first column.  Name the column "
+            "to aggregate with a tuple label, using _ for the other "
+            f"columns, e.g. 'the {name} of the {noun} ({blanks}; ?v)'; add "
+            "'per ?x' to aggregate per value of a labelled column, e.g. "
+            f"'every {name} of the {noun} (?x; ...; ?v) per ?x'."
+        )
+
+    def _relation_columns(self, functor):
+        """
+        Return the number of value columns of ``functor``, or 0 if unknown.
+
+        The probability column of stored probabilistic facts and choices
+        is not counted.
+        """
+        try:
+            columns = len(self.program_ir.predicate_terms(functor))
+        except NeuroLangException:
+            return 0
+        probabilistic = (
+            getattr(self.program_ir, 'pfact_pred_symbs', set())
+            | getattr(self.program_ir, 'pchoice_pred_symbs', set())
+        )
+        if functor in probabilistic and isinstance(
+            self.program_ir.symbol_table[functor], ir.Constant
+        ):
+            columns -= 1
+        return columns
+
+    def _check_squall_aggregation_columns(self, head_args, body):
+        """
+        Reject a one-variable aggregation over a multi-column relation.
+
+        ``the Max of the R`` with a 3-column ``R`` binds only ``R``'s first
+        column, so the aggregate would be computed over it without warning.
+        """
+        for aggregation in head_args:
+            if not (
+                isinstance(aggregation, AggregationApplication)
+                and len(aggregation.args) == 1
+            ):
+                continue
+            for atom in extract_logic_atoms(body):
+                if atom.args != aggregation.args:
+                    continue
+                columns = self._relation_columns(atom.functor)
+                if columns > 1:
+                    raise SquallSemanticError(
+                        self._aggregation_column_message(
+                            aggregation, atom.functor, columns
+                        )
+                    )
+
+    def _check_squall_rule_body(self, rule):
+        """
+        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
+        """
+        if isinstance(rule, datalog.Implication) and isinstance(
+            rule.consequent, ir.FunctionApplication
+        ):
+            self._check_squall_aggregation_columns(
+                rule.consequent.args, rule.antecedent
+            )
 
     def query(
         self, *args, show_rewritten: bool = False, dry_run: bool = False,
