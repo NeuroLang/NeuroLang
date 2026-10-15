@@ -479,30 +479,48 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def process_extended_projection_formulas(classified_formulas, output):
-        extended_projections = []
-        to_keep = []
         named_columns = classified_formulas["named_columns"]
-        dst_columns = set()
-        for ext_proj in classified_formulas["ext_proj_formulas"]:
-            dst_column, fun_exp = ext_proj.args
-            cols_for_fun_exp = get_expression_columns(fun_exp)
-            if cols_for_fun_exp.issubset(named_columns):
-                extended_projections.append(
-                    FunctionApplicationListMember(fun_exp, dst_column)
-                )
-                dst_columns.add(dst_column)
-            else:
-                to_keep.append(ext_proj)
-        if len(extended_projections) > 0:
-            for column in classified_formulas["named_columns"]:
+        new_columns = TranslateToNamedRA.split_extended_projection_formulas(
+            classified_formulas
+        )
+        if len(new_columns) > 0:
+            extended_projections = [
+                FunctionApplicationListMember(fun_exp, dst_column)
+                for dst_column, fun_exp in new_columns.items()
+            ]
+            for column in named_columns:
                 extended_projections.append(
                     FunctionApplicationListMember(column, column)
                 )
             output = ExtendedProjection(output, extended_projections)
 
-        named_columns |= dst_columns
-        classified_formulas["ext_proj_formulas"] = to_keep
+        named_columns.update(new_columns)
         return output
+
+    @staticmethod
+    def split_extended_projection_formulas(classified_formulas):
+        """
+        Split the `x == expr` formulas into new columns and filters.
+
+        If `x` is already bound, or is defined by a previous formula of
+        this batch, the equality constrains `x` and is moved to the
+        selection formulas. If every column of `expr` is bound, `x` is
+        returned as a new column mapped to `expr`. Otherwise the formula
+        is kept for a later round.
+        """
+        named_columns = classified_formulas["named_columns"]
+        new_columns = {}
+        to_keep = []
+        for ext_proj in classified_formulas["ext_proj_formulas"]:
+            dst_column, fun_exp = ext_proj.args
+            if dst_column in named_columns.union(new_columns):
+                classified_formulas["selection_formulas"].append(ext_proj)
+            elif get_expression_columns(fun_exp).issubset(named_columns):
+                new_columns[dst_column] = fun_exp
+            else:
+                to_keep.append(ext_proj)
+        classified_formulas["ext_proj_formulas"] = to_keep
+        return new_columns
 
     @staticmethod
     def process_selection_formulas(classified_formulas, output):

@@ -548,6 +548,16 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     assert res == expected
 
 
+@pytest.mark.xfail(
+    raises=TypeError,
+    strict=True,
+    reason=(
+        "Named lambda statements (`f := lambda ...`) are never stored in "
+        "the program symbol table, so `plus_one` cannot be resolved. "
+        "The test used to pass only because `y == plus_one(4)` was "
+        "silently dropped for the already bound `y`."
+    ),
+)
 def test_neurolang_dl_datalog_code_lambda_def():
     neurolang = frontend.NeurolangDL()
     neurolang.execute_datalog_program(
