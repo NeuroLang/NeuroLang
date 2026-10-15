@@ -10,6 +10,7 @@ pytest.importorskip("rich")
 from rich.console import Console  # noqa: E402
 
 from neurolang.frontend import NeurolangPDL  # noqa: E402
+from neurolang.utils import engine_registry  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.catalog import (  # noqa: E402
     PredicateInfo,
@@ -71,6 +72,13 @@ def test_catalog_kinds_and_columns(session):
         "selected_study", "probabilistic", ("study_id",), 1, True
     )
     assert catalog["inc"] == PredicateInfo("inc", "function", None, 1)
+
+
+def test_catalog_lists_builtin_euclidean_function(engine):
+    catalog = predicate_catalog(engine)
+    assert catalog["euclidean"] == PredicateInfo(
+        "euclidean", "function", None, 6
+    )
 
 
 def test_catalog_loaded_relation(session):
@@ -143,7 +151,8 @@ def test_predicates_lists_kinds_and_columns(engine):
     assert [line for line in lines if line not in functions] == [
         "Predicate Kind Columns",
         "active session active(who)",
-        "peak_reported stored peak_reported(i, j, k, study_id)",
+        "peak_reported stored "
+        "peak_reported(voxel(i, j, k), study(study_id))",
         "person stored person/1",
         "named derived named(x)",
         "selected_study probabilistic selected_study(study_id)",
@@ -158,4 +167,34 @@ def test_predicates_is_a_table_on_a_terminal(engine):
     _app(engine, console)._handle_dot_command(".predicates")
     out = console.file.getvalue()
     assert "╭" in out and "Predicate" in out
-    assert "peak_reported(i, j, k, study_id)" in out
+    assert "peak_reported(voxel(i, j, k), study(study_id))" in out
+
+
+def test_predicates_shows_the_entities_of_a_rule(engine):
+    console = Console(file=io.StringIO(), width=200)
+    app = _app(engine, console)
+    app._execute_and_display(
+        "reports(s, i, j, k) :- peak_reported(i, j, k, s)"
+    )
+    console.file.truncate(0)
+    console.file.seek(0)
+    app._handle_dot_command(".predicates")
+    lines = [
+        " ".join(line.split())
+        for line in console.file.getvalue().splitlines()
+    ]
+    assert "reports session reports(study(study_id), voxel(i, j, k))" in lines
+
+
+def test_catalog_arguments_from_signatures(session):
+    signatures = engine_registry.get_signatures("neurosynth")
+    catalog = predicate_catalog(session, signatures=signatures)
+    peaks = catalog["peak_reported"]
+    assert [argument.sort for argument in peaks.arguments] == [
+        "voxel", "study"
+    ]
+    assert peaks.signature() == (
+        "peak_reported(voxel(i, j, k), study(study_id))"
+    )
+    assert peaks.meta() == f"{peaks.signature()} · stored"
+    assert catalog["person"].arguments is None

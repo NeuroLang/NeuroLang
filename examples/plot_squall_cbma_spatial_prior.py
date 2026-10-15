@@ -92,25 +92,14 @@ mni_t1_2mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 # %%
 # Set up engine and register aggregation symbols
 # -----------------------------------------------
-# ``euclidean`` computes the Euclidean distance between two voxel coordinates.
 # ``kernelized_max_proximity`` folds a collection of distances into
 # ``max(exp(−d/5))``, the spatial-decay weight used in coordinate-based
 # meta-analysis.  ``brain_image`` assembles the final
-# probability map into a brain overlay image.
+# probability map into a brain overlay image.  The Euclidean distance is a
+# built-in function, ``euclidean`` (or the reserved ``EUCLIDEAN``): no
+# registration is needed.
 
 nl = NeurolangPDL()
-
-
-def euclidean(
-    i1: int, j1: int, k1: int, i2: int, j2: int, k2: int
-) -> float:
-    """Euclidean distance between two voxel coordinates (numpy-vectorised)."""
-    return np.sqrt(
-        (i1 - i2) ** 2 + (j1 - j2) ** 2 + (k1 - k2) ** 2
-    )
-
-
-nl.add_symbol(euclidean, name="EUCLIDEAN")
 
 
 @nl.add_symbol
@@ -119,7 +108,6 @@ def kernelized_max_proximity(d_values: Iterable) -> float:
     return float(np.max(np.exp(-np.asarray(d_values) / 5.0)))
 
 
-@nl.add_symbol
 def brain_image(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
 ) -> ExplicitVBR:
@@ -128,6 +116,10 @@ def brain_image(
     return ExplicitVBROverlay(
         voxels, mni_t1_2mm.affine, p, image_dim=mni_t1_2mm.shape
     )
+
+
+# Registered for use in programs; the Python function stays callable below.
+nl.add_symbol(brain_image)
 
 
 # %%
@@ -182,7 +174,10 @@ nconfig.disable_expression_type_printing()
 #             groups by the four head variables; ``where (?i1; ?j1; ?k1) is
 #             a Voxel`` constrains the focus coordinates to voxel grid
 #             membership; ``where EUCLIDEAN(…) is lower than 2`` filters by
-#             proximity inline — no relay variable needed.
+#             proximity inline — no relay variable needed.  As both points
+#             are ranged by stored relations, the pairs of voxels and foci
+#             closer than 2 (strictly) are computed once, when the rule is
+#             defined, instead of comparing every voxel with every focus.
 # Sentences 2-3  ``where ?s is a Selected_study`` — existential study
 #             filter; ``_`` (anonymous wildcard) drops the tfidf column from
 #             Study_term's head so only (study, term) are exposed.

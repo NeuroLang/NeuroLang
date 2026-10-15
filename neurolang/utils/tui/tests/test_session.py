@@ -773,3 +773,92 @@ def test_rerun_warnings_are_short_notes(app, capsys, command):
     captured = capsys.readouterr()
     assert "note: predicate fan has no facts or rules" in out
     assert "warnings.warn" not in out + captured.out + captured.err
+
+
+@pytest.fixture
+def studies():
+    """Return a SQUALL REPL over a small neurosynth-like engine."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set([(1, "pain"), (2, "pain"), (2, "fear")], name="mentions")
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1)], name="voxel")
+    nl.add_tuple_set([(1, 0, 0, 0), (2, 1, 1, 1)], name="reports")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,)], name="selected_study"
+    )
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="neurosynth", squall=True),
+        console=console, err_console=console,
+    )
+    return app
+
+
+def _headers(app, program):
+    """Run *program* and return the header rows of the tables it printed."""
+    app.console.file.seek(0)
+    app.console.file.truncate()
+    app._execute_and_display(program)
+    lines = _output(app).splitlines()
+    return [
+        " ".join(lines[n + 1].strip("│ ").split(" │ ")).split()
+        for n, line in enumerate(lines) if line.startswith("╭")
+    ]
+
+
+@pytest.mark.parametrize(
+    "definition, query, headers",
+    [
+        (
+            "define as Pain_study every Study that mentions 'pain'.",
+            "obtain every Pain_study.", [["study_id"]],
+        ),
+        (
+            "define as Selected with inferred probability every Study that "
+            "is a Selected_study and that mentions 'pain'.",
+            "obtain every Selected.", [["study_id", "probability"]],
+        ),
+        (
+            "define as Pain_voxel every Voxel in 3D that a Study reports.",
+            "obtain every Pain_voxel.", [["i", "j", "k"]],
+        ),
+        (
+            None, "obtain the Count of the Study that mentions 'pain'.",
+            [["count"]],
+        ),
+        (None, "obtain every Study that mentions 'pain' as Pain.", [["pain"]]),
+        (
+            "define as Activation with probability every Voxel (?i; ?j; ?k) "
+            "that a Selected_study reports conditioned to every "
+            "Selected_study that mentions 'pain'.",
+            "obtain every Activation.", [["i", "j", "k", "probability"]],
+        ),
+        (
+            None, "obtain every Voxel in 3D that a Study reports.",
+            [["i", "j", "k"]],
+        ),
+    ],
+)
+def test_results_have_no_generated_column_names(
+    studies, definition, query, headers
+):
+    if definition:
+        _headers(studies, definition)
+    assert _headers(studies, query) == headers
+    assert "fresh_" not in _output(studies)
+
+
+def test_rewritten_shows_a_squall_query_on_a_rule(studies, capsys):
+    """Check ``.rewritten`` prints the magic-sets rewriting of SQUALL."""
+    studies.settings.squall = False
+    studies._execute_and_display("ment(s, t) :- mentions(s, t)")
+    studies.settings.squall = True
+    studies._execute_and_display("obtain every Study that ment 'pain'.")
+    capsys.readouterr()
+    studies.console.file.seek(0)
+    studies.console.file.truncate()
+    studies._handle_dot_command(".rewritten")
+    out = capsys.readouterr().out + _output(studies)
+    assert "── rewritten program ──" in out
+    assert "ment^bf" in out or "ment^fb" in out
+    assert "error" not in out.lower()
