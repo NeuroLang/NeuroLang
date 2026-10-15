@@ -424,6 +424,22 @@ def write_nifti(image: nib.Nifti1Image, path) -> None:
     Path(path).write_bytes(data)
 
 
+def read_nifti(path) -> nib.Nifti1Image:
+    """
+    Read the NIfTI image of exactly *path*, gzipped or not.
+
+    ``nib.load`` looks for a lowercase suffix on case-sensitive file
+    systems, so it cannot open ``Out.Nii``.
+    """
+    data = Path(path).read_bytes()
+    if data[:2] == b"\x1f\x8b":
+        data = gzip.decompress(data)
+    try:
+        return nib.Nifti1Image.from_bytes(data)
+    except Exception:
+        return nib.Nifti2Image.from_bytes(data)
+
+
 def _save_nifti(app, df: pd.DataFrame, request: SaveRequest) -> None:
     """Save *df* as the NIfTI image of *request* and tell what was written."""
     template = engine_template(app._nl)
@@ -556,7 +572,7 @@ def symmetry(console, path: Path, symmetric: Optional[bool]) -> bool:
     """
     if symmetric is not None:
         return symmetric
-    signed = bool((np.asanyarray(nib.load(path).dataobj) < 0).any())
+    signed = bool((np.asanyarray(read_nifti(path).dataobj) < 0).any())
     console.print(
         "Colormap: symmetric, the image has negative values (--one-sided "
         "for a one-sided one)." if signed else
@@ -593,7 +609,7 @@ def _viewer_page(app, path: Path, request: ViewRequest, title: str) -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return brain_viewer.viewer_html(
-            nib.load(path), brain_viewer.mni_background(),
+            read_nifti(path), brain_viewer.mni_background(),
             title=title, threshold=request.threshold, cmap=request.cmap,
             symmetric=symmetric,
         )
