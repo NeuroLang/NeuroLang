@@ -558,8 +558,54 @@ class TestSortSpaces:
         assert sorts["mni"] == engine_registry.Sort(
             "mni", ("x", "y", "z"), "float", sorts["mni"].description, "mm"
         )
-        # The Schaefer atlas grid is not the template's.
-        assert sorts["atlas_voxel"].space == ""
+        assert sorts["voxel"].grid == ""
+        # The Schaefer atlas indexes its own grid, not the template's.
+        assert sorts["atlas_voxel"].space == "voxel"
+        assert sorts["atlas_voxel"].grid == "schaefer"
+
+    @pytest.mark.parametrize("grid", ["template", "schaefer"])
+    def test_grid_is_read(self, tmp_path, grid):
+        """Check a sort of voxels names the grid it indexes."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n      schaefer: {n_rois: 100}\n"
+            "    sorts:\n"
+            "      v: {columns: [i, j, k], type: int, space: voxel, "
+            f"grid: {grid}}}\n"
+        )
+        assert engine_registry.get_sorts("e", path)["v"].grid == grid
+
+    def test_unknown_grid_is_rejected(self, tmp_path):
+        """Check a grid is the template's or one of the engine's atlases."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n      schaefer: {n_rois: 100}\n"
+            "    sorts:\n"
+            "      v: {columns: [i, j, k], type: int, space: voxel, "
+            "grid: nowhere}\n"
+        )
+        with pytest.raises(ValueError, match="nowhere") as info:
+            engine_registry.get_sorts("e", path)
+        assert "template, schaefer" in str(info.value)
+        with pytest.raises(ValueError, match="nowhere"):
+            engine_registry.get_predicates("e", path)
+
+    def test_grid_of_a_sort_not_of_voxels_is_rejected(self, tmp_path):
+        """Check only a sort of ``space: voxel`` names a grid."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      p: {columns: [x, y, z], type: float, space: mm, "
+            "grid: template}\n"
+        )
+        with pytest.raises(ValueError, match="space: voxel"):
+            engine_registry.get_sorts("e", path)
 
 
 class TestEngineTemplate:
@@ -579,3 +625,39 @@ class TestEngineTemplate:
         path.write_text("engines:\n  e:\n    description: bare\n")
         nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
         assert nl.template is None
+        assert nl.grids == {}
+
+    def test_the_template_is_a_grid(self, small_neurosynth):
+        """Check the template is the engine's ``template`` grid."""
+        assert small_neurosynth.grids["template"] is (
+            small_neurosynth.template
+        )
+
+    def test_an_atlas_is_a_grid(self, tmp_path, monkeypatch):
+        """Check loading an atlas registers its image as a grid."""
+        import nibabel as nib
+
+        from neurolang.utils import engine_registry
+
+        data = np.zeros((3, 5, 2), dtype=np.int16)
+        data[2, 4, 1], data[0, 0, 0] = 1, 2
+        affine = np.diag([3.0, 3.0, 3.0, 1.0])
+        nib.save(nib.Nifti1Image(data, affine), tmp_path / "atlas.nii")
+        monkeypatch.setitem(
+            engine_registry._ATLAS_REGISTRY, "schaefer", {
+                "fetch": lambda **kw: {
+                    "maps": str(tmp_path / "atlas.nii"),
+                    "labels": ["Background", "A", "B"],
+                },
+                "probabilistic": False,
+            },
+        )
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n"
+            "      schaefer: {predicate_name: parcels}\n"
+        )
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        grid = nl.grids["schaefer"]
+        assert grid.shape == (3, 5, 2)
+        assert np.array_equal(grid.affine, affine)

@@ -65,20 +65,40 @@ TINY_AFFINE = np.array([
     [0.0, 0.0, 0.0, 1.0],
 ])
 
+# The grid of the tiny engine's atlas, another than its template's:
+# 3×5×2 voxels of 3 mm.
+ATLAS_AFFINE = np.array([
+    [3.0, 0.0, 0.0, -6.0],
+    [0.0, 3.0, 0.0, -9.0],
+    [0.0, 0.0, 3.0, -3.0],
+    [0.0, 0.0, 0.0, 1.0],
+])
+
 TINY_ENGINE = """\
 engines:
   tiny:
+    atlases:
+      schaefer: {predicate_name: schaefer}
     sorts:
       study: {columns: [study_id], type: int}
       tfidf: {columns: [tfidf], type: float}
       voxel: {columns: [i, j, k], type: int, space: voxel}
       mni: {columns: [x, y, z], type: float, space: mm}
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+      label: {columns: [label], type: str}
     predicates:
       voxel: {arguments: [voxel]}
       study: {arguments: [study]}
       reports: {arguments: [study, voxel]}
       weight: {arguments: [voxel, tfidf]}
       peak: {arguments: [mni, study]}
+      mni: {arguments: [mni]}
+      atlas_voxel: {arguments: [atlas_voxel]}
+      labels: {arguments: [label, atlas_voxel]}
 """
 
 
@@ -105,6 +125,14 @@ def tiny(monkeypatch, tmp_path):
     nl.add_tuple_set(
         [(-1.0, -1.0, -1.0, 10), (-3.2, -4.9, -7.0, 11)], name="peak"
     )
+    nl.add_tuple_set([(-1.0, -1.0, -1.0), (-3.2, -4.9, -7.0)], name="mni")
+    nl.grids = {
+        "schaefer": nib.Nifti1Image(
+            np.zeros((3, 5, 2), dtype=np.int16), ATLAS_AFFINE
+        ),
+    }
+    nl.add_tuple_set([(2, 4, 1), (0, 0, 0)], name="atlas_voxel")
+    nl.add_tuple_set([("a", 2, 4, 1), ("b", 0, 0, 0)], name="labels")
     console = Console(file=io.StringIO(), width=200)
     return InteractiveTuiApp(
         nl, TuiSettings(engine_name="tiny"), console=console,
@@ -316,8 +344,9 @@ class TestSaveErrors:
         assert "no template" in out
 
     def test_no_voxel_columns(self, tiny, tmp_path):
+        tiny._nl.add_tuple_set([(10, 1, 2, 3)], name="seen")
         out = self._error(
-            tiny, tmp_path, "ans(s, a, b, c) :- reports(s, a, b, c)"
+            tiny, tmp_path, "ans(s, a, b, c) :- seen(s, a, b, c)"
         )
         assert "no voxel columns" in out
         assert "i, j, k" in out and "x, y, z" in out
@@ -434,6 +463,9 @@ def test_help_save_tells_the_convention(tiny):
     assert "space: voxel" in out and "space: mm" in out
     assert "--value COLUMN" in out and "maximum" in out
     assert "mask" in out
+    # the voxels follow from the last query, and a sort names its grid
+    assert "ans(x, y, z) :- voxel(x, y, z)" in out
+    assert "grid: schaefer" in out
 
 
 def test_help_lists_the_save_options(tiny):
@@ -744,3 +776,181 @@ class TestPathsWithSpaces:
         request = nifti.parse_view_args("my image.nii.gz --threshold 2")
         assert request.path == Path("my image.nii.gz")
         assert request.threshold == 2.0
+
+
+def _data(img):
+    return np.asanyarray(img.dataobj)
+
+
+class TestProvenance:
+    """
+    Check the voxels of a result follow from the query giving it.
+
+    A column holds the values of the argument of a declared predicate
+    its variable is in, whatever its name: indices of the template's
+    grid, of an atlas's grid, or millimetres.
+    """
+
+    def test_voxels_named_as_millimetres(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(x, y, z) :- voxel(x, y, z)")
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+        assert np.count_nonzero(_data(img)) == 2
+
+    def test_reordered_voxel_columns(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(k, j, i) :- voxel(i, j, k)")
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_voxels_of_a_relation_of_entities(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(s, a, b, c) :- reports(s, a, b, c)"
+        )
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_millimetres(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(x, y, z) :- mni(x, y, z)")
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+        assert np.count_nonzero(_data(img)) == 2
+
+    def test_millimetres_named_as_voxels(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(i, j, k) :- mni(i, j, k)")
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+        assert "outside" not in _output(tiny)
+
+    def test_through_a_rule_of_the_program(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path,
+            "near(x, y, z) :- voxel(x, y, z)\nans(x, y, z) :- near(x, y, z)",
+        )
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_through_a_rule_defined_before(self, tiny, tmp_path):
+        tiny._execute_and_display("near(x, y, z) :- voxel(x, y, z)")
+        img = _saved(tiny, tmp_path, "ans(a, b, c) :- near(a, b, c)")
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_atlas_grid(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(l, i, j, k) :- labels(l, i, j, k)"
+        )
+        assert img.shape == (3, 5, 2)
+        assert np.array_equal(img.affine, ATLAS_AFFINE)
+        assert _data(img)[2, 4, 1] == 1 and _data(img)[0, 0, 0] == 1
+        assert "3×5×2 schaefer grid" in _output(tiny)
+
+    def test_atlas_grid_outside(self, tiny, tmp_path):
+        tiny._nl.add_tuple_set([("c", 3, 4, 3)], name="labels")
+        _saved(tiny, tmp_path, "ans(l, i, j, k) :- labels(l, i, j, k)")
+        assert "outside the schaefer grid" in _output(tiny)
+
+    def test_explicit_voxels_are_on_the_template(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(l, i, j, k) :- labels(l, i, j, k)",
+            "--voxel i j k",
+        )
+        assert img.shape == (4, 4, 4)
+        assert np.array_equal(img.affine, TINY_AFFINE)
+
+    def test_squall_in_3d(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        img = _saved(tiny, tmp_path, "obtain every Atlas_voxel in 3D.")
+        assert img.shape == (3, 5, 2)
+        assert _data(img)[2, 4, 1] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_squall_tuple_named_as_millimetres(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        img = _saved(
+            tiny, tmp_path,
+            "obtain every Voxel (?x; ?y; ?z) that a Study reports.",
+        )
+        assert img.shape == (4, 4, 4)
+        assert _data(img)[1, 2, 3] == 1 and _data(img)[0, 0, 0] == 1
+
+    def test_squall_whole_relation(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        img = _saved(tiny, tmp_path, "obtain every Labels.")
+        assert img.shape == (3, 5, 2)
+
+    def test_squall_blocks_have_their_own_grid(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        tiny._execute_and_display(
+            "obtain every Atlas_voxel in 3D as First. "
+            "obtain every Voxel in 3D as Second."
+        )
+        tiny._handle_dot_command(f".save {tmp_path / 'out.nii'}")
+        assert nib.load(tmp_path / "out_first.nii").shape == (3, 5, 2)
+        assert nib.load(tmp_path / "out_second.nii").shape == (4, 4, 4)
+
+    def test_unknown_provenance_falls_back_on_names(self, tiny, tmp_path):
+        tiny._nl.add_tuple_set([(-1.0, -1.0, -1.0)], name="spots")
+        img = _saved(tiny, tmp_path, "ans(x, y, z) :- spots(x, y, z)")
+        assert img.shape == (4, 4, 4)
+        assert _data(img)[1, 2, 3] == 1
+
+    def test_engine_without_the_grid(self, tiny, tmp_path):
+        tiny._nl.grids = {}
+        tiny._execute_and_display("ans(l, i, j, k) :- labels(l, i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.nii'}")
+        assert not (tmp_path / "out.nii").exists()
+        assert "no grid 'schaefer'" in _output(tiny)
+
+    def test_view_on_the_atlas_grid(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l, i, j, k) :- labels(l, i, j, k)")
+        tiny._handle_dot_command(".view")
+        out = _output(tiny)
+        image = Path(out.split("image to: ")[1].split()[0])
+        assert nib.load(image).shape == (3, 5, 2)
+        assert "schaefer grid" in out
+        image.unlink()
+        Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+
+class TestProvenanceUnits:
+    """Check the sorts of the columns of a query and their voxels."""
+
+    @staticmethod
+    def _sorts():
+        """Return the sorts of :class:`TestUnits` and of the atlas."""
+        atlas = Sort(
+            "atlas_voxel", ("i", "j", "k"), "int", "", "voxel", "schaefer"
+        )
+        return {**TestUnits.SORTS, "atlas_voxel": atlas}
+
+    def test_column_sorts_of_a_datalog_query(self, tiny):
+        from neurolang.utils.tui.provenance import ColumnSort, column_sorts
+
+        sorts = column_sorts(
+            tiny._nl, "tiny", "ans(s, x, y, z) :- reports(s, x, y, z)",
+            squall=False,
+        )
+        assert list(sorts.values()) == [(
+            ColumnSort("study", 0), ColumnSort("voxel", 0),
+            ColumnSort("voxel", 1), ColumnSort("voxel", 2),
+        )]
+
+    def test_unknown_column_sorts(self, tiny):
+        from neurolang.utils.tui.provenance import column_sorts
+
+        sorts = column_sorts(
+            tiny._nl, "tiny", "ans(a, n) :- far(a), (n == 2)", squall=False,
+        )
+        assert list(sorts.values()) == [(None, None)]
+
+    def test_points_from_the_column_sorts(self):
+        from neurolang.utils.tui.provenance import ColumnSort
+
+        df = pd.DataFrame(columns=["l", "x", "y", "z"])
+        provenance = (
+            None, ColumnSort("atlas_voxel", 0), ColumnSort("atlas_voxel", 1),
+            ColumnSort("atlas_voxel", 2),
+        )
+        assert nifti.point_columns(
+            df, self._sorts(), provenance
+        ) == nifti.PointColumns(("x", "y", "z"), "voxel", "schaefer")
+
+    def test_names_only_of_columns_of_unknown_sort(self):
+        from neurolang.utils.tui.provenance import ColumnSort
+
+        df = pd.DataFrame(columns=["i", "j", "k"])
+        provenance = (ColumnSort("study", 0), None, None)
+        with pytest.raises(nifti.SaveError, match="no voxel columns"):
+            nifti.point_columns(df, self._sorts(), provenance)
