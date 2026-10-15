@@ -330,21 +330,41 @@ class Sort(NamedTuple):
 
     Its entities span *columns*, whose values are of the *type*; a sort of
     N > 1 columns reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+
+    The *space* of a sort of points tells what its columns are: ``voxel``
+    for the indices ``(i, j, k)`` of the grid of the engine's template
+    (see :func:`build_engine`), ``mm`` for coordinates ``(x, y, z)`` in
+    millimetres in the space of that template, ``""`` otherwise.
     """
 
     name: str
     columns: Tuple[str, ...]
     type: str = ""
     description: str = ""
+    space: str = ""
+
+
+SORT_SPACES = ("voxel", "mm")
+
+
+def _declared_sort(name: str, info: Dict[str, Any]) -> Sort:
+    """Return the sort *name* declared by *info*, checking its space."""
+    space = str(info.get("space", ""))
+    if space and space not in SORT_SPACES:
+        raise ValueError(
+            f"sort {name!r} declares the space {space!r}; a space is "
+            f"one of {', '.join(SORT_SPACES)}"
+        )
+    return Sort(
+        name, tuple(info["columns"]), str(info.get("type", "")),
+        str(info.get("description", "")).strip(), space,
+    )
 
 
 def _declared_sorts(cfg: Dict[str, Any]) -> Dict[str, Sort]:
     """Return the sorts the engine *cfg* declares, by name."""
     return {
-        name: Sort(
-            name, tuple(info["columns"]), str(info.get("type", "")),
-            str(info.get("description", "")).strip(),
-        )
+        name: _declared_sort(name, info)
         for name, info in (cfg.get("sorts") or {}).items()
     }
 
@@ -993,7 +1013,11 @@ def build_engine(
     Returns
     -------
     NeurolangPDL
-        A fully initialised engine ready for query execution.
+        A fully initialised engine ready for query execution. Its
+        ``template`` attribute is the MNI image whose grid the voxel
+        indices of the engine refer to (the sorts of ``space: voxel``),
+        resampled to *resolution* if given, or None if the engine does
+        not require the MNI mask.
 
     Raises
     ------
@@ -1031,6 +1055,7 @@ def build_engine(
     else:
         nl = NeurolangPDL()
 
+    nl.template = mask
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)

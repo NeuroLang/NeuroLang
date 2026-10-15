@@ -129,6 +129,22 @@ whose probability column is not an argument.
 :func:`~neurolang.utils.engine_registry.get_signatures` returns the
 arguments of each predicate.
 
+A sort of points may declare its ``space``: ``space: voxel`` marks the
+indices ``(i, j, k)`` of the grid of the engine's template, the MNI image
+of an engine with ``requires_mni_mask`` (``nl.template`` on the engine
+:func:`~neurolang.utils.engine_registry.build_engine` returns), and
+``space: mm`` coordinates ``(x, y, z)`` in millimetres in the space of
+that template::
+
+    sorts:
+      voxel: {columns: [i, j, k], type: int, space: voxel}
+      mni: {columns: [x, y, z], type: float, space: mm}
+
+The REPL's ``.save out.nii.gz`` writes a result on the template's grid:
+the columns of a result named as those of a ``voxel`` sort are written as
+they are, those named as those of an ``mm`` sort are converted to the
+nearest voxel (see ``.help save``).
+
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
 offers the nouns, capitalised; after ``every Study that`` the verbs whose
 first entity is a study (``mentions``, ``reports``); after ``every Term
