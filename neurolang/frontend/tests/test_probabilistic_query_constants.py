@@ -7,6 +7,7 @@ reach the rules defining ``r`` through magic sets, so that only the
 one of the unrestricted query, or of the query with the constant written
 into the rule by hand.
 """
+import re
 import subprocess
 import sys
 import textwrap
@@ -27,7 +28,14 @@ r(i, j, k, t, PROB(i, j, k, t)) :- activation(i, j, k, s) // term_association(s,
 w(i, j, k, t, PROB(i, j, k, t)) :- activation(i, j, k, s) & term_association(s, t)
 r_pain(i, j, k, PROB(i, j, k)) :- activation(i, j, k, s) // term_association(s, "pain")
 w_pain(i, j, k, PROB(i, j, k)) :- activation(i, j, k, s) & term_association(s, "pain")
+act(i, j, k, t) :- activation(i, j, k, s), term_association(s, t)
+v(i, j, k, t, PROB(i, j, k, t)) :- act(i, j, k, t)
+v_pain(i, j, k, PROB(i, j, k)) :- act(i, j, k, "pain")
 """
+
+RANDOM_PREDICATES = (
+    "selected_study", "activation", "term_association", "act", "r", "w", "v",
+)
 
 
 def _engine(studies="choice"):
@@ -248,6 +256,65 @@ def test_plan_propagates_constant_to_term_association(nl, capsys):
     ]
     assert numerator_rules
     assert all("magic_" in body for body in numerator_rules), rules
+
+
+def test_constant_through_probabilistic_idb_equals_unrestricted(nl):
+    """
+    Restrict a probabilistic rule body by deterministic magic sets only.
+
+    The magic set of ``term_association`` in ``act`` must not be derived
+    from ``activation``, which is probabilistic: it would no longer be
+    deterministic, and the probabilities of ``v_pain`` would change.
+    """
+    found = _rows(nl, ("i", "j", "k", "p"), ("v_pain", "i", "j", "k", "p"))
+    expected = _restrict(_full(nl, "v"), 3, "pain")
+    assert len(expected) > 0
+    _assert_same(found, expected)
+    _assert_same(
+        _rows(nl, ("i", "j", "k", "p"), ("v", "i", "j", "k", "pain", "p")),
+        expected,
+    )
+
+
+@pytest.mark.parametrize(
+    "atom",
+    [
+        ("r", "i", "j", "k", "pain", "p"),
+        ("w", "i", "j", "k", "pain", "p"),
+        ("v", "i", "j", "k", "pain", "p"),
+        ("v_pain", "i", "j", "k", "p"),
+        ("w_pain", "i", "j", "k", "p"),
+    ],
+)
+def test_magic_predicates_are_deterministic(nl, atom, capsys):
+    with nl.scope as e:
+        nl.query(
+            tuple(getattr(e, v) for v in ("i", "j", "k", "p")),
+            getattr(e, atom[0])(
+                *(getattr(e, a) if a in VARIABLES else a for a in atom[1:])
+            ),
+            show_rewritten=True, dry_run=True,
+        )
+    rules = _rewritten_rules(capsys.readouterr().out)
+    magic_bodies = [body for head, body in rules if head.startswith("magic_")]
+    for body in magic_bodies:
+        for name in re.findall(r"([\w^]+)\(", body):
+            base = re.split(r"[\^]|_\d+$", name)[0]
+            assert name.startswith("magic_") or base not in RANDOM_PREDICATES, (
+                body
+            )
+
+
+def test_constant_on_probability_column(nl):
+    full = _restrict(_full(nl, "w"), 3, "pain")
+    key, value = next(iter(full.items()))
+    with nl.scope as e:
+        res = nl.query(
+            (e.i, e.j, e.k), e.w(e.i, e.j, e.k, "pain", value),
+        )
+    found = _as_dict(res, ("i", "j", "k"))
+    assert key in found
+    assert set(found) == {k for k, p in full.items() if p == value}
 
 
 SIZE_SCRIPT = textwrap.dedent(

@@ -17,6 +17,7 @@ from ...relational_algebra import (
     NameColumns,
     NaturalJoin,
     Projection,
+    RelationalAlgebraSolver,
     Selection,
     Union,
     str2columnstr_constant,
@@ -386,6 +387,17 @@ def test_only_equality():
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
+
+
+def test_only_equalities_to_constants():
+    """Translate ``x = 3 & y = 'a'``, as in ``magic_p(3, 'a') :- ()``."""
+    exp = Conjunction((C_(eq)(S_("x"), C_(3)), C_(eq)(S_("y"), C_("a"))))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(3, "a")]
+    )
 
 
 def test_disjunction():
