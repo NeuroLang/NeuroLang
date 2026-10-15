@@ -1,6 +1,7 @@
 """Tests for saving and viewing results in the interactive REPL."""
 
 import io
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,47 +14,9 @@ import nibabel as nib  # noqa: E402
 from rich.console import Console  # noqa: E402
 
 from neurolang.frontend import NeurolangPDL  # noqa: E402
+from neurolang.utils.engine_registry import Sort  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui import nifti  # noqa: E402
-from neurolang.utils.tui.nifti import _result_to_nifti  # noqa: E402
-
-
-class TestResultToNifti:
-    def test_basic_nifti_from_ijk_columns(self):
-        df = pd.DataFrame({
-            "i": [10, 20], "j": [30, 40], "k": [50, 60],
-            "value": [1.0, 2.0],
-        })
-        img = _result_to_nifti(df)
-        assert isinstance(img, nib.Nifti1Image)
-        assert img.shape == (256, 256, 256)
-        data = img.get_fdata()
-        assert data[10, 30, 50] == 1.0
-        assert data[20, 40, 60] == 2.0
-
-    def test_nifti_without_value_column(self):
-        df = pd.DataFrame({"i": [5], "j": [5], "k": [5]})
-        assert _result_to_nifti(df).get_fdata()[5, 5, 5] == 1.0
-
-    def test_nifti_clips_out_of_bounds(self):
-        df = pd.DataFrame({
-            "i": [1000, 1], "j": [1000, 2], "k": [1000, 3],
-            "value": [42.0, 7.0],
-        })
-        data = _result_to_nifti(df).get_fdata()
-        assert data[255, 255, 255] == 0.0
-        assert data[1, 2, 3] == 7.0
-
-    def test_nifti_raises_with_no_coords(self):
-        df = pd.DataFrame({"label": ["a"], "value": [1.0]})
-        with pytest.raises(
-            ValueError, match="Cannot determine voxel coordinates"
-        ):
-            _result_to_nifti(df)
-
-    def test_nifti_uses_fallback_numeric_cols(self):
-        df = pd.DataFrame({"x": [0], "y": [0], "z": [0], "val": [5.0]})
-        assert _result_to_nifti(df).get_fdata()[0, 0, 0] == 5.0
 
 
 def _output(app):
@@ -82,13 +45,6 @@ def test_save_csv(app, tmp_path):
     assert saved.values.tolist() == [[1, 2, 3], [4, 5, 6]]
 
 
-def test_save_nifti(app, tmp_path):
-    app._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
-    app._handle_dot_command(f".save {tmp_path / 'out.nii'}")
-    data = nib.load(tmp_path / "out.nii").get_fdata()
-    assert data[1, 2, 3] == 1.0 and data[4, 5, 6] == 1.0
-
-
 def test_save_every_obtain_block(app, tmp_path):
     app.settings.squall = True
     app._execute_and_display(
@@ -105,9 +61,7 @@ def test_view(app, tmp_path, monkeypatch):
     app._handle_dot_command(f".view {tmp_path / 'missing.nii'}")
     assert "File not found" in _output(app)
     path = tmp_path / "img.nii"
-    nib.save(_result_to_nifti(pd.DataFrame(
-        {"i": [100], "j": [100], "k": [100]}
-    )), path)
+    nib.save(nib.Nifti1Image(np.ones((4, 4, 4), np.float32), np.eye(4)), path)
     app._handle_dot_command(f".view {path}")
     assert "Saved visualisation to" in _output(app)
     assert opened and opened[0][1].endswith(".png")
@@ -216,3 +170,232 @@ class TestNiftiPaths:
         tiny._handle_dot_command(f".save {tmp_path / 'out.nii.gz'}")
         for name in ("out_first.nii.gz", "out_second.nii.gz"):
             assert isinstance(nib.load(tmp_path / name), nib.Nifti1Image)
+
+
+def _saved(app, tmp_path, query, options="", name="out.nii.gz"):
+    """Run the Datalog *query*, save it in *name* and load the image."""
+    app._execute_and_display(query)
+    app._handle_dot_command(f".save {tmp_path / name} {options}".strip())
+    return nib.load(tmp_path / name)
+
+
+class TestSaveOnTheTemplate:
+    """Check .save writes the result on the grid of the engine's template."""
+
+    def test_shape_and_affine_of_the_template(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)")
+        assert img.shape == (4, 4, 4)
+        assert np.array_equal(img.affine, TINY_AFFINE)
+
+    def test_voxel_indices_written_as_they_are(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)")
+        data = np.asanyarray(img.dataobj)
+        assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
+        assert np.count_nonzero(data) == 2
+
+    def test_mask_is_uint8(self, tiny, tmp_path):
+        img = _saved(tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)")
+        assert img.get_data_dtype() == np.uint8
+        assert "mask" in _output(tiny)
+
+    def test_millimetres_converted_to_voxels(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(x, y, z, s) :- peak(x, y, z, s)"
+        )
+        data = np.asanyarray(img.dataobj)
+        # (-1, -1, -1) mm is the centre of voxel (1, 2, 3);
+        # (-3.2, -4.9, -7.0) mm the nearest to voxel (0, 0, 0).
+        assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
+        assert np.count_nonzero(data) == 2
+
+    def test_the_value_column_and_the_max_of_duplicates(
+        self, tiny, tmp_path
+    ):
+        img = _saved(
+            tiny, tmp_path, "ans(i, j, k, w) :- weight(i, j, k, w)"
+        )
+        data = np.asanyarray(img.dataobj)
+        assert img.get_data_dtype() == np.float32
+        assert data[1, 2, 3] == 0.75 and data[0, 0, 0] == 0.5
+        assert "w" in _output(tiny) and "max" in _output(tiny)
+
+    def test_an_entity_column_is_not_a_value(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(i, j, k, study_id) :- "
+            "reports(study_id, i, j, k)"
+        )
+        data = np.asanyarray(img.dataobj)
+        assert img.get_data_dtype() == np.uint8
+        assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
+
+    def test_an_explicit_value_column(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(i, j, k, s) :- reports(s, i, j, k)",
+            "--value s",
+        )
+        data = np.asanyarray(img.dataobj)
+        assert img.get_data_dtype() == np.int32
+        assert data[1, 2, 3] == 11 and data[0, 0, 0] == 12
+
+    def test_explicit_voxel_columns(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(a, b, c) :- voxel(a, b, c)",
+            "--voxel a b c",
+        )
+        assert np.count_nonzero(np.asanyarray(img.dataobj)) == 2
+
+    def test_explicit_mm_columns(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(a, b, c, s) :- peak(a, b, c, s)",
+            "--mm a b c",
+        )
+        assert np.asanyarray(img.dataobj)[1, 2, 3] == 1
+
+    def test_squall_voxels_in_3d(self, tiny, tmp_path):
+        tiny.settings.squall = True
+        img = _saved(
+            tiny, tmp_path, "obtain every Voxel in 3D that a Study reports."
+        )
+        data = np.asanyarray(img.dataobj)
+        assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
+
+    def test_squall_probability(self, tiny, tmp_path):
+        tiny._nl.add_uniform_probabilistic_choice_over_set(
+            [(10,), (11,), (12,)], name="selected_study"
+        )
+        tiny.settings.squall = True
+        img = _saved(
+            tiny, tmp_path,
+            "define as Map with inferred probability every Voxel in 3D "
+            "that a Selected_study reports. obtain every Map.",
+        )
+        data = np.asanyarray(img.dataobj)
+        assert data[1, 2, 3] == pytest.approx(2 / 3)
+        assert data[0, 0, 0] == pytest.approx(1 / 3)
+        assert "probability" in _output(tiny)
+
+
+class TestSaveErrors:
+    """Check .save tells why it cannot write a NIfTI image."""
+
+    def _error(self, app, tmp_path, query, options=""):
+        app._execute_and_display(query)
+        app._handle_dot_command(f".save {tmp_path / 'out.nii'} {options}")
+        assert not (tmp_path / "out.nii").exists()
+        return _output(app)
+
+    def test_no_template(self, tiny, tmp_path):
+        tiny._nl.template = None
+        out = self._error(tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)")
+        assert "no template" in out
+
+    def test_no_voxel_columns(self, tiny, tmp_path):
+        out = self._error(
+            tiny, tmp_path, "ans(s, a, b, c) :- reports(s, a, b, c)"
+        )
+        assert "no voxel columns" in out
+        assert "i, j, k" in out and "x, y, z" in out
+        assert "--voxel" in out
+
+    def test_unknown_value_column(self, tiny, tmp_path):
+        out = self._error(
+            tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)", "--value p"
+        )
+        assert "no column 'p'" in out
+
+    def test_unknown_option(self, tiny, tmp_path):
+        out = self._error(
+            tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)", "--colour red"
+        )
+        assert "--colour" in out
+
+    def test_option_missing_its_columns(self, tiny, tmp_path):
+        out = self._error(
+            tiny, tmp_path, "ans(a, b, c) :- voxel(a, b, c)", "--voxel a b"
+        )
+        assert "--voxel takes 3 columns" in out
+
+    def test_options_of_a_table(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save {tmp_path / 'out.csv'} --value i")
+        assert "NIfTI" in _output(tiny)
+        assert not (tmp_path / "out.csv").exists()
+
+    def test_non_integer_voxel_indices(self, tiny, tmp_path):
+        out = self._error(
+            tiny, tmp_path, "ans(a, b, c, s) :- peak(a, b, c, s)",
+            "--voxel a b c",
+        )
+        assert "not integers" in out and "--mm" in out
+
+    def test_voxels_outside_the_grid_are_counted(self, tiny, tmp_path):
+        tiny._nl.add_tuple_set([(9, 9, 9), (1, 1, 1)], name="far")
+        img = _saved(tiny, tmp_path, "ans(i, j, k) :- far(i, j, k)")
+        assert np.count_nonzero(np.asanyarray(img.dataobj)) == 1
+        assert "1 row outside the template grid" in _output(tiny)
+
+
+class TestUnits:
+    """Check the parts of the conversion on their own."""
+
+    SORTS = {
+        "voxel": Sort("voxel", ("i", "j", "k"), "int", "", "voxel"),
+        "mni": Sort("mni", ("x", "y", "z"), "float", "", "mm"),
+        "study": Sort("study", ("study_id",), "int"),
+        "tfidf": Sort("tfidf", ("tfidf",), "float"),
+    }
+
+    def test_voxel_columns_from_the_sorts(self):
+        df = pd.DataFrame(columns=["k", "s", "i", "j"])
+        assert nifti.point_columns(df, self.SORTS) == nifti.PointColumns(
+            ("i", "j", "k"), "voxel"
+        )
+
+    def test_mm_columns_from_the_sorts(self):
+        df = pd.DataFrame(columns=["x", "y", "z"])
+        assert nifti.point_columns(df, self.SORTS).space == "mm"
+
+    def test_voxel_columns_preferred_to_mm(self):
+        df = pd.DataFrame(columns=["x", "y", "z", "i", "j", "k"])
+        assert nifti.point_columns(df, self.SORTS).space == "voxel"
+
+    def test_mm_to_voxel_indices(self):
+        df = pd.DataFrame({"x": [-1.0, 0.9], "y": [-1.0, 1.0],
+                           "z": [-1.0, 2.6]})
+        points = nifti.PointColumns(("x", "y", "z"), "mm")
+        indices = nifti.voxel_indices(df, points, TINY_AFFINE)
+        assert indices.tolist() == [[1, 2, 3], [2, 3, 5]]
+
+    @pytest.mark.parametrize("columns, expected", [
+        (["i", "j", "k", "probability", "tfidf"], "probability"),
+        (["i", "j", "k", "PROB"], "PROB"),
+        (["i", "j", "k", "tfidf"], "tfidf"),
+        (["i", "j", "k", "count"], "count"),
+        (["i", "j", "k", "study_id"], None),
+        (["i", "j", "k", "study_id", "tfidf"], "tfidf"),
+        (["i", "j", "k", "tfidf", "count"], None),
+        (["i", "j", "k", "term"], None),
+        (["i", "j", "k"], None),
+    ])
+    def test_value_column_rule(self, columns, expected):
+        values = {
+            "term": ["pain"], "study_id": [1], "count": [3],
+            "tfidf": [0.5], "probability": [0.5], "PROB": [0.5],
+        }
+        df = pd.DataFrame({
+            c: values.get(c, [0]) for c in columns
+        })
+        points = nifti.PointColumns(("i", "j", "k"), "voxel")
+        assert nifti.value_column(df, points, self.SORTS) == expected
+
+    def test_parse_save_arguments(self):
+        request = nifti.parse_save_args(
+            "out.nii.gz --value tfidf --mm a b c"
+        )
+        assert request == nifti.SaveRequest(
+            Path("out.nii.gz"), "tfidf",
+            nifti.PointColumns(("a", "b", "c"), "mm"),
+        )
+        assert nifti.parse_save_args("'my out.csv'").path == Path(
+            "my out.csv"
+        )
