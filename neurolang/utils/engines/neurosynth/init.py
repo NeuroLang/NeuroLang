@@ -26,7 +26,6 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from neurolang.expressions import Symbol
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import (
     StudyID,
@@ -71,15 +70,10 @@ def init_engine(
     )
     # Every (i, j, k) index of the mask grid. Use the image shape only:
     # ``get_fdata`` would load the full image as float64 to read it.
-    # The indices are distinct: mark them so, sparing a deduplication of
-    # the grid in the queries that use it.
     nl.add_tuple_set(
         np.indices(mask.shape[:3]).reshape(3, -1).T,
         name="voxel",
     )
-    nl.program_ir.symbol_table[
-        Symbol("voxel")
-    ].value.might_have_duplicates = False
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
 
 def _process_peaks(
