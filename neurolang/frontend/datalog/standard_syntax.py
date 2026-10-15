@@ -1236,6 +1236,20 @@ class DatalogTransformer(Transformer):
         return ast
 
 
+def strip_comment(line):
+    """Return *line* without its ``%`` comment, if any (not in strings)."""
+    in_single = False
+    in_double = False
+    for i, c in enumerate(line):
+        if c == "'" and not in_double:
+            in_single = not in_single
+        elif c == '"' and not in_single:
+            in_double = not in_double
+        elif c == '%' and not in_single and not in_double:
+            return line[:i]
+    return line
+
+
 def _preprocess(code):
     """Strip % comments and trailing Prolog-style dots before Lark parsing.
 
@@ -1245,17 +1259,7 @@ def _preprocess(code):
     lines = code.split('\n')
     processed = []
     for line in lines:
-        # Strip % comments (not inside strings)
-        in_single = False
-        in_double = False
-        for i, c in enumerate(line):
-            if c == "'" and not in_double:
-                in_single = not in_single
-            elif c == '"' and not in_single:
-                in_double = not in_double
-            elif c == '%' and not in_single and not in_double:
-                line = line[:i]
-                break
+        line = strip_comment(line)
         # Strip trailing Prolog-style dot
         stripped = line.rstrip()
         if stripped.endswith('.') and stripped != '.':
