@@ -148,6 +148,12 @@ class TestNiftiPaths:
         def no_load(*args, **kwargs):
             raise AssertionError("nib.load cannot open every NIfTI name")
 
+        # nilearn loads the MNI background with nib.load: keep it out of
+        # the stub, which would fail it and, with some versions of
+        # nilearn, the backgrounds of the tests after this one.
+        monkeypatch.setattr(
+            nifti.brain_viewer, "mni_background", lambda: None
+        )
         monkeypatch.setattr(nifti.nib, "load", no_load)
         tiny._handle_dot_command(f".view {tmp_path / name}")
         assert len(view_calls) == 1
