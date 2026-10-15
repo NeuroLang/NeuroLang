@@ -562,6 +562,29 @@ Supported forms:
 * ``equal to``
 * ``not equal to``
 
+4.8 Euclidean Distance Bounds
+------------------------------
+
+The built-in ``euclidean`` function takes the coordinates of two points,
+those of the first point followed by those of the second one, and returns
+their Euclidean distance.  Bounding it by a number relates the points of
+two relations that are close to each other:
+
+.. code-block:: squall
+
+    define as Close (?i; ?j; ?k; ?s) where Voxel (?i, ?j, ?k)
+        and Peak_reported (?i1, ?j1, ?k1, ?s)
+        and euclidean(?i, ?j, ?k, ?i1, ?j1, ?k1) is lower than 2.
+
+The same bound can name the distance, which then can be used by the head
+of the rule: ``and ?d is euclidean(?i, ?j, ?k, ?i1, ?j1, ?k1) and ?d is
+lower than 2``.  ``lower than`` is a strict bound and ``lower equal than``
+a non-strict one, and the reserved uppercase ``EUCLIDEAN`` behaves as
+``euclidean``.  When both points are ranged by stored relations, as here,
+the pairs of points within the distance are computed once, when the rule
+is defined, rather than by comparing every voxel with every peak; the
+coordinates of each point must then be distinct variables.
+
 
 Part 5: Probabilistic Rules
 =============================
