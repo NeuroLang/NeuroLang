@@ -836,9 +836,14 @@ def _absorbed(bound, ranges):
     excluded = set(bound.application.args) | {bound.distance}
     absorbed = []
     for atom, point in zip(ranges, bound.points):
-        absorbed.append(_absorbable(atom, point, excluded))
+        args = set(atom.args)
+        absorbed.append(
+            all(isinstance(arg, Symbol) for arg in atom.args)
+            and len(args) == len(atom.args)
+            and not (args - set(point)) & excluded
+        )
         if absorbed[-1]:
-            excluded |= set(atom.args)
+            excluded |= args
     return absorbed
 
 
@@ -876,33 +881,6 @@ def _pair_variables(rule, bound, formulas, ranges, absorbed):
     )
     selected = [variable for variable in available if variable in needed]
     return selected or list(bound.points[0])
-
-
-def _absorbable(atom, point, excluded):
-    """
-    Return whether *atom* can be absorbed into the pairs relation.
-
-    Parameters
-    ----------
-    atom : FunctionApplication
-        Relation atom ranging *point*.
-    point : tuple of Symbol
-        Coordinate variables.
-    excluded : set of Symbol
-        Variables the atom's other arguments must not be.
-
-    Returns
-    -------
-    bool
-        Whether its arguments are distinct variables, those other than
-        the coordinates of *point* not in *excluded*.
-    """
-    args = atom.args
-    if not all(isinstance(arg, Symbol) for arg in args):
-        return False
-    return len(set(args)) == len(args) and not (
-        (set(args) - set(point)) & excluded
-    )
 
 
 def _is_contains_atom(atom):
