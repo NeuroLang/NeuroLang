@@ -345,9 +345,7 @@ def test_negated_probabilistic_fact(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -382,9 +380,7 @@ def test_fact_negation_choice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
     pytest.param(dalvi_suciu_lift, marks=pytest.mark.xfail(
@@ -857,9 +853,7 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -896,9 +890,7 @@ def test_program_with_segregation_constant_case(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1199,9 +1191,7 @@ def test_empty_result_program(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1510,9 +1500,7 @@ def test_dalvi_suciu_fails_not_ranked():
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1562,9 +1550,7 @@ def test_nested_negation(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
