@@ -74,6 +74,17 @@ class TestNeuroLangReplCompleter:
     def test_grammar_completion(self, completer):
         assert ":-" in _texts(completer, "ans(x) ")
 
+    def test_unlexable_character_does_not_crash(self, completer):
+        # The lexer rejects "$"; the grammar then offers nothing.
+        assert _texts(completer, "a(x) :- b(x)\nans(x) $ ") == []
+
+    def test_comment_lines_are_skipped(self, completer):
+        text = "% the studies\na(x) :- b(x) % b is stored\nans(x) "
+        assert ":-" in _texts(completer, text)
+
+    def test_nothing_offered_inside_a_comment(self, completer):
+        assert _texts(completer, "ans(x) :- b(x) % b is ") == []
+
     def test_squall_keywords(self):
         completer = NeuroLangReplCompleter(squall_keywords=squall_keywords())
         assert "obtain" in _texts(completer, "ob")
