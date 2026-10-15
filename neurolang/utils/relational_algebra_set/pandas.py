@@ -67,6 +67,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
+                self._might_have_duplicates = iterable._might_have_duplicates
             elif isinstance(iterable, pd.DataFrame):
                 self._container = iterable.copy()
             else:
@@ -102,6 +103,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             )
         output = cls()
         output._container = other._container
+        output._might_have_duplicates = other._might_have_duplicates
         return output
 
     @classmethod
@@ -672,8 +674,27 @@ class NamedRelationalAlgebraFrozenSet(
             return self
         new_container = self._container[list(columns)]
         return self._light_init_same_structure(
-            new_container, might_have_duplicates=True, columns=columns
+            new_container, might_have_duplicates=(
+                self._projection_might_have_duplicates(columns)
+            ),
+            columns=columns
         )
+
+    def _projection_might_have_duplicates(self, columns):
+        """
+        Return whether projecting on *columns* might give duplicates.
+
+        Parameters
+        ----------
+        columns : tuple of str
+            Projected columns.
+
+        Returns
+        -------
+        bool
+            False when the set has no duplicates and every column is kept.
+        """
+        return self._might_have_duplicates or len(set(columns)) < self.arity
 
     def projection_to_unnamed(self, *columns):
         unnamed_self = self.to_unnamed()
@@ -1114,7 +1135,7 @@ class NamedRelationalAlgebraFrozenSet(
         return next(container.itertuples(index=False, name="tuple"))
 
     def to_unnamed(self):
-        container = self._container[list(self.columns)].copy()
+        container = self._container[list(self.columns)]
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container

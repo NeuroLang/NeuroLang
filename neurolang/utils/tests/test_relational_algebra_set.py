@@ -789,6 +789,17 @@ def test_named_to_unnamed(ra_module):
     assert ras_a.to_unnamed() == ras_b
 
 
+def test_named_to_unnamed_leaves_the_named_set_unchanged(ra_module):
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "x"), [(1, 2), (3, 4)]
+    )
+    unnamed = ras.to_unnamed()
+    assert unnamed.arity == 2
+    assert ras.columns == ("y", "x")
+    assert set(ras.projection("x")) == {(2,), (4,)}
+    assert set(unnamed) == {(1, 2), (3, 4)}
+
+
 def test_named_ra_set_from_other(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "n"), [(56, "bonjour"), (42, "aurevoir")]
@@ -1263,3 +1274,20 @@ def test_relational_algebra_difference_large(ra_module):
     assert len(result) == len(expected)
     assert result == ra_module.RelationalAlgebraFrozenSet(expected)
     assert first - ra_module.RelationalAlgebraFrozenSet.dee() == first
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_no_duplicates_flag_kept_by_copies_and_full_projections(backend):
+    module = pytest.importorskip(
+        f"neurolang.utils.relational_algebra_set.{backend}"
+    )
+    ras = module.RelationalAlgebraFrozenSet([(0, 1), (1, 2)])
+    ras.might_have_duplicates = False
+    assert not module.RelationalAlgebraFrozenSet(ras).might_have_duplicates
+    view = module.RelationalAlgebraFrozenSet.create_view_from(ras)
+    assert not view.might_have_duplicates
+    named = module.NamedRelationalAlgebraFrozenSet(("x", "y"), ras)
+    assert not named.might_have_duplicates
+    assert not named.projection("y", "x").might_have_duplicates
+    assert named.projection("x").might_have_duplicates
+    assert set(named.projection("y", "x")) == {(1, 0), (2, 1)}
