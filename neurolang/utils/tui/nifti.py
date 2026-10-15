@@ -7,12 +7,15 @@ image, or the last result, in a browser: an HTML page of
 :mod:`~neurolang.utils.tui.brain_viewer`, whose controls change the
 threshold, the colormap and its symmetry live (see :data:`VIEW_HELP`).
 
-A NIfTI image is written on the grid of the engine's template, the MNI
-image its voxel indices refer to (the ``template`` of the engine
-:func:`~neurolang.utils.engine_registry.build_engine` returns), with its
-shape and affine. The engine's sorts tell which columns of the result
-are the voxels (:func:`point_columns`) and :func:`value_column` which
-column holds their value; see :data:`SAVE_HELP`.
+A NIfTI image is written on a grid of the engine, with its shape and
+affine: that of the engine's template, the MNI image its voxel indices
+refer to (the ``template`` of the engine
+:func:`~neurolang.utils.engine_registry.build_engine` returns), or that
+of an atlas whose voxel indices a sort names with ``grid`` (the engine's
+``grids``). The sorts of the columns of the result, from the query that
+gave it (:mod:`~.provenance`), else their names, tell which columns are
+the voxels (:func:`point_columns`) and :func:`value_column` which column
+holds their value; see :data:`SAVE_HELP`.
 """
 
 import gzip
@@ -40,17 +43,21 @@ SAVE_HELP = """\
 
   out.csv, out.tsv      a table, comma- or tab-separated, gzipped for a
   out.csv.gz            .gz path; any other path is CSV
-  out.nii, out.nii.gz   a NIfTI image on the grid of the engine's
-                        template (its shape and affine)
+  out.nii, out.nii.gz   a NIfTI image on a grid of the engine (its shape
+                        and affine), that of its template by default
 
-The voxels of a NIfTI image are the columns of the result named as those
-of a sort of the engine declaring a space (engines.yaml):
-  space: voxel          grid indices (i, j, k), written as they are
+The voxels of a NIfTI image are the columns of the result of a sort of
+the engine declaring a space (engines.yaml):
+  space: voxel          grid indices (i, j, k), written as they are on
+                        the grid the sort names (e.g. grid: schaefer, an
+                        atlas's), by default the template's
   space: mm             millimetres (x, y, z), converted to the nearest
                         voxel with the inverse of the template's affine
-or those given with --voxel I J K (indices) or --mm X Y Z (millimetres).
-In Datalog, name the variables of the head after the sort, e.g.
-ans(i, j, k) :- voxel(i, j, k).
+A column has the sort of the argument of the predicate its variable is
+in, in the last query: ans(x, y, z) :- voxel(x, y, z) holds indices. A
+column of unknown sort, of a relation without declared arguments, is of
+the sort it is named as (i, j, k or x, y, z). --voxel I J K (indices of
+the template's grid) or --mm X Y Z (millimetres) give the columns.
 
 The value of a voxel is that of the column given with --value COLUMN,
 else of the probability column, else of the one numeric column that is
@@ -58,7 +65,7 @@ neither a voxel column nor an entity's (a column of a sort that is not
 of type float, such as study_id); otherwise the image is a mask, 1 at
 each voxel of the result. Rows of the same voxel keep their maximum.
 A mask is written as uint8, integers as int32 and other values as
-float32; rows outside the template grid are skipped."""
+float32; rows outside the grid are skipped. A path may hold spaces."""
 
 
 HELP_TOPICS["save"] = SAVE_HELP
@@ -70,14 +77,16 @@ class SaveError(ValueError):
 
 class PointColumns(NamedTuple):
     """
-    The columns of a result locating its voxels, and their space.
+    The columns of a result locating its voxels, their space and grid.
 
-    The *space* is ``voxel`` for the indices of the template grid, ``mm``
-    for millimetres in the template's space.
+    The *space* is ``voxel`` for the indices of the *grid*, the name of a
+    grid of the engine (the template's by default), ``mm`` for
+    millimetres in the template's space, written on its grid.
     """
 
     columns: Tuple[str, ...]
     space: str
+    grid: str = engine_registry.TEMPLATE_GRID
 
 
 class SaveRequest(NamedTuple):
@@ -99,13 +108,14 @@ class SavedImage(NamedTuple):
 
     *value* is the column of the voxel values, None for a mask; *voxels*
     the number of voxels written and *outside* the number of rows outside
-    the template grid, skipped.
+    the *grid*, skipped.
     """
 
     image: nib.Nifti1Image
     value: Optional[str]
     voxels: int
     outside: int
+    grid: str = engine_registry.TEMPLATE_GRID
 
 
 # The options of .save and the number of columns each takes.
@@ -206,27 +216,72 @@ def _column(df: pd.DataFrame, name: str):
     return found
 
 
-def point_columns(df: pd.DataFrame, sorts: dict) -> PointColumns:
+def _sort_points(sort, columns: tuple) -> PointColumns:
+    """Return the *columns* holding the points of *sort*, on its grid."""
+    return PointColumns(
+        tuple(columns), sort.space,
+        sort.grid or engine_registry.TEMPLATE_GRID,
+    )
+
+
+def _spatial_sorts(sorts: dict) -> list:
+    """Return the *sorts* declaring a space, those of voxels first."""
+    return [
+        sort for space in engine_registry.SORT_SPACES
+        for sort in sorts.values() if sort.space == space
+    ]
+
+
+def _provenance_points(columns, provenance, sorts: dict):
+    """
+    Return the *columns* holding the points of a sort, or None.
+
+    *provenance* holds the sort of each column (see
+    :class:`~.provenance.ColumnSort`); the columns are those of the
+    first sort declaring a space that the columns span whole.
+    """
+    found = {}
+    for column, column_sort in zip(columns, provenance):
+        if column_sort is not None:
+            found.setdefault(tuple(column_sort), column)
+    for sort in _spatial_sorts(sorts):
+        spanned = [
+            found.get((sort.name, n)) for n in range(len(sort.columns))
+        ]
+        if None not in spanned:
+            return _sort_points(sort, spanned)
+    return None
+
+
+def point_columns(
+    df: pd.DataFrame, sorts: dict, provenance: Optional[tuple] = None
+) -> PointColumns:
     """
     Return the columns of *df* locating its voxels, from the *sorts*.
 
     They are the columns of a sort declaring a space (see
-    :class:`~neurolang.utils.engine_registry.Sort`) that *df* has, those
-    of a sort of voxel indices first, then of millimetres.
+    :class:`~neurolang.utils.engine_registry.Sort`), those of a sort of
+    voxel indices first, then of millimetres: the columns of that sort
+    in the *provenance* of *df*, the sort of each column as the query
+    tells it, else the columns of unknown sort named as those of the
+    sort.
     """
-    names = set(df.columns)
-    for space in engine_registry.SORT_SPACES:
-        for sort in sorts.values():
-            if sort.space == space and set(sort.columns) <= names:
-                return PointColumns(sort.columns, space)
+    if provenance is None or len(provenance) != len(df.columns):
+        provenance = (None,) * len(df.columns)
+    points = _provenance_points(df.columns, provenance, sorts)
+    if points is not None:
+        return points
+    names = {c for c, p in zip(df.columns, provenance) if p is None}
+    for sort in _spatial_sorts(sorts):
+        if set(sort.columns) <= names:
+            return _sort_points(sort, sort.columns)
     raise SaveError(_no_points_message(df, sorts))
 
 
 def _no_points_message(df: pd.DataFrame, sorts: dict) -> str:
     """Return the error on *df*, whose voxel columns cannot be found."""
-    spaces = {"voxel": "indices", "mm": "millimetres"}
     known = [
-        f"{sort.name} ({', '.join(sort.columns)}, {spaces[sort.space]})"
+        f"{sort.name} ({', '.join(sort.columns)}, {_space_text(sort)})"
         for sort in sorts.values() if sort.space
     ]
     columns = ", ".join(str(c) for c in df.columns)
@@ -238,6 +293,13 @@ def _no_points_message(df: pd.DataFrame, sorts: dict) -> str:
         f"The result has no voxel columns (its columns are {columns}): "
         f"{hint}give them with --voxel I J K or --mm X Y Z."
     )
+
+
+def _space_text(sort) -> str:
+    """Return what the columns of the *sort* of points are, in words."""
+    if sort.space == "mm":
+        return "millimetres"
+    return f"indices of the {sort.grid} grid" if sort.grid else "indices"
 
 
 def voxel_indices(
@@ -267,7 +329,7 @@ _PROBABILITY_COLUMNS = ("probability", "prob")
 
 def value_column(
     df: pd.DataFrame, points: PointColumns, sorts: dict,
-    explicit: Optional[str] = None,
+    explicit: Optional[str] = None, provenance: Optional[tuple] = None,
 ):
     """
     Return the column of *df* holding the value of its voxels, or None.
@@ -275,7 +337,8 @@ def value_column(
     It is the *explicit* column if given, else the probability column,
     else the one numeric column that is neither of the *points* nor of an
     entity, a sort of the *sorts* that is not of type float (such as a
-    study); None stands for a mask.
+    study): the sort of the column in the *provenance* of *df*, as the
+    query tells it, else the sort it is named as. None stands for a mask.
     """
     if explicit is not None:
         return _numeric_column(df, explicit)
@@ -285,25 +348,44 @@ def value_column(
     ]
     if probability:
         return probability[0]
-    measures = _measure_columns(df, others, sorts)
+    measures = _measure_columns(df, others, sorts, provenance)
     return measures[0] if len(measures) == 1 else None
 
 
-def _measure_columns(df: pd.DataFrame, columns: list, sorts: dict) -> list:
+def _column_sort(df: pd.DataFrame, column, sorts: dict, provenance):
+    """
+    Return the sort of *column* of *df* in its *provenance*, or None.
+
+    The sort is one of *sorts*; None when the provenance of *df* is
+    unknown, or that of the column.
+    """
+    if provenance is None or len(provenance) != len(df.columns):
+        return None
+    column_sort = provenance[list(df.columns).index(column)]
+    return sorts.get(column_sort.sort) if column_sort else None
+
+
+def _measure_columns(
+    df: pd.DataFrame, columns: list, sorts: dict, provenance=None
+) -> list:
     """
     Return the numeric *columns* of *df* that are not of an entity.
 
     The columns of an entity are those of the *sorts* not of type float,
-    such as ``study_id``.
+    such as ``study_id``: of such a sort in the *provenance* of *df*, or
+    named as its columns when their sort is unknown.
     """
     entities = {
         column for sort in sorts.values() if sort.type != "float"
         for column in sort.columns
     }
-    return [
-        c for c in columns
-        if c not in entities and pd.api.types.is_numeric_dtype(df[c])
-    ]
+    measures = []
+    for c in columns:
+        sort = _column_sort(df, c, sorts, provenance)
+        entity = c in entities if sort is None else sort.type != "float"
+        if not entity and pd.api.types.is_numeric_dtype(df[c]):
+            measures.append(c)
+    return measures
 
 
 def _numeric_column(df: pd.DataFrame, name: str):
@@ -351,18 +433,21 @@ def _volume(per_voxel: pd.Series, shape: tuple) -> np.ndarray:
 def result_to_nifti(
     df: pd.DataFrame, template, sorts: dict,
     request: SaveRequest = SaveRequest(Path()),
+    provenance: Optional[tuple] = None,
 ) -> SavedImage:
     """
     Convert the result *df* into a NIfTI image on the *template*'s grid.
 
     The voxels and their value follow from the *request*, else from the
-    *sorts* (:func:`point_columns`, :func:`value_column`); rows of the
+    *sorts* and the *provenance* of *df*, the sort of each of its
+    columns (:func:`point_columns`, :func:`value_column`); rows of the
     same voxel keep their maximum and rows outside the grid are skipped.
+    The *template* is the image of the grid of the voxels.
     """
-    points = request.points or point_columns(df, sorts)
+    points = request.points or point_columns(df, sorts, provenance)
     for name in points.columns:
         _column(df, name)
-    value = value_column(df, points, sorts, request.value)
+    value = value_column(df, points, sorts, request.value, provenance)
     indices = voxel_indices(df, points, template.affine)
     shape = tuple(template.shape[:3])
     inside = np.all((indices >= 0) & (indices < shape), axis=1)
@@ -373,7 +458,8 @@ def result_to_nifti(
     per_voxel = _max_per_voxel(indices[inside], values)
     image = nib.Nifti1Image(_volume(per_voxel, shape), template.affine)
     return SavedImage(
-        image, value, len(per_voxel), int(len(df) - inside.sum())
+        image, value, len(per_voxel), int(len(df) - inside.sum()),
+        points.grid,
     )
 
 
@@ -393,25 +479,64 @@ def engine_template(nl):
     return template
 
 
+def engine_grid(nl, name: str):
+    """
+    Return the image of the grid *name* of the engine *nl*.
+
+    The template's grid is :func:`engine_template`; the others are the
+    engine's ``grids``, such as its atlases'. A :class:`SaveError` tells
+    the engine has no such grid.
+    """
+    if name == engine_registry.TEMPLATE_GRID:
+        return engine_template(nl)
+    image = (getattr(nl, "grids", None) or {}).get(name)
+    if image is None:
+        raise SaveError(
+            f"The engine has no grid {name!r}, the grid of the voxel "
+            "indices of the result: it registers the grid of an atlas "
+            "when it loads it. Give the voxel columns with --voxel I J K "
+            "to write them on the template's grid."
+        )
+    return image
+
+
+def result_image(app, block, request: SaveRequest) -> SavedImage:
+    """
+    Convert the result *block* of *app* into a NIfTI image, as *request* asks.
+
+    The voxel columns follow from the request, else from the sorts of
+    the block's columns or their names (:func:`point_columns`); the
+    image is on the grid of their sort.
+    """
+    sorts = _engine_sorts(app.settings.engine_name)
+    points = request.points or point_columns(
+        block.frame, sorts, block.sorts
+    )
+    return result_to_nifti(
+        block.frame, engine_grid(app._nl, points.grid), sorts,
+        request._replace(points=points), block.sorts,
+    )
+
+
 def _engine_sorts(engine_name: str) -> dict:
     """Return the sorts of the engine *engine_name*, if any."""
     return engine_registry.get_sorts(engine_name) if engine_name else {}
 
 
-def saved_image_message(path: Path, saved: SavedImage, shape) -> str:
+def saved_image_message(path: Path, saved: SavedImage) -> str:
     """Return the message telling what :func:`result_to_nifti` wrote."""
-    grid = "×".join(str(n) for n in shape[:3])
+    shape = "×".join(str(n) for n in saved.image.shape[:3])
     value = (
         "1 at each voxel (mask)" if saved.value is None
         else f"the max of {str(saved.value)!r} per voxel"
     )
     message = (
         f"Saved NIfTI image to: {path} ({saved.voxels} voxels of the "
-        f"{grid} template grid, value: {value})"
+        f"{shape} {saved.grid} grid, value: {value})"
     )
     if saved.outside:
         rows = "1 row" if saved.outside == 1 else f"{saved.outside} rows"
-        message += f"; {rows} outside the template grid skipped"
+        message += f"; {rows} outside the {saved.grid} grid skipped"
     return message
 
 
@@ -445,16 +570,17 @@ def read_nifti(path) -> nib.Nifti1Image:
         return nib.Nifti2Image.from_bytes(data)
 
 
-def _save_nifti(app, df: pd.DataFrame, request: SaveRequest) -> None:
-    """Save *df* as the NIfTI image of *request* and tell what was written."""
-    template = engine_template(app._nl)
-    saved = result_to_nifti(
-        df, template, _engine_sorts(app.settings.engine_name), request
-    )
+def _save_nifti(app, block, request: SaveRequest) -> None:
+    """
+    Save the result *block* as the NIfTI image of *request*.
+
+    What was written is told.
+    """
+    saved = result_image(app, block, request)
     write_nifti(saved.image, request.path)
     app.console.print(
-        saved_image_message(request.path, saved, template.shape),
-        style="green", markup=False,
+        saved_image_message(request.path, saved), style="green",
+        markup=False,
     )
 
 
@@ -725,13 +851,17 @@ def _save_failed(app, message: str) -> None:
     )
 
 
-def _save_frame(app, df: pd.DataFrame, request: SaveRequest) -> None:
-    """Save *df* as *request* asks: NIfTI for ``.nii(.gz)``, else a table."""
+def _save_block(app, block, request: SaveRequest) -> None:
+    """
+    Save the result *block* as *request* asks.
+
+    It is saved as NIfTI for ``.nii(.gz)``, else as a table.
+    """
     try:
         if is_nifti_path(request.path):
-            _save_nifti(app, df, request)
+            _save_nifti(app, block, request)
         else:
-            _save_table(app.console, df, request.path)
+            _save_table(app.console, block.frame, request.path)
     except Exception as exc:
         _save_failed(app, str(exc))
 
@@ -761,7 +891,7 @@ def cmd_save(app, arg: str) -> None:
     several = len(app.results) > 1
     for block in app.results:
         path = _save_path(request.path, block.title, several)
-        _save_frame(app, block.frame, request._replace(path=path))
+        _save_block(app, block, request._replace(path=path))
 
 
 def last_result_image(app, request: SaveRequest) -> Optional[Path]:
@@ -779,11 +909,7 @@ def last_result_image(app, request: SaveRequest) -> Optional[Path]:
         )
         return None
     try:
-        template = engine_template(app._nl)
-        saved = result_to_nifti(
-            app.results[-1].frame, template,
-            _engine_sorts(app.settings.engine_name), request,
-        )
+        saved = result_image(app, app.results[-1], request)
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
@@ -791,8 +917,8 @@ def last_result_image(app, request: SaveRequest) -> Optional[Path]:
     os.close(fd)
     write_nifti(saved.image, name)
     app.console.print(
-        saved_image_message(Path(name), saved, template.shape),
-        style="green", markup=False,
+        saved_image_message(Path(name), saved), style="green",
+        markup=False,
     )
     return Path(name)
 

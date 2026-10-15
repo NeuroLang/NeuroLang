@@ -1,6 +1,7 @@
 """Paged display of query results as tables."""
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -18,11 +19,14 @@ class ResultBlock:
     The rows of a query result and how many of them have been shown.
 
     The title names the ``obtain`` of a SQUALL program with several.
+    *sorts* holds the sort of each column of the frame, as the query
+    tells it (see :func:`~.provenance.column_sorts`), or None.
     """
 
     frame: pd.DataFrame
     title: str = ""
     shown: int = 0
+    sorts: Optional[tuple] = None
 
     @property
     def remaining(self) -> int:

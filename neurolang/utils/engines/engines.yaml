@@ -36,13 +36,16 @@ engines:
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
     #
     # ``space`` tells what the columns of a sort of points are, for
-    # ``.save out.nii.gz`` in the REPL, which writes a result on the grid
-    # of the engine's template (the MNI mask): ``space: voxel`` marks the
-    # indices (i, j, k) of that grid, written as they are; ``space: mm``
-    # coordinates (x, y, z) in millimetres, converted to the nearest
-    # voxel with the inverse of the template's affine.  A result's
-    # columns are matched to these sorts by name.  ``atlas_voxel`` indexes
-    # another grid, the 2 mm atlas's, and declares no space.
+    # ``.save out.nii.gz`` in the REPL, which writes a result on a grid:
+    # ``space: voxel`` marks the indices (i, j, k) of the grid the sort
+    # names with ``grid`` (an atlas of the engine, by its key under
+    # ``atlases``), by default that of the engine's template (the MNI
+    # mask), written as they are; ``space: mm`` coordinates (x, y, z) in
+    # millimetres, converted to the nearest voxel of the template with
+    # the inverse of its affine.  A result's columns take the sort of the
+    # argument of the predicate their variable comes from in the query,
+    # else of the sort they are named as.  ``atlas_voxel`` indexes the
+    # grid of the 2 mm Schaefer atlas, not the template's.
     sorts:
       study:
         columns: [study_id]
@@ -69,6 +72,8 @@ engines:
       atlas_voxel:
         columns: [i, j, k]
         type: int
+        space: voxel
+        grid: schaefer
         description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
       label:
         columns: [label]
