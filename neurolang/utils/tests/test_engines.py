@@ -516,3 +516,66 @@ def _engine_yaml(tmp_path, extra: str, more: str = "") -> Path:
         + more
     )
     return path
+
+
+class TestSortSpaces:
+    """Check the sorts declaring the space of their coordinates."""
+
+    def test_space_is_read(self, tmp_path):
+        """Check a sort keeps its declared space, empty by default."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      voxel: {columns: [i, j, k], type: int, space: voxel}\n"
+            "      mni: {columns: [x, y, z], type: float, space: mm}\n"
+            "      study: {columns: [s], type: int}\n"
+        )
+        sorts = engine_registry.get_sorts("e", path)
+        assert sorts["voxel"].space == "voxel"
+        assert sorts["mni"].space == "mm"
+        assert sorts["study"].space == ""
+
+    def test_unknown_space_is_rejected(self, tmp_path):
+        """Check a space is ``voxel`` or ``mm``."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      voxel: {columns: [i, j, k], type: int, space: grid}\n"
+        )
+        with pytest.raises(ValueError, match="grid"):
+            engine_registry.get_sorts("e", path)
+
+    def test_neurosynth_spaces(self):
+        """Check neurosynth declares its template grid and MNI millimetres."""
+        from neurolang.utils import engine_registry
+
+        sorts = engine_registry.get_sorts("neurosynth")
+        assert sorts["voxel"].space == "voxel"
+        assert sorts["mni"] == engine_registry.Sort(
+            "mni", ("x", "y", "z"), "float", sorts["mni"].description, "mm"
+        )
+        # The Schaefer atlas grid is not the template's.
+        assert sorts["atlas_voxel"].space == ""
+
+
+class TestEngineTemplate:
+    """Check an engine keeps the template its voxel indices refer to."""
+
+    def test_the_template_is_the_mask(self, small_neurosynth):
+        """Check the voxel grid of neurosynth is the MNI mask's."""
+        template = small_neurosynth.template
+        assert template.shape == (4, 4, 4)
+        assert np.array_equal(template.affine, np.eye(4))
+
+    def test_no_template_without_a_mask(self, tmp_path):
+        """Check an engine not requiring the MNI mask has no template."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text("engines:\n  e:\n    description: bare\n")
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        assert nl.template is None
