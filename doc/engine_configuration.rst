@@ -129,6 +129,47 @@ whose probability column is not an argument.
 :func:`~neurolang.utils.engine_registry.get_signatures` returns the
 arguments of each predicate.
 
+A sort of points may declare its ``space``: ``space: voxel`` marks the
+indices ``(i, j, k)`` of a grid, and ``space: mm`` coordinates
+``(x, y, z)`` in millimetres in the space of the engine's template, the
+MNI image of an engine with ``requires_mni_mask`` (``nl.template`` on the
+engine :func:`~neurolang.utils.engine_registry.build_engine` returns).
+The grid of a sort of voxels is that of the template unless the sort
+names another with ``grid``: that of an atlas of the engine, by its key
+under ``atlases``.  The Schaefer atlas of ``neurosynth`` has its own
+2 mm grid, which ``labels`` and ``schaefer_voxels`` index::
+
+    atlases:
+      schaefer: {n_rois: 100, resolution_mm: 2, yeo_networks: 17}
+    sorts:
+      voxel: {columns: [i, j, k], type: int, space: voxel}
+      mni: {columns: [x, y, z], type: float, space: mm}
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+
+A grid is ``template`` or the key of an atlas of the engine, and only a
+sort of ``space: voxel`` names one; the configuration is rejected
+otherwise.  The engine holds the image of each grid in ``nl.grids``, by
+name: the template's, as ``template``, and each atlas's, registered
+when the atlas is loaded.
+
+The REPL's ``.save out.nii.gz`` (and ``.view``) writes a result on a
+grid, with its shape and affine.  Each column of the result has the sort
+of the argument of the predicate its variable is in, in the last query:
+``ans(x, y, z) :- voxel(x, y, z)`` holds voxel indices of the template
+grid, whatever the names of its columns, ``ans(l, i, j, k) :- labels(l,
+i, j, k)`` indices of the Schaefer atlas grid.  The sorts follow from
+the predicates declaring their ``arguments``, then from the rules defined
+from them, in Datalog as in SQUALL (``obtain every Voxel in 3D``).  The
+columns of a ``space: voxel`` sort are written as they are on its grid,
+those of an ``mm`` sort converted to the nearest voxel of the template.
+A column of unknown sort, such as one of a relation loaded with
+``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
+X Y Z`` give the columns, on the template's grid (see ``.help save``).
+
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
 offers the nouns, capitalised; after ``every Study that`` the verbs whose
 first entity is a study (``mentions``, ``reports``); after ``every Term

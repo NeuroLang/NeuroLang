@@ -666,6 +666,36 @@ def test_post_probabilistic_aggregation():
     assert_almost_equal(res.to_unnamed(), expected)
 
 
+
+@pytest.mark.parametrize(
+    "query, columns, rows",
+    [
+        ("ans(count(s)) :- pain(s)", ("count",), {(2,)}),
+        (
+            "ans(t, count(s)) :- term(s, t)", ("t", "count"),
+            {("pain", 2), ("fear", 1)},
+        ),
+    ],
+)
+def test_aggregate_query_on_a_rule(query, columns, rows):
+    """
+    An aggregate in the head of a query on one rule-defined predicate.
+
+    It used to raise AttributeError: 'FunctionApplication' object has no
+    attribute 'name', the aggregate being taken for a variable.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s2", "pain"), ("s2", "fear")], name="tfidf"
+    )
+    nl.execute_datalog_program(
+        "pain(s) :- tfidf(s, 'pain')\nterm(s, t) :- tfidf(s, t)"
+    )
+    res = nl.execute_datalog_program(query)
+    assert res.columns == columns
+    result = res.as_pandas_dataframe().itertuples(index=False, name=None)
+    assert set(result) == rows
+
 def test_empty_result_query():
     nl = NeurolangPDL()
     A = nl.add_tuple_set([("f",), ("d",)], name="A")
@@ -1836,3 +1866,26 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
+
+
+def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
+    """
+    Solve a probabilistic rule over an empty deterministic predicate.
+
+    ``m`` has no tuple, and so no relation in the solution of the
+    deterministic stratum: selecting ``m(s, "memory")`` crashed.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "memory", 0.5), ("s2", "pain", 0.6)], name="tfidf"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.execute_datalog_program(
+        "m(s, t) :- tfidf(s, t, v) & (v > 100)\n"
+        "q(x, PROB(x)) :- m(s, 'memory'), selected_study(s), tfidf(s, x, v)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.x, e.p), e.q(e.x, e.p))
+    assert len(res) == 0

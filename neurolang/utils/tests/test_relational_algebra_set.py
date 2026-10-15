@@ -1220,6 +1220,22 @@ def test_explode_multi_columns(ra_module):
     assert result == expected
 
 
+def test_explode_multi_columns_empty_relation(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=[(0, 1, frozenset({(3, 4)}))],
+    ).selection({"x": 2})
+    for empty in (
+        relation,
+        ra_module.NamedRelationalAlgebraFrozenSet(
+            columns=["x", "y", "z"], iterable=[]
+        ),
+    ):
+        result = empty.explode("z", ("v", "w"))
+        assert result.columns == ("x", "y", "z", "v", "w")
+        assert len(result) == 0
+
+
 def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y"],

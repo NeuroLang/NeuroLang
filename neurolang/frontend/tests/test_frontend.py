@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ... import expressions as exp, frontend
+from ... import exceptions, expressions as exp, frontend
 from ...datalog import DatalogProgram, Fact, Implication
 from ...exceptions import NeuroLangException, UnsupportedProgramError, WrongArgumentsInPredicateError
 from ...expression_walker import ExpressionBasicEvaluator
@@ -638,6 +638,161 @@ def test_neurolang_dl_datalog_code_with_query():
         )
 
 
+def _voxel_engine(engine_class):
+    """
+    Return an *engine_class* engine with voxels, peaks and a distance.
+    """
+    nl = engine_class()
+
+    @nl.add_symbol
+    def euclidean(i, j, k, i1, j1, k1) -> float:
+        return ((i - i1) ** 2 + (j - j1) ** 2 + (k - k1) ** 2) ** .5
+
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1), (9, 9, 9)], name="voxel")
+    nl.add_tuple_set(
+        [(0, 0, 0, "s1"), (1, 1, 2, "s2")], name="peak_reported"
+    )
+    return nl
+
+
+ENGINES = pytest.mark.parametrize(
+    "engine_class", [frontend.NeurolangDL, frontend.NeurolangPDL],
+    ids=["DL", "PDL"],
+)
+
+
+@ENGINES
+def test_unbound_variables_rejected_at_definition(engine_class):
+    nl = _voxel_engine(engine_class)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(
+            "reports_close(i, j, k, s) :- "
+            "(euclidean(i, j, k, i1, j1, k1) < 2.) & voxel(i, j, k) "
+            "& peak_reported(i, j, k, s)"
+        )
+    exc = exc_info.value
+    assert exc.rule == "reports_close"
+    assert exc.variables == ("i1", "j1", "k1")
+    assert str(exc).startswith(
+        "In reports_close: the variables i1, j1, k1 appear only in "
+        "`euclidean(i, j, k, i1, j1, k1) < 2.0`"
+    )
+    assert "positive atom" in str(exc)
+    assert "voxel(i1, j1, k1)" in exc.suggestion
+    assert "normal form" not in exc.suggestion
+    assert not nl.current_program
+
+
+@pytest.mark.parametrize(
+    "body, variables",
+    [
+        ("voxel(i, j, k) & (i < m)", ("m",)),
+        ("voxel(i, j, k) & (i == m + 1)", ("m",)),
+        ("voxel(i, j, k) & (d < 2) & (e == d + 1)", ("d", "e")),
+        ("voxel(i, j, k) & ~peak_reported(i, j, k, s) & (s != 'a')",
+         ("s",)),
+    ],
+    ids=["comparison", "equality-over-unbound", "chain", "negation"],
+)
+def test_unbound_variables_named_in_error(body, variables):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(f"p(i) :- {body}")
+    assert exc_info.value.variables == variables
+    assert ", ".join(variables) in str(exc_info.value)
+
+
+def test_unbound_variables_in_aggregation_rule_rejected():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError, match="i1, j1"):
+        nl.execute_datalog_program(
+            "n_close(i, count(s)) :- peak_reported(i, j, k, s) "
+            "& (euclidean(i, j, k, i1, j1, k1) < 2.)"
+        )
+
+
+@pytest.mark.parametrize("head", ["ans(i)", "ans(i, m)"])
+def test_unbound_variables_in_query_rejected(head):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(f"{head} :- voxel(i, j, k) & (i < m)")
+    assert exc_info.value.rule is None
+    assert str(exc_info.value).startswith(
+        "In the query: the variable m appears only in `i < m`"
+    )
+
+
+@ENGINES
+def test_unbound_head_variable_named_when_queried_unbound(engine_class):
+    nl = _voxel_engine(engine_class)
+    nl.execute_datalog_program(
+        "far(i, s) :- peak_reported(i0, j, k, s) & (i0 != i)"
+    )
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program("ans(i, s) :- far(i, s)")
+    assert exc_info.value.rule == "far"
+    assert exc_info.value.variables == ("i",)
+
+
+def test_unbound_head_variable_bound_by_query_constant():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    res = nl.execute_datalog_program(
+        """
+        far(i, s) :- peak_reported(i0, j, k, s) & (i0 != i)
+        ans(s) :- far(0, s)
+        """
+    )
+    assert res.to_unnamed() == {("s2",)}
+
+
+def test_variables_only_in_negations_left_to_negation_check():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    nl.execute_datalog_program(
+        "p(i) :- voxel(i, j, k) & ~peak_reported(i, j, k, s)"
+    )
+    with pytest.raises(exceptions.NegativeFormulaNotSafeRangeException):
+        nl.execute_datalog_program("ans(i) :- p(i)")
+
+
+@ENGINES
+def test_functions_and_comparisons_on_bound_variables_accepted(
+    engine_class
+):
+    nl = _voxel_engine(engine_class)
+    res = nl.execute_datalog_program(
+        """
+        close(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) \
+            & (euclidean(i, j, k, i1, j1, k1) < 2.)
+        ans(i, j, k, s) :- close(i, j, k, s)
+        """
+    )
+    assert res.to_unnamed() == {
+        (0, 0, 0, "s1"), (1, 1, 1, "s1"), (1, 1, 1, "s2")
+    }
+
+
+@pytest.mark.parametrize(
+    "rule, expected",
+    [
+        ("p(i, s) :- peak_reported(i0, j, k, s) & (i == i0 + 1)",
+         {(1, "s1"), (2, "s2")}),
+        ("p(e, s) :- peak_reported(i, j, k, s) & (e == d + 1) "
+         "& (d == i * 10)", {(1, "s1"), (11, "s2")}),
+        ("p(d, s) :- peak_reported(i, j, k, s) & (d == i)",
+         {(0, "s1"), (1, "s2")}),
+        ("p(d, s) :- peak_reported(i, j, k, s) & (d == 3)",
+         {(3, "s1"), (3, "s2")}),
+        ("p(i, s) :- peak_reported(i, j, k, s) & (d == euclidean(i, j, k, "
+         "0, 0, 0)) & (d < 1)", {(0, "s1")}),
+    ],
+    ids=["expression", "chain", "variable", "constant", "function"],
+)
+def test_equality_defined_variables_accepted(rule, expected):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    res = nl.execute_datalog_program(f"{rule}\nans(x, s) :- p(x, s)")
+    assert res.to_unnamed() == expected
+
+
 def test_neurolang_dl_aggregation():
     neurolang = frontend.NeurolangDL()
     q = neurolang.new_symbol(name="q")
@@ -950,6 +1105,66 @@ def test_neurolang_dl_region_destroy_tuple_coords():
         ("B", 2, 0, 0),
     }
     assert set(ans) == expected
+
+
+
+SCHAEFER_INIT = """
+schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
+schaefer_label(l) :- schaefer(l, r)
+labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+"""
+SCHAEFER_NAMES = {1: "17Networks_LH_A", 2: "17Networks_LH_B", 3: "17Networks_RH_C"}
+
+
+def _small_atlas_regions():
+    """
+    Return the labelled regions of a small 3-parcel atlas image.
+
+    Returns
+    -------
+    list of tuple
+        ``(label, region)`` rows, as the engines load deterministic
+        atlases.
+    """
+    import nibabel
+
+    data = np.zeros((4, 3, 2), dtype=np.int16)
+    data[0, :, 0] = 1
+    data[1:3, 0, :] = 2
+    data[3, 2, 1] = 3
+    image = nibabel.Nifti1Image(data, np.diag([2.0, 2.0, 2.0, 1.0]))
+    regions = ExplicitVBR.from_spatial_image_labels(image, [1, 2, 3])
+    return [(SCHAEFER_NAMES[k], regions[k]) for k in (1, 2, 3)], data
+
+
+def test_schaefer_shaped_engine_keeps_atlas_regions():
+    nl = frontend.NeurolangPDL()
+    rows, data = _small_atlas_regions()
+    nl.add_tuple_set(rows, name="schaefer")
+    declared_type = nl.symbol_table["schaefer"].type
+
+    nl.execute_datalog_program(SCHAEFER_INIT)
+
+    assert nl.symbol_table["schaefer"].type == declared_type
+    regions = nl.execute_datalog_program("ans(l, r) :- schaefer(l, r)")
+    assert set(regions.to_unnamed()) == set(rows)
+    assert all(
+        isinstance(region, ExplicitVBR) for _, region in regions.to_unnamed()
+    )
+
+    expected = {
+        (name, *map(int, voxel))
+        for label, name in SCHAEFER_NAMES.items()
+        for voxel in np.argwhere(data == label)
+    }
+    labels = nl.execute_datalog_program("ans(l, i, j, k) :- labels(l, i, j, k)")
+    assert set(labels.to_unnamed()) == expected
+    voxels = nl.execute_datalog_program(
+        "ans(i, j, k, l) :- schaefer_voxels(i, j, k, l)"
+    )
+    assert {(l, i, j, k) for i, j, k, l in voxels.to_unnamed()} == expected
+    label_names = nl.execute_datalog_program("ans(l) :- schaefer_label(l)")
+    assert set(label_names.to_unnamed()) == {(name,) for name in SCHAEFER_NAMES.values()}
 
 
 @pytest.mark.skip

@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from operator import itemgetter
 from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
@@ -820,8 +821,11 @@ class NamedRelationalAlgebraFrozenSet(
             new_container = self._container.assign(
                 **{dst_columns[-1]: self._container[src_column]}
             ).explode(dst_columns[-1], ignore_index=True)
-            for c, v in zip(dst_columns, zip(*new_container[dst_columns[-1]])):
-                new_container[c] = v
+            # Pick each tuple position with ``map``: unlike unzipping the
+            # tuples, this also yields the columns of an empty relation.
+            exploded = new_container[dst_columns[-1]]
+            for i, c in enumerate(dst_columns):
+                new_container[c] = exploded.map(itemgetter(i))
             new_columns = self.columns + dst_columns
             new_container = new_container[list(new_columns)]
 
