@@ -15,7 +15,9 @@ from typing import Optional
 
 from rich.markup import escape
 from rich.panel import Panel
-from rich.syntax import Syntax
+from rich.text import Text
+
+from neurolang.utils import query_highlight
 
 from .commands import command
 from .interrupt import call_interruptibly
@@ -101,16 +103,45 @@ def _target_language(app, flag: Optional[str], config) -> str:
     return "squall" if app.settings.squall else "datalog"
 
 
+# The rich styles of the kinds of fragments of a query, as the prompt
+# highlights them (``editing.STYLE``).
+QUERY_STYLES = {
+    "keyword": "bold magenta",
+    "operator": "bold blue",
+    "predicate": "blue",
+    "string": "green",
+    "number": "cyan",
+}
+
+
+def query_text(query: str, language: str, indent: str = "") -> Text:
+    """Return *query* highlighted as *language*, its lines indented."""
+    text = Text()
+    for n, line in enumerate(query.strip().split("\n")):
+        if n:
+            text.append("\n")
+        text.append(indent)
+        for kind, fragment in query_highlight.tokens(
+            line, language == "squall"
+        ):
+            text.append(fragment, style=QUERY_STYLES.get(kind, ""))
+    return text
+
+
 def _call_text(step) -> str:
-    """Return the tool call of *step* as ``name(arg=value, ...)``."""
+    """Return the tool call of *step* without its query: ``name(a=v)``."""
     arguments = ", ".join(
         f"{key}={value!r}" for key, value in step.arguments.items()
+        if key != "query"
     )
     return f"{step.action}({arguments})"
 
 
-def _step_printer(app):
-    """Return the function printing a step of the agent, dimmed."""
+def _step_printer(app, language: str):
+    """
+    Return the function printing a step of the agent, dimmed, but for
+    the query of its tool call, highlighted as *language*.
+    """
     def print_step(step) -> None:
         console = app.err_console
         if step.thought:
@@ -123,10 +154,11 @@ def _step_printer(app):
             summary = observation[0] if observation else ""
             if len(observation) > 1:
                 summary += f" (+{len(observation) - 1} lines)"
-            console.print(
-                f"  [dim]→ {escape(_call_text(step))}[/dim]\n"
-                f"    [dim]{escape(summary)}[/dim]"
-            )
+            console.print(f"  [dim]→ {escape(_call_text(step))}[/dim]")
+            query = step.arguments.get("query")
+            if isinstance(query, str) and query.strip():
+                console.print(query_text(query, language, "      "))
+            console.print(f"    [dim]{escape(summary)}[/dim]")
     return print_step
 
 
@@ -143,10 +175,9 @@ def _switch_language(app, language: str) -> None:
 
 def _show_result(app, result) -> None:
     """Print the query of the agent's *result* and put it in the prompt."""
-    lexer = "text"
     if result.valid:
         app.console.print(Panel(
-            Syntax(result.query, lexer, word_wrap=True),
+            query_text(result.query, result.language),
             title=f"{result.language.upper()} query", border_style="green",
         ))
         if result.explanation:
@@ -158,7 +189,7 @@ def _show_result(app, result) -> None:
         )
         if result.query:
             app.console.print(Panel(
-                Syntax(result.query, lexer, word_wrap=True),
+                query_text(result.query, result.language),
                 title="last attempt", border_style="red",
             ))
     tokens = result.usage.get("input", 0) + result.usage.get("output", 0)
@@ -205,7 +236,7 @@ def cmd_ask(app, arg: str) -> None:
             strategy or state.strategy,
             engine_name=app.settings.engine_name,
             loaded=app.loaded_relations, client=state.client,
-            on_step=_step_printer(app),
+            on_step=_step_printer(app, language),
         )
         app.err_console.print(
             f"[dim]Asking {provider.name} ({provider.model or provider.api}"

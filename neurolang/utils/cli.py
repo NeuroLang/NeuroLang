@@ -84,7 +84,7 @@ from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.logic import ExistentialPredicate
 from neurolang.probabilistic.expressions import Condition
-from neurolang.utils import engine_registry
+from neurolang.utils import engine_registry, query_highlight
 from neurolang.utils.sort_hints import sort_notes
 
 
@@ -1376,11 +1376,22 @@ def _print_step(step) -> None:
         )
 
 
-def _print_step_verbose(step) -> None:
+def _verbose_step_printer(language: str):
     """
-    Print a step of the LLM assistant on stderr: its thought, the tool
-    called with its arguments and the start of what it returned.
+    Return the function printing a step of the LLM assistant on stderr:
+    its thought, the tool called with its arguments, its query on its
+    lines and highlighted as *language*, and the start of what it
+    returned.
     """
+    def print_step(step) -> None:
+        _print_step_verbose(step, language)
+    return print_step
+
+
+def _print_step_verbose(step, language: str = "datalog") -> None:
+    """Print a step of the LLM assistant: see :func:`_verbose_step_printer`."""
+    from neurolang.utils.llm.trace import query_lines
+
     if not step.action:
         return
     lines = []
@@ -1388,8 +1399,14 @@ def _print_step_verbose(step) -> None:
         lines.append(f"  thought: {' '.join(step.thought.split())}")
     arguments = ", ".join(
         f"{name}={value!r}" for name, value in step.arguments.items()
+        if name != "query"
     )
     lines.append(f"  → {step.action}({arguments})")
+    query = step.arguments.get("query")
+    if isinstance(query, str) and query.strip():
+        lines += query_lines(
+            query, language, query_highlight.use_color(sys.stderr), "      "
+        )
     observation = step.observation.strip().splitlines()
     shown = observation[:VERBOSE_OBSERVATION_LINES]
     lines += [f"    {line}" for line in shown]
@@ -1398,7 +1415,7 @@ def _print_step_verbose(step) -> None:
     print("\n".join(lines), file=sys.stderr, flush=True)
 
 
-def _ask_reporting(args, provider, config):
+def _ask_reporting(args, provider, config, language):
     """
     Return the chat client and the step callback of ``--ask``, as
     ``--verbose`` asks: one line per step, the steps in full (-v), or
@@ -1410,11 +1427,11 @@ def _ask_reporting(args, provider, config):
 
         client = TracingClient(
             make_client(provider, config.assistant.timeout),
-            Printer(full=True).show,
+            Printer(full=True, language=language).show,
         )
         return client, None
     if args.verbose == 1:
-        return None, _print_step_verbose
+        return None, _verbose_step_printer(language)
     return None, _print_step
 
 
@@ -1450,7 +1467,7 @@ def _run_ask(args) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
-    client, on_step = _ask_reporting(args, provider, config)
+    client, on_step = _ask_reporting(args, provider, config, language)
     agent = make_agent(
         nl, provider, config.assistant, language, args.strategy,
         engine_name=args.engine, client=client, on_step=on_step,
@@ -1463,9 +1480,12 @@ def _run_ask(args) -> None:
     if not result.valid:
         print(f"Error: no valid query: {result.error}", file=sys.stderr)
         if result.query:
-            print(f"Last attempt:\n{result.query}", file=sys.stderr)
+            query = query_highlight.highlight(
+                result.query, language, sys.stderr
+            )
+            print(f"Last attempt:\n{query}", file=sys.stderr)
         sys.exit(1)
-    print(result.query)
+    print(query_highlight.highlight(result.query, language, sys.stdout))
     if result.explanation:
         print(f"-- {result.explanation}", file=sys.stderr)
     if args.run or args.save or args.view:

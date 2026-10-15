@@ -16,9 +16,14 @@ QUESTION -vv``.
 """
 
 import json
+import re
 import sys
 import time
 from typing import Callable
+
+from neurolang.utils import query_highlight
+
+_ACTION_INPUT = re.compile(r"Action[ _]Input\s*:", re.IGNORECASE)
 
 
 class TracingClient:
@@ -79,18 +84,21 @@ class Printer:
 
     Messages are cut to *limit* characters, and system prompts to
     *system_limit*, unless *full*; *hint* tells how to see them whole.
-    Other kinds of events are printed by the methods ``_<event>`` of
-    subclasses.
+    The queries the model writes in its tool calls are shown on their
+    lines, highlighted as *language* on a terminal. Other kinds of
+    events are printed by the methods ``_<event>`` of subclasses.
     """
 
     def __init__(self, stream=None, full: bool = False, limit: int = 4000,
-                 system_limit: int = 800, hint: str = ""):
+                 system_limit: int = 800, hint: str = "",
+                 language: str = "datalog"):
         self.stream = stream or sys.stderr
         self.full = full
         self.limit = limit
         self.system_limit = system_limit
         self.hint = hint
-        self.color = getattr(self.stream, "isatty", lambda: False)()
+        self.language = language
+        self.color = query_highlight.use_color(self.stream)
 
     def show(self, event: dict) -> None:
         """Print *event*."""
@@ -122,10 +130,26 @@ class Printer:
         self._rule("─", f"call {event['call']} ← {event['seconds']:.1f} s"
                         + (f", {usage}" if usage else ""), "32")
         if event["text"]:
-            self._write(self._cut(event["text"], self.limit))
+            self._reply_text(event["text"])
         for call in event["tool_calls"]:
-            self._write(f"tool call {call['name']}: "
-                        + json.dumps(call["arguments"], ensure_ascii=False))
+            self._write(f"tool call {call['name']}:")
+            self._write("\n".join(argument_lines(
+                call["arguments"], self.language, self.color, "  "
+            )))
+
+    def _reply_text(self, text: str):
+        """Print a reply, with the arguments of its text action laid out."""
+        from .agent import parse_text_action
+
+        start = _ACTION_INPUT.search(text)
+        action = parse_text_action(text, self.language) if start else None
+        if action is None or "query" not in action.arguments:
+            self._write(self._cut(text, self.limit))
+            return
+        self._write(self._cut(text[:start.end()].rstrip(), self.limit))
+        self._write("\n".join(argument_lines(
+            action.arguments, self.language, self.color, "  "
+        )))
 
     def _message(self, message: dict):
         role = message.get("role", "?")
@@ -147,6 +171,34 @@ class Printer:
 
     def _write(self, text: str):
         print(text, file=self.stream)
+
+
+def argument_lines(arguments: dict, language: str, color: bool,
+                   indent: str = "") -> list:
+    """
+    Return the lines showing the *arguments* of a tool call: its query on
+    its own lines, highlighted as *language* if *color*, then the others.
+    """
+    lines = []
+    query = arguments.get("query")
+    if isinstance(query, str):
+        lines += query_lines(query, language, color, indent)
+    for name, value in arguments.items():
+        if name != "query":
+            value = value if isinstance(value, str) else json.dumps(
+                value, ensure_ascii=False
+            )
+            lines.append(f"{indent}{name}: {value}")
+    return lines
+
+
+def query_lines(query: str, language: str, color: bool,
+                indent: str = "") -> list:
+    """Return the lines of *query*, highlighted as *language* if *color*."""
+    text = query.strip()
+    if color:
+        text = query_highlight.ansi(text, language)
+    return [indent + line for line in text.split("\n")]
 
 
 def message_text(message: dict) -> str:

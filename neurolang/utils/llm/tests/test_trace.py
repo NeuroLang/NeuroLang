@@ -123,3 +123,31 @@ def test_ask_very_verbose_prints_the_messages(ask, capsys):
     assert "─── call 2 → 2 new message(s) from #2" in err
     assert "Observation: Facts with values containing 'pain'" in err
     assert "more characters" not in err
+
+
+def test_printer_lays_out_the_queries_of_actions():
+    stream = io.StringIO()
+    printer = Printer(stream)
+    reply = (
+        'Thought: run it\nAction: run_query\nAction Input: {"query": '
+        '"q(s) :- mentions(s, \'pain\')\\nans(s) :- q(s)"}'
+    )
+    client = TracingClient(ScriptedClient([reply]), printer.show)
+    client.complete([{"role": "user", "content": "Which studies?"}])
+    text = stream.getvalue()
+    assert "Action Input:\n  q(s) :- mentions(s, 'pain')\n  ans(s) :- q(s)" \
+        in text
+    assert "\\n" not in text
+
+
+def test_ask_verbose_shows_queries_on_their_lines(ask, capsys):
+    two_lines = (
+        'Action: final_answer\nAction Input: {"query": "q(s) :- '
+        'mentions(s, \'pain\')\\nans(s) :- q(s)", "explanation": "x"}'
+    )
+    ask("-v", replies=[two_lines])
+    out, err = capsys.readouterr()
+    assert out.strip() == "q(s) :- mentions(s, 'pain')\nans(s) :- q(s)"
+    assert ("  → final_answer(explanation='x')\n"
+            "      q(s) :- mentions(s, 'pain')\n"
+            "      ans(s) :- q(s)\n") in err

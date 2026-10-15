@@ -100,7 +100,8 @@ def test_ask_with_react_strategy_prints_the_steps(app):
     )
     app._run_line(".ask --react Which studies mention pain?")
     text = output(app)
-    assert "→ check_query(query=" in text and "The query is valid." in text
+    assert "→ check_query()\n      ans(s) :- mentions(s, 'pain')" in text
+    assert "The query is valid." in text
     assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
 
 
@@ -188,3 +189,13 @@ def test_next_prompt_is_prefilled(app):
     assert app.pending_input == ""
     assert app.last_query == ("ans(s) :- mentions(s, 'pain')", False)
     assert app.results and list(app.results[0].frame.iloc[:, 0]) == [1]
+
+
+def test_query_text_styles_the_query():
+    from neurolang.utils.tui.assistant import query_text
+
+    text = query_text("q(s) :- study(s)\nans(s) :- q(s)", "datalog", "  ")
+    assert text.plain == "  q(s) :- study(s)\n  ans(s) :- q(s)"
+    styles = {text.plain[span.start:span.end]: span.style
+              for span in text.spans}
+    assert styles[":-"] == "bold blue" and styles["study"] == "blue"

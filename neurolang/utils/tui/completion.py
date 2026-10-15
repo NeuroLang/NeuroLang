@@ -17,10 +17,11 @@ from prompt_toolkit.completion import Completer, Completion
 
 from neurolang.frontend.datalog.standard_syntax import AGGREGATION_FUNCS
 from neurolang.utils.interactive_parsing import LarkCompleter
+from neurolang.utils.query_highlight import DATALOG_KEYWORDS
 
 from .commands import COMMANDS
 from neurolang.utils import squall_sorts
-from .squall_completion import (
+from neurolang.utils.squall_completion import (
     SquallGrammarOptions,
     allowed_terminals,
     current_sentence,
@@ -47,10 +48,7 @@ GRAMMAR_OPERATORS = frozenset({":-", "~", "//", "::", ":=", "-:"})
 # The grammar's words not worth offering.
 GRAMMAR_NOISE = frozenset({"lambda", "st"})
 # The words of the Datalog grammar, which cannot name variables.
-KEYWORDS = frozenset({
-    "AGGREGATE", "EXISTS", "MARG", "PROB", "SUCC", "ans", "exists",
-    "False", "True", "lambda", "st",
-})
+KEYWORDS = DATALOG_KEYWORDS
 
 
 def identifier_prefix(text: str) -> str:
@@ -178,7 +176,7 @@ class NeuroLangReplCompleter(Completer):
     engine's predicates, by name; it is called at each completion.
     Datalog input is completed with the LALR grammar's *lark_completer*,
     SQUALL input with the Earley grammar's *squall_grammar* (see
-    :mod:`~.squall_completion`). Without them, or where the input is
+    :mod:`~neurolang.utils.squall_completion`). Without them, or where the input is
     invalid, the predicates and *squall_keywords* starting with the word
     being typed are offered. *is_squall* tells whether the input is SQUALL.
     The predicates named in *hidden* are not offered in SQUALL, and

@@ -30,7 +30,7 @@ from neurolang.utils.tui.editing import (  # noqa: E402
     toolbar,
     toolbar_text,
 )
-from neurolang.utils.tui.squall_completion import (  # noqa: E402
+from neurolang.utils.squall_completion import (  # noqa: E402
     SquallGrammarOptions,
     current_sentence,
     squall_keywords,

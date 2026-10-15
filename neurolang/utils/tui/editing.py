@@ -8,8 +8,6 @@ suggestions from the history and the vi and emacs editing modes
 (``.mode vi|emacs``).
 """
 
-import functools
-import re
 from typing import Callable, Optional
 
 from prompt_toolkit.application.current import get_app
@@ -20,31 +18,16 @@ from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
 from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
-from neurolang.utils import engine_registry
+from neurolang.utils import engine_registry, query_highlight
 from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
 from neurolang.utils.predicate_catalog import predicate_catalog
 from .commands import MODES, sort_spec_text
-from .completion import KEYWORDS as DATALOG_KEYWORDS, NeuroLangReplCompleter
-from .squall_completion import SquallGrammarOptions, squall_keywords
+from .completion import NeuroLangReplCompleter
+from neurolang.utils.squall_completion import SquallGrammarOptions, squall_keywords
 from .value_completion import ColumnValues
 
-
-
-_TOKEN = re.compile(
-    r"""(?P<string>"[^"]*"?|'[^']*'?)"""
-    r"|(?P<number>\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
-    r"|(?P<word>[A-Za-z_][A-Za-z0-9_]*)(?P<call>\s*\()?"
-    r"|(?P<operator>:~:|:-|::|:=|-:|//|==|<=|>=|!=|\*\*|[^\w\s])"
-)
-
-# The operators of the Datalog grammar that are highlighted.
-DATALOG_OPERATORS = frozenset({
-    ":-", "\N{LEFTWARDS ARROW}", "-:", "\N{RIGHTWARDS ARROW}", "~",
-    "\N{NOT SIGN}", "//", "|", "::", ":~:", "^", ":=", "==", "!=", "<",
-    "<=", ">", ">=", "=", "&", "\N{LOGICAL AND}", "\N{THERE EXISTS}",
-})
 
 
 class NeuroLangLexer(Lexer):
@@ -55,7 +38,7 @@ class NeuroLangLexer(Lexer):
     grammar's keywords (``PROB``, ``EXISTS``…), its operators (``:-``,
     ``~``, ``//``, comparisons…) and the predicates applied to arguments
     are highlighted; in SQUALL, the keywords of its grammar
-    (:func:`~.squall_completion.squall_keywords`), which its completion
+    (:func:`~neurolang.utils.squall_completion.squall_keywords`), which its completion
     offers. Strings and numbers are highlighted in both. The fragments
     are styled with the classes ``keyword``, ``operator``, ``predicate``,
     ``string`` and ``number`` of :data:`STYLE`.
@@ -80,46 +63,8 @@ class NeuroLangLexer(Lexer):
         """Yield the ``(style, text)`` fragments of *line*."""
         if squall is None:
             squall = self._is_squall()
-        end = 0
-        for match in _TOKEN.finditer(line):
-            if match.start() > end:
-                yield "", line[end:match.start()]
-            yield from _styled(match, squall)
-            end = match.end()
-        if end < len(line):
-            yield "", line[end:]
-
-
-def _word_style(word: str, call: bool, squall: bool) -> str:
-    """Return the style of *word*, followed by ``(`` if *call*."""
-    if squall:
-        return "class:keyword" if word in _squall_words() else ""
-    if word in DATALOG_KEYWORDS:
-        return "class:keyword"
-    return "class:predicate" if call else ""
-
-
-def _styled(match, squall: bool):
-    """Yield the styled fragments of a token *match* of :data:`_TOKEN`."""
-    kind = match.lastgroup
-    if kind == "call":
-        word = match.group("word")
-        yield _word_style(word, True, squall), word
-        yield "", match.group("call")
-    elif kind == "word":
-        yield _word_style(match.group(0), False, squall), match.group(0)
-    elif kind == "operator":
-        operator = match.group(0)
-        highlighted = not squall and operator in DATALOG_OPERATORS
-        yield ("class:operator" if highlighted else ""), operator
-    else:
-        yield f"class:{kind}", match.group(0)
-
-
-@functools.lru_cache(maxsize=None)
-def _squall_words() -> frozenset:
-    """Return the keywords of the SQUALL grammar, as a set."""
-    return frozenset(squall_keywords())
+        for kind, text in query_highlight.tokens(line, squall):
+            yield (f"class:{kind}" if kind else ""), text
 
 
 # Readable on light and dark terminals: ANSI colours, no hex.
