@@ -268,6 +268,7 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
     missing transformer handler, etc.) confirms that the conditioned-rule
     transformer methods are wired up end-to-end.
     """
+    from neurolang.exceptions import UnboundVariablesError
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
@@ -287,6 +288,8 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
         pass  # Expected: reached rewrite_conditional_query — plumbing is OK
     except ForbiddenDisjunctionError:
         pass  # Also acceptable: disjunctive queries reached probabilistic solver
+    except UnboundVariablesError:
+        pass  # Also acceptable: the rewritten rule reached the program
     except Exception as exc:
         pytest.fail(
             f"execute_squall_program raised an unexpected exception type for "
@@ -296,6 +299,7 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
 
 def test_execute_squall_body_function_call():
     """Function call in rel_b position produces a valid body atom."""
+    from neurolang.exceptions import UnboundVariablesError
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
@@ -313,6 +317,8 @@ def test_execute_squall_body_function_call():
         )
     except Fol2DatalogTranslationException:
         pass  # Acceptable: reached datalog translation — plumbing is OK
+    except UnboundVariablesError:
+        pass  # Acceptable: ?x and ?y are only bound by close_enough
     except Exception as exc:
         pytest.fail(
             f"Body function call raised unexpected exception: "
@@ -842,6 +848,37 @@ def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
     assert pdf.iloc[0, 0] == "alice", (
         f"Expected 'alice', got {pdf.iloc[0, 0]}"
     )
+
+
+def test_execute_squall_where_label_is_constant_absent_from_set_column():
+    """
+    A ``where ?l is 'value'`` filter matching no row over a relation whose
+    columns come from destroying a set of tuples returns an empty result.
+
+    The constant is pushed below the set destruction, so the relation
+    exploded into ``(I, J, K)`` is empty.  Before the fix, exploding an
+    empty relation into several columns raised ``KeyError ['I', 'J']``.
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("a", frozenset({(0, 0, 0), (1, 1, 1)})),
+         ("b", frozenset({(2, 2, 2)}))],
+        name="atlas",
+    )
+    engine.execute_datalog_program(
+        """
+        voxels(I, J, K, l) :- atlas(l, r), contains(r, (I, J, K)).
+        labels(l, i, j, k) :- voxels(i, j, k, l)
+        """
+    )
+    found = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'a'."
+    )
+    assert set(found) == {("a", 0, 0, 0), ("a", 1, 1, 1)}
+    missing = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'zzz'."
+    )
+    assert len(missing) == 0
 
 
 # ---------------------------------------------------------------------------

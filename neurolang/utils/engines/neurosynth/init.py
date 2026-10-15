@@ -74,6 +74,9 @@ def init_engine(
         np.indices(mask.shape[:3]).reshape(3, -1).T,
         name="voxel",
     )
+    # The indices of a grid are distinct: say so, sparing the queries that
+    # use the 8.7M-row grid its deduplication.
+    nl.symbol_table["voxel"].value.might_have_duplicates = False
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
 
 def _process_peaks(

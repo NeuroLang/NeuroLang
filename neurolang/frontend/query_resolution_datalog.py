@@ -6,9 +6,11 @@ as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
+from ..datalog.range_restriction import check_range_restriction
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
+from ..exceptions import UnboundVariablesError
 from typing import (
     AbstractSet,
     Dict,
@@ -801,6 +803,22 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             return solution_set
 
+    def _declare_query(
+        self, head: fe.Expression, predicate: fe.Expression
+    ) -> logic.Implication:
+        """
+        Declare the query rule *head* :- *predicate*, checking that all
+        its variables are bound.
+        """
+        try:
+            query_expression = self._declare_implication(head, predicate)
+            check_range_restriction(
+                query_expression, self.program_ir.symbol_table, query=True
+            )
+        except UnboundVariablesError as error:
+            raise error.located(query=True) from None
+        return query_expression
+
     def _magic_sets_rewrite_query(
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
@@ -836,7 +854,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             new_head = self.new_symbol()(*head)
         else:
             raise ValueError("Wrong head syntax")
-        query_expression = self._declare_implication(new_head, predicate)
+        query_expression = self._declare_query(new_head, predicate)
 
         try:
             magic_query_expression = self.magic_sets_rewrite_program(

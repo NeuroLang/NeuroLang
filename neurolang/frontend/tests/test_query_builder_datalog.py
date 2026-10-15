@@ -36,3 +36,17 @@ def test_show_ra_deterministic_frontend_reports_wrong_arity_error():
                 "label(l) :- schaefer(l, r).\nans(l) :- label(l).",
                 show_ra=show_ra,
             )
+
+
+def test_query_with_two_constants_on_a_derived_predicate():
+    """Magic sets seed ``magic_q2^bbf(5, 'a')``, a rule of two constants."""
+    from neurolang.frontend import NeurolangDL
+
+    nl = NeurolangDL()
+    nl.add_tuple_set([(5, "a", 2), (5, "b", 3), (2, "a", 4)], name="e")
+    nl.execute_datalog_program(
+        "q(x, y, z) :- e(x, y, z)\nq2(x, y, z) :- q(x, y, z)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.z,), e.q2(5, "a", e.z))
+    assert set(res) == {(2,)}
