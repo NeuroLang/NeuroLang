@@ -40,6 +40,7 @@ from .expression_processing import (
     is_aggregation_rule,
 )
 from .expressions import AggregationApplication, TranslateToLogic
+from .range_restriction import check_range_restriction
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -101,6 +102,7 @@ class DatalogWithAggregationMixin(PatternWalker):
         antecedent = expression.antecedent
 
         self._validate_aggregation_implication_syntax(consequent, antecedent)
+        check_range_restriction(expression, self.symbol_table)
 
         if consequent.functor in self.symbol_table:
             eb = self._new_intensional_internal_representation(consequent)

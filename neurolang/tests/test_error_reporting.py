@@ -4,6 +4,7 @@ import pickle  # nosec B403 - round-trips exceptions built by the test
 
 import pytest
 
+from .. import exceptions
 from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenDisjunctionError,
@@ -18,7 +19,6 @@ from ..exceptions import (
     ProtectedKeywordError,
     SquallSemanticError,
     SymbolNotFoundError,
-    UnboundVariableException,
     WrongArgumentsInPredicateError,
 )
 from ..datalog.exceptions import InvalidMagicSetError
@@ -44,7 +44,6 @@ def test_base_exception_has_no_suggestion():
         (ProtectedKeywordError(), "reserved"),
         (NotConjunctiveExpressionNestedPredicates(), "separate rule"),
         (CouldNotTranslateConjunctionException("f"), "normal form"),
-        (UnboundVariableException("f", {"q"}), "constant"),
         (NegativeFormulaNotSafeRangeException("p(x)"), "non-negated"),
         (NegativeFormulaNotNamedRelationException("p(x)"), "own rule"),
     ],
@@ -52,6 +51,20 @@ def test_base_exception_has_no_suggestion():
 )
 def test_actionable_suggestion(exc, keyword):
     assert keyword in exc.suggestion
+
+
+def test_unbound_variables_suggestion_and_attributes():
+    exc = exceptions.UnboundVariablesError(
+        "p", ("y",), ("x < y",), "q(y)"
+    )
+    assert exc.rule == "p"
+    assert exc.variables == ("y",)
+    assert exc.occurrences == ("x < y",)
+    assert "q(y)" in exc.suggestion
+    assert "normal form" not in exc.suggestion
+    restored = pickle.loads(pickle.dumps(exc))  # nosec B301 - data created here
+    assert str(restored) == str(exc)
+    assert restored.suggestion == exc.suggestion
 
 
 class TestParserError:
@@ -94,7 +107,6 @@ class TestPickleRoundtrip:
             ProtectedKeywordError,
             NoValidChaseClassForStratumException,
             lambda: CouldNotTranslateConjunctionException("test"),
-            lambda: UnboundVariableException("test", {"q"}),
             lambda: NegativeFormulaNotSafeRangeException("p(x)"),
             lambda: NegativeFormulaNotNamedRelationException("p(x)"),
             lambda: SquallSemanticError("test"),

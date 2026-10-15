@@ -6,8 +6,7 @@ from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenExpressionError,
     NegativeFormulaNotNamedRelationException,
-    NegativeFormulaNotSafeRangeException,
-    UnboundVariableException,
+    NegativeFormulaNotSafeRangeException
 )
 from ..expression_walker import (
     ExpressionBasicEvaluator,
@@ -35,6 +34,7 @@ from ..relational_algebra import (
 from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
+from .range_restriction import unbound_variables_error
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -272,38 +272,21 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 )
 
             if new_output is output:
-                raise self.untranslatable_conjunction(
-                    expression, classified_formulas
-                )
+                raise self._untranslatable_conjunction_error(expression)
             output = new_output
 
         return output
 
     @staticmethod
-    def untranslatable_conjunction(expression, classified_formulas):
+    def _untranslatable_conjunction_error(expression):
         """
-        Return the exception of a conjunction that cannot be translated.
-
-        It is an :class:`UnboundVariableException` when some variables
-        of the formulas left are bound by no formula, e.g. ``q`` in
-        ``study(s) & (sim == f(q, s))``.
+        Return the error for the conjunction *expression*, that cannot be
+        translated: its unbound variables, if it has any.
         """
-        defined = set()
-        columns = set()
-        for key in (
-            "destroy_formulas", "selection_formulas",
-            "eq_formulas", "ext_proj_formulas",
-        ):
-            for formula in classified_formulas[key]:
-                columns |= get_expression_columns(formula)
-                if key in ("eq_formulas", "ext_proj_formulas"):
-                    defined.add(formula.args[0])
-        unbound = columns - classified_formulas["named_columns"] - defined
-        if unbound:
-            return UnboundVariableException(
-                expression, {column.value for column in unbound}
-            )
-        return CouldNotTranslateConjunctionException(expression)
+        error = unbound_variables_error(expression)
+        if error is None:
+            error = CouldNotTranslateConjunctionException(expression)
+        return error
 
     @add_match(ExistentialPredicate)
     def translate_existential_predicate(self, expression):

@@ -94,40 +94,21 @@ Unreleased
 
 **Bug fixes:**
 
-* ``NeurolangPDL`` queries such as ``ans(s) :- p('a', s)`` now pass the
-  constants of the query to the rules of ``p`` through magic sets, as
-  ``NeurolangDL`` does, so a rule variable bound only by the query, e.g.
-  the argument of a function, can be computed.
-
 * Magic sets missed the initial magic fact of a constant when the same
   predicate, with the same adornment, was called with another constant in
   a rule rewritten earlier, e.g. ``a(y) :- r(1, y)`` and
   ``b(y) :- r(2, y)``, so one of the calls gave no rows.
 
-* A rule body made only of equalities to constants, as the magic rules
-  of a query with two constants, e.g. ``ans(z) :- r(1, 2, z)``, lost all
-  but the last column.
+* A rule variable defined by an equality over head variables, e.g.
+  ``sim`` in ``close(q, s) :- study(s) & (sim == f(q, s)) & (sim > .75)``,
+  was rejected as unbound when the rule was defined, although a query
+  constant, e.g. ``ans(s) :- close('math', s)``, binds ``q`` through magic
+  sets.
 
-* Magic sets now rewrite conditional (MARG, ``//``) rules, so a constant
-  of a query or of a rule body reaches the deterministic rules a
-  probabilistic rule calls.  E.g. with
-  ``p(q, i, PROB) :- (peak(i, s) & selected(s)) // (close(q, s) & selected(s))``
-  the query ``ans(i, p) :- p('math', i, p)`` binds ``q`` of
-  ``close(q, s) :- study(s) & (sim == f(q, s))``.  Magic sets took the
-  numerator ``p^cond_num`` of a conditional rule ``p`` for ``p`` itself and
-  fell back to solving the whole program, which failed when a function
-  needed ``q``.  Predicates computed from probabilities no longer pass
-  bindings to magic sets, which are solved before them, and a
-  deterministic predicate left without tuples by magic sets is an empty
-  relation, not a missing one, in probabilistic rules.  A variable that a
-  function or comparison needs and no predicate or constant binds now
-  raises :class:`~neurolang.exceptions.UnboundVariableException` naming it.
-
-* The ``neurosynth`` engine stored study ids as floats in ``study`` and
-  ``peak_reported`` but as ``StudyID`` strings in ``term_in_study_tfidf``,
-  so joining them failed.  All three now use ``StudyID``, and the documented
-  column order of ``term_in_study_tfidf`` is fixed to
-  ``(study_id, term, tfidf)``.
+* The magic sets SIPS passed bindings from the predicates computed from
+  within-language probabilistic queries, e.g. a conditional (MARG, ``//``)
+  rule ``p``, which are solved after the magic predicates:
+  ``both(i, a, b) :- p('math', i, a) & p('lang', i, b)`` failed.
 
 
 v0.0.1 (Alpha)

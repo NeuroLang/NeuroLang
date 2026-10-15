@@ -61,7 +61,7 @@ to the rule.  In the ``neurolang-query`` interactive mode::
     ans(s) :- close('visual word form reading', s)
 
 Querying ``close(w, s)`` without a constant for ``w`` fails with an
-:class:`~neurolang.exceptions.UnboundVariableException`: the similarity
+:class:`~neurolang.exceptions.UnboundVariablesError`: the similarity
 cannot be computed without a query text.
 
 The query text can also flow through a probabilistic rule.  Here ``q`` is

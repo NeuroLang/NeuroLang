@@ -12,6 +12,7 @@ from .....exceptions import UnsupportedProgramError
 from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
 from .....frontend import NeurolangDL, NeurolangPDL
+from .....regions import ExplicitVBR
 from ..spatial import (
     DetectEuclideanDistanceBoundMatrix,
     TranslateEuclideanDistanceBoundMatrixMixin,
@@ -580,3 +581,55 @@ def test_range_atoms_with_other_columns(head, body, expected):
         if _distance(v[:3], p[:3]) < 2
     )
     assert result == {row for row in rows if row is not None}
+
+
+def _region_relation_rows(engine, name):
+    """
+    Return the type and the rows of the stored relation *name*.
+
+    Parameters
+    ----------
+    engine : QueryBuilderDatalog
+        Engine storing the relation.
+    name : str
+        Name of the relation.
+
+    Returns
+    -------
+    tuple
+        The type of the relation and its rows.
+    """
+    stored = engine.symbol_table[name]
+    value = stored.value
+    rows = set(value.unwrap() if hasattr(value, "unwrap") else value)
+    return stored.type, rows
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_region_destroy_keeps_region_relation(frontend):
+    engine = frontend()
+    first = ExplicitVBR(numpy.array([[1, 0, 0], [1, 1, 0]]), numpy.eye(4))
+    second = ExplicitVBR(numpy.array([[2, 0, 0]]), numpy.eye(4))
+    engine.add_tuple_set([("A", first), ("B", second)], name="region")
+    before = _region_relation_rows(engine, "region")
+
+    engine.execute_datalog_program(
+        "voxels(i, j, k, l) :- region(l, r), contains(r, (i, j, k))."
+    )
+
+    relation_type, rows = _region_relation_rows(engine, "region")
+    assert relation_type == before[0]
+    assert rows == before[1]
+    assert all(isinstance(region, ExplicitVBR) for _, region in rows)
+
+    voxels = engine.execute_datalog_program(
+        "ans(i, j, k, l) :- voxels(i, j, k, l)"
+    )
+    assert set(voxels.to_unnamed()) == {
+        (1, 0, 0, "A"),
+        (1, 1, 0, "A"),
+        (2, 0, 0, "B"),
+    }
+
+    regions = engine.execute_datalog_program("ans(l, r) :- region(l, r)")
+    assert set(regions.to_unnamed()) == {("A", first), ("B", second)}

@@ -525,6 +525,9 @@ class TestSquallGrammarCompletion:
         clause = "that mentions a term and "
         sentence = "obtain every study that reports a peak and " + clause * 4
         assert 140 < len(sentence) <= 200
+        # build the grammar first: this measures each completion, not the
+        # one-time construction of the parser (about 4 times longer)
+        _words(squall_app, "obtain every ")
         start = time.perf_counter()
         words = _words(squall_app, sentence)
         _words(squall_app, "obtain every study that ")

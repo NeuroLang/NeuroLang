@@ -36,6 +36,7 @@ from .commands import (
 )
 from .editing import session_options
 from .interrupt import call_interruptibly
+from .provenance import column_sorts
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope, record_squall_rules
 from .submission import Submission, submission_outline
@@ -223,12 +224,21 @@ class InteractiveTuiApp:
             engine_name=self.settings.engine_name,
         )
 
-    def _result_block(self, result, title: str, column_names) -> ResultBlock:
-        """Return the sorted rows of a query *result* as a block."""
+    def _result_block(
+        self, result, title: str, column_names, sorts=None
+    ) -> ResultBlock:
+        """
+        Return the sorted rows of a query *result* as a block.
+
+        *sorts* are the sorts of its columns, kept with the block when
+        they are as many as its columns.
+        """
         df = result_to_dataframe(result, column_names)
         if not df.empty:
             df = sort_dataframe(df, self.settings.sort_by)
-        return ResultBlock(df, title)
+        if sorts is not None and len(sorts) != len(df.columns):
+            sorts = None
+        return ResultBlock(df, title, sorts=sorts)
 
     def print_block(self, block: ResultBlock) -> None:
         """
@@ -250,15 +260,20 @@ class InteractiveTuiApp:
             self.console.out(_emit(block.frame, fmt), highlight=False)
             block.shown = len(block.frame)
 
-    def _show_result(self, result, column_names: dict) -> None:
+    def _show_result(
+        self, result, column_names: dict, sorts: Optional[dict] = None
+    ) -> None:
         """
         Print a query *result*, keeping its blocks for the commands.
 
         A dict result, from a SQUALL program with several ``obtain``,
         gives a block per ``obtain``. *column_names* maps result keys to
         their column names, as
-        :func:`~neurolang.utils.cli.squall_column_names` returns them.
+        :func:`~neurolang.utils.cli.squall_column_names` returns them,
+        and *sorts* to the sorts of their columns, as
+        :func:`~.provenance.column_sorts` returns them.
         """
+        sorts = sorts or {}
         self.results = []
         if result is None:
             self.console.print("[dim](no result)[/dim]")
@@ -268,12 +283,16 @@ class InteractiveTuiApp:
             )
         elif isinstance(result, dict):
             self.results = [
-                self._result_block(value, key, column_names.get(key))
+                self._result_block(
+                    value, key, column_names.get(key), sorts.get(key)
+                )
                 for key, value in result.items()
             ]
         else:
             names = next(iter(column_names.values()), None)
-            self.results = [self._result_block(result, "", names)]
+            self.results = [self._result_block(
+                result, "", names, next(iter(sorts.values()), None)
+            )]
         for block in self.results:
             self.print_block(block)
 
@@ -286,13 +305,29 @@ class InteractiveTuiApp:
         """
         if not self.settings.squall:
             return {}
-        rules = [
+        return squall_column_names(
+            self.settings.engine_name, program, self.loaded_relations,
+            self._session_rules(),
+        )
+
+    def _session_rules(self) -> list:
+        """Return the rules of the engine's program, those defined so far."""
+        return [
             rule
             for union in self._nl.program_ir.intensional_database().values()
             for rule in union.formulas
         ]
-        return squall_column_names(
-            self.settings.engine_name, program, self.loaded_relations, rules
+
+    def _column_sorts(self, program: str) -> dict:
+        """
+        Return the sorts of the columns of the results of *program*.
+
+        They follow from the predicates of the query, as
+        :func:`~.provenance.column_sorts` tells them.
+        """
+        return column_sorts(
+            self._nl, self.settings.engine_name, program,
+            self.settings.squall, self._session_rules(),
         )
 
     def _submit(self, program: str, submission: Submission):
@@ -344,7 +379,10 @@ class InteractiveTuiApp:
             result = self._submit(program, submission)
             self._print_definitions(submission, query)
             if query and not self.settings.show_ra:
-                self._show_result(result, self._column_names(program))
+                self._show_result(
+                    result, self._column_names(program),
+                    self._column_sorts(program),
+                )
         except KeyboardInterrupt:
             self.failed = True
             self.err_console.print("[yellow]Query interrupted[/yellow]")

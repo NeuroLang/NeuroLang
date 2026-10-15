@@ -340,21 +340,85 @@ class Sort(NamedTuple):
 
     Its entities span *columns*, whose values are of the *type*; a sort of
     N > 1 columns reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+
+    The *space* of a sort of points tells what its columns are: ``voxel``
+    for the indices ``(i, j, k)`` of a grid, ``mm`` for coordinates
+    ``(x, y, z)`` in millimetres in the space of the engine's template,
+    ``""`` otherwise. The *grid* of a sort of voxels is the grid it
+    indexes: that of the engine's template (see :func:`build_engine`)
+    when ``""`` or ``template``, else that of the atlas of this name.
     """
 
     name: str
     columns: Tuple[str, ...]
     type: str = ""
     description: str = ""
+    space: str = ""
+    grid: str = ""
+
+
+SORT_SPACES = ("voxel", "mm")
+
+# The grid of the engine's template, which the voxels of a sort index
+# unless it names another grid.
+TEMPLATE_GRID = "template"
+
+
+def engine_grid_names(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+    """
+    Return the names of the grids of the engine *cfg*.
+
+    They are the template's and those of the atlases it loads.
+    """
+    return (TEMPLATE_GRID, *(cfg.get("atlases") or {}))
+
+
+def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
+    """
+    Return the grid the sort *name* declared by *info* indexes, or "".
+
+    Only a sort of ``space: voxel`` names a grid, one of *grids*.
+    """
+    grid = str(info.get("grid", ""))
+    if grid and info.get("space") != "voxel":
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; only a sort of "
+            "space: voxel indexes a grid"
+        )
+    if grid and grid not in grids:
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; the grids of the "
+            f"engine are {', '.join(grids)}"
+        )
+    return grid
+
+
+def _declared_sort(
+    name: str, info: Dict[str, Any], grids=(TEMPLATE_GRID,)
+) -> Sort:
+    """
+    Return the sort *name* declared by *info*, checking its space.
+
+    Its grid, if any, is one of *grids*.
+    """
+    space = str(info.get("space", ""))
+    if space and space not in SORT_SPACES:
+        raise ValueError(
+            f"sort {name!r} declares the space {space!r}; a space is "
+            f"one of {', '.join(SORT_SPACES)}"
+        )
+    return Sort(
+        name, tuple(info["columns"]), str(info.get("type", "")),
+        str(info.get("description", "")).strip(), space,
+        _sort_grid(name, info, grids),
+    )
 
 
 def _declared_sorts(cfg: Dict[str, Any]) -> Dict[str, Sort]:
     """Return the sorts the engine *cfg* declares, by name."""
+    grids = engine_grid_names(cfg)
     return {
-        name: Sort(
-            name, tuple(info["columns"]), str(info.get("type", "")),
-            str(info.get("description", "")).strip(),
-        )
+        name: _declared_sort(name, info, grids)
         for name, info in (cfg.get("sorts") or {}).items()
     }
 
@@ -710,6 +774,18 @@ def _label_name(val: Any) -> str:
     return name
 
 
+def _register_grid(nl, name: str, img) -> None:
+    """
+    Register the grid of the image *img* as the grid *name* of *nl*.
+
+    The voxel indices of a sort naming the grid (``grid: name``) index
+    it: ``.save`` writes them with its shape and affine.
+    """
+    if getattr(nl, "grids", None) is None:
+        nl.grids = {}
+    nl.grids[name] = img
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path
 ) -> None:
@@ -722,6 +798,7 @@ def _load_deterministic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     pred_name = params.get("predicate_name", atlas_name)
     labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
     regions = ExplicitVBR.from_spatial_image_labels(
@@ -757,6 +834,7 @@ def _load_probabilistic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     n_components = img.shape[-1]
     labels = list(atl_data["labels"])
     threshold = float(params.get("threshold", 0.5))
@@ -1066,7 +1144,14 @@ def build_engine(
     Returns
     -------
     NeurolangPDL
-        A fully initialised engine ready for query execution.
+        A fully initialised engine ready for query execution. Its
+        ``template`` attribute is the MNI image whose grid the voxel
+        indices of the engine refer to (the sorts of ``space: voxel``),
+        resampled to *resolution* if given, or None if the engine does
+        not require the MNI mask. Its ``grids`` attribute holds the
+        images of the grids voxel indices may index, by name: the
+        template, as ``template``, and each atlas, under its name (the
+        sorts naming a ``grid``).
 
     Raises
     ------
@@ -1104,6 +1189,8 @@ def build_engine(
     else:
         nl = NeurolangPDL()
 
+    nl.template = mask
+    nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)
