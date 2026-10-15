@@ -34,7 +34,6 @@ from .constraints_representation import (
 )
 from .expression_processing import (
     any_body_preds_in_set,
-    extract_logic_atoms,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
 )
@@ -415,6 +414,10 @@ def order_rules_definitions_first(rules):
     those of recursive predicates aside; otherwise, the order of
     ``rules`` is kept. Walking the rules in this order, the types of
     the predicates of a rule body are known when the rule is walked.
+    Unlike :func:`.expression_processing.stratify`, the predicates of
+    the bodies not defined in ``rules``, such as probabilistic ones, are
+    taken as known, and the rules after a recursive one are still
+    ordered.
     """
     pending = list(rules)
     ordered = []
@@ -422,19 +425,13 @@ def order_rules_definitions_first(rules):
         heads = {rule.consequent.functor for rule in pending}
         ready = [
             rule for rule in pending
-            if not _body_functors(rule) & (heads - {rule.consequent.functor})
+            if not any_body_preds_in_set(
+                rule, heads - {rule.consequent.functor}
+            )
         ] or pending[:1]
         ordered += ready
         pending = [rule for rule in pending if rule not in ready]
     return tuple(ordered)
-
-
-def _body_functors(rule):
-    """Return the predicate symbols of the body of ``rule``."""
-    return {
-        getattr(atom, "functor", None)
-        for atom in extract_logic_atoms(rule.antecedent)
-    }
 
 
 def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
