@@ -1,12 +1,16 @@
 """
-Pairs of points within a Euclidean distance, computed with numpy.
+Joins of points within a Euclidean distance, computed with numpy.
 
-This is the kernel of the Euclidean spatial-bound syntactic sugar (see
-:mod:`neurolang.frontend.datalog.sugar.spatial`). Given two point sets
-and a radius it returns every pair of points, one from each set, whose
-distance is below (or, non-strictly, at most) the radius. The distances
-are those :func:`euclidean_distance` computes, so that the pairs are
-exactly the ones the ``euclidean`` built-in would select.
+This is the numeric kernel of the Euclidean spatial-bound syntactic sugar
+(see :mod:`neurolang.frontend.datalog.sugar.spatial`), which only detects
+the bound and rewrites the rule. :func:`euclidean_distance` is the
+``euclidean`` built-in function. :func:`euclidean_pairs` returns every
+pair of points, one from each of two sets, whose distance is below (or,
+non-strictly, at most) a radius; :func:`euclidean_join` joins two tables
+on the distance between their points in the same way, and projects the
+result on some of its columns. The distances are those
+:func:`euclidean_distance` computes, so that the pairs are exactly the
+ones the ``euclidean`` built-in would select.
 
 When both sets have integer coordinates, the candidate neighbours of the
 smaller set are generated from an integer offset stencil and looked up in
@@ -21,6 +25,7 @@ import numbers
 import operator
 
 import numpy
+import pandas
 import scipy.spatial
 
 from .various import log_performance
@@ -119,6 +124,282 @@ def euclidean_pairs(first, second, radius, strict=True):
     return small_index, large_index, distances
 
 
+def euclidean_join(
+    first, second, radius, strict=True, columns=None, distance=None
+):
+    """
+    Return the rows of two tables whose points are within a distance.
+
+    Each row of *first* is paired with each row of *second* whose point is
+    at a distance lower than *radius* (or, non-strictly, at most
+    *radius*) from its own. The result is projected on *columns*, without
+    repeated rows.
+
+    Parameters
+    ----------
+    first, second : tuple
+        Each table, a pandas.DataFrame without repeated rows, and the names
+        of its columns holding the coordinates of its point. The names of
+        the columns of the two tables are distinct.
+    radius : float
+        Distance bound.
+    strict : bool, optional
+        Whether the distance must be lower than *radius* (the default)
+        rather than lower or equal.
+    columns : sequence of str, optional
+        Columns of the result, among those of the tables and *distance*.
+        All of them by default.
+    distance : str, optional
+        Name of the column of the distance between the points.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The distinct rows of the join, with the *columns*.
+    """
+    if columns is None:
+        columns = [*first[0].columns, *second[0].columns]
+        columns += [] if distance is None else [distance]
+    small, large = sorted(
+        (_restrict(*first, columns), _restrict(*second, columns)),
+        key=lambda table: len(table[0]),
+    )
+    compare = operator.lt if strict else operator.le
+    with log_performance(
+        LOG, "euclidean join of %s x %s rows within %s",
+        (len(small[0]), len(large[0]), radius),
+    ):
+        indices = _row_pairs(small, large, radius, compare)
+        if not set(small[1]).union(large[1]) <= set(columns):
+            indices = _distinct_pairs(
+                small, large, indices, columns, distance
+            )
+        result = _join_columns(small, large, indices, columns, distance)
+    LOG.info("%s rows joined", len(result))
+    return result
+
+
+def _restrict(frame, point, columns):
+    """
+    Return a table restricted to its point and its result columns.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Rows of the table.
+    point : sequence of str
+        Names of the coordinate columns.
+    columns : sequence of str
+        Result columns.
+
+    Returns
+    -------
+    tuple
+        The distinct rows of the restricted table and *point*.
+    """
+    kept = [name for name in frame.columns if name in point or name in columns]
+    if len(kept) < len(frame.columns):
+        frame = frame[kept].drop_duplicates()
+    return frame, list(point)
+
+
+def _row_pairs(small, large, radius, compare):
+    """
+    Return the pairs of rows of two tables whose points are within *radius*.
+
+    Parameters
+    ----------
+    small, large : tuple
+        Each table and the names of its coordinate columns, *small* having
+        fewer rows.
+    radius : float
+        Distance bound.
+    compare : callable
+        ``operator.lt`` or ``operator.le``.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The row in *small* of each pair, its row in *large* and the
+        distance between their points.
+    """
+    points, groups = _distinct_points(*large)
+    small_rows, large_points, distances = _pairs(
+        _as_points(small[0][small[1]]), points, radius, compare
+    )
+    if groups is None:
+        return small_rows, large_points, distances
+    repeat, large_rows = _expand(large_points, groups)
+    return small_rows[repeat], large_rows, distances[repeat]
+
+
+def _distinct_points(frame, point):
+    """
+    Return the distinct points of a table and the rows of each one.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Rows of the table.
+    point : list of str
+        Names of the coordinate columns.
+
+    Returns
+    -------
+    tuple
+        The points, one per row, and the order of the rows sorted by point
+        with the start and the number of rows of each point in it, or None
+        when each row is a point.
+    """
+    coordinates = _as_points(frame[point])
+    if len(point) == len(frame.columns):
+        return coordinates, None
+    point_of_row = frame.groupby(point, sort=False).ngroup().to_numpy()
+    order = numpy.argsort(point_of_row, kind="stable")
+    counts = numpy.bincount(point_of_row, minlength=1)
+    starts = numpy.cumsum(counts) - counts
+    return coordinates[order[starts]], (order, starts, counts)
+
+
+def _expand(point_index, groups):
+    """
+    Return each element of *point_index* repeated for the rows of its point.
+
+    Parameters
+    ----------
+    point_index : numpy.ndarray
+        Point of each element.
+    groups : tuple of numpy.ndarray
+        Order of the rows sorted by point, and the start and the number of
+        rows of each point in it.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The element and the row of each output.
+    """
+    order, starts, counts = groups
+    sizes = counts[point_index]
+    repeat = numpy.repeat(numpy.arange(len(point_index)), sizes)
+    position = numpy.arange(len(repeat)) - numpy.repeat(
+        numpy.cumsum(sizes) - sizes, sizes
+    )
+    return repeat, order[numpy.repeat(starts[point_index], sizes) + position]
+
+
+def _distinct_pairs(small, large, indices, columns, distance):
+    """
+    Return pairs of rows giving each distinct result row once.
+
+    Parameters
+    ----------
+    small, large : tuple
+        Each table and the names of its coordinate columns.
+    indices : tuple of numpy.ndarray
+        The rows of the pairs in *small*, in *large* and their distances.
+    columns : sequence of str
+        Result columns.
+    distance : str or None
+        Name of the distance column.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The rows of the distinct pairs and their distances.
+    """
+    (small_codes, small_rows, n_small), (large_codes, large_rows, n_large) = (
+        _value_codes(table[0], columns) for table in (small, large)
+    )
+    if distance in columns or n_small * n_large >= MAX_KEY:
+        rows = _join_columns(small, large, indices, columns, distance)
+        keep = numpy.flatnonzero(~rows.duplicated().to_numpy())
+        return tuple(index[keep] for index in indices)
+    keys = numpy.sort(
+        _take(large_codes, indices[1]) * n_small
+        + _take(small_codes, indices[0])
+    )
+    first = numpy.ones(len(keys), dtype=bool)
+    numpy.not_equal(keys[1:], keys[:-1], out=first[1:])
+    large_code, small_code = numpy.divmod(keys[first], n_small)
+    return _take(small_rows, small_code), _take(large_rows, large_code), None
+
+
+def _value_codes(frame, columns):
+    """
+    Return codes of the distinct values of the result columns of a table.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Rows of the table.
+    columns : sequence of str
+        Result columns.
+
+    Returns
+    -------
+    tuple
+        The code of each row, a row of each code and the number of codes;
+        the codes and the rows are None when the codes are the rows.
+    """
+    selected = [name for name in frame.columns if name in columns]
+    if len(selected) == len(frame.columns):
+        return None, None, len(frame)
+    if not selected:
+        zeros = numpy.zeros(len(frame), dtype=int)
+        return zeros, zeros[:1], 1
+    codes = frame.groupby(selected, sort=False).ngroup().to_numpy()
+    rows = numpy.unique(codes, return_index=True)[1]
+    return codes, rows, len(rows)
+
+
+def _take(values, index):
+    """
+    Return the *values* at *index*, *index* itself if *values* is None.
+
+    Parameters
+    ----------
+    values : numpy.ndarray or None
+        Values, None standing for the identity.
+    index : numpy.ndarray
+        Positions.
+
+    Returns
+    -------
+    numpy.ndarray
+        The values at the positions.
+    """
+    return index if values is None else values[index]
+
+
+def _join_columns(small, large, indices, columns, distance):
+    """
+    Return the result columns of pairs of rows.
+
+    Parameters
+    ----------
+    small, large : tuple
+        Each table and the names of its coordinate columns.
+    indices : tuple of numpy.ndarray
+        The rows of the pairs in *small*, in *large* and their distances.
+    columns : sequence of str
+        Result columns.
+    distance : str or None
+        Name of the distance column.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The result columns of the pairs.
+    """
+    values = {distance: indices[2]}
+    for (frame, _), rows in zip((small, large), indices):
+        values.update({
+            name: frame[name].to_numpy()[rows]
+            for name in frame.columns if name in columns
+        })
+    return pandas.DataFrame({name: values[name] for name in columns})
+
+
 def _as_points(points):
     """
     Return *points* as a 2-D numpy array with a numeric type if possible.
@@ -148,7 +429,8 @@ def _pairs(small, large, radius, compare):
     Parameters
     ----------
     small, large : numpy.ndarray
-        Point sets, *small* being the smaller one.
+        Point sets, *small* being the smaller one; only *small* may
+        repeat points.
     radius : float
         Distance bound.
     compare : callable
@@ -180,7 +462,8 @@ def _integer_stencil(small, large, radius, compare):
     Parameters
     ----------
     small, large : numpy.ndarray
-        Point sets, *small* being the smaller one.
+        Point sets, *small* being the smaller one; only *small* may
+        repeat points.
     radius : float
         Distance bound.
     compare : callable
@@ -225,7 +508,7 @@ def _stencil_pairs(small, large, offsets, lengths):
     Parameters
     ----------
     small, large : numpy.ndarray
-        Integer point sets.
+        Integer point sets; only *small* may repeat points.
     offsets : numpy.ndarray
         Integer offsets, one per row.
     lengths : numpy.ndarray
@@ -307,7 +590,8 @@ def _kdtree_pairs(small, large, radius, compare):
     Parameters
     ----------
     small, large : numpy.ndarray
-        Point sets, *small* being the smaller one.
+        Point sets, *small* being the smaller one; only *small* may
+        repeat points.
     radius : float
         Distance bound.
     compare : callable

@@ -5,10 +5,6 @@ import typing
 import warnings
 from typing import AbstractSet
 
-import numpy
-import pandas
-import scipy.sparse
-
 from ....datalog.expression_processing import (
     UnifyVariableEqualitiesMixin,
     extract_logic_atoms,
@@ -25,11 +21,7 @@ from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....utils import log_performance
 from ...frontend_extensions import NumpyFunctionsMixin
-from ....utils.euclidean_join import (
-    MAX_KEY,
-    euclidean_distance,
-    euclidean_pairs,
-)
+from ....utils.euclidean_join import euclidean_distance, euclidean_join
 from ....type_system import is_leq_informative
 from ....utils.various import FrozenNDArray
 from ....regions import ExplicitVBR
@@ -519,13 +511,16 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     euclidean(i, j, k, i1, j1, k1) < 2``
 
     is rewritten to use a fresh relation holding the pairs of points within
-    the distance, and the distance itself when the rule uses it,
+    the distance, computed by
+    :func:`~neurolang.utils.euclidean_join.euclidean_join`. A ranging atom
+    whose arguments are distinct variables, used by no other ranging atom,
+    is absorbed into the pairs, which are then projected on the variables
+    the rest of the rule uses, the distance included; here both are,
 
-    ``close(i, j, k, s) :- fresh(i, j, k, i1, j1, k1), peak(i1, j1, k1, s)``
+    ``close(i, j, k, s) :- fresh(i, j, k, s)``
 
-    computed by :func:`~neurolang.utils.euclidean_join.euclidean_pairs`.
-    The ranging atoms having no other argument than the coordinates, as
-    ``voxel(i, j, k)``, are implied by the pairs and dropped.
+    Any other ranging atom stays in the rule, joined with the pairs on the
+    point's coordinates.
 
     When a point is not ranged by a stored deterministic relation (it is
     derived, probabilistic or missing), the rule is kept and the distance
@@ -736,105 +731,33 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         Implication
             The rewritten rule.
         """
-        sides = self._point_ranges(bound, ranges)
-        pairs = euclidean_pairs(
-            sides[0].points, sides[1].points, bound.radius, bound.strict
-        )
+        absorbed = _absorbed(bound, ranges)
         removed = {id(formula) for formula in bound.formulas} | {
-            id(side.atom) for side in sides if side.absorbed
+            id(atom) for atom, absorb in zip(ranges, absorbed) if absorb
         }
         formulas = tuple(
             formula for formula in rule.antecedent.formulas
             if id(formula) not in removed
         )
-        needed = set(rule.consequent._symbols).union(
-            *(formula._symbols for formula in formulas)
+        variables = _pair_variables(rule, bound, formulas, ranges, absorbed)
+        tables = [
+            self._range_table(atom, point, absorb)
+            for atom, point, absorb in zip(ranges, bound.points, absorbed)
+        ]
+        pairs = euclidean_join(
+            *tables, bound.radius, bound.strict,
+            [variable.name for variable in variables], bound.distance.name,
         )
-        with log_performance(LOG, "joining the euclidean pairs"):
-            columns = _pair_columns(sides, bound, pairs, needed)
-        pairs_symbol = self._add_pairs_relation(list(columns.values()))
         return Implication(
             rule.consequent,
-            Conjunction((pairs_symbol(*columns),) + formulas),
+            Conjunction(
+                (self._add_pairs_relation(pairs)(*variables),) + formulas
+            ),
         )
 
-    def _point_ranges(self, bound, ranges):
+    def _range_table(self, atom, point, absorbed):
         """
-        Return the coordinates of the points of *bound* and their rows.
-
-        The atom ranging a point is absorbed into the pairs relation when
-        its arguments are distinct variables, of which those other than
-        the point's coordinates appear in no other absorbed atom, in no
-        coordinate of the other point and are not the distance.
-
-        Parameters
-        ----------
-        bound : EuclideanBound
-            Distance bound of a rule.
-        ranges : tuple of FunctionApplication
-            The stored relation atom ranging each point.
-
-        Returns
-        -------
-        list of _PointRange
-            The range of each point.
-        """
-        excluded = set(bound.application.args) | {bound.distance}
-        sides = []
-        for atom, point in zip(ranges, bound.points):
-            absorbed = _absorbable(atom, point, excluded)
-            if absorbed:
-                excluded |= set(atom.args)
-                sides.append(self._absorbed_range(atom, point))
-            else:
-                points = self._coordinate_points(atom, point)
-                sides.append(_PointRange(
-                    atom, points, dict(zip(point, points.T)), None, None,
-                    False,
-                ))
-        return sides
-
-    def _absorbed_range(self, atom, point):
-        """
-        Return the rows of the relation of *atom* and their points.
-
-        Parameters
-        ----------
-        atom : FunctionApplication
-            Stored relation atom of distinct variables ranging the point.
-        point : tuple of Symbol
-            Coordinate variables.
-
-        Returns
-        -------
-        _PointRange
-            The distinct points of the relation and its rows.
-        """
-        relation = self.symbol_table[atom.functor].value
-        with log_performance(LOG, "reading %s", (atom.functor.name,)):
-            frame = relation.as_pandas_dataframe().set_axis(
-                [arg.name for arg in atom.args], axis=1
-            )
-        values = {arg: frame[arg.name].to_numpy() for arg in atom.args}
-        coordinates = frame[[coordinate.name for coordinate in point]]
-        if len(atom.args) == len(point):
-            return _PointRange(
-                atom, coordinates.to_numpy(), values, None, None, True
-            )
-        point_of_row = coordinates.groupby(
-            list(coordinates.columns), sort=False
-        ).ngroup().to_numpy()
-        order = numpy.argsort(point_of_row, kind="stable")
-        counts = numpy.bincount(point_of_row)
-        starts = numpy.cumsum(counts) - counts
-        points = coordinates.to_numpy()[order[starts]]
-        return _PointRange(
-            atom, points, values, point_of_row, (order, starts, counts), True
-        )
-
-    def _coordinate_points(self, atom, point):
-        """
-        Return the coordinates of *point* in the relation of *atom*.
+        Return the rows of the relation ranging a point, as a table.
 
         Parameters
         ----------
@@ -842,35 +765,34 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             Stored relation atom ranging the point.
         point : tuple of Symbol
             Coordinate variables.
+        absorbed : bool
+            Whether *atom* is absorbed into the pairs relation, its rows
+            being then all needed rather than only the point coordinates.
 
         Returns
         -------
-        numpy.ndarray
-            The distinct coordinates, one point per row.
+        tuple
+            The rows, as a pandas.DataFrame whose columns are named by the
+            variables, and the names of the coordinate columns.
         """
-        columns = tuple(
-            next(
-                position for position, arg in enumerate(atom.args)
-                if isinstance(arg, Symbol) and arg == coordinate
-            )
-            for coordinate in point
-        )
         relation = self.symbol_table[atom.functor].value
-        if columns != tuple(range(relation.arity)):
-            relation = relation.projection(*columns)
-        with log_performance(
-            LOG, "reading the coordinates of %s", (atom.functor.name,)
-        ):
-            return relation.as_numpy_array()
+        variables = atom.args
+        if not absorbed:
+            columns = (atom.args.index(coordinate) for coordinate in point)
+            relation, variables = relation.projection(*columns), point
+        with log_performance(LOG, "reading %s", (atom.functor.name,)):
+            frame = relation.as_pandas_dataframe()
+        names = [variable.name for variable in variables]
+        return frame.set_axis(names, axis=1), [arg.name for arg in point]
 
-    def _add_pairs_relation(self, columns):
+    def _add_pairs_relation(self, frame):
         """
-        Store *columns* as a fresh relation without duplicates.
+        Store the rows of *frame* as a fresh relation without duplicates.
 
         Parameters
         ----------
-        columns : list of numpy.ndarray
-            Columns of the relation, without duplicate rows.
+        frame : pandas.DataFrame
+            Rows of the relation, without duplicates.
 
         Returns
         -------
@@ -879,10 +801,10 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         """
         symbol = Symbol.fresh()
         with log_performance(
-            LOG, "storing %s euclidean pairs", (len(columns[0]),)
+            LOG, "storing %s euclidean pairs", (len(frame),)
         ):
             self.add_extensional_predicate_from_tuples(
-                symbol, pandas.DataFrame(dict(enumerate(columns)))
+                symbol, frame.set_axis(range(frame.shape[1]), axis=1)
             )
         relation = self.symbol_table[symbol].value
         if hasattr(relation, "might_have_duplicates"):
@@ -890,34 +812,70 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         return symbol
 
 
-class _PointRange(typing.NamedTuple):
+def _absorbed(bound, ranges):
     """
-    Coordinates of a point of a Euclidean bound, read from a relation.
+    Return whether the atom ranging each point is absorbed into the pairs.
 
-    Attributes
+    The atom ranging a point is absorbed into the pairs relation when its
+    arguments are distinct variables, of which those other than the
+    point's coordinates appear in no other absorbed atom, in no coordinate
+    of the other point and are not the distance.
+
+    Parameters
     ----------
-    atom : FunctionApplication
-        Relation atom ranging the point.
-    points : numpy.ndarray
-        Distinct coordinates of the point in the relation, one per row.
-    values : dict
-        Values of each variable of the range, by row: the rows of the
-        relation when the atom is absorbed, the points otherwise.
-    point_of_row : numpy.ndarray or None
-        Point of each row, None when each row is a point.
-    groups : tuple of numpy.ndarray or None
-        The order of the rows sorted by point, and the start and the
-        number of rows of each point in it; None when each row is a point.
-    absorbed : bool
-        Whether the atom is absorbed into the pairs relation.
-    """
+    bound : EuclideanBound
+        Distance bound of a rule.
+    ranges : tuple of FunctionApplication
+        The stored relation atom ranging each point.
 
-    atom: FunctionApplication
-    points: numpy.ndarray
-    values: dict
-    point_of_row: typing.Optional[numpy.ndarray]
-    groups: typing.Optional[tuple]
-    absorbed: bool
+    Returns
+    -------
+    list of bool
+        Whether each atom is absorbed.
+    """
+    excluded = set(bound.application.args) | {bound.distance}
+    absorbed = []
+    for atom, point in zip(ranges, bound.points):
+        absorbed.append(_absorbable(atom, point, excluded))
+        if absorbed[-1]:
+            excluded |= set(atom.args)
+    return absorbed
+
+
+def _pair_variables(rule, bound, formulas, ranges, absorbed):
+    """
+    Return the variables of the pairs relation.
+
+    Parameters
+    ----------
+    rule : Implication
+        Normalised rule.
+    bound : EuclideanBound
+        Its distance bound.
+    formulas : tuple of Expression
+        The conjuncts left in the rule besides the pairs relation.
+    ranges : tuple of FunctionApplication
+        The stored relation atom ranging each point.
+    absorbed : list of bool
+        Whether each atom is absorbed into the pairs relation.
+
+    Returns
+    -------
+    list of Symbol
+        The variables of the points, of the absorbed atoms and the distance
+        that the head or the other conjuncts use; the coordinates of the
+        first point if they use none.
+    """
+    available = [
+        variable
+        for atom, point, absorb in zip(ranges, bound.points, absorbed)
+        for variable in (atom.args if absorb else point)
+    ] + [bound.distance]
+    needed = set(rule.consequent._symbols).union(
+        *(formula._symbols for formula in formulas)
+    )
+    selected = [variable for variable in available if variable in needed]
+    return selected or list(bound.points[0])
 
 
 def _absorbable(atom, point, excluded):
@@ -945,266 +903,6 @@ def _absorbable(atom, point, excluded):
     return len(set(args)) == len(args) and not (
         (set(args) - set(point)) & excluded
     )
-
-
-def _expand(point_index, groups):
-    """
-    Return each element of *point_index* repeated for the rows of its point.
-
-    Parameters
-    ----------
-    point_index : numpy.ndarray
-        Point of each element.
-    groups : tuple of numpy.ndarray
-        Order of the rows sorted by point, and the start and the number of
-        rows of each point in it.
-
-    Returns
-    -------
-    tuple of numpy.ndarray
-        The element and the row of each output.
-    """
-    order, starts, counts = groups
-    sizes = counts[point_index]
-    repeat = numpy.repeat(numpy.arange(len(point_index)), sizes)
-    position = numpy.arange(len(repeat)) - numpy.repeat(
-        numpy.cumsum(sizes) - sizes, sizes
-    )
-    return repeat, order[numpy.repeat(starts[point_index], sizes) + position]
-
-
-def _pair_columns(sides, bound, pairs, needed):
-    """
-    Return the columns of the pairs relation, by variable.
-
-    The pairs are joined with the rows of the ranges of their points and
-    projected on the *needed* variables, without duplicates.
-
-    Parameters
-    ----------
-    sides : list of _PointRange
-        The range of each point.
-    bound : EuclideanBound
-        Distance bound of the rule.
-    pairs : tuple of numpy.ndarray
-        Index of the points of each pair and their distance.
-    needed : set of Symbol
-        Variables used by the rest of the rule.
-
-    Returns
-    -------
-    dict
-        Column of each variable.
-    """
-    available = [
-        variable for side in sides for variable in side.values
-    ] + [bound.distance]
-    selected = [variable for variable in available if variable in needed]
-    if not selected:
-        selected = list(bound.points[0])
-    if bound.distance in selected or len(selected) == len(available):
-        return _expanded_pairs(sides, bound, pairs, selected)
-    return _projected_pairs(sides, pairs, selected)
-
-
-def _expanded_pairs(sides, bound, pairs, selected):
-    """
-    Return the *selected* columns of the pairs joined with their rows.
-
-    Parameters
-    ----------
-    sides : list of _PointRange
-        The range of each point.
-    bound : EuclideanBound
-        Distance bound of the rule.
-    pairs : tuple of numpy.ndarray
-        Index of the points of each pair and their distance.
-    selected : list of Symbol
-        Variables of the columns.
-
-    Returns
-    -------
-    dict
-        Column of each variable, without duplicate rows.
-    """
-    rows, distances = list(pairs[:2]), pairs[2]
-    for position, side in enumerate(sides):
-        if side.groups is not None:
-            repeat, rows[position] = _expand(rows[position], side.groups)
-            rows[1 - position] = rows[1 - position][repeat]
-            distances = distances[repeat]
-    columns = {bound.distance: distances}
-    for side, row in zip(sides, rows):
-        columns.update({
-            variable: values[row] for variable, values in side.values.items()
-        })
-    columns = {variable: columns[variable] for variable in selected}
-    if len(selected) < len(sides[0].values) + len(sides[1].values) + 1:
-        keep = _distinct_rows(list(columns.values()))
-        columns = {
-            variable: column[keep] for variable, column in columns.items()
-        }
-    return columns
-
-
-def _projected_pairs(sides, pairs, selected):
-    """
-    Return the *selected* columns of the pairs joined with their rows.
-
-    The join and the projection are a product of sparse matrices relating
-    the distinct values of the selected variables of the first range to
-    its points, the points of the pairs and the points of the second
-    range to the distinct values of its selected variables.
-
-    Parameters
-    ----------
-    sides : list of _PointRange
-        The range of each point.
-    pairs : tuple of numpy.ndarray
-        Index of the points of each pair and their distance.
-    selected : list of Symbol
-        Variables of the columns, not including the distance.
-
-    Returns
-    -------
-    dict
-        Column of each variable, without duplicate rows.
-    """
-    product = scipy.sparse.csr_matrix(
-        (numpy.ones(len(pairs[0]), dtype=numpy.int32), pairs[:2]),
-        shape=(len(sides[0].points), len(sides[1].points)),
-    )
-    codes = [_value_codes(side, selected) for side in sides]
-    first_codes, second_codes = codes
-    if first_codes is not None:
-        product = _code_matrix(first_codes, sides[0]).T @ product
-    if second_codes is not None:
-        product = product @ _code_matrix(second_codes, sides[1])
-    product = product.tocoo()
-    columns = {}
-    for side, side_codes, index in zip(
-        sides, codes, (product.row, product.col)
-    ):
-        columns.update(_code_columns(side, side_codes, index, selected))
-    return {variable: columns[variable] for variable in selected}
-
-
-def _code_columns(side, codes, index, selected):
-    """
-    Return the columns of the selected variables of a range, by code.
-
-    Parameters
-    ----------
-    side : _PointRange
-        Range of a point.
-    codes : tuple of numpy.ndarray or None
-        The code of each row and a row of each code, None when the codes
-        are the points.
-    index : numpy.ndarray
-        Code of each output row.
-    selected : list of Symbol
-        Selected variables.
-
-    Returns
-    -------
-    dict
-        Column of each selected variable of the range.
-    """
-    rows = index if codes is None else codes[1][index]
-    return {
-        variable: values[rows] for variable, values in side.values.items()
-        if variable in selected
-    }
-
-
-def _value_codes(side, selected):
-    """
-    Return codes of the distinct values of the selected variables.
-
-    Parameters
-    ----------
-    side : _PointRange
-        Range of a point.
-    selected : list of Symbol
-        Selected variables.
-
-    Returns
-    -------
-    tuple of numpy.ndarray or None
-        The code of each row and a row of each code, or None when the
-        rows are the points and the codes their indices.
-    """
-    variables = [variable for variable in side.values if variable in selected]
-    if len(variables) == len(side.values) and side.point_of_row is None:
-        return None
-    n_rows = len(next(iter(side.values.values())))
-    if len(variables) == len(side.values):
-        return numpy.arange(n_rows), numpy.arange(n_rows)
-    if not variables:
-        return numpy.zeros(n_rows, dtype=int), numpy.zeros(1, dtype=int)
-    frame = pandas.DataFrame({
-        position: side.values[variable]
-        for position, variable in enumerate(variables)
-    })
-    row_codes = frame.groupby(list(frame.columns), sort=False).ngroup()
-    row_codes = row_codes.to_numpy()
-    first_rows = numpy.flatnonzero(
-        numpy.diff(numpy.maximum.accumulate(row_codes), prepend=-1) > 0
-    )
-    return row_codes, first_rows
-
-
-def _code_matrix(codes, side):
-    """
-    Return the sparse matrix relating the points of *side* to row codes.
-
-    Parameters
-    ----------
-    codes : tuple of numpy.ndarray
-        The code of each row and a row of each code.
-    side : _PointRange
-        Range of a point.
-
-    Returns
-    -------
-    scipy.sparse.csr_matrix
-        Matrix of the points by the codes of their rows.
-    """
-    row_codes, first_rows = codes
-    point_of_row = side.point_of_row
-    if point_of_row is None:
-        point_of_row = numpy.arange(len(row_codes))
-    return scipy.sparse.csr_matrix(
-        (numpy.ones(len(row_codes), dtype=numpy.int32),
-         (point_of_row, row_codes)),
-        shape=(len(side.points), len(first_rows)),
-    )
-
-
-def _distinct_rows(columns):
-    """
-    Return which rows of *columns* are the first of their value.
-
-    Parameters
-    ----------
-    columns : list of numpy.ndarray
-        Columns of equal length.
-
-    Returns
-    -------
-    numpy.ndarray
-        Boolean mask of the distinct rows.
-    """
-    key = numpy.zeros(len(columns[0]), dtype=numpy.int64)
-    span = 1
-    for column in columns:
-        codes, uniques = pandas.factorize(column)
-        span *= max(len(uniques), 1)
-        if span >= MAX_KEY:
-            frame = pandas.DataFrame(dict(enumerate(columns)))
-            return ~frame.duplicated().to_numpy()
-        key = key * max(len(uniques), 1) + codes
-    return ~pandas.Series(key).duplicated().to_numpy()
 
 
 def _is_contains_atom(atom):
