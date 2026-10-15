@@ -56,7 +56,7 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..logic import Implication, Union, Symbol
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -88,7 +88,10 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
-from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..datalog.wrapped_collections import (
+    WrappedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraSet,
+)
 from ..commands import CommandsMixin
 from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
@@ -111,6 +114,41 @@ from .show_ra import (
     show_ra_options,
 )
 from .stratum_solver import StratumSolver
+
+
+def _symbol_names(symbols):
+    """Return the names of ``symbols``."""
+    return tuple(symbol.name for symbol in symbols)
+
+
+def _with_empty_relations(solution, prob_idb, program):
+    """
+    Return the relations of ``solution`` and the empty ones ``prob_idb`` uses.
+
+    The chase leaves out of its solution the deterministic intensional
+    predicates of ``program`` without tuples; the rules of ``prob_idb``
+    need their relations, of their arity, to select constants from them.
+    """
+    idb = program.intensional_database()
+    relations = dict(solution.items())
+    heads = {rule.consequent.functor for rule in prob_idb.formulas}
+    for rule in prob_idb.formulas:
+        for atom in extract_logic_atoms(rule.antecedent):
+            if atom.functor in idb and not (
+                atom.functor in heads or atom.functor in relations
+            ):
+                relations[atom.functor] = _empty_relation(len(atom.args))
+    return relations
+
+
+def _empty_relation(arity):
+    """Return an empty relation of ``arity`` columns."""
+    columns = tuple(str(i) for i in range(arity))
+    return ir.Constant[AbstractSet](
+        WrappedRelationalAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(columns, []).to_unnamed()
+        )
+    )
 
 
 def instance_lru_cache(key_fn, maxsize=128):
@@ -443,7 +481,49 @@ class NeurolangPDL(QueryBuilderDatalog):
                 show_ra=show_ra,
             )
 
-        query = symbol_entry.formulas[0]
+        with self.scope:
+            query, query_pred_args = self._query_rule(
+                symbol_entry, predicate.expression
+            )
+            return self._solve_query_rule(
+                head, query, query_pred_args, show_rewritten, dry_run, show_ra
+            )
+
+    def _query_rule(self, symbol_entry, query_atom):
+        """
+        Return the rule to solve for ``query_atom`` and its head's arguments.
+
+        When the arguments of ``query_atom`` are variables and constants,
+        not all distinct variables, the rule is a fresh one,
+        ``q(v) :- query_atom`` with ``v`` the variables of ``query_atom``,
+        which are returned, added to the program: magic sets then restrict
+        the solved rules to the constants and repeated variables of
+        ``query_atom``. Otherwise the rule is the first of
+        ``symbol_entry``, the rules of the query predicate, and the
+        arguments are those of ``query_atom``.
+        """
+        args = query_atom.args
+        variables = tuple(
+            dict.fromkeys(arg for arg in args if isinstance(arg, ir.Symbol))
+        )
+        if len(variables) == len(args) or not all(
+            isinstance(arg, (ir.Symbol, ir.Constant)) for arg in args
+        ):
+            return symbol_entry.formulas[0], args
+        goal = ir.Symbol.fresh()
+        self.program_ir.walk(Implication(goal(*variables), query_atom))
+        return self.program_ir.symbol_table[goal].formulas[0], variables
+
+    def _solve_query_rule(
+        self, head, query, query_pred_args, show_rewritten, dry_run, show_ra
+    ):
+        """
+        Solve the rule ``query`` and restrict its solution to ``head``.
+
+        ``query_pred_args`` are the arguments of the query predicate, the
+        consequent of ``query``; the other parameters and the result are
+        those of :meth:`_execute_query`.
+        """
         options = show_ra_options(show_ra)
         if options is not None:
             return self._show_ra_query(
@@ -542,6 +622,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
+            query_pred_symb = stratum_solver.query_predicate(
+                query, magic_query
+            )
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 self._handle_rewritten_output(
@@ -550,7 +633,6 @@ class NeurolangPDL(QueryBuilderDatalog):
                 solution = self._solve(
                     magic_query, stratum_solver=stratum_solver
                 )
-                query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             self._handle_rewritten_output(
                 query, show_rewritten, dry_run, show_ra=True
@@ -666,12 +748,13 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_probabilistic_stratum(self, solution, prob_idb):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
+        det_solution = self._deterministic_relations(solution, prob_idb)
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
         ):
             try:
                 prob_solution = compute_probabilistic_solution(
-                    solution,
+                    det_solution,
                     pfact_edb,
                     pchoice_edb,
                     prob_idb,
@@ -698,6 +781,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             }
         )
         return solution
+
+    def _deterministic_relations(self, solution, prob_idb):
+        """
+        Return the relations of ``solution`` and the empty ones ``prob_idb``
+        uses: the chase leaves out of its solution the deterministic
+        intensional predicates without tuples.
+        """
+        return _with_empty_relations(solution, prob_idb, self.program_ir)
 
     def _build_postprobabilistic_solver(self, solution, postprob_idb):
         """
@@ -811,10 +902,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         retrieve the relation whose columns correspond to symbols in the head
         of the query.
         """
-        # return dum when empty solution (reported in GH481)
+        # return an empty set when empty solution (reported in GH481)
         if pred_symb not in solution:
             return ir.Constant[AbstractSet](
-                NamedRelationalAlgebraFrozenSet.dum()
+                NamedRelationalAlgebraFrozenSet(
+                    _symbol_names(head_symbols), []
+                )
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type

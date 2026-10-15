@@ -770,11 +770,13 @@ def test_adorned_symbol_predicates_keep_their_own_rules():
     dl.walk(code)
     dl.walk(edb)
     goal, mr = magic_rewrite(q(x), dl)
-    names = {
-        rule.consequent.functor.name for rule in mr.formulas
-        if not rule.consequent.functor.name.startswith("magic_")
-    }
-    assert any(name.startswith("anc^cond_num^") for name in names), names
+    heads = {rule.consequent.functor for rule in mr.formulas}
+    num_heads = [
+        head for head in heads
+        if isinstance(head, AdornedSymbol) and head.adornment == "cond_num"
+    ]
+    assert len(num_heads) == 1, heads
+    assert num_heads[0].expression != anc
     dl.walk(mr)
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {(a,)}
