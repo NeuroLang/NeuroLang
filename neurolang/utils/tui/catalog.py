@@ -6,7 +6,8 @@ time it is called, so that the relations and the rules added during the
 session are in it as soon as they exist: the relations stored in the
 engine, its rules, those of the session, the relations loaded with
 ``.load``, its probabilistic facts and choices and its functions, each
-described by a :class:`PredicateInfo`.
+described by a :class:`PredicateInfo`. The completion and ``.predicates``
+share it.
 """
 
 from typing import NamedTuple, Optional
@@ -16,6 +17,8 @@ from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.probabilistic.expressions import ProbabilisticQuery
 from neurolang.utils.cli import _is_generated_column
+
+from . import squall_sorts
 
 
 class PredicateInfo(NamedTuple):
@@ -29,7 +32,9 @@ class PredicateInfo(NamedTuple):
     *columns* are the names of its columns, or None when they are
     unknown, and *arity* its number of columns, or None when it is
     unknown. A *probabilistic* predicate has a probability column
-    besides its *arity* columns.
+    besides its *arity* columns. *arguments* are the
+    :class:`~neurolang.utils.engine_registry.Argument` the engine
+    declares, the entities it relates, or None.
     """
 
     name: str
@@ -37,14 +42,33 @@ class PredicateInfo(NamedTuple):
     columns: Optional[tuple] = None
     arity: Optional[int] = None
     probabilistic: bool = False
+    arguments: Optional[tuple] = None
 
     def signature(self) -> str:
-        """Return ``name(col, ...)``, or ``name/arity``, or ``name``."""
+        """
+        Return ``name(entity, ...)``, ``name(col, ...)``, ``name/arity``.
+
+        The entities of several columns, or of a column not named after
+        their sort, show their columns: ``reports(study(study_id),
+        voxel(i, j, k))``. Without entities, the columns are shown, or
+        else the arity, or else the name alone.
+        """
+        arguments = self.arguments or ()
+        if len(arguments) > 1:
+            entities = ", ".join(
+                squall_sorts.argument_text(argument, columns=True)
+                for argument in arguments
+            )
+            return f"{self.name}({entities})"
         if self.columns:
             return f"{self.name}({', '.join(self.columns)})"
         if self.arity is not None:
             return f"{self.name}/{self.arity}"
         return self.name
+
+    def meta(self) -> str:
+        """Return the signature and the kind, as the completion shows."""
+        return f"{self.signature()} · {self.kind}"
 
 
 # The kinds of predicates, in the order they are listed.
@@ -136,6 +160,16 @@ def _rule_info(name, union, kind, columns) -> PredicateInfo:
     return PredicateInfo(name, kind, declared, arity, probabilistic)
 
 
+def _declared_arguments(name, arity, signatures) -> Optional[tuple]:
+    """Return the arguments *signatures* gives *name*, if they fit."""
+    arguments = signatures.get(name)
+    if arguments is None or arity is None:
+        return None
+    if sum(len(argument.columns) for argument in arguments) != arity:
+        return None
+    return tuple(arguments)
+
+
 def _function_arity(symbol) -> Optional[int]:
     """Return the number of parameters of the typed function *symbol*."""
     args = getattr(symbol.type, "__args__", None)
@@ -147,17 +181,18 @@ def _function_arity(symbol) -> Optional[int]:
 class CatalogBuilder:
     """Collect the :class:`PredicateInfo` of the symbols of an engine."""
 
-    def __init__(self, nl, columns=None, loaded=None):
+    def __init__(self, nl, columns=None, loaded=None, signatures=None):
         """
         Set up the collection on the engine *nl*.
 
-        See :func:`predicate_catalog` for the *columns* and the *loaded*
-        relations.
+        See :func:`predicate_catalog` for the *columns*, the *loaded*
+        relations and the *signatures*.
         """
         loaded = loaded or {}
         self.program_ir = nl.program_ir
         self.columns = {**(columns or {}), **loaded}
         self.loaded = loaded
+        self.signatures = signatures or {}
         self.probabilistic = _probabilistic_symbols(self.program_ir)
         self.protected = getattr(self.program_ir, "protected_keywords", ())
 
@@ -167,8 +202,18 @@ class CatalogBuilder:
 
         *session* tells whether it is defined in the session's scope.
         None is returned for a symbol that is not a predicate or that
-        NeuroLang generates.
+        NeuroLang generates. The arguments are those the signatures
+        declare for it, if they fit its arity.
         """
+        info = self._info(symbol, value, session)
+        if info is None:
+            return None
+        return info._replace(arguments=_declared_arguments(
+            info.name, info.arity, self.signatures
+        ))
+
+    def _info(self, symbol, value, session: bool):
+        """Return the info of *symbol* without its arguments, or None."""
         if not is_user_symbol(symbol, self.protected):
             return None
         inner = getattr(value, "value", None)
@@ -217,7 +262,7 @@ def collect_catalog(builder, symbol_table) -> dict:
     return catalog
 
 
-def predicate_catalog(nl, columns=None, loaded=None) -> dict:
+def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
     """
     Return the predicates defined in the engine *nl*, by name.
 
@@ -225,9 +270,11 @@ def predicate_catalog(nl, columns=None, loaded=None) -> dict:
     when the session opened one, being the session's), its probabilistic
     facts and choices and its functions. *columns* maps relation names to
     their declared columns (e.g. from the engine's configuration) and
-    *loaded* those of the relations loaded with ``.load``.
+    *loaded* those of the relations loaded with ``.load``. *signatures*
+    maps predicate names to the arguments the engine declares (see
+    :func:`~neurolang.utils.engine_registry.get_signatures`).
     """
-    builder = CatalogBuilder(nl, columns, loaded)
+    builder = CatalogBuilder(nl, columns, loaded, signatures)
     return collect_catalog(builder, nl.program_ir.symbol_table)
 
 
