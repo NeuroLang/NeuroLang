@@ -1148,8 +1148,10 @@ class NamedRelationalAlgebraFrozenSet(
         # Check if column is Object type (e.g., frozenset)
         c_schema = c.collect_schema()
         dt = c_schema.get(src_column)
-        if dt == pl.Object or dt is None:
-            # Fall back to pure Python approach since Polars can't explode Object dtype
+        if not isinstance(dt, (pl.List, pl.Array)):
+            # Fall back to pure Python approach since Polars only explodes
+            # lists: not the Object dtype (e.g. frozensets), nor the
+            # inferred dtype of the column of an empty relation
             eager = c.collect()
             rows = list(eager.iter_rows())
             col_names = list(eager.columns)
