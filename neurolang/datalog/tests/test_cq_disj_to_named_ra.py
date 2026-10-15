@@ -4,6 +4,7 @@ from typing import AbstractSet, Callable, Tuple
 import numpy
 import pytest
 
+from ... import exceptions
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Disjunction, ExistentialPredicate
@@ -230,6 +231,22 @@ def test_selection():
     )
     expected_builtin_condition = C_(gt)(C_(ColumnStr("x")), C_(3))
     assert res == Selection(fa_trans, expected_builtin_condition)
+
+
+def test_selection_over_unbound_variable():
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    exp = Conjunction((R1(x), C_(gt)(x, y)))
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        TranslateToNamedRA().walk(exp)
+    assert exc_info.value.variables == ("y",)
+    assert exc_info.value.rule is None
+    assert str(exc_info.value).startswith(
+        "In a rule body: the variable y appears only in `x > y`"
+    )
+    assert "normal form" not in exc_info.value.suggestion
 
 
 def test_extended_projection():
