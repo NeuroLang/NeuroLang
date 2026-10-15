@@ -501,10 +501,17 @@ _PREDICATE_COLUMNS = ("Predicate", "Kind", "Columns")
     "with their kind and columns",
 )
 def cmd_predicates(app, arg: str) -> None:
-    """Print the predicates of the engine, by kind and name."""
+    """
+    Print the predicates of the engine, by kind and name.
+
+    A predicate the engine declares the arguments of shows its
+    entities.
+    """
+    engine = app.settings.engine_name
+    signatures = engine_registry.get_signatures(engine) if engine else {}
     infos = listed(predicate_catalog(
-        app._nl, _declared_columns(app.settings.engine_name),
-        app.loaded_relations,
+        app._nl, _declared_columns(engine), app.loaded_relations,
+        signatures,
     ))
     if app.console.is_terminal:
         _print_predicates_table(app, infos)
