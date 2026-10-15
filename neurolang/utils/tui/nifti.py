@@ -108,6 +108,37 @@ class SavedImage(NamedTuple):
 _SAVE_OPTIONS = {"--value": 1, "--voxel": 3, "--mm": 3}
 
 
+# How each option is written, for the messages.
+_OPTION_FORMS = {
+    "--value": "--value COLUMN", "--voxel": "--voxel I J K",
+    "--mm": "--mm X Y Z", "--threshold": "--threshold T",
+    "--cmap": "--cmap NAME", "--symmetric": "--symmetric",
+    "--one-sided": "--one-sided",
+}
+
+
+def split_args(arg: str, widths: dict, usage: str) -> tuple:
+    """
+    Return the paths and the options of the command arguments *arg*.
+
+    *widths* gives the number of values each option takes; the options
+    are returned as a dict of their values. A :class:`SaveError` tells
+    why *arg* does not follow *usage*.
+    """
+    try:
+        tokens = shlex.split(arg)
+    except ValueError as exc:
+        raise SaveError(f"{exc}. Usage: {usage}") from exc
+    paths, options = [], {}
+    while tokens:
+        token = tokens.pop(0)
+        if token.startswith("--"):
+            options[token] = _option_values(token, tokens, widths)
+        else:
+            paths.append(token)
+    return paths, options
+
+
 def parse_save_args(arg: str) -> SaveRequest:
     """
     Return the request of the arguments *arg* of ``.save``.
@@ -115,34 +146,26 @@ def parse_save_args(arg: str) -> SaveRequest:
     They are a path, quoted if it holds spaces, and the options of
     :data:`SAVE_USAGE`; a :class:`SaveError` tells why they are not.
     """
-    try:
-        tokens = shlex.split(arg)
-    except ValueError as exc:
-        raise SaveError(f"{exc}. Usage: {SAVE_USAGE}") from exc
-    paths, options = [], {}
-    while tokens:
-        token = tokens.pop(0)
-        if token.startswith("--"):
-            options[token] = _option_values(token, tokens)
-        else:
-            paths.append(token)
+    paths, options = split_args(arg, _SAVE_OPTIONS, SAVE_USAGE)
     if len(paths) != 1:
         raise SaveError(f"Usage: {SAVE_USAGE}")
     return _save_request(Path(paths[0]).expanduser(), options)
 
 
-def _option_values(option: str, tokens: list) -> list:
-    """Remove the columns of *option* from the head of *tokens*."""
-    width = _SAVE_OPTIONS.get(option)
+def _option_values(option: str, tokens: list, widths: dict) -> list:
+    """Remove the values of *option* from the head of *tokens*."""
+    width = widths.get(option)
     if width is None:
+        forms = [_OPTION_FORMS[name] for name in widths]
         raise SaveError(
-            f"Unknown option {option}; the options are --value COLUMN, "
-            "--voxel I J K and --mm X Y Z."
+            f"Unknown option {option}; the options are "
+            f"{', '.join(forms[:-1])} and {forms[-1]}."
         )
     values = tokens[:width]
     if len(values) < width or any(v.startswith("--") for v in values):
-        columns = "1 column" if width == 1 else f"{width} columns"
-        raise SaveError(f"{option} takes {columns}.")
+        unit = "column" if option in _SAVE_OPTIONS else "value"
+        count = f"1 {unit}" if width == 1 else f"{width} {unit}s"
+        raise SaveError(f"{option} takes {count}.")
     del tokens[:width]
     return values
 
@@ -396,13 +419,142 @@ def _save_nifti(app, df: pd.DataFrame, request: SaveRequest) -> None:
     )
 
 
-# The threshold of the viewer: every nonzero voxel is shown.
+# The default threshold of the viewer: every nonzero voxel is shown.
 VIEW_THRESHOLD = 1e-6
 
+VIEW_USAGE = (
+    ".view [PATH.nii[.gz]] [--threshold T|P%] [--cmap NAME] "
+    "[--symmetric | --one-sided]"
+)
 
-def _view_nifti(app, path: str) -> None:
+# The options of .view and the number of values each takes; without a
+# path, the options of .save tell how to convert the last result.
+_VIEW_OPTIONS = {
+    "--threshold": 1, "--cmap": 1, "--symmetric": 0, "--one-sided": 0,
+}
+
+
+class ViewRequest(NamedTuple):
     """
-    Show the NIfTI image *path* in nilearn's viewer.
+    What ``.view`` shows: the image *path*, or the last result if None.
+
+    *save* tells how to convert the last result, as ``.save`` would;
+    *symmetric* is None when the image decides (see :func:`symmetry`).
+    """
+
+    path: Optional[Path]
+    save: SaveRequest
+    threshold: object = VIEW_THRESHOLD
+    cmap: Optional[str] = None
+    symmetric: Optional[bool] = None
+
+
+def parse_view_args(arg: str) -> ViewRequest:
+    """
+    Return the request of the arguments *arg* of ``.view``.
+
+    A :class:`SaveError` tells why they do not follow :data:`VIEW_USAGE`.
+    """
+    paths, options = split_args(
+        arg, {**_VIEW_OPTIONS, **_SAVE_OPTIONS}, VIEW_USAGE
+    )
+    if len(paths) > 1:
+        raise SaveError(f"Usage: {VIEW_USAGE}")
+    conversion = {k: v for k, v in options.items() if k in _SAVE_OPTIONS}
+    if paths and conversion:
+        raise SaveError(
+            f"{', '.join(conversion)}: options to view the last result, "
+            "not a file."
+        )
+    return ViewRequest(
+        Path(paths[0]).expanduser() if paths else None,
+        _save_request(Path("last.nii.gz"), conversion),
+        view_threshold(options.get("--threshold", [None])[0]),
+        options.get("--cmap", [None])[0], _symmetry_option(options),
+    )
+
+
+def view_threshold(text: Optional[str]):
+    """
+    Return the threshold *text*: a value, or a percentile such as ``95%``.
+
+    Without *text*, it is :data:`VIEW_THRESHOLD`.
+    """
+    if text is None:
+        return VIEW_THRESHOLD
+    number = text[:-1] if text.endswith("%") else text
+    try:
+        value = float(number)
+    except ValueError:
+        value = -1.0
+    upper = 100.0 if text.endswith("%") else float("inf")
+    if not 0 <= value <= upper:
+        raise SaveError(
+            f"--threshold takes a value ≥ 0 or a percentile such as 95%, "
+            f"not {text!r}."
+        )
+    return text if text.endswith("%") else value
+
+
+def _symmetry_option(options: dict) -> Optional[bool]:
+    """Return the colormap symmetry the *options* ask for, if any."""
+    if "--symmetric" in options and "--one-sided" in options:
+        raise SaveError("Give --symmetric or --one-sided, not both.")
+    if "--symmetric" in options:
+        return True
+    return False if "--one-sided" in options else None
+
+
+def symmetry(console, path: Path, symmetric: Optional[bool]) -> bool:
+    """
+    Return whether the colormap of the image *path* is symmetric.
+
+    Unless *symmetric* says, it is when the image has negative values;
+    *console* is then told which was chosen and how to change it.
+    """
+    if symmetric is not None:
+        return symmetric
+    signed = bool((np.asanyarray(nib.load(path).dataobj) < 0).any())
+    console.print(
+        "Colormap: symmetric, the image has negative values (--one-sided "
+        "for a one-sided one)." if signed else
+        "Colormap: one-sided, the image has no negative values "
+        "(--symmetric for a symmetric one).",
+        style="dim", markup=False,
+    )
+    return signed
+
+
+def _check_cmap(name: Optional[str]) -> None:
+    """Raise a SaveError unless *name* is a matplotlib or nilearn colormap."""
+    if name is None:
+        return
+    import matplotlib
+    from nilearn.plotting import cm
+
+    if name not in matplotlib.colormaps and name not in getattr(
+        cm, "_cmap_d", {}
+    ):
+        raise SaveError(f"Unknown colormap {name!r}.")
+
+
+def _view_kwargs(app, path: Path, request: ViewRequest) -> dict:
+    """Return the arguments of nilearn's viewer for the image *path*."""
+    _check_cmap(request.cmap)
+    template = getattr(app._nl, "template", None)
+    kwargs = {
+        "bg_img": "MNI152" if template is None else template,
+        "threshold": request.threshold, "title": path.name,
+        "symmetric_cmap": symmetry(app.console, path, request.symmetric),
+    }
+    if request.cmap is not None:
+        kwargs["cmap"] = request.cmap
+    return kwargs
+
+
+def _view_nifti(app, path: Path, request: ViewRequest) -> None:
+    """
+    Show the NIfTI image *path* in nilearn's viewer, as *request* asks.
 
     The viewer, over the engine's template (nilearn's MNI152 without
     one), is saved as an HTML file whose path is printed, and opened in a
@@ -414,14 +566,11 @@ def _view_nifti(app, path: str) -> None:
     except ImportError:
         app.console.print("[red]nilearn is required for visualisation.[/red]")
         return
-    template = getattr(app._nl, "template", None)
     try:
+        kwargs = _view_kwargs(app, path, request)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            view = plotting.view_img(
-                path, bg_img="MNI152" if template is None else template,
-                threshold=VIEW_THRESHOLD, title=Path(path).name,
-            )
+            view = plotting.view_img(str(path), **kwargs)
         html = _html_file(view)
     except Exception as exc:
         app.console.print(
@@ -557,16 +706,61 @@ def cmd_save(app, arg: str) -> None:
         _save_frame(app, block.frame, request._replace(path=path))
 
 
+def last_result_image(app, request: SaveRequest) -> Optional[Path]:
+    """
+    Save the last result as a NIfTI image in a temporary file, its path.
+
+    The result, the last ``obtain`` block of a SQUALL program with
+    several, is converted as ``.save`` converts it, as *request* asks.
+    Return None, and tell why, if there is no result or it has no voxels.
+    """
+    if not app.results:
+        app.console.print(
+            "[yellow]Nothing to view — run a query first, or give a NIfTI "
+            "file.[/yellow]"
+        )
+        return None
+    try:
+        template = engine_template(app._nl)
+        saved = result_to_nifti(
+            app.results[-1].frame, template,
+            _engine_sorts(app.settings.engine_name), request,
+        )
+    except Exception as exc:
+        app.console.print(f"View failed: {exc}", style="red", markup=False)
+        return None
+    fd, name = tempfile.mkstemp(suffix=".nii.gz", prefix="neurolang_view_")
+    os.close(fd)
+    nib.save(saved.image, name)
+    app.console.print(
+        saved_image_message(Path(name), saved, template.shape),
+        style="green", markup=False,
+    )
+    return Path(name)
+
+
 @command(
-    ".view", "Show a NIfTI image in nilearn's viewer, in a browser",
-    ".view PATH.nii[.gz]",
+    ".view", "Show a NIfTI image, or the last result, in nilearn's viewer",
+    VIEW_USAGE,
 )
 def cmd_view(app, arg: str) -> None:
-    """Show the NIfTI image *arg* in nilearn's viewer."""
-    path = os.path.expanduser(arg.strip())
-    if not path:
-        app.console.print("[yellow]Usage: .view <path>.nii[.gz][/yellow]")
-    elif not os.path.isfile(path):
-        app.console.print(f"[red]File not found: {path}[/red]")
-    else:
-        _view_nifti(app, path)
+    """
+    Show the NIfTI image of *arg*, or the last result, in nilearn's viewer.
+
+    Without a path, the last result is converted as ``.save`` would, its
+    options included, into a temporary ``.nii.gz`` file.
+    """
+    try:
+        request = parse_view_args(arg)
+    except SaveError as exc:
+        app.console.print(f"View failed: {exc}", style="red", markup=False)
+        return
+    path = request.path or last_result_image(app, request.save)
+    if path is None:
+        return
+    if not path.is_file():
+        app.console.print(
+            f"File not found: {path}", style="red", markup=False
+        )
+        return
+    _view_nifti(app, path, request)
