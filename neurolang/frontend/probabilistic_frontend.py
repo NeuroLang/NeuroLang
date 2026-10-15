@@ -56,12 +56,13 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..logic import Implication, Union, Symbol
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
 )
 from ..probabilistic.cplogic.program import CPLogicMixin
+from ..probabilistic.expressions import PROB
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -110,7 +111,12 @@ from .show_ra import (
     generated_query_symbol,
     show_ra_options,
 )
-from .stratum_solver import StratumSolver
+from .stratum_solver import StratumSolver, with_empty_relations
+
+
+def _symbol_names(symbols):
+    """Return the names of ``symbols``."""
+    return tuple(symbol.name for symbol in symbols)
 
 
 def instance_lru_cache(key_fn, maxsize=128):
@@ -434,16 +440,60 @@ class NeurolangPDL(QueryBuilderDatalog):
         #   1. EDB predicates — symbol entry is a Constant (no .formulas).
         #   2. Conjunction queries (p(x), q(y)) — functor is `and_`, which
         #      is not in the symbol table at all.
-        # In both cases fall through to the base QueryBuilderDatalog
+        #   3. Heads computing a term, such as count(s): the path below
+        #      only restricts the predicate's relation to its variables.
+        # In these cases fall through to the base QueryBuilderDatalog
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
-        if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+        if _solved_as_query_rule(head, symbol_entry):
             return super()._execute_query(
                 head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
             )
 
-        query = symbol_entry.formulas[0]
+        with self.scope:
+            query, query_pred_args = self._query_rule(
+                symbol_entry, predicate.expression
+            )
+            return self._solve_query_rule(
+                head, query, query_pred_args, show_rewritten, dry_run, show_ra
+            )
+
+    def _query_rule(self, symbol_entry, query_atom):
+        """
+        Return the rule to solve for ``query_atom`` and its head's arguments.
+
+        When the arguments of ``query_atom`` are variables and constants,
+        not all distinct variables, the rule is a fresh one,
+        ``q(v) :- query_atom`` with ``v`` the variables of ``query_atom``,
+        which are returned, added to the program: magic sets then restrict
+        the solved rules to the constants and repeated variables of
+        ``query_atom``. Otherwise the rule is the first of
+        ``symbol_entry``, the rules of the query predicate, and the
+        arguments are those of ``query_atom``.
+        """
+        args = query_atom.args
+        variables = tuple(
+            dict.fromkeys(arg for arg in args if isinstance(arg, ir.Symbol))
+        )
+        if len(variables) == len(args) or not all(
+            isinstance(arg, (ir.Symbol, ir.Constant)) for arg in args
+        ):
+            return symbol_entry.formulas[0], args
+        goal = ir.Symbol.fresh()
+        self.program_ir.walk(Implication(goal(*variables), query_atom))
+        return self.program_ir.symbol_table[goal].formulas[0], variables
+
+    def _solve_query_rule(
+        self, head, query, query_pred_args, show_rewritten, dry_run, show_ra
+    ):
+        """
+        Solve the rule ``query`` and restrict its solution to ``head``.
+
+        ``query_pred_args`` are the arguments of the query predicate, the
+        consequent of ``query``; the other parameters and the result are
+        those of :meth:`_execute_query`.
+        """
         options = show_ra_options(show_ra)
         if options is not None:
             return self._show_ra_query(
@@ -451,22 +501,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 (self._query_head_symbols(head)[0], query_pred_args),
             )
 
-        try:
-            magic_query, magic_rules = self._magic_rewrite_query(query)
-            if self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run
-            ):
-                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
-            with self.scope:
-                self.program_ir.walk(magic_rules)
-                solution = self._solve(magic_query)
-                query_pred_symb = magic_query.consequent.functor
-        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            if self._handle_rewritten_output(
-                query, show_rewritten, dry_run
-            ):
-                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
-            solution = self._solve(query)
+        solved = self._solve_rewritten(query, show_rewritten, dry_run)
+        if solved is None:
+            return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+        solution, query_pred_symb = solved
 
         head_symbols, functor_orig = self._query_head_symbols(head)
         solution = self._restrict_to_query_solution(
@@ -475,6 +513,33 @@ class NeurolangPDL(QueryBuilderDatalog):
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    def _solve_rewritten(self, query, show_rewritten, dry_run):
+        """
+        Solve ``query``, rewritten with magic sets if it can be.
+
+        The rewritten program is printed, within the scope holding the
+        magic rules it needs, when ``show_rewritten`` or ``dry_run`` is
+        set. When the query cannot be rewritten, ``query`` itself is
+        printed and solved. Return the solution and the symbol of the
+        solved query predicate, or None for a dry run.
+        """
+        try:
+            magic_query, magic_rules = self._magic_rewrite_query(query)
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                if self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run
+                ):
+                    return None
+                solution = self._solve(magic_query)
+                return solution, magic_query.consequent.functor
+        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+            if self._handle_rewritten_output(
+                query, show_rewritten, dry_run
+            ):
+                return None
+            return self._solve(query), query.consequent.functor
 
     @staticmethod
     def _query_head_symbols(head):
@@ -527,15 +592,17 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
-            self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run, show_ra=True
+            query_pred_symb = stratum_solver.query_predicate(
+                query, magic_query
             )
             with self.scope:
                 self.program_ir.walk(magic_rules)
+                self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run, show_ra=True
+                )
                 solution = self._solve(
                     magic_query, stratum_solver=stratum_solver
                 )
-                query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             self._handle_rewritten_output(
                 query, show_rewritten, dry_run, show_ra=True
@@ -651,12 +718,15 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_probabilistic_stratum(self, solution, prob_idb):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
+        det_solution = with_empty_relations(
+            solution, prob_idb, self.program_ir
+        )
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
         ):
             try:
                 prob_solution = compute_probabilistic_solution(
-                    solution,
+                    det_solution,
                     pfact_edb,
                     pchoice_edb,
                     prob_idb,
@@ -796,10 +866,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         retrieve the relation whose columns correspond to symbols in the head
         of the query.
         """
-        # return dum when empty solution (reported in GH481)
+        # return an empty set when empty solution (reported in GH481)
         if pred_symb not in solution:
             return ir.Constant[AbstractSet](
-                NamedRelationalAlgebraFrozenSet.dum()
+                NamedRelationalAlgebraFrozenSet(
+                    _symbol_names(head_symbols), []
+                )
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type
@@ -1067,3 +1139,21 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
+
+
+
+def _solved_as_query_rule(head, symbol_entry) -> bool:
+    """
+    Return whether a query is solved as a rule of its own.
+
+    It is when its predicate is not defined by rules (*symbol_entry* is
+    not a union of rules) or when its *head* computes a term other than
+    a probability, such as the aggregate ``count(s)``.
+    """
+    if not hasattr(symbol_entry, "formulas"):
+        return True
+    return isinstance(head, tuple) and any(
+        isinstance(h.expression, ir.FunctionApplication)
+        and h.expression.functor != PROB
+        for h in head
+    )

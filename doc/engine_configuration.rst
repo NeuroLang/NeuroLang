@@ -36,10 +36,18 @@ may specify the following keys, all of them optional:
   ``description``)
 - ``ontologies`` — list of ``{url}`` entries for OWL/RDF ontologies to load
 - ``predicates`` — schema metadata (arity, column names, description) used
-  by ``--list-predicates`` and the web UI
+  by ``--list-predicates``, the interactive REPL and the web UI; see
+  :ref:`predicate-arguments` below
+- ``hidden_predicates`` — predicates the interactive REPL does not offer
+  in SQUALL, because their argument order breaks sentences (they remain
+  usable when typed)
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
+- ``examples`` — example queries, as lists under ``datalog`` and
+  ``squall``; the interactive REPL suggests the first one of its language
+  at startup and lists them all in ``.help`` (by default it suggests
+  obtaining the first declared predicate)
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
@@ -66,6 +74,7 @@ Example — the ``neurosynth`` engine (abridged)::
         datalog_init: |
           study_with_peaks(S) :- peak_reported(I, J, K, S)
           mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+          weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
         predicates:
           peak_reported:
             arity: 4
@@ -82,8 +91,95 @@ Example — the ``neurosynth`` engine (abridged)::
 
 In this engine ``term_in_study_tfidf`` has columns ``(study_id, term,
 tfidf)``, and the derived ``mentions(s, t)`` relation keeps the same
-order: ``(study_id, term)``.  The ``selected_study`` uniform choice over studies is
+order: ``(study_id, term)``.  ``weighted_mention(study_id, term, tfidf)``
+holds the same rows as ``term_in_study_tfidf`` under a name that reads
+better in SQUALL, where an n-ary relation is a noun followed by a tuple of
+variables, in the order of its columns::
+
+    obtain every Weighted_mention (?s; ?t; ?w)
+        such that ?t is 'pain' and ?w is greater than 0.1.
+
+SQUALL verbs relate two arguments (``a Study mentions a Term``), so a
+relation of three columns cannot be a verb.  The ``selected_study`` uniform choice over studies is
 registered by the Python init module.
+
+.. _predicate-arguments:
+
+Predicate arguments and sorts
+-----------------------------
+
+A predicate may declare its ``arguments``: the entities it relates, in
+column order, each of a ``sort`` spanning one or more ``columns`` of a
+``type``.  The arity of a predicate, in the sense of the entities it
+relates, is the number of its arguments, not of its columns: a voxel
+``(i, j, k)`` is one argument, so ``reports(study_id, i, j, k)`` relates
+a study and a voxel::
+
+    reports:
+      description: "Studies reporting an activation peak at a voxel"
+      arguments:
+        - {sort: study, columns: [study_id], type: int}
+        - {sort: voxel, columns: [i, j, k], type: int}
+
+``columns`` and ``arity`` (the number of columns) are then derived from
+the arguments, and ``entities`` holds the number of arguments; declared
+``columns`` or ``arity`` must agree with them.  A sort spans the same
+columns everywhere.  ``probability: true`` marks a probabilistic symbol,
+whose probability column is not an argument.
+:func:`~neurolang.utils.engine_registry.get_signatures` returns the
+arguments of each predicate.
+
+A sort of points may declare its ``space``: ``space: voxel`` marks the
+indices ``(i, j, k)`` of a grid, and ``space: mm`` coordinates
+``(x, y, z)`` in millimetres in the space of the engine's template, the
+MNI image of an engine with ``requires_mni_mask`` (``nl.template`` on the
+engine :func:`~neurolang.utils.engine_registry.build_engine` returns).
+The grid of a sort of voxels is that of the template unless the sort
+names another with ``grid``: that of an atlas of the engine, by its key
+under ``atlases``.  The Schaefer atlas of ``neurosynth`` has its own
+2 mm grid, which ``labels`` and ``schaefer_voxels`` index::
+
+    atlases:
+      schaefer: {n_rois: 100, resolution_mm: 2, yeo_networks: 17}
+    sorts:
+      voxel: {columns: [i, j, k], type: int, space: voxel}
+      mni: {columns: [x, y, z], type: float, space: mm}
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+
+A grid is ``template`` or the key of an atlas of the engine, and only a
+sort of ``space: voxel`` names one; the configuration is rejected
+otherwise.  The engine holds the image of each grid in ``nl.grids``, by
+name: the template's, as ``template``, and each atlas's, registered
+when the atlas is loaded.
+
+The REPL's ``.save out.nii.gz`` (and ``.view``) writes a result on a
+grid, with its shape and affine.  Each column of the result has the sort
+of the argument of the predicate its variable is in, in the last query:
+``ans(x, y, z) :- voxel(x, y, z)`` holds voxel indices of the template
+grid, whatever the names of its columns, ``ans(l, i, j, k) :- labels(l,
+i, j, k)`` indices of the Schaefer atlas grid.  The sorts follow from
+the predicates declaring their ``arguments``, then from the rules defined
+from them, in Datalog as in SQUALL (``obtain every Voxel in 3D``).  The
+columns of a ``space: voxel`` sort are written as they are on its grid,
+those of an ``mm`` sort converted to the nearest voxel of the template.
+A column of unknown sort, such as one of a relation loaded with
+``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
+X Y Z`` give the columns, on the template's grid (see ``.help save``).
+
+The interactive REPL completes SQUALL from the sorts: after ``every`` it
+offers the nouns, capitalised; after ``every Study that`` the verbs whose
+first entity is a study (``mentions``, ``reports``); after ``every Term
+that`` the object clause ``a Study mentions``; after a noun of several
+columns ``in 3D`` and the tuple ``(?i; ?j; ?k)``, and ``with Probability``
+after a relation defined ``with inferred probability``.  In Datalog,
+the columns of an entity are completed together (``i, j, k``).  The
+inverse verb form ``~verb`` is not offered, as SQUALL does not invert
+its arguments in a relative clause; ``every Term that a Study mentions``
+reads the same.
 
 A note on the ``datalog_init`` syntax: the text Datalog parser does not
 distinguish variables from predicate names by case, so ``S`` and ``s`` are

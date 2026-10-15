@@ -845,3 +845,37 @@ def test_frontend_idb_predicate_several_bound_constants(frontend):
         "ans(s) :- reports(s, 10, 20, 30)"
     )
     assert set(res.as_pandas_dataframe().s) == {1, 2}
+
+
+def test_adorned_symbol_predicates_keep_their_own_rules():
+    """
+    Rewrite the rules of a predicate whose symbol is an AdornedSymbol.
+
+    The conditional query sugar defines ``anc^cond_num``, an
+    ``AdornedSymbol`` of ``anc``. Adorning it again must neither take the
+    rules of ``anc`` for its own nor give it the name of an adornment of
+    ``anc``.
+    """
+    anc_num = AdornedSymbol(anc, "cond_num", None)
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)), F_(par(d, a))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, b)),
+            Imp_(anc(x, y), anc_num(x, y) & par(y, z)),
+            Imp_(anc_num(x, y), par(x, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+    heads = {rule.consequent.functor for rule in mr.formulas}
+    num_heads = [
+        head for head in heads
+        if isinstance(head, AdornedSymbol) and head.adornment == "cond_num"
+    ]
+    assert len(num_heads) == 1, heads
+    assert num_heads[0].expression != anc
+    dl.walk(mr)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {(a,)}

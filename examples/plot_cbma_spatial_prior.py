@@ -101,12 +101,18 @@ Voxel = nl.add_tuple_set(
 # ----------------------------------
 
 
+# The distance ``d`` between each voxel and each focus of a study is bounded
+# by ``d <= 1``: the voxel of the focus and its 6 face neighbours. The bound
+# is exact, ``d < 1`` would keep the voxel of the focus only. As both points
+# are ranged by stored relations, the pairs within the bound are computed
+# once, when the rule is defined, rather than for every voxel and focus.
+
 with nl.environment as e:
     (e.VoxelReported @ e.max(e.exp(-e.d / 5.0)))[e.i1, e.j1, e.k1, e.s] = (
         e.FocusReported(e.i2, e.j2, e.k2, e.s)
         & e.Voxel(e.i1, e.j1, e.k1)
         & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-        & (e.d < 1)
+        & (e.d <= 1)
     )
     e.TermAssociation[e.t] = (
         e.SelectedStudy[e.s] & e.TermInStudyTFIDF[e.s, e.t, ...]

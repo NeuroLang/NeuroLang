@@ -2,21 +2,26 @@ import typing
 
 import pytest
 
+from ...datalog.expressions import Fact
+from ...datalog.magic_sets import probabilistic_symbols
 from ...datalog.wrapped_collections import (
     WrappedNamedRelationalAlgebraFrozenSetMixin,
     WrappedRelationalAlgebraSetMixin,
 )
 from ...exceptions import UnexpectedExpressionError
 from ...expressions import Constant, Symbol
-from ...logic import Union
+from ...logic import TRUE, Conjunction, Implication, Union
 from ...utils.relational_algebra_set import pandas as pandas_ras
+from ..cplogic.program import CPLogicProgram
 from ..exceptions import DistributionDoesNotSumToOneError
 from ..expression_processing import (
     add_to_union,
     check_probabilistic_choice_set_probabilities_sum_to_one,
     get_probchoice_variable_equalities,
     group_preds_by_functor,
+    is_probabilistic_predicate_symbol,
 )
+from ..expressions import PROB, ProbabilisticFact, ProbabilisticQuery
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -158,3 +163,48 @@ def test_probabilistic_choice_empty_does_not_sum_to_one(backend):
     with pytest.raises(DistributionDoesNotSumToOneError, match="Got 0"):
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
 
+
+
+def test_probabilistic_predicate_symbols_agree_with_magic_sets():
+    """
+    Classify the predicates of a program as the magic sets SIPS does.
+
+    The predicates depending on probabilistic facts or choices, other than
+    through a within-language probabilistic query (WLQ), are
+    probabilistic, recursive ones included; the WLQs and the predicates
+    depending on them are not. The frontend check of query predicates and
+    the magic sets must agree on these.
+    """
+    E, PF, PC, D, DR, R, PR, W, PW = (
+        Symbol(name)
+        for name in ("E", "PF", "PC", "D", "DR", "R", "PR", "W", "PW")
+    )
+    p = Symbol("p")
+    program = CPLogicProgram()
+    program.walk(Union((
+        Fact(E(a, b)),
+        Fact(E(b, a)),
+        Implication(ProbabilisticFact(Constant(0.5), PF(a)), TRUE),
+        Implication(D(x), E(x, y)),
+        Implication(DR(x, y), E(x, y)),
+        Implication(DR(x, y), Conjunction((DR(x, z), E(z, y)))),
+        Implication(R(x, y), Conjunction((PF(x), E(x, y)))),
+        Implication(R(x, y), Conjunction((R(x, z), E(z, y)))),
+        Implication(PR(x), Conjunction((D(x), PC(x)))),
+        Implication(
+            W(x, ProbabilisticQuery(PROB, (x,))), Conjunction((R(x, y),))
+        ),
+        Implication(PW(x, p), Conjunction((W(x, p), D(x)))),
+    )))
+    program.add_probabilistic_choice_from_tuples(PC, [(0.5, a), (0.5, b)])
+    symbols = (E, PF, PC, D, DR, R, PR, W, PW, Symbol("unknown"))
+
+    probabilistic = {
+        symbol for symbol in symbols
+        if is_probabilistic_predicate_symbol(symbol, program)
+    }
+
+    assert probabilistic == {PF, PC, R, PR}
+    assert probabilistic == (
+        probabilistic_symbols(program) - {W}
+    ).intersection(symbols)

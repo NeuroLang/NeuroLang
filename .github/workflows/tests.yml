@@ -26,6 +26,14 @@ jobs:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
 
+    - name: Cache downloaded atlases and datasets
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/neurolang_data
+          ~/nilearn_data
+        key: datasets-${{ runner.os }}-v1
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip

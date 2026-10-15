@@ -235,6 +235,36 @@ def test_show_rewritten_datalog_prints_all_rules(capsys):
     assert "fanatic" in captured.out
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [
+        dict(dry_run=True),
+        dict(show_rewritten=True),
+        dict(show_rewritten=True, show_ra=True),
+    ],
+)
+def test_show_rewritten_query_on_rule_with_constant(flags, capsys):
+    """
+    Check that the rewritten program of a query on a rule is printed.
+
+    The query on ``found`` is rewritten with magic sets, through the
+    constant ``'pain'``. Printing it used to fail with a KeyError on the
+    rewritten query predicate, whose rules were not in the program yet.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1", "pain"), ("s2", "noise")], name="mentions")
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.execute_datalog_program(
+        "talks(s, t) :- mentions(s, t)\n"
+        "found(s) :- study(s), talks(s, 'pain')"
+    )
+    with nl.scope as e:
+        nl.query((e.s,), e.found(e.s), **flags)
+    out = capsys.readouterr().out
+    assert "── rewritten program ──" in out
+    assert "magic_talks" in out
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
@@ -635,6 +665,36 @@ def test_post_probabilistic_aggregation():
     expected = {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
     assert_almost_equal(res.to_unnamed(), expected)
 
+
+
+@pytest.mark.parametrize(
+    "query, columns, rows",
+    [
+        ("ans(count(s)) :- pain(s)", ("count",), {(2,)}),
+        (
+            "ans(t, count(s)) :- term(s, t)", ("t", "count"),
+            {("pain", 2), ("fear", 1)},
+        ),
+    ],
+)
+def test_aggregate_query_on_a_rule(query, columns, rows):
+    """
+    An aggregate in the head of a query on one rule-defined predicate.
+
+    It used to raise AttributeError: 'FunctionApplication' object has no
+    attribute 'name', the aggregate being taken for a variable.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s2", "pain"), ("s2", "fear")], name="tfidf"
+    )
+    nl.execute_datalog_program(
+        "pain(s) :- tfidf(s, 'pain')\nterm(s, t) :- tfidf(s, t)"
+    )
+    res = nl.execute_datalog_program(query)
+    assert res.columns == columns
+    result = res.as_pandas_dataframe().itertuples(index=False, name=None)
+    assert set(result) == rows
 
 def test_empty_result_query():
     nl = NeurolangPDL()
@@ -1378,7 +1438,7 @@ def test_query_based_spatial_prior():
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-            & (e.d < 1)
+            & (e.d <= 1)
         )
         e.Activation[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.VoxelReported(
             e.i, e.j, e.k, e.s
@@ -1732,3 +1792,26 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
+
+
+def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
+    """
+    Solve a probabilistic rule over an empty deterministic predicate.
+
+    ``m`` has no tuple, and so no relation in the solution of the
+    deterministic stratum: selecting ``m(s, "memory")`` crashed.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "memory", 0.5), ("s2", "pain", 0.6)], name="tfidf"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.execute_datalog_program(
+        "m(s, t) :- tfidf(s, t, v) & (v > 100)\n"
+        "q(x, PROB(x)) :- m(s, 'memory'), selected_study(s), tfidf(s, x, v)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.x, e.p), e.q(e.x, e.p))
+    assert len(res) == 0
