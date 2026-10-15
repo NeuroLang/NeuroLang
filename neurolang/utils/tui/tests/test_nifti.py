@@ -674,3 +674,67 @@ def test_view_keeps_nilearn_warnings_quiet(tiny, tiny_image):
     out = _output(tiny)
     assert "Saved the viewer to" in out
     Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+
+class TestPathsWithSpaces:
+    """Check .save and .view take a path with spaces, quoted or not."""
+
+    def test_save_unquoted_nifti_path(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)",
+            name="my brain map.nii.gz",
+        )
+        assert np.asanyarray(img.dataobj)[1, 2, 3] == 1
+
+    def test_save_unquoted_path_and_options(self, tiny, tmp_path):
+        img = _saved(
+            tiny, tmp_path, "ans(i, j, k, w) :- weight(i, j, k, w)",
+            "--value w", name="my map.nii",
+        )
+        assert np.asanyarray(img.dataobj)[1, 2, 3] == 0.75
+
+    def test_save_unquoted_table_path(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        path = tmp_path / "my sub dir" / "a b.csv"
+        tiny._handle_dot_command(f".save {path}")
+        saved = pd.read_csv(path)
+        assert len(saved) == 2
+
+    def test_save_quoted_path(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(f".save '{tmp_path / 'a  b.csv'}'")
+        assert (tmp_path / "a  b.csv").exists()
+
+    def test_save_needs_a_path(self, tiny, tmp_path):
+        tiny._execute_and_display("ans(i, j, k) :- voxel(i, j, k)")
+        tiny._handle_dot_command(".save --value i")
+        assert "Usage: .save PATH" in _output(tiny)
+        tiny._handle_dot_command(".save")
+        assert _output(tiny).count("Usage: .save PATH") == 2
+
+    @pytest.mark.parametrize("arg, path", [
+        ("my out.nii --value w", "my out.nii"),
+        ("'my  out.nii' --value w", "my  out.nii"),
+        ("a b c.csv", "a b c.csv"),
+    ])
+    def test_parse_save_path_with_spaces(self, arg, path):
+        assert nifti.parse_save_args(arg).path == Path(path)
+
+    def test_view_unquoted_path(self, tiny, tmp_path, view_calls):
+        _saved(
+            tiny, tmp_path, "ans(i, j, k) :- voxel(i, j, k)",
+            name="my image.nii",
+        )
+        tiny._handle_dot_command(
+            f".view {tmp_path / 'my image.nii'} --cmap hot"
+        )
+        out = _output(tiny)
+        assert "File not found" not in out
+        assert view_calls[-1]["cmap"] == "hot"
+        assert view_calls[-1]["title"] == "my image.nii"
+        Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+    def test_parse_view_path_with_spaces(self):
+        request = nifti.parse_view_args("my image.nii.gz --threshold 2")
+        assert request.path == Path("my image.nii.gz")
+        assert request.threshold == 2.0
