@@ -909,24 +909,27 @@ class DatalogTransformer(Transformer):
                 result.append(arg)
         return result
 
+    @staticmethod
+    def _expand_implicit_prob(arguments):
+        """
+        Return the head *arguments* with a bare ``PROB`` made explicit.
+
+        ``PROB`` alone stands for the probability of the other head
+        terms: ``p(x, PROB, y)`` is ``p(x, PROB(x, y), y)``.
+        """
+        if PROB not in arguments:
+            return arguments
+        ix_prob = arguments.index(PROB)
+        others = arguments[:ix_prob] + arguments[ix_prob + 1:]
+        return (
+            arguments[:ix_prob] + [PROB(*others)] + arguments[ix_prob + 1:]
+        )
+
     def head_predicate(self, ast):
         if ast[1] is not None:
             arguments = list(ast[1])
             arguments = self._wrap_aggregation_args(arguments)
-
-            if PROB in arguments:
-                ix_prob = arguments.index(PROB)
-                arguments_not_prob = (
-                    arguments[:ix_prob] +
-                    arguments[ix_prob + 1:]
-                )
-                prob_arg = PROB(*arguments_not_prob)
-                arguments = (
-                    arguments[:ix_prob] +
-                    [prob_arg] +
-                    arguments[ix_prob + 1:]
-                )
-
+            arguments = self._expand_implicit_prob(arguments)
             ast = ast[0](*arguments)
         else:
             ast = ast[0]()
@@ -941,6 +944,7 @@ class DatalogTransformer(Transformer):
                 arguments = list(arguments_raw) if arguments_raw else []
 
             arguments = self._wrap_aggregation_args(arguments)
+            arguments = self._expand_implicit_prob(arguments)
             return Symbol("ans")(*arguments)
         else:
             return Symbol("ans")()

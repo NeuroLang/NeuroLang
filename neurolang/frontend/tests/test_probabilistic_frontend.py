@@ -754,6 +754,80 @@ def test_trivial_probability_query_result():
     assert set(res) == b
 
 
+
+def _mentions_engine():
+    """Return an engine where studies mention terms, a study chosen."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s1", "fear"), ("s2", "pain")], name="mentions"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    return nl
+
+
+def _rows(result):
+    return {
+        (t, round(p, 4))
+        for t, p in result.as_pandas_dataframe().itertuples(index=False)
+    }
+
+
+def test_datalog_query_with_probability_in_its_head():
+    """``ans(t, PROB(t)) :- …`` used to return an empty result."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)"
+    )
+    assert res.columns == ("t", "PROB")
+    assert _rows(res) == {("pain", 1.0), ("fear", 0.5)}
+
+
+def test_datalog_conditional_query_with_probability_in_its_head():
+    """``ans(t, PROB(t)) :- … // …`` used to raise AttributeError."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- (mentions(s, t), selected_study(s)) // "
+        "(selected_study(s), mentions(s, 'fear'))"
+    )
+    assert _rows(res) == {("pain", 1.0), ("fear", 1.0)}
+
+
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "ans(t, PROB) :- mentions(s, t), selected_study(s)",
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)",
+    ],
+)
+def test_datalog_query_with_implicit_probability_in_its_head(query):
+    """``PROB`` alone in the head stands for ``PROB`` of the other terms."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(query)
+    assert res.columns == ("t", "PROB")
+    assert _rows(res) == {("pain", 1.0), ("fear", 0.5)}
+
+@pytest.mark.parametrize(
+    "option", [{"dry_run": True}, {"show_rewritten": True}, {"show_ra": True}]
+)
+def test_query_with_probability_in_its_head_printed(option, capsys):
+    nl = _mentions_engine()
+    nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)", **option
+    )
+    assert "mentions(s, t)" in capsys.readouterr().out
+
+def test_query_with_probability_in_its_head_leaves_program_unchanged():
+    nl = _mentions_engine()
+    before = set(nl.symbol_table.symbols_by_type(object))
+    nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)"
+    )
+    assert set(nl.symbol_table.symbols_by_type(object)) == before
+
 def test_equality():
     nl = NeurolangPDL()
     r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
