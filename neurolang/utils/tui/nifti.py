@@ -27,7 +27,7 @@ import pandas as pd
 
 from neurolang.utils import engine_registry
 
-from .commands import command
+from .commands import HELP_TOPICS, command
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 
@@ -55,6 +55,9 @@ of type float, such as study_id); otherwise the image is a mask, 1 at
 each voxel of the result. Rows of the same voxel keep their maximum.
 A mask is written as uint8, integers as int32 and other values as
 float32; rows outside the template grid are skipped."""
+
+
+HELP_TOPICS["save"] = SAVE_HELP
 
 
 class SaveError(ValueError):
