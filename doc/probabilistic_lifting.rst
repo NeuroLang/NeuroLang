@@ -121,10 +121,10 @@ Ranking
 Checks
    The query must have no built-in function, except comparisons within
    existential conjuncts (see `Negations and comparisons sharing
-   relations`_). Unless the
-   ``check_unate`` option of ``[PROBABILISTIC_SOLVER]`` is turned off (see
-   :doc:`performance`), it must also use a single kind of quantifier and be
-   *unate*, each relation occurring only positively or only negatively.
+   relations`_). Unless the ``check_unate`` option of
+   ``[PROBABILISTIC_SOLVER]`` is turned off (see :doc:`performance`), it
+   must also use a single kind of quantifier and be *unate*, each relation
+   occurring only positively or only negatively.
    The negations and comparisons of `Negations and comparisons sharing
    relations`_ are exempt from this check, as their rules check each
    query they lift.
@@ -133,9 +133,10 @@ Hierarchical queries without self-joins
 ---------------------------------------
 
 For a conjunctive query in which no relation occurs twice, the small
-dichotomy theorem applies [Dalvi2007]_ [Fink2014]_: writing :math:`at(x)` for the atoms in which variable
-:math:`x` occurs, the query can be computed in polynomial time if it is
-*hierarchical*, that is if for any two variables :math:`x` and :math:`y`,
+dichotomy theorem applies [Dalvi2007]_ [Fink2014]_: writing :math:`at(x)`
+for the atoms in which variable :math:`x` occurs, the query can be computed
+in polynomial time if it is *hierarchical*, that is if for any two variables
+:math:`x` and :math:`y`,
 
 .. math::
 
