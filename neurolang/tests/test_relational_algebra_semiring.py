@@ -3,7 +3,6 @@ from typing import AbstractSet
 
 import pytest
 
-from ..config import config
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
@@ -71,10 +70,6 @@ class SetType(frozenset):
         return self.union(other)
 
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of sets not yet implemented in dask backend",
-)
 def test_set_type_semiring():
     r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
@@ -119,10 +114,6 @@ class StringTestType:
         return hash(self.value)
 
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of strings not yet implemented in dask backend",
-)
 def test_string_semiring():
     r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(

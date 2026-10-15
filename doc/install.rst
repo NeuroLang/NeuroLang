@@ -138,8 +138,7 @@ NeuroLang requires the following libraries (installed automatically):
 * `scikit-learn <https://scikit-learn.org>`_,
   `matplotlib <https://matplotlib.org>`_ and
   `seaborn <https://seaborn.pydata.org>`_
-* `SQLAlchemy <https://www.sqlalchemy.org>`_, `PyYAML <https://pyyaml.org>`_
-  and ``typing_inspect``
+* `PyYAML <https://pyyaml.org>`_ and ``typing_inspect``
 
 Optional extras
 ---------------
@@ -167,23 +166,19 @@ For instance, from a clone of the repository:
    uv pip install -e ".[ras-polars]"
 
 
-Alternative backends
---------------------
+Alternative backend
+-------------------
 
-By default NeuroLang stores relations in pandas data frames. Two
-alternative backends are available:
+By default NeuroLang stores relations in pandas data frames. One
+alternative backend is available:
 
 ``polars``
    Backed by `Polars <https://pola.rs>`_ lazy frames. Install the
    ``ras-polars`` extra. It is usually faster on relations holding numbers
    and strings; see :doc:`performance` for details.
 
-``dask``
-   Backed by `dask-sql <https://github.com/NeuroLang/dask-sql>`__, which
-   translates queries to SQL and may parallelise them. dask-sql is not
-   installed by any extra; it needs a Java (≥ 8) runtime and Maven, e.g.
-   ``sudo apt install maven`` or ``conda install -c conda-forge maven``,
-   followed by ``pip install dask-sql``.
+The former ``dask`` (dask-sql) backend has been removed; selecting it raises
+a ``ValueError`` that lists the available backends.
 
 To select a backend, either edit the ``[RAS] backend`` entry of
 ``neurolang/config/config.ini``, or call
@@ -191,6 +186,6 @@ To select a backend, either edit the ``[RAS] backend`` entry of
 .. code-block:: python
 
    from neurolang.config import config
-   config.set_query_backend("polars")  # "pandas", "dask" or "polars"
+   config.set_query_backend("polars")  # "pandas" or "polars"
 
 **at the top of your script, before importing other NeuroLang modules.**

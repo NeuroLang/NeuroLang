@@ -6,17 +6,49 @@ from importlib import reload
 
 LOG = logging.getLogger(__name__)
 
+VALID_QUERY_BACKENDS = ("pandas", "polars")
+REMOVED_QUERY_BACKENDS = {
+    "dask": "the dask-sql backend was removed from NeuroLang",
+}
+
+
+def check_query_backend(backend):
+    """
+    Check that ``backend`` names an available relational algebra set backend.
+
+    Parameters
+    ----------
+    backend : str
+        Name of the backend, e.g. ``"pandas"`` or ``"polars"``.
+
+    Raises
+    ------
+    ValueError
+        If ``backend`` is not one of ``VALID_QUERY_BACKENDS``. Backends that
+        were removed get an error message saying so.
+
+    """
+    if backend in VALID_QUERY_BACKENDS:
+        return
+    valid = ", ".join(repr(b) for b in VALID_QUERY_BACKENDS)
+    if backend in REMOVED_QUERY_BACKENDS:
+        raise ValueError(
+            f"Query backend {backend!r} is no longer available: "
+            f"{REMOVED_QUERY_BACKENDS[backend]}. "
+            f"Use one of {valid} instead."
+        )
+    raise ValueError(
+        f"Unknown query backend {backend!r}. "
+        f"The query backend option should be one of {valid}."
+    )
+
 
 class NeurolangConfigParser(configparser.ConfigParser):
     def set_query_backend(self, backend):
         """
         Convenience method to set the backend used by Neurolang.
         """
-        valid_backends = {"pandas", "dask", "polars"}
-        if backend not in valid_backends:
-            raise ValueError(
-                f"The query backend option should be one of {valid_backends}"
-            )
+        check_query_backend(backend)
         LOG.info(f"Setting new query backend : {backend}")
         self["RAS"]["backend"] = backend
         # Polars has its own query optimizer — disable the chase's

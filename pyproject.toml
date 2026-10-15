@@ -41,7 +41,6 @@ dependencies = [
     "seaborn",
     "typing_inspect",
     "rdflib>=6.0.0",
-    "sqlalchemy>=1.4",
     "siibra>=1.0.1a15",
     "pyyaml>=6.0",
 ]

@@ -322,9 +322,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             if eager is None:
                 return False
             mask = None
-            for i, val in enumerate(element):
-                col_name = str(i)
-                col = eager[:, col_name]
+            for col_name, val in zip(self.columns, element):
+                col = eager[:, str(col_name)]
                 if mask is None:
                     mask = (col == val)
                 else:
@@ -417,20 +416,20 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self._empty_set_same_structure()
         if len(columns) == 0:
             return self.dee()
-        str_cols = list(dict.fromkeys(str(c) for c in columns))
+        str_cols = [str(c) for c in columns]
         c = _strip_sentinel(self._container)
         if c is None:
             return self._empty_set_same_structure()
+        c_names = _lf_names(c)
         for col in str_cols:
-            c_names = _lf_names(c)
             if col not in c_names:
                 raise KeyError(
                     f"Column '{col}' not found in {c_names}"
                 )
-        new_c = c.select(*[pl.col(col) for col in str_cols])
-        new_c_names = _lf_names(new_c)
-        new_c = new_c.rename(
-            dict(zip(new_c_names, [str(i) for i in range(len(columns))]))
+        # Alias each projected column to its output position so that a
+        # column projected more than once yields several output columns.
+        new_c = c.select(
+            *[pl.col(col).alias(str(i)) for i, col in enumerate(str_cols)]
         )
         output = self._empty_set_same_structure()
         output._container = new_c
@@ -1304,20 +1303,22 @@ class NamedRelationalAlgebraFrozenSet(
             return self._columns == other._columns
         if self._container is None or other._container is None:
             return False
+        if self.arity == 0 or other.arity == 0:
+            # Stripping the dee sentinel leaves no rows, so tell dee and
+            # dum apart before comparing the stripped containers.
+            return (
+                self.arity == other.arity
+                and self.is_dee() == other.is_dee()
+            )
         s_eager = self._eager()
         o_eager = other._eager()
+        # Both containers are set here, so neither stripped frame is None.
         scont = _strip_sentinel(s_eager)
         ocont = _strip_sentinel(o_eager)
-        if scont is None and ocont is None:
-            return True
-        if scont is None or ocont is None:
-            return False
         if set(scont.columns) != set(ocont.columns):
             return False
         if len(scont) == 0 and len(ocont) == 0:
             return True
-        if len(scont.columns) == 0 and len(ocont.columns) == 0:
-            return len(scont) > 0 and len(ocont) > 0
         # Compare as sorted column sets (order-independent)
         try:
             s_sorted = scont.sort(by=list(scont.columns)).select(sorted(scont.columns))
