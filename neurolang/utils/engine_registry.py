@@ -38,6 +38,16 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``text_embeddings`` — semantic search over document texts (e.g. PubMed
+  abstracts) with SPECTER2, registered as a function
+  ``f(query, doc) -> similarity``; see
+  :mod:`neurolang.utils.text_embeddings`::
+
+      text_embeddings:
+        study_abstracts:
+          ids_from: study
+          source: pubmed
+          function: query_similarity
 
 Usage
 -----
@@ -1046,6 +1056,69 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name):
         nl.load_ontology(result[0])
 
 
+def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
+    """
+    Register the document indexes declared in ``text_embeddings``.
+
+    Only the ids are read here; texts are fetched and embedded on first use.
+    """
+    entries = cfg.get("text_embeddings", {})
+    if not entries:
+        return
+    from neurolang.utils import text_embeddings
+
+    emb_dir = data_dir / engine_name / "embeddings"
+    nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
+    for emb_name, emb_cfg in entries.items():
+        encoder = text_embeddings.Specter2Encoder(**{
+            key: emb_cfg[key]
+            for key in ("model", "document_adapter", "query_adapter")
+            if key in emb_cfg
+        })
+        index = text_embeddings.EmbeddingIndex(
+            ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
+            load_texts=_text_loader(
+                emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                engine_name, data_dir, rel_base_dir,
+            ),
+            encoder=encoder,
+            cache_path=emb_dir / f"{emb_name}.npz",
+        )
+        nl.text_embedding_indexes[emb_name] = index
+        nl.add_symbol(
+            text_embeddings.make_similarity_function(index),
+            name=emb_cfg["function"],
+        )
+
+
+def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
+    """Return ``load_texts(keys)`` for a ``text_embeddings`` source."""
+    from neurolang.utils import text_embeddings
+
+    source = emb_cfg.get("source", "pubmed")
+    if source == "pubmed":
+        def load_texts(keys):
+            return text_embeddings.fetch_pubmed_abstracts(
+                keys, cache_path=pubmed_cache, email=emb_cfg.get("email")
+            )
+    elif isinstance(source, dict) and "file" in source:
+        def load_texts(keys):
+            path = _resolve_relation_file(
+                source, engine_name, data_dir, base_dir=base_dir
+            )
+            return text_embeddings.load_text_table(
+                path,
+                source.get("id_column", "id"),
+                source.get("text_columns", ["title", "abstract"]),
+            )
+    else:
+        raise ValueError(
+            f"Unknown text_embeddings source {source!r}: use 'pubmed' "
+            "or a mapping with a 'file' key."
+        )
+    return load_texts
+
+
 def build_engine(
     name: str,
     data_dir: Path,
@@ -1126,6 +1199,7 @@ def build_engine(
     _phase_atlases(nl, cfg, data_dir, name)
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
     _phase_ontologies(nl, cfg, data_dir, name)
 

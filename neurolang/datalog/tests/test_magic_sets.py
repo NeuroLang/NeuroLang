@@ -62,6 +62,7 @@ flat = S_("flat")
 anc = S_("anc")
 par = S_("par")
 anc2 = S_("anc2")
+anc3 = S_("anc3")
 q = S_("q")
 a = C_("a")
 b = C_("b")
@@ -412,6 +413,44 @@ def test_resolution_works_repeated_predicate_different_constants_nested():
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((b,))}
+
+
+def test_resolution_works_constants_in_different_rules():
+    """
+    Check that every constant of an adorned predicate seeds its magic set.
+
+    anc(a, x) is met once anc^bf was adorned from anc(c, y); its constant
+    must still get a magic init rule.
+    """
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(x, y), anc2(x) & anc3(y)),
+            Imp_(anc2(x), anc(a, x)),
+            Imp_(anc3(y), anc(c, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x, y), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e, d)) for e in (b, c, d)}
 
 
 def test_resolution_works_aggregation():

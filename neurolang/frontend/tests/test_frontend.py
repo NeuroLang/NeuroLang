@@ -883,6 +883,22 @@ def test_unbound_head_variable_bound_by_query_constant():
     assert res.to_unnamed() == {("s2",)}
 
 
+@ENGINES
+def test_variable_defined_from_head_variable_bound_by_query_constant(
+    engine_class
+):
+    """``d`` is defined from the head variable ``i``, bound by the query."""
+    nl = _voxel_engine(engine_class)
+    res = nl.execute_datalog_program(
+        """
+        near(i, s) :- peak_reported(i1, j, k, s) \
+            & (d == euclidean(i, i, i, i1, j, k)) & (d < 1.5)
+        ans(s) :- near(0, s)
+        """
+    )
+    assert res.to_unnamed() == {("s1",)}
+
+
 def test_variables_only_in_negations_left_to_negation_check():
     nl = _voxel_engine(frontend.NeurolangDL)
     nl.execute_datalog_program(

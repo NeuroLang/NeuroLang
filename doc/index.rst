@@ -84,6 +84,7 @@ a guided walkthrough.
    tutorial
    tutorial_squall
    tutorial_datalog
+   tutorial_text_embeddings
    concepts
    engine_configuration
    performance

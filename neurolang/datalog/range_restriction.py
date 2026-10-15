@@ -31,8 +31,9 @@ def check_range_restriction(rule, symbol_table=None, query=False):
     The variables of the head of a rule can be bound by the queries using
     it: magic sets give ``x`` the value ``'a'`` in ``A(x, y) :- P(w, y),
     w != x`` for the query ``ans(y) :- A('a', y)``, and probabilistic
-    solvers unfold rules into queries. Only the other variables of the
-    body are checked, unless *rule* is a query. Rules with a fresh head
+    solvers unfold rules into queries. They are taken as bound, as are
+    the variables they define, e.g. ``sim`` in ``A(q, s) :- P(s),
+    sim == f(q, s), sim > .5``, unless *rule* is a query. Rules with a fresh head
     functor are generated, by syntactic sugar or for queries, and are
     left to the translation to relational algebra, see
     :func:`unbound_variables_error`.
@@ -86,7 +87,7 @@ def unbound_variables_error(
     query : bool
         Whether *body* is the body of a query, for the message.
     exempt : iterable of Symbol
-        Variables that may be unbound.
+        Variables that may be bound from outside *body*.
 
     Returns
     -------
@@ -98,8 +99,8 @@ def unbound_variables_error(
         (literal, _classify(literal, symbol_table))
         for literal in _literals(body)
     )
-    bound = _bound_variables(literals, symbol_table)
-    bound |= set(exempt) | _negated_only_variables(literals)
+    bound = _bound_variables(literals, symbol_table, exempt)
+    bound |= _negated_only_variables(literals)
     unbound = [
         v for v in extract_logic_free_variables(body) if v not in bound
     ]
@@ -190,12 +191,13 @@ def _classify(literal, symbol_table):
     return _FILTER
 
 
-def _bound_variables(literals, symbol_table):
+def _bound_variables(literals, symbol_table, exempt):
     """
-    Return the variables bound by the classified *literals*, and the
-    symbols they use that are constants of *symbol_table*.
+    Return the variables bound by the classified *literals* and by
+    *exempt*, and the symbols they use that are constants of
+    *symbol_table*.
     """
-    bound = set()
+    bound = set(exempt)
     for literal, kind in literals:
         variables = extract_logic_free_variables(literal)
         bound |= {v for v in variables if v in symbol_table}

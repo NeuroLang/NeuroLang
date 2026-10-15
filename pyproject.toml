@@ -57,6 +57,12 @@ dev = [
     "problog"
 ]
 
+embeddings = [
+    "torch",
+    "transformers",
+    "adapters",
+]
+
 ras-polars = [
     "polars>=1.17",
     "pyarrow",
