@@ -644,12 +644,26 @@ def _projected_plan(
 
 
 def _existential_variables_and_body(formula):
+    """The variables quantified by `formula`, or by its conjuncts, and the
+    conjunction of their bodies: as the query is standardised apart,
+    A ∧ ∃X ψ ≡ ∃X (A ∧ ψ)."""
+    formula = RTO.walk(formula)
+    conjuncts = (
+        formula.formulas if isinstance(formula, Conjunction) else (formula,)
+    )
     variables = set()
-    body = RTO.walk(formula)
-    while isinstance(body, ExistentialPredicate):
-        variables.add(body.head)
-        body = body.body
-    return variables, body
+    body = []
+    for conjunct in conjuncts:
+        while isinstance(conjunct, ExistentialPredicate):
+            variables.add(conjunct.head)
+            conjunct = conjunct.body
+        if isinstance(conjunct, Conjunction):
+            body.extend(conjunct.formulas)
+        else:
+            body.append(conjunct)
+    if len(body) == 1:
+        return variables, body[0]
+    return variables, Conjunction(tuple(body))
 
 
 def _split_choice_projection(antecedent, symbol_table):
