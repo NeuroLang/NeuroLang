@@ -311,10 +311,10 @@ class NameColumns(UnaryRelationalAlgebraOperation):
 
 class Materialise(UnaryRelationalAlgebraOperation):
     """
-    Mark a relation to be computed as a set, once, when the plan
-    containing it is evaluated, rather than while it is built. It
-    evaluates to its relation, and a backend may cache or persist the
-    set at this node.
+    Mark a relation to be computed as a set when the plan containing it
+    is evaluated, rather than while it is built. It evaluates to its
+    relation. Each occurrence in a plan is evaluated: a backend may cache
+    or persist the set at this node.
 
     Planning walkers can keep it behind a symbol rather than walking into
     it, as for a constant set.
