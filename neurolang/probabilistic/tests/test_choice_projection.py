@@ -144,3 +144,18 @@ def test_choice_also_within_a_negation_is_not_projected():
     )
     with pytest.raises(UnsupportedSolverError):
         _solve(_engine(True, choices), program)
+
+
+def test_variable_which_is_not_a_separator_is_not_projected():
+    """In ∃s seg(t, s), the atoms mentions(s2, t) of the negation do not
+    have s: the events of different studies share tuples, and the query
+    is left to the next solvers, which answer it."""
+    program = SEGREGATION + "\nq(t, PROB) :- seg(t, s)"
+    expected = _enumerated(
+        {},
+        lambda w, c, a: any(_segregated(w, s, a[0]) for s in STUDIES),
+        answers=tuple((t,) for t in TERMS)
+    )
+    with pytest.raises(UnsupportedSolverError):
+        _solve(_engine(True, {}), program)
+    _assert_close(_solve(_engine(False, {}), program), expected)
