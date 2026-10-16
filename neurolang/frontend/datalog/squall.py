@@ -4,6 +4,9 @@ Logic simplifier for SQUALL parsed expressions.
 Collapses nested conjunctions, removes trivial operations,
 and normalizes quantifier expressions produced by the SQUALL parser.
 """
+from collections import defaultdict
+from functools import lru_cache
+
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, PatternWalker, add_match
 from ...expressions import Constant, Expression, FunctionApplication, Query, Symbol
@@ -174,6 +177,105 @@ class LogicSimplifier(
         if new_args != expression.args:
             return expression.functor(*new_args)
         return expression
+
+
+@lru_cache(maxsize=4096)
+def predicate_lemma(name):
+    """
+    Return the lemma used to match the predicate *name* to a verb form.
+
+    Only the last underscore-separated word is lemmatised, as it carries
+    the inflection (``peak_reported`` → ``peak_report``). The verb lemma
+    also folds plural nouns (``studies`` → ``study``).
+    """
+    from lemminflect import getLemma
+
+    prefix, separator, word = name.rpartition("_")
+    lemmas = getLemma(word, upos="VERB", lemmatize_oov=True)
+    return prefix + separator + (lemmas[0] if lemmas else word)
+
+
+def atom_arity(args):
+    """
+    Return the number of columns the arguments *args* of an atom fill.
+
+    A SQUALL tuple argument such as ``(?i; ?j; ?k)`` fills one column per
+    element.
+    """
+    return sum(len(arg) if isinstance(arg, tuple) else 1 for arg in args)
+
+
+def _unknown_arity(name):
+    """Default arity lookup: every arity is unknown."""
+    return None
+
+
+class ResolvePredicateLemmas(ExpressionWalker):
+    """
+    Rename undefined predicates to the defined one sharing their lemma.
+
+    SQUALL uses the typed word as the predicate name, so ``does not
+    mention`` refers to ``mention`` even if only ``mentions`` is defined.
+    A rule-body or query predicate whose name is not in *defined_names* is
+    renamed to the defined predicate with the same `predicate_lemma` and
+    the atom's `atom_arity`, only if there is exactly one. *arity* maps a
+    defined name to its arity, or to None when unknown, which accepts any
+    atom. Several candidates leave the name unchanged and are recorded in
+    ``ambiguous``. Rule heads, variables and constants are never renamed,
+    nor are SQUALL's dimension-type predicates (``probability``,
+    ``value``).
+    """
+
+    def __init__(self, defined_names, arity=_unknown_arity):
+        self.defined_names = frozenset(defined_names)
+        self.arity = arity
+        self.ambiguous = {}
+        self._names_by_lemma = None
+
+    @add_match(Implication)
+    def resolve_rule_body(self, rule):
+        antecedent = self.walk(rule.antecedent)
+        if antecedent is rule.antecedent:
+            return rule
+        return rule.apply(rule.consequent, antecedent)
+
+    @add_match(Query)
+    def resolve_query_body(self, query):
+        body = self.walk(query.body)
+        if body is query.body:
+            return query
+        return query.apply(query.head, body)
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def resolve_predicate(self, atom):
+        functor = self._resolve(atom.functor, atom_arity(atom.args))
+        if functor is atom.functor:
+            return atom
+        return atom.apply(functor, atom.args)
+
+    def _resolve(self, functor, arity):
+        if (
+            functor.is_fresh
+            or functor.name in self.defined_names
+            or functor.name in _DIMENSION_TYPE_PREDICATE_NAMES
+        ):
+            return functor
+        candidates = self._candidates(predicate_lemma(functor.name), arity)
+        if len(candidates) == 1:
+            return Symbol(candidates[0])
+        if candidates:
+            self.ambiguous[functor.name] = candidates
+        return functor
+
+    def _candidates(self, lemma, arity):
+        if self._names_by_lemma is None:
+            self._names_by_lemma = defaultdict(list)
+            for name in sorted(self.defined_names):
+                self._names_by_lemma[predicate_lemma(name)].append(name)
+        return tuple(
+            name for name in self._names_by_lemma.get(lemma, ())
+            if self.arity(name) in (None, arity)
+        )
 
 
 _DIMENSION_TYPE_PREDICATE_NAMES = frozenset({
