@@ -7,6 +7,7 @@ from .. import (
     UniversalPredicate
 )
 from ..transformations import (
+    AbsorbAssertedConjunctsInNegations,
     PushExistentialsDown,
     PushUniversalsDown,
     standardise_apart
@@ -22,6 +23,7 @@ Z = Symbol("Z")
 
 PED = PushExistentialsDown()
 PUD = PushUniversalsDown()
+AACN = AbsorbAssertedConjunctsInNegations()
 
 
 def test_push_existentials_down():
@@ -175,6 +177,55 @@ def test_push_universals_down():
     )
 
     assert PUD.walk(exp) == exp
+
+
+def test_absorb_asserted_conjuncts_in_negation():
+    exp = Conjunction((P(X), Negation(Conjunction((P(X), Q(X))))))
+
+    assert AACN.walk(exp) == Conjunction((P(X), Negation(Q(X))))
+
+
+def test_absorb_asserted_conjuncts_in_negated_existential():
+    exp = Conjunction((
+        P(X), Q(X, Z),
+        Negation(ExistentialPredicate(
+            Y, Conjunction((P(X), Q(X, Z), R(X, Y)))
+        ))
+    ))
+
+    assert AACN.walk(exp) == Conjunction((
+        P(X), Q(X, Z),
+        Negation(ExistentialPredicate(Y, R(X, Y)))
+    ))
+
+
+def test_absorb_asserted_conjuncts_keeps_bound_variables():
+    exp = Conjunction((
+        P(Y),
+        Negation(ExistentialPredicate(Y, Conjunction((P(Y), Q(X, Y)))))
+    ))
+
+    assert AACN.walk(exp) == exp
+
+
+def test_absorb_asserted_conjuncts_keeps_contradictions():
+    exp = Conjunction((P(X), Negation(P(X))))
+
+    assert AACN.walk(exp) == exp
+
+    exp = Conjunction((P(X), Negation(Conjunction((P(X), P(X))))))
+
+    assert AACN.walk(exp) == exp
+
+
+def test_absorb_asserted_conjuncts_within_quantifiers():
+    exp = ExistentialPredicate(X, Conjunction((
+        P(X), Negation(Conjunction((P(X), Q(X))))
+    )))
+
+    assert AACN.walk(exp) == ExistentialPredicate(
+        X, Conjunction((P(X), Negation(Q(X))))
+    )
 
 
 def test_standardise_apart():
