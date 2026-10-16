@@ -2101,3 +2101,42 @@ def test_argument_types_of_probabilistic_relations(kind):
     assert probabilities.keys() == expected.keys()
     for value, p in expected.items():
         assert probabilities[value] == pytest.approx(p)
+
+
+@pytest.mark.parametrize("program, expected", (
+    (
+        "q(PROB) :- selected_study(s), "
+        "~exists(s2; selected_study(s2), (s2 != s))",
+        {(): 1.},
+    ),
+    (
+        "q(t, PROB) :- mentions(s, t), selected_study(s), "
+        "~exists(s2; mentions(s2, t), selected_study(s2), (s2 != s))",
+        {("a",): (0.4 + 0.7) / 3},
+    ),
+), ids=("choice twice", "choice twice with facts"))
+def test_weighted_model_counting_of_a_choice_occurring_twice(
+    program, expected
+):
+    """A probabilistic choice is a single random variable: a selected
+    study is the only one selected."""
+    from ...probabilistic import weighted_model_counting
+    nl = NeurolangPDL(
+        probabilistic_solvers=(weighted_model_counting.solve_succ_query,),
+        probabilistic_marg_solvers=(weighted_model_counting.solve_marg_query,),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.4, "s1", "a"), (0.7, "s2", "a")], name="mentions"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected_study"
+    )
+    nl.execute_datalog_program(program)
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    probabilities = {
+        tuple(row[:-1]): row[-1]
+        for row in result.itertuples(index=False)
+    }
+    assert probabilities.keys() == expected.keys()
+    for answer, p in expected.items():
+        assert probabilities[answer] == pytest.approx(p)
