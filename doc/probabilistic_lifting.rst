@@ -135,8 +135,10 @@ Deterministic negations
    The negation is left unchanged when no non-empty :math:`G` binds all of
    :math:`\bar x`, for instance when :math:`N` is closed
    (:mod:`neurolang.probabilistic.deterministic_subqueries`). The
-   expression is not evaluated while planning: it is a subexpression of
-   the plan, evaluated with it.
+   expression is not evaluated while planning: marked with
+   :class:`~neurolang.relational_algebra.relational_algebra.Materialise`,
+   it is a subexpression of the plan, computed as a set when the plan is
+   evaluated.
 
 Probabilistic choices
    Two atoms of the same probabilistic choice relation are true together
