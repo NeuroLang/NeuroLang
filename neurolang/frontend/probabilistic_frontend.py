@@ -471,16 +471,25 @@ class NeurolangPDL(QueryBuilderDatalog):
         #      is not in the symbol table at all.
         #   3. Heads computing a term, such as count(s): the path below
         #      only restricts the predicate's relation to its variables.
-        # In these cases fall through to the base QueryBuilderDatalog
-        # implementation which creates a fresh query rule and runs chase.
+        # Conjunction queries, and EDB predicates when the program has an
+        # ontology's constraints, are queried through a fresh rule defining
+        # them, which takes the probabilistic path. The other cases fall
+        # through to the base QueryBuilderDatalog implementation, which
+        # creates a fresh query rule and only runs the deterministic chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
         if _solved_as_query_rule(head, symbol_entry):
             is_edb = symbol_entry is None or isinstance(
                 symbol_entry, ir.Constant
             )
-            if is_edb and "__constraints__" in self.symbol_table:
-                # The base implementation ignores the ontology's
-                # constraints: query a rule defined as the predicate.
+            if is_edb and (
+                "__constraints__" in self.symbol_table or (
+                    symbol_entry is None and
+                    self._depends_on_probabilistic_queries(predicate)
+                )
+            ):
+                # The deterministic chase of the base implementation
+                # neither solves the probabilistic queries a conjunction
+                # may depend on nor applies the ontology's constraints.
                 return self._execute_query_through_rule(
                     head, predicate, show_rewritten, dry_run, show_ra
                 )
@@ -607,6 +616,19 @@ class NeurolangPDL(QueryBuilderDatalog):
             {v.expression.name: name for v, name in zip(variables, names)}
         ), None
 
+    def _depends_on_probabilistic_queries(self, predicate):
+        """Whether the rules ``predicate`` depends on have probabilistic
+        queries, which the deterministic chase does not solve."""
+        with self.scope:
+            try:
+                idbs = stratify_program(
+                    self._declare_fresh_rule(predicate), self.program_ir
+                )
+            except SymbolNotFoundError:
+                # Left to the base implementation, which reports it.
+                return False
+        return bool(idbs.get("probabilistic", Union(tuple())).formulas)
+
     def _execute_query_through_rule(
         self, head, predicate, show_rewritten, dry_run, show_ra
     ):
@@ -617,20 +639,27 @@ class NeurolangPDL(QueryBuilderDatalog):
         of ``predicate``, lives in a scope closed on return; querying it
         rewrites the program with the ontology's constraints.
         """
+        with self.scope:
+            rule = self._declare_fresh_rule(predicate)
+            return self._execute_query(
+                head, fe.Expression(self, rule.consequent),
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+
+    def _declare_fresh_rule(self, predicate):
+        """Declare, in the current scope, the rule ``fresh(x, ...) :-
+        predicate`` over the free variables of ``predicate``, and return
+        it as stored in the program."""
         variables = tuple(sorted(
             extract_logic_free_variables(predicate.expression),
             key=lambda symbol: symbol.name,
         ))
-        with self.scope:
-            fresh = ir.Symbol.fresh()
-            self.program_ir.walk(Union((
-                Implication(fresh(*variables), predicate.expression),
-            )))
-            return self._execute_query(
-                head, fe.Expression(self, fresh(*variables)),
-                show_rewritten=show_rewritten, dry_run=dry_run,
-                show_ra=show_ra,
-            )
+        fresh = ir.Symbol.fresh()
+        self.program_ir.walk(Union((
+            Implication(fresh(*variables), predicate.expression),
+        )))
+        return self.program_ir.symbol_table[fresh].formulas[0]
 
     @staticmethod
     def _query_head_symbols(head):

@@ -2155,3 +2155,30 @@ def test_weighted_model_counting_of_a_choice_occurring_twice(
     assert probabilities.keys() == expected.keys()
     for answer, p in expected.items():
         assert probabilities[answer] == pytest.approx(p)
+
+
+@pytest.mark.parametrize("query, expected", (
+    ("ans(x, p) :- m(x, p), d(x)", {("a", .5), ("b", .5)}),
+    ("ans(x, p) :- m(x, p), (x == 'a')", {("a", .5)}),
+    ("ans(x, q) :- m(x, p), n(x, p1), (q == p1 / p)",
+     {("a", .4 / .5), ("b", .1 / .5)}),
+))
+def test_conjunctive_query_on_probabilistic_queries(query, expected):
+    """A query whose body is a conjunction is solved with the
+    probabilistic queries it depends on."""
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set([("a",), ("b",)], name="c")
+    nl.add_probabilistic_facts_from_tuples([(.4, "a"), (.1, "b")], name="f")
+    nl.add_tuple_set([("a",), ("b",)], name="d")
+    result = nl.execute_datalog_program(
+        "m(x, PROB) :- c(x)\n"
+        "n(x, PROB) :- f(x)\n" + query
+    )
+
+    rows = set(result.as_pandas_dataframe().itertuples(index=False))
+    assert len(rows) == len(expected)
+    for (x, p), (x_expected, p_expected) in zip(
+        sorted(rows), sorted(expected)
+    ):
+        assert x == x_expected
+        assert p == pytest.approx(p_expected)
