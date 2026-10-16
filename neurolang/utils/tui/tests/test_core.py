@@ -31,6 +31,41 @@ class TestDfToRichTable:
         assert _headers(table) == ["a\nint", "b\nfloat", "c\nstr"]
 
 
+class TestRegionCells:
+    """Check regions show compactly in result tables."""
+
+    def _rendered(self, df):
+        console = _console()
+        console.print(rows_table(df))
+        return console.file.getvalue()
+
+    def test_region_shows_its_size_and_centroid(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+
+        affine = np.diag([2.0, 2.0, 2.0, 1.0])
+        affine[:3, 3] = [-10.0, 0.0, 4.0]
+        region = ExplicitVBR(
+            np.array([[1, 1, 1], [1, 2, 1]]), affine, image_dim=(4, 4, 4)
+        )
+        out = self._rendered(pd.DataFrame({"label": ["a"], "r": [region]}))
+        assert "VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)" in out
+        assert "affine" not in out
+
+    def test_region_cell(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+        from neurolang.utils.tui.results import cell_text
+
+        region = ExplicitVBR(np.array([[0, 0, 0]]), np.eye(4))
+        assert cell_text(region) == (
+            "VBR(n_voxels=1, centroid=(0.0, 0.0, 0.0) mm)"
+        )
+        assert cell_text(None) == "" and cell_text(1.5) == "1.5"
+
+
 def _console():
     import io
 

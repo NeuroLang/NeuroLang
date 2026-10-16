@@ -236,18 +236,30 @@ def _print_panel(app, text: str) -> None:
     app.console.print(Panel(text, border_style="cyan"))
 
 
-@command(".help", "Show this help, or a primer on SQUALL", ".help [squall]")
+# Help on a topic, ``.help TOPIC``: the text of each topic, by name.
+HELP_TOPICS = {}
+
+
+@command(
+    ".help", "Show this help, a primer on SQUALL, or help on a topic",
+    ".help [squall|TOPIC]",
+)
 def cmd_help(app, arg: str) -> None:
     """
     Print the help text, and the SQUALL primer in SQUALL mode.
 
-    ``.help squall`` prints the primer alone.
+    ``.help squall`` prints the primer alone, and ``.help TOPIC`` the
+    help on a topic of :data:`HELP_TOPICS`.
     """
     topic = arg.strip().lower()
     engine = app.settings.engine_name
+    if topic in HELP_TOPICS:
+        _print_panel(app, HELP_TOPICS[topic])
+        return
     if topic not in ("", "squall"):
+        topics = " or ".join(f".help {t}" for t in ("squall", *HELP_TOPICS))
         app.console.print(
-            f"No help on {topic!r}: use .help or .help squall.",
+            f"No help on {topic!r}: use .help, {topics}.",
             style="yellow", markup=False,
         )
         return

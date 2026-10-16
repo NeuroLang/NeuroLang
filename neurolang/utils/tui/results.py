@@ -12,13 +12,16 @@ output (piped, batch) stays plain.
 import math
 import re
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
+import numpy as np
 import pandas as pd
 from rich import box
 from rich.cells import cell_len
 from rich.table import Table
 from rich.text import Text
+
+from neurolang.regions import ExplicitVBR
 
 DEFAULT_PAGE_SIZE = 20
 MAX_COLUMN_WIDTH = 40
@@ -47,16 +50,40 @@ class ResultBlock:
     The rows of a query result and how many of them have been shown.
 
     The title names the ``obtain`` of a SQUALL program with several.
+    *sorts* holds the sort of each column of the frame, as the query
+    tells it (see :func:`~.provenance.column_sorts`), or None.
     """
 
     frame: pd.DataFrame
     title: str = ""
     shown: int = 0
+    sorts: Optional[tuple] = None
 
     @property
     def remaining(self) -> int:
         """Return the number of rows not shown yet."""
         return len(self.frame) - self.shown
+
+
+def cell_text(value) -> str:
+    """
+    Return the text of a cell of a result table holding *value*.
+
+    A region shows its number of voxels and its centroid in millimetres,
+    ``VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)``, rather than its
+    affine and voxel arrays.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, ExplicitVBR):
+        return region_text(value)
+    return str(value)
+
+
+def region_text(region: ExplicitVBR) -> str:
+    """Return the number of voxels of *region* and its centroid, in mm."""
+    centroid = ", ".join(f"{c:.1f}" for c in np.mean(region.to_xyz(), axis=0))
+    return f"VBR(n_voxels={len(region.voxels)}, centroid=({centroid}) mm)"
 
 
 def column_kind(values: pd.Series) -> str:
@@ -86,13 +113,12 @@ def format_value(value) -> str:
     Return the text of a table cell holding *value*.
 
     Floats get at most 4 significant digits, but their integer part is
-    kept up to 1e15; missing values are blank and anything else is shown
-    with :func:`str`.
+    kept up to 1e15; missing values are blank, regions show their number
+    of voxels and centroid (see :func:`cell_text`) and anything else is
+    shown with :func:`str`.
     """
-    if value is None:
-        return ""
     if not isinstance(value, float):
-        return str(value)
+        return cell_text(value)
     if math.isnan(value):
         return ""
     if 1e4 <= abs(value) < 1e15:
@@ -160,7 +186,8 @@ def column_view(name, values: pd.Series, terminal: bool) -> ColumnView:
 
     On a *terminal*, a probability column gets an inline bar after each
     value. The width is the one the column needs, at most
-    :data:`MAX_COLUMN_WIDTH`.
+    :data:`MAX_COLUMN_WIDTH`, except for columns of regions, whose cells
+    are already a summary of their number of voxels and centroid.
     """
     kind = column_kind(values)
     raw = values.tolist()
@@ -171,7 +198,9 @@ def column_view(name, values: pd.Series, terminal: bool) -> ColumnView:
     header.append("\n" + kind, style="dim")
     widths = [cell_len(str(name)), cell_len(kind)]
     widths += [cell_len(str(cell)) for cell in cells]
-    width = min(MAX_COLUMN_WIDTH, max(widths))
+    width = max(widths)
+    if not any(isinstance(value, ExplicitVBR) for value in raw):
+        width = min(MAX_COLUMN_WIDTH, width)
     return ColumnView(header, cells, kind in _NUMERIC_KINDS, width)
 
 

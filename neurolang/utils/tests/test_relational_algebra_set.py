@@ -8,13 +8,10 @@ from ..relational_algebra_set import (
 )
 
 try:
-    from ..relational_algebra_set import dask_sql
-    HAS_DASK = True
-    fixture_ids = ["pandas", "dask_sql"]
-    fixture_params = [(pandas,), (dask_sql,)]
-
+    from ..relational_algebra_set import polars
+    fixture_ids = ["pandas", "polars"]
+    fixture_params = [(pandas,), (polars,)]
 except ImportError:
-    HAS_DASK = False
     fixture_ids = ["pandas"]
     fixture_params = [(pandas,)]
 
@@ -1218,6 +1215,22 @@ def test_explode_multi_columns(ra_module):
     )
     result = relation.explode("z", ("v", "w"))
     assert result == expected
+
+
+def test_explode_multi_columns_empty_relation(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=[(0, 1, frozenset({(3, 4)}))],
+    ).selection({"x": 2})
+    for empty in (
+        relation,
+        ra_module.NamedRelationalAlgebraFrozenSet(
+            columns=["x", "y", "z"], iterable=[]
+        ),
+    ):
+        result = empty.explode("z", ("v", "w"))
+        assert result.columns == ("x", "y", "z", "v", "w")
+        assert len(result) == 0
 
 
 def test_aggregate_repeated_group_column(ra_module):

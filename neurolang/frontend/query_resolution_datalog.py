@@ -6,9 +6,11 @@ as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
+from ..datalog.range_restriction import check_range_restriction
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
+from ..exceptions import UnboundVariablesError
 from typing import (
     AbstractSet,
     Dict,
@@ -22,6 +24,9 @@ from typing import (
 from uuid import uuid1
 
 import pandas as pd
+
+from ..exceptions import SquallSemanticError
+from ..logic.expression_processing import extract_logic_atoms
 
 from .. import datalog
 from .. import expressions as ir
@@ -50,6 +55,7 @@ from .datalog.squall_syntax_lark import (
     WeightedChoiceDef,
 )
 from .datalog.standard_syntax import parser as datalog_parser
+from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -81,6 +87,22 @@ def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exceptio
         )
         exc.args = (new_msg,)
     return exc
+
+
+def _names_whole_relation(head_vars, body):
+    """
+    Return whether *body* is a single atom on the only head variable.
+
+    Such a SQUALL clause, as ``every Voxel``, names a relation without a
+    tuple label.
+    """
+    if len(head_vars) != 1 or not isinstance(body, ir.FunctionApplication):
+        return False
+    return (
+        isinstance(head_vars[0], ir.Symbol)
+        and isinstance(body.functor, ir.Symbol)
+        and tuple(body.args) == tuple(head_vars)
+    )
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -399,6 +421,43 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def _expand_whole_relation(self, head_vars, body):
+        """
+        Make a SQUALL clause naming a relation alone use all its columns.
+
+        ``every Voxel`` without a tuple label stands for the whole
+        relation: the head variables and the body atom are expanded to
+        the columns of the relation instead of keeping only the first.
+        """
+        if not _names_whole_relation(head_vars, body):
+            return head_vars, body
+        arity = predicate_arity(self.program_ir, body.functor)
+        if arity is None or arity < 2:
+            return head_vars, body
+        terms = self.program_ir.predicate_terms(body.functor)[-arity:]
+        head_vars = tuple(
+            t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
+            for t in terms
+        )
+        return head_vars, body.functor(*head_vars)
+
+    def _expand_whole_relation_rule(self, rule):
+        """
+        Expand a SQUALL rule whose body names a relation alone.
+
+        ``obtain every Voxel as Voxels`` defines ``voxels`` with all the
+        columns of ``voxel``, as the query itself obtains them.
+        """
+        head = getattr(rule, "consequent", None)
+        if not isinstance(head, ir.FunctionApplication):
+            return rule
+        head_vars, body = self._expand_whole_relation(
+            tuple(head.args), rule.antecedent
+        )
+        if body is rule.antecedent:
+            return rule
+        return rule.apply(head.functor(*head_vars), body)
+
     @staticmethod
     def _process_squall_commands(parsed):
         """Process SQUALL directives (#set_backend, etc.)."""
@@ -423,11 +482,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def _walk_squall_rule(self, rule):
         """Walk a single SQUALL rule or choice definition into the engine."""
+        self._check_squall_rule_body(rule)
         if isinstance(rule, EquiprobableChoiceDef):
             self._handle_equiprobable_choice(rule)
         elif isinstance(rule, WeightedChoiceDef):
             self._handle_weighted_choice(rule)
         else:
+            rule = self._expand_whole_relation_rule(rule)
+            CheckPredicateArities(self.program_ir).walk(rule)
             try:
                 self.program_ir.walk(rule)
             except Fol2DatalogTranslationException as e:
@@ -457,6 +519,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         delegates to _execute_query, exactly as execute_datalog_program
         does for ans(...) :- R(...).
         """
+        self._check_squall_aggregation_columns(
+            query.head if isinstance(query.head, tuple) else (query.head,),
+            query.body,
+        )
         head = query.head
         if isinstance(head, AggregationApplication):
             head_vars = (head,)
@@ -467,27 +533,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             head_vars = tuple(head)
 
-        body = query.body
-        if (
-            len(head_vars) == 1
-            and isinstance(head_vars[0], ir.Symbol)
-            and isinstance(body, ir.FunctionApplication)
-            and isinstance(body.functor, ir.Symbol)
-            and len(body.args) == 1
-            and body.args[0] == head_vars[0]
-        ):
-            # "obtain every RelationName." without a tuple label projects
-            # the whole relation (all columns) instead of only the first.
-            try:
-                terms = self.program_ir.predicate_terms(body.functor)
-            except NeuroLangException:
-                terms = ()
-            if len(terms) > 1:
-                head_vars = tuple(
-                    t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
-                    for t in terms
-                )
-                body = body.functor(*head_vars)
+        head_vars, body = self._expand_whole_relation(head_vars, query.body)
+        CheckPredicateArities(self.program_ir).walk(body)
 
         h = ir.Symbol.fresh()
         query_impl = datalog.Implication(h(*head_vars), body)
@@ -727,6 +774,84 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             "Use 'define as X as an equiprobable choice over every Y' for now."
         )
 
+    @staticmethod
+    def _aggregation_column_message(aggregation, functor, arity):
+        """
+        Explain how to name the aggregated column of a multi-column relation.
+        """
+        func = aggregation.functor
+        func = getattr(func, 'value', func)
+        name = getattr(func, '__name__', getattr(func, 'name', str(func)))
+        name = {'len': 'count', 'mean': 'average'}.get(name, name)
+        name = name[:1].upper() + name[1:]
+        noun = functor.name[:1].upper() + functor.name[1:]
+        blanks = '; '.join(['_'] * (arity - 1))
+        return (
+            f"Cannot aggregate '{name}' over '{noun}': the relation has "
+            f"{arity} columns but the aggregation names a single one, so "
+            "it would silently aggregate the first column.  Name the column "
+            "to aggregate with a tuple label, using _ for the other "
+            f"columns, e.g. 'the {name} of the {noun} ({blanks}; ?v)'; add "
+            "'per ?x' to aggregate per value of a labelled column, e.g. "
+            f"'every {name} of the {noun} (?x; ...; ?v) per ?x'."
+        )
+
+    def _relation_columns(self, functor):
+        """
+        Return the number of value columns of ``functor``, or 0 if unknown.
+
+        The probability column of stored probabilistic facts and choices
+        is not counted.
+        """
+        try:
+            columns = len(self.program_ir.predicate_terms(functor))
+        except NeuroLangException:
+            return 0
+        probabilistic = (
+            getattr(self.program_ir, 'pfact_pred_symbs', set())
+            | getattr(self.program_ir, 'pchoice_pred_symbs', set())
+        )
+        if functor in probabilistic and isinstance(
+            self.program_ir.symbol_table[functor], ir.Constant
+        ):
+            columns -= 1
+        return columns
+
+    def _check_squall_aggregation_columns(self, head_args, body):
+        """
+        Reject a one-variable aggregation over a multi-column relation.
+
+        ``the Max of the R`` with a 3-column ``R`` binds only ``R``'s first
+        column, so the aggregate would be computed over it without warning.
+        """
+        for aggregation in head_args:
+            if not (
+                isinstance(aggregation, AggregationApplication)
+                and len(aggregation.args) == 1
+            ):
+                continue
+            for atom in extract_logic_atoms(body):
+                if atom.args != aggregation.args:
+                    continue
+                columns = self._relation_columns(atom.functor)
+                if columns > 1:
+                    raise SquallSemanticError(
+                        self._aggregation_column_message(
+                            aggregation, atom.functor, columns
+                        )
+                    )
+
+    def _check_squall_rule_body(self, rule):
+        """
+        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
+        """
+        if isinstance(rule, datalog.Implication) and isinstance(
+            rule.consequent, ir.FunctionApplication
+        ):
+            self._check_squall_aggregation_columns(
+                rule.consequent.args, rule.antecedent
+            )
+
     def query(
         self, *args, show_rewritten: bool = False, dry_run: bool = False,
         show_ra=False,
@@ -801,6 +926,22 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             return solution_set
 
+    def _declare_query(
+        self, head: fe.Expression, predicate: fe.Expression
+    ) -> logic.Implication:
+        """
+        Declare the query rule *head* :- *predicate*, checking that all
+        its variables are bound.
+        """
+        try:
+            query_expression = self._declare_implication(head, predicate)
+            check_range_restriction(
+                query_expression, self.program_ir.symbol_table, query=True
+            )
+        except UnboundVariablesError as error:
+            raise error.located(query=True) from None
+        return query_expression
+
     def _magic_sets_rewrite_query(
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
@@ -836,7 +977,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             new_head = self.new_symbol()(*head)
         else:
             raise ValueError("Wrong head syntax")
-        query_expression = self._declare_implication(new_head, predicate)
+        query_expression = self._declare_query(new_head, predicate)
 
         try:
             magic_query_expression = self.magic_sets_rewrite_program(

@@ -38,6 +38,16 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``text_embeddings`` — semantic search over document texts (e.g. PubMed
+  abstracts) with SPECTER2, registered as a function
+  ``f(query, doc) -> similarity``; see
+  :mod:`neurolang.utils.text_embeddings`::
+
+      text_embeddings:
+        study_abstracts:
+          ids_from: study
+          source: pubmed
+          function: query_similarity
 
 Usage
 -----
@@ -330,21 +340,85 @@ class Sort(NamedTuple):
 
     Its entities span *columns*, whose values are of the *type*; a sort of
     N > 1 columns reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+
+    The *space* of a sort of points tells what its columns are: ``voxel``
+    for the indices ``(i, j, k)`` of a grid, ``mm`` for coordinates
+    ``(x, y, z)`` in millimetres in the space of the engine's template,
+    ``""`` otherwise. The *grid* of a sort of voxels is the grid it
+    indexes: that of the engine's template (see :func:`build_engine`)
+    when ``""`` or ``template``, else that of the atlas of this name.
     """
 
     name: str
     columns: Tuple[str, ...]
     type: str = ""
     description: str = ""
+    space: str = ""
+    grid: str = ""
+
+
+SORT_SPACES = ("voxel", "mm")
+
+# The grid of the engine's template, which the voxels of a sort index
+# unless it names another grid.
+TEMPLATE_GRID = "template"
+
+
+def engine_grid_names(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+    """
+    Return the names of the grids of the engine *cfg*.
+
+    They are the template's and those of the atlases it loads.
+    """
+    return (TEMPLATE_GRID, *(cfg.get("atlases") or {}))
+
+
+def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
+    """
+    Return the grid the sort *name* declared by *info* indexes, or "".
+
+    Only a sort of ``space: voxel`` names a grid, one of *grids*.
+    """
+    grid = str(info.get("grid", ""))
+    if grid and info.get("space") != "voxel":
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; only a sort of "
+            "space: voxel indexes a grid"
+        )
+    if grid and grid not in grids:
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; the grids of the "
+            f"engine are {', '.join(grids)}"
+        )
+    return grid
+
+
+def _declared_sort(
+    name: str, info: Dict[str, Any], grids=(TEMPLATE_GRID,)
+) -> Sort:
+    """
+    Return the sort *name* declared by *info*, checking its space.
+
+    Its grid, if any, is one of *grids*.
+    """
+    space = str(info.get("space", ""))
+    if space and space not in SORT_SPACES:
+        raise ValueError(
+            f"sort {name!r} declares the space {space!r}; a space is "
+            f"one of {', '.join(SORT_SPACES)}"
+        )
+    return Sort(
+        name, tuple(info["columns"]), str(info.get("type", "")),
+        str(info.get("description", "")).strip(), space,
+        _sort_grid(name, info, grids),
+    )
 
 
 def _declared_sorts(cfg: Dict[str, Any]) -> Dict[str, Sort]:
     """Return the sorts the engine *cfg* declares, by name."""
+    grids = engine_grid_names(cfg)
     return {
-        name: Sort(
-            name, tuple(info["columns"]), str(info.get("type", "")),
-            str(info.get("description", "")).strip(),
-        )
+        name: _declared_sort(name, info, grids)
         for name, info in (cfg.get("sorts") or {}).items()
     }
 
@@ -700,6 +774,18 @@ def _label_name(val: Any) -> str:
     return name
 
 
+def _register_grid(nl, name: str, img) -> None:
+    """
+    Register the grid of the image *img* as the grid *name* of *nl*.
+
+    The voxel indices of a sort naming the grid (``grid: name``) index
+    it: ``.save`` writes them with its shape and affine.
+    """
+    if getattr(nl, "grids", None) is None:
+        nl.grids = {}
+    nl.grids[name] = img
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path
 ) -> None:
@@ -712,6 +798,7 @@ def _load_deterministic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     pred_name = params.get("predicate_name", atlas_name)
     labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
     regions = ExplicitVBR.from_spatial_image_labels(
@@ -747,6 +834,7 @@ def _load_probabilistic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     n_components = img.shape[-1]
     labels = list(atl_data["labels"])
     threshold = float(params.get("threshold", 0.5))
@@ -968,6 +1056,69 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name):
         nl.load_ontology(result[0])
 
 
+def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
+    """
+    Register the document indexes declared in ``text_embeddings``.
+
+    Only the ids are read here; texts are fetched and embedded on first use.
+    """
+    entries = cfg.get("text_embeddings", {})
+    if not entries:
+        return
+    from neurolang.utils import text_embeddings
+
+    emb_dir = data_dir / engine_name / "embeddings"
+    nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
+    for emb_name, emb_cfg in entries.items():
+        encoder = text_embeddings.Specter2Encoder(**{
+            key: emb_cfg[key]
+            for key in ("model", "document_adapter", "query_adapter")
+            if key in emb_cfg
+        })
+        index = text_embeddings.EmbeddingIndex(
+            ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
+            load_texts=_text_loader(
+                emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                engine_name, data_dir, rel_base_dir,
+            ),
+            encoder=encoder,
+            cache_path=emb_dir / f"{emb_name}.npz",
+        )
+        nl.text_embedding_indexes[emb_name] = index
+        nl.add_symbol(
+            text_embeddings.make_similarity_function(index),
+            name=emb_cfg["function"],
+        )
+
+
+def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
+    """Return ``load_texts(keys)`` for a ``text_embeddings`` source."""
+    from neurolang.utils import text_embeddings
+
+    source = emb_cfg.get("source", "pubmed")
+    if source == "pubmed":
+        def load_texts(keys):
+            return text_embeddings.fetch_pubmed_abstracts(
+                keys, cache_path=pubmed_cache, email=emb_cfg.get("email")
+            )
+    elif isinstance(source, dict) and "file" in source:
+        def load_texts(keys):
+            path = _resolve_relation_file(
+                source, engine_name, data_dir, base_dir=base_dir
+            )
+            return text_embeddings.load_text_table(
+                path,
+                source.get("id_column", "id"),
+                source.get("text_columns", ["title", "abstract"]),
+            )
+    else:
+        raise ValueError(
+            f"Unknown text_embeddings source {source!r}: use 'pubmed' "
+            "or a mapping with a 'file' key."
+        )
+    return load_texts
+
+
 def build_engine(
     name: str,
     data_dir: Path,
@@ -993,7 +1144,14 @@ def build_engine(
     Returns
     -------
     NeurolangPDL
-        A fully initialised engine ready for query execution.
+        A fully initialised engine ready for query execution. Its
+        ``template`` attribute is the MNI image whose grid the voxel
+        indices of the engine refer to (the sorts of ``space: voxel``),
+        resampled to *resolution* if given, or None if the engine does
+        not require the MNI mask. Its ``grids`` attribute holds the
+        images of the grids voxel indices may index, by name: the
+        template, as ``template``, and each atlas, under its name (the
+        sorts naming a ``grid``).
 
     Raises
     ------
@@ -1031,6 +1189,8 @@ def build_engine(
     else:
         nl = NeurolangPDL()
 
+    nl.template = mask
+    nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)
@@ -1039,6 +1199,7 @@ def build_engine(
     _phase_atlases(nl, cfg, data_dir, name)
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
     _phase_ontologies(nl, cfg, data_dir, name)
 

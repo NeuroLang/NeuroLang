@@ -30,12 +30,10 @@ The main sections are:
 ``[RAS]`` — relational algebra sets
     ``backend``
         Which implementation stores and manipulates relations: ``pandas``
-        (default), ``dask`` or ``polars``.  The ``polars`` backend needs the
-        optional dependencies ``pip install "neurolang[ras-polars]"``; the
-        ``dask`` backend needs the ``dask`` and ``dask-sql`` packages.
-    ``synchronous``, ``tableIds``
-        Only used by the ``dask`` backend: whether to use the synchronous
-        dask scheduler, and whether tables get human-readable or UUID names.
+        (default) or ``polars``.  The ``polars`` backend needs the
+        optional dependencies ``pip install "neurolang[ras-polars]"``.
+        Any other value, including the removed ``dask`` backend, raises a
+        ``ValueError``.
 
 ``[CHASE]`` — the Datalog fixpoint (chase) engine
     ``max_iterations``
@@ -69,7 +67,7 @@ Switching the backend at runtime
 The backend can be changed from Python without editing ``config.ini``::
 
     from neurolang.config import config
-    config.set_query_backend("polars")   # or "pandas", "dask"
+    config.set_query_backend("polars")   # or "pandas"
 
     from neurolang.frontend import NeurolangPDL
     nl = NeurolangPDL()

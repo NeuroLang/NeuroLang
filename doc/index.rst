@@ -84,7 +84,9 @@ a guided walkthrough.
    tutorial
    tutorial_squall
    tutorial_datalog
+   tutorial_text_embeddings
    concepts
+   probabilistic_lifting
    engine_configuration
    performance
    auto_examples/index

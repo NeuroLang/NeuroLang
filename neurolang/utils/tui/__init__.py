@@ -22,6 +22,7 @@ The REPL is organised in modules:
 - :mod:`.commands`: the dot-command registry and the core commands,
 - :mod:`.editing`: completion, highlighting, toolbar and editing modes,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
+- :mod:`.nifti`: saving results as CSV or NIfTI and viewing images,
 - :mod:`.results`: paged display of query results,
 - :mod:`.session`: the session's scope, holding its rules and the
   relations loaded with ``.load``, and the session commands,
@@ -31,6 +32,7 @@ The REPL is organised in modules:
 - :mod:`.transcript`: the record of the session and ``.transcript``.
 """
 
+from . import nifti  # registers the .save and .view commands
 from .app import InteractiveTuiApp, TuiSettings, main
 
-__all__ = ["InteractiveTuiApp", "TuiSettings", "main"]
+__all__ = ["InteractiveTuiApp", "TuiSettings", "main", "nifti"]
