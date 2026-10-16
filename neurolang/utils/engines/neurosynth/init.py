@@ -15,6 +15,8 @@ Registers the following predicates:
 * ``cortical_mask(i, j, k)`` — the voxels of the MNI template grid in the
   cortex, labelled by the Harvard–Oxford cortical atlas (maximum
   probability, 25% threshold, 2 mm).
+* ``cognitive_task(task_id, name, description)`` — the tasks of the
+  Cognitive Atlas, with their descriptions.
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
 ``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
@@ -23,6 +25,7 @@ Predicate names are lowercase to match SQUALL's case-folding convention
 (see ``intransitive`` in ``squall_syntax_lark.py``).
 """
 
+import json
 from pathlib import Path
 
 import nibabel as nib
@@ -35,7 +38,13 @@ from neurolang.frontend.neurosynth_utils import (
     fetch_neurosynth_peak_data,
     get_ns_term_study_associations,
 )
-from neurolang.utils.nilearn_compat import nilearn_datasets, nilearn_image
+from neurolang.utils.nilearn_compat import (
+    fetch_files,
+    nilearn_datasets,
+    nilearn_image,
+)
+
+COGNITIVE_ATLAS_TASKS_URL = "https://www.cognitiveatlas.org/api/v-alpha/task"
 
 
 def init_engine(
@@ -86,6 +95,9 @@ def init_engine(
         name="cortical_mask",
     )
     nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
+    nl.add_tuple_set(
+        fetch_cognitive_atlas_tasks(data_dir), name="cognitive_task"
+    )
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
 
 
@@ -96,6 +108,28 @@ def fetch_cortical_atlas(data_dir: Path) -> nib.Nifti1Image:
         "cort-maxprob-thr25-2mm", data_dir=str(data_dir), verbose=0
     )
     return nilearn_image().load_img(atlas.maps)
+
+
+def fetch_cognitive_atlas_tasks(data_dir: Path) -> pd.DataFrame:
+    """The tasks of the Cognitive Atlas, from its API, as the columns
+    ``task_id``, ``name`` and ``description``, stripped. A task without
+    a description has an empty one; one without a name is left out."""
+    path = fetch_files(
+        str(Path(data_dir) / "cognitive_atlas"),
+        [(
+            "tasks.json", COGNITIVE_ATLAS_TASKS_URL,
+            {"move": "tasks.json"},
+        )],
+        verbose=0,
+    )[0]
+    with open(path) as file:
+        tasks = pd.DataFrame(json.load(file))
+    tasks = pd.DataFrame({
+        "task_id": tasks["id"],
+        "name": tasks["name"].fillna("").str.strip(),
+        "description": tasks["definition_text"].fillna("").str.strip(),
+    })
+    return tasks[tasks["name"] != ""].reset_index(drop=True)
 
 
 def _cortical_voxels(
