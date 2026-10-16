@@ -7,6 +7,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 """
 import collections
 import functools
+import random
 import typing
 from typing import (
     AbstractSet,
@@ -1172,6 +1173,89 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
+
+    def k_fold_assign(
+        self,
+        iterable: Iterable[Tuple[Any, ...]],
+        k: int = 10,
+        shuffle: bool = True,
+        seed: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> Tuple[fe.Symbol, fe.Symbol]:
+        """
+        Assign the tuples of ``iterable`` to ``k`` cross-validation folds.
+
+        Each distinct tuple is put in exactly one fold, and the sizes of
+        the folds differ by at most one. Two deterministic relations are
+        added: ``{name}_assign``, holding each tuple with its fold id
+        appended, and ``{name}_fold_id``, holding the fold ids
+        ``0, ..., k - 1``. Since the fold is just another column, the
+        training and test sets of all folds are obtained in a single
+        query, without looping over folds:
+
+        >>> assign, fold_id = nl.k_fold_assign(studies, k=5, seed=0)
+        >>> with nl.scope as e:
+        ...     e.train[e.f, e.s] = (
+        ...         fold_id[e.f] & assign[e.s, e.g] & (e.g != e.f)
+        ...     )
+        ...     e.test[e.f, e.s] = assign[e.s, e.f]
+
+        Parameters
+        ----------
+        iterable : Iterable[Tuple[Any, ...]]
+            tuples to assign to folds, as for ``add_tuple_set``.
+            Repeated tuples are assigned once.
+        k : int, optional
+            number of folds, between 2 and the number of distinct tuples,
+            by default 10.
+        shuffle : bool, optional
+            whether to shuffle the tuples before assigning them to folds,
+            by default True. Otherwise tuples are assigned to folds in a
+            round-robin fashion, in the order of ``iterable``.
+        seed : Optional[int], optional
+            seed of the shuffle. The same tuples and seed always give the
+            same folds, whatever the order of ``iterable``.
+            By default None, which gives different folds on each call.
+        name : Optional[str], optional
+            prefix of the names of the two relations, by default None,
+            in which case a unique name is generated.
+
+        Returns
+        -------
+        Tuple[fe.Symbol, fe.Symbol]
+            the symbols of the ``{name}_assign`` and ``{name}_fold_id``
+            relations.
+
+        Raises
+        ------
+        ValueError
+            if ``k`` is less than 2 or more than the number of tuples.
+
+        """
+        if name is None:
+            name = str(uuid1())
+        if isinstance(iterable, pd.DataFrame):
+            iterable = iterable.itertuples(index=False, name=None)
+        items = list(dict.fromkeys(
+            tuple(item) if isinstance(item, (tuple, list)) else (item,)
+            for item in iterable
+        ))
+        if not 2 <= k <= len(items):
+            raise ValueError(
+                f"k={k} must be between 2 and the number of tuples, "
+                f"{len(items)}"
+            )
+        if shuffle:
+            items.sort()
+            random.Random(seed).shuffle(items)
+        assign = self.add_tuple_set(
+            [item + (i % k,) for i, item in enumerate(items)],
+            name=f"{name}_assign",
+        )
+        fold_id = self.add_tuple_set(
+            [(i,) for i in range(k)], name=f"{name}_fold_id"
+        )
+        return assign, fold_id
 
 
 def _has_probability(head) -> bool:
