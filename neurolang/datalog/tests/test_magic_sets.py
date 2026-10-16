@@ -21,6 +21,7 @@ from ..expression_processing import extract_logic_free_variables
 from ..exceptions import (
     BoundAggregationApplicationError,
     NegationInMagicSetsRewriteError,
+    NoConstantPredicateFoundError,
 )
 from ..magic_sets import (
     AdornedSymbol,
@@ -316,6 +317,55 @@ def test_resolution_works_query_free():
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
+
+
+def test_resolution_works_constant_in_edb_atom():
+    """
+    An atom of the extensional database with a constant binds the
+    variables of the atoms after it: ``x`` in ``anc(x, y)``, the magic
+    set of ``anc`` holding the children of ``a``.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), par(a, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("magic_anc^bf")
+        and par(a, x) in rule.antecedent.formulas
+        for rule in mr.formulas
+    )
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((c,)), C_((d,))}
+
+
+def test_edb_atom_without_constant_does_not_seed_magic_sets():
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), par(z, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    with raises(NoConstantPredicateFoundError):
+        magic_rewrite(q(y), dl)
 
 def test_resolution_works_builtin():
     edb = Eb_(
@@ -918,3 +968,40 @@ def test_adorned_symbol_predicates_keep_their_own_rules():
     dl.walk(mr)
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {(a,)}
+
+
+# A function of a variable that only the query binds, as the similarity
+# of a query text to a study: the rule is solved only for the query texts
+# magic sets pass to it.
+def _similarity(text: str, study: int) -> float:
+    return float(len(text) % study == 0)
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_variable_bound_by_an_edb_atom_with_a_constant(frontend):
+    nl = frontend()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set(
+        [("t1", "motor task", "move"), ("t2", "reading task", "read it")],
+        name="task",
+    )
+    nl.add_symbol(_similarity, name="similarity")
+    res = nl.execute_datalog_program(
+        "close(q, s) :- study(s) & (v == similarity(q, s)) & (v > .5)\n"
+        'ans(s) :- task(_, "motor task", d) & close(d, s)'
+    )
+    assert set(res.as_pandas_dataframe().s) == {1, 2}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_edb_atom_with_a_constant_binding_an_aggregate(frontend):
+    """The value an EDB atom with a constant gives to an aggregate is not
+    bound by magic sets: the query is solved as without the binding."""
+    nl = frontend()
+    nl.add_tuple_set([(1, 2), (1, 3), (2, 2)], name="e")
+    nl.add_tuple_set([("a",), ("b",)], name="r")
+    res = nl.execute_datalog_program(
+        "c(count(x)) :- r(x)\n"
+        "ans(n) :- e(1, n) & c(n)"
+    )
+    assert set(res.as_pandas_dataframe().n) == {2}

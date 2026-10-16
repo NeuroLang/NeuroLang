@@ -123,6 +123,15 @@ Unreleased
 
 **Bug fixes:**
 
+* Magic sets pass the values of a stored relation with a constant to the
+  rules after it in a query: ``ans(i, j, k, p) :- cognitive_task(_,
+  "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)`` gives
+  the description of the task to the rules computing the similarities to
+  it, which raised an ``UnboundVariablesError``. A recursive component of
+  a program is now a stratum of its own, before the rules depending on
+  it, such as an aggregation, which raised a
+  ``NoValidChaseClassForStratumException``.
+
 * Magic sets missed the initial magic fact of a constant when the same
   predicate, with the same adornment, was called with another constant in
   a rule rewritten earlier, e.g. ``a(y) :- r(1, y)`` and

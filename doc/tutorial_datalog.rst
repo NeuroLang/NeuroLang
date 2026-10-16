@@ -536,7 +536,11 @@ the right fusiform gyrus are evaluated.
 
     Magic-sets works when the constant appears on an IDB (rule-defined)
     predicate, as it does here (``bayes_factor`` is defined by a rule).
-    For EDB predicates the optimisation does not apply.
+    A constant on an EDB predicate does not restrict that predicate, but
+    its rows bind its variables in the IDB predicates right of it: in
+    ``ans(x) :- e("c", y) & p(y, x)``, with ``e`` an EDB predicate and
+    ``p`` defined by rules, the values of ``y`` in the rows of ``e``
+    with ``"c"`` are passed to ``p``.
 
 
 Part 9: The Complete Program

@@ -1115,7 +1115,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return solution_set, functor_orig
 
     def magic_sets_rewrite_program(self, query_expression):
-        goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
+        try:
+            goal, mr = magic_rewrite(
+                query_expression.consequent, self.program_ir
+            )
+        except InvalidMagicSetError:
+            goal, mr = magic_rewrite(
+                query_expression.consequent, self.program_ir,
+                seed_from_edb=False
+            )
         self.program_ir.walk(mr)
         new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
         return new_query_expression
