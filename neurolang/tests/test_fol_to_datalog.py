@@ -1296,3 +1296,64 @@ def test_fol2datalog_unsafe_complex_formula():
                 )
             )
         )
+
+
+def _depends_on_itself(program):
+    """Whether a predicate of `program` depends on itself."""
+    dependencies = {}
+    for clause in program.expressions:
+        head = clause.consequent.functor
+        body = clause.antecedent
+        dependencies.setdefault(head, set()).update(
+            atom.functor for atom in _program_atoms(body)
+        )
+
+    def reachable(start):
+        seen, stack = set(), [start]
+        while stack:
+            for functor in dependencies.get(stack.pop(), ()):
+                if functor not in seen:
+                    seen.add(functor)
+                    stack.append(functor)
+        return seen
+
+    return any(head in reachable(head) for head in dependencies)
+
+
+def _program_atoms(formula):
+    if isinstance(formula, Negation):
+        return _program_atoms(formula.formula)
+    if isinstance(formula, Conjunction):
+        return [a for f in formula.formulas for a in _program_atoms(f)]
+    return [formula]
+
+
+@pytest.mark.parametrize("repeat", range(5))
+def test_negated_existential_with_a_conjunct_of_the_rule(repeat):
+    """T(s, t) ∧ C(s) ∧ ¬∃u (W(u) ∧ u ≠ t ∧ T(s, u) ∧ C(s)): the negated
+    conjunction is a disjunction ¬∃u (…) ∨ ¬C(s), whose auxiliary
+    predicate must not restrict the variables of its own subqueries,
+    which would make it depend on its negation."""
+    s, t, u = Symbol("s"), Symbol("t"), Symbol("u")
+    C, H, T, W = Symbol("C"), Symbol("H"), Symbol("T"), Symbol("W")
+    NE = Constant(operator.ne)
+    exp = Conjunction((
+        T(s, t), C(s),
+        Negation(ExistentialPredicate(u, Conjunction((
+            W(u), NE(u, t), T(s, u), C(s)
+        ))))
+    ))
+    program = fol_query_to_datalog_program(H(t, s), exp)
+    assert not _depends_on_itself(program)
+
+    dl = Datalog2()
+    dl.walk(ExpressionBlock(
+        tuple(Fact(T(Constant(a), Constant(b))) for a, b in (
+            ("s1", "x"), ("s1", "y"), ("s2", "x"), ("s3", "y")
+        )) +
+        tuple(Fact(C(Constant(a))) for a in ("s1", "s2")) +
+        tuple(Fact(W(Constant(a))) for a in ("x", "y")) +
+        (Implication(H(t, s), exp),)
+    ))
+    solution = Chase(dl).build_chase_solution()
+    assert solution["H"].value == {("x", "s2")}
