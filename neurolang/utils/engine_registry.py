@@ -1070,11 +1070,14 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
     emb_dir = data_dir / engine_name / "embeddings"
     nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
     for emb_name, emb_cfg in entries.items():
-        encoder = text_embeddings.Specter2Encoder(**{
-            key: emb_cfg[key]
-            for key in ("model", "document_adapter", "query_adapter")
-            if key in emb_cfg
-        })
+        encoder = text_embeddings.Specter2Encoder(
+            model_dir=emb_dir / "models",
+            **{
+                key: emb_cfg[key]
+                for key in ("model", "document_adapter", "query_adapter")
+                if key in emb_cfg
+            },
+        )
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(

@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* Text embeddings work offline: SPECTER2, its tokenizer and its adapters
+  are downloaded once into ``{data_dir}/<engine>/embeddings/models/``
+  (by the first query or by
+  ``python -m neurolang.utils.text_embeddings``) and then loaded from
+  there without network.
+
 * The ``.view`` brain viewer of the interactive REPL starts with the
   ``plasma`` colormap and shows the top 5% of the voxels (threshold at the
   95th percentile of the nonzero values) unless ``--cmap`` or

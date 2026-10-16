@@ -23,10 +23,17 @@ The feature needs extra packages::
 
 Titles and abstracts come from PubMed.  The first query that uses the
 similarity downloads them (about three minutes for the 14,371 NeuroSynth
-studies), embeds them (minutes on a GPU, longer on a CPU), and caches both
-under ``{data_dir}/neurosynth/embeddings/``.  To do it ahead of time::
+studies), downloads SPECTER2 and its adapters (about 430 MB), embeds the
+studies (minutes on a GPU, longer on a CPU), and caches all of it under
+``{data_dir}/neurosynth/embeddings/``, the model and its tokenizer in
+``models/``.  To do it ahead of time::
 
     python -m neurolang.utils.text_embeddings -e neurosynth -d neurolang_data
+
+After that, queries need no network: new query texts are embedded with
+the local copy of the model.  To work offline on another machine, e.g. a
+compute node without internet, run this command once on a machine with
+internet and copy the data directory.
 
 NCBI asks for a contact e-mail with E-utilities requests.  It is optional;
 set it, and optionally an API key raising the rate limit from 3 to 10
