@@ -8,7 +8,8 @@ from .. import (
 )
 from ..transformations import (
     PushExistentialsDown,
-    PushUniversalsDown
+    PushUniversalsDown,
+    standardise_apart
 )
 
 P = Symbol("P")
@@ -174,3 +175,24 @@ def test_push_universals_down():
     )
 
     assert PUD.walk(exp) == exp
+
+
+def test_standardise_apart():
+    """Each quantified variable is renamed to a fresh one, the free
+    variables are kept."""
+    exp = Conjunction((
+        P(X),
+        ExistentialPredicate(
+            X, Conjunction((Q(X), Negation(ExistentialPredicate(X, R(X)))))
+        ),
+        UniversalPredicate(Y, P(Y)),
+    ))
+    res = standardise_apart(exp)
+    free, outer, universal = res.formulas
+    assert free == P(X)
+    inner = outer.body.formulas[1].formula
+    heads = {outer.head, inner.head, universal.head}
+    assert len(heads) == 3 and heads.isdisjoint({X, Y})
+    assert outer.body.formulas[0] == Q(outer.head)
+    assert inner.body == R(inner.head)
+    assert universal.body == P(universal.head)
