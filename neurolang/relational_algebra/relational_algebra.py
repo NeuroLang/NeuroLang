@@ -309,6 +309,27 @@ class NameColumns(UnaryRelationalAlgebraOperation):
         )
 
 
+class Materialise(UnaryRelationalAlgebraOperation):
+    """
+    Mark a relation to be computed as a set when the plan containing it
+    is evaluated, rather than while it is built. It evaluates to its
+    relation. Each occurrence in a plan is evaluated: a backend may cache
+    or persist the set at this node.
+
+    Planning walkers can keep it behind a symbol rather than walking into
+    it, as for a constant set.
+    """
+
+    def __init__(self, relation):
+        self.relation = relation
+
+    def columns(self):
+        return self.relation.columns()
+
+    def __repr__(self):
+        return f"materialise({self.relation})"
+
+
 class NumberColumns(UnaryRelationalAlgebraOperation):
     """
     Converts a named relational algebra set to an unnamed one
@@ -990,6 +1011,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
         return self._build_relation_constant(new_set)
+
+    @ew.add_match(Materialise(Constant))
+    def ra_materialise(self, materialise):
+        return materialise.relation
 
     @ew.add_match(NumberColumns(Constant, ...))
     def ra_number_columns(self, number_columns):

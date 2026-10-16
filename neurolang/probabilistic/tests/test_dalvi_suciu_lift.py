@@ -17,6 +17,7 @@ from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     Difference,
+    Materialise,
     NameColumns,
     Projection,
     str2columnstr_constant
@@ -841,6 +842,21 @@ def test_interaction_deterministic_probfact_probchoice_safe():
     )
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_symbols_of_relations_to_materialise_are_kept_in_plans():
+    """Like constant sets, relations marked to be materialised are left
+    behind their symbols, rather than inlined in the plan.
+    """
+    relation = Materialise(Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x",), [(1,)])
+    ))
+    symbol = Symbol.fresh()
+    replace = dalvi_suciu_lift.ReplaceAllSymbolsButConstantSets(
+        {symbol: relation}
+    )
+
+    assert replace.walk(symbol) == symbol
 
 
 @pytest.mark.parametrize("rules", (
