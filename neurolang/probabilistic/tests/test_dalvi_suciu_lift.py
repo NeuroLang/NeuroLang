@@ -10,7 +10,8 @@ from ...logic import (
     Disjunction,
     ExistentialPredicate,
     Implication,
-    Negation
+    Negation,
+    Union
 )
 from ...relational_algebra import (
     ColumnInt,
@@ -26,6 +27,8 @@ from ...relational_algebra_provenance import (
 )
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
+from ..cplogic import testing
+from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
@@ -838,3 +841,37 @@ def test_interaction_deterministic_probfact_probchoice_safe():
     )
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+@pytest.mark.parametrize("rules", (
+    "S(x), S(y)",
+    "S(x), S(y) | R(y, x), S(w)",
+), ids=("self-join", "union implying the self-join"))
+def test_inclusion_exclusion_on_equivalent_formulas(rules):
+    """∃x S(x) ∧ ∃y S(y) is ∃x S(x): its two conjuncts and their
+    disjunction are equivalent, and the Möbius weights of their lattice
+    must count them once. The union adds R(y, x) ∧ S(w), which implies
+    ∃x S(x)."""
+    R, S, Z, ans = (Symbol(n) for n in ("R", "S", "Z", "ans"))
+    w, x, y = (Symbol(n) for n in ("w", "x", "y"))
+    bodies = {
+        "S(x), S(y)": (Conjunction((S(x), S(y))),),
+        "S(x), S(y) | R(y, x), S(w)": (
+            Conjunction((S(x), S(y))), Conjunction((R(y, x), S(w)))
+        ),
+    }[rules]
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, "a", "b"), (0.4, "b", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        S, [(0.3, "a"), (0.6, "b")]
+    )
+    cpl_program.walk(Union(tuple(Implication(Z(), b) for b in bodies)))
+    result = dalvi_suciu_lift.solve_succ_query(
+        Implication(ans(), Z()), cpl_program
+    )
+    expected = 1 - (1 - 0.3) * (1 - 0.6)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
