@@ -424,6 +424,33 @@ Polynomial time
    the rules of this section. The order being well founded, the
    construction terminates.
 
+Absorption in negations
+   In every world, for every :math:`\theta`: if :math:`A\theta` holds,
+   :math:`\lnot(A \land B)\theta` and :math:`\lnot B\theta` agree;
+   otherwise both sides of :math:`A \land \lnot(A \land B) \equiv A \land
+   \lnot B` are false. When :math:`y` is not free in :math:`A`,
+   :math:`\exists y\, (A \land B) \equiv A \land \exists y\, B`, which gives
+   the rule through existentials. A conjunct is removed from a negation
+   only if it is one of the conjuncts asserted outside it and no variable
+   quantified between the negation and it is free in it
+   (``_without_asserted_conjuncts``), so that its variables are the same
+   inside and outside. A negation whose conjuncts would all be removed is
+   left unchanged. The rewriting is done once, before lifting.
+
+Deterministic negations
+   The atoms of :math:`N` are deterministic relations or comparisons
+   (``_is_deterministic``, the extensional database of a
+   ``CPLogicProgram`` excluding its probabilistic relations), so
+   :math:`N`, and :math:`D = G \land \lnot N` computed by relational
+   algebra, are the same in every world. :math:`G` being asserted by the
+   conjunction, :math:`G \land \lnot N \equiv G \land D` in every world.
+   :math:`G` binds every free variable of :math:`N` (``_can_materialise``),
+   so :math:`D` is finite. :math:`G` is conjoined within the existentials
+   of :math:`N`, whose variables are not free in :math:`G`:
+   :math:`\lnot\exists t\, N \equiv \lnot\exists t\, (G \land N)` given
+   :math:`G`, by absorption. :math:`D` is computed once, in time
+   polynomial in the deterministic relations.
+
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
    relation with :math:`A` and its free variables are among those of
