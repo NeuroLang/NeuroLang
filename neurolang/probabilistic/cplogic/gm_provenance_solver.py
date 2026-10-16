@@ -33,7 +33,10 @@ from .cplogic_to_gm import (
     NaryChoiceResultPlateNode,
     PlateNode,
 )
-from .grounding import get_grounding_predicate, ground_cplogic_program
+from .grounding import (
+    get_grounding_predicate,
+    ground_cplogic_program_for_query,
+)
 from .problog_solver import solve_succ_query as problog_solve_succ_query
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
@@ -43,6 +46,20 @@ EQUAL = Constant(operator.eq)
 def solve_succ_query(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
+
+    The query is currently solved by translating the part of the program
+    it depends on to ProbLog (see
+    :func:`.problog_solver.solve_succ_query`). The graphical-model based
+    resolution is available in
+    :func:`solve_succ_query_with_graphical_model`.
+
+    """
+    return problog_solve_succ_query(query_predicate, cpl_program)
+
+
+def solve_succ_query_with_graphical_model(query_predicate, cpl_program):
+    """
+    Obtain the solution of a SUCC query using a graphical model.
 
     The SUCC query must take the form
 
@@ -59,7 +76,8 @@ def solve_succ_query(query_predicate, cpl_program):
 
     Solving a SUCC query is a multi-step process:
 
-        1.  First, the program is grounded. That is because the
+        1.  First, the part of the program that the query depends on
+            is grounded. That is because the
             algorithm used to convert it to a graphical model in
             the next step only works on grounded CP-Logic programs.
             A grounding of a program is an ExpressionBlock where
@@ -97,8 +115,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
-    return problog_solve_succ_query(query_predicate, cpl_program)
-    grounded = ground_cplogic_program(cpl_program)
+    grounded = ground_cplogic_program_for_query(cpl_program, query_predicate)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
     qpred_symb = query_predicate.functor

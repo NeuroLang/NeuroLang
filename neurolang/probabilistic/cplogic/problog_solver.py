@@ -17,6 +17,7 @@ from ..expression_processing import (
     is_within_language_prob_query,
     within_language_succ_query_to_intensional_rule,
 )
+from .grounding import get_query_reachable_predicates
 
 
 def nl_pred_to_pl_pred(pred):
@@ -88,15 +89,40 @@ def add_rule_to_problog(rule, pl):
     pl += pl_rule
 
 
-def cplogic_to_problog(cpl):
+def cplogic_to_problog(cpl, query_pred=None):
+    """
+    Convert a CP-Logic program to a ProbLog program.
+
+    Parameters
+    ----------
+    cpl : CPLogicProgram
+        The CP-Logic program to convert.
+    query_pred : FunctionApplication, optional
+        If provided, only the facts and rules of predicates transitively
+        reachable from the query predicate are included in the ProbLog
+        program.
+
+    Returns
+    -------
+    problog.program.SimpleProgram
+        The ProbLog program.
+
+    """
+    if query_pred is None:
+        included = cpl.predicate_symbols
+    else:
+        included = get_query_reachable_predicates(cpl, query_pred)
     pl = problog.program.SimpleProgram()
     for pred_symb, relation in cpl.extensional_database().items():
-        add_facts_to_problog(pred_symb, relation, pl)
-    for pred_symb in cpl.pfact_pred_symbs:
+        if pred_symb in included:
+            add_facts_to_problog(pred_symb, relation, pl)
+    for pred_symb in cpl.pfact_pred_symbs & included:
         add_probfacts_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
-    for pred_symb in cpl.pchoice_pred_symbs:
+    for pred_symb in cpl.pchoice_pred_symbs & included:
         add_probchoice_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
-    for union in cpl.intensional_database().values():
+    for pred_symb, union in cpl.intensional_database().items():
+        if pred_symb not in included:
+            continue
         for rule in union.formulas:
             if is_within_language_prob_query(rule):
                 rule = within_language_succ_query_to_intensional_rule(rule)
@@ -129,7 +155,7 @@ def pl_solution_to_nl_solution(pl_solution, query_preds):
 
 
 def solve_succ_query(query_pred, cpl):
-    pl = cplogic_to_problog(cpl)
+    pl = cplogic_to_problog(cpl, query_pred=query_pred)
     query = problog.logic.Term("query")
     pl += query(nl_pred_to_pl_pred(query_pred))
     res = problog.core.ProbLog.convert(pl, problog.sdd_formula.SDD).evaluate()
