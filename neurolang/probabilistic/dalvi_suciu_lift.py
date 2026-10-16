@@ -103,7 +103,11 @@ from .query_resolution import (
     lift_solve_marg_query
 )
 from .non_repeating_lift import columns_comparison, non_repeating_plan
-from .ranking import partially_rank_query, verify_that_the_query_is_ranked
+from .ranking import (
+    partially_rank_query,
+    rank_query,
+    verify_that_the_query_is_ranked
+)
 from .shattering import NE, shatter_constants
 from .transforms import (
     add_existentials_except,
@@ -310,6 +314,8 @@ def _prepare_and_optimise_query(
     shattered_query_body = partially_rank_query(
         shattered_query_body, symbol_table
     )
+    if not verify_that_the_query_is_ranked(shattered_query_body):
+        shattered_query_body = rank_query(shattered_query_body, symbol_table)
     shattered_query = Implication(
         unified_query.consequent,
         shattered_query_body

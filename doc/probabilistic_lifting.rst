@@ -155,12 +155,47 @@ Shattering constants
    of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
 
 Ranking
-   Atoms with a repeated variable, such as :math:`R(x, x)`, are replaced by
-   atoms of a new relation holding the selected tuples, and the query must
-   then be *ranked*: there is an order on the variables such that the
-   arguments of every atom follow it [Dalvi2012]_
-   (:mod:`neurolang.probabilistic.ranking`). Queries which are not ranked are
-   declined.
+   The query must be *ranked*: there is an order on the variables such
+   that the arguments of every atom follow it [Dalvi2012]_
+   (:mod:`neurolang.probabilistic.ranking`). Atoms with a repeated variable,
+   such as :math:`R(x, x)`, are first replaced by atoms of a new relation
+   holding the selected tuples. A query whose variables still occur in both
+   orders, such as :math:`\exists x, y\, R(x, y) \land R(y, x)`, is then
+   rewritten into an equivalent ranked query
+   (:func:`~neurolang.probabilistic.ranking.rank_query`), following Dalvi
+   and Suciu's Proposition 4.2. The variables to rank are those occurring in
+   both orders or repeated, together with the variables at the same
+   positions of the other atoms of their relations. For every weak order of
+   them, each atom :math:`R(\bar x)` becomes an atom of the relation of the
+   tuples of :math:`R` whose values at those positions are in that order,
+   and the variables of each rank are the same in every order; the query is
+   the disjunction of these queries, one per order. For
+   :math:`R(x, y) \land R(y, x)`, the orders :math:`x < y`, :math:`x = y`
+   and :math:`y < x` give
+
+   .. math::
+
+      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2) \;\lor\;
+      \exists x_1\, R_=(x_1) \;\lor\;
+      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2),
+
+   with :math:`R_<` the tuples :math:`(a, b)` of :math:`R` with
+   :math:`a < b`, :math:`R_>` the tuples :math:`(b, a)` with
+   :math:`a < b`, and :math:`R_=` the tuples :math:`(a, a)`. The ranked
+   relations are computed on the data, each tuple keeping its probability.
+
+   The query is declined, and left to the next solver, when a relation to
+   split is a probabilistic choice or occurs within a negation; when a
+   ranked position has a constant, or a comparison or a function has a
+   ranked variable; when an answer variable is to rank, as Dalvi and Suciu
+   rank Boolean queries, the answer variables being constants; when the
+   ranked columns are not all of real numbers or all of strings, the types
+   with a total order and an equality, or contain NaN; or when more than
+   ``MAX_RANKED_VARIABLES``, two, variables are to rank, as the number of
+   orders, 1, 3, 13, 75…, makes planning exponential. Only variables in
+   both orders in two atoms are detected, as in the check of rankedness: a
+   cycle such as :math:`R(x, y) \land R(y, z) \land R(z, x)` is not
+   ranked, which the separator variable rule still checks.
 
 Checks
    The query must have no built-in function, except comparisons within
@@ -672,6 +707,27 @@ Dalvi–Suciu rules
    [Dalvi2012]_, whose proofs apply to unions of conjunctive queries on
    tuple-independent databases, and of Suciu et al. [Suciu2011]_ (section
    4.3.1) for the disjoint projection on probabilistic choices.
+
+Ranking
+   Dalvi and Suciu prove the ranked query equivalent to the query, and its
+   relations to be tuple-independent, by mapping each tuple of a relation
+   to a single tuple of a single ranked relation [Dalvi2012]_
+   (Proposition 4.2). ``rank_query`` keeps what the proof needs:
+
+   * every atom of a relation has variables to rank at the same positions
+     (``_ranked_variables_and_positions`` closes the set of variables to
+     rank), so the ranked relations of :math:`R` partition its tuples by
+     the order of their values at these positions, and keep their
+     probabilities: a tuple-independent relation gives tuple-independent
+     relations;
+   * a probabilistic choice, a single block of exclusive tuples, is not
+     split: its parts would not be independent choices;
+   * the atoms split are positive: each disjunct then implies the query,
+     even when no atom forces its order, while a negated
+     :math:`\lnot R_<(x, y)` would hold whenever :math:`x > y`;
+   * the order compared is total, with equality: real numbers or strings
+     (``_is_totally_ordered``), without NaN. Sets, ordered by inclusion,
+     would leave the tuples of incomparable values in no ranked relation.
 
 The tests of the rules of `Negations and comparisons sharing relations`_
 (``neurolang/probabilistic/tests/test_lifted_negation.py``) also compare
