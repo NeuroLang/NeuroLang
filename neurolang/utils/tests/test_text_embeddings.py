@@ -311,11 +311,14 @@ def _task_engine(index):
     return nl
 
 
-def test_query_texts_joined_in_the_query_are_unbound(index):
+def test_query_texts_joined_in_the_query(index):
+    """The description of a task, joined with ``voxel_given_sim`` in the
+    query, is passed by magic sets to ``cutoff`` and ``close``."""
     nl = _task_engine(index)
     nl.execute_datalog_program(QUERY_TEXT_RULES.format(range=""))
-    with pytest.raises(UnboundVariablesError, match=r"In cutoff: .*\bq\b"):
-        nl.execute_datalog_program(TASK_QUERY)
+    res = nl.execute_datalog_program(TASK_QUERY)
+    assert dict(res) == pytest.approx({"b": .5, "c": .5})
+    assert index.encoder.query_calls == 1
 
 
 def test_query_texts_from_a_relation(index):
