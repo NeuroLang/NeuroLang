@@ -158,9 +158,11 @@ implements the algorithm of Dalvi and Suciu for unions of conjunctive
 queries [Dalvi2012]_, extended to probabilistic choices [Suciu2011]_. Its
 rules are tried in the order below, each one calling the algorithm on the
 subqueries it produces. A query to which no rule applies is marked
-``NonLiftable`` and declined. For unions of conjunctive queries the
-algorithm is complete: a query on which it fails is #P-hard
-[Dalvi2012]_.
+``NonLiftable`` and declined. Dalvi and Suciu prove their algorithm
+complete for unions of conjunctive queries on tuple-independent
+databases: a query on which it fails is #P-hard [Dalvi2012]_. The
+implementation restricts some of its rules, inclusion–exclusion for
+instance, so a query it declines is not necessarily #P-hard.
 
 Base cases
    A single atom is read from its relation; a subquery whose atoms are all
@@ -183,9 +185,10 @@ Independent conjunction
       P[Q_1 \land \lnot Q_2] = P[Q_1]\,(1 - P[Q_2]).
 
    Negated components sharing no relation with the rest are planned this
-   way, with ``Difference``. Fink and Olteanu show that such a query is
-   liftable if and only if its positive and negated parts are
-   [Fink2016]_.
+   way, with ``Difference``: the query is liftable when its positive and
+   negated parts are (see `Correctness of the plans`_). Fink and Olteanu
+   study the converse, for queries with negation without repeated
+   relations [Fink2014]_ [Fink2016]_.
 
 Independent disjunction
    With the query in disjunctive normal form, if its disjuncts split into
@@ -245,9 +248,11 @@ completeness result above does not apply to them.
 The rules below are tried in turn when the relations shared are
 tuple-independent; a conjunction sharing a probabilistic choice is
 declined. Every rule checks each query it lifts, and the lifted plans are
-sound, but the rules are not known to be complete: some liftable
-conjunctions of this kind may still be declined and left to weighted
-model counting.
+sound (see `Correctness of the plans`_), but the rules are not known to be
+complete: some liftable conjunctions of this kind may still be declined
+and left to weighted model counting. These rules are NeuroLang's own: the
+references they cite give the techniques they build on, not their
+correctness, which is proved below.
 
 Comparisons in an existential conjunct
    For :math:`A \land \exists t\,(\psi(t) \land C)`, or its negation, where
@@ -313,6 +318,151 @@ Existential shattering
       \psi(t)],
 
    the latter being planned by free-variable shattering.
+
+Correctness of the plans
+------------------------
+
+A rule is *liftable* when its plan computes the exact probability of the
+query (soundness) in time polynomial in the size of the data, the query
+being fixed (data complexity). This section proves both for the rules of
+this page which are not covered by a cited theorem. Completeness, that
+every tractable query is lifted, is not claimed for them.
+
+The probabilistic model
+   A tuple-independent relation has a Boolean random variable per tuple,
+   these variables being independent. A probabilistic choice has one
+   random variable whose value is the single tuple of the relation which
+   is true. The variables of different relations are independent, and a
+   possible world is a value for all of them. Deterministic relations are
+   the same in every world.
+
+   For a formula :math:`\varphi` and a tuple :math:`\theta` of values for
+   its free variables, the event :math:`\varphi\theta` is the set of worlds
+   in which it holds. It is determined by the random variables of the
+   tuples :math:`R(\bar a)` such that an atom of :math:`\varphi\theta` can be
+   :math:`R(\bar a)` for some values of its quantified variables: these are
+   its *tuples*. A plan computes, for every :math:`\theta` in its support,
+   :math:`P[\varphi\theta]`, and :math:`P[\varphi\theta] = 0` outside it.
+
+   The rules identify the variables by their names, so the quantified
+   variables are first renamed to fresh ones
+   (:func:`~neurolang.logic.transformations.standardise_apart`, applied by
+   :func:`~neurolang.probabilistic.dalvi_suciu_lift.solve_succ_query`): no
+   substitution is captured and no atom has a variable on which it does
+   not depend.
+
+Lemma 1 (independence)
+   If two events :math:`E_1` and :math:`E_2` have no tuple of a
+   tuple-independent relation in common, and no probabilistic choice of
+   which they both have a tuple, they are independent: they are determined
+   by disjoint sets of independent random variables. Two formulas without
+   a common probabilistic relation satisfy this.
+
+Lemma 2 (exclusivity)
+   If :math:`E_1` implies that the tuple :math:`C(\bar a)` of a
+   probabilistic choice :math:`C` is true, and :math:`E_2` that the tuple
+   :math:`C(\bar b)` is, with :math:`\bar a \neq \bar b`, then
+   :math:`E_1 \land E_2` is impossible, as a single tuple of :math:`C` is
+   true.
+
+Polynomial time
+   Each operation of the plans (`Operations of the lifted plans`_) is
+   computed in time polynomial in the size of its inputs: joins,
+   selections, left joins for ``Difference`` and ``Subtraction``, and
+   grouped products or sums for the projections. A plan is built from the
+   query alone, so its size does not depend on the data, and it is
+   computed in polynomial time if the construction terminates.
+
+   The rules of `Negations and comparisons sharing relations`_ call each
+   other through the queries they lift. Each call is on a query that is
+   smaller for the lexicographic order on (number of quantifiers, number
+   of negations, size): negation by subtraction lifts :math:`A`, a part of
+   :math:`A \land \lnot N`, and :math:`A \land N`, which has one negation
+   less; free-variable shattering lifts :math:`A \land \lnot\psi(x)` and
+   :math:`\psi(t)`, with one quantifier less than
+   :math:`A \land \lnot\exists t\, \psi(t)`; existential shattering lifts
+   :math:`A` and the queries of free-variable shattering; the comparison
+   rule lifts :math:`A` and :math:`\psi(t)`, parts of the query. The
+   Dalvi–Suciu rules, whose recursion terminates [Dalvi2012]_, do not call
+   the rules of this section. The order being well founded, the
+   construction terminates.
+
+Independent negation
+   For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
+   relation with :math:`A` and its free variables are among those of
+   :math:`A`, Lemma 1 gives, for every :math:`\theta`,
+   :math:`P[(A \land \lnot N)\theta] = P[A\theta]\,(1 - P[N\theta])`, which
+   ``Difference`` computes, a tuple of :math:`A` absent from the plan of
+   :math:`N` having :math:`P[N\theta] = 0`. The query is thus liftable when
+   :math:`A` and :math:`N` are.
+
+Negation by subtraction
+   :math:`A\theta` is the disjoint union of :math:`(A \land N)\theta` and
+   :math:`(A \land \lnot N)\theta`, so
+   :math:`P[(A \land \lnot N)\theta] = P[A\theta] - P[(A \land N)\theta]`
+   for any events. The free variables of :math:`N` being among those of
+   :math:`A` (``_split_dependent_conjunct``), the plan of
+   :math:`A \land N` has the columns of the plan of :math:`A`, and
+   ``Subtraction`` computes this difference tuple by tuple. Existential
+   shattering is the same identity, with :math:`\exists t\, \psi(t)` for
+   :math:`N`.
+
+Free-variable shattering
+   Splitting on :math:`t = x`,
+   :math:`\exists t\, \psi(t) \equiv \psi(x) \lor E` with
+   :math:`E = \exists t\, (t \neq x \land \psi(t))`, so
+   :math:`A \land \lnot\exists t\, \psi(t) \equiv L \land \lnot E` with
+   :math:`L = A \land \lnot\psi(x)`. The rule checks that
+
+   * :math:`t` is a separator variable of :math:`\psi`
+     (``_is_separator_variable``): every probabilistic atom of
+     :math:`\psi` has :math:`t`, at the same position for all the atoms of
+     a relation. A separator variable cannot be a variable of a
+     probabilistic choice atom (``extract_probabilistic_root_variables``),
+     so :math:`\psi` has no such atom, and the relations shared with
+     :math:`A` are tuple-independent (``_shares_a_choice_relation``). For
+     :math:`a \neq b`, the tuples of :math:`\psi(a)` and :math:`\psi(b)`
+     thus differ at that position, and by Lemma 1
+     :math:`P[E\theta] = 1 - \prod_{a
+     \neq x\theta} (1 - P[\psi(a)\theta])`, which the independent
+     projection of the plan computes, ``support(L)`` giving the value of
+     :math:`x`;
+   * for :math:`t \neq x`, each probabilistic atom of :math:`\psi(t)` has
+     :math:`t` at a position where each atom of the same relation in
+     :math:`A` and :math:`\psi(x)` has :math:`x`
+     (``_are_different_tuples_when_different``): the tuples of
+     :math:`E\theta` are not tuples of :math:`L\theta`, and by Lemma 1
+     :math:`P[(L \land \lnot E)\theta] = P[L\theta]\,(1 - P[E\theta])`,
+     which ``Difference`` computes.
+
+Comparisons in an existential conjunct
+   With :math:`E = \exists t\, (\psi(t) \land C)`, the rule checks that
+   :math:`t` is a separator variable of :math:`\psi`, which as above gives
+   :math:`P[E\theta] = 1 - \prod_{a : C\theta(a)} (1 - P[\psi(a)\theta])`,
+   computed by selecting :math:`C` before the independent projection; and
+   that each probabilistic atom of :math:`\psi(t)` has :math:`t` at a
+   position where each atom of the same relation in :math:`A` has a term
+   :math:`u` with :math:`t \neq u`, :math:`t < u` or :math:`t > u` in
+   :math:`C` (``_terms_different_from``, ``STRICT_COMPARISONS``). When
+   :math:`C\theta(a)` holds, the tuples of :math:`\psi(a)\theta` are thus
+   not tuples of :math:`A\theta`, and by Lemma 1
+   :math:`P[(A \land E)\theta] = P[A\theta]\,P[E\theta]` and
+   :math:`P[(A \land \lnot E)\theta] = P[A\theta]\,(1 - P[E\theta])`, which
+   the join and ``Difference`` compute. Olteanu and Huang
+   [Olteanu2009]_ compute existentials with inequalities on relations
+   that are not shared with the rest of the query; this rule uses the
+   inequalities to show that the shared relations have different tuples.
+
+Dalvi–Suciu rules
+   The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu
+   [Dalvi2012]_, whose proofs apply to unions of conjunctive queries on
+   tuple-independent databases, and of Suciu et al. [Suciu2011]_ (section
+   4.3.1) for the disjoint projection on probabilistic choices.
+
+The tests of the rules of `Negations and comparisons sharing relations`_
+(``neurolang/probabilistic/tests/test_lifted_negation.py``) also compare
+their plans with an enumeration of the possible worlds of small
+databases.
 
 References
 ----------

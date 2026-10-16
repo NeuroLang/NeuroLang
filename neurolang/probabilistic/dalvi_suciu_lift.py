@@ -346,8 +346,9 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
 
     A negated conjunct `¬N` sharing no probabilistic symbol with the rest
     `A` of the rule is left to `dalvi_suciu_lift`, which lifts the
-    query as P[A] (1 - P[N]): the query is liftable if and only if `A`
-    and `N` are, being #P-hard otherwise [1]. Otherwise, if the shared
+    query as P[A] (1 - P[N]), as `A` and `N` are independent: the query
+    is liftable when `A` and `N` are, see Fink & Olteanu [1] for queries
+    with negation without repeated relations. Otherwise, if the shared
     relations are tuple-independent, `free_variable_shattering_plan`
     and `negation_subtraction_plan` are tried in turn. They are sound
     but not known to be complete. Shared probabilistic choices are not
