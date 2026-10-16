@@ -10,8 +10,21 @@ import pytest
 
 from ...exceptions import UnsupportedSolverError
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Negation, Union
+from ...logic import (
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation,
+    Union
+)
 from .. import dalvi_suciu_lift
+from ..non_repeating_lift import non_repeating_plan
+from ..probabilistic_ra_utils import (
+    generate_probabilistic_symbol_table_for_query
+)
+from ..query_resolution import generate_provenance_query_solver
+from ..shattering import EQ
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 
@@ -53,6 +66,24 @@ def _program(rules, pfacts=None, pchoices=None, deterministic=None):
 def _solve(rules, query, **relations):
     return dalvi_suciu_lift.solve_succ_query(
         query, _program(rules, **relations)
+    )
+
+
+def _solve_formula(formula, cpl_program):
+    """Probability of the closed `formula`, planned with
+    `non_repeating_plan` and run as `dalvi_suciu_lift` runs its plans."""
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, formula
+    )
+    plan = non_repeating_plan(formula, symbol_table)
+    assert plan is not None
+    solver = generate_provenance_query_solver(
+        symbol_table, True,
+        solver_class=dalvi_suciu_lift.ExtendedRAPToRAWalker
+    )
+    return solver.walk(
+        dalvi_suciu_lift.ReplaceAllSymbolsButConstantSets(symbol_table)
+        .walk(plan)
     )
 
 
@@ -200,6 +231,87 @@ def test_repeated_variable_in_a_negation():
         rules, Implication(ans(), Z()), pfacts={R: R_FACTS, S: S_FACTS}
     )
     expected = 1 - (1 - 0.2 * 0.7) * (1 - 0.7) * (1 - 0.5 * 0.55)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+C_CHOICES = {(0.3, "s1"), (0.5, "s2"), (0.2, "s3")}
+M_FACTS = {
+    (0.5, "s1", "t1"), (0.5, "s1", "t2"), (0.1, "s2", "t1"), (0.7, "s3", "t2")
+}
+
+
+def test_negated_predicate_of_two_rules():
+    """∃s C(s) ∧ ¬N(s), N(s) ← F(s), N(s) ← M(s, t): the negation of
+    ∃t (F(s) ∨ M(s, t)), whose quantifier is pushed into the disjuncts.
+    """
+    N = Symbol("N")
+    rules = (
+        Implication(N(s), F(s)),
+        Implication(N(s), M(s, t)),
+        Implication(Z(), Conjunction((C(s), Negation(N(s))))),
+    )
+    result = _solve(
+        rules, Implication(ans(), Z()),
+        pchoices={C: C_CHOICES},
+        pfacts={F: {(0.4, "s1"), (0.9, "s3")}, M: M_FACTS},
+    )
+    expected = 0.3 * 0.6 * 0.25 + 0.5 * 0.9 + 0.2 * 0.1 * 0.3
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_negated_disjunction_with_different_free_variables():
+    """∃s, t C(s) ∧ M(s, t) ∧ ¬(K(s) ∨ G(s, t)), planned as
+    ¬K(s) ∧ ¬G(s, t)."""
+    G = Symbol("G")
+    K = Symbol("K")
+    formula = ExistentialPredicate(s, ExistentialPredicate(t, Conjunction((
+        C(s), M(s, t), Negation(Disjunction((K(s), G(s, t))))
+    ))))
+    cpl_program = _program(
+        (), pchoices={C: C_CHOICES},
+        pfacts={
+            M: M_FACTS,
+            K: {(0.8, "s2")},
+            G: {(0.35, "s1", "t2"), (0.6, "s2", "t1")},
+        },
+    )
+    result = _solve_formula(formula, cpl_program)
+    expected = (
+        0.3 * (1 - (1 - 0.5) * (1 - 0.5 * 0.65)) +
+        0.5 * 0.2 * 0.1 * 0.4 +
+        0.2 * 0.7
+    )
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_equality_between_inner_and_outer_variables():
+    """∃s C(s) ∧ ¬∃t (M(s, t) ∧ ¬∃u (W(s, u) ∧ u = t)): u is replaced by
+    t."""
+    W = Symbol("W")
+    u = Symbol("u")
+    formula = ExistentialPredicate(s, Conjunction((
+        C(s),
+        Negation(ExistentialPredicate(t, Conjunction((
+            M(s, t),
+            Negation(ExistentialPredicate(u, Conjunction((
+                W(s, u), EQ(u, t)
+            ))))
+        ))))
+    )))
+    cpl_program = _program(
+        (), pchoices={C: C_CHOICES},
+        pfacts={M: M_FACTS, W: {(0.25, "s1", "t1"), (0.5, "s3", "t2")}},
+    )
+    result = _solve_formula(formula, cpl_program)
+    expected = (
+        0.3 * (1 - 0.5 * 0.75) * (1 - 0.5) + 0.5 * 0.9 + 0.2 * (1 - 0.7 * 0.5)
+    )
     assert testing.eq_prov_relations(
         result, testing.make_prov_set([(expected,)], ("_p_",))
     )
