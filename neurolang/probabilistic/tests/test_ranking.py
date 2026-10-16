@@ -1,5 +1,5 @@
 import operator
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 import pytest
 from pytest import fixture
@@ -150,7 +150,10 @@ def test_query_with_comparison_ranked():
 
 
 def _pairs(*tuples):
-    return Constant[AbstractSet](WrappedRelationalAlgebraSet(tuples))
+    types = tuple(type(value) for value in tuples[0])
+    return Constant[AbstractSet[Tuple[types]]](
+        WrappedRelationalAlgebraSet(tuples)
+    )
 
 
 def test_rank_query_symmetric_pair():
