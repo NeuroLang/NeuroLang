@@ -19,10 +19,10 @@ from ...logic import (
     Union
 )
 from .. import dalvi_suciu_lift
-from ..non_repeating_lift import (
-    _eliminate_equalities,
-    non_repeating_plan
+from ...datalog.expression_processing import (
+    UnifyExistentialVariableEqualities
 )
+from ..non_repeating_lift import non_repeating_plan
 from ..probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
@@ -345,7 +345,7 @@ def test_equality_is_not_substituted_into_a_rebinding_quantifier():
     formula = ExistentialPredicate(u, Conjunction((
         EQ(u, t), ExistentialPredicate(t, W(u, t))
     )))
-    assert _eliminate_equalities(formula) == formula
+    assert UnifyExistentialVariableEqualities().walk(formula) == formula
 
 
 def test_rebound_variable_is_not_a_root_variable():

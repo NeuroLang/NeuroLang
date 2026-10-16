@@ -34,15 +34,26 @@ from collections import Counter
 from functools import reduce
 
 from .. import relational_algebra_provenance as rap
+from ..datalog.expression_processing import (
+    UnifyExistentialVariableEqualitiesMixin
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ReplaceExpressionWalker, expression_iterator
+from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
+from ..expression_walker import PatternWalker, add_match, expression_iterator
 from ..expressions import FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
 )
-from ..logic.transformations import standardise_apart
+from ..logic.transformations import (
+    LogicExpressionWalker,
+    CollapseConjunctionsMixin,
+    MoveNegationsIntoDisjunctionsMixin,
+    PushExistentialsDownDisjunctionsMixin,
+    RemoveTrivialOperationsMixin,
+    standardise_apart
+)
 from ..relational_algebra import str2columnstr_constant
 from .expression_processing import is_comparison
 from .shattering import EQ
@@ -67,17 +78,19 @@ def non_repeating_plan(formula, symbol_table):
     -------
     Optional[RelationalAlgebraOperation]
         plan whose columns are the free variables of `formula`, or None
-        if `formula` has no negation, is repeating, or is not
-        hierarchical.
+        if `formula` has no negation, is repeating, or is not planned by
+        `NonRepeatingPlanner`.
     """
     if not (
-        _has_a_negation(formula) and
-        _is_non_repeating(formula, symbol_table)
+        any(isinstance(e, Negation) for _, e in expression_iterator(formula))
+        and _is_non_repeating(formula, symbol_table)
     ):
         return None
-    return _NonRepeatingPlanner(symbol_table).plan(
-        _eliminate_equalities(standardise_apart(formula))
-    )
+    normalised = NormaliseNonRepeatingQuery().walk(standardise_apart(formula))
+    try:
+        return NonRepeatingPlanner(symbol_table).walk(normalised)
+    except NeuroLangPatternMatchingNoMatch:
+        return None
 
 
 def columns_comparison(comparison):
@@ -89,28 +102,103 @@ def columns_comparison(comparison):
     ))
 
 
-class _NonRepeatingPlanner:
+class NormaliseNonRepeatingQuery(
+    UnifyExistentialVariableEqualitiesMixin,
+    MoveNegationsIntoDisjunctionsMixin,
+    PushExistentialsDownDisjunctionsMixin,
+    CollapseConjunctionsMixin,
+    RemoveTrivialOperationsMixin,
+    LogicExpressionWalker
+):
+    """
+    Equivalences applied before planning a non-repeating query, which add
+    no atom: ∃v (v = e ∧ φ) ≡ φ[e/v], ¬(A ∨ B) ≡ ¬A ∧ ¬B and
+    ∃v (A ∨ B) ≡ ∃v A ∨ ∃v B. The query must be standardised apart first.
+    The planner pushes the existentials into conjunctions itself, as it
+    groups the conjuncts.
+    """
+
+
+class NonRepeatingPlanner(PatternWalker):
+    """
+    Plan of a normalised non-repeating query, see `non_repeating_plan`.
+    A formula that cannot be planned gives None, or no match.
+    """
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
-    def plan(self, formula):
-        if isinstance(formula, Conjunction):
-            return self._conjunction(formula.formulas)
-        if isinstance(formula, ExistentialPredicate):
-            return self._existential(formula)
-        if isinstance(formula, Disjunction):
-            return self._disjunction(formula)
-        if (
-            isinstance(formula, FunctionApplication) and
-            isinstance(formula.functor, Symbol)
-        ):
-            return _atom_plan(formula)
-        return None
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return self._conjunction_plan(conjunction.formulas)
 
-    def _conjunction(self, formulas, planned=()):
+    @add_match(Disjunction)
+    def disjunction(self, disjunction):
+        free_variables = extract_logic_free_variables(disjunction)
+        plans = []
+        for formula in disjunction.formulas:
+            if extract_logic_free_variables(formula) != free_variables:
+                return None
+            plan = self.walk(formula)
+            if plan is None:
+                return None
+            plans.append(plan)
+        return reduce(rap.Union, plans)
+
+    @add_match(ExistentialPredicate)
+    def existential(self, existential):
+        """Plan of ∃v̄ φ: the groups of conjuncts of φ connected by the
+        variables of v̄ are each projected on one of their variables
+        occurring in all of their probabilistic atoms."""
+        variables = set()
+        body = existential
+        while isinstance(body, ExistentialPredicate):
+            variables.add(body.head)
+            body = body.body
+        conjuncts = _conjuncts(body)
+        outside = [
+            f for f in conjuncts
+            if extract_logic_free_variables(f).isdisjoint(variables)
+        ]
+        planned = []
+        for group in _connected_groups(
+            [f for f in conjuncts if f not in outside], variables
+        ):
+            plan = self._projected_group(group, variables)
+            if plan is None:
+                return None
+            planned.append(plan)
+        if len(outside) == 0 and len(planned) == 1:
+            return planned[0][0]
+        return self._conjunction_plan(outside, planned)
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def atom(self, atom):
+        """Plan of `atom`, whose constants and repeated variables are
+        selected on named columns: positional selections would not skip
+        the probability column of a probabilistic relation."""
+        args = []
+        selections = []
+        variables = []
+        for arg in atom.args:
+            if isinstance(arg, Symbol) and arg not in variables:
+                args.append(arg)
+                variables.append(arg)
+            else:
+                fresh = Symbol.fresh()
+                args.append(fresh)
+                selections.append(EQ(fresh, arg))
+        plan = TranslateToNamedRA().walk(atom.functor(*args))
+        if len(selections) == 0:
+            return plan
+        for selection in selections:
+            plan = rap.Selection(plan, columns_comparison(selection))
+        return rap.Projection(
+            plan, tuple(str2columnstr_constant(v.name) for v in variables)
+        )
+
+    def _conjunction_plan(self, formulas, planned=()):
         """Plan of the conjunction of `formulas` and of the plans
         `planned`, pairs of a plan and its columns."""
-        formulas = _conjuncts(formulas)
         negations = [f for f in formulas if isinstance(f, Negation)]
         comparisons = [f for f in formulas if is_comparison(f)]
         positives = [
@@ -119,7 +207,7 @@ class _NonRepeatingPlanner:
         ]
         plans = list(planned)
         for formula in positives:
-            plan = self.plan(formula)
+            plan = self.walk(formula)
             if plan is None:
                 return None
             plans.append((plan, extract_logic_free_variables(formula)))
@@ -135,55 +223,11 @@ class _NonRepeatingPlanner:
             negated = negation.formula
             if not extract_logic_free_variables(negated) <= columns:
                 return None
-            negated_plan = self.plan(negated)
+            negated_plan = self.walk(negated)
             if negated_plan is None:
                 return None
             plan = rap.Difference(plan, negated_plan)
         return plan
-
-    def _disjunction(self, disjunction):
-        free_variables = extract_logic_free_variables(disjunction)
-        plans = []
-        for formula in disjunction.formulas:
-            if extract_logic_free_variables(formula) != free_variables:
-                return None
-            plan = self.plan(formula)
-            if plan is None:
-                return None
-            plans.append(plan)
-        return reduce(rap.Union, plans)
-
-    def _existential(self, existential):
-        """Plan of ∃v̄ φ: the quantifiers are pushed down to the groups
-        of conjuncts of φ connected by the variables of v̄, each of which
-        is projected on one of its variables occurring in all of its
-        probabilistic atoms."""
-        variables = set()
-        body = existential
-        while isinstance(body, ExistentialPredicate):
-            variables.add(body.head)
-            body = body.body
-        if isinstance(body, Disjunction):
-            return self.plan(Disjunction(tuple(
-                _add_existentials(formula, variables)
-                for formula in body.formulas
-            )))
-        conjuncts = _conjuncts((body,))
-        outside = [
-            f for f in conjuncts
-            if extract_logic_free_variables(f).isdisjoint(variables)
-        ]
-        planned = []
-        for group in _connected_groups(
-            [f for f in conjuncts if f not in outside], variables
-        ):
-            plan = self._projected_group(group, variables)
-            if plan is None:
-                return None
-            planned.append(plan)
-        if len(outside) == 0 and len(planned) == 1:
-            return planned[0][0]
-        return self._conjunction(outside, planned)
 
     def _projected_group(self, group, variables):
         group_variables = (
@@ -201,7 +245,7 @@ class _NonRepeatingPlanner:
             group_variables - {root}, key=lambda v: v.name
         ):
             inner = ExistentialPredicate(variable, inner)
-        plan = self.plan(inner)
+        plan = self.walk(inner)
         if plan is None:
             return None
         columns = extract_logic_free_variables(inner) - {root}
@@ -236,9 +280,7 @@ class _NonRepeatingPlanner:
         ]
         if len(choice_atoms) == 0:
             return rap.IndependentProjection
-        if any(
-            formula in choice_atoms for formula in _conjuncts(group)
-        ):
+        if any(formula in choice_atoms for formula in group):
             return rap.DisjointProjection
         return None
 
@@ -249,133 +291,10 @@ class _NonRepeatingPlanner:
         )
 
 
-def _atom_plan(atom):
-    """Plan of `atom`, whose constants and repeated variables are
-    selected on named columns: positional selections would not skip
-    the probability column of a probabilistic relation."""
-    args = []
-    selections = []
-    variables = []
-    for arg in atom.args:
-        if isinstance(arg, Symbol) and arg not in variables:
-            args.append(arg)
-            variables.append(arg)
-        else:
-            fresh = Symbol.fresh()
-            args.append(fresh)
-            selections.append(EQ(fresh, arg))
-    plan = TranslateToNamedRA().walk(atom.functor(*args))
-    if len(selections) == 0:
-        return plan
-    for selection in selections:
-        plan = rap.Selection(plan, columns_comparison(selection))
-    return rap.Projection(
-        plan, tuple(str2columnstr_constant(v.name) for v in variables)
-    )
-
-
-def _conjuncts(formulas):
-    """The conjuncts of the conjunction of `formulas`, a negated
-    disjunction being the conjunction of its negated disjuncts."""
-    conjuncts = []
-    for formula in formulas:
-        if isinstance(formula, Conjunction):
-            conjuncts.extend(_conjuncts(formula.formulas))
-        elif (
-            isinstance(formula, Negation) and
-            isinstance(formula.formula, Disjunction)
-        ):
-            conjuncts.extend(_conjuncts(
-                Negation(f) for f in formula.formula.formulas
-            ))
-        else:
-            conjuncts.append(formula)
-    return conjuncts
-
-
-def _add_existentials(formula, variables):
-    """∃v̄ `formula`, for the variables `v̄` of `variables` free in it."""
-    free_variables = extract_logic_free_variables(formula)
-    for variable in sorted(variables & free_variables, key=lambda v: v.name):
-        formula = ExistentialPredicate(variable, formula)
-    return formula
-
-
-def _eliminate_equalities(formula):
-    """`formula` where each existentially quantified variable `v` equal
-    to a term `e` by a conjunct `v = e` is replaced by `e`, as
-    ∃v (v = e ∧ φ) ≡ φ[e/v]. This is done in every subformula before
-    planning, so that the variables that occur in all the atoms of a
-    group are known.
-    """
-    if isinstance(formula, ExistentialPredicate):
-        variables = set()
-        while isinstance(formula, ExistentialPredicate):
-            variables.add(formula.head)
-            formula = formula.body
-        conjuncts, variables = _substitute_equalities(
-            _conjuncts((_eliminate_equalities(formula),)), variables
-        )
-        return _add_existentials(
-            Conjunction(tuple(conjuncts)) if len(conjuncts) > 1
-            else conjuncts[0],
-            variables
-        )
-    if isinstance(formula, (Conjunction, Disjunction)):
-        return type(formula)(tuple(
-            _eliminate_equalities(f) for f in formula.formulas
-        ))
-    if isinstance(formula, Negation):
-        return Negation(_eliminate_equalities(formula.formula))
-    return formula
-
-
-def _substitute_equalities(conjuncts, variables):
-    """Replace the variables of `variables` equal to a term by a
-    conjunct of `conjuncts` by that term, and remove the equalities.
-
-    Returns
-    -------
-    Tuple[List[LogicExpression], Set[Symbol]]
-        the conjuncts and the variables which are left.
-    """
-    variables = set(variables)
-    conjuncts = list(conjuncts)
-    while True:
-        substitution = next(
-            (
-                (conjunct, variable, term)
-                for conjunct in conjuncts
-                if isinstance(conjunct, FunctionApplication) and
-                conjunct.functor == EQ
-                for variable, term in (
-                    conjunct.args, tuple(reversed(conjunct.args))
-                )
-                if variable in variables and variable != term and
-                not ({variable, term} & _bound_variables(conjuncts))
-            ),
-            None
-        )
-        if substitution is None or len(conjuncts) == 1:
-            return conjuncts, variables
-        equality, variable, term = substitution
-        replace = ReplaceExpressionWalker({variable: term})
-        conjuncts = [
-            replace.walk(conjunct) for conjunct in conjuncts
-            if conjunct is not equality
-        ]
-        variables.discard(variable)
-
-
-def _bound_variables(formulas):
-    """Variables quantified within `formulas`, into which a substitution
-    could be captured."""
-    return {
-        expression.head
-        for formula in formulas
-        for _, expression in expression_iterator(formula)
-        if isinstance(expression, ExistentialPredicate)
-    }
+def _conjuncts(formula):
+    if isinstance(formula, Conjunction):
+        return list(formula.formulas)
+    return [formula]
 
 
 def _connected_groups(formulas, variables):
@@ -395,16 +314,6 @@ def _connected_groups(formulas, variables):
             merged[1].update(group[1])
         groups.append(merged)
     return [group for group, _ in groups]
-
-
-def _has_a_negation(formula):
-    if isinstance(formula, Negation):
-        return True
-    if isinstance(formula, (Conjunction, Disjunction)):
-        return any(_has_a_negation(f) for f in formula.formulas)
-    if isinstance(formula, ExistentialPredicate):
-        return _has_a_negation(formula.body)
-    return False
 
 
 def _is_non_repeating(formula, symbol_table):
