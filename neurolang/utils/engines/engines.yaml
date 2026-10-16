@@ -95,6 +95,18 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      task:
+        columns: [task_id]
+        type: str
+        description: "a task of the Cognitive Atlas"
+      task_name:
+        columns: [name]
+        type: str
+        description: "the name of a task of the Cognitive Atlas"
+      task_description:
+        columns: [description]
+        type: str
+        description: "the description of a task of the Cognitive Atlas"
     # Each predicate declares its arguments, in column order: the entities
     # it relates, each a sort over the columns it spans, named alone or as
     # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
@@ -135,6 +147,14 @@ engines:
           threshold)
         arguments:
           - voxel
+      cognitive_task:
+        description: >-
+          The tasks of the Cognitive Atlas (cognitiveatlas.org), with their
+          names and descriptions
+        arguments:
+          - task
+          - task_name
+          - task_description
       term:
         description: "Every term of the TF-IDF vocabulary"
         arguments:

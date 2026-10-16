@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* The ``neurosynth`` engine has a ``cognitive_task(task_id, name,
+  description)`` relation: the tasks of the Cognitive Atlas, downloaded
+  from its API (``cognitiveatlas.org/api/v-alpha/task``), with their
+  descriptions, e.g.
+  ``ans(d) :- cognitive_task(t, "stop signal task", d)``.
+
 * The ``neurosynth`` engine has a ``cortical_mask(i, j, k)`` relation: the
   voxels of the MNI template grid in the cortex, labelled by the
   Harvard–Oxford cortical atlas (maximum probability, 25% threshold),
