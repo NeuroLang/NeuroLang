@@ -645,7 +645,9 @@ Comparisons in an existential conjunct
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
    applies only if no probabilistic relation, fact or choice, occurs
-   twice in the query (``_is_non_repeating``). Its rewrites add no atom,
+   twice in the query (``_is_non_repeating``), the occurrences of an atom
+   being counted: :math:`R(x) \land \lnot R(x)` has two occurrences of
+   :math:`R`, which are not independent. Its rewrites add no atom,
    so this holds for every subformula planned, and by Lemma 1 two
    subformulas without a common atom are independent. Then:
 
