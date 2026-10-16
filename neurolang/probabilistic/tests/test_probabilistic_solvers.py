@@ -1833,6 +1833,41 @@ def test_choice_asserted_outside_and_inside_negation_is_absorbed():
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_choice_within_negated_existential_as_a_contradicting_disjunct():
+    """P(the selected study mentions t and no other term), the choice
+    being also within the negated existential,
+    ¬∃t1 (Mentions(s, t1) ∧ Term(t1) ∧ t1 ≠ t ∧ Selected(s)), which the
+    translation to rules writes as the disjunction
+    ¬∃t1 (Mentions(s, t1) ∧ Term(t1) ∧ t1 ≠ t) ∨ ¬Selected(s). Its second
+    disjunct contradicts the Selected(s) asserted outside, and is removed.
+    """
+    cpl, Mentions, Term, Selected = _studies_mentioning_one_term_program()
+    Other = Symbol("Other")
+    NoOther = Symbol("NoOther")
+    s, t, t1 = Symbol("s"), Symbol("t"), Symbol("t1")
+    cpl.walk(Union((
+        Implication(Other(s, t), Conjunction((
+            Mentions(s, t), Mentions(s, t1), Term(t1), NE(t1, t)
+        ))),
+        Implication(NoOther(s, t), Conjunction((
+            Mentions(s, t), Negation(Other(s, t))
+        ))),
+        Implication(NoOther(s, t), Conjunction((
+            Mentions(s, t), Negation(Selected(s))
+        ))),
+        Implication(P(t), Conjunction((
+            Mentions(s, t), Selected(s), NoOther(s, t)
+        ))),
+    )))
+    query = Implication(ans(t), P(t))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = testing.make_prov_set(
+        [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
 @pytest.mark.parametrize("r_facts, expected", (
     (((3, 3),), [(0.5, 1), (0.5, 2)]),
     (((3, 3), (3, 4)), []),
