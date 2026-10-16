@@ -636,6 +636,28 @@ class AbsorbAssertedConjunctsInNegations(LogicExpressionWalker):
         return self.walk(Conjunction(_absorbed_negations(conjunction)))
 
 
+def standardise_apart(formula):
+    """
+    Rename each quantified variable of *formula* to a fresh one, so that
+    no variable is quantified twice, nor both free and quantified. The
+    inner quantifiers are renamed first, so that only the free
+    occurrences of a variable are renamed with its quantifier.
+    """
+    if isinstance(formula, Quantifier):
+        body = standardise_apart(formula.body)
+        fresh = Symbol.fresh()
+        return formula.apply(
+            fresh, ReplaceExpressionWalker({formula.head: fresh}).walk(body)
+        )
+    if isinstance(formula, NaryLogicOperator):
+        return formula.apply(tuple(
+            standardise_apart(f) for f in formula.formulas
+        ))
+    if isinstance(formula, Negation):
+        return formula.apply(standardise_apart(formula.formula))
+    return formula
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
