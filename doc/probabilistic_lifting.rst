@@ -476,7 +476,12 @@ Projection on a choice or a separator variable
    When the rules above decline :math:`\exists X\, \varphi`, it is planned
    by projecting the plan of :math:`\varphi`, lifted with all the rules of
    this page, on variables of :math:`X` made free
-   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.projection_plan`):
+   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.projection_plan`).
+   The quantifiers of the conjuncts of the query are first gathered,
+   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`, which
+   holds as the query is standardised apart: a closed conjunct, such as an
+   atom added by magic sets, does not prevent the projection. The
+   projection is
 
    * *disjointly*, when a conjunct of :math:`\varphi` is an atom
      :math:`C(\bar u)` of a probabilistic choice :math:`C` with variables
