@@ -187,6 +187,9 @@ Keyword     Meaning      Example
                          earlier ``every Region`` (section 5.3)
 =========== ============ ==========================================
 
+Counting quantifiers such as ``more than 10 Studies`` or
+``at most 3 Terms`` are determiners too; see section 10.6.
+
 In the Bayes Factor program, ``a Selected_study`` is the existential choice
 that quantifies over studies — it introduces a study variable without binding
 it in the rule head.
@@ -223,6 +226,20 @@ want to match but not project into the rule head:
 
 Each ``_`` creates a distinct fresh variable that exists in the query body
 but is dropped from the head.
+
+A column can also be fixed to a constant — a string in single or double
+quotes, or a number — written in place of its label:
+
+.. code-block:: squall
+
+    obtain every Term_in_study_tfidf (?s; 'pain'; ?w).
+    obtain every Peak_reported (?i; ?j; 0; ?s).
+
+The first query is the same as
+``obtain every Term_in_study_tfidf (?s; ?t; ?w) such that ?t is 'pain'``:
+only the rows whose term is ``'pain'`` match, and like ``_`` the constant
+column is dropped from the head, so the result has the columns ``?s`` and
+``?w``.
 
 2.5 String Literals
 --------------------
@@ -1301,6 +1318,47 @@ used as the noun:
     define as Popular_genre every Genre that is popular.
     define as Performer every person that sings a Popular_genre.
 
+10.6 Counting Quantifiers — ``more than N``, ``at most N``
+----------------------------------------------------------
+
+A number of entities can be required with a counting quantifier in place
+of a determiner:
+
+=================== ========================================
+Quantifier          Holds when the count is
+=================== ========================================
+``more than N``     greater than N
+``at least N``      greater than or equal to N
+``fewer than N``    lower than N (``less than N`` also works)
+``at most N``       lower than or equal to N
+=================== ========================================
+
+It works in subject and in object position:
+
+.. code-block:: squall
+
+    obtain every Term that more than 10 Studies mention.
+    obtain every Study that mentions at most 3 Terms.
+
+The first query counts, for each term, the studies that mention it and
+keeps the terms with a count above 10.  SQUALL compiles it as the
+aggregation of section 10.1 followed by a comparison: an auxiliary rule
+``count(t, count(s)) ← study(s) ∧ mention(s, t)`` grouped by the term,
+and the test ``count(t, c) ∧ c > 10``.  ``fewer than`` and ``at most``
+are compiled as the negation of ``at least`` and ``more than``, so that
+an entity counted zero times — which an aggregation never produces —
+qualifies: ``every Term that fewer than 2 Studies mention`` includes the
+terms no study mentions.  A noun with several columns, such as
+``Voxels (?x; ?y; ?z)`` or ``Voxels in 3D``, counts distinct tuples.
+
+The counted noun may be written in the plural: ``Studies``, ``Terms`` and
+``Classes`` are matched to the predicates ``study``, ``term`` and
+``class`` by a simple English rule (``-ies`` → ``-y``; ``-sses``,
+``-shes``, ``-ches``, ``-xes`` drop ``-es``; otherwise a final ``-s`` is
+dropped unless the word ends in ``-ss``, ``-us`` or ``-is``).  Name the
+predicate in the singular.  The verb is not changed: in
+``more than 10 Studies mention`` the predicate is ``mention``.
+
 
 .. _part-9-appendix-a:
 
@@ -1371,8 +1429,8 @@ Transitive verbs and binary predicates
     ['alice']
 
 
-Quantifiers: every, a, no
---------------------------
+Quantifiers: every, a, no, more than
+-------------------------------------
 
 **Every**
 
@@ -1404,6 +1462,25 @@ Quantifiers: every, a, no
     ... )
     >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
     ['c']
+
+**More than / at least / fewer than / at most**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> _ = nl.add_tuple_set([("pain",), ("memory",), ("reward",)], name="term")
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "pain"), ("s2", "pain"), ("s2", "memory")], name="mention"
+    ... )
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every term that more than 1 Studies mention."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['pain']
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every term that fewer than 2 Studies mention."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['memory', 'reward']
 
 
 Relative clauses and negation

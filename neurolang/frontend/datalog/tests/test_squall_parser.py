@@ -1,12 +1,13 @@
 from inspect import signature
 from itertools import product
-from operator import eq
+from operator import eq, ge, gt
 import logging
 
 import pytest
 
 from .... import config
 from ....datalog import Conjunction, Implication, Negation
+from ....exceptions import SquallSemanticError
 from ....expression_pattern_matching import add_match
 from ....expression_walker import (
     ExpressionWalker, PatternWalker, ReplaceExpressionWalker, ReplaceSymbolWalker
@@ -1616,6 +1617,156 @@ def test_obtain_unnamed_with_tuple_label_parses():
     assert len(q.head) == 2, f"Expected 2 head vars, got {len(q.head)}"
     head_names = [h.name for h in q.head]
     assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"
+
+
+@pytest.mark.parametrize("literal,value", [
+    ("'pain'", "pain"),
+    ('"pain"', "pain"),
+    ("3", 3),
+    ("0.5", 0.5),
+])
+def test_obtain_tuple_label_with_constant_binds_column(literal, value):
+    """
+    A constant in a tuple label fixes that column and leaves the head.
+
+    ``(?s; 'pain'; ?w)`` means ``(?s; ?t; ?w) such that ?t is 'pain'``.
+    """
+    result = parser(
+        f"obtain every Term_in_study_tfidf (?s; {literal}; ?w)."
+    )
+    q = result.queries[0]
+    assert q.head == (Symbol("s"), Symbol("w"))
+    assert q.body == Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant(value), Symbol("w")
+    )
+
+
+def test_define_tuple_label_with_constant_binds_column():
+    result = parser(
+        "define as Pain_weight every Term_in_study_tfidf (?s; 'pain'; ?w)."
+    )
+    assert result.consequent == Symbol("pain_weight")(Symbol("s"), Symbol("w"))
+    assert result.antecedent == Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant("pain"), Symbol("w")
+    )
+
+
+def test_tuple_label_with_constant_and_relative_clause():
+    result = parser(
+        "obtain every Term_in_study_tfidf (?s; 'pain'; ?w) "
+        "such that ?w is greater than 0.1."
+    )
+    q = result.queries[0]
+    assert q.head == (Symbol("s"), Symbol("w"))
+    atoms = extract_logic_atoms(q.body)
+    assert Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant("pain"), Symbol("w")
+    ) in atoms
+
+
+def _counting_parts(result):
+    """Split a counting-quantifier program into its count rule and query."""
+    assert isinstance(result, SquallProgram)
+    count_rules = [
+        r for r in result.rules
+        if any(isinstance(a, AggregationApplication) for a in r.consequent.args)
+    ]
+    assert len(count_rules) == 1, result.rules
+    return count_rules[0], result.queries[0]
+
+
+@pytest.mark.parametrize("quantifier,op,negated", [
+    ("more than", gt, False),
+    ("at least", ge, False),
+    ("fewer than", ge, True),
+    ("less than", ge, True),
+    ("at most", gt, True),
+])
+def test_counting_quantifier_subject(quantifier, op, negated):
+    """
+    ``every Term that Q 2 Studies mention`` counts the studies per term.
+
+    The count is an auxiliary aggregation rule grouped by the term; the
+    query compares it with the number. Downward quantifiers negate the
+    upward test so that terms no study mentions (count 0) qualify.
+    """
+    rule, query = _counting_parts(parser(
+        f"obtain every Term that {quantifier} 2 Studies mention."
+    ))
+    term = query.head
+    group, count = rule.consequent.args
+    assert group == term
+    assert count.functor == Constant(len)
+    study, = count.args
+    body_atoms = extract_logic_atoms(rule.antecedent)
+    assert Symbol("study")(study) in body_atoms
+    assert Symbol("mention")(study, term) in body_atoms
+
+    query_atoms = extract_logic_atoms(query.body)
+    assert Symbol("term")(term) in query_atoms
+    counted = [
+        a for a in query_atoms if a.functor == rule.consequent.functor
+    ]
+    assert len(counted) == 1
+    assert Constant(op)(counted[0].args[1], Constant(2)) in query_atoms
+    negations = [
+        f for f in _walk_formulas(query.body) if isinstance(f, Negation)
+    ]
+    assert bool(negations) == negated
+
+
+def _walk_formulas(formula):
+    yield formula
+    for child in getattr(formula, "formulas", ()):
+        yield from _walk_formulas(child)
+    for attr in ("body", "formula"):
+        child = getattr(formula, attr, None)
+        if child is not None and not isinstance(child, tuple):
+            yield from _walk_formulas(child)
+
+
+def test_counting_quantifier_object():
+    rule, query = _counting_parts(parser(
+        "obtain every Study that mentions more than 3 Terms."
+    ))
+    study = query.head
+    group, count = rule.consequent.args
+    assert group == study
+    term, = count.args
+    body_atoms = extract_logic_atoms(rule.antecedent)
+    assert Symbol("term")(term) in body_atoms
+    assert Symbol("mentions")(study, term) in body_atoms
+
+
+@pytest.mark.parametrize("noun,predicate", [
+    ("Studies", "study"),
+    ("Study", "study"),
+    ("Terms", "term"),
+    ("Classes", "class"),
+    ("Voxels", "voxel"),
+    ("Focus", "focus"),
+])
+def test_counting_quantifier_singularises_plural_noun(noun, predicate):
+    rule, _ = _counting_parts(parser(
+        f"obtain every Term that at least 2 {noun} mention."
+    ))
+    assert predicate in _functor_names(rule.antecedent)
+
+
+def test_counting_quantifier_in_rule_definition():
+    result = parser(
+        "define as Popular every Term that at least 2 Studies mention."
+    )
+    rules = list(result.formulas)
+    assert len(rules) == 2
+    popular = [r for r in rules if r.consequent.functor == Symbol("popular")]
+    assert len(popular) == 1
+    assert "term" in _functor_names(popular[0].antecedent)
+
+
+def test_counting_quantifier_without_scope_is_an_error():
+    with pytest.raises(SquallSemanticError):
+        parser("obtain more than 3 Studies.")
 
 
 def _functor_names(expression):

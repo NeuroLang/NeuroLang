@@ -28,6 +28,17 @@ Aggregation::
         where every Max of the Quantity where ?i item_count per ?i.
     →  max_items(i, max({q : item_count(i,q)})) :- item(i)
 
+Counting quantifiers (``more than``, ``at least``, ``fewer than``,
+``at most``)::
+
+    every term that more than 10 studies mention
+    →  count(t, len(s)) ← study(s) ∧ mention(s, t)
+       ∀t. term(t) ∧ ∃c. count(t, c) ∧ c > 10
+
+Constants in tuple labels::
+
+    every tfidf (?s; 'pain'; ?w)   →  tfidf(s, 'pain', w), head (s, w)
+
 Probabilistic rules::
 
     every study probably activates        →  ProbabilisticFact(p̃, activates(?s))
@@ -191,6 +202,20 @@ class _AnonymousVar:
         return self._sym
 
 
+class _ConstantSlot(_AnonymousVar):
+
+    """
+    Constant in a tuple label, as ``'pain'`` in ``(?s; 'pain'; ?w)``.
+
+    Like ``_``, the position appears in the rule *body* (holding the
+    constant) but not in the *head*, so every consumer of anonymous
+    wildcards handles constants unchanged.
+    """
+
+    def __init__(self, constant):
+        self._sym = constant
+
+
 GRAMMAR_PATH = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     "neurolang_natural.lark"
@@ -249,6 +274,67 @@ def _tail_smallest(values, n):
     """Return the n-th smallest value of *values*, clamped to its size."""
     values = sorted(values)
     return values[min(int(n), len(values)) - 1]
+
+
+# Counting quantifiers: (comparison applied to the count, negated).
+# Downward quantifiers negate the upward test so that a count of zero,
+# which no aggregation produces, satisfies them.
+_COUNT_COMPARISONS = {
+    ("more", "than"): (gt, False),
+    ("at", "least"): (ge, False),
+    ("fewer", "than"): (ge, True),
+    ("less", "than"): (ge, True),
+    ("at", "most"): (gt, True),
+}
+
+
+def _count_rows(*columns):
+    """Count the rows of a group of several columns (a tuple count)."""
+    return len(columns[0])
+
+
+_PLURAL_SUFFIXES = (
+    ("ies", "y"), ("sses", "ss"), ("shes", "sh"), ("ches", "ch"),
+    ("xes", "x"),
+)
+
+
+def _singular(name):
+    """
+    Return the singular of the English plural *name*, or *name* itself.
+
+    A deliberately simple rule set (``studies`` → ``study``, ``classes``
+    → ``class``, ``terms`` → ``term``) that leaves words ending in ``ss``,
+    ``us`` or ``is`` unchanged (``focus``, ``analysis``).
+    """
+    for suffix, replacement in _PLURAL_SUFFIXES:
+        if name.endswith(suffix):
+            return name[:-len(suffix)] + replacement
+    if name.endswith("s") and not name.endswith(("ss", "us", "is")):
+        return name[:-1]
+    return name
+
+
+def _rename_noun(formula, name):
+    """
+    Rename the noun atom ``name(...)`` of a restriction to its singular.
+
+    The noun atom is the restriction itself or one of its top-level
+    conjuncts (a noun group with a relative clause).
+    """
+    singular = _singular(name) if name else name
+    if singular == name:
+        return formula
+    if isinstance(formula, Conjunction):
+        return Conjunction(tuple(
+            _rename_noun(f, name) for f in formula.formulas
+        ))
+    if (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == Symbol(name)
+    ):
+        return Symbol(singular)(*formula.args)
+    return formula
 
 
 class _InverseVerbSymbol:
@@ -350,6 +436,7 @@ class SquallTransformer(Transformer):
         self._source_lines = source_lines or []
         self._current_line = None
         self._current_column = None
+        self._count_rules = []
 
     def _clear_scope(self):
         self._symbol_scope.clear()
@@ -416,45 +503,20 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def squall(self, args):
-        rules = []
-        choice_defs = []
-        queries = []
-        commands = []
-        query_names = {}  # index → name for 'obtain … as Name' clauses
+        """
+        Assemble the program from its sentences.
+
+        The auxiliary count rules of counting quantifiers come first.
+        """
+        parts = {
+            "rules": list(self._count_rules), "choice_defs": [],
+            "queries": [], "commands": [],
+            "query_names": {},  # index → name for 'obtain … as Name'
+        }
         for a in args:
-            if a is None:
-                continue
-            if isinstance(a, tuple) and len(a) == 2 and a[0] == '_query':
-                queries.append(a[1])
-            elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_query_as':
-                impl, q, name_str = a[1]
-                rules.append(impl)
-                query_names[len(queries)] = name_str
-                queries.append(q)
-            elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_command':
-                commands.append(a[1])
-            elif isinstance(a, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                choice_defs.append(a)
-            else:
-                rules.append(a)
-
-        if queries or commands:
-            return SquallProgram(
-                rules=rules, queries=queries, choice_defs=choice_defs,
-                query_names=query_names, commands=commands,
-            )
-
-        # Backward compat: no queries → return Union or single rule
-        if len(rules) == 0 and len(choice_defs) == 1:
-            return choice_defs[0]
-        if len(rules) == 1 and not choice_defs:
-            return rules[0]
-        if choice_defs:
-            # Mix of rules and choice defs — can't represent as Union.
-            return SquallProgram(
-                rules=rules, queries=[], choice_defs=choice_defs,
-            )
-        return Union(tuple(rules))
+            if a is not None:
+                _add_program_part(parts, a)
+        return _squall_result(**parts)
 
     def sentence(self, args):
         return args[0]
@@ -1451,6 +1513,63 @@ class SquallTransformer(Transformer):
                 )
             return apply_d
         return no
+
+    def det1_count(self, args):
+        """
+        Return the CPS determiner of a counting quantifier.
+
+        ``more than 10 Studies`` in ``every Term that more than 10 Studies
+        mention`` counts, per term, the studies that mention it: the count
+        is an auxiliary aggregation rule and the determiner holds when the
+        count compares with the number.
+        """
+        token, number = args
+        comparison, negated = _COUNT_COMPARISONS[tuple(token.split())]
+
+        def count(ng):
+            def apply_d(d):
+                return self._counting_formula(
+                    ng, d, comparison, negated, number
+                )
+            return apply_d
+        return count
+
+    def _counting_formula(self, ng, d, comparison, negated, number):
+        """
+        Compile ``Q N noun`` applied to the scope *d* to a count test.
+
+        Adds the rule ``count(g…, len(x)) ← noun(x) ∧ d(x)`` grouped by
+        the scope's other free variables ``g…`` and returns
+        ``∃c. count(g…, c) ∧ c comparison N``, negated for downward
+        quantifiers.
+        """
+        body_syms, counted = _resolve_var_info(
+            getattr(ng, '_var_info', None) or Symbol.fresh()
+        )
+        restriction = _rename_noun(
+            ng(body_syms), getattr(ng, '_noun_name', None)
+        )
+        scope = _apply_to_vars(d, counted)
+        if scope == Constant(True):
+            raise self._make_error(
+                "A counting quantifier such as 'more than 3 Studies' "
+                "needs a verb: 'every Term that more than 3 Studies "
+                "mention'."
+            )
+        body = Conjunction((restriction, scope))
+        group = sorted(
+            extract_logic_free_variables(body) - set(counted),
+            key=lambda s: s.name,
+        )
+        count_pred, total = Symbol.fresh(), Symbol.fresh()
+        counter = Constant(len if len(counted) == 1 else _count_rows)
+        self._count_rules.append(Implication(
+            count_pred(*group, _AggApp(counter, tuple(counted))), body
+        ))
+        test = ExistentialPredicate(total, Conjunction((
+            count_pred(*group, total), Constant(comparison)(total, number)
+        )))
+        return Negation(test) if negated else test
 
     # ---- Noun Groups ----
 
@@ -2518,6 +2637,18 @@ class SquallTransformer(Transformer):
             return result
         return label
 
+    def app_label_constants(self, args):
+        """
+        Handle a tuple label holding constants, e.g. ``(?s; 'pain'; ?w)``.
+
+        Equivalent to ``(?s; ?t; ?w) such that ?t is 'pain'``: the
+        constant fills its column in the body and is left out of the head.
+        """
+        return tuple(args)
+
+    def tuple_constant(self, args):
+        return _ConstantSlot(args[0])
+
     def dims_base(self, args):
         d = args[0]
         # dim_npc_list returns a plain list; other dims return a single tagged tuple.
@@ -2615,6 +2746,47 @@ class SquallTransformer(Transformer):
         if len(children) == 1:
             return children[0]
         return children if children else None
+
+
+def _add_program_part(parts, part):
+    """Add a transformed sentence to the program *parts* by its kind."""
+    tag = part[0] if isinstance(part, tuple) and len(part) == 2 else None
+    if tag == '_query':
+        parts["queries"].append(part[1])
+    elif tag == '_query_as':
+        impl, q, name_str = part[1]
+        parts["rules"].append(impl)
+        parts["query_names"][len(parts["queries"])] = name_str
+        parts["queries"].append(q)
+    elif tag == '_command':
+        parts["commands"].append(part[1])
+    elif isinstance(part, (EquiprobableChoiceDef, WeightedChoiceDef)):
+        parts["choice_defs"].append(part)
+    else:
+        parts["rules"].append(part)
+
+
+def _squall_result(rules, choice_defs, queries, commands, query_names):
+    """
+    Return the parse result of a program.
+
+    A `SquallProgram` when it has queries, commands or mixes rules with
+    choice definitions; otherwise, for backward compatibility, the single
+    rule or choice definition, or a `Union` of the rules.
+    """
+    if queries or commands:
+        return SquallProgram(
+            rules=rules, queries=queries, choice_defs=choice_defs,
+            query_names=query_names, commands=commands,
+        )
+    if not rules and len(choice_defs) == 1:
+        return choice_defs[0]
+    if len(rules) == 1 and not choice_defs:
+        return rules[0]
+    if choice_defs:
+        # Mix of rules and choice defs — can't represent as Union.
+        return SquallProgram(rules=rules, queries=[], choice_defs=choice_defs)
+    return Union(tuple(rules))
 
 
 def _unwrap_label(val):

@@ -954,6 +954,136 @@ def test_execute_squall_where_label_is_constant_absent_from_set_column():
 
 
 # ---------------------------------------------------------------------------
+# Constants in tuple labels
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_tfidf():
+    """NeurolangPDL with a (study, term, weight) relation."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [
+            ("s1", "pain", 0.5), ("s2", "pain", 0.2),
+            ("s1", "memory", 0.3), ("s3", "reward", 0.1),
+        ],
+        name="term_in_study_tfidf",
+    )
+    return engine
+
+
+@pytest.mark.parametrize("literal", ["'pain'", '"pain"'])
+def test_execute_squall_tuple_label_string_constant(nl_tfidf, literal):
+    result = nl_tfidf.execute_squall_program(
+        f"obtain every Term_in_study_tfidf (?s; {literal}; ?w)."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {("s1", 0.5), ("s2", 0.2)}
+
+
+def test_execute_squall_tuple_label_numeric_constant(nl_counts):
+    result = nl_counts.execute_squall_program(
+        "obtain every Item_count (?i; 2)."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {("b",)}
+
+
+def test_execute_squall_tuple_label_constant_in_rule(nl_tfidf):
+    nl_tfidf.execute_squall_program(
+        "define as Pain_weight every Term_in_study_tfidf (?s; 'pain'; ?w)."
+    )
+    solution = nl_tfidf.solve_all()
+    df = solution["pain_weight"].as_pandas_dataframe()
+    assert set(map(tuple, df.values.tolist())) == {("s1", 0.5), ("s2", 0.2)}
+
+
+# ---------------------------------------------------------------------------
+# Counting quantifiers: more than / at least / fewer than / at most
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_mentions():
+    """
+    Studies mentioning terms: t1 by 3 studies, t2 by 2, t3 by 1, t4 by 0.
+
+    The relation is registered as ``mention`` and ``mentions`` because
+    SQUALL uses the verb form as typed (lemma matching is separate).
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    engine.add_tuple_set(
+        [("t1",), ("t2",), ("t3",), ("t4",)], name="term"
+    )
+    pairs = [
+        ("s1", "t1"), ("s1", "t2"), ("s1", "t3"),
+        ("s2", "t1"), ("s2", "t2"),
+        ("s3", "t1"),
+    ]
+    engine.add_tuple_set(pairs, name="mention")
+    engine.add_tuple_set(pairs, name="mentions")
+    return engine
+
+
+def _first_column_values(result):
+    return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+
+
+@pytest.mark.parametrize("quantifier,expected", [
+    ("more than 1", {"t1", "t2"}),
+    ("more than 2", {"t1"}),
+    ("at least 2", {"t1", "t2"}),
+    ("at least 1", {"t1", "t2", "t3"}),
+    ("fewer than 2", {"t3", "t4"}),
+    ("less than 3", {"t2", "t3", "t4"}),
+    ("at most 1", {"t3", "t4"}),
+    ("at most 0", {"t4"}),
+])
+def test_execute_squall_counting_quantifier_subject(
+    nl_mentions, quantifier, expected
+):
+    result = nl_mentions.execute_squall_program(
+        f"obtain every Term that {quantifier} Studies mention."
+    )
+    assert _first_column_values(result) == expected
+
+
+@pytest.mark.parametrize("sentence,expected", [
+    ("obtain every Study that mentions more than 1 Terms.", {"s1", "s2"}),
+    ("obtain every Study that mentions at most 1 Term.", {"s3"}),
+    ("obtain every Study that mentions at least 3 Terms.", {"s1"}),
+])
+def test_execute_squall_counting_quantifier_object(
+    nl_mentions, sentence, expected
+):
+    result = nl_mentions.execute_squall_program(sentence)
+    assert _first_column_values(result) == expected
+
+
+@pytest.mark.parametrize("voxels", ["Voxels (?x; ?y; ?z)", "Voxels in 3D"])
+def test_execute_squall_counting_quantifier_counts_tuples(voxels):
+    """A counted noun with several columns counts distinct tuples."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.add_tuple_set([(0, 0, 0), (1, 1, 1), (2, 2, 2)], name="voxel")
+    engine.add_tuple_set(
+        [("s1", 0, 0, 0), ("s1", 1, 1, 1), ("s2", 2, 2, 2)],
+        name="reports",
+    )
+    result = engine.execute_squall_program(
+        f"obtain every Study that reports at least 2 {voxels}."
+    )
+    assert _first_column_values(result) == {"s1"}
+
+
+def test_execute_squall_counting_quantifier_in_rule(nl_mentions):
+    result = nl_mentions.execute_squall_program(
+        "define as Popular every Term that at least 2 Studies mention. "
+        "obtain every Popular."
+    )
+    assert _first_column_values(result) == {"t1", "t2"}
+
+
+# ---------------------------------------------------------------------------
 # Probabilistic choice syntax
 # ---------------------------------------------------------------------------
 
