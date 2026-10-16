@@ -1,4 +1,6 @@
 import logging
+import threading
+from collections import OrderedDict
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -87,6 +89,7 @@ from .expression_processing import (
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
+    GetProbabilisticSetAtom,
     NonLiftable,
     ProbabilisticFactSet,
     classify_and_wrap_symbols,
@@ -122,7 +125,42 @@ __all__ = [
     "dalvi_suciu_lift",
     "solve_succ_query",
     "solve_marg_query",
+    "clear_cache",
 ]
+
+
+# Bound cache to avoid unbounded memory growth in long-running processes.
+_MAX_DALVI_SUCIU_CACHE_SIZE = config.getint(
+    "probabilistic.cache", "dalvi_suciu_max_size", fallback=4096
+)
+
+_dalvi_suciu_lift_cache = OrderedDict()
+_dalvi_suciu_lift_cache_lock = threading.Lock()
+
+
+def clear_cache():
+    """Clear the internal cache used by `dalvi_suciu_lift`."""
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache.clear()
+
+
+def _lift_cache_key(rule, symbol_table):
+    """
+    Key a lifted plan by the rule and the kind of each of its symbols.
+
+    The plan only refers to the relational symbols of the rule, and only
+    depends on the symbol table through whether each symbol is a
+    deterministic, probabilistic fact or probabilistic choice relation.
+    Keying on that, rather than on the tables themselves, avoids hashing
+    the data and lets queries with fresh table symbols share plans.
+    """
+    gpsa = GetProbabilisticSetAtom(symbol_table)
+    kinds = frozenset(
+        (symbol, type(symbol_table[symbol]), type(gpsa.walk(symbol)))
+        for symbol in rule._symbols
+        if symbol in symbol_table
+    )
+    return rule, kinds
 
 
 AACN = AbsorbAssertedConjunctsInNegations()
@@ -869,10 +907,26 @@ def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]. Non-liftable segments are identified
-    by the `NonLiftable` expression.
+    by the `NonLiftable` expression. Plans are cached, see `clear_cache`.
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
+    key = _lift_cache_key(rule, symbol_table)
+    with _dalvi_suciu_lift_cache_lock:
+        if key in _dalvi_suciu_lift_cache:
+            _dalvi_suciu_lift_cache.move_to_end(key)
+            return _dalvi_suciu_lift_cache[key]
+
+    plan = _dalvi_suciu_lift(rule, symbol_table)
+
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache[key] = plan
+        if len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCIU_CACHE_SIZE:
+            _dalvi_suciu_lift_cache.popitem(last=False)
+    return plan
+
+
+def _dalvi_suciu_lift(rule, symbol_table):
     #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 

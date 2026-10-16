@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
@@ -19,7 +20,7 @@ from ..logic.transformations import (
 LOG = logging.getLogger(__name__)
 
 
-__all__ = ['is_contained_rule', 'is_contained']
+__all__ = ['is_contained_rule', 'is_contained', 'clear_cache']
 
 
 def canonical_database_program(rule):
@@ -77,6 +78,7 @@ def is_contained_rule(q1, q2):
     return frozen_head in solution.as_set()
 
 
+@lru_cache(maxsize=4096)
 def is_contained(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
@@ -103,6 +105,11 @@ def is_contained(q1, q2):
         else:
             return False
     return True
+
+
+def clear_cache():
+    """Clear the cache of `is_contained`."""
+    is_contained.cache_clear()
 
 
 def _disjunct_implies(q2_, q1_):

@@ -165,6 +165,23 @@ def test_probabilistic_choice_empty_does_not_sum_to_one(backend):
 
 
 
+def test_is_probabilistic_predicate_symbol_recursive_rules():
+    """Recursive rules terminate whether or not they reach a pfact."""
+    edge, reach, pedge, preach = map(
+        Symbol, ("edge", "reach", "pedge", "preach")
+    )
+    cpl = CPLogicProgram()
+    cpl.add_extensional_predicate_from_tuples(edge, {(1, 2), (2, 3)})
+    cpl.add_probabilistic_facts_from_tuples(pedge, {(0.5, 1, 2)})
+    for head, base in ((reach, edge), (preach, pedge)):
+        cpl.walk(Implication(head(x, y), base(x, y)))
+        cpl.walk(
+            Implication(head(x, y), Conjunction((head(x, z), head(z, y))))
+        )
+    assert not is_probabilistic_predicate_symbol(reach, cpl)
+    assert is_probabilistic_predicate_symbol(preach, cpl)
+
+
 def test_probabilistic_predicate_symbols_agree_with_magic_sets():
     """
     Classify the predicates of a program as the magic sets SIPS does.

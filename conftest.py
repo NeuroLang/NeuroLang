@@ -20,3 +20,12 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
+
+
+@pytest.fixture(autouse=True)
+def clear_probabilistic_caches():
+    """Clear the probabilistic plan caches so that tests are independent."""
+    from neurolang.probabilistic import containment, dalvi_suciu_lift
+
+    containment.clear_cache()
+    dalvi_suciu_lift.clear_cache()
