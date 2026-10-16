@@ -608,24 +608,28 @@ Non-repeating queries
    so this holds for every subformula planned, and by Lemma 1 two
    subformulas without a common atom are independent. Then:
 
-   * *rewrites*: :math:`\exists v\, (v = e \land \varphi) \equiv
-     \varphi[e/v]` when no variable of :math:`e` is captured, which
-     ``_bound_variables`` checks after the query is standardised apart;
-     :math:`\lnot(A \lor B) \equiv \lnot A \land \lnot B`;
-     :math:`\exists v\, (A \lor B) \equiv \exists v\, A \lor \exists v\, B`;
-     and :math:`\exists \bar v\, (A \land B) \equiv \exists \bar v_A\, A
+   * *rewrites*, by ``NormaliseNonRepeatingQuery``:
+     :math:`\exists v\, (v = e \land \varphi) \equiv \varphi[e/v]` when no
+     variable of :math:`e` is captured, which
+     ``UnifyExistentialVariableEqualitiesMixin`` checks with
+     ``ExtractBoundVariables`` after the query is standardised apart;
+     :math:`\lnot(A \lor B) \equiv \lnot A \land \lnot B`
+     (``MoveNegationsIntoDisjunctionsMixin``);
+     :math:`\exists v\, (A \lor B) \equiv \exists v\, A \lor \exists v\, B`
+     (``PushExistentialsDownDisjunctionsMixin``); and, by the planner,
+     :math:`\exists \bar v\, (A \land B) \equiv \exists \bar v_A\, A
      \land \exists \bar v_B\, B` when :math:`A` and :math:`B` share no
      variable of :math:`\bar v` (``_connected_groups``). These hold in
      every world;
    * *conjunction*: the join of independent positive conjuncts is the
      product of their probabilities; a comparison, deterministic, is a
      selection; for a negation whose free variables are bound by the
-     positive conjuncts (checked in ``_conjunction``), ``Difference``
-     computes :math:`P[A\theta]\,(1 - P[N\theta])` as for an independent
-     negation above. Atoms with constants or repeated variables are selected on
-     named columns (``_atom_plan``);
+     positive conjuncts (checked in ``_conjunction_plan``),
+     ``Difference`` computes :math:`P[A\theta]\,(1 - P[N\theta])` as for an
+     independent negation above. Atoms with constants or repeated
+     variables are selected on named columns (``NonRepeatingPlanner.atom``);
    * *disjunction*: its disjuncts have the same free variables (checked in
-     ``_disjunction``) and are independent, so
+     ``NonRepeatingPlanner.disjunction``) and are independent, so
      :math:`P[(A \lor B)\theta] = 1 - (1 - P[A\theta])(1 - P[B\theta])`;
    * *projection*: the variable :math:`v` occurs in every probabilistic
      atom of the group :math:`\varphi`, including those within its
