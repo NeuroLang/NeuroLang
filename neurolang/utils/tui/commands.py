@@ -17,6 +17,7 @@ from neurolang.utils import engine_registry
 from neurolang.utils.cli import _parse_sort_spec, sort_dataframe
 
 from .results import ResultBlock, print_all
+from .table_view import browse, can_browse
 
 
 class QuitRepl(Exception):
@@ -366,6 +367,52 @@ def cmd_all(app, arg: str) -> None:
     """Print all the rows of the last result."""
     for block in app.results:
         print_all(app.console, block)
+
+
+def _block_to_browse(app, arg: str):
+    """
+    Return the block of the last result chosen by *arg*, or None.
+
+    *arg* is the 1-based number of the block, default the first one;
+    a missing result or a wrong number is reported.
+    """
+    if not app.results:
+        app.console.print("[dim]No result to browse.[/dim]")
+        return None
+    try:
+        number = int(arg) if arg.strip() else 1
+    except ValueError:
+        number = 0
+    if not 1 <= number <= len(app.results):
+        app.console.print(
+            f"[yellow]Give a result number from 1 to {len(app.results)}, "
+            f"not {arg.strip()!r}.[/yellow]"
+        )
+        return None
+    return app.results[number - 1]
+
+
+@command(
+    ".browse", "Browse the last result: scroll, sort (s), search (/)",
+    ".browse [N]",
+)
+def cmd_browse(app, arg: str) -> None:
+    """
+    Open the last result in the full-screen table viewer.
+
+    *arg* chooses the result of a SQUALL program with several ``obtain``.
+    Without a terminal, all the rows are printed instead.
+    """
+    block = _block_to_browse(app, arg)
+    if block is None:
+        return
+    if not can_browse(app.console):
+        app.console.print(
+            "[dim].browse needs a terminal; printing all the rows.[/dim]"
+        )
+        print_all(app.console, block)
+        return
+    browse(block.frame, block.title)
 
 
 FORMATS = ("table", "csv", "json")

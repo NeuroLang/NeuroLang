@@ -10,21 +10,25 @@ from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.results import rows_table  # noqa: E402
 
 
+def _headers(table):
+    return [str(c.header) for c in table.columns]
+
+
 class TestDfToRichTable:
     def test_basic_table(self):
         df = pd.DataFrame({"x": [1, 2], "y": ["a", "b"]})
         table = rows_table(df)
-        assert [c.header for c in table.columns] == ["x", "y"]
+        assert _headers(table) == ["x\nint", "y\nstr"]
 
     def test_empty_dataframe(self):
         df = pd.DataFrame({"x": pd.Series([], dtype=int)})
         table = rows_table(df)
-        assert [c.header for c in table.columns] == ["x"]
+        assert _headers(table) == ["x\nint"]
 
     def test_multiple_columns(self):
         df = pd.DataFrame({"a": [1], "b": [2.5], "c": ["x"]})
         table = rows_table(df)
-        assert [c.header for c in table.columns] == ["a", "b", "c"]
+        assert _headers(table) == ["a\nint", "b\nfloat", "c\nstr"]
 
 
 class TestRegionCells:
@@ -324,7 +328,9 @@ def test_caption_is_one_line_on_narrow_tables(long_app):
     caption = [
         line for line in _output(long_app).splitlines() if "rows" in line
     ]
-    assert caption == ["45 rows · showing 1–20 · .more for next"]
+    assert caption == [
+        "45 rows · showing 1–20 · .more for next · .browse to explore"
+    ]
 
 
 def test_small_result_caption(small_app):

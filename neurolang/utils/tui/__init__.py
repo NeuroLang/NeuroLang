@@ -27,6 +27,8 @@ The REPL is organised in modules:
 - :mod:`.session`: the session's scope, holding its rules and the
   relations loaded with ``.load``, and the session commands,
 - :mod:`.statements`: splitting of the input into statements,
+- :mod:`.table_model` and :mod:`.table_view`: the full-screen viewer of
+  a result opened with ``.browse``,
 - :mod:`.transcript`: the record of the session and ``.transcript``.
 """
 
