@@ -289,24 +289,9 @@ def split_positive_negative_formulas(nary_logic_operation):
 
 
 def minimise_formulas_containment(components, containment_op, head_vars):
-    components_fv = [
-        extract_logic_free_variables(c)
-        for c in components
-    ]
-    containments = {}
-
-    def contained(i, j):
-        if (i, j) not in containments:
-            c_fv = components_fv[i] & components_fv[j]
-            q = add_existentials_except(components[i], c_fv | head_vars)
-            q_ = add_existentials_except(components[j], c_fv | head_vars)
-            containments[i, j] = containment_op(q_, q)
-            LOG.debug(
-                "Checking containment %s <= %s: %s",
-                q, q_, containments[i, j]
-            )
-        return containments[i, j]
-
+    containments = _ComponentContainments(
+        components, containment_op, head_vars
+    )
     # Of equivalent components, only the last one is kept: the
     # containment of an earlier one is computed when needed, as the loop
     # on it may have stopped before.
@@ -315,11 +300,45 @@ def minimise_formulas_containment(components, containment_op, head_vars):
         for j in range(len(components)):
             if i == j:
                 continue
-            if contained(i, j) and not (j < i and contained(j, i)):
+            if containments.contained(i, j) and not (
+                j < i and containments.contained(j, i)
+            ):
                 break
         else:
             keep += (c,)
     return keep
+
+
+class _ComponentContainments:
+    """Memoised containments between `components`, each existentially
+    quantified except for the free variables it has in common with the
+    other and `head_vars`."""
+
+    def __init__(self, components, containment_op, head_vars):
+        self.components = components
+        self.components_fv = [
+            extract_logic_free_variables(c) for c in components
+        ]
+        self.containment_op = containment_op
+        self.head_vars = head_vars
+        self.containments = {}
+
+    def contained(self, i, j):
+        """Whether `containment_op` holds for the components `j` and
+        `i`."""
+        if (i, j) not in self.containments:
+            c_fv = (
+                self.components_fv[i] & self.components_fv[j] |
+                self.head_vars
+            )
+            q = add_existentials_except(self.components[i], c_fv)
+            q_ = add_existentials_except(self.components[j], c_fv)
+            self.containments[i, j] = self.containment_op(q_, q)
+            LOG.debug(
+                "Checking containment %s <= %s: %s",
+                q, q_, self.containments[i, j]
+            )
+        return self.containments[i, j]
 
 
 def add_existentials_except(query, variables):
