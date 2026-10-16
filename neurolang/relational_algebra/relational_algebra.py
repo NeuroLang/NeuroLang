@@ -848,7 +848,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return Constant[relation_type](relation, verify_type=False)
 
     @ew.add_match(
-        Selection(Constant, FunctionApplication(eq_, (Constant[Column], ...)))
+        Selection(
+            Constant, FunctionApplication(eq_, (Constant[Column], Constant))
+        )
     )
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
