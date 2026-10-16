@@ -152,7 +152,7 @@ def test_query_with_comparison_ranked():
 def _pairs(*tuples):
     types = tuple(type(value) for value in tuples[0])
     return Constant[AbstractSet[Tuple[types]]](
-        WrappedRelationalAlgebraSet(tuples)
+        WrappedRelationalAlgebraSet(tuples), verify_type=False
     )
 
 

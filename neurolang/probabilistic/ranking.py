@@ -47,7 +47,7 @@ from ..relational_algebra import (
 )
 
 # The number of orders of n variables grows as 1, 3, 13, 75, 541...
-MAX_RANKED_VARIABLES = 4
+MAX_RANKED_VARIABLES = 2
 
 
 def verify_that_the_query_is_ranked(query):
@@ -173,8 +173,8 @@ def rank_query(query, symbol_table):
         if the query cannot be ranked so: a relation to split is a
         probabilistic choice, which is a single block of exclusive tuples,
         or occurs within a negation; a ranked position has a constant or a
-        comparison has a ranked variable; two answer variables are to
-        rank; the ranked columns are not all of numbers or all of strings,
+        comparison has a ranked variable; an answer variable is to rank;
+        the ranked columns are not all of numbers or all of strings,
         the types with a total order and an equality, or have NaN; or more
         than `MAX_RANKED_VARIABLES` variables are to rank.
     """
@@ -192,8 +192,11 @@ def rank_query(query, symbol_table):
     )
     relations = {}
     disjuncts = []
+    # As in Dalvi & Suciu, the variables of rank r in every order are the
+    # same variable, so that the disjuncts follow a single order.
+    canonical = [Symbol.fresh() for _ in variables]
     for order in _weak_orders(sorted(variables, key=lambda v: v.name)):
-        substitution, ranks = _order_substitution(order, free_variables)
+        substitution, ranks = _order_substitution(order, canonical)
         disjuncts.append(
             RankAtoms(positions, ranks, relations, symbol_table).walk(
                 ReplaceExpressionWalker(substitution).walk(matrix)
@@ -328,8 +331,10 @@ def _check_rankable(
         raise NotRankedException(
             f"More than {MAX_RANKED_VARIABLES} variables to rank"
         )
-    if len(variables & free_variables) > 1:
-        raise NotRankedException("Two answer variables to rank")
+    if variables & free_variables:
+        # Dalvi & Suciu rank Boolean queries; the answer variables are
+        # constants, which this ranking does not shatter.
+        raise NotRankedException("An answer variable to rank")
     for atom in extract_logic_atoms(matrix):
         if (
             not isinstance(atom.functor, Symbol) and
@@ -420,19 +425,14 @@ def _weak_orders(variables):
             yield order[:i] + [{first}] + order[i:]
 
 
-def _order_substitution(order, free_variables):
-    """The substitution of each variable by the representative of its set
-    of equal variables, an answer variable if there is one, and the rank
-    of each representative."""
+def _order_substitution(order, canonical):
+    """The substitution of each variable by the variable `canonical` of
+    the rank of its set of equal variables, and the rank of each of
+    these."""
     substitution = {}
     ranks = {}
     for rank, equal in enumerate(order):
-        answer = equal & free_variables
-        representative = (
-            next(iter(answer)) if answer
-            else min(equal, key=lambda v: v.name)
-        )
-        ranks[representative] = rank
-        for variable in equal - {representative}:
-            substitution[variable] = representative
+        ranks[canonical[rank]] = rank
+        for variable in equal:
+            substitution[variable] = canonical[rank]
     return substitution, ranks

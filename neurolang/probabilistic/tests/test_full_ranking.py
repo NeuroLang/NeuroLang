@@ -100,21 +100,30 @@ def test_symmetric_pair_is_lifted():
     _assert_close(_solve(nl, "q(PROB) :- R(x, y), R(y, x)"), expected)
 
 
-def test_symmetric_pair_with_an_answer_variable_is_lifted():
+def test_answer_variable_to_rank_is_left_to_the_next_solver():
+    """Dalvi & Suciu rank Boolean queries, the answer variables being
+    constants: q(x) :- R(x, y), R(y, x) would need ranking x."""
     values = ("a", "b", "c")
+    program = "q(x, PROB) :- R(x, y), R(y, x)"
+    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
+    with pytest.raises(NotRankedException):
+        _solve(nl, program)
     expected = _enumerated(
         {"R": R_FACTS},
         lambda w, a: any((a[0], y) in w["R"] and (y, a[0]) in w["R"]
                          for y in values),
         answers=tuple((v,) for v in values)
     )
-    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
-    _assert_close(_solve(nl, "q(x, PROB) :- R(x, y), R(y, x)"), expected)
+    _assert_close(_solve(_engine({"R": R_FACTS}), program), expected)
 
 
-def test_symmetric_pair_with_another_relation_is_lifted():
+def test_symmetric_pair_with_another_relation_is_answered():
+    """∃x, y R(x, y) ∧ R(y, x) ∧ S(x): ranked, the disjuncts for x < y and
+    y < x have S on different variables, and the union is not lifted.
+    The next solver answers it."""
     s_facts = {("a",): 0.7, ("b",): 0.1}
     relations = {"R": R_FACTS, "S": s_facts}
+    program = "q(PROB) :- R(x, y), R(y, x), S(x)"
     expected = _enumerated(
         relations,
         lambda w, _: any(
@@ -123,9 +132,9 @@ def test_symmetric_pair_with_another_relation_is_lifted():
         )
     )
     nl = _engine(relations, solvers=(dalvi_suciu_lift,))
-    _assert_close(
-        _solve(nl, "q(PROB) :- R(x, y), R(y, x), S(x)"), expected
-    )
+    with pytest.raises(UnsupportedSolverError):
+        _solve(nl, program)
+    _assert_close(_solve(_engine(relations), program), expected)
 
 
 @pytest.mark.parametrize("program, relations, holds, choices", (
