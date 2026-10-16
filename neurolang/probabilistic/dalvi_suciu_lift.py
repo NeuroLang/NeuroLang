@@ -62,7 +62,8 @@ from ..logic.transformations import (
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix
+    convert_to_pnf_with_dnf_matrix,
+    standardise_apart
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -195,6 +196,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
+        # The lifting rules identify variables by their names, which
+        # standardising apart makes unambiguous.
+        flat_query_body = standardise_apart(flat_query_body)
         flat_query = Implication(query.consequent, flat_query_body)
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
