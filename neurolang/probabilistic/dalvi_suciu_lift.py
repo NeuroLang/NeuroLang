@@ -88,7 +88,6 @@ from .expression_processing import (
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
-    ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
@@ -1278,7 +1277,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
         )
     )
     for atom in atoms_with_constants_in_all_key_positions:
-        if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
+        # A ranked or shattered choice is a selection of a choice, whose
+        # tuples are still mutually exclusive.
+        if not is_atom_a_probabilistic_choice_relation(atom, symbol_table):
             raise NeuroLangException(
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
