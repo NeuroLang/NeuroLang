@@ -207,11 +207,11 @@ def verb1():
 
 @pytest.fixture(scope="module")
 def verb2():
-    # Parser now resolves InvertedFunctionApplication at parse time.
-    # _apply_ops pre-swaps inverse-verb args before the resolver reverses
-    # them back, so the final IR has normal subject-first order.
+    # ``~`` inverts the argument order: ``x ~sings y`` is ``sings(y, x)``,
+    # as documented in the tutorial (section 3.2) and consistent with the
+    # ``~author`` noun2 fixture below and with ``~verb`` in ``rel_vpn``.
     return [
-        ("~sings", lambda x, y: Symbol("sings")(x, y))  # pylint: disable=W0108
+        ("~sings", lambda x, y: Symbol("sings")(y, x))  # pylint: disable=W0108
     ]
 
 
@@ -726,6 +726,39 @@ def test_squall_transitive_inv_argument_order():
     )
 
 
+def test_squall_transitive_inv_in_verb_phrase_swaps_arguments():
+    """``~verb`` with subject and object swaps them in a verb phrase too."""
+    res = parser("squall ?x ~sings ?y")
+    assert res == Symbol("sings")(Symbol("y"), Symbol("x"))
+
+
+def test_squall_transitive_inv_in_relative_vp_swaps_arguments():
+    """``every T that ~mentions a S`` builds ``mentions(s, t)``."""
+    res = parser("define as mentioned every Term that ~mentions a Study.")
+    atoms = [
+        a for a in _collect_atoms(res.antecedent)
+        if a.functor == Symbol("mentions")
+    ]
+    assert len(atoms) == 1
+    term_var = res.consequent.args[0]
+    assert atoms[0].args[1] == term_var
+    assert atoms[0].args[0] != term_var
+
+
+def _collect_atoms(expression):
+    stack = [expression]
+    atoms = []
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    return atoms
+
+
 def test_squall_conditioned_prior_produces_condition_node():
     """rule_body1_cond_prior returns an Implication with Condition antecedent."""
 
@@ -933,6 +966,46 @@ def test_det_every_agg_free_var_fallback():
     )
 
 
+def _obtained_aggregation(code):
+    head = parser(code).formulas[0].head
+    columns = head if isinstance(head, tuple) else (head,)
+    aggregations = [
+        c for c in columns if isinstance(c, AggregationApplication)
+    ]
+    assert len(aggregations) == 1
+    return aggregations[0]
+
+
+def test_agg_tuple_label_skips_anonymous_columns():
+    """``the Max of the T (_; _; ?w)`` aggregates only the named column."""
+    head = _obtained_aggregation(
+        "obtain the Max of the Term_in_study_tfidf (_; _; ?w)."
+    )
+    assert head.args == (Symbol("w"),)
+
+
+def test_agg_tuple_label_per_aggregates_value_not_group():
+    """With ``per ?s`` the aggregated column is the named non-group one."""
+    code = "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    head = _obtained_aggregation(code)
+    assert head.args == (Symbol("w"),)
+    assert parser(code).formulas[0].head[0] == Symbol("s")
+
+
+def test_agg_tuple_label_per_in_rule_aggregates_value():
+    """``for every Study ?s ; where every Max of … (?s; _; ?w) per ?s``."""
+    rule = parser(
+        "define as Peak for every Study ?s ; "
+        "where every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    )
+    agg = [
+        a for a in rule.consequent.args
+        if isinstance(a, AggregationApplication)
+    ]
+    assert len(agg) == 1
+    assert agg[0].args == (Symbol("w"),)
+
+
 def test_ng1_tail_npc_parses_parameterized_functors():
     """'Top/Bottom n[%] of the Relation' builds parameterized aggregate functors."""
 
@@ -1001,6 +1074,70 @@ def test_rel_body_function_call_parses():
     assert len(free_vars) >= 3, (
         f"Expected >=3 free vars (subject + 2 labels), got {free_vars}"
     )
+
+
+def _query_atoms(code):
+    query = parser(code).formulas[0]
+    return {
+        atom.functor: atom.args for atom in _collect_atoms(query.body)
+    }
+
+
+def test_prepositional_ternary_verb_builds_ternary_atom():
+    """``?s weighs ?t with ?w`` is ``weighs(s, t, w)``."""
+    res = parser("squall ?s weighs ?t with ?w")
+    assert res == Symbol("weighs")(Symbol("s"), Symbol("t"), Symbol("w"))
+
+
+def test_prepositional_ternary_verb_in_relative_clause():
+    """``every Study ?s that weighs 'pain' with ?w`` parses to an atom."""
+    atoms = _query_atoms("obtain every Study ?s that weighs 'pain' with ?w.")
+    assert atoms[Symbol("weighs")] == (
+        Symbol("s"), Constant("pain"), Symbol("w")
+    )
+
+
+def test_tuple_subject_is_a_noun_in_where_conjunction():
+    """``where (?s; ?t; ?w) is a T and ?t is 'pain'`` builds ``T(s, t, w)``."""
+    atoms = _query_atoms(
+        "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
+        "and ?t is 'pain'."
+    )
+    assert atoms[Symbol("term_weight")] == (
+        Symbol("s"), Symbol("t"), Symbol("w")
+    )
+
+
+def test_tuple_subject_with_intransitive_verb():
+    """``(?s; ?t; ?w) weighs`` fills the verb's columns."""
+    res = parser("squall (?s; ?t; ?w) weighs")
+    assert res == Symbol("weighs")(Symbol("s"), Symbol("t"), Symbol("w"))
+
+
+def test_relative_clause_conjunction_with_bare_verb():
+    """``that activates and that is a S`` keeps both conjuncts."""
+    atoms = _query_atoms(
+        "obtain every Voxel that activates and that is a Schaefer_voxels."
+    )
+    assert Symbol("activates") in atoms
+    assert Symbol("schaefer_voxels") in atoms
+
+
+def test_vp_conjunction_of_bare_verbs():
+    """``that activates and plays`` applies each verb to the subject."""
+    atoms = _query_atoms("obtain every Voxel that activates and plays.")
+    assert atoms[Symbol("activates")] == atoms[Symbol("plays")]
+
+
+def test_adjective_with_complement_keeps_complement():
+    """``is reported by a Study`` builds ``reported(voxel, study)``."""
+    atoms = _query_atoms(
+        "obtain every Voxel that is reported by a Study "
+        "and that is a Schaefer_voxels."
+    )
+    voxel = atoms[Symbol("voxel")][0]
+    study = atoms[Symbol("study")][0]
+    assert atoms[Symbol("reported")] == (voxel, study)
 
 
 def test_rel_comp_variable_rhs_parses():

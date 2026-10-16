@@ -458,6 +458,57 @@ def test_existential():
         res = parser("C(x) :- B(x), exists(s1; )")
 
 
+def test_existential_body_keeps_negations_and_nested_existentials():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+
+    res = parser("C(x) :- B(x), ~exists(y; A(x, y), ~B(y))")
+    expected = Union((
+        Implication(
+            C(x),
+            Conjunction((
+                B(x),
+                Negation(ExistentialPredicate(
+                    y, Conjunction((A(x, y), Negation(B(y))))
+                )),
+            ))
+        ),
+    ))
+    assert res == expected
+
+    res = parser("C(x) :- B(x), exists(y; A(x, y), exists(z; A(y, z)))")
+    expected = Union((
+        Implication(
+            C(x),
+            Conjunction((
+                B(x),
+                ExistentialPredicate(
+                    y,
+                    Conjunction((
+                        A(x, y), ExistentialPredicate(z, A(y, z))
+                    ))
+                ),
+            ))
+        ),
+    ))
+    assert res == expected
+
+    res = parser("C(x) :- B(x), exists(y; ~A(x, y))")
+    expected = Union((
+        Implication(
+            C(x),
+            Conjunction((
+                B(x), ExistentialPredicate(y, Negation(A(x, y)))
+            ))
+        ),
+    ))
+    assert res == expected
+
+
 def test_query():
     ans = Symbol("ans")
     B = Symbol("B")
@@ -491,6 +542,28 @@ def test_prob_explicit():
         (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
     )
 
+
+
+def test_prob_implicit_in_query():
+    """``ans(x, PROB, y)`` is ``ans(x, PROB(x, y), y)``, as for a rule."""
+    ans = Symbol("ans")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Query(ans(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_implicit_in_conditional_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    res = parser("ans(x, PROB) :- B(x) // C(x)")
+    assert res.formulas[0].head == ans(x, PROB(x))
+    assert res.formulas[0].body == Condition(B(x), C(x))
 
 def test_lambda_definition():
     c = Symbol("c")

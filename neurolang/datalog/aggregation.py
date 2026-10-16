@@ -40,6 +40,7 @@ from .expression_processing import (
     is_aggregation_rule,
 )
 from .expressions import AggregationApplication, TranslateToLogic
+from .range_restriction import check_range_restriction
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -68,6 +69,22 @@ class BuiltinAggregationMixin:
 
     def function_count(self, *iterables: typing.Iterable) -> int:
         return len(next(iter(iterables)))
+
+    def function_percentile(
+        self, values: typing.Iterable, q: float
+    ) -> float:
+        """
+        Return the ``q``-th percentile of ``values``, ignoring NaNs.
+
+        ``q`` is in ``[0, 100]`` and the percentile is linearly
+        interpolated, as in :func:`numpy.nanpercentile`.  The rows in the
+        top ``p``% of a column ``v`` are those with
+        ``v >= percentile(v, 100 - p)``; with ties or interpolation, they
+        can be slightly more than ``p``%.
+        """
+        return float(
+            numpy.nanpercentile(numpy.asarray(values, dtype=float), q)
+        )
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):
@@ -107,6 +124,7 @@ class DatalogWithAggregationMixin(PatternWalker):
         antecedent = expression.antecedent
 
         self._validate_aggregation_implication_syntax(consequent, antecedent)
+        check_range_restriction(expression, self.symbol_table)
 
         if consequent.functor in self.symbol_table:
             eb = self._new_intensional_internal_representation(consequent)

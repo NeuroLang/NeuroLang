@@ -6,6 +6,7 @@ from .. import expressions as ir
 from ..datalog import DatalogProgram
 from ..datalog.chase import Chase
 from ..datalog.aggregation import (
+    BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation
 )
@@ -21,7 +22,10 @@ from .datalog.sugar import (
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
-from .datalog.sugar.spatial import TranslateRegionDestroy
+from .datalog.sugar.spatial import (
+    TranslateEuclideanDistanceBoundMatrixMixin,
+    TranslateRegionDestroy,
+)
 from .type_resolution import TypeResolutionMixin
 from ..commands import CommandsMixin
 from .frontend_extensions import NumpyFunctionsMixin
@@ -79,6 +83,7 @@ class RegionFrontendDatalogSolver(
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,
+    TranslateEuclideanDistanceBoundMatrixMixin,
     TypeResolutionMixin,
     TranslateRegionDestroy,
     Fol2DatalogMixin,
@@ -86,6 +91,7 @@ class RegionFrontendDatalogSolver(
     CommandsMixin,
     NumpyFunctionsMixin,
     DatalogWithAggregationMixin,
+    BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,
     ExpressionBasicEvaluator,
