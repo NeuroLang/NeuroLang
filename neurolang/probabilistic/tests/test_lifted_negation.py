@@ -1,16 +1,17 @@
 """Lifted inference for conjunctive queries with existential and negated
 existential subqueries, Q1(x, y) ∧ ¬∃t Q2(x, t), sharing symbols with the
-rest of the query, checked against the probabilities computed by
-enumerating every possible world.
+rest of the query or with comparisons, checked against the probabilities
+computed by enumerating every possible world.
 """
 import itertools
+import operator
 
 import pytest
 
 from ...datalog.expression_processing import flatten_query
 from ...exceptions import NonLiftableException
 from ...expression_walker import expression_iterator
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Negation, Union
 from ...relational_algebra import Selection
 from ...relational_algebra_provenance import Difference, Subtraction
@@ -34,7 +35,12 @@ t = Symbol("t")
 u = Symbol("u")
 v = Symbol("v")
 x = Symbol("x")
+w = Symbol("w")
 y = Symbol("y")
+
+NE = Constant(operator.ne)
+LT = Constant(operator.lt)
+LE = Constant(operator.le)
 
 R2 = {(0.5, "a", "b"), (0.4, "a", "c"), (0.3, "b", "b"), (0.7, "c", "a")}
 S2 = {(0.6, "a", "b"), (0.2, "a", "c"), (0.9, "b", "a")}
@@ -376,6 +382,81 @@ def test_positive_conjunct_without_separator_not_liftable():
     cpl.add_probabilistic_facts_from_tuples(S, SL)
     cpl.walk(Implication(N(), Conjunction((R(t), S(t, u), R(u)))))
     query = Implication(ans(x), Conjunction((R(x), N())))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+PW = {
+    (0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d"),
+    (0.4, "c", "b"), (0.3, "b", "b"),
+}
+
+
+def test_negated_inequality():
+    """Segregation: P(x, y) ∧ ¬∃w (P(w, y) ∧ w ≠ x)."""
+    check(
+        {R: PW}, {},
+        [Implication(A(x, y), Conjunction((R(w, y), NE(w, x))))],
+        Implication(ans(x, y), Conjunction((R(x, y), Negation(A(x, y))))),
+        lambda db: {
+            (a, b) for a, b in db[R]
+            if not exists(db[R], lambda c, d: d == b and c != a)
+        },
+    )
+
+
+def test_inequality():
+    """P(x, y) ∧ ∃w (P(w, y) ∧ w ≠ x)."""
+    check(
+        {R: PW}, {},
+        [Implication(A(x, y), Conjunction((R(w, y), NE(w, x))))],
+        Implication(ans(x, y), Conjunction((R(x, y), A(x, y)))),
+        lambda db: {
+            (a, b) for a, b in db[R]
+            if exists(db[R], lambda c, d: d == b and c != a)
+        },
+    )
+
+
+def test_negated_order_comparison():
+    """P(x, y) ∧ ¬∃w (P(w, y) ∧ T(w) ∧ w < x)."""
+    check(
+        {R: PW, T: T1}, {},
+        [Implication(A(x, y), Conjunction((R(w, y), T(w), LT(w, x))))],
+        Implication(ans(x, y), Conjunction((R(x, y), Negation(A(x, y))))),
+        lambda db: {
+            (a, b) for a, b in db[R]
+            if not exists(
+                db[R], lambda c, d: d == b and c < a and (c,) in db[T]
+            )
+        },
+    )
+
+
+def test_inequalities_with_constant():
+    """P(x, y) ∧ ∃w (T(w) ∧ w ≠ "a" ∧ w ≠ x)."""
+    check(
+        {R: PW, T: T1}, {},
+        [Implication(
+            A(x), Conjunction((T(w), NE(w, Constant("a")), NE(w, x)))
+        )],
+        Implication(ans(x, y), Conjunction((R(x, y), A(x)))),
+        lambda db: {
+            (a, b) for a, b in db[R]
+            if exists(db[T], lambda c: c not in ("a", a))
+        },
+    )
+
+
+def test_non_strict_comparison_sharing_a_symbol_not_liftable():
+    """P(x, y) ∧ ¬∃w (P(w, y) ∧ w ≤ x) is not lifted: w ≤ x does not make
+    P(w, y) and P(x, y) different tuples."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(R, PW)
+    cpl.walk(Implication(A(x, y), Conjunction((R(w, y), LE(w, x)))))
+    query = Implication(
+        ans(x, y), Conjunction((R(x, y), Negation(A(x, y))))
+    )
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 

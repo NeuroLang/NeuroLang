@@ -11,6 +11,7 @@ from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
 from ..ranking import verify_that_the_query_is_ranked, partially_rank_query
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -134,3 +135,8 @@ def test_cant_rank_repeated():
     res = partially_rank_query(query, symbol_table)
 
     assert not verify_that_the_query_is_ranked(res)
+
+
+def test_query_with_comparison_ranked():
+    query = Conjunction((Q(x, y), P(z, y), NE(z, x)))
+    assert verify_that_the_query_is_ranked(query)

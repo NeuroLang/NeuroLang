@@ -80,7 +80,9 @@ when the query is liftable; if the query is not supported by these, it falls
 back to **knowledge compilation**, i.e. weighted model counting over a
 sentential decision diagram (SDD) built with pysdd
 (:mod:`neurolang.probabilistic.weighted_model_counting`), which is general but
-can be much more expensive.  See [Zanitti2023]_ for details.
+can be much more expensive.  See [Zanitti2023]_ for details, and
+:doc:`probabilistic_lifting` for the lifting strategies and their
+references.
 
 .. note::
 

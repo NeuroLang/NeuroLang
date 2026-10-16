@@ -571,6 +571,47 @@ class RemoveExistentialOnVariables(LogicExpressionWalker):
             return ExistentialPredicate(expression.head, body)
 
 
+class StandardiseApart(PatternWalker):
+    """
+    Rename each quantified variable to a fresh one, so that no variable is
+    quantified twice, nor both free and quantified. The body of a
+    quantifier is walked first, so that only the free occurrences of its
+    variable are left to rename. A rebuilt expression is not walked again,
+    as renaming to fresh variables always changes it.
+    """
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        body = self.walk(expression.body)
+        fresh = expression.head.fresh()
+        return expression.apply(
+            fresh, ReplaceExpressionWalker({expression.head: fresh}).walk(body)
+        )
+
+    @add_match(NaryLogicOperator)
+    def nary_logic_operator(self, expression):
+        return expression.apply(tuple(
+            self.walk(formula) for formula in expression.formulas
+        ))
+
+    @add_match(UnaryLogicOperator)
+    def unary_logic_operator(self, expression):
+        return expression.apply(self.walk(expression.formula))
+
+    @add_match(FunctionApplication)
+    def atom(self, expression):
+        return expression
+
+    @add_match(Constant)
+    def logical_constant(self, expression):
+        return expression
+
+
+def standardise_apart(formula):
+    """Rename the quantified variables of *formula*, see
+    `StandardiseApart`."""
+    return StandardiseApart().walk(formula)
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,

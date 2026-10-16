@@ -930,10 +930,7 @@ def test_program_with_segregation_second_constant(solver):
     cpl_program.walk(code)
     query = Implication(ans(x), Z(x, b))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -972,10 +969,7 @@ def test_program_with_segregation(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -985,6 +979,8 @@ def test_program_with_segregation(solver):
         expected = testing.make_prov_set(
             [
                 (0.5, "a", "b"),
+                (0.5, "b", "c"),
+                (0.2, "b", "d"),
             ],
             ("_p_", "x", "y"),
         )
@@ -1704,9 +1700,24 @@ def test_dalvi_suciu_fails_builtin():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
         )
-    query = Implication(ans(x), Conjunction((Q(x), P(x, y), GT(x, y))))
+    query = Implication(ans(x, y), Conjunction((Q(x), P(x, y), GT(x, y))))
     with pytest.raises(UnsupportedSolverError):
         solver.solve_succ_query(query, cpl_program)
+
+
+def test_dalvi_suciu_comparison_in_existential():
+    """Q(x) ∧ ∃y (P(x, y) ∧ x > y)."""
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.9, 3, 2), (0.8, 3, 1), (0.5, 1, 0)}
+    )
+    cpl_program.add_probabilistic_choice_from_tuples(
+        Q, {(0.6, 1), (0.4, 2)}
+    )
+    query = Implication(ans(x), Conjunction((Q(x), P(x, y), GT(x, y))))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(0.6 * 0.5, 1)], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_deterministic_simplification():
