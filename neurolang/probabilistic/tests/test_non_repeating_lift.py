@@ -346,3 +346,24 @@ def test_equality_is_not_substituted_into_a_rebinding_quantifier():
         EQ(u, t), ExistentialPredicate(t, W(u, t))
     )))
     assert _eliminate_equalities(formula) == formula
+
+
+def test_rebound_variable_is_not_a_root_variable():
+    """In ∃v (R(v) ∧ ¬(S(v) ∧ ∃v T(v))), the inner v is another variable:
+    the events for different v share T, and are not independent. The
+    query is not planned as non-repeating."""
+    v = Symbol("v")
+    formula = ExistentialPredicate(v, Conjunction((
+        R(v), Negation(Conjunction((S(v), ExistentialPredicate(v, T(v)))))
+    )))
+    cpl_program = _program(
+        (), pfacts={
+            R: {(0.5, "a"), (0.5, "b")},
+            S: {(0.5, "a"), (0.5, "b")},
+            T: {(0.5, "a")},
+        }
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, formula
+    )
+    assert non_repeating_plan(formula, symbol_table) is None
