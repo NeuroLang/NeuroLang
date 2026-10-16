@@ -1987,3 +1987,35 @@ def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
     with nl.scope as e:
         res = nl.query((e.x, e.p), e.q(e.x, e.p))
     assert len(res) == 0
+
+
+@pytest.mark.parametrize("equality", ("(t == 't1')", "('t1' == t)"))
+@pytest.mark.parametrize("negated", (False, True))
+def test_equality_to_a_constant_within_an_existential(equality, negated):
+    """
+    An equality to a constant within ``exists(…)`` is not inlined.
+
+    The equality rewrites looked for equalities in the whole body but only
+    rewrote the top-level conjuncts, rewriting such a rule again and
+    again until the recursion limit.
+    """
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [(0.4, "s1"), (0.6, "s2")], name="C"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "s1", "t1"), (0.5, "s2", "t2")], name="M"
+    )
+    negation = "~" if negated else ""
+    res = nl.execute_datalog_program(
+        f"q(s, PROB) :- C(s), {negation}exists(t; M(s, t), {equality})\n"
+        "ans(s, p) :- q(s, p)"
+    )
+    probabilities = {
+        s: p for s, p in res.as_pandas_dataframe().itertuples(index=False)
+        if p > 0
+    }
+    expected = {"s1": 0.2, "s2": 0.6} if negated else {"s1": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for s, p in expected.items():
+        assert probabilities[s] == pytest.approx(p)
