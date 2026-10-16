@@ -352,11 +352,11 @@ The probabilistic model
    not depend.
 
 Lemma 1 (independence)
-   If two events :math:`E_1` and :math:`E_2` have no tuple of a
-   tuple-independent relation in common, and no probabilistic choice of
-   which they both have a tuple, they are independent: they are determined
-   by disjoint sets of independent random variables. Two formulas without
-   a common probabilistic relation satisfy this.
+   If no two events of a family :math:`E_1, \dots, E_n` have a tuple of a
+   tuple-independent relation in common, nor both have tuples of the same
+   probabilistic choice, the events are mutually independent: they are
+   determined by pairwise disjoint sets of independent random variables.
+   Formulas without a common probabilistic relation satisfy this.
 
 Lemma 2 (exclusivity)
    If :math:`E_1` implies that the tuple :math:`C(\bar a)` of a
@@ -390,7 +390,9 @@ Polynomial time
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
    relation with :math:`A` and its free variables are among those of
-   :math:`A`, Lemma 1 gives, for every :math:`\theta`,
+   :math:`A`, which the range restriction of the rules, checked when they
+   are declared (:func:`~neurolang.datalog.range_restriction.check_range_restriction`),
+   ensures, Lemma 1 gives, for every :math:`\theta`,
    :math:`P[(A \land \lnot N)\theta] = P[A\theta]\,(1 - P[N\theta])`, which
    ``Difference`` computes, a tuple of :math:`A` absent from the plan of
    :math:`N` having :math:`P[N\theta] = 0`. The query is thus liftable when
@@ -416,13 +418,17 @@ Free-variable shattering
 
    * :math:`t` is a separator variable of :math:`\psi`
      (``_is_separator_variable``): every probabilistic atom of
-     :math:`\psi` has :math:`t`, at the same position for all the atoms of
-     a relation. A separator variable cannot be a variable of a
+     :math:`\psi` has :math:`t`, and any two atoms of the same relation
+     have :math:`t` at a common position (``find_separator_variables``).
+     A tuple of :math:`\psi(a)` through one of them and a tuple of
+     :math:`\psi(b)` through the other have :math:`a` and :math:`b` at
+     that position, so they differ when :math:`a \neq b`. A separator
+     variable cannot be a variable of a
      probabilistic choice atom (``extract_probabilistic_root_variables``),
      so :math:`\psi` has no such atom, and the relations shared with
-     :math:`A` are tuple-independent (``_shares_a_choice_relation``). For
-     :math:`a \neq b`, the tuples of :math:`\psi(a)` and :math:`\psi(b)`
-     thus differ at that position, and by Lemma 1
+     :math:`A` are tuple-independent (``_shares_a_choice_relation``). By
+     Lemma 1, the events :math:`\psi(a)\theta` being mutually
+     independent,
      :math:`P[E\theta] = 1 - \prod_{a
      \neq x\theta} (1 - P[\psi(a)\theta])`, which the independent
      projection of the plan computes, ``support(L)`` giving the value of
@@ -449,9 +455,11 @@ Comparisons in an existential conjunct
    :math:`P[(A \land E)\theta] = P[A\theta]\,P[E\theta]` and
    :math:`P[(A \land \lnot E)\theta] = P[A\theta]\,(1 - P[E\theta])`, which
    the join and ``Difference`` compute. Olteanu and Huang
-   [Olteanu2009]_ compute existentials with inequalities on relations
-   that are not shared with the rest of the query; this rule uses the
-   inequalities to show that the shared relations have different tuples.
+   [Olteanu2009]_ compute conjunctive queries with inequalities without
+   self-joins on tuple-independent databases; this rule uses the
+   inequalities instead to show that the tuples of a relation occurring
+   in both :math:`A` and :math:`\psi` differ, which their result does not
+   cover.
 
 Dalvi–Suciu rules
    The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu
