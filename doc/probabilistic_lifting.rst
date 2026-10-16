@@ -193,9 +193,14 @@ Non-repeating queries with negation
 -----------------------------------
 
 A query is *non-repeating* when none of its probabilistic relations
-occurs twice in it. Fink and Olteanu show that a non-repeating query with
-negations can be computed in polynomial time if it is hierarchical, and is
-#P-hard otherwise [Fink2014]_. Before Dalvi–Suciu lifting,
+occurs twice in it. Fink and Olteanu show that a non-repeating query
+without union, built from joins, projections and negations, on
+tuple-independent relations, can be computed in polynomial time if it is
+hierarchical, and is #P-hard otherwise [Fink2014]_. The planner below
+also accepts disjunctions, comparisons, constants, deterministic relations
+and probabilistic choices, which this theorem does not cover: its plans
+are proved correct in `Correctness of the plans`_, and it is not claimed
+to plan every tractable query. Before Dalvi–Suciu lifting,
 :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
 plans the non-repeating queries with a negation in this way. The negations
 can be nested and can quantify variables, as in
@@ -241,10 +246,13 @@ only:
   :math:`1 - \prod_a (1 - P[\varphi(a)])`. When a probabilistic choice
   conjunct of the group has :math:`v`, the events are mutually exclusive
   instead, and the projection is disjoint, :math:`\sum_a P[\varphi(a)]`.
-  If no variable of the group occurs in all of its probabilistic atoms, the
-  query is not hierarchical, for instance
+  If no variable of the group occurs in all of its probabilistic atoms, as
+  in the #P-hard
   :math:`\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land T(y))`,
-  and it is left to Dalvi–Suciu lifting.
+  or if another condition fails, such as a comparison or a negation whose
+  variables are not bound by the rest of its conjunction, or a choice atom
+  with the variable that is not a conjunct of the group, no plan is given
+  and the query is left to Dalvi–Suciu lifting.
 
 Deterministic relations do not count as repetitions, and do not need to
 have the projected variable.
@@ -584,6 +592,56 @@ Comparisons in an existential conjunct
    [Olteanu2009]_ compute existentials with inequalities on relations
    that are not shared with the rest of the query; this rule uses the
    inequalities to show that the shared relations have different tuples.
+
+Non-repeating queries
+   :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
+   applies only if no probabilistic relation, fact or choice, occurs
+   twice in the query (``_is_non_repeating``). Its rewrites add no atom,
+   so this holds for every subformula planned, and by Lemma 1 two
+   subformulas without a common atom are independent. Then:
+
+   * *rewrites*: :math:`\exists v\, (v = e \land \varphi) \equiv
+     \varphi[e/v]` when no variable of :math:`e` is captured, which
+     ``_bound_variables`` checks after the query is standardised apart;
+     :math:`\lnot(A \lor B) \equiv \lnot A \land \lnot B`;
+     :math:`\exists v\, (A \lor B) \equiv \exists v\, A \lor \exists v\, B`;
+     and :math:`\exists \bar v\, (A \land B) \equiv \exists \bar v_A\, A
+     \land \exists \bar v_B\, B` when :math:`A` and :math:`B` share no
+     variable of :math:`\bar v` (``_connected_groups``). These hold in
+     every world;
+   * *conjunction*: the join of independent positive conjuncts is the
+     product of their probabilities; a comparison, deterministic, is a
+     selection; for a negation whose free variables are bound by the
+     positive conjuncts (checked in ``_conjunction``), ``Difference``
+     computes :math:`P[A\theta]\,(1 - P[N\theta])` as for an independent
+     negation above. Atoms with constants or repeated variables are selected on
+     named columns (``_atom_plan``);
+   * *disjunction*: its disjuncts have the same free variables (checked in
+     ``_disjunction``) and are independent, so
+     :math:`P[(A \lor B)\theta] = 1 - (1 - P[A\theta])(1 - P[B\theta])`;
+   * *projection*: the variable :math:`v` occurs in every probabilistic
+     atom of the group :math:`\varphi`, including those within its
+     negations and existentials (``_root_variable``); the query being
+     standardised apart, these atoms depend on :math:`v`. Each relation
+     occurring once, its atom has :math:`v` at some position :math:`i`, so
+     for :math:`a \neq b` the tuples of :math:`\varphi(a)\theta` and
+     :math:`\varphi(b)\theta` of that relation differ at :math:`i`. If no
+     probabilistic choice atom has :math:`v` (``_projection``), there is
+     no choice atom in :math:`\varphi`, and by Lemma 1 the events
+     :math:`\varphi(a)\theta` are mutually independent:
+     :math:`P[\exists v\, \varphi\theta] = 1 - \prod_a (1 -
+     P[\varphi(a)\theta])`. If a conjunct of :math:`\varphi` is an atom of
+     a choice :math:`C` with :math:`v`, :math:`\varphi(a)\theta` and
+     :math:`\varphi(b)\theta` imply different tuples of :math:`C`, and by
+     Lemma 2 they are mutually exclusive:
+     :math:`P[\exists v\, \varphi\theta] = \sum_a P[\varphi(a)\theta]`.
+     Otherwise no plan is given;
+   * deterministic relations are the same in every world, so they neither
+     count as repetitions nor need to have :math:`v`.
+
+   Each recursive call is on a smaller formula: a part of the formula, or
+   a group with one quantifier less, so the plan is built from the query
+   alone, in polynomial time in the data.
 
 Dalvi–Suciu rules
    The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu

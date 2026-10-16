@@ -42,6 +42,7 @@ from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
 )
+from ..logic.transformations import standardise_apart
 from ..relational_algebra import str2columnstr_constant
 from .expression_processing import is_comparison
 from .shattering import EQ
@@ -75,7 +76,7 @@ def non_repeating_plan(formula, symbol_table):
     ):
         return None
     return _NonRepeatingPlanner(symbol_table).plan(
-        _eliminate_equalities(_standardise_apart(formula))
+        _eliminate_equalities(standardise_apart(formula))
     )
 
 
@@ -297,25 +298,6 @@ def _add_existentials(formula, variables):
     free_variables = extract_logic_free_variables(formula)
     for variable in sorted(variables & free_variables, key=lambda v: v.name):
         formula = ExistentialPredicate(variable, formula)
-    return formula
-
-
-def _standardise_apart(formula):
-    """`formula` with each quantified variable renamed to a fresh one, so
-    that no variable is quantified twice or both free and quantified:
-    an atom then has a variable only if it depends on it."""
-    if isinstance(formula, ExistentialPredicate):
-        body = _standardise_apart(formula.body)
-        fresh = Symbol.fresh()
-        return ExistentialPredicate(
-            fresh, ReplaceExpressionWalker({formula.head: fresh}).walk(body)
-        )
-    if isinstance(formula, (Conjunction, Disjunction)):
-        return type(formula)(tuple(
-            _standardise_apart(f) for f in formula.formulas
-        ))
-    if isinstance(formula, Negation):
-        return Negation(_standardise_apart(formula.formula))
     return formula
 
 
