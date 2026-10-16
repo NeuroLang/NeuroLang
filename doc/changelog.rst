@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* The ``neurosynth`` engine has a ``cortical_mask(i, j, k)`` relation: the
+  voxels of the MNI template grid in the cortex, labelled by the
+  Harvard–Oxford cortical atlas (maximum probability, 25% threshold),
+  resampled by nearest neighbour, for instance to restrict
+  ``voxel_given_term(t, i, j, k, p)`` to the cortex.
+
 * Text embeddings work offline: SPECTER2, its tokenizer and its adapters
   are downloaded once into ``{data_dir}/<engine>/embeddings/models/``
   (by the first query or by

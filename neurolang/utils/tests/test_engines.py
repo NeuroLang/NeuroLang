@@ -202,10 +202,11 @@ def test_sparql_builtins(tmp_path):
 class TestNeurosynthEngineVocabulary:
     """Check the vocabulary predicates the neurosynth engine defines."""
 
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
     @patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
     @patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
     def test_term_relation_holds_distinct_terms(
-        self, mock_get_term, mock_get_peaks
+        self, mock_get_term, mock_get_peaks, mock_atlas
     ):
         """Check that ``term`` lists every TF-IDF term once."""
         import nibabel as nib
@@ -222,6 +223,9 @@ class TestNeurosynthEngineVocabulary:
             "tfidf": [0.5, 0.3, 0.7],
         })
         mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+        mock_atlas.return_value = nib.Nifti1Image(
+            np.zeros((4, 4, 4), dtype=np.int16), np.eye(4)
+        )
         nl = MagicMock()
 
         init_engine(nl, mask, data_dir="unused")
@@ -338,10 +342,14 @@ def small_neurosynth():
         "tfidf": [0.5, 0.3, 0.02],
     })
     mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+    cortex = np.zeros((4, 4, 4), dtype=np.int16)
+    cortex[1, 2, 3] = 1
     init = "neurolang.utils.engines.neurosynth.init"
     with patch(f"{init}.fetch_neurosynth_peak_data", return_value=peaks), \
             patch(f"{init}.get_ns_term_study_associations",
                   return_value=terms), \
+            patch(f"{init}.fetch_cortical_atlas",
+                  return_value=nib.Nifti1Image(cortex, np.eye(4))), \
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):

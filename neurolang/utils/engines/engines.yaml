@@ -128,6 +128,13 @@ engines:
         description: "Every voxel index (i, j, k) of the MNI template grid"
         arguments:
           - voxel
+      cortical_mask:
+        description: >-
+          The voxels (i, j, k) of the MNI template grid in the cortex
+          (Harvard–Oxford cortical atlas, maximum probability, 25%
+          threshold)
+        arguments:
+          - voxel
       term:
         description: "Every term of the TF-IDF vocabulary"
         arguments:

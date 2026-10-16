@@ -12,6 +12,9 @@ Registers the following predicates:
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
+* ``cortical_mask(i, j, k)`` — the voxels of the MNI template grid in the
+  cortex, labelled by the Harvard–Oxford cortical atlas (maximum
+  probability, 25% threshold, 2 mm).
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
 ``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
@@ -32,6 +35,7 @@ from neurolang.frontend.neurosynth_utils import (
     fetch_neurosynth_peak_data,
     get_ns_term_study_associations,
 )
+from neurolang.utils.nilearn_compat import nilearn_datasets, nilearn_image
 
 
 def init_engine(
@@ -77,7 +81,32 @@ def init_engine(
     # The indices of a grid are distinct: say so, sparing the queries that
     # use the 8.7M-row grid its deduplication.
     nl.symbol_table["voxel"].value.might_have_duplicates = False
+    nl.add_tuple_set(
+        _cortical_voxels(fetch_cortical_atlas(data_dir), mask),
+        name="cortical_mask",
+    )
+    nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
+
+
+def fetch_cortical_atlas(data_dir: Path) -> nib.Nifti1Image:
+    """The Harvard–Oxford cortical atlas, maximum probability at a 25%
+    threshold, on its 2 mm grid; 0 is outside the cortex."""
+    atlas = nilearn_datasets().fetch_atlas_harvard_oxford(
+        "cort-maxprob-thr25-2mm", data_dir=str(data_dir), verbose=0
+    )
+    return nilearn_image().load_img(atlas.maps)
+
+
+def _cortical_voxels(
+    atlas: nib.Nifti1Image, mask: nib.Nifti1Image
+) -> np.ndarray:
+    """The (i, j, k) indices of the voxels of the *mask* grid labelled
+    by the *atlas*, resampled to that grid by nearest neighbour."""
+    resampled = nilearn_image().resample_to_img(
+        atlas, mask, interpolation="nearest"
+    )
+    return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
 
 def _process_peaks(
     activations: pd.DataFrame, mni_mask: nib.Nifti1Image
