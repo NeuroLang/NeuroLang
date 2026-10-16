@@ -3,10 +3,7 @@ import operator
 from ...datalog import Fact
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, ExistentialPredicate, Negation, Union
-from ...relational_algebra import (
-    RelationalAlgebraOperation,
-    RelationalAlgebraSolver
-)
+from ...relational_algebra import Materialise, RelationalAlgebraSolver
 from ..cplogic.program import CPLogicProgram
 from ..deterministic_subqueries import replace_deterministic_negations
 
@@ -36,7 +33,8 @@ def _program():
 
 def test_deterministic_negation_replaced_by_unevaluated_relation():
     """The relation replacing the negation is a relational algebra
-    expression, evaluated with the rest of the plan, not a set.
+    expression marked to be materialised, evaluated with the rest of the
+    plan, not a set.
     """
     cpl = _program()
     formula = Conjunction((
@@ -53,7 +51,7 @@ def test_deterministic_negation_replaced_by_unevaluated_relation():
     assert new_formula == Conjunction((
         Selected(s), Mentions(s, t), symbol(s, t)
     ))
-    assert isinstance(relation, RelationalAlgebraOperation)
+    assert isinstance(relation, Materialise)
     result = RelationalAlgebraSolver().walk(relation).value
     assert set(result) == {(0, "pain")}
 
