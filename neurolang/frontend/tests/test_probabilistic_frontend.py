@@ -15,6 +15,7 @@ from ...exceptions import (
     UnsupportedQueryError,
     WrongArgumentsInPredicateError
 )
+from ...expressions import Symbol
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
@@ -2039,3 +2040,32 @@ def test_forward_inference_given_a_single_term_is_lifted():
         (0, 0, 0, "joy", 0.5),
         (3, 3, 3, "joy", 0.5),
     }
+
+
+@pytest.mark.parametrize("kind", ("facts", "choice"))
+def test_argument_types_of_probabilistic_relations(kind):
+    """The types of the arguments of a probabilistic relation are those of
+    its columns after the probability column."""
+    nl = NeurolangPDL()
+    tuples = [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")]
+    if kind == "facts":
+        nl.add_probabilistic_facts_from_tuples(tuples, name="R")
+    else:
+        nl.add_probabilistic_choice_from_tuples(tuples, name="R")
+    nl.execute_datalog_program("q(x, PROB) :- R(x, y), R(y, x)")
+    q = nl.program_ir.intensional_database()[Symbol("q")].formulas[0]
+    assert all(
+        arg.type is str
+        for atom in q.antecedent.formulas for arg in atom.args
+    ), q.antecedent
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    probabilities = {
+        row[0]: row[1] for row in result.itertuples(index=False)
+    }
+    if kind == "facts":
+        expected = {"a": 1 - (1 - 0.5 * 0.3) * (1 - 0.2), "b": 0.5 * 0.3}
+    else:
+        expected = {"a": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for value, p in expected.items():
+        assert probabilities[value] == pytest.approx(p)
