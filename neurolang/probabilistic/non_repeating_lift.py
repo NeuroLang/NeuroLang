@@ -149,24 +149,17 @@ class NonRepeatingPlanner(PatternWalker):
         """Plan of ∃v̄ φ: the groups of conjuncts of φ connected by the
         variables of v̄ are each projected on one of their variables
         occurring in all of their probabilistic atoms."""
-        variables = set()
-        body = existential
-        while isinstance(body, ExistentialPredicate):
-            variables.add(body.head)
-            body = body.body
+        variables, body = _quantified_body(existential)
         conjuncts = _conjuncts(body)
         outside = [
             f for f in conjuncts
             if extract_logic_free_variables(f).isdisjoint(variables)
         ]
-        planned = []
-        for group in _connected_groups(
+        planned = self._projected_groups(
             [f for f in conjuncts if f not in outside], variables
-        ):
-            plan = self._projected_group(group, variables)
-            if plan is None:
-                return None
-            planned.append(plan)
+        )
+        if planned is None:
+            return None
         if len(outside) == 0 and len(planned) == 1:
             return planned[0][0]
         return self._conjunction_plan(outside, planned)
@@ -199,26 +192,31 @@ class NonRepeatingPlanner(PatternWalker):
     def _conjunction_plan(self, formulas, planned=()):
         """Plan of the conjunction of `formulas` and of the plans
         `planned`, pairs of a plan and its columns."""
-        negations = [f for f in formulas if isinstance(f, Negation)]
-        comparisons = [f for f in formulas if is_comparison(f)]
-        positives = [
-            f for f in formulas
-            if not (isinstance(f, Negation) or is_comparison(f))
-        ]
-        plans = list(planned)
+        positives, comparisons, negations = _partition_conjuncts(formulas)
+        plans = self._positive_plans(positives, list(planned))
+        if not plans:
+            return None
+        plan = reduce(rap.NaturalJoin, (plan for plan, _ in plans))
+        columns = set().union(*(columns for _, columns in plans))
+        plan = _selected_by_comparisons(plan, columns, comparisons)
+        if plan is None:
+            return None
+        return self._without_negations(plan, columns, negations)
+
+    def _positive_plans(self, positives, plans):
+        """`plans` followed by the plans of the formulas `positives`, with
+        their columns, or None if one cannot be planned."""
         for formula in positives:
             plan = self.walk(formula)
             if plan is None:
                 return None
             plans.append((plan, extract_logic_free_variables(formula)))
-        if len(plans) == 0:
-            return None
-        plan = reduce(rap.NaturalJoin, (plan for plan, _ in plans))
-        columns = set().union(*(columns for _, columns in plans))
-        for comparison in comparisons:
-            if not extract_logic_free_variables(comparison) <= columns:
-                return None
-            plan = rap.Selection(plan, columns_comparison(comparison))
+        return plans
+
+    def _without_negations(self, plan, columns, negations):
+        """`plan` from which the plans of the negated formulas of
+        `negations` are removed, or None if one has a variable that is not
+        in `columns` or cannot be planned."""
         for negation in negations:
             negated = negation.formula
             if not extract_logic_free_variables(negated) <= columns:
@@ -228,6 +226,18 @@ class NonRepeatingPlanner(PatternWalker):
                 return None
             plan = rap.Difference(plan, negated_plan)
         return plan
+
+    def _projected_groups(self, formulas, variables):
+        """The projected plans, with their columns, of the groups of
+        `formulas` connected by `variables`, or None if one cannot be
+        planned."""
+        planned = []
+        for group in _connected_groups(formulas, variables):
+            plan = self._projected_group(group, variables)
+            if plan is None:
+                return None
+            planned.append(plan)
+        return planned
 
     def _projected_group(self, group, variables):
         group_variables = (
@@ -289,6 +299,38 @@ class NonRepeatingPlanner(PatternWalker):
             isinstance(atom.functor, Symbol) and
             not is_atom_a_deterministic_relation(atom, self.symbol_table)
         )
+
+
+def _quantified_body(existential):
+    """The variables quantified by the existentials heading
+    `existential`, and the formula they quantify."""
+    variables = set()
+    body = existential
+    while isinstance(body, ExistentialPredicate):
+        variables.add(body.head)
+        body = body.body
+    return variables, body
+
+
+def _partition_conjuncts(formulas):
+    """The positive conjuncts, comparisons and negations of `formulas`."""
+    negations = [f for f in formulas if isinstance(f, Negation)]
+    comparisons = [f for f in formulas if is_comparison(f)]
+    positives = [
+        f for f in formulas
+        if not (isinstance(f, Negation) or is_comparison(f))
+    ]
+    return positives, comparisons, negations
+
+
+def _selected_by_comparisons(plan, columns, comparisons):
+    """`plan` selected by `comparisons`, or None if one has a variable
+    that is not in `columns`."""
+    for comparison in comparisons:
+        if not extract_logic_free_variables(comparison) <= columns:
+            return None
+        plan = rap.Selection(plan, columns_comparison(comparison))
+    return plan
 
 
 def _conjuncts(formula):
