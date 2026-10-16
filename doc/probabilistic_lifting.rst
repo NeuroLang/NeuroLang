@@ -647,9 +647,15 @@ Non-repeating queries
    * deterministic relations are the same in every world, so they neither
      count as repetitions nor need to have :math:`v`.
 
-   Each recursive call is on a smaller formula: a part of the formula, or
-   a group with one quantifier less, so the plan is built from the query
-   alone, in polynomial time in the data.
+   Each recursive call is on a smaller formula: a part of a conjunction,
+   negation or disjunction, or a group with one quantifier less. Pushing
+   :math:`\exists \bar v` into a disjunction copies the quantifiers into
+   every disjunct, but the disjuncts are planned one by one, and each
+   :math:`\exists \bar v\, \varphi_i` is smaller than
+   :math:`\exists \bar v\, (\varphi_1 \lor \dots \lor \varphi_n)`. The
+   rewrites remove equalities and negations of disjunctions without adding
+   atoms. The plan is thus built from the query alone, and computed in
+   polynomial time in the data.
 
 Dalvi–Suciu rules
    The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu
