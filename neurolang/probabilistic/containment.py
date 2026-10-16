@@ -74,6 +74,12 @@ def is_contained_rule(q1, q2):
         dp.walk(f)
     dp.walk(q1)
     solution = chase.Chase(dp).build_chase_solution()
+    if len(frozen_head.args) == 0:
+        # A nullary fact is derived when its relation is not empty; its
+        # membership in the facts of the solution is not tested, as their
+        # type differs from that of the frozen head.
+        relation = solution.get(frozen_head.functor)
+        return relation is not None and not relation.value.is_empty()
     return frozen_head in solution.as_set()
 
 
