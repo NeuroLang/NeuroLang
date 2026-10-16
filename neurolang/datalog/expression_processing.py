@@ -280,13 +280,14 @@ def stratify(union, datalog_instance):
             to_process, seen
         )
         to_process = new_to_process
-        if len(new_seen) > 0:
-            strata.append(stratum)
-            seen |= new_seen
-        else:
-            strata.append(to_process)
+        if len(new_seen) == 0:
             stratifiable = False
-            break
+            stratum, to_process = stratify_obtain_recursive_stratum(
+                to_process, seen
+            )
+            new_seen = {r.consequent.functor for r in stratum}
+        strata.append(stratum)
+        seen |= new_seen
 
     return strata, stratifiable
 
@@ -302,6 +303,58 @@ def stratify_obtain_facts_stratum(to_process, seen):
         else:
             new_to_process.append(r)
     return stratum, new_to_process
+
+
+def stratify_obtain_recursive_stratum(to_process, seen):
+    """
+    The rules of a recursive component of *to_process* whose other body
+    predicates are in *seen*, as a stratum, and the rules left to
+    process. The rules depending on the component are left for later
+    strata. Without such a component, every rule of *to_process* is in
+    the stratum.
+    """
+    for component in _recursive_components(to_process):
+        rules = [r for r in to_process if r.consequent.functor in component]
+        if all(all_body_preds_in_set(r, seen | component) for r in rules):
+            rest = [r for r in to_process if r not in rules]
+            return rules, rest
+    return list(to_process), []
+
+
+def _recursive_components(rules):
+    """The sets of the predicates defined by *rules* which depend on
+    each other, by the order of their first rule."""
+    heads = {r.consequent.functor for r in rules}
+    depends_on = {head: set() for head in heads}
+    for r in rules:
+        depends_on[r.consequent.functor] |= _body_predicates(r) & heads
+    reachable = _reachable_predicates(depends_on)
+    for head in dict.fromkeys(r.consequent.functor for r in rules):
+        yield {
+            other for other in reachable[head] | {head}
+            if head in reachable[other] | {other}
+        }
+
+
+def _body_predicates(implication):
+    return {
+        atom.functor for atom in extract_logic_atoms(implication.antecedent)
+    }
+
+
+def _reachable_predicates(depends_on):
+    """The predicates each predicate of *depends_on* depends on, through
+    the dependencies of *depends_on*."""
+    reachable = {}
+    for head in depends_on:
+        pending, found = list(depends_on[head]), set()
+        while pending:
+            predicate = pending.pop()
+            if predicate not in found:
+                found.add(predicate)
+                pending += depends_on.get(predicate, ())
+        reachable[head] = found
+    return reachable
 
 
 def stratify_obtain_new_stratum(to_process, seen):

@@ -966,8 +966,10 @@ the right fusiform gyrus are evaluated.
 .. note::
 
     Magic-sets works when the constant appears on an **IDB** (rule-defined)
-    predicate, as it does here (``Bayes_factor`` is defined by a rule).  For
-    EDB queries the SIPS returns early and the optimisation does not apply.
+    predicate, as it does here (``Bayes_factor`` is defined by a rule).  A
+    constant on an **EDB** predicate does not restrict that predicate, but
+    its rows bind its variables in the IDB predicates after it, whose
+    magic sets they seed.
 
 
 Part 9: The Complete Program

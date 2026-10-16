@@ -235,6 +235,40 @@ def test_stratification():
     ]
 
 
+
+def test_stratification_after_mutual_recursion():
+    """
+    The rules of a mutually recursive component form a stratum, before
+    the rules depending on it, e.g. an aggregation, which a chase cannot
+    solve in the stratum of a recursion.
+    """
+    E = S_('E')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    U = S_('U')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Imp_(R(x), E(x, y) & S(y)),
+        Imp_(S(x), R(x)),
+        Imp_(S(x), E(x, x)),
+        Imp_(U(x), S(x) & R(x)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+    datalog.add_extensional_predicate_from_tuples(E, {(1, 1)})
+
+    strata, stratifyiable = stratify(code, datalog)
+
+    assert not stratifyiable
+    assert strata == [
+        [code.formulas[2]],
+        list(code.formulas[:2]),
+        list(code.formulas[3:]),
+    ]
+
 def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')

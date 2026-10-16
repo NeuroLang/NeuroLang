@@ -150,10 +150,12 @@ class SIPS(ABC):
     literals, to another literal.
     """
 
-    def __init__(self, datalog) -> None:
+    def __init__(self, datalog, seed_from_edb=True) -> None:
         self.datalog = datalog
         self.edb = edb_with_prob_symbols(datalog)
         self.prob_symbols = probabilistic_symbols(datalog)
+        self.seed_from_edb = seed_from_edb
+        self.seeding_edb_atoms = set()
 
     def _check_for_bound_aggregates(self, rule, adornment):
         """
@@ -274,6 +276,11 @@ class LeftToRightSIPS(SIPS):
         - it corresponds to a bound variable of H in a.
         - or it is a variable of a positive non probabilistic body literal
         left of P in the rule.
+        - or, if ``seed_from_edb``, it is a variable of a positive literal
+        of a deterministic relation of the extensional database with a
+        constant argument, left of P in the rule, as ``d`` in
+        ``task(t, "stroop", d) & p(d, x)``. That literal joins the
+        bodies of the magic rules of the literals right of it.
 
     Probabilistic literals are those of probabilistic facts and choices,
     of within-language probabilistic queries, and of the predicates
@@ -286,8 +293,8 @@ class LeftToRightSIPS(SIPS):
        Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 305.
     """
 
-    def __init__(self, datalog) -> None:
-        super().__init__(datalog)
+    def __init__(self, datalog, seed_from_edb=True) -> None:
+        super().__init__(datalog, seed_from_edb)
 
     def _create_arc(
         self,
@@ -302,53 +309,91 @@ class LeftToRightSIPS(SIPS):
         This is achieved by updating the list of tail_predicates with each new
         adorned predicate.
         """
-        # 1. unwrap negative predicates
-        is_neg = isinstance(predicate, Negation)
-        if is_neg:
-            pred = predicate.formula
-            if not hasattr(pred, "functor"):
-                raise NegationInMagicSetsRewriteError(
-                    "MagicSets can only handle negations on single predicates."
-                    f"Negation {predicate} cannot be handled"
-                )
-        else:
-            pred = predicate
-        # 2. Constants, constraints and predicates in the EDB are already bound
+        pred, is_neg = _unwrap_negation(predicate)
+        # Constants, constraints and predicates in the EDB are already bound
         # and should not be adorned.
-        if (
-            isinstance(pred.functor, Constant) or
-            pred.functor.name in self.edb or
-            (
-                hasattr(self.datalog, 'categorized_constraints') and
-                pred.functor in self.datalog.categorized_constraints
-            )
-        ):
+        if self._is_bound_literal(pred):
+            if not is_neg and self._seeds_magic_sets(pred):
+                self._seed(pred, bound_variables, tail_predicates)
             return None
 
-        # 3. Adorn the predicate
         p = self._adorn_predicate(pred, predicate_number, bound_variables)
         tail = tuple(tail_predicates)
 
-        # 4. Update the tail_predicates and list of bound_variables with the
+        # Update the tail_predicates and list of bound_variables with the
         # variables of this predicate. We only add bound variables for
         # positive, non probabilistic predicates
         if (
             unadorned_predicate_symbol(pred.functor) not in self.prob_symbols
             and not is_neg
         ):
-            bound_variables.update(
-                arg for arg in predicate.args if isinstance(arg, Symbol)
-                and arg in [a for t in tail for a in t.args]
-            )
+            _bind_shared_variables(p, tail, bound_variables)
             tail_predicates.append(p)
 
         if is_neg:
             p = Negation(p)
         return tail, p
 
+    def _seed(self, predicate, bound_variables, tail_predicates):
+        """Bind the variables of *predicate*, a literal of the extensional
+        database with a constant, and add it to the tails of the arcs of
+        the literals right of it."""
+        self.seeding_edb_atoms.add(predicate)
+        bound_variables.update(
+            arg for arg in predicate.args if isinstance(arg, Symbol)
+        )
+        tail_predicates.append(predicate)
+
+    def _is_bound_literal(self, predicate):
+        """Whether *predicate* is a constant function, a predicate of the
+        extensional database or a constraint, which are not adorned."""
+        return (
+            isinstance(predicate.functor, Constant) or
+            predicate.functor.name in self.edb or
+            (
+                hasattr(self.datalog, 'categorized_constraints') and
+                predicate.functor in self.datalog.categorized_constraints
+            )
+        )
+
+    def _seeds_magic_sets(self, predicate):
+        """
+        Whether *predicate*, a positive literal, binds its variables: it
+        is of a deterministic relation of the extensional database, not a
+        function, with a constant argument.
+        """
+        return (
+            self.seed_from_edb and
+            isinstance(predicate.functor, Symbol) and
+            predicate.functor in self.datalog.extensional_database() and
+            predicate.functor not in self.prob_symbols and
+            any(isinstance(arg, Constant) for arg in predicate.args)
+        )
+
+
+def _bind_shared_variables(predicate, tail, bound_variables):
+    """Bind the variables of *predicate* which are in the *tail*."""
+    tail_variables = {arg for t in tail for arg in t.args}
+    bound_variables.update(
+        arg for arg in predicate.args
+        if isinstance(arg, Symbol) and arg in tail_variables
+    )
+
+
+def _unwrap_negation(predicate):
+    """The predicate of the literal *predicate* and whether it is negated."""
+    if not isinstance(predicate, Negation):
+        return predicate, False
+    if not hasattr(predicate.formula, "functor"):
+        raise NegationInMagicSetsRewriteError(
+            "MagicSets can only handle negations on single predicates."
+            f"Negation {predicate} cannot be handled"
+        )
+    return predicate.formula, True
+
 
 def magic_rewrite(
-    query: Expression, datalog: DatalogProgram
+    query: Expression, datalog: DatalogProgram, seed_from_edb: bool = True
 ) -> Tuple[Symbol, Union]:
     """
     Implementation of the Magic Sets method of optimization for datalog
@@ -362,6 +407,10 @@ def magic_rewrite(
         the head symbol of the query rule in the program
     datalog : DatalogProgram
         a processed datalog program to optimize
+    seed_from_edb : bool
+        whether a literal of the extensional database with a constant
+        binds the variables of the literals right of it, see
+        :class:`LeftToRightSIPS`
 
     Returns
     -------
@@ -369,12 +418,12 @@ def magic_rewrite(
         the rewritten query symbol and program
     """
     # 1. Create a SIPS and use it to adorn the code
-    sips = LeftToRightSIPS(datalog)
+    sips = LeftToRightSIPS(datalog, seed_from_edb)
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, sips
     )
     # 2. Check that there is a constant in the code
-    if len(constant_predicates) == 0:
+    if len(constant_predicates) == 0 and len(sips.seeding_edb_atoms) == 0:
         # No constants present in the code, magic sets is not useful
         raise NoConstantPredicateFoundError(
             "No predicate with constant argument found."

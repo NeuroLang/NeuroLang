@@ -682,9 +682,22 @@ class NeurolangPDL(QueryBuilderDatalog):
         program is left unchanged. Return the rewritten query and the
         magic rules it needs.
         """
+        try:
+            return self._magic_rewrite_query_seeded(query, True)
+        except (
+            InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
+        ):
+            return self._magic_rewrite_query_seeded(query, False)
+
+    def _magic_rewrite_query_seeded(self, query, seed_from_edb):
+        """
+        Rewrite ``query`` with magic sets, the literals of the extensional
+        database with a constant binding variables if ``seed_from_edb``
+        (see :class:`~neurolang.datalog.magic_sets.LeftToRightSIPS`).
+        """
         with self.scope:
             goal, magic_rules = magic_rewrite(
-                query.consequent, self.program_ir
+                query.consequent, self.program_ir, seed_from_edb
             )
             self.program_ir.walk(magic_rules)
             magic_query = self.program_ir.symbol_table[goal].formulas[0]

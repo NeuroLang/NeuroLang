@@ -84,11 +84,14 @@ Each query text, e.g. ``'math'`` and ``'reading'`` in
 voxel_given_sim('reading', i, j, k, r)``, gets its own conditional
 probabilities.  A constant written in a rule works as well, e.g.
 ``math_study(s) :- close('math', s)`` used in the condition
-``// (math_study(s) & selected_study(s))``.  A relation of query texts
-must bind ``q`` in the body of ``close`` itself, e.g.
-``close(q, s) :- topic(q) & study(s) & ...``: a predicate joined with the
-probabilistic rule, as in ``ans(q, i, j, k, p) :- topic(q) &
-voxel_given_sim(q, i, j, k, p)``, does not pass its values to ``close``.
+``// (math_study(s) & selected_study(s))``.  The query texts can also
+come from a stored relation with a constant joined in the query, e.g.
+``ans(i, j, k, p) :- topic("maths", q) & voxel_given_sim(q, i, j, k, p)``:
+magic sets pass the texts of ``topic`` with ``"maths"`` to ``close``, see
+below. A relation without a constant, as ``topic(q)`` in
+``ans(q, i, j, k, p) :- topic(q) & voxel_given_sim(q, i, j, k, p)``,
+does not pass its values to ``close``: it must bind ``q`` in the body of
+``close`` itself, e.g. ``close(q, s) :- topic(q) & study(s) & ...``.
 
 SPECTER2 similarities fall in a narrow range: for this query they average
 0.71 with a standard deviation of 0.03 over NeuroSynth, and 0.78 keeps
@@ -130,30 +133,34 @@ resolution in millimetres.
 Query texts from the Cognitive Atlas
 ------------------------------------
 
-The query text can come from a relation, e.g. the description of a task
-of the Cognitive Atlas in ``cognitive_task(task_id, name, description)``.
-Joining that relation with ``voxel_given_sim`` in the query does not
-bind ``q`` in ``cutoff`` and ``close``::
+The query text can be the description of a task of the Cognitive Atlas,
+from ``cognitive_task(task_id, name, description)``, joined with
+``voxel_given_sim`` in the query: the descriptions of the tasks named in
+the query are passed by magic sets to ``cutoff`` and ``close``::
 
-    ans(i, j, k, p) :- cognitive_task(_, "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)
-
-fails with an :class:`~neurolang.exceptions.UnboundVariablesError`
-(``In cutoff: the variables sim, q appear only in ...``). A relation of
-the query texts, ``task_query``, binds ``q`` in the bodies of ``cutoff``
-and ``close``::
-
-    task_query(d) :- cognitive_task(_, "color-word stroop task", d)
-    cutoff(q, percentile(sim, 95)) :- task_query(q) & study(s) & (sim == query_similarity(q, s))
-    close(q, s) :- task_query(q) & study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
+    cutoff(q, percentile(sim, 95)) :- study(s) & (sim == query_similarity(q, s))
+    close(q, s) :- study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
     near_peak(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) < 3)
     voxel_given_sim(q, i, j, k, PROB) :- (near_peak(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
     ans(i, j, k, p) :- cognitive_task(_, "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)
 
 The map is that of the studies among the top 5% closest to the
-description of the task. Each description in ``task_query`` is embedded
-as a query text, and the similarities to the 16 most recent ones are
-cached: list the tasks of interest in ``task_query``, e.g. with one rule
-per task, rather than every task of the Cognitive Atlas.
+description of the task. The constant ``"color-word stroop task"`` is
+what lets magic sets pass the description: with ``cognitive_task(_, _,
+d)``, every description would be a query text, and the query fails with
+an :class:`~neurolang.exceptions.UnboundVariablesError` (``In cutoff:
+the variables sim, q appear only in ...``). To map several tasks, name
+them in a relation of query texts which binds ``q`` in the bodies of
+``cutoff`` and ``close``::
+
+    task_query(d) :- cognitive_task(_, "color-word stroop task", d)
+    task_query(d) :- cognitive_task(_, "stop signal task", d)
+    cutoff(q, percentile(sim, 95)) :- task_query(q) & study(s) & (sim == query_similarity(q, s))
+    close(q, s) :- task_query(q) & study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
+
+Each description is embedded as a query text, and the similarities to
+the 16 most recent ones are cached: list the tasks of interest rather
+than every task of the Cognitive Atlas.
 
 The term-based counterpart replaces the similarity by the TF-IDF of a term.
 Rather than keeping the studies whose TF-IDF passes a threshold
