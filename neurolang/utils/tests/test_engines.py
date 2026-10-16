@@ -24,10 +24,11 @@ class TestNeurosynthEngineStudyIdConsistency:
     dtype.  It is expected to **fail** until the inconsistency is fixed.
     """
 
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
     @patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
     @patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
     def test_study_id_consistency(
-        self, mock_get_term, mock_get_peaks, tmp_path
+        self, mock_get_term, mock_get_peaks, mock_atlas, tmp_path
     ):
         """All study_id columns should share the same integer dtype."""
         from neurolang.utils.engines.neurosynth.init import init_engine
@@ -56,6 +57,9 @@ class TestNeurosynthEngineStudyIdConsistency:
         mask = nib.Nifti1Image(
             np.ones((10, 10, 10), dtype=np.uint8),
             np.eye(4),
+        )
+        mock_atlas.return_value = nib.Nifti1Image(
+            np.zeros((10, 10, 10), dtype=np.int16), np.eye(4)
         )
 
         # ---- Mock NeurolangPDL to capture add_tuple_set calls ---------------
@@ -88,6 +92,42 @@ class TestNeurosynthEngineStudyIdConsistency:
             assert np.issubdtype(dtype, np.integer), (
                 f"{name}.study_id has non-integer dtype: {dtype}"
             )
+
+
+@patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
+@patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
+@patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
+def test_neurosynth_cortical_mask(mock_get_term, mock_get_peaks, mock_atlas):
+    """``cortical_mask(i, j, k)`` holds the voxels of the engine's grid
+    labelled by the cortical atlas, resampled to that grid: here an atlas
+    shifted by two voxels along i, and larger than the grid."""
+    import nibabel as nib
+
+    from neurolang.utils.engines.neurosynth.init import init_engine
+
+    mock_get_peaks.return_value = pd.DataFrame({
+        "id": [1], "x": [0.0], "y": [0.0], "z": [0.0], "space": ["MNI"],
+    })
+    mock_get_term.return_value = pd.DataFrame({
+        "id": [StudyID(1)], "term": ["memory"], "tfidf": [0.5],
+    })
+    labels = np.zeros((14, 10, 10), dtype=np.int16)
+    labels[3, 4, 5] = 7
+    labels[5, 0, 9] = 2
+    labels[13, 0, 0] = 1  # outside the grid of the engine
+    affine = np.eye(4)
+    affine[0, 3] = -2
+    mock_atlas.return_value = nib.Nifti1Image(labels, affine)
+    mask = nib.Nifti1Image(np.ones((10, 10, 10), dtype=np.uint8), np.eye(4))
+
+    nl = MagicMock()
+    init_engine(nl, mask, data_dir=Path("unused"))
+
+    sets = {
+        call.kwargs["name"]: call.args[0]
+        for call in nl.add_tuple_set.call_args_list
+    }
+    assert {tuple(v) for v in sets["cortical_mask"]} == {(1, 4, 5), (3, 0, 9)}
 
 
 GRAPH = """
