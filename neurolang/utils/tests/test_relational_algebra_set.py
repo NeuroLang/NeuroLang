@@ -822,6 +822,36 @@ def test_named_ra_set_from_other(ra_module):
     assert fourth.is_dee()
 
 
+class _Unordered:
+    """A hashable value without an order, as the SDD nodes of weighted
+    model counting."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __eq__(self, other):
+        return isinstance(other, _Unordered) and self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __lt__(self, other):
+        raise TypeError("not ordered")
+
+
+def test_named_ra_union_of_unordered_values():
+    """A union needs no order on the values: the provenance column of
+    weighted model counting holds SDD nodes."""
+    a, b, c = (_Unordered(n) for n in "abc")
+    first = pandas.NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), [(1, a), (2, b)]
+    )
+    second = pandas.NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), [(2, b), (3, c)]
+    )
+    assert set(first | second) == {(1, a), (2, b), (3, c)}
+
+
 def test_named_ra_union(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(7, 8), (9, 2)]

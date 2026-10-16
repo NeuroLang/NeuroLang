@@ -1190,10 +1190,12 @@ class NamedRelationalAlgebraFrozenSet(
 
         col_types = self._extract_unified_column_types(other)
 
-        new_container = pd.merge(
-            left=self._container.astype(col_types),
-            right=other._container.astype(col_types),
-            how="outer",
+        new_container = pd.concat(
+            [
+                self._container.astype(col_types),
+                other._container.astype(col_types),
+            ],
+            ignore_index=True,
         )
 
         self._keep_column_types(new_container)
