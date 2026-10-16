@@ -584,8 +584,9 @@ def _save_nifti(app, block, request: SaveRequest) -> None:
     )
 
 
-# The default threshold of the viewer: every nonzero voxel is shown.
-VIEW_THRESHOLD = 1e-6
+# The default threshold of the viewer: the 95th percentile of the nonzero
+# values, so the top 5% of the voxels are shown.
+VIEW_THRESHOLD = "95%"
 
 VIEW_USAGE = (
     ".view [PATH.nii[.gz]] [--threshold T|P%] [--cmap NAME] "
@@ -604,10 +605,10 @@ MNI152 T1 in three slices (left hemisphere on the left): click or drag to
 move the cursor, whose MNI coordinates and value it tells. Its controls
 change, live, what these options start with:
   --threshold T|P%      hide the voxels below T, or below the P-th
-                        percentile of the nonzero values (default: show
-                        every nonzero voxel)
+                        percentile of the nonzero values (default: 95%,
+                        the top 5% of the voxels)
   --cmap NAME           the colormap, of matplotlib or nilearn (default:
-                        RdBu_r)
+                        plasma)
   --symmetric           a colormap symmetric around 0, hiding |v| < T
   --one-sided           a colormap from the threshold to the maximum
 Without either, the colormap is symmetric when the image has negative

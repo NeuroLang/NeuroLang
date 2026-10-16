@@ -27,8 +27,8 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-# The colormap of nilearn's viewer, used when none is asked for.
-DEFAULT_CMAP = "RdBu_r"
+# The colormap used when none is asked for.
+DEFAULT_CMAP = "plasma"
 
 # The colormaps the page offers, from matplotlib and nilearn.
 COLORMAPS = (
