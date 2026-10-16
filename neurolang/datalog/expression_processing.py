@@ -40,7 +40,13 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
+from ..logic.transformations import (
+    CollapseConjunctions,
+    ExtractBoundVariables,
+    GuaranteeConjunction,
+    LogicExpressionWalker,
+    RemoveTrivialOperations,
+)
 from ..logic.unification import most_general_unifier
 from ..utils import OrderedSet
 from .exceptions import AggregatedVariableReplacedByConstantError
@@ -1055,6 +1061,69 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
+    pass
+
+
+class UnifyExistentialVariableEqualitiesMixin(PatternWalker):
+    """
+    Replace an existentially quantified variable `v` equal to a term `e`,
+    by a conjunct `v = e` of the body of its quantifiers, by `e`, as
+    ∃v (v = e ∧ φ) ≡ φ[e/v]. Equalities within nested formulas, which
+    `UnifyVariableEqualitiesMixin` leaves, are so eliminated. The
+    replacement is not done if a variable of `e`, or `v`, is quantified
+    within `φ`, where it would be captured.
+    """
+    @add_match(
+        ExistentialPredicate,
+        lambda existential: (
+            _existential_variable_equality(existential) is not None
+        )
+    )
+    def unify_existential_variable_equality(self, existential):
+        variables = []
+        body = existential
+        while isinstance(body, ExistentialPredicate):
+            variables.append(body.head)
+            body = body.body
+        equality, variable, term = _existential_variable_equality(existential)
+        replacer = ReplaceExpressionWalker({variable: term})
+        body = Conjunction(tuple(
+            replacer.walk(formula) for formula in body.formulas
+            if formula is not equality
+        ))
+        for head in reversed(variables):
+            if head != variable:
+                body = ExistentialPredicate(head, body)
+        return self.walk(body)
+
+
+def _existential_variable_equality(existential):
+    """The first conjunct `v = e` of the body of the quantifiers of
+    `existential`, with `v` one of their variables, that can be
+    eliminated, as `(equality, v, e)`, or None."""
+    variables = set()
+    body = existential
+    while isinstance(body, ExistentialPredicate):
+        variables.add(body.head)
+        body = body.body
+    if not isinstance(body, Conjunction) or len(body.formulas) < 2:
+        return None
+    bound = set(ExtractBoundVariables().walk(body))
+    for formula in body.formulas:
+        if not is_var_equality_to_var_or_const(formula):
+            continue
+        for variable, term in (formula.args, formula.args[::-1]):
+            if (
+                variable in variables and variable != term and
+                not ({variable, term} & bound)
+            ):
+                return formula, variable, term
+    return None
+
+
+class UnifyExistentialVariableEqualities(
+    UnifyExistentialVariableEqualitiesMixin, LogicExpressionWalker
+):
     pass
 
 

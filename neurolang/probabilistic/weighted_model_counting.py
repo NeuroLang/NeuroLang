@@ -410,6 +410,27 @@ class SDDWMCSemiRingSolver(
 
         return r
 
+    def _semiring_monus(self, left, right):
+        return FunctionApplication(
+            Constant(self._internal_monus),
+            (left, right)
+        )
+
+    @staticmethod
+    def _internal_monus(left, right):
+        """Formula of `left` and not `right`, `right` being 0 when the
+        tuple is absent from the subtracted relation."""
+        if not isinstance(right, sdd.SddNode):
+            return left
+        left.ref()
+        right.ref()
+        r = left & ~right
+        r.ref()
+        left.deref()
+        right.deref()
+
+        return r
+
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
         relation_symbol = deterministic_set.relation
