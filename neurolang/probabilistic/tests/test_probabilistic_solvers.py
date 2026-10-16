@@ -1841,8 +1841,8 @@ def test_choice_asserted_outside_and_inside_negation_is_absorbed():
 
 def test_choice_with_closed_negated_deterministic_query_is_not_lifted():
     """A negated deterministic query without free variables has no
-    conjunct binding them to materialise it with, and is left to the
-    other solvers.
+    conjunct binding them to replace it by a deterministic relation, and
+    is left to the other solvers.
     """
     S = Symbol("S")
     Any_ = Symbol("Any")

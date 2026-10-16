@@ -121,7 +121,8 @@ Deterministic negations
    deterministic relations or comparisons is the same relation in every
    possible world. With :math:`G(\bar x)` the deterministic conjuncts of
    the query whose variables are among :math:`\bar x`, it is replaced by a
-   fresh deterministic relation computed with relational algebra,
+   fresh deterministic relation defined by a relational algebra
+   expression,
 
    .. math::
 
@@ -133,7 +134,9 @@ Deterministic negations
    :math:`\lnot\exists t_1\,(T(t_1) \land M(s, t_1) \land t_1 \neq t)`.
    The negation is left unchanged when no non-empty :math:`G` binds all of
    :math:`\bar x`, for instance when :math:`N` is closed
-   (:mod:`neurolang.probabilistic.deterministic_subqueries`).
+   (:mod:`neurolang.probabilistic.deterministic_subqueries`). The
+   expression is not evaluated while planning: it is a subexpression of
+   the plan, evaluated with it.
 
 Probabilistic choices
    Two atoms of the same probabilistic choice relation are true together
@@ -441,15 +444,16 @@ Deterministic negations
    The atoms of :math:`N` are deterministic relations or comparisons
    (``_is_deterministic``, the extensional database of a
    ``CPLogicProgram`` excluding its probabilistic relations), so
-   :math:`N`, and :math:`D = G \land \lnot N` computed by relational
-   algebra, are the same in every world. :math:`G` being asserted by the
+   :math:`N`, and the relation of :math:`D = G \land \lnot N`, defined by
+   its relational algebra expression, are the same in every world. :math:`G` being asserted by the
    conjunction, :math:`G \land \lnot N \equiv G \land D` in every world.
-   :math:`G` binds every free variable of :math:`N` (``_can_materialise``),
+   :math:`G` binds every free variable of :math:`N` (``_can_replace``),
    so :math:`D` is finite. :math:`G` is conjoined within the existentials
    of :math:`N`, whose variables are not free in :math:`G`:
    :math:`\lnot\exists t\, N \equiv \lnot\exists t\, (G \land N)` given
-   :math:`G`, by absorption. :math:`D` is computed once, in time
-   polynomial in the deterministic relations.
+   :math:`G`, by absorption. :math:`D` is computed when the plan is, as
+   one of its subexpressions, in time polynomial in the deterministic
+   relations.
 
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
