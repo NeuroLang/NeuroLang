@@ -118,6 +118,37 @@ Absorption in negations
    is a contradiction and is left unchanged
    (:class:`~neurolang.logic.transformations.AbsorbAssertedConjunctsInNegations`).
 
+Contradicting disjuncts
+   A disjunct with a negated conjunct :math:`\lnot A`, where :math:`A` is
+   one of its conjuncts or is asserted by the conjunction of which the
+   disjunction is a conjunct, is removed:
+
+   .. math::
+
+      A \land (B \lor (C \land \lnot A)) \equiv A \land B, \qquad
+      B \lor (A \land C \land \lnot A) \equiv B,
+
+   also through the existentials of the disjunct which do not quantify a
+   variable of :math:`A`. A disjunction all of whose disjuncts are
+   contradictions is left unchanged. The translation of a negated
+   existential to rules gives such disjuncts:
+   :math:`\lnot\exists y\,(B \land A)`, with :math:`y` not free in
+   :math:`A`, is :math:`\lnot\exists y\, B \lor \lnot A`, so that
+
+   .. math::
+
+      A \land \lnot\exists y\,(B \land A) \equiv
+      A \land (\lnot\exists y\, B \lor \lnot A) \equiv
+      A \land \lnot\exists y\, B,
+
+   which is the absorption in negations, after the translation. For
+   instance, with a choice :math:`C`, the query
+   :math:`T(s, t) \land C(s) \land \lnot\exists t_1\,
+   (T(s, t_1) \land t_1 \neq t \land C(s))` is rewritten without the
+   choice in the negation, and is lifted by the projection on the choice
+   (:class:`~neurolang.logic.transformations.RemoveContradictingDisjunctsMixin`,
+   in :class:`~neurolang.logic.transformations.AbsorbAssertedConjuncts`).
+
 Deterministic negations
    A negated conjunct :math:`\lnot N(\bar x)` whose atoms are all
    deterministic relations or comparisons is the same relation in every
@@ -602,6 +633,22 @@ Absorption in negations
    (``_without_asserted_conjuncts``), so that its variables are the same
    inside and outside. A negation whose conjuncts would all be removed is
    left unchanged. The rewriting is done once, before lifting.
+
+Contradicting disjuncts
+   A disjunct :math:`\exists \bar y\,(C \land \lnot A)` is false in
+   every world and for every :math:`\theta` where :math:`A\theta` holds,
+   provided no variable of :math:`\bar y` is free in :math:`A`, so that
+   :math:`A` has the same variables inside the disjunct and outside it
+   (``_is_contradiction``). If :math:`A` is a conjunct of the disjunct,
+   the disjunct is false in every world. If :math:`A` is asserted by the
+   conjunction :math:`A \land (B \lor D)`, then where :math:`A\theta`
+   holds :math:`(B \lor D)\theta \equiv B\theta`, and where it does not
+   both sides are false. Removing a false disjunct preserves the
+   probability of every answer. A disjunction left with a single disjunct
+   is replaced by it, and nested conjunctions are flattened, both
+   equivalences. Every rewriting removes a disjunct or a nested
+   conjunction, so it terminates. The rewriting is done once, before
+   lifting, together with absorption in negations.
 
 Deterministic negations
    The atoms of :math:`N` are deterministic relations or comparisons

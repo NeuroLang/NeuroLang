@@ -51,7 +51,7 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
-    AbsorbAssertedConjunctsInNegations,
+    AbsorbAssertedConjuncts,
     ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
@@ -129,7 +129,7 @@ __all__ = [
 ]
 
 
-AACN = AbsorbAssertedConjunctsInNegations()
+AACN = AbsorbAssertedConjuncts()
 GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
 MQU = MoveQuantifiersUp()

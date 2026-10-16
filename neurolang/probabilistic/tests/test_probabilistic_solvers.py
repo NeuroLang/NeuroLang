@@ -1868,6 +1868,7 @@ def test_choice_within_negated_existential_as_a_contradicting_disjunct():
     )
     assert testing.eq_prov_relations(result, expected)
 
+
 @pytest.mark.parametrize("r_facts, expected", (
     (((3, 3),), [(0.5, 1), (0.5, 2)]),
     (((3, 3), (3, 4)), []),

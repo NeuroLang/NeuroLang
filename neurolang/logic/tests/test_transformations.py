@@ -230,7 +230,6 @@ def test_absorb_asserted_conjuncts_within_quantifiers():
     )
 
 
-
 def test_absorb_disjuncts_contradicting_asserted_conjuncts():
     """A ∧ (B ∨ (D ∧ ¬A)) ≡ A ∧ B, the remaining disjunct being
     collapsed into the conjunction."""
@@ -301,6 +300,7 @@ def test_absorb_asserted_conjuncts_still_absorbs_in_negations():
     exp = Conjunction((P(X), Negation(Conjunction((P(X), Q(X))))))
 
     assert AAC.walk(exp) == Conjunction((P(X), Negation(Q(X))))
+
 
 def test_standardise_apart():
     """Each quantified variable is renamed to a fresh one, the free
