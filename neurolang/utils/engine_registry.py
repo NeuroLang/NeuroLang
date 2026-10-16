@@ -78,10 +78,12 @@ Usage
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
+
 import numpy as np
 import yaml
 
@@ -103,10 +105,85 @@ def _builtin_startswith(prefix: str, s: str) -> bool:
     return s.startswith(prefix)
 
 
+def _builtin_lcase(s) -> str:
+    """Return *s* in lower case, as SPARQL's ``LCASE``."""
+    return str(s).lower()
+
+
+def _builtin_ucase(s) -> str:
+    """Return *s* in upper case, as SPARQL's ``UCASE``."""
+    return str(s).upper()
+
+
+def _builtin_strlen(s) -> int:
+    """Return the number of characters of *s*, as SPARQL's ``STRLEN``."""
+    return len(str(s))
+
+
+def _builtin_strstarts(s, prefix) -> bool:
+    """Return True if *s* starts with *prefix*, as SPARQL's ``STRSTARTS``."""
+    return str(s).startswith(str(prefix))
+
+
+def _builtin_strends(s, suffix) -> bool:
+    """Return True if *s* ends with *suffix*, as SPARQL's ``STRENDS``."""
+    return str(s).endswith(str(suffix))
+
+
+def _builtin_str_contains(s, part) -> bool:
+    """Return True if *part* is in *s*, as SPARQL's ``CONTAINS``."""
+    return str(part) in str(s)
+
+
+def _builtin_regex(s, pattern) -> bool:
+    """
+    Return True if *pattern* matches in *s*, as SPARQL's ``REGEX``.
+
+    Flags are written in the pattern, e.g. ``(?i)`` for SPARQL's ``"i"``.
+    """
+    return re.search(str(pattern), str(s)) is not None
+
+
+def _builtin_round(x) -> float:
+    """Return *x* rounded to an integer, halves away from 0, as ``ROUND``."""
+    x = float(x)
+    return float(np.sign(x) * np.floor(abs(x) + 0.5))
+
+
+def _builtin_int(x) -> int:
+    """Return *x* as an integer, as SPARQL's ``xsd:integer`` cast."""
+    return int(float(x))
+
+
+def _builtin_float(x) -> float:
+    """Return *x* as a float, as SPARQL's ``xsd:double`` cast."""
+    return float(x)
+
+
+def _builtin_str(x) -> str:
+    """Return *x* as a string, as SPARQL's ``STR``."""
+    return str(x)
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
     "log": np.log,
     "startswith": _builtin_startswith,
+    # String and numeric functions of SPARQL, e.g. for RDF engines.
+    "lcase": _builtin_lcase,
+    "ucase": _builtin_ucase,
+    "strlen": _builtin_strlen,
+    "strstarts": _builtin_strstarts,
+    "strends": _builtin_strends,
+    "str_contains": _builtin_str_contains,
+    "regex": _builtin_regex,
+    "round": _builtin_round,
+    "abs": abs,
+    "floor": lambda x: float(np.floor(float(x))),
+    "ceil": lambda x: float(np.ceil(float(x))),
+    "int": _builtin_int,
+    "float": _builtin_float,
+    "str": _builtin_str,
 }
 
 
@@ -1047,13 +1124,45 @@ def _phase_probabilistic_choices(nl, cfg):
         )
 
 
-def _phase_ontologies(nl, cfg, data_dir, engine_name):
-    for onto_cfg in cfg.get("ontologies", []):
-        url = onto_cfg["url"]
+_ONTOLOGY_OPTIONS = ("format", "individuals", "names")
+
+
+def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
+    """
+    Return the local path of the ontology file *source*.
+
+    A URL is downloaded (and cached) to ``{data_dir}/{engine_name}/``; a
+    local path is relative to *base_dir* (default: the built-in
+    ``engines/`` directory).
+    """
+    if source.startswith(("http://", "https://")):
         onto_dir = str(data_dir / engine_name)
-        onto_file = Path(url).name
-        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
-        nl.load_ontology(result[0])
+        result = _fetch_files(
+            onto_dir, [(Path(source).name, source, {})], verbose=1
+        )
+        return result[0]
+    return str((base_dir or _ENGINES_DIR) / Path(source).expanduser())
+
+
+def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
+    """
+    Load the engine's ``ontologies``.
+
+    Each entry gives a file with ``url`` (a URL or a local path), or
+    several, loaded together, with ``urls``. ``format``, ``individuals``
+    and ``names`` are passed to
+    :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
+    """
+    for onto_cfg in cfg.get("ontologies", []):
+        sources = onto_cfg.get("urls") or [onto_cfg["url"]]
+        paths = [
+            _ontology_file(source, engine_name, data_dir, base_dir)
+            for source in sources
+        ]
+        options = {
+            key: onto_cfg[key] for key in _ONTOLOGY_OPTIONS if key in onto_cfg
+        }
+        nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
 
 
 def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
@@ -1204,6 +1313,6 @@ def build_engine(
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
-    _phase_ontologies(nl, cfg, data_dir, name)
+    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
 
     return nl

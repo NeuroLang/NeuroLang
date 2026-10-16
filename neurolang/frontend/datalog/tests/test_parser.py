@@ -174,6 +174,64 @@ def test_aggregation():
     assert res == expected_result
 
 
+def test_iri_constants():
+    res = parser(
+        "q(x) :- `http://ld.company.org/prod-vocab/name`(x, "
+        "<http://ld.company.org/prod-instances/prod-cat-Sensor>)"
+    )
+    name = Symbol("http://ld.company.org/prod-vocab/name")
+    x = Symbol("x")
+    sensor = Constant("http://ld.company.org/prod-instances/prod-cat-Sensor")
+    assert res == Union((Implication(Symbol("q")(x), Conjunction((
+        name(x, sensor),
+    ))),))
+
+
+def test_iri_with_parentheses_and_percent_is_not_a_comment():
+    res = parser(
+        "q(x) :- p(x, <http://dbpedia.org/resource/Python_(language)%20>)"
+        " % a comment"
+    )
+    x = Symbol("x")
+    iri = Constant("http://dbpedia.org/resource/Python_(language)%20")
+    assert res == Union((Implication(Symbol("q")(x), Conjunction((
+        Symbol("p")(x, iri),
+    ))),))
+
+
+@pytest.mark.parametrize("text, value", [
+    ("'EUR-2'", "EUR-2"),
+    ("'lh_G_front.inf'", "lh_G_front.inf"),
+    ("\"it's\"", "it's"),
+    ("'say \"hi\"'", 'say "hi"'),
+    ("'a, b (c) % d'", "a, b (c) % d"),
+])
+def test_strings_hold_any_character_but_their_quote(text, value):
+    x = Symbol("x")
+    res = parser(f"q(x) :- p(x, {text})")
+    assert res == Union((Implication(Symbol("q")(x), Conjunction((
+        Symbol("p")(x, Constant(value)),
+    ))),))
+
+
+def test_prefixed_predicate_names():
+    x, n = Symbol("x"), Symbol("n")
+    res = parser("q(n) :- pv:name(x, n), rdfs:label (x, n)")
+    assert res == Union((Implication(Symbol("q")(n), Conjunction((
+        Symbol("pv:name")(x, n), Symbol("rdfs:label")(x, n),
+    ))),))
+
+
+def test_prefixed_names_leave_lambdas_and_rules_alone():
+    x, y = Symbol("x"), Symbol("y")
+    res = parser("q(x):-p(x)")
+    assert res == Union((Implication(Symbol("q")(x), Conjunction((
+        Symbol("p")(x),
+    ))),))
+    res = parser("f(x) := lambda y:y")
+    assert isinstance(res.formulas[0], Statement)
+
+
 def test_uri():
     from rdflib import RDFS
 

@@ -186,3 +186,13 @@ def test_is_leq_informative_callable_ellipsis():
     # A concrete Callable is NOT less informative than Callable[..., T]
     assert not is_leq_informative(Callable[[int], bool], Callable[..., bool])
     assert not is_leq_informative(Callable[[int, str], bool], Callable[..., bool])
+
+
+def test_callable_type_of_postponed_annotations():
+    from . import _postponed_annotations as postponed
+
+    assert typing_callable_from_annotated_function(postponed.starts) == \
+        Callable[[str, str], bool]
+    assert typing_callable_from_annotated_function(
+        postponed.unresolvable
+    ) == Callable[[Unknown], Unknown]

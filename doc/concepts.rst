@@ -100,8 +100,9 @@ NeuroLang treats neuroimaging data as relational data:
   ``(voxel_id, intensity)`` or ``(x, y, z, intensity)`` tuples.
 * **Atlas labels** (e.g., Destrieux, AAL) become ``(label, region_id)``
   relations.
-* **Ontologies** (OWL/RDF via rdflib) are loaded as triple stores and
-  queried with Datalog rules.
+* **Ontologies** (OWL/RDF via rdflib) give constraints, such as
+  subclasses, that rewrite the queries; their triples can also be loaded
+  as facts (see :ref:`neurolang-rdf-data`).
 * **Coordinate activations** (NeuroSynth) become ``(pmid, x, y, z)``
   probabilistic relations.
 
@@ -109,6 +110,47 @@ The :class:`~neurolang.frontend.deterministic_frontend.NeurolangDL` and
 :class:`~neurolang.frontend.NeurolangPDL` frontends expose helper methods
 such as :meth:`add_tuple_set` and :meth:`add_atlas_set` to load these
 data sources.
+
+.. _neurolang-rdf-data:
+
+RDF Data and Ontologies
+-----------------------
+
+:meth:`~neurolang.frontend.NeurolangPDL.load_ontology` reads OWL/RDF files
+(RDF/XML, Turtle, N-Triples…, guessed from the file extension or given
+with ``format``). The axioms of the ontology become constraints:
+``Manager rdfs:subClassOf Employee`` makes ``Employee(x)`` hold for every
+``Manager``, by rewriting the queries.
+
+With ``individuals=True`` every triple is also a fact, so that a knowledge
+graph is queried as a SPARQL endpoint would be::
+
+    nl.load_ontology(
+        ["prod-vocab.ttl", "prod-inst.ttl"],
+        individuals=True, names="prefixed",
+    )
+
+* a triple ``s p o`` is the fact ``p(s, o)`` and ``s rdf:type C`` is also
+  ``C(s)``;
+* with ``names="prefixed"``, classes and properties are named after the
+  prefixes the files declare (``pv:name``, ``rdfs:label``), or their full
+  IRI when no prefix is declared;
+* IRIs are the strings of their full IRI, written ``<http://...>`` in
+  Datalog; literals are their value (numbers, strings without their
+  language tag, dates as ISO strings).
+
+The SPARQL query::
+
+    SELECT ?name WHERE {
+      ?c rdfs:subClassOf* pv:Employee .
+      ?e a ?c ; pv:areaOfExpertise prodi:prod-cat-Sensor ; pv:name ?name .
+    }
+
+reads in Datalog::
+
+    ans(name) :- pv:Employee(e),
+        pv:areaOfExpertise(e, <http://ld.company.org/prod-instances/prod-cat-Sensor>),
+        pv:name(e, name)
 
 
 Declarative Engine Registry & CLI
@@ -314,10 +356,19 @@ builds an engine, it runs up to ten phases, in this order:
            description: "Uniform choice over studies"
 
 #. **Ontologies** (``ontologies``) — loads OWL/RDF ontologies from URLs
-   or local paths::
+   or local paths, one file per ``url`` or several, loaded together, with
+   ``urls``.  ``format`` is the rdflib format (guessed from the file
+   extension by default); with ``individuals: true`` every triple is also
+   loaded as a fact, and ``names: prefixed`` names classes and properties
+   ``prefix:local`` (see :ref:`neurolang-rdf-data`)::
 
        ontologies:
          - url: "https://example.com/ontology.owl"
+         - urls:
+             - "https://example.com/vocab.ttl"
+             - "data/instances.ttl"
+           individuals: true
+           names: prefixed
 
 All phases are optional — include only what your engine needs.
 If ``use_base_symbols`` and the declarative YAML fields (``atlases``,

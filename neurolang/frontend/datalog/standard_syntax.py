@@ -1,6 +1,7 @@
 import functools
 import json
 import os
+import re
 from typing import Tuple
 
 from lark import Lark, Transformer
@@ -149,13 +150,7 @@ cmd_args : cmd_arg ("," cmd_arg)*
          | keyword_item
 
 keyword_item : identifier "=" pos_item
-pos_item : arithmetic_operation | python_string
-
-python_string : PYTHON_STRING
-PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
-              | SINGLE_QUOTE NO_SING_QUOTE_STR SINGLE_QUOTE
-NO_DBL_QUOTE_STR : /[^"]*/
-NO_SING_QUOTE_STR : /[^']*/
+pos_item : arithmetic_operation
 
 ?function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
                      | id_application
@@ -187,7 +182,7 @@ fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text | tuple_literal
+?literal : number | text | iri | tuple_literal
 
 tuple_literal : "(" argument ("," argument)+ ")"
 
@@ -196,15 +191,19 @@ identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
 IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\\/#%._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
-CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*(?:\\:[a-zA-Z_][a-zA-Z0-9_-]*(?=\\s*\\())?\\b/
 
 exists : EXISTS_WORD | EXISTS_SYMBOL
 EXISTS_WORD : "exists" | "EXISTS"
 EXISTS_SYMBOL : "\u2203"
 
 text : TEXT
-TEXT : DOUBLE_QUOTE /[a-zA-Z0-9 ]*/ DOUBLE_QUOTE
-     | SINGLE_QUOTE /[a-zA-Z0-9 ]*/ SINGLE_QUOTE
+TEXT : DOUBLE_QUOTE /[^"\\n]*/ DOUBLE_QUOTE
+     | SINGLE_QUOTE /[^'\\n]*/ SINGLE_QUOTE
+
+// An IRI, as in SPARQL and Turtle: <http://example.org/a>
+iri : IRI
+IRI : /<[a-zA-Z][a-zA-Z0-9+.-]*:[^<>"{}|^`\\\\\\s]*>/
 DOUBLE_QUOTE : "\\""
 SINGLE_QUOTE : "'"
 
@@ -1039,10 +1038,7 @@ class DatalogTransformer(Transformer):
         return tuple(ast)
 
     def pos_item(self, ast):
-        ast = ast[0]
-        if not isinstance(ast, Expression):
-            return Constant((ast.children[0]).value.replace('"', ''))
-        return ast
+        return ast[0]
 
     def lambda_application(self, ast):
         if not isinstance(ast[0], Expression):
@@ -1204,7 +1200,10 @@ class DatalogTransformer(Transformer):
         return Symbol((ast[0]).value)
 
     def text(self, ast):
-        return Constant((ast[0].replace("'", "")).replace('"', ''))
+        return Constant(ast[0][1:-1])
+
+    def iri(self, ast):
+        return Constant(ast[0][1:-1])
 
     def tuple_literal(self, ast):
         # Filter out Lark terminal tokens (commas, parens) which are str/Token
@@ -1238,17 +1237,32 @@ class DatalogTransformer(Transformer):
         return ast
 
 
+_IRI = re.compile(r'<[a-zA-Z][a-zA-Z0-9+.-]*:[^<>"{}|^`\\\s]*>')
+
+
 def strip_comment(line):
-    """Return *line* without its ``%`` comment, if any (not in strings)."""
+    """
+    Return *line* without its ``%`` comment, if any.
+
+    A ``%`` within a string or an IRI does not start a comment.
+    """
     in_single = False
     in_double = False
-    for i, c in enumerate(line):
+    i = 0
+    while i < len(line):
+        c = line[i]
         if c == "'" and not in_double:
             in_single = not in_single
         elif c == '"' and not in_single:
             in_double = not in_double
+        elif c == '<' and not in_single and not in_double:
+            iri = _IRI.match(line, i)
+            if iri:
+                i = iri.end()
+                continue
         elif c == '%' and not in_single and not in_double:
             return line[:i]
+        i += 1
     return line
 
 

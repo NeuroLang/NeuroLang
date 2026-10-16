@@ -1,7 +1,13 @@
+import datetime
+import decimal
+import re
 import warnings
+from collections import defaultdict
+from pathlib import Path
 
 import rdflib
-from rdflib import BNode, Literal
+from rdflib import BNode, Literal, URIRef
+from rdflib.util import guess_format
 from rdflib.extras.infixowl import EnumeratedClass
 from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
@@ -17,20 +23,47 @@ from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
 
 
+NAMING_STYLES = ("local", "prefixed")
+_PREFIXED_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*:[A-Za-z_][A-Za-z0-9_-]*\Z")
+
+
 class OntologyParser:
     """
     This class is in charge of generating the rules that can be derived
     from an ontology, both at entity and constraint levels.
+
+    *paths* are the files (or file objects) of the ontology, read in
+    *load_format*, an rdflib format or a list of them, guessed from the
+    file extensions when None (RDF/XML by default). *names* is how
+    classes and properties are named: ``local`` (``Dean``,
+    ``rdf-schema:label``) or ``prefixed`` (``pv:Employee``, from the
+    prefixes the files declare, else the full IRI).
+
+    With *individuals*, every triple is also a fact (see
+    :meth:`parse_individuals`) and the annotations of classes are facts
+    about the classes rather than constraints on their instances.
     """
 
-    def __init__(self, paths, connector_symbol=None, load_format="xml"):
+    def __init__(
+        self, paths, connector_symbol=None, load_format=None,
+        individuals=False, names="local",
+    ):
+        if names not in NAMING_STYLES:
+            raise ValueError(
+                f"names must be one of {', '.join(NAMING_STYLES)}"
+            )
         self.structural_knowledge_namespace = (
             config.get_structural_knowledge_namespace()
         )
-        if isinstance(paths, list):
-            self._load_ontology(paths, load_format)
-        else:
-            self._load_ontology([paths], [load_format])
+        self.individuals = individuals
+        self.names = names
+        if not isinstance(paths, (list, tuple)):
+            paths = [paths]
+        if load_format is None or isinstance(load_format, str):
+            load_format = [
+                load_format or _guess_format(path) for path in paths
+            ]
+        self._load_ontology(paths, load_format)
 
         if connector_symbol is None:
             self.connector_symbol = Symbol.fresh()
@@ -45,6 +78,8 @@ class OntologyParser:
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
         for counter, path in enumerate(paths):
+            if isinstance(path, Path):
+                path = str(path)
             rdfGraph.parse(path, format=load_format[counter])
 
         self.rdfGraph = rdfGraph
@@ -94,6 +129,11 @@ class OntologyParser:
 
                 elif prop == EnumeratedClass:
                     self._parseEnumeratedClass(entity, prop, value)
+
+                elif self.individuals:
+                    # Annotations of the class: facts about the class,
+                    # which parse_individuals reads with all the triples.
+                    continue
 
                 else:
                     if not isinstance(value, BNode):
@@ -286,6 +326,9 @@ class OntologyParser:
         if isinstance(obj, Literal):
             return str(obj)
 
+        if self.names == "prefixed":
+            return self._prefixed_name(obj)
+
         obj_split = obj.split("#")
         if len(obj_split) == 2:
             name = obj_split[1]
@@ -307,6 +350,51 @@ class OntologyParser:
             res = obj_split[-1]
 
         return res
+
+    def _prefixed_name(self, iri):
+        """
+        Return ``prefix:local`` for *iri*, from the declared prefixes.
+
+        The full IRI is returned when no prefix is declared for it, or
+        when the local name is not a name.
+        """
+        try:
+            prefix, _, local = self.rdfGraph.namespace_manager.compute_qname(
+                iri, generate=False
+            )
+        except Exception:
+            return str(iri)
+        name = f"{prefix}:{local}"
+        if prefix and _PREFIXED_NAME.match(name):
+            return name
+        return str(iri)
+
+    def parse_individuals(self):
+        """
+        Return the facts of all the triples of the ontology, by predicate.
+
+        A triple ``s p o`` is the fact ``p(s, o)``, the predicate being
+        named after the property (see *names*); ``s rdf:type C`` is also
+        the fact ``C(s)``. IRIs are the strings of their full IRI, blank
+        nodes ``_:id`` and literals their Python value: numbers, strings
+        (without their language tag), booleans, and dates and times as
+        ISO strings. A column holding values of several types holds their
+        strings, and one of integers and floats holds floats.
+
+        Returns
+        -------
+        A dictionary from predicate names to sets of tuples.
+        """
+        facts = defaultdict(set)
+        for subject, prop, value in self.rdfGraph:
+            facts[self._parse_name(prop)].add(
+                (_term_value(subject), _term_value(value))
+            )
+            if prop == RDF.type and isinstance(value, URIRef):
+                facts[self._parse_name(value)].add((_term_value(subject),))
+        return {
+            name: _uniform_columns(rows) for name, rows in facts.items()
+        }
 
     def _parse_restriction(self, entity, restriction_dic, support_prop=None):
         """Method for the identification of the type of restriction.
@@ -705,3 +793,57 @@ class OntologyParser:
                 self.entity_rules[exp_functor] = cons_set
             else:
                 self.entity_rules[exp_functor] = set([exp])
+
+
+def _guess_format(path) -> str:
+    """Return the rdflib format of the file at *path*, RDF/XML by default."""
+    if isinstance(path, (str, Path)):
+        return guess_format(str(path)) or "xml"
+    return "xml"
+
+
+def _term_value(term):
+    """Return the Python value of an RDF *term* (see parse_individuals)."""
+    if isinstance(term, BNode):
+        return f"_:{term}"
+    if isinstance(term, Literal):
+        value = term.toPython()
+        if isinstance(value, Literal):
+            return str(value)
+        if isinstance(value, decimal.Decimal):
+            return float(value)
+        if isinstance(value, (datetime.date, datetime.time)):
+            return value.isoformat()
+        if isinstance(value, (bool, int, float, str)):
+            return value
+        return str(value)
+    return str(term)
+
+
+def _column_type(values):
+    """Return the type the values of a column are converted to."""
+    types = {type(value) for value in values}
+    if len(types) == 1:
+        return None
+    if types <= {int, float}:
+        return float
+    return str
+
+
+def _uniform_columns(rows) -> set:
+    """Return *rows* with the values of each column of a single type."""
+    rows = list(rows)
+    if not rows:
+        return set()
+    converters = [
+        _column_type([row[i] for row in rows]) for i in range(len(rows[0]))
+    ]
+    if not any(converters):
+        return set(rows)
+    return {
+        tuple(
+            convert(value) if convert else value
+            for convert, value in zip(converters, row)
+        )
+        for row in rows
+    }
