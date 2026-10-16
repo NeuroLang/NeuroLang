@@ -359,9 +359,14 @@ def _connected_groups(formulas, variables):
 
 
 def _is_non_repeating(formula, symbol_table):
+    """Whether no probabilistic relation occurs twice in `formula`, the
+    occurrences of an atom being counted, not the distinct atoms: R(x)
+    and ¬R(x) are two occurrences of R."""
     counts = Counter(
-        atom.functor for atom in extract_logic_atoms(formula)
-        if isinstance(atom.functor, Symbol) and
-        not is_atom_a_deterministic_relation(atom, symbol_table)
+        expression.functor
+        for _, expression in expression_iterator(formula)
+        if isinstance(expression, FunctionApplication) and
+        isinstance(expression.functor, Symbol) and
+        not is_atom_a_deterministic_relation(expression, symbol_table)
     )
     return all(count == 1 for count in counts.values())
