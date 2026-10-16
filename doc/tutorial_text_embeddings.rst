@@ -99,6 +99,53 @@ Each query text is embedded once and the similarities of all the studies
 to it are cached (the 16 most recent query texts), so each call is a
 lookup.
 
+Activations within a radius of the peaks
+----------------------------------------
+
+A study rarely reports a peak exactly at a voxel: the activation of a
+study can be taken as the voxels within a radius of its peaks, with the
+``EUCLIDEAN`` distance bound (section 4.8 of :doc:`tutorial_squall`
+describes it in SQUALL; the pairs within the distance are computed once,
+when the rule is defined). Combined with
+the percentile cutoff above, this gives the probability that a voxel is
+within 2 voxels of a peak of a study, given that the study is among the
+top 1% closest to the query text::
+
+    cutoff(q, percentile(sim, 99)) :- study(s) & (sim == query_similarity(q, s))
+    close(q, s) :- study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
+    near_peak(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) < 2)
+    voxel_given_sim(q, i, j, k, PROB) :- (near_peak(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+    ans(i, j, k, p) :- voxel_given_sim('math', i, j, k, p)
+
+The radius is in voxels of the engine's grid, so 2 is 2 times its
+resolution in millimetres.
+
+The term-based counterpart replaces the similarity by the TF-IDF of a term.
+Rather than keeping the studies whose TF-IDF passes a threshold
+:math:`\tau`, Iovene et al. [iovene2021]_ make the association of a term
+to a study a probabilistic fact, whose probability is a soft threshold of
+the TF-IDF :math:`x`,
+
+.. math::
+
+   \omega(x; \alpha, \tau) = \sigma(\alpha (x - \tau)) =
+   \frac{1}{1 + e^{-\alpha (x - \tau)}},
+
+which tends to the hard threshold :math:`\mathbf{1}[x > \tau]` as
+:math:`\alpha` grows. They report :math:`\alpha = 300`, with
+:math:`\tau = 0.1` in their experiments; the ``mentions`` relation of the
+engine uses a hard threshold of 0.03 instead. A query-based probabilistic
+fact, ``head :: probability :- body``, defines it::
+
+    term_in_study(s, t) :: 1 / (1 + exp(-300 * (w - 0.1))) :- term_in_study_tfidf(s, t, w)
+    near_peak(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) < 2)
+    voxel_given_term(t, i, j, k, PROB) :- (near_peak(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+    ans(i, j, k, p) :- voxel_given_term('pain', i, j, k, p)
+
+On NeuroSynth, this query takes about 9 s: 435 of the 516 studies with a
+TF-IDF for 'pain' are above :math:`\tau = 0.1`, and the probabilities
+reach 0.025.
+
 
 Forward inference from free text
 --------------------------------
@@ -146,6 +193,11 @@ overlap of the top 5% voxels 0.84).
 Other engines can use the same machinery on their own documents, from
 PubMed or from a table of texts, through the ``text_embeddings`` section of
 ``engines.yaml``.
+
+.. [iovene2021] Iovene, V., Zanitti, G. E., & Wassermann, D. (2021).
+   Complex Coordinate-Based Meta-Analysis with Probabilistic Programming.
+   *Proceedings of the AAAI Conference on Artificial Intelligence*, 35(1),
+   223–231.
 
 .. [singh2023] Singh, A., D'Arcy, M., Cohan, A., Downey, D., & Feldman, S.
    (2023). SciRepEval: A Multi-Format Benchmark for Scientific Document
