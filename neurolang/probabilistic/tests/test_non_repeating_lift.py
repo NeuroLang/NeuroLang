@@ -367,3 +367,13 @@ def test_rebound_variable_is_not_a_root_variable():
         cpl_program, formula
     )
     assert non_repeating_plan(formula, symbol_table) is None
+
+
+def test_atom_and_its_negation_are_a_repetition():
+    """R(x) ∧ ¬R(x) has R twice, although as the same atom: it is a
+    contradiction, not the conjunction of independent events."""
+    rules = (Implication(Z(x), Conjunction((R(x), Negation(R(x))))),)
+    result = _solve(rules, Implication(ans(x), Z(x)), pfacts={R: R_FACTS})
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([], ("_p_", "x"))
+    )
