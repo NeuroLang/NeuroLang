@@ -576,13 +576,17 @@ class SDDWMCSemiRingSolver(
             tagged_ras_set = NamedRelationalAlgebraFrozenSet(
                 new_columns, tagged_df
             )
-        return ProvenanceAlgebraSet(
+        # A choice is a single random variable: its other occurrences use
+        # the same Boolean variables.
+        prov_set = ProvenanceAlgebraSet(
             NumberColumns(
                 Constant[AbstractSet](tagged_ras_set, verify_type=False),
                 tuple(str2columnstr_constant(c) for c in new_columns)
             ),
             int2columnint_constant(prob_column)
         )
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
 
     def generate_sdd_expression(
         self, adjusted_probability, tag_expressions, previous_expression

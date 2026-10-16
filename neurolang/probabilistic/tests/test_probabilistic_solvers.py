@@ -1219,9 +1219,7 @@ def test_simple_negation(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1308,9 +1306,7 @@ def test_negation_of_deterministic_relation_sharing_choice_variable(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1335,9 +1331,7 @@ def test_program_with_probchoice_selfjoin(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
