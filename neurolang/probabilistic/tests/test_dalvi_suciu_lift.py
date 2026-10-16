@@ -17,6 +17,7 @@ from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     Difference,
+    Materialise,
     NameColumns,
     Projection,
     str2columnstr_constant
@@ -883,3 +884,18 @@ def test_inclusion_exclusion_on_equivalent_formulas(rules):
     assert testing.eq_prov_relations(
         result, testing.make_prov_set([(expected,)], ("_p_",))
     )
+
+
+def test_symbols_of_relations_to_materialise_are_kept_in_plans():
+    """Like constant sets, relations marked to be materialised are left
+    behind their symbols, rather than inlined in the plan.
+    """
+    relation = Materialise(Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x",), [(1,)])
+    ))
+    symbol = Symbol.fresh()
+    replace = dalvi_suciu_lift.ReplaceAllSymbolsButConstantSets(
+        {symbol: relation}
+    )
+
+    assert replace.walk(symbol) == symbol

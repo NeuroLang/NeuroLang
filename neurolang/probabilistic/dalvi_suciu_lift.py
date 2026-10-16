@@ -51,6 +51,7 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
+    AbsorbAssertedConjunctsInNegations,
     ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
@@ -68,6 +69,7 @@ from ..logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
@@ -76,6 +78,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
+from .deterministic_subqueries import replace_deterministic_negations
 from .expression_processing import (
     STRICT_COMPARISONS,
     is_builtin,
@@ -83,9 +86,11 @@ from .expression_processing import (
     lift_optimization_for_choice_predicates
 )
 from .probabilistic_ra_utils import (
+    DeterministicFactSet,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
+    classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
     is_atom_a_probabilistic_choice_relation
@@ -98,6 +103,7 @@ from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query
 )
+from .non_repeating_lift import columns_comparison, non_repeating_plan
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import NE, shatter_constants
 from .transforms import (
@@ -120,6 +126,7 @@ __all__ = [
 ]
 
 
+AACN = AbsorbAssertedConjunctsInNegations()
 GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
 MQU = MoveQuantifiersUp()
@@ -145,7 +152,7 @@ class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
         res = expression
         if expression in self.symbol_table:
             value = self.symbol_table[expression]
-            if not isinstance(value, Constant[AbstractSet]):
+            if not isinstance(value, (Constant[AbstractSet], Materialise)):
                 res = value
         return res
 
@@ -198,13 +205,23 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     with log_performance(LOG, "Translation to extensional plan"):
         # The lifting rules identify variables by their names, which
         # standardising apart makes unambiguous.
-        flat_query_body = standardise_apart(flat_query_body)
+        flat_query_body, deterministic_relations = \
+            replace_deterministic_negations(
+                AACN.walk(standardise_apart(flat_query_body)), cpl_program
+            )
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = \
-            _prepare_and_optimise_query(flat_query, cpl_program)
-        ra_query = lift_with_dependent_negations(
-            shattered_query, symbol_table
+        non_repeating = _non_repeating_query_plan(
+            flat_query, cpl_program, deterministic_relations
         )
+        if non_repeating is not None:
+            ra_query, symbol_table, shattered_query = non_repeating
+        else:
+            shattered_query, symbol_table = _prepare_and_optimise_query(
+                flat_query, cpl_program, deterministic_relations
+            )
+            ra_query = lift_with_dependent_negations(
+                shattered_query, symbol_table
+            )
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
@@ -235,7 +252,44 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     return prob_set_result
 
 
-def _prepare_and_optimise_query(flat_query, cpl_program):
+def _non_repeating_query_plan(
+    flat_query, cpl_program, deterministic_relations=None
+):
+    """Plan of a non-repeating query with negations, see
+    `non_repeating_plan`, with its symbol table and the query planned,
+    or None if the query is not such a hierarchical query.
+    """
+    antecedent = flat_query.antecedent
+    if isinstance(antecedent, Conjunction):
+        antecedent = lift_optimization_for_choice_predicates(
+            antecedent, cpl_program
+        )
+    unified_query = UnifyVariableEqualities().walk(
+        Implication(flat_query.consequent, antecedent)
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, unified_query.antecedent
+    )
+    classify_and_wrap_symbols(
+        deterministic_relations or {}, unified_query.antecedent,
+        symbol_table, lambda s, _: DeterministicFactSet(s)
+    )
+    head_variables = {
+        arg for arg in unified_query.consequent.args
+        if isinstance(arg, Symbol)
+    }
+    plan = non_repeating_plan(
+        add_existentials_except(unified_query.antecedent, head_variables),
+        symbol_table
+    )
+    if plan is None:
+        return None
+    return plan, symbol_table, unified_query
+
+
+def _prepare_and_optimise_query(
+    flat_query, cpl_program, deterministic_relations=None
+):
     flat_query_body = convert_to_dnf_existential_ucq(flat_query.antecedent)
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
@@ -245,6 +299,10 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     unified_query = UnifyVariableEqualities().walk(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
+    )
+    classify_and_wrap_symbols(
+        deterministic_relations or {}, unified_query.antecedent,
+        symbol_table, lambda s, _: DeterministicFactSet(s)
     )
     shattered_query_body = shatter_constants(
         convert_rule_to_ucq(unified_query),
@@ -666,7 +724,7 @@ def _separated_existential_plan(
         return None
     plan = rap.NaturalJoin(plans[0], rap.Support(remainder_plan))
     for comparison in comparisons:
-        plan = rap.Selection(plan, _columns_comparison(comparison))
+        plan = rap.Selection(plan, columns_comparison(comparison))
     return rap.IndependentProjection(
         plan,
         tuple(str2columnstr_constant(v.name) for v in remainder_variables)
@@ -725,13 +783,6 @@ def _terms_different_from(t, comparisons):
             elif right == t:
                 terms.add(left)
     return terms
-
-
-def _columns_comparison(comparison):
-    return comparison.functor(*(
-        str2columnstr_constant(arg.name) if isinstance(arg, Symbol) else arg
-        for arg in comparison.args
-    ))
 
 
 def _lift_pure(rules, symbol_table):
