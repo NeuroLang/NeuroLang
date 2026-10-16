@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* ``percentile(v, q)`` aggregation: the ``q``-th percentile of a column,
+  ignoring NaN values, to keep for instance the top ``p``% of a column
+  with ``v >= percentile(v, 100 - p)``.  The built-in aggregations
+  (``count``, ``max``, ``mean``, ``sum``, ``std``, ``percentile``) are now
+  also available in :class:`~neurolang.frontend.NeurolangDL`.
+
 * Semantic search over document texts with SPECTER2
   (:mod:`neurolang.utils.text_embeddings`).  Engines declare a
   ``text_embeddings`` section in ``engines.yaml`` to register a function

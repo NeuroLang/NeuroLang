@@ -353,3 +353,28 @@ def test_multiple_aggregations():
     result = solution[Q]
     expected = Constant[AbstractSet]({(10, 9)})
     assert result == expected
+
+
+def test_percentile_aggregation_ignores_nan():
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    values = [float(i) for i in range(11)] + [float('nan')]
+    dl.walk(Eb_(tuple(F_(P(C_(v))) for v in values)))
+    dl.walk(Imp_(
+        Q(Fa_(S_('percentile'), (x, C_(90.)))),
+        P(x)
+    ))
+    solution = Chase(dl).build_chase_solution()
+    (result,), = solution[Q].value.unwrap()
+    assert result == pytest.approx(9.)
