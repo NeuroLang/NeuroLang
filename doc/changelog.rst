@@ -19,6 +19,11 @@ Unreleased
 
 **New features:**
 
+* The ``.view`` brain viewer of the interactive REPL starts with the
+  ``plasma`` colormap and shows the top 5% of the voxels (threshold at the
+  95th percentile of the nonzero values) unless ``--cmap`` or
+  ``--threshold`` say otherwise.
+
 * ``percentile(v, q)`` aggregation: the ``q``-th percentile of a column,
   ignoring NaN values, to keep for instance the top ``p``% of a column
   with ``v >= percentile(v, 100 - p)``.  The built-in aggregations
