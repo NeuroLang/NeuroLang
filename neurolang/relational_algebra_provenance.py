@@ -13,6 +13,7 @@ from .expressions import (
     sure_is_not_pattern,
 )
 from .relational_algebra import (
+    BinaryRelationalAlgebraOperation,
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
@@ -118,6 +119,30 @@ class NaturalJoinInverse(NaturalJoin):
             f"INVERSE \N{JOIN}"
             f"{self.relation_right}]"
         )
+
+
+class Subtraction(BinaryRelationalAlgebraOperation):
+    """Probabilistic subtraction of two provenance sets.
+
+    Every tuple of `relation_left` is kept and its provenance becomes
+    p_left - p_right, where p_right is 0 for tuples absent from
+    `relation_right`. The columns of `relation_right` must be a subset
+    of those of `relation_left`.
+
+    It is used to lift P[A AND NOT B] = P[A] - P[A AND B] when A and B
+    are not independent.
+    """
+    def __repr__(self):
+        return f"[{self.relation_left} \N{MINUS SIGN}_P {self.relation_right}]"
+
+
+class Support(UnaryRelationalAlgebraOperation):
+    """Tuples of a provenance set, all with provenance 1."""
+    def __init__(self, relation):
+        self.relation = relation
+
+    def __repr__(self):
+        return f"support({self.relation})"
 
 
 class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
@@ -835,8 +860,34 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet)
     )
     def difference(self, diff):
-        left = diff.relation_left
-        right = diff.relation_right
+        return self._left_join_combine_provenances(
+            diff, self._semiring_monus
+        )
+
+    @add_match(
+        Subtraction(ProvenanceAlgebraSet, ProvenanceAlgebraSet)
+    )
+    def subtraction(self, subtraction):
+        return self._left_join_combine_provenances(subtraction, SUB)
+
+    @add_match(Support(ProvenanceAlgebraSet))
+    def support(self, support):
+        relation = support.relation
+        return self.walk(ProvenanceAlgebraSet(
+            ConcatenateConstantColumn(
+                Projection(
+                    relation.relation,
+                    tuple(relation.non_provenance_columns)
+                ),
+                relation.provenance_column,
+                ONE
+            ),
+            relation.provenance_column
+        ))
+
+    def _left_join_combine_provenances(self, operation, combine):
+        left = operation.relation_left
+        right = operation.relation_right
         res_columns = tuple(
             col for col in left.columns()
         )
@@ -864,7 +915,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             tmp_non_prov_result,
             (
                 FunctionApplicationListMember(
-                    fun_exp=self._semiring_monus(
+                    fun_exp=combine(
                         tmp_left_prov_col, tmp_right_prov_col
                     ),
                     dst_column=res_prov_col,

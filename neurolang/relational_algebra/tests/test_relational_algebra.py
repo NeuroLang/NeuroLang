@@ -2,10 +2,8 @@ import operator
 from typing import AbstractSet, Tuple
 
 import numpy
-import pandas as pd
 import pytest
 
-from ...config import config
 from ...datalog.basic_representation import WrappedRelationalAlgebraSet
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -19,6 +17,7 @@ from ...relational_algebra import (
     FunctionApplicationListMember,
     GroupByAggregation,
     Intersection,
+    Materialise,
     NameColumns,
     NaturalJoin,
     Product,
@@ -392,19 +391,11 @@ def test_extended_projection_divide_columns():
         dst_column
     )
     extended_proj_op = ExtendedProjection(relation, (proj, ))
-    if config["RAS"].get("backend") == "dask":
-        expected = Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                columns=("z",),
-                iterable=pd.DataFrame([(2.0,), (4.0,)]).convert_dtypes(),
-            )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("z",), iterable=[(2.0,), (4.0,)]
         )
-    else:
-        expected = Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                columns=("z",), iterable=[(2.0,), (4.0,)]
-            )
-        )
+    )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
     assert result == expected
@@ -788,3 +779,18 @@ def test_evaluatable_function_applications():
             )
         )
         assert result == expected
+
+
+def test_materialise_evaluates_its_relation():
+    r1 = Constant(NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(1, "a"), (2, "b")]
+    ))
+    r2 = Constant(NamedRelationalAlgebraFrozenSet(
+        ("y", "z"), [("a", 3), ("c", 4)]
+    ))
+    join = NaturalJoin(r1, r2)
+    materialised = Materialise(join)
+
+    assert materialised.columns() == join.columns()
+    result = RelationalAlgebraSolver().walk(materialised)
+    assert result == RelationalAlgebraSolver().walk(join)

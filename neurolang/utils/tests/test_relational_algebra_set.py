@@ -8,13 +8,10 @@ from ..relational_algebra_set import (
 )
 
 try:
-    from ..relational_algebra_set import dask_sql
-    HAS_DASK = True
-    fixture_ids = ["pandas", "dask_sql"]
-    fixture_params = [(pandas,), (dask_sql,)]
-
+    from ..relational_algebra_set import polars
+    fixture_ids = ["pandas", "polars"]
+    fixture_params = [(pandas,), (polars,)]
 except ImportError:
-    HAS_DASK = False
     fixture_ids = ["pandas"]
     fixture_params = [(pandas,)]
 
@@ -789,6 +786,17 @@ def test_named_to_unnamed(ra_module):
     assert ras_a.to_unnamed() == ras_b
 
 
+def test_named_to_unnamed_leaves_the_named_set_unchanged(ra_module):
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "x"), [(1, 2), (3, 4)]
+    )
+    unnamed = ras.to_unnamed()
+    assert unnamed.arity == 2
+    assert ras.columns == ("y", "x")
+    assert set(ras.projection("x")) == {(2,), (4,)}
+    assert set(unnamed) == {(1, 2), (3, 4)}
+
+
 def test_named_ra_set_from_other(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "n"), [(56, "bonjour"), (42, "aurevoir")]
@@ -1209,6 +1217,22 @@ def test_explode_multi_columns(ra_module):
     assert result == expected
 
 
+def test_explode_multi_columns_empty_relation(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=[(0, 1, frozenset({(3, 4)}))],
+    ).selection({"x": 2})
+    for empty in (
+        relation,
+        ra_module.NamedRelationalAlgebraFrozenSet(
+            columns=["x", "y", "z"], iterable=[]
+        ),
+    ):
+        result = empty.explode("z", ("v", "w"))
+        assert result.columns == ("x", "y", "z", "v", "w")
+        assert len(result) == 0
+
+
 def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y"],
@@ -1247,3 +1271,20 @@ def test_relational_algebra_difference_large(ra_module):
     assert len(result) == len(expected)
     assert result == ra_module.RelationalAlgebraFrozenSet(expected)
     assert first - ra_module.RelationalAlgebraFrozenSet.dee() == first
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_no_duplicates_flag_kept_by_copies_and_full_projections(backend):
+    module = pytest.importorskip(
+        f"neurolang.utils.relational_algebra_set.{backend}"
+    )
+    ras = module.RelationalAlgebraFrozenSet([(0, 1), (1, 2)])
+    ras.might_have_duplicates = False
+    assert not module.RelationalAlgebraFrozenSet(ras).might_have_duplicates
+    view = module.RelationalAlgebraFrozenSet.create_view_from(ras)
+    assert not view.might_have_duplicates
+    named = module.NamedRelationalAlgebraFrozenSet(("x", "y"), ras)
+    assert not named.might_have_duplicates
+    assert not named.projection("y", "x").might_have_duplicates
+    assert named.projection("x").might_have_duplicates
+    assert set(named.projection("y", "x")) == {(1, 0), (2, 1)}

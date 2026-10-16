@@ -41,7 +41,6 @@ dependencies = [
     "seaborn",
     "typing_inspect",
     "rdflib>=6.0.0",
-    "sqlalchemy>=1.4",
     "siibra>=1.0.1a15",
     "pyyaml>=6.0",
 ]
@@ -57,9 +56,20 @@ dev = [
     "problog"
 ]
 
+embeddings = [
+    "torch",
+    "transformers",
+    "adapters",
+]
+
 ras-polars = [
     "polars>=1.17",
     "pyarrow",
+]
+
+tui = [
+    "prompt-toolkit>=3.0.36",
+    "rich>=13.0",
 ]
 
 doc = [

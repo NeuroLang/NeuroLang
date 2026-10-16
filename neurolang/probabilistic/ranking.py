@@ -5,6 +5,7 @@ from ..expression_walker import ReplaceExpressionWalker
 from ..expressions import Symbol
 from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import convert_to_pnf_with_dnf_matrix
+from .expression_processing import is_comparison
 from ..relational_algebra import (
     Projection,
     Selection,
@@ -18,6 +19,8 @@ def verify_that_the_query_is_ranked(query):
     query = convert_to_pnf_with_dnf_matrix(query)
 
     for atom in extract_logic_atoms(query):
+        if is_comparison(atom):
+            continue
         if not isinstance(atom.functor, Symbol):
             return False
         for i, arg in enumerate(atom.args[1:], 1):

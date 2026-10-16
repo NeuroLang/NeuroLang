@@ -243,10 +243,12 @@ identifier : LOWER_NAME
 label_identifier : CNAME
 
 ?literal : "'"string"'"
+         | "\""dq_string"\""  -> literal
          | number
          | "^"NAME      -> external_literal
 
 string : STRING
+dq_string : DQ_STRING -> string
 number : SIGNED_INT
        | SIGNED_FLOAT
 
@@ -351,12 +353,13 @@ _WHO : "who"
 _WHOM : "whom"
 _WHOSE : "whose"
 
-LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
-UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
-NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
+LOWER_NAME : /(?<!\w)(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
+UPPER_NAME : /(?<!\w)(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?<!\w)(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/
+DQ_STRING : /[^"]+/
 COMMENT : /\%\%[^\n]*/ NEWLINE
 
 %import common._STRING_ESC_INNER
