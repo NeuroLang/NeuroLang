@@ -86,10 +86,18 @@ voxel_given_sim(q, i, j, k, p)``, does not pass its values to ``close``.
 SPECTER2 similarities fall in a narrow range: for this query they average
 0.71 with a standard deviation of 0.03 over NeuroSynth, and 0.78 keeps
 about the top 1% of the studies.  Pick thresholds from the distribution
-rather than as absolute values, for instance in Datalog with an
-aggregation (see the example below).  Each query text is embedded once and
-the similarities of all the studies to it are cached (the 16 most recent
-query texts), so each call is a lookup.
+rather than as absolute values: the ``percentile`` aggregation computes,
+for each query text, the similarity above which the top 1% of the studies
+lie, and ``close`` keeps them, whatever the query::
+
+    cutoff(q, percentile(sim, 99)) :- study(s) & (sim == query_similarity(q, s))
+    close(q, s) :- study(s) & (sim == query_similarity(q, s)) & cutoff(q, t) & (sim >= t)
+    voxel_given_sim(q, i, j, k, PROB) :- (peak_reported(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+    ans(i, j, k, p) :- voxel_given_sim('math', i, j, k, p)
+
+Each query text is embedded once and the similarities of all the studies
+to it are cached (the 16 most recent query texts), so each call is a
+lookup.
 
 
 Forward inference from free text

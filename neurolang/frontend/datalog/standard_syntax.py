@@ -32,7 +32,9 @@ from ...utils.interactive_parsing import LarkCompleter
 from .lark_errors import lark_errors_as_neurolang
 
 # Aggregation function names recognised in rule head arguments.
-AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
+AGGREGATION_FUNCS = frozenset(
+    {"count", "sum", "max", "min", "mean", "avg", "std", "percentile"}
+)
 
 
 GRAMMAR = u"""

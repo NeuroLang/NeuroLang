@@ -195,6 +195,16 @@ class TestPage:
         assert state["initial"]["cmap"] == brain_viewer.DEFAULT_CMAP
         assert state["background"] is None
 
+    def test_default_colormap_is_plasma_and_percentile_threshold(self):
+        html = brain_viewer.viewer_html(
+            _image(np.ones((2, 2, 2), np.float32)), None, title="t",
+            threshold="95%", cmap=None, symmetric=False,
+        )
+        state = _state(html)
+        assert state["initial"]["cmap"] == "plasma"
+        assert state["initial"]["threshold"] == 95.0
+        assert state["initial"]["thresholdMode"] == "percentile"
+
     def test_title_is_escaped(self, html):
         assert "<title>signed &lt;map&gt;</title>" in html
 

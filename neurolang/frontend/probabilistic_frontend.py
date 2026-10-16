@@ -102,7 +102,7 @@ from .datalog.sugar.spatial import (
     TranslateRegionDestroy,
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
-from .type_resolution import TypeResolutionMixin
+from .type_resolution import ProbabilisticTypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -164,7 +164,7 @@ class RegionFrontendCPLogicSolver(
     TranslateEuclideanDistanceBoundMatrixMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
-    TypeResolutionMixin,
+    ProbabilisticTypeResolutionMixin,
     TranslateRegionDestroy,
     RegionSolver,
     CommandsMixin,
