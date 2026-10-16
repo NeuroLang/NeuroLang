@@ -317,10 +317,35 @@ def test_mutual_exclusivity(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_negated_probabilistic_fact(solver):
+    pfact_sets = {
+        P: {(0.2, "a"), (0.7, "b")},
+        Q: {(0.3, "a")},
+    }
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Negation(Q(x))))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [(0.2 * 0.7, "a"), (0.7, "b")], ("_p_", "x")
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -355,9 +380,7 @@ def test_fact_negation_choice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
     pytest.param(dalvi_suciu_lift, marks=pytest.mark.xfail(
@@ -830,9 +853,7 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -869,9 +890,7 @@ def test_program_with_segregation_constant_case(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1168,9 +1187,7 @@ def test_empty_result_program(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1479,9 +1496,7 @@ def test_dalvi_suciu_fails_not_ranked():
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1531,9 +1546,7 @@ def test_nested_negation(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
