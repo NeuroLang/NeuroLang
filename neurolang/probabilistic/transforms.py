@@ -1,4 +1,4 @@
-from functools import reduce
+from itertools import product
 import logging
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
@@ -22,7 +22,7 @@ from ..logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
-from ..logic.unification import compose_substitutions, most_general_unifier
+from ..logic.unification import most_general_unifier
 from .containment import is_contained
 
 
@@ -390,26 +390,44 @@ def unify_existential_variables(query):
     if not isinstance(query, Disjunction):
         return original_query
 
-    unifiers = []
+    # The renaming must be injective within each clause: a class of
+    # unified variables has at most one variable of each clause.
+    representative = {}
+    clauses = {}
+    for i, clause in enumerate(query.formulas):
+        for variable in (
+            extract_logic_free_variables(clause) - variables_to_project
+        ):
+            representative[variable] = variable
+            clauses.setdefault(variable, set()).add(i)
+
+    def find(variable):
+        while representative[variable] != variable:
+            variable = representative[variable]
+        return variable
+
     for i, clause in enumerate(query.formulas):
         atoms = extract_logic_atoms(clause)
         for clause_ in query.formulas[i + 1:]:
-            atoms_ = extract_logic_atoms(clause_)
-            unifiers += [
-                most_general_unifier(a, a_)
-                for a in atoms
-                for a_ in atoms_
-            ]
-    unifiers = reduce(
-        compose_substitutions,
-        (u[0] for u in unifiers if u is not None),
-        {}
-    )
-    unifiers = {
-        k: v for k, v in unifiers.items()
-        if variables_to_project.isdisjoint((k, v))
+            for a, a_ in product(atoms, extract_logic_atoms(clause_)):
+                unifier = most_general_unifier(a, a_)
+                if unifier is None:
+                    continue
+                for variable, term in unifier[0].items():
+                    if variable not in representative or (
+                        term not in representative
+                    ):
+                        continue
+                    root, root_ = find(variable), find(term)
+                    if root != root_ and clauses[root].isdisjoint(
+                        clauses[root_]
+                    ):
+                        representative[root] = root_
+                        clauses[root_] |= clauses.pop(root)
+    substitution = {
+        variable: find(variable) for variable in representative
+        if find(variable) != variable
     }
-    for i in range(len(unifiers)):
-        query = ReplaceExpressionWalker(unifiers).walk(query)
+    query = ReplaceExpressionWalker(substitution).walk(query)
     query = add_existentials_except(query, variables_to_project)
     return query

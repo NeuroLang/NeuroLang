@@ -899,3 +899,26 @@ def test_symbols_of_relations_to_materialise_are_kept_in_plans():
     )
 
     assert replace.walk(symbol) == symbol
+
+
+@pytest.mark.parametrize("answer", (False, True))
+def test_choice_with_a_repeated_variable(answer):
+    """C(x, x) on a probabilistic choice C is ranked into a selection of C,
+    which is still a choice: its tuples are mutually exclusive."""
+    C, Z, ans, x = (Symbol(n) for n in ("C", "Z", "ans", "x"))
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.3, "b", "b"), (0.2, "a", "a")]
+    )
+    if answer:
+        cpl_program.walk(Union((Implication(Z(x), C(x, x)),)))
+        query = Implication(ans(x), Z(x))
+        expected = testing.make_prov_set(
+            [(0.3, "b"), (0.2, "a")], ("_p_", "x")
+        )
+    else:
+        cpl_program.walk(Union((Implication(Z(), C(x, x)),)))
+        query = Implication(ans(), Z())
+        expected = testing.make_prov_set([(0.5,)], ("_p_",))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(result, expected)

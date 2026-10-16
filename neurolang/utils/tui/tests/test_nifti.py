@@ -777,6 +777,11 @@ class TestPathsWithSpaces:
         assert request.path == Path("my image.nii.gz")
         assert request.threshold == 2.0
 
+    def test_view_default_threshold_is_the_top_5_percent(self):
+        request = nifti.parse_view_args("my image.nii.gz")
+        assert request.threshold == "95%"
+        assert request.cmap is None
+
 
 def _data(img):
     return np.asanyarray(img.dataobj)

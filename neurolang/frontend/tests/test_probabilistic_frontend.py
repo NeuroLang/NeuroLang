@@ -15,6 +15,7 @@ from ...exceptions import (
     UnsupportedQueryError,
     WrongArgumentsInPredicateError
 )
+from ...expressions import Symbol
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
@@ -1989,6 +1990,38 @@ def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
     assert len(res) == 0
 
 
+@pytest.mark.parametrize("equality", ("(t == 't1')", "('t1' == t)"))
+@pytest.mark.parametrize("negated", (False, True))
+def test_equality_to_a_constant_within_an_existential(equality, negated):
+    """
+    An equality to a constant within ``exists(…)`` is not inlined.
+
+    The equality rewrites looked for equalities in the whole body but only
+    rewrote the top-level conjuncts, rewriting such a rule again and
+    again until the recursion limit.
+    """
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [(0.4, "s1"), (0.6, "s2")], name="C"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "s1", "t1"), (0.5, "s2", "t2")], name="M"
+    )
+    negation = "~" if negated else ""
+    res = nl.execute_datalog_program(
+        f"q(s, PROB) :- C(s), {negation}exists(t; M(s, t), {equality})\n"
+        "ans(s, p) :- q(s, p)"
+    )
+    probabilities = {
+        s: p for s, p in res.as_pandas_dataframe().itertuples(index=False)
+        if p > 0
+    }
+    expected = {"s1": 0.2, "s2": 0.6} if negated else {"s1": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for s, p in expected.items():
+        assert probabilities[s] == pytest.approx(p)
+
+
 def test_forward_inference_given_a_single_term_is_lifted():
     """The probability that the selected study reports a peak near a
     voxel, given that it mentions t and no other term, is lifted: the
@@ -2039,3 +2072,32 @@ def test_forward_inference_given_a_single_term_is_lifted():
         (0, 0, 0, "joy", 0.5),
         (3, 3, 3, "joy", 0.5),
     }
+
+
+@pytest.mark.parametrize("kind", ("facts", "choice"))
+def test_argument_types_of_probabilistic_relations(kind):
+    """The types of the arguments of a probabilistic relation are those of
+    its columns after the probability column."""
+    nl = NeurolangPDL()
+    tuples = [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")]
+    if kind == "facts":
+        nl.add_probabilistic_facts_from_tuples(tuples, name="R")
+    else:
+        nl.add_probabilistic_choice_from_tuples(tuples, name="R")
+    nl.execute_datalog_program("q(x, PROB) :- R(x, y), R(y, x)")
+    q = nl.program_ir.intensional_database()[Symbol("q")].formulas[0]
+    assert all(
+        arg.type is str
+        for atom in q.antecedent.formulas for arg in atom.args
+    ), q.antecedent
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    probabilities = {
+        row[0]: row[1] for row in result.itertuples(index=False)
+    }
+    if kind == "facts":
+        expected = {"a": 1 - (1 - 0.5 * 0.3) * (1 - 0.2), "b": 0.5 * 0.3}
+    else:
+        expected = {"a": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for value, p in expected.items():
+        assert probabilities[value] == pytest.approx(p)

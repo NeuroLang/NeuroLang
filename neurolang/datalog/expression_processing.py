@@ -1146,7 +1146,7 @@ class CollapseConjunctiveAntecedents(CollapseConjunctions):
 def is_to_be_sorted_equality(formula):
     try:
         is_eq_functor = formula.functor == Constant(operator.eq)
-    except ValueError:
+    except (ValueError, AttributeError):
         return False
     return (
         is_eq_functor
@@ -1156,11 +1156,14 @@ def is_to_be_sorted_equality(formula):
 
 
 class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
+    # Only the top-level conjuncts are rewritten, so only they are
+    # checked: an equality within an existential or a negation would
+    # otherwise match the rule again and again.
     @add_match(
         Implication(FunctionApplication, Conjunction),
         lambda implication: any(
             is_to_be_sorted_equality(conjunct)
-            for conjunct in extract_logic_atoms(implication.antecedent)
+            for conjunct in implication.antecedent.formulas
         ),
     )
     def sort_antecedent_equalities(self, implication):
@@ -1224,11 +1227,13 @@ class InlineEqualityConstantsMixin(PatternWalker):
     equality atoms have the Symbol as the first argument.
     """
 
+    # As for `sort_antecedent_equalities`, only the top-level conjuncts
+    # are rewritten and checked.
     @add_match(
         Implication(FunctionApplication, Conjunction),
         lambda implication: any(
             is_inlineable_equality(conjunct)
-            for conjunct in extract_logic_atoms(implication.antecedent)
+            for conjunct in implication.antecedent.formulas
         ),
     )
     def inline_equality_constants(self, implication):

@@ -640,6 +640,21 @@ Global aggregation (no group-by) uses empty brackets:
     total_studies(cnt) :-
         AGGREGATE[](study(s) @ count(s)) = cnt.
 
+An aggregation can also be written directly in the head of a rule, the
+variables of the head being the group-by variables.  This form accepts
+aggregation functions with constant parameters, such as
+``percentile(v, q)``: the ``q``-th percentile of ``v``, with ``q`` in
+``[0, 100]``, ignoring NaN values.  It keeps, for instance, the top 10% of
+the scores of each query:
+
+.. code-block:: none
+
+    cutoff(q, percentile(v, 90)) :- score(q, s, v).
+    top_score(q, s) :- score(q, s, v), cutoff(q, t), (v >= t).
+
+Percentiles are linearly interpolated and ties are kept, so the top 10%
+can hold slightly more than 10% of the rows.
+
 10.2 Existential Predicates
 ----------------------------
 
