@@ -1,9 +1,9 @@
 {
     "version": 1,
-    "project": "neurolang-polars",
-    "project_url": "https://github.com/NeuroLang/neurolang-polars",
+    "project": "NeuroLang",
+    "project_url": "https://github.com/NeuroLang/NeuroLang",
     "repo": ".",
-    "show_commit_url": "https://github.com/NeuroLang/neurolang-polars/commit/",
+    "show_commit_url": "https://github.com/NeuroLang/NeuroLang/commit/",
     "branches": ["master"],
     "pythons": ["3.14"],
     "environment_type": "virtualenv",

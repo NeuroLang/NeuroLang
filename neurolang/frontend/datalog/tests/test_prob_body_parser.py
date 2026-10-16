@@ -580,7 +580,14 @@ def test_aggregate_assign_vars():
     """AGGREGATE with group vars — hits agg_assign_vars."""
     result = _parse("ans(x, c) :- AGGREGATE[x](R(x, y) @ count(y)) = c.")
 
-    expected = Union((Implication(ans_(x_, AggregationApplication(count_, (y_,))), Conjunction((R_(x_, y_),))),))
+    fresh = Symbol("fresh_00000000")
+    expected = Union((
+        Implication(
+            fresh(x_, AggregationApplication(count_, (y_,))),
+            Conjunction((R_(x_, y_),)),
+        ),
+        Query(ans_(x_, c_), Conjunction((fresh(x_, c_),))),
+    ))
     assert weak_eq(result, expected)
 
 
@@ -590,7 +597,7 @@ def test_aggregate_assign_empty():
 
     expected = Union((
         Implication(Symbol("fresh_00000000")(count_(y_)), Conjunction((R_(x_, y_),))),
-        Implication(ans_(c_), Conjunction((Symbol("fresh_00000000")(c_),))),
+        Query(ans_(c_), Conjunction((Symbol("fresh_00000000")(c_),))),
     ))
     assert weak_eq(result, expected)
 
@@ -649,7 +656,7 @@ def test_aggregate_fn_call():
 
     expected = Union((
         Implication(Symbol("fresh_00000000")(count_(x_)), Conjunction((R_(x_, y_),))),
-        Implication(ans_(cnt_), Conjunction((Symbol("fresh_00000000")(cnt_),))),
+        Query(ans_(cnt_), Conjunction((Symbol("fresh_00000000")(cnt_),))),
 
     ))
     assert weak_eq(result, expected)
@@ -1083,7 +1090,14 @@ def test_aggregate_with_group_vars():
     """AGGREGATE with group vars and extra head args."""
     result = _parse("ans(x, cnt) :- AGGREGATE[x](R(x, y) @ count(y)) = cnt.")
 
-    expected = Union((Implication(ans_(x_, AggregationApplication(count_, (y_,))), Conjunction((R_(x_, y_),))),))
+    fresh = Symbol("fresh_00000000")
+    expected = Union((
+        Implication(
+            fresh(x_, AggregationApplication(count_, (y_,))),
+            Conjunction((R_(x_, y_),)),
+        ),
+        Query(ans_(x_, cnt_), Conjunction((fresh(x_, cnt_),))),
+    ))
     assert weak_eq(result, expected)
 
 
@@ -1094,8 +1108,12 @@ def test_aggregate_with_prob_body():
     expected = Union(
         (
             Implication(
-                ans_(x_, count_(x_)),
+                Symbol("fresh_00000000")(x_, count_(x_)),
                 Conjunction((__PROB__(Conjunction((R_(x_),)), None, p_),)),
+            ),
+            Query(
+                ans_(x_, cnt_),
+                Conjunction((Symbol("fresh_00000000")(x_, cnt_),)),
             ),
         )
     )
@@ -1111,6 +1129,27 @@ def test_aggregate_with_marg_body():
          Implication(
              p_(x_, count_(x_)),
              Conjunction((Symbol("fresh_00000000")(x_, p_),)),
+         ),)
+    )
+    assert weak_eq(result, expected)
+
+
+def test_aggregate_with_marg_body_ans_head_is_query():
+    """AGGREGATE with MARG body and ans head: the main rule is a Query
+    over a fresh predicate holding the aggregation."""
+    result = _parse(
+        "ans(x, cnt) :- AGGREGATE[x](MARG[R(x)] = p @ count(x)) = cnt."
+    )
+
+    expected = Union(
+        (Implication(Symbol("fresh_00000000")(x_, PROB(x_)), R_(x_)),
+         Implication(
+             Symbol("fresh_00000001")(x_, count_(x_)),
+             Conjunction((Symbol("fresh_00000000")(x_, p_),)),
+         ),
+         Query(
+             ans_(x_, cnt_),
+             Conjunction((Symbol("fresh_00000001")(x_, cnt_),)),
          ),)
     )
     assert weak_eq(result, expected)

@@ -6,24 +6,17 @@ import numpy as np
 from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
-    extract_logic_predicates,
 )
-from ..datalog.constraints_representation import reachable_code
+from ..datalog.constraints_representation import (
+    RightImplication,
+    get_list_of_intensional_rules,
+    iter_implications,
+    reachable_code,
+)
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import TRUE, Implication, Negation, Union
-from ..datalog.constraints_representation import RightImplication
+from ..logic import TRUE, Implication, Union
 from .expressions import ProbabilisticFact
-
-
-def _iter_implication_or_union_of_implications(expression):
-    if expression is None:
-        return
-    if isinstance(expression, Implication):
-        yield expression
-    elif isinstance(expression, Union):
-        for formula in expression.formulas:
-            yield formula
 
 
 def reachable_code_from_query(query, program):
@@ -44,7 +37,7 @@ def reachable_code_from_query(query, program):
     )
     reachable = set()
     for pred in predicates:
-        for rule in _iter_implication_or_union_of_implications(
+        for rule in iter_implications(
             program.intensional_database().get(pred.functor, None)
         ):
             if not isinstance(rule, RightImplication):
@@ -108,49 +101,11 @@ def stratify_program(query, program):
     _check_for_query_based_probfact_dependency_on_prob_relation(
         grpd_idbs["probabilistic"], grpd_symbs
     )
-    _check_no_negated_prob_idb_predicate(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
         if idb_rules
     }
-
-
-def _check_no_negated_prob_idb_predicate(prob_idb):
-    if any(
-        any(
-            isinstance(pred, Negation) and pred.formula.functor in prob_idb
-            for pred in extract_logic_predicates(rule.antecedent)
-        )
-        for rule in prob_idb
-    ):
-        raise UnsupportedProgramError(
-            "Negation not permitted in probabilistic rules"
-        )
-
-
-def get_list_of_intensional_rules(program):
-    '''
-    Given a program, it returns a list of intentional rules.
-
-    Parameters
-    ----------
-    program : CPLogicProgram
-        Program from which we want to obtain the list of intentional rules.
-
-    Returns
-    -------
-    list
-        list of intentional rules
-    '''
-
-    idb = [
-        rule
-        for exp in program.intensional_database().values()
-        for rule in _iter_implication_or_union_of_implications(exp)
-        if not isinstance(rule, RightImplication)
-    ]
-    return idb
 
 
 def _get_program_deterministic_symbols(program):

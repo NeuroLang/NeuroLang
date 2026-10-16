@@ -12,7 +12,7 @@ from .expression_processing import extract_logic_atoms
 from .basic_representation import DatalogProgramMixin
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import LogicOperator, Union
+from ..logic import Implication, LogicOperator, Union
 
 class RightImplication(LogicOperator):
     """
@@ -127,6 +127,44 @@ class DatalogConstraintsMixin(PatternWalker):
                 self.categorized_constraints[sigma_functor] = cons_set
         else:
             self.categorized_constraints[sigma_functor] = set([sigma])
+
+
+def iter_implications(expression):
+    """
+    Yield the implications of ``expression``.
+
+    ``expression`` is an implication, a union of implications, or anything
+    else, such as None or a constant, which has none.
+    """
+    if isinstance(expression, Implication):
+        yield expression
+    elif isinstance(expression, Union):
+        yield from expression.formulas
+
+
+def get_list_of_intensional_rules(program):
+    """
+    Return the list of the rules of the intensional database of ``program``.
+
+    The constraints of ``program``, its right implications, are left out.
+
+    Parameters
+    ----------
+    program : DatalogProgram
+        Program from which we want to obtain the list of intensional rules.
+
+    Returns
+    -------
+    list
+        list of intensional rules
+    """
+    return [
+        rule
+        for exp in program.intensional_database().values()
+        for rule in iter_implications(exp)
+        if not isinstance(rule, RightImplication)
+    ]
+
 
 def reachable_code(query, datalog):
     """Produces the code reachable by a query

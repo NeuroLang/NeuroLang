@@ -1,5 +1,6 @@
 
 import io
+from typing import Callable
 from neurolang.logic import Implication
 
 from ...expressions import Constant, Symbol
@@ -796,7 +797,7 @@ def test_connector_edb_populated_for_word_lower():
     word_lower = nl.add_symbol(
         lambda x: x.lower(),
         name='word_lower',
-        type_=str,
+        type_=Callable[[str], str],
     )
 
     with nl.scope as e:
