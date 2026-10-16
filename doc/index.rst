@@ -84,6 +84,7 @@ a guided walkthrough.
    tutorial
    tutorial_squall
    tutorial_datalog
+   tutorials/viterbi
    tutorial_text_embeddings
    concepts
    probabilistic_lifting
