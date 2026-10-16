@@ -6,13 +6,17 @@ twice in it. Fink and Olteanu show that such a query, possibly with
 negations, can be computed in polynomial time if it is hierarchical, and
 is #P-hard otherwise [1]_. As the relations of the subformulas of a
 non-repeating query are different, the subformulas are independent and
-the plan is built with the independent operations only:
+the plan is built with the independent operations only, once each
+quantified variable equal to a term is replaced by it,
+∃v (v = e ∧ φ) ≡ φ[e/v], and each negated disjunction is split,
+¬(A ∨ B) ≡ ¬A ∧ ¬B:
 
 * a conjunction is the join of its positive conjuncts, from which its
   negated conjuncts are removed with ``Difference``,
   P[A ∧ ¬B] = P[A] (1 - P[B]);
 * a disjunction of formulas with the same free variables is their
   independent union;
+* ``∃v (φ ∨ ψ)`` is ``∃v φ ∨ ∃v ψ``;
 * ``∃v φ(v)``, after pushing the quantifier down to the conjuncts in
   which `v` is free, is an independent projection on a variable `v`
   that occurs in every probabilistic atom of φ: the events φ(a) for
@@ -31,6 +35,7 @@ from functools import reduce
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..expression_walker import ReplaceExpressionWalker
 from ..expressions import FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
@@ -69,7 +74,9 @@ def non_repeating_plan(formula, symbol_table):
         _is_non_repeating(formula, symbol_table)
     ):
         return None
-    return _NonRepeatingPlanner(symbol_table).plan(formula)
+    return _NonRepeatingPlanner(symbol_table).plan(
+        _eliminate_equalities(formula)
+    )
 
 
 def columns_comparison(comparison):
@@ -155,6 +162,11 @@ class _NonRepeatingPlanner:
         while isinstance(body, ExistentialPredicate):
             variables.add(body.head)
             body = body.body
+        if isinstance(body, Disjunction):
+            return self.plan(Disjunction(tuple(
+                _add_existentials(formula, variables)
+                for formula in body.formulas
+            )))
         conjuncts = _conjuncts((body,))
         outside = [
             f for f in conjuncts
@@ -262,13 +274,95 @@ def _atom_plan(atom):
 
 
 def _conjuncts(formulas):
+    """The conjuncts of the conjunction of `formulas`, a negated
+    disjunction being the conjunction of its negated disjuncts."""
     conjuncts = []
     for formula in formulas:
         if isinstance(formula, Conjunction):
             conjuncts.extend(_conjuncts(formula.formulas))
+        elif (
+            isinstance(formula, Negation) and
+            isinstance(formula.formula, Disjunction)
+        ):
+            conjuncts.extend(_conjuncts(
+                Negation(f) for f in formula.formula.formulas
+            ))
         else:
             conjuncts.append(formula)
     return conjuncts
+
+
+def _add_existentials(formula, variables):
+    """∃v̄ `formula`, for the variables `v̄` of `variables` free in it."""
+    free_variables = extract_logic_free_variables(formula)
+    for variable in sorted(variables & free_variables, key=lambda v: v.name):
+        formula = ExistentialPredicate(variable, formula)
+    return formula
+
+
+def _eliminate_equalities(formula):
+    """`formula` where each existentially quantified variable `v` equal
+    to a term `e` by a conjunct `v = e` is replaced by `e`, as
+    ∃v (v = e ∧ φ) ≡ φ[e/v]. This is done in every subformula before
+    planning, so that the variables that occur in all the atoms of a
+    group are known.
+    """
+    if isinstance(formula, ExistentialPredicate):
+        variables = set()
+        while isinstance(formula, ExistentialPredicate):
+            variables.add(formula.head)
+            formula = formula.body
+        conjuncts, variables = _substitute_equalities(
+            _conjuncts((_eliminate_equalities(formula),)), variables
+        )
+        return _add_existentials(
+            Conjunction(tuple(conjuncts)) if len(conjuncts) > 1
+            else conjuncts[0],
+            variables
+        )
+    if isinstance(formula, (Conjunction, Disjunction)):
+        return type(formula)(tuple(
+            _eliminate_equalities(f) for f in formula.formulas
+        ))
+    if isinstance(formula, Negation):
+        return Negation(_eliminate_equalities(formula.formula))
+    return formula
+
+
+def _substitute_equalities(conjuncts, variables):
+    """Replace the variables of `variables` equal to a term by a
+    conjunct of `conjuncts` by that term, and remove the equalities.
+
+    Returns
+    -------
+    Tuple[List[LogicExpression], Set[Symbol]]
+        the conjuncts and the variables which are left.
+    """
+    variables = set(variables)
+    conjuncts = list(conjuncts)
+    while True:
+        substitution = next(
+            (
+                (conjunct, variable, term)
+                for conjunct in conjuncts
+                if isinstance(conjunct, FunctionApplication) and
+                conjunct.functor == EQ
+                for variable, term in (
+                    conjunct.args, tuple(reversed(conjunct.args))
+                )
+                if variable in variables and variable != term
+            ),
+            None
+        )
+        if substitution is None or len(conjuncts) == 1:
+            return conjuncts, variables
+        equality, variable, term = substitution
+        replace = ReplaceExpressionWalker({variable: term})
+        conjuncts = [
+            replace.walk(conjunct) for conjunct in conjuncts
+            if conjunct is not equality
+        ]
+        variables.discard(variable)
 
 
 def _connected_groups(formulas, variables):

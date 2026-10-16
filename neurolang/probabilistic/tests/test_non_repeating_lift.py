@@ -315,3 +315,21 @@ def test_equality_between_inner_and_outer_variables():
     assert testing.eq_prov_relations(
         result, testing.make_prov_set([(expected,)], ("_p_",))
     )
+
+
+def test_equality_to_a_constant():
+    """∃s C(s) ∧ ¬∃t (M(s, t) ∧ t = 't1'): t is replaced by 't1'."""
+    formula = ExistentialPredicate(s, Conjunction((
+        C(s),
+        Negation(ExistentialPredicate(t, Conjunction((
+            M(s, t), EQ(t, Constant("t1"))
+        ))))
+    )))
+    cpl_program = _program(
+        (), pchoices={C: C_CHOICES}, pfacts={M: M_FACTS}
+    )
+    result = _solve_formula(formula, cpl_program)
+    expected = 0.3 * 0.5 + 0.5 * 0.9 + 0.2
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )

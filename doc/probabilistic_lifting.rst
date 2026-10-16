@@ -203,6 +203,18 @@ can be nested and can quantify variables, as in
 y))`, whose quantifiers are mixed once the negations are moved to the
 atoms, which the checks of Dalvi–Suciu lifting decline.
 
+The query is first rewritten with two equivalences, which hold in every
+possible world and keep it non-repeating:
+
+* equalities with a quantified variable are eliminated in every
+  subformula, :math:`\exists v\, (v = e \land \varphi) \equiv
+  \varphi[e/v]` for a variable or a constant :math:`e`, as in
+  :math:`\lnot\exists u\, (W(s, u) \land u = t) \equiv \lnot W(s, t)`;
+* a negated disjunction is the conjunction of the negated disjuncts,
+  :math:`\lnot(A \lor B) \equiv \lnot A \land \lnot B`, the disjuncts
+  possibly having different free variables, as in
+  :math:`M(s, t) \land \lnot(K(s) \lor G(s, t))`.
+
 As the subformulas of a non-repeating query have different relations, they
 are independent, and the plan is built with the independent operations
 only:
@@ -212,6 +224,13 @@ only:
   ``Difference``, :math:`P[A \land \lnot B] = P[A]\,(1 - P[B])`;
 * a disjunction of formulas with the same free variables is their
   independent union;
+* :math:`\exists \bar v\, (\varphi_1 \lor \varphi_2)` is planned as
+  :math:`\exists \bar v\, \varphi_1 \lor \exists \bar v\, \varphi_2`,
+  each disjunct keeping the quantifiers of its variables. For instance, a
+  negated predicate defined by two rules, :math:`N(s) \leftarrow F(s)` and
+  :math:`N(s) \leftarrow M(s, t)`, flattens to
+  :math:`\lnot\exists t\, (F(s) \lor M(s, t))`, which is planned as
+  :math:`\lnot F(s) \land \lnot\exists t\, M(s, t)`;
 * :math:`\exists \bar v\, \varphi` is first split into the groups of
   conjuncts of :math:`\varphi` connected by the variables of
   :math:`\bar v`, the other conjuncts being moved out of the quantifier.
@@ -229,6 +248,12 @@ only:
 
 Deterministic relations do not count as repetitions, and do not need to
 have the projected variable.
+
+In Datalog, the rules of a predicate share their head variables, so the
+negation of a predicate defined by several rules always has disjuncts with
+the same free variables once the quantifiers are pushed into them;
+disjuncts with different free variables only arise in queries built with
+the Python API.
 
 Dalvi–Suciu lifting
 -------------------
