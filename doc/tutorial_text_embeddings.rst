@@ -127,6 +127,34 @@ top 1% closest to the query text::
 The radius is in voxels of the engine's grid, so 2 is 2 times its
 resolution in millimetres.
 
+Query texts from the Cognitive Atlas
+------------------------------------
+
+The query text can come from a relation, e.g. the description of a task
+of the Cognitive Atlas in ``cognitive_task(task_id, name, description)``.
+Joining that relation with ``voxel_given_sim`` in the query does not
+bind ``q`` in ``cutoff`` and ``close``::
+
+    ans(i, j, k, p) :- cognitive_task(_, "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)
+
+fails with an :class:`~neurolang.exceptions.UnboundVariablesError`
+(``In cutoff: the variables sim, q appear only in ...``). A relation of
+the query texts, ``task_query``, binds ``q`` in the bodies of ``cutoff``
+and ``close``::
+
+    task_query(d) :- cognitive_task(_, "color-word stroop task", d)
+    cutoff(q, percentile(sim, 95)) :- task_query(q) & study(s) & (sim == query_similarity(q, s))
+    close(q, s) :- task_query(q) & study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
+    near_peak(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) < 3)
+    voxel_given_sim(q, i, j, k, PROB) :- (near_peak(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+    ans(i, j, k, p) :- cognitive_task(_, "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)
+
+The map is that of the studies among the top 5% closest to the
+description of the task. Each description in ``task_query`` is embedded
+as a query text, and the similarities to the 16 most recent ones are
+cached: list the tasks of interest in ``task_query``, e.g. with one rule
+per task, rather than every task of the Cognitive Atlas.
+
 The term-based counterpart replaces the similarity by the TF-IDF of a term.
 Rather than keeping the studies whose TF-IDF passes a threshold
 :math:`\tau`, Iovene et al. [iovene2021]_ make the association of a term

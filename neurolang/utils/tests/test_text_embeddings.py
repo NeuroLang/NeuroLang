@@ -285,6 +285,49 @@ def test_similarity_function_several_queries(frontend, index):
     assert index.encoder.query_calls == 4
 
 
+
+# Query texts from a relation, e.g. the descriptions of the Cognitive Atlas
+# tasks: ``task_query`` binds ``q`` in the body of ``cutoff`` and ``close``.
+TASKS = [
+    ("t1", "motor task", "Motor hand movements"),
+    ("t2", "reading task", "Reading visual words"),
+]
+REPORTS = [("a", 1), ("b", 2), ("c", 4)]
+QUERY_TEXT_RULES = """
+cutoff(q, percentile(sim, 50)) :- {range}study(s) & (sim == query_similarity(q, s))
+close(q, s) :- {range}study(s) & (sim == query_similarity(q, s)) & cutoff(q, c) & (sim >= c)
+voxel_given_sim(q, v, PROB) :- (reports(v, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+"""
+TASK_QUERY = 'ans(v, p) :- task(_, "motor task", d) & voxel_given_sim(d, v, p)'
+
+
+def _task_engine(index):
+    nl = _engine(NeurolangPDL, index)
+    nl.add_tuple_set(TASKS, name="task")
+    nl.add_tuple_set(REPORTS, name="reports")
+    nl.add_uniform_probabilistic_choice_over_set(
+        STUDIES, name="selected_study"
+    )
+    return nl
+
+
+def test_query_texts_joined_in_the_query_are_unbound(index):
+    nl = _task_engine(index)
+    nl.execute_datalog_program(QUERY_TEXT_RULES.format(range=""))
+    with pytest.raises(UnboundVariablesError, match=r"In cutoff: .*\bq\b"):
+        nl.execute_datalog_program(TASK_QUERY)
+
+
+def test_query_texts_from_a_relation(index):
+    nl = _task_engine(index)
+    nl.execute_datalog_program(
+        'task_query(d) :- task(_, "motor task", d)\n'
+        + QUERY_TEXT_RULES.format(range="task_query(q) & ")
+    )
+    res = nl.execute_datalog_program(TASK_QUERY)
+    assert dict(res) == pytest.approx({"b": .5, "c": .5})
+    assert index.encoder.query_calls == 1
+
 def test_similarity_function_is_cached(index):
     query_similarity = te.make_similarity_function(index)
     similarities = index.similarities("visual word reading")
