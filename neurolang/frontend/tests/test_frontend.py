@@ -1,3 +1,4 @@
+import multiprocessing
 from collections import namedtuple
 from operator import add, contains
 from typing import AbstractSet, Callable, Tuple
@@ -7,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ... import expressions as exp, frontend
+from ... import exceptions, expressions as exp, frontend
 from ...datalog import DatalogProgram, Fact, Implication
 from ...exceptions import NeuroLangException, UnsupportedProgramError, WrongArgumentsInPredicateError
 from ...expression_walker import ExpressionBasicEvaluator
@@ -237,6 +238,144 @@ def test_query_wrong_head_arguments():
 
         with pytest.raises(NeuroLangException):
             neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
+
+
+def _squall_voxel_engine(engine_class=frontend.NeurolangDL):
+    """Return an engine with neurosynth-like voxel, study and report facts."""
+    neurolang = engine_class()
+    neurolang.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="voxel")
+    neurolang.add_tuple_set([(10, 1, 2, 3), (11, 7, 8, 9)], name="reports")
+    neurolang.add_tuple_set([(10,), (11,)], name="study")
+    neurolang.add_tuple_set([(1, 2)], name="pair")
+    return neurolang
+
+
+def test_squall_noun_with_fewer_arguments_than_columns():
+    """
+    A SQUALL noun naming a 3-column relation without ``in 3D`` is an error.
+
+    It used to compile to ``voxel(v) ∧ reports(s, v)``, projecting the
+    first column of each relation and returning a meaningless result.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Voxel that a Study reports."
+        )
+    error = info.value
+    assert isinstance(error, WrongArgumentsInPredicateError)
+    assert (error.predicate, error.arity, error.used) == ("voxel", 3, 1)
+    assert str(error) == "`voxel` has 3 columns but is used with 1"
+    assert "in 3D" in error.suggestion
+    assert "3 variables" in error.suggestion
+
+    result = neurolang.execute_squall_program(
+        "obtain every Voxel in 3D that a Study reports."
+    )
+    assert set(result) == {(1, 2, 3)}
+
+
+def test_squall_wrong_arity_states_only_the_counts():
+    """
+    A predicate used with more arguments than its columns, or a verb used
+    with too few, reports the counts without guessing a fix.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program("obtain every Pair in 3D.")
+    assert (info.value.predicate, info.value.arity, info.value.used) == (
+        "pair", 2, 3
+    )
+    assert "in 3D" not in info.value.suggestion
+
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Study that reports a Voxel in 2D."
+        )
+    assert (info.value.predicate, info.value.arity, info.value.used) in {
+        ("reports", 4, 3), ("voxel", 3, 2)
+    }
+
+
+def test_predicate_arity_error_suggests_tuple_subject_for_extra_objects():
+    """
+    A predicate used with more arguments than its columns, as a verb with
+    too many objects, suggests matching the extra value through a tuple
+    subject on the relation that stores it.
+    """
+    from ...exceptions import PredicateArityError
+
+    error = PredicateArityError("mentions", 2, 3)
+    assert "several objects" in error.suggestion
+    assert "(?s; ?t; ?w) is a" in error.suggestion
+    assert "in 2D" not in error.suggestion
+
+    neurolang = _squall_voxel_engine()
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program("obtain every Pair in 3D.")
+    assert "several objects" in info.value.suggestion
+
+
+def test_squall_defined_relation_with_wrong_arity():
+    """
+    A relation defined with several columns and used as a unary noun is
+    an error, both in a query and in the body of a rule definition.
+    """
+    from ...exceptions import PredicateArityError
+
+    neurolang = _squall_voxel_engine()
+    neurolang.execute_squall_program("define as Region3 every Voxel in 3D.")
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "obtain every Region3 that a Study reports."
+        )
+    assert (info.value.predicate, info.value.arity, info.value.used) == (
+        "region3", 3, 1
+    )
+    with pytest.raises(PredicateArityError) as info:
+        neurolang.execute_squall_program(
+            "define as Active every Voxel that a Study reports."
+        )
+    assert info.value.predicate == "voxel"
+
+    # The whole relation is still obtained by naming it alone.
+    assert set(neurolang.execute_squall_program("obtain every Region3.")) == {
+        (1, 2, 3), (4, 5, 6)
+    }
+
+
+def test_squall_obtain_as_defines_the_whole_relation():
+    """
+    ``obtain every Voxel as Voxels`` defines ``voxels`` with every column
+    of ``voxel``, as the query itself obtains them, not only the first.
+    """
+    neurolang = _squall_voxel_engine()
+    result = neurolang.execute_squall_program("obtain every Voxel as Voxels.")
+    assert set(result) == {(1, 2, 3), (4, 5, 6)}
+    result = neurolang.execute_squall_program("obtain every Voxels.")
+    assert set(result) == {(1, 2, 3), (4, 5, 6)}
+
+
+def test_squall_probabilistic_predicate_arity_excludes_probability():
+    """
+    The probability column of probabilistic facts and choices is not an
+    argument, so using them with their other columns is not an error.
+    """
+    neurolang = _squall_voxel_engine(frontend.NeurolangPDL)
+    neurolang.add_uniform_probabilistic_choice_over_set(
+        [(10,), (11,)], name="selected_study"
+    )
+    neurolang.add_probabilistic_facts_from_tuples(
+        [(0.5, 10), (0.2, 11)], name="maybe_study"
+    )
+    neurolang.execute_squall_program(
+        "define as Chosen every Selected_study.\n"
+        "define as Maybe_chosen every Maybe_study."
+    )
 
 
 def test_query_with_constant():
@@ -548,6 +687,16 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     assert res == expected
 
 
+@pytest.mark.xfail(
+    raises=TypeError,
+    strict=True,
+    reason=(
+        "Named lambda statements (`f := lambda ...`) are never stored in "
+        "the program symbol table, so `plus_one` cannot be resolved. "
+        "The test used to pass only because `y == plus_one(4)` was "
+        "silently dropped for the already bound `y`."
+    ),
+)
 def test_neurolang_dl_datalog_code_lambda_def():
     neurolang = frontend.NeurolangDL()
     neurolang.execute_datalog_program(
@@ -636,6 +785,177 @@ def test_neurolang_dl_datalog_code_with_query():
         neurolang.execute_datalog_program(
             "ans(x) :- A(x, 5)\n" + prog + "\nans(x) :- B(x, y), (y == 5)"
         )
+
+
+def _voxel_engine(engine_class):
+    """
+    Return an *engine_class* engine with voxels, peaks and a distance.
+    """
+    nl = engine_class()
+
+    @nl.add_symbol
+    def euclidean(i, j, k, i1, j1, k1) -> float:
+        return ((i - i1) ** 2 + (j - j1) ** 2 + (k - k1) ** 2) ** .5
+
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1), (9, 9, 9)], name="voxel")
+    nl.add_tuple_set(
+        [(0, 0, 0, "s1"), (1, 1, 2, "s2")], name="peak_reported"
+    )
+    return nl
+
+
+ENGINES = pytest.mark.parametrize(
+    "engine_class", [frontend.NeurolangDL, frontend.NeurolangPDL],
+    ids=["DL", "PDL"],
+)
+
+
+@ENGINES
+def test_unbound_variables_rejected_at_definition(engine_class):
+    nl = _voxel_engine(engine_class)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(
+            "reports_close(i, j, k, s) :- "
+            "(euclidean(i, j, k, i1, j1, k1) < 2.) & voxel(i, j, k) "
+            "& peak_reported(i, j, k, s)"
+        )
+    exc = exc_info.value
+    assert exc.rule == "reports_close"
+    assert exc.variables == ("i1", "j1", "k1")
+    assert str(exc).startswith(
+        "In reports_close: the variables i1, j1, k1 appear only in "
+        "`euclidean(i, j, k, i1, j1, k1) < 2.0`"
+    )
+    assert "positive atom" in str(exc)
+    assert "voxel(i1, j1, k1)" in exc.suggestion
+    assert "normal form" not in exc.suggestion
+    assert not nl.current_program
+
+
+@pytest.mark.parametrize(
+    "body, variables",
+    [
+        ("voxel(i, j, k) & (i < m)", ("m",)),
+        ("voxel(i, j, k) & (i == m + 1)", ("m",)),
+        ("voxel(i, j, k) & (d < 2) & (e == d + 1)", ("d", "e")),
+        ("voxel(i, j, k) & ~peak_reported(i, j, k, s) & (s != 'a')",
+         ("s",)),
+    ],
+    ids=["comparison", "equality-over-unbound", "chain", "negation"],
+)
+def test_unbound_variables_named_in_error(body, variables):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(f"p(i) :- {body}")
+    assert exc_info.value.variables == variables
+    assert ", ".join(variables) in str(exc_info.value)
+
+
+def test_unbound_variables_in_aggregation_rule_rejected():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError, match="i1, j1"):
+        nl.execute_datalog_program(
+            "n_close(i, count(s)) :- peak_reported(i, j, k, s) "
+            "& (euclidean(i, j, k, i1, j1, k1) < 2.)"
+        )
+
+
+@pytest.mark.parametrize("head", ["ans(i)", "ans(i, m)"])
+def test_unbound_variables_in_query_rejected(head):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(f"{head} :- voxel(i, j, k) & (i < m)")
+    assert exc_info.value.rule is None
+    assert str(exc_info.value).startswith(
+        "In the query: the variable m appears only in `i < m`"
+    )
+
+
+@ENGINES
+def test_unbound_head_variable_named_when_queried_unbound(engine_class):
+    nl = _voxel_engine(engine_class)
+    nl.execute_datalog_program(
+        "far(i, s) :- peak_reported(i0, j, k, s) & (i0 != i)"
+    )
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program("ans(i, s) :- far(i, s)")
+    assert exc_info.value.rule == "far"
+    assert exc_info.value.variables == ("i",)
+
+
+def test_unbound_head_variable_bound_by_query_constant():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    res = nl.execute_datalog_program(
+        """
+        far(i, s) :- peak_reported(i0, j, k, s) & (i0 != i)
+        ans(s) :- far(0, s)
+        """
+    )
+    assert res.to_unnamed() == {("s2",)}
+
+
+@ENGINES
+def test_variable_defined_from_head_variable_bound_by_query_constant(
+    engine_class
+):
+    """``d`` is defined from the head variable ``i``, bound by the query."""
+    nl = _voxel_engine(engine_class)
+    res = nl.execute_datalog_program(
+        """
+        near(i, s) :- peak_reported(i1, j, k, s) \
+            & (d == euclidean(i, i, i, i1, j, k)) & (d < 1.5)
+        ans(s) :- near(0, s)
+        """
+    )
+    assert res.to_unnamed() == {("s1",)}
+
+
+def test_variables_only_in_negations_left_to_negation_check():
+    nl = _voxel_engine(frontend.NeurolangDL)
+    nl.execute_datalog_program(
+        "p(i) :- voxel(i, j, k) & ~peak_reported(i, j, k, s)"
+    )
+    with pytest.raises(exceptions.NegativeFormulaNotSafeRangeException):
+        nl.execute_datalog_program("ans(i) :- p(i)")
+
+
+@ENGINES
+def test_functions_and_comparisons_on_bound_variables_accepted(
+    engine_class
+):
+    nl = _voxel_engine(engine_class)
+    res = nl.execute_datalog_program(
+        """
+        close(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) \
+            & (euclidean(i, j, k, i1, j1, k1) < 2.)
+        ans(i, j, k, s) :- close(i, j, k, s)
+        """
+    )
+    assert res.to_unnamed() == {
+        (0, 0, 0, "s1"), (1, 1, 1, "s1"), (1, 1, 1, "s2")
+    }
+
+
+@pytest.mark.parametrize(
+    "rule, expected",
+    [
+        ("p(i, s) :- peak_reported(i0, j, k, s) & (i == i0 + 1)",
+         {(1, "s1"), (2, "s2")}),
+        ("p(e, s) :- peak_reported(i, j, k, s) & (e == d + 1) "
+         "& (d == i * 10)", {(1, "s1"), (11, "s2")}),
+        ("p(d, s) :- peak_reported(i, j, k, s) & (d == i)",
+         {(0, "s1"), (1, "s2")}),
+        ("p(d, s) :- peak_reported(i, j, k, s) & (d == 3)",
+         {(3, "s1"), (3, "s2")}),
+        ("p(i, s) :- peak_reported(i, j, k, s) & (d == euclidean(i, j, k, "
+         "0, 0, 0)) & (d < 1)", {(0, "s1")}),
+    ],
+    ids=["expression", "chain", "variable", "constant", "function"],
+)
+def test_equality_defined_variables_accepted(rule, expected):
+    nl = _voxel_engine(frontend.NeurolangDL)
+    res = nl.execute_datalog_program(f"{rule}\nans(x, s) :- p(x, s)")
+    assert res.to_unnamed() == expected
 
 
 def test_neurolang_dl_aggregation():
@@ -764,6 +1084,153 @@ def test_frontend_operators():
     assert isinstance(c, qre.Operation)
     assert c.expression.functor == exp.Constant(add)
     assert c.expression.args == (exp.Constant(1), a.expression)
+
+
+@pytest.mark.parametrize(
+    "aggregate, expected",
+    [("count", {("a", 2), ("b", 1)}), ("max", {("a", 2), ("b", 5)})],
+)
+def test_query_with_aggregation_in_head(aggregate, expected):
+    neurolang = frontend.NeurolangPDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    sol = neurolang.execute_datalog_program(
+        f"ans(t, {aggregate}(s)) :- hits(s, t)"
+    )
+    assert sol.columns == ("t", aggregate)
+    assert sol.to_unnamed() == expected
+    with neurolang.scope as e:
+        sol = neurolang.query(
+            (e.t, getattr(e, aggregate)(e.s)), e.hits(e.s, e.t)
+        )
+    assert sol.columns == ("t", aggregate)
+    assert sol.to_unnamed() == expected
+
+
+def test_query_head_with_repeated_variable():
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b")], name="hits")
+    sol = neurolang.execute_datalog_program("ans(t, t) :- hits(s, t)")
+    assert sol.columns == ("t", "t_1")
+    assert sol.to_unnamed() == {("a", "a"), ("b", "b")}
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        ("q(i1, di), v(i), (i == i1 + di)", {(1,)}),
+        ("q(i1, di), (i == i1 + di), v(i)", {(1,)}),
+        ("q(i1, di), v(i), (i == (i1 + di))", {(1,)}),
+        ("q(i1, di), v(i), (i1 + di == i)", {(1,)}),
+        ("q(i1, di), v(i), (i == i1 * 2)", {(0,)}),
+        ("q(i1, di), v(i), (i == 2 + 3)", {(5,)}),
+        ("q(i1, di), v(i), (i == i1 + di), (i == di * 1)", {(1,)}),
+        ("q(i1, di), v(i), (i == i1 + di), (i == di * 5)", set()),
+        ("q(i1, di), (i == i1 + di), (i == di * 5)", set()),
+        ("q(i1, di), (i == i1 + di), (i == di * 1)", {(1,)}),
+        ("q(i1, di), (i == i1 + di)", {(1,)}),
+    ],
+)
+def test_equality_with_expression_on_bound_variable(
+    frontend_class, body, expected
+):
+    nl = frontend_class()
+    nl.add_tuple_set([(0,), (1,), (5,)], name="v")
+    nl.add_tuple_set([(0, 1)], name="q")
+    res = nl.execute_datalog_program(f"p(i) :- {body}\nans(i) :- p(i)")
+    assert res.to_unnamed() == expected
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+def test_equality_with_expression_3d_neighbourhood(frontend_class):
+    nl = frontend_class()
+    grid = [(i, j, k) for i in range(4) for j in range(4) for k in range(4)]
+    nl.add_tuple_set(grid, name="voxel")
+    nl.add_tuple_set([(1, 1, 1, "s1"), (3, 0, 2, "s2")], name="peak_reported")
+    nl.add_tuple_set([(0, 0, 0), (1, 0, 0), (0, 1, 0)], name="offset")
+    res = nl.execute_datalog_program(
+        "reports_close(i, j, k, s) :- peak_reported(i1, j1, k1, s), "
+        "offset(di, dj, dk), (i == i1 + di), (j == j1 + dj), "
+        "(k == k1 + dk), voxel(i, j, k)\n"
+        "ans(i, j, k, s) :- reports_close(i, j, k, s)"
+    )
+    assert res.to_unnamed() == {
+        (1, 1, 1, "s1"),
+        (2, 1, 1, "s1"),
+        (1, 2, 1, "s1"),
+        (3, 0, 2, "s2"),
+        (3, 1, 2, "s2"),
+    }
+
+
+GRID_SIDE = 60
+N_PEAKS = 2000
+
+
+def neighbourhood_peaks():
+    """Return ``N_PEAKS`` peaks spread over the ``GRID_SIDE`` grid."""
+    return [
+        (
+            (7 * n) % GRID_SIDE,
+            (13 * n) % GRID_SIDE,
+            (29 * n) % GRID_SIDE,
+            n,
+        )
+        for n in range(N_PEAKS)
+    ]
+
+
+def count_neighbourhood_rows(queue):
+    """
+    Put in ``queue`` the rows of the one-rule neighbourhood query.
+
+    The engine holds ``N_PEAKS`` peaks, the 27 offsets in
+    ``{-1, 0, 1}`` ^ 3 and a ``GRID_SIDE`` ^ 3 voxel grid, so a cross
+    product of the three relations would not finish.
+    """
+    nl = frontend.NeurolangPDL()
+    side = range(GRID_SIDE)
+    nl.add_tuple_set(
+        [(i, j, k) for i in side for j in side for k in side], name="voxel"
+    )
+    nl.add_tuple_set(neighbourhood_peaks(), name="peak_reported")
+    shifts = (-1, 0, 1)
+    nl.add_tuple_set(
+        [(a, b, c) for a in shifts for b in shifts for c in shifts],
+        name="offset",
+    )
+    res = nl.execute_datalog_program(
+        "reports_close(i, j, k, s) :- peak_reported(i1, j1, k1, s), "
+        "offset(di, dj, dk), (i == i1 + di), (j == j1 + dj), "
+        "(k == k1 + dk), voxel(i, j, k)\n"
+        "ans(i, j, k, s) :- reports_close(i, j, k, s)"
+    )
+    queue.put(len(res))
+
+
+def test_equality_with_expression_3d_neighbourhood_large_grid():
+    ctx = multiprocessing.get_context("spawn")
+    queue = ctx.Queue()
+    process = ctx.Process(target=count_neighbourhood_rows, args=(queue,))
+    process.start()
+    process.join(timeout=60)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        pytest.fail("the neighbourhood query did not finish in 60 s")
+
+    def in_grid(c):
+        return sum(0 <= c + d < GRID_SIDE for d in (-1, 0, 1))
+
+    expected = sum(
+        in_grid(i) * in_grid(j) * in_grid(k)
+        for i, j, k, _ in neighbourhood_peaks()
+    )
+    assert queue.get(timeout=5) == expected
 
 
 def test_neurolang_dl_attribute_access():
@@ -924,6 +1391,66 @@ def test_neurolang_dl_region_destroy_tuple_coords():
     assert set(ans) == expected
 
 
+
+SCHAEFER_INIT = """
+schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
+schaefer_label(l) :- schaefer(l, r)
+labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+"""
+SCHAEFER_NAMES = {1: "17Networks_LH_A", 2: "17Networks_LH_B", 3: "17Networks_RH_C"}
+
+
+def _small_atlas_regions():
+    """
+    Return the labelled regions of a small 3-parcel atlas image.
+
+    Returns
+    -------
+    list of tuple
+        ``(label, region)`` rows, as the engines load deterministic
+        atlases.
+    """
+    import nibabel
+
+    data = np.zeros((4, 3, 2), dtype=np.int16)
+    data[0, :, 0] = 1
+    data[1:3, 0, :] = 2
+    data[3, 2, 1] = 3
+    image = nibabel.Nifti1Image(data, np.diag([2.0, 2.0, 2.0, 1.0]))
+    regions = ExplicitVBR.from_spatial_image_labels(image, [1, 2, 3])
+    return [(SCHAEFER_NAMES[k], regions[k]) for k in (1, 2, 3)], data
+
+
+def test_schaefer_shaped_engine_keeps_atlas_regions():
+    nl = frontend.NeurolangPDL()
+    rows, data = _small_atlas_regions()
+    nl.add_tuple_set(rows, name="schaefer")
+    declared_type = nl.symbol_table["schaefer"].type
+
+    nl.execute_datalog_program(SCHAEFER_INIT)
+
+    assert nl.symbol_table["schaefer"].type == declared_type
+    regions = nl.execute_datalog_program("ans(l, r) :- schaefer(l, r)")
+    assert set(regions.to_unnamed()) == set(rows)
+    assert all(
+        isinstance(region, ExplicitVBR) for _, region in regions.to_unnamed()
+    )
+
+    expected = {
+        (name, *map(int, voxel))
+        for label, name in SCHAEFER_NAMES.items()
+        for voxel in np.argwhere(data == label)
+    }
+    labels = nl.execute_datalog_program("ans(l, i, j, k) :- labels(l, i, j, k)")
+    assert set(labels.to_unnamed()) == expected
+    voxels = nl.execute_datalog_program(
+        "ans(i, j, k, l) :- schaefer_voxels(i, j, k, l)"
+    )
+    assert {(l, i, j, k) for i, j, k, l in voxels.to_unnamed()} == expected
+    label_names = nl.execute_datalog_program("ans(l) :- schaefer_label(l)")
+    assert set(label_names.to_unnamed()) == {(name,) for name in SCHAEFER_NAMES.values()}
+
+
 @pytest.mark.skip
 @patch(
     "neurolang.frontend.neurosynth_utils."
@@ -1061,3 +1588,33 @@ def test_symbol_eq_user_function_extended_projection():
         ("Hello", "hello"),
         ("World", "world"),
     }
+
+
+def _count(x) -> int:
+    return len(x)
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("ans(n) :- AGGREGATE[](study(s) @ count(s)) = n", {(3,)}),
+        (
+            "ans(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n",
+            {("pain", 2), ("emotion", 1)},
+        ),
+    ],
+)
+def test_aggregate_in_ans_query(frontend_class, query, expected):
+    nl = frontend_class()
+    if frontend_class is frontend.NeurolangDL:
+        nl.add_symbol(_count, name="count")
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set(
+        [(1, "pain"), (2, "pain"), (1, "emotion")], name="mentions"
+    )
+    res = nl.execute_datalog_program(query)
+    assert res is not None
+    assert set(map(tuple, res.as_pandas_dataframe().values)) == expected

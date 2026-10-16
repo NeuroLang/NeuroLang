@@ -80,7 +80,9 @@ when the query is liftable; if the query is not supported by these, it falls
 back to **knowledge compilation**, i.e. weighted model counting over a
 sentential decision diagram (SDD) built with pysdd
 (:mod:`neurolang.probabilistic.weighted_model_counting`), which is general but
-can be much more expensive.  See [Zanitti2023]_ for details.
+can be much more expensive.  See [Zanitti2023]_ for details, and
+:doc:`probabilistic_lifting` for the lifting strategies and their
+references.
 
 .. note::
 
@@ -143,6 +145,7 @@ Engines are declared in :file:`neurolang/utils/engines/engines.yaml`
        datalog_init: |
          study_with_peaks(S) :- peak_reported(I, J, K, S)
          mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+         weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
        relations:
          extra_data: "shared/my_data.csv"
        predicates:

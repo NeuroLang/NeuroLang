@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from neurolang.exceptions import NeuroLangException
+from neurolang.exceptions import NeuroLangException, SymbolNotFoundError
 from neurolang.expressions import Constant, Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
@@ -184,6 +184,56 @@ class TestEngineRegistry:
     def test_unknown_engine_raises(self):
         with pytest.raises(ValueError, match="Unknown engine"):
             engine_registry.get_engine_config("nonexistent")
+
+    @pytest.mark.parametrize(
+        "name, text",
+        [
+            ("r.csv", "a,b\n1,x\n2,y\n"),
+            ("r.TSV", "a\tb\n1\tx\n2\ty\n"),
+            ("r.csv.gz", "a,b\n1,x\n2,y\n"),
+            ("r.tsv.gz", "a\tb\n1\tx\n2\ty\n"),
+        ],
+    )
+    def test_read_relation_file(self, tmp_path, name, text):
+        import gzip
+
+        path = tmp_path / name
+        if name.endswith(".gz"):
+            path.write_bytes(gzip.compress(text.encode()))
+        else:
+            path.write_text(text)
+        df = engine_registry.read_relation_file(path)
+        assert list(df.columns) == ["a", "b"]
+        assert df.values.tolist() == [[1, "x"], [2, "y"]]
+
+    def test_read_relation_file_expands_home(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / "r.csv").write_text("a\n1\n")
+        df = engine_registry.read_relation_file("~/r.csv")
+        assert df["a"].tolist() == [1]
+
+    def test_read_relation_file_unsupported(self, tmp_path):
+        with pytest.raises(
+            engine_registry.UnsupportedRelationFile,
+            match="Unsupported relation file format: r.xlsx",
+        ):
+            engine_registry.read_relation_file(tmp_path / "r.xlsx")
+
+    def test_phase_relations(self, tmp_path):
+        from neurolang.frontend import NeurolangPDL
+
+        (tmp_path / "r.tsv").write_text("a\tb\n1\tx\n")
+        nl = NeurolangPDL()
+        cfg = {"relations": {"rel": {"file": "r.tsv"}}}
+        engine_registry._phase_relations(nl, cfg, "e", tmp_path, tmp_path)
+        assert set(nl.symbols["rel"].value) == {(1, "x")}
+
+    def test_phase_relations_unsupported(self, tmp_path):
+        cfg = {"relations": {"rel": "r.txt"}}
+        with pytest.raises(ValueError, match="Relation 'rel': Unsupported"):
+            engine_registry._phase_relations(
+                None, cfg, "e", tmp_path, tmp_path
+            )
 
     def test_datalog_init_in_config(self):
         """Every engine with python_init should have inline datalog_init."""
@@ -1323,6 +1373,35 @@ class TestExecuteSquallProgram:
 
 
 # ---------------------------------------------------------------------------
+# Aggregations in the head of the query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "aggregate, rows",
+    [
+        ("count", [["a", 2], ["b", 1]]),
+        ("sum", [["a", 3], ["b", 5]]),
+        ("max", [["a", 2], ["b", 5]]),
+    ],
+)
+def test_query_with_aggregation_in_head(aggregate, rows, monkeypatch, capsys):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main([
+        "--format", "json", "--sort", "t",
+        f"ans(t, {aggregate}(s)) :- hits(s, t)",
+    ])
+    out = json.loads(capsys.readouterr().out)
+    assert [[r["t"], r[aggregate]] for r in out] == rows
+
+
+# ---------------------------------------------------------------------------
 # Error reporting
 # ---------------------------------------------------------------------------
 
@@ -1424,3 +1503,365 @@ class TestErrorReporting:
         err = self.run_failing(capsys, "ans(x) :- item(x)")
         assert err.startswith("Internal error — ValueError: boom")
         assert "--debug" in err
+
+
+# ---------------------------------------------------------------------------
+# Result helpers shared with the interactive REPL
+# ---------------------------------------------------------------------------
+
+
+class TestResultToDataFrame:
+
+    def test_wrapped_constant_renamed(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(42,)])
+        df = result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(df.columns) == ["val"]
+        assert df.iloc[0, 0] == 42
+
+    def test_named_set(self):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+
+    @pytest.mark.parametrize(
+        "columns, renamed",
+        [
+            (("fresh_00000002",), ["term"]),
+            (("0", "1"), ["term", "weight"]),
+            (("fresh_00000002", "y"), ["term", "y"]),
+            (("fresh_00000002", "term"), ["fresh_00000002", "term"]),
+        ],
+    )
+    def test_generated_columns_renamed(self, columns, renamed):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=columns, iterable=[tuple(range(len(columns)))]
+        )
+        names = ["term", "weight"][:len(columns)]
+        df = result_to_dataframe(nras, names)
+        assert list(df.columns) == renamed
+
+    def test_sort_dataframe_warns_on_unknown_column(self, capsys):
+        from neurolang.utils.cli import sort_dataframe
+
+        import pandas as pd
+
+        df = pd.DataFrame({"x": [1, 3, 2]})
+        out = sort_dataframe(df, [("y", True), ("x", False)])
+        assert list(out["x"]) == [3, 2, 1]
+        assert "sort column 'y' not found" in capsys.readouterr().err
+
+
+def test_squall_obtain_relation_uses_declared_column_names(
+    monkeypatch, capsys
+):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3, 10)], name="peak_reported")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main(["--squall", "obtain every peak_reported."])
+    header = capsys.readouterr().out.splitlines()[0].split()
+    assert header == ["i", "j", "k", "study_id"]
+
+
+@pytest.mark.parametrize("missing", ["prompt_toolkit", "rich"])
+def test_interactive_without_tui_dependencies(missing, monkeypatch, capsys):
+    """Check that -i without the tui extra exits with an install hint."""
+    import sys
+
+    import neurolang.utils
+
+    monkeypatch.setitem(sys.modules, missing, None)
+    for name in list(sys.modules):
+        if name.startswith("neurolang.utils.tui"):
+            monkeypatch.delitem(sys.modules, name)
+    monkeypatch.delattr(neurolang.utils, "tui", raising=False)
+
+    def fail_build(*args, **kwargs):
+        raise AssertionError("the engine must not be built")
+
+    monkeypatch.setattr(engine_registry, "build_engine", fail_build)
+    with pytest.raises(SystemExit) as exc_info:
+        main(["-i"])
+    assert exc_info.value.code == 1
+    assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
+
+
+class TestResultToDataFrameUsesBackendFrame:
+
+    def test_named_set_not_iterated(self, monkeypatch):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a"), (2, "b")]
+        )
+
+        def no_iteration(self):
+            raise AssertionError("rows must not be iterated")
+
+        monkeypatch.setattr(
+            NamedRelationalAlgebraFrozenSet, "__iter__", no_iteration
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+        assert len(df) == 2
+
+    def test_renaming_does_not_change_the_set(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(1,)])
+        result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(inner.as_pandas_dataframe().columns) == [0]
+
+    def test_polars_empty_named_set_keeps_columns(self):
+        pytest.importorskip("polars")
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.polars import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        empty = NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+        df = result_to_dataframe(empty)
+        assert list(df.columns) == ["x", "y"]
+        assert df.empty
+        full = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        assert result_to_dataframe(full).values.tolist() == [[1, "a"]]
+
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        ("obtain every term.", {"obtain_0": ["term"]}),
+        ("obtain every Term that a Study mentions.", {"obtain_0": ["term"]}),
+        ("obtain every Study that mentions 'pain'.", {"obtain_0": ["study_id"]}),
+        ("obtain every item that plays.", {"obtain_0": ["item"]}),
+        ("obtain every mentions.", {"obtain_0": ["study_id", "term"]}),
+    ],
+)
+def test_squall_column_names_follow_the_obtained_noun(program, expected):
+    """Check results are named after the noun they obtain."""
+    from neurolang.utils.cli import squall_column_names
+
+    names = squall_column_names("neurosynth", program)
+    assert {k: v for k, v in names.items()} == expected
+
+
+def test_squall_column_names_keep_user_variables():
+    """Check a user-named variable keeps its name in the result."""
+    import pandas as pd
+
+    from neurolang.utils.cli import _rename_unnamed_columns, squall_column_names
+
+    names = squall_column_names(
+        "neurosynth", "obtain every Study ?s that mentions 'pain'."
+    )
+    df = pd.DataFrame({"s": [1]})
+    assert list(_rename_unnamed_columns(df, names.get("obtain_0")).columns) == ["s"]
+
+
+_PAIN_STUDY = "define as Pain_study every Study that mentions 'pain'.\n"
+_SELECTED = (
+    "define as Selected with inferred probability every Study that is a "
+    "Selected_study and that mentions 'pain'.\n"
+)
+
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        (_PAIN_STUDY + "obtain every Pain_study.", {"obtain_0": ["study_id"]}),
+        (
+            "obtain the Count of the Study that mentions 'pain'.",
+            {"obtain_0": ["count"]},
+        ),
+        (
+            "obtain the Count of the Study ?s that mentions 'pain'.",
+            {"obtain_0": ["count"]},
+        ),
+        (
+            "obtain every Study that mentions 'pain' as Pain.",
+            {"pain": ["pain"]},
+        ),
+        (
+            _SELECTED + "obtain every Selected.",
+            {"obtain_0": ["study_id", "probability"]},
+        ),
+        (
+            "obtain every Voxel in 3D that a Study reports.",
+            {"obtain_0": ["i", "j", "k"]},
+        ),
+        (
+            "obtain every Voxel (?x; ?y; ?z) that a Study reports.",
+            {"obtain_0": ["x", "y", "z"]},
+        ),
+        (
+            "define as Pain_voxel every Voxel in 3D that a Study reports.\n"
+            "obtain every Pain_voxel.",
+            {"obtain_0": ["i", "j", "k"]},
+        ),
+        (
+            "define as Activation with probability every Voxel in 3D that "
+            "a Selected_study reports conditioned to every Selected_study "
+            "that mentions 'pain'.\nobtain every Activation.",
+            {"obtain_0": ["i", "j", "k", "probability"]},
+        ),
+    ],
+)
+def test_squall_column_names_of_generated_columns(program, expected):
+    """Check no result keeps a generated column name."""
+    from neurolang.utils.cli import squall_column_names
+
+    assert squall_column_names("neurosynth", program) == expected
+
+
+def test_squall_column_names_of_rules_defined_before():
+    """Check a rule defined by an earlier program names its columns."""
+    from neurolang.utils.cli import squall_column_names
+
+    rules = squall_parser(_PAIN_STUDY + _SELECTED).formulas
+    assert squall_column_names(
+        "neurosynth", "obtain every Pain_study.", rules=rules
+    ) == {"obtain_0": ["study_id"]}
+    assert squall_column_names(
+        "neurosynth", "obtain every Selected.", rules=rules
+    ) == {"obtain_0": ["study_id", "probability"]}
+
+
+@pytest.mark.parametrize(
+    "column, generated",
+    [
+        (0, True), ("c0", True), ("c12", True), ("fresh_00000001", True),
+        ("3", True), ("count", False), ("cs", False), ("c", False),
+    ],
+)
+def test_generated_columns(column, generated):
+    """Check only positions and fresh names count as generated."""
+    from neurolang.utils.cli import _is_generated_column
+
+    assert _is_generated_column(column) is generated
+
+
+class PredicateArityError(NeuroLangException):
+    """Stand-in of the frontend's error on a predicate's arity."""
+
+    def __init__(self, predicate, arity, used):
+        super().__init__(f"{predicate} has {arity} columns, not {used}")
+        self.predicate = predicate
+        self.arity = arity
+        self.used = used
+
+
+_VOXEL_NOTE = (
+    'note: voxel is voxel(i, j, k), a 3-column entity: write '
+    '"every Voxel in 3D" or "every Voxel (?i; ?j; ?k)"'
+)
+_REPORTS_NOTE = (
+    'note: reports relates study(study_id) to voxel(i, j, k): write '
+    '"a Study reports a Voxel in 3D"'
+)
+
+
+class TestSortHints:
+    """Check the notes on the entities of several columns."""
+
+    @pytest.mark.parametrize(
+        "exc, program, notes",
+        [
+            (
+                PredicateArityError(Symbol("voxel"), 3, 1),
+                "obtain every Voxel.", [_VOXEL_NOTE],
+            ),
+            (
+                PredicateArityError("reports", 4, 2),
+                "obtain every Study that reports a Voxel.", [_REPORTS_NOTE],
+            ),
+            (
+                ValueError("Relations must have the same arity"),
+                "obtain every Study that reports a Voxel.",
+                [_REPORTS_NOTE, _VOXEL_NOTE],
+            ),
+            (
+                SymbolNotFoundError("Symbol not found voxels"),
+                "obtain every Voxels.", [_VOXEL_NOTE],
+            ),
+            (
+                SymbolNotFoundError("Symbol not found pain"),
+                "obtain every Pain.", [],
+            ),
+            (
+                ValueError("Relations must have the same arity"),
+                "obtain every Study that mentions 'pain'.", [],
+            ),
+            (ValueError("bad value"), "obtain every Voxel.", []),
+        ],
+    )
+    def test_squall_notes(self, exc, program, notes):
+        from neurolang.utils.sort_hints import sort_notes
+
+        assert sort_notes(exc, program, "neurosynth", squall=True) == notes
+
+    def test_datalog_notes(self):
+        from neurolang.utils.sort_hints import sort_notes
+
+        notes = sort_notes(
+            ValueError("Relations must have the same arity"),
+            "ans(s) :- reports(s, i)", "neurosynth", squall=False,
+        )
+        assert notes == [
+            "note: reports relates study(study_id) to voxel(i, j, k): "
+            "write reports(study_id, i, j, k)"
+        ]
+
+    def test_no_notes_without_engine(self):
+        from neurolang.utils.sort_hints import sort_notes
+
+        exc = PredicateArityError("voxel", 3, 1)
+        assert sort_notes(exc, "obtain every Voxel.", "", squall=True) == []
+
+    def test_report_error_adds_the_notes(self):
+        import io
+
+        from neurolang.utils.cli import report_error
+
+        stream = io.StringIO()
+        report_error(
+            ValueError("Relations must have the same arity"),
+            "obtain every Study that reports a Voxel.", squall=True,
+            debug=False, file=stream, engine_name="neurosynth",
+        )
+        assert _REPORTS_NOTE in stream.getvalue()

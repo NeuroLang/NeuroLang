@@ -141,22 +141,33 @@ class RemoveDuplicatedConjunctsDisjuncts(
     pass
 
 
-class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
-    """
-    Moves the negations the furthest possible to the atoms. On
-    conjunction, disjunction, and negation operations.
-    """
+class MoveNegationsIntoConjunctionsMixin(PatternWalker):
+    """¬(A ∧ B) ≡ ¬A ∨ ¬B"""
     @add_match(Negation(Conjunction(...)))
     def negated_conjunction(self, negation):
         conj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
         return self.walk(Disjunction(tuple(formulas)))
 
+
+class MoveNegationsIntoDisjunctionsMixin(PatternWalker):
+    """¬(A ∨ B) ≡ ¬A ∧ ¬B"""
     @add_match(Negation(Disjunction(...)))
     def negated_disjunction(self, negation):
         disj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
         return self.walk(Conjunction(tuple(formulas)))
+
+
+class MoveNegationsToAtomsSimpleOperationsMixin(
+    MoveNegationsIntoConjunctionsMixin,
+    MoveNegationsIntoDisjunctionsMixin,
+    PatternWalker
+):
+    """
+    Moves the negations the furthest possible to the atoms. On
+    conjunction, disjunction, and negation operations.
+    """
 
 
 class PullUniversalUpFromNegation(PatternWalker):
@@ -571,6 +582,112 @@ class RemoveExistentialOnVariables(LogicExpressionWalker):
             return ExistentialPredicate(expression.head, body)
 
 
+def _without_asserted_conjuncts(formula, asserted, bound=frozenset()):
+    """
+    Remove from *formula*, a conjunction possibly within existentials,
+    the conjuncts in *asserted* not using the *bound* variables. The
+    formula is returned unchanged if no conjunct would be left.
+    """
+    if isinstance(formula, ExistentialPredicate):
+        body = _without_asserted_conjuncts(
+            formula.body, asserted, bound | {formula.head}
+        )
+        return formula.apply(formula.head, body)
+    if not isinstance(formula, Conjunction):
+        return formula
+    kept = tuple(
+        conjunct for conjunct in formula.formulas
+        if conjunct not in asserted
+        or extract_logic_free_variables(conjunct) & bound
+    )
+    if len(kept) in (0, len(formula.formulas)):
+        return formula
+    if len(kept) == 1:
+        return kept[0]
+    return Conjunction(kept)
+
+
+def _absorbed_negations(conjunction):
+    """The conjuncts of *conjunction*, with the conjuncts asserted by
+    *conjunction* removed from its negated conjunctions."""
+    asserted = frozenset(
+        formula for formula in conjunction.formulas
+        if not isinstance(formula, Negation)
+    )
+    return tuple(
+        Negation(_without_asserted_conjuncts(formula.formula, asserted))
+        if isinstance(formula, Negation) else formula
+        for formula in conjunction.formulas
+    )
+
+
+class AbsorbAssertedConjunctsInNegations(LogicExpressionWalker):
+    """
+    Remove from the negated conjunctions of a conjunction the conjuncts
+    it asserts, by the absorption law A ∧ ¬(A ∧ B) ≡ A ∧ ¬B. As
+    ∃y (A ∧ B) ≡ A ∧ ∃y B when y is not free in A, this also holds for
+    A ∧ ¬∃y (A ∧ B), the conjuncts in which y is free being kept.
+
+    The equivalence holds in every interpretation, hence in every
+    possible world of a probabilistic database. It removes, for
+    instance, a probabilistic atom repeated within a negation, which
+    can make a query liftable.
+
+    A negated conjunction all of whose conjuncts are asserted is left
+    unchanged, as it is a contradiction.
+    """
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: (
+            _absorbed_negations(conjunction) != conjunction.formulas
+        )
+    )
+    def absorb_in_negations(self, conjunction):
+        return self.walk(Conjunction(_absorbed_negations(conjunction)))
+
+
+class StandardiseApart(PatternWalker):
+    """
+    Rename each quantified variable to a fresh one, so that no variable is
+    quantified twice, nor both free and quantified. The body of a
+    quantifier is walked first, so that only the free occurrences of its
+    variable are left to rename. A rebuilt expression is not walked again,
+    as renaming to fresh variables always changes it.
+    """
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        body = self.walk(expression.body)
+        fresh = expression.head.fresh()
+        return expression.apply(
+            fresh, ReplaceExpressionWalker({expression.head: fresh}).walk(body)
+        )
+
+    @add_match(NaryLogicOperator)
+    def nary_logic_operator(self, expression):
+        return expression.apply(tuple(
+            self.walk(formula) for formula in expression.formulas
+        ))
+
+    @add_match(UnaryLogicOperator)
+    def unary_logic_operator(self, expression):
+        return expression.apply(self.walk(expression.formula))
+
+    @add_match(FunctionApplication)
+    def atom(self, expression):
+        return expression
+
+    @add_match(Constant)
+    def logical_constant(self, expression):
+        return expression
+
+
+def standardise_apart(formula):
+    """Rename the quantified variables of *formula*, see
+    `StandardiseApart`."""
+    return StandardiseApart().walk(formula)
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
@@ -645,10 +762,11 @@ class RemoveTrivialOperations(
     pass
 
 
-class PushExistentialsDownMixin(
-    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
-    PatternWalker
-):
+class PushExistentialsDownDisjunctionsMixin(PatternWalker):
+    """
+    Remove the existentials whose variable is not free in their body, and
+    push the others into disjunctions, ∃v (A ∨ B) ≡ ∃v A ∨ ∃v B.
+    """
     @add_match(
         ExistentialPredicate,
         lambda expression: (
@@ -684,6 +802,13 @@ class PushExistentialsDownMixin(
             res = expression
         return res
 
+
+class PushExistentialsDownConjunctionsMixin(PatternWalker):
+    """
+    Push the existentials into conjunctions, ∃v (A ∧ B) ≡ A ∧ ∃v B when
+    `v` is not free in `A`, keeping within them the conjuncts that share
+    variables with negations, and swap nested existentials to push them.
+    """
     @add_match(
         ExistentialPredicate(..., Conjunction),
         lambda expression: any(
@@ -772,6 +897,15 @@ class PushExistentialsDownMixin(
                     ExistentialPredicate(inner_var, new_body)
                 )
         return expression
+
+
+class PushExistentialsDownMixin(
+    PushExistentialsDownDisjunctionsMixin,
+    PushExistentialsDownConjunctionsMixin,
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    PatternWalker
+):
+    pass
 
 
 class PushUniversalsDownMixin(

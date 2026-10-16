@@ -85,7 +85,9 @@ a guided walkthrough.
    tutorial_squall
    tutorial_datalog
    tutorials/viterbi
+   tutorial_text_embeddings
    concepts
+   probabilistic_lifting
    engine_configuration
    performance
    auto_examples/index

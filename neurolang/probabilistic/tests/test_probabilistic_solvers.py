@@ -4,7 +4,6 @@ from typing import AbstractSet
 import numpy as np
 import pytest
 
-from ...config import config
 from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
@@ -318,10 +317,35 @@ def test_mutual_exclusivity(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_negated_probabilistic_fact(solver):
+    pfact_sets = {
+        P: {(0.2, "a"), (0.7, "b")},
+        Q: {(0.3, "a")},
+    }
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Negation(Q(x))))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [(0.2 * 0.7, "a"), (0.7, "b")], ("_p_", "x")
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -356,9 +380,7 @@ def test_fact_negation_choice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
     pytest.param(dalvi_suciu_lift, marks=pytest.mark.xfail(
@@ -417,10 +439,7 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 
 def test_large_probabilistic_choice(solver):
-    if (
-        config["RAS"].get("backend", "pandas") == "dask"
-        or solver is weighted_model_counting
-    ):
+    if solver is weighted_model_counting:
         n = int(1000)
     else:
         n = int(10000)
@@ -834,9 +853,7 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -873,9 +890,7 @@ def test_program_with_segregation_constant_case(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -934,10 +949,7 @@ def test_program_with_segregation_second_constant(solver):
     cpl_program.walk(code)
     query = Implication(ans(x), Z(x, b))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -976,10 +988,7 @@ def test_program_with_segregation(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -989,6 +998,8 @@ def test_program_with_segregation(solver):
         expected = testing.make_prov_set(
             [
                 (0.5, "a", "b"),
+                (0.5, "b", "c"),
+                (0.2, "b", "d"),
             ],
             ("_p_", "x", "y"),
         )
@@ -1176,9 +1187,7 @@ def test_empty_result_program(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1417,11 +1426,39 @@ def test_dalvi_suciu_fails_unate():
         R,
         [(0.1, 'a'), (0.3, 'c')]
     )
-    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    rule = Implication(P(x), Conjunction((
+        R(y), A(y, z), R(z), Q(x), Negation(R(x))
+    )))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+def test_dalvi_suciu_non_unate_shattered_on_free_variable():
+    """Q(x) ∧ ¬R(x) ∧ ∃y R(y) is not unate, it is lifted by shattering
+    ∃y R(y) into R(x) ∨ ∃y≠x R(y)."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [
+            (0.2 * 0.9 * 0.3, "a"),
+            (0.1 * (1 - 0.9 * 0.7), "b"),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_dalvi_suciu_fails_single_quantifier():
@@ -1459,9 +1496,7 @@ def test_dalvi_suciu_fails_not_ranked():
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1511,9 +1546,7 @@ def test_nested_negation(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1680,9 +1713,24 @@ def test_dalvi_suciu_fails_builtin():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
         )
-    query = Implication(ans(x), Conjunction((Q(x), P(x, y), GT(x, y))))
+    query = Implication(ans(x, y), Conjunction((Q(x), P(x, y), GT(x, y))))
     with pytest.raises(UnsupportedSolverError):
         solver.solve_succ_query(query, cpl_program)
+
+
+def test_dalvi_suciu_comparison_in_existential():
+    """Q(x) ∧ ∃y (P(x, y) ∧ x > y)."""
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.9, 3, 2), (0.8, 3, 1), (0.5, 1, 0)}
+    )
+    cpl_program.add_probabilistic_choice_from_tuples(
+        Q, {(0.6, 1), (0.4, 2)}
+    )
+    query = Implication(ans(x), Conjunction((Q(x), P(x, y), GT(x, y))))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(0.6 * 0.5, 1)], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_deterministic_simplification():
@@ -1709,4 +1757,111 @@ def test_deterministic_simplification():
 
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y'])
+    )
+
+
+def _studies_mentioning_one_term_program():
+    """Studies 0-5 uniformly selected, mentioning terms as follows:
+    0 pain; 1 pain, joy; 2 joy; 3 joy; 4 fear, pain; 5 none. Only
+    studies 0 (pain), 2 and 3 (joy) mention a single term.
+    """
+    Mentions = Symbol("Mentions")
+    Term = Symbol("Term")
+    Selected = Symbol("Selected")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        Selected, [(1 / 6, i) for i in range(6)]
+    )
+    mentions = (
+        (0, "pain"), (1, "pain"), (1, "joy"), (2, "joy"), (3, "joy"),
+        (4, "fear"), (4, "pain"),
+    )
+    cpl.walk(Union(
+        tuple(
+            Fact(Mentions(Constant(s), Constant(t))) for s, t in mentions
+        ) + tuple(
+            Fact(Term(Constant(t))) for t in ("pain", "joy", "fear")
+        )
+    ))
+    return cpl, Mentions, Term, Selected
+
+
+def test_choice_with_negated_deterministic_existential_comparison():
+    """P(the selected study mentions t and no other term), where the
+    negated existential, with a comparison, only has deterministic
+    relations and is lifted as a deterministic relation.
+    """
+    cpl, Mentions, Term, Selected = _studies_mentioning_one_term_program()
+    Other = Symbol("Other")
+    s, t, t1 = Symbol("s"), Symbol("t"), Symbol("t1")
+    cpl.walk(Union((
+        Implication(Other(s, t), Conjunction((
+            Mentions(s, t), Mentions(s, t1), Term(t1), NE(t1, t)
+        ))),
+        Implication(P(t), Conjunction((
+            Mentions(s, t), Selected(s), Negation(Other(s, t))
+        ))),
+    )))
+    query = Implication(ans(t), P(t))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = testing.make_prov_set(
+        [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_choice_asserted_outside_and_inside_negation_is_absorbed():
+    """As above, with the choice also within the negation, through
+    `T(s, t) :- Mentions(s, t), Selected(s)`. As `Selected(s)` is
+    asserted outside the negation, it is absorbed, by
+    A ∧ ¬(A ∧ B) ≡ A ∧ ¬B, leaving a deterministic negation.
+    """
+    cpl, Mentions, Term, Selected = _studies_mentioning_one_term_program()
+    T = Symbol("T")
+    Other = Symbol("Other")
+    s, t, t1 = Symbol("s"), Symbol("t"), Symbol("t1")
+    cpl.walk(Union((
+        Implication(T(s, t), Conjunction((Mentions(s, t), Selected(s)))),
+        Implication(Other(s, t), Conjunction((
+            T(s, t), T(s, t1), Term(t1), NE(t1, t)
+        ))),
+        Implication(P(t), Conjunction((T(s, t), Negation(Other(s, t))))),
+    )))
+    query = Implication(ans(t), P(t))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = testing.make_prov_set(
+        [(1 / 6, "pain"), (2 / 6, "joy")], ("_p_", "t")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("r_facts, expected", (
+    (((3, 3),), [(0.5, 1), (0.5, 2)]),
+    (((3, 3), (3, 4)), []),
+))
+def test_choice_with_closed_negated_deterministic_query(r_facts, expected):
+    """A negated deterministic query without free variables has no
+    conjunct binding them to replace it by a deterministic relation. As no probabilistic
+    relation is repeated, it is lifted as a non-repeating query.
+    """
+    S = Symbol("S")
+    Any_ = Symbol("Any")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(S, [(0.5, 1), (0.5, 2)])
+    cpl.walk(Union(tuple(
+        Fact(R(Constant(a), Constant(b))) for a, b in r_facts
+    )))
+    cpl.walk(Union((
+        Implication(Any_(), Conjunction((R(y, z), NE(y, z)))),
+        Implication(P(x), Conjunction((S(x), Negation(Any_())))),
+    )))
+    query = Implication(ans(x), P(x))
+
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set(expected, ("_p_", "x"))
     )
