@@ -141,22 +141,33 @@ class RemoveDuplicatedConjunctsDisjuncts(
     pass
 
 
-class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
-    """
-    Moves the negations the furthest possible to the atoms. On
-    conjunction, disjunction, and negation operations.
-    """
+class MoveNegationsIntoConjunctionsMixin(PatternWalker):
+    """¬(A ∧ B) ≡ ¬A ∨ ¬B"""
     @add_match(Negation(Conjunction(...)))
     def negated_conjunction(self, negation):
         conj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
         return self.walk(Disjunction(tuple(formulas)))
 
+
+class MoveNegationsIntoDisjunctionsMixin(PatternWalker):
+    """¬(A ∨ B) ≡ ¬A ∧ ¬B"""
     @add_match(Negation(Disjunction(...)))
     def negated_disjunction(self, negation):
         disj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
         return self.walk(Conjunction(tuple(formulas)))
+
+
+class MoveNegationsToAtomsSimpleOperationsMixin(
+    MoveNegationsIntoConjunctionsMixin,
+    MoveNegationsIntoDisjunctionsMixin,
+    PatternWalker
+):
+    """
+    Moves the negations the furthest possible to the atoms. On
+    conjunction, disjunction, and negation operations.
+    """
 
 
 class PullUniversalUpFromNegation(PatternWalker):
@@ -751,10 +762,11 @@ class RemoveTrivialOperations(
     pass
 
 
-class PushExistentialsDownMixin(
-    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
-    PatternWalker
-):
+class PushExistentialsDownDisjunctionsMixin(PatternWalker):
+    """
+    Remove the existentials whose variable is not free in their body, and
+    push the others into disjunctions, ∃v (A ∨ B) ≡ ∃v A ∨ ∃v B.
+    """
     @add_match(
         ExistentialPredicate,
         lambda expression: (
@@ -790,6 +802,13 @@ class PushExistentialsDownMixin(
             res = expression
         return res
 
+
+class PushExistentialsDownConjunctionsMixin(PatternWalker):
+    """
+    Push the existentials into conjunctions, ∃v (A ∧ B) ≡ A ∧ ∃v B when
+    `v` is not free in `A`, keeping within them the conjuncts that share
+    variables with negations, and swap nested existentials to push them.
+    """
     @add_match(
         ExistentialPredicate(..., Conjunction),
         lambda expression: any(
@@ -878,6 +897,15 @@ class PushExistentialsDownMixin(
                     ExistentialPredicate(inner_var, new_body)
                 )
         return expression
+
+
+class PushExistentialsDownMixin(
+    PushExistentialsDownDisjunctionsMixin,
+    PushExistentialsDownConjunctionsMixin,
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    PatternWalker
+):
+    pass
 
 
 class PushUniversalsDownMixin(
