@@ -69,6 +69,7 @@ from ..logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
@@ -150,7 +151,7 @@ class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
         res = expression
         if expression in self.symbol_table:
             value = self.symbol_table[expression]
-            if not isinstance(value, Constant[AbstractSet]):
+            if not isinstance(value, (Constant[AbstractSet], Materialise)):
                 res = value
         return res
 

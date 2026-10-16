@@ -782,10 +782,10 @@ def test_evaluatable_function_applications():
 
 
 def test_materialise_evaluates_its_relation():
-    r1 = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+    r1 = Constant(NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(1, "a"), (2, "b")]
     ))
-    r2 = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+    r2 = Constant(NamedRelationalAlgebraFrozenSet(
         ("y", "z"), [("a", 3), ("c", 4)]
     ))
     join = NaturalJoin(r1, r2)

@@ -5,8 +5,8 @@ A subquery whose relations are all deterministic is the same relation in
 every possible world. It can be replaced by a fresh deterministic
 relation, defined by the subquery's relational algebra expression, which
 a lifted solver then handles like any other deterministic relation. The
-expression is not evaluated while planning: it is part of the plan, and
-evaluated with it.
+expression is not evaluated while planning: marked with `Materialise`,
+it is computed as a set when the plan is evaluated.
 """
 from ..datalog.expression_processing import extract_logic_atoms
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
@@ -16,6 +16,7 @@ from ..logic import Conjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import extract_logic_free_variables
 from ..logic.transformations import LogicExpressionWalker
 from ..relational_algebra import (
+    Materialise,
     NumberColumns,
     Projection,
     str2columnstr_constant
@@ -37,8 +38,9 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
     unchanged.
 
     The relations are in the attribute `relations`, a mapping from their
-    symbols to their unevaluated relational algebra expressions, whose
-    columns are numbered in the order of x̄ sorted by name.
+    symbols to their unevaluated relational algebra expressions, marked
+    with `Materialise`, whose columns are numbered in the order of x̄
+    sorted by name.
 
     Parameters
     ----------
@@ -107,7 +109,8 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
     def _relation(self, guard, negation, columns):
         """
         The relational algebra expression of G ∧ ¬N, with numbered
-        columns. Its relations are the sets of the extensional database,
+        columns, marked to be materialised when the plan is evaluated. Its
+        relations are the sets of the extensional database,
         rather than their symbols, which the lifted solver maps to
         probabilistic sets.
         """
@@ -122,7 +125,7 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         plan = ReplaceSymbolWalker(
             self.program.extensional_database()
         ).walk(plan)
-        return NumberColumns(plan, column_names)
+        return Materialise(NumberColumns(plan, column_names))
 
 
 def _conjoin_within_existentials(formulas, formula):
