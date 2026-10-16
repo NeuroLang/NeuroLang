@@ -47,6 +47,13 @@ EMAIL_ENV = "NEUROLANG_ENTREZ_EMAIL"
 API_KEY_ENV = "NCBI_API_KEY"
 INSTALL_HINT = 'pip install "neurolang[embeddings]"'
 
+# The files of a model or adapter repository the encoder loads: its
+# configuration, tokenizer and PyTorch weights.
+MODEL_FILES = ("*.json", "*.txt", "*.bin")
+
+# Written in a local copy of a repository once it is complete.
+COMPLETE_MARKER = ".complete"
+
 
 # ---------------------------------------------------------------------------
 # Text sources
@@ -226,9 +233,11 @@ class Specter2Encoder:
     """
     Embed documents and queries with SPECTER2.
 
-    The base model and both adapters are downloaded from the Hugging Face
-    hub and loaded on the first call to :meth:`encode_documents` or
-    :meth:`encode_query`.  A document is encoded as
+    The base model and both adapters are loaded on the first call to
+    :meth:`encode_documents` or :meth:`encode_query`.  With a *model_dir*
+    they are downloaded once into it (see :meth:`download`) and then
+    loaded from there without network; otherwise they come from the
+    Hugging Face hub and its cache.  A document is encoded as
     ``title [SEP] abstract`` with the document adapter, a query with the
     query adapter; the embedding is the first ([CLS]) token of the last
     hidden layer.
@@ -245,6 +254,8 @@ class Specter2Encoder:
         Number of documents per forward pass.
     device : str, optional
         Torch device; by default CUDA, then MPS, then CPU.
+    model_dir : str or Path, optional
+        Directory holding local copies of the model and the adapters.
 
     """
 
@@ -255,6 +266,7 @@ class Specter2Encoder:
         query_adapter="allenai/specter2_adhoc_query",
         batch_size=16,
         device=None,
+        model_dir=None,
     ):
         """Store the configuration; the model is loaded on first use."""
         self.model_name = model
@@ -262,6 +274,7 @@ class Specter2Encoder:
         self.query_adapter = query_adapter
         self.batch_size = batch_size
         self.device = device
+        self.model_dir = None if model_dir is None else Path(model_dir)
         self._model = None
 
     @property
@@ -270,6 +283,23 @@ class Specter2Encoder:
         return json.dumps(
             [self.model_name, self.document_adapter, self.query_adapter]
         )
+
+    def download(self):
+        """
+        Download the model and the adapters into ``model_dir``, once.
+
+        Returns
+        -------
+        tuple
+            Paths of the local copies of the model, the document adapter
+            and the query adapter; their names on the hub without a
+            ``model_dir``.
+
+        """
+        repos = (self.model_name, self.document_adapter, self.query_adapter)
+        if self.model_dir is None:
+            return repos
+        return tuple(local_model(repo, self.model_dir) for repo in repos)
 
     def _load(self):
         if self._model is not None:
@@ -285,12 +315,13 @@ class Specter2Encoder:
             ) from e
         self._torch = torch
         self.device = self.device or _default_device(torch)
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        model = AutoAdapterModel.from_pretrained(self.model_name)
-        model.load_adapter(
-            self.document_adapter, source="hf", load_as="document"
-        )
-        model.load_adapter(self.query_adapter, source="hf", load_as="query")
+        base, document, query = self.download()
+        # Local copies are directories: no hub source, no network.
+        source = None if self.model_dir is not None else "hf"
+        self._tokenizer = AutoTokenizer.from_pretrained(base)
+        model = AutoAdapterModel.from_pretrained(base)
+        model.load_adapter(str(document), source=source, load_as="document")
+        model.load_adapter(str(query), source=source, load_as="query")
         self._model = model.to(self.device).eval()
         LOG.info("Loaded %s on %s", self.model_name, self.device)
 
@@ -338,6 +369,32 @@ class Specter2Encoder:
         ).to(self.device)
         hidden = self._model(**inputs).last_hidden_state
         return hidden[:, 0, :].float().cpu().numpy()
+
+
+def local_model(repo_id, model_dir):
+    """
+    Return a local copy of the Hugging Face repository *repo_id*.
+
+    The copy is ``model_dir/<owner>--<name>``.  It is downloaded on the
+    first call, then marked complete; later calls return it without
+    contacting the hub, so the model works offline.  An interrupted
+    download is resumed on the next call.
+    """
+    path = Path(model_dir) / repo_id.replace("/", "--")
+    if (path / COMPLETE_MARKER).exists():
+        return path
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as e:
+        raise ImportError(
+            f"Downloading {repo_id} needs huggingface_hub: {INSTALL_HINT}"
+        ) from e
+    LOG.info("Downloading %s to %s", repo_id, path)
+    snapshot_download(
+        repo_id, local_dir=path, allow_patterns=list(MODEL_FILES)
+    )
+    (path / COMPLETE_MARKER).touch()
+    return path
 
 
 def _default_device(torch):
@@ -513,7 +570,11 @@ def make_similarity_function(index, id_type=None):
 
 
 def main(argv=None):
-    """Compute the text embeddings declared by an engine ahead of time."""
+    """
+    Download the models and compute the text embeddings of an engine.
+
+    Afterwards, queries embed their texts without network.
+    """
     from neurolang.utils.engine_registry import build_engine
 
     parser = argparse.ArgumentParser(
@@ -531,6 +592,9 @@ def main(argv=None):
         yaml_path=None if args.yaml is None else Path(args.yaml),
     )
     for name, index in getattr(nl, "text_embedding_indexes", {}).items():
+        # The model is needed by every new query text, even when the
+        # document embeddings are already cached.
+        index.encoder.download()
         start = time.perf_counter()
         matrix = index.build()
         print(

@@ -27,6 +27,7 @@ class FakeEncoder:
 
     def __init__(self, *args, **kwargs):
         """Accept the Specter2Encoder arguments and count calls."""
+        self.model_dir = kwargs.get("model_dir")
         self.document_calls = 0
         self.query_calls = 0
 
@@ -352,6 +353,7 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
     index = nl.text_embedding_indexes["docs"]
     assert index.encoder.document_calls == 0
     assert index.cache_path == tmp_path / "data/mini/embeddings/docs.npz"
+    assert index.encoder.model_dir == tmp_path / "data/mini/embeddings/models"
     assert not index.cache_path.exists()
 
     res = nl.execute_datalog_program(
@@ -414,3 +416,63 @@ def test_specter2_ranks_reading_paper_first():
     )
     similarities = index.similarities("reading")
     assert similarities["reading"] > similarities["motor"]
+
+
+# ---------------------------------------------------------------------------
+# Local copies of the model, for offline use
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_hub(monkeypatch):
+    """Replace huggingface_hub by a stub recording the downloads."""
+    calls = []
+
+    def snapshot_download(repo_id, local_dir, allow_patterns):
+        calls.append(repo_id)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "config.json").write_text("{}")
+
+    module = type(sys)("huggingface_hub")
+    module.snapshot_download = snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", module)
+    return calls
+
+
+def test_local_model_is_downloaded_once(fake_hub, tmp_path):
+    path = te.local_model("allenai/specter2", tmp_path)
+    assert path == tmp_path / "allenai--specter2"
+    assert (path / "config.json").exists()
+    assert te.local_model("allenai/specter2", tmp_path) == path
+    assert fake_hub == ["allenai/specter2"]
+
+
+def test_interrupted_download_is_resumed(fake_hub, tmp_path):
+    (tmp_path / "allenai--specter2").mkdir()
+    te.local_model("allenai/specter2", tmp_path)
+    assert fake_hub == ["allenai/specter2"]
+    assert (tmp_path / "allenai--specter2" / te.COMPLETE_MARKER).exists()
+
+
+def test_encoder_downloads_its_model_and_adapters(fake_hub, tmp_path):
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    paths = encoder.download()
+    assert paths == tuple(
+        tmp_path / name for name in (
+            "allenai--specter2_base",
+            "allenai--specter2",
+            "allenai--specter2_adhoc_query",
+        )
+    )
+    encoder.download()
+    assert len(fake_hub) == 3
+
+
+def test_encoder_without_model_dir_uses_the_hub(fake_hub):
+    encoder = te.Specter2Encoder()
+    assert encoder.download() == (
+        "allenai/specter2_base",
+        "allenai/specter2",
+        "allenai/specter2_adhoc_query",
+    )
+    assert fake_hub == []
