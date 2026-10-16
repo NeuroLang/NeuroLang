@@ -7,6 +7,7 @@ from .. import (
     UniversalPredicate
 )
 from ..transformations import (
+    AbsorbAssertedConjuncts,
     AbsorbAssertedConjunctsInNegations,
     PushExistentialsDown,
     PushUniversalsDown,
@@ -24,6 +25,7 @@ Z = Symbol("Z")
 PED = PushExistentialsDown()
 PUD = PushUniversalsDown()
 AACN = AbsorbAssertedConjunctsInNegations()
+AAC = AbsorbAssertedConjuncts()
 
 
 def test_push_existentials_down():
@@ -226,6 +228,78 @@ def test_absorb_asserted_conjuncts_within_quantifiers():
     assert AACN.walk(exp) == ExistentialPredicate(
         X, Conjunction((P(X), Negation(Q(X))))
     )
+
+
+def test_absorb_disjuncts_contradicting_asserted_conjuncts():
+    """A ∧ (B ∨ (D ∧ ¬A)) ≡ A ∧ B, the remaining disjunct being
+    collapsed into the conjunction."""
+    exp = Conjunction((
+        P(X), Disjunction((Q(X), Conjunction((R(X), Negation(P(X))))))
+    ))
+
+    assert AAC.walk(exp) == Conjunction((P(X), Q(X)))
+
+    exp = Conjunction((
+        P(X), Disjunction((
+            Conjunction((Q(X), R(X))), Negation(P(X)),
+            Conjunction((R(X), Negation(P(X))))
+        ))
+    ))
+
+    assert AAC.walk(exp) == Conjunction((P(X), Q(X), R(X)))
+
+
+def test_absorb_self_contradicting_disjuncts():
+    exp = Disjunction((Q(X), Conjunction((P(X), R(X), Negation(P(X))))))
+
+    assert AAC.walk(exp) == Q(X)
+
+
+def test_absorb_contradicting_disjuncts_through_existentials():
+    exp = Conjunction((
+        P(X), Disjunction((
+            Q(X),
+            ExistentialPredicate(Y, Conjunction((R(Y), Negation(P(X)))))
+        ))
+    ))
+
+    assert AAC.walk(exp) == Conjunction((P(X), Q(X)))
+
+
+def test_absorb_contradicting_disjuncts_keeps_bound_variables():
+    exp = Conjunction((
+        P(Y), Disjunction((
+            Q(X),
+            ExistentialPredicate(Y, Conjunction((R(Y), Negation(P(Y)))))
+        ))
+    ))
+
+    assert AAC.walk(exp) == exp
+
+
+def test_absorb_contradicting_disjuncts_keeps_contradictions():
+    """If every disjunct is a contradiction, the formula is left
+    unchanged."""
+    exp = Conjunction((
+        P(X), Disjunction((
+            Negation(P(X)), Conjunction((Q(X), Negation(P(X))))
+        ))
+    ))
+
+    assert AAC.walk(exp) == exp
+
+    exp = Disjunction((
+        Conjunction((P(X), Negation(P(X)))),
+        Conjunction((Q(X), Negation(Q(X)))),
+    ))
+
+    assert AAC.walk(exp) == exp
+
+
+def test_absorb_asserted_conjuncts_still_absorbs_in_negations():
+    exp = Conjunction((P(X), Negation(Conjunction((P(X), Q(X))))))
+
+    assert AAC.walk(exp) == Conjunction((P(X), Negation(Q(X))))
 
 
 def test_standardise_apart():

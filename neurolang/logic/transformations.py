@@ -582,6 +582,43 @@ class RemoveExistentialOnVariables(LogicExpressionWalker):
             return ExistentialPredicate(expression.head, body)
 
 
+def _with_kept_formulas(nary_op, kept):
+    """*nary_op* with the formulas *kept*, itself if none or all of them
+    are kept, the formula kept if it is only one."""
+    if len(kept) in (0, len(nary_op.formulas)):
+        return nary_op
+    if len(kept) == 1:
+        return kept[0]
+    return nary_op.apply(kept)
+
+
+def _not_using(formulas, bound):
+    """The *formulas* in which none of the *bound* variables is free."""
+    return frozenset(
+        formula for formula in formulas
+        if not extract_logic_free_variables(formula) & bound
+    )
+
+
+def _asserted_conjuncts(formulas):
+    return frozenset(
+        formula for formula in formulas
+        if not isinstance(formula, Negation)
+    )
+
+
+def _rewrite_given_asserted(conjunction, operator, rewrite):
+    """The conjuncts of *conjunction*, those of type *operator* being
+    rewritten by *rewrite* given the conjuncts asserted by
+    *conjunction*."""
+    asserted = _asserted_conjuncts(conjunction.formulas)
+    return tuple(
+        rewrite(formula, asserted) if isinstance(formula, operator)
+        else formula
+        for formula in conjunction.formulas
+    )
+
+
 def _without_asserted_conjuncts(formula, asserted, bound=frozenset()):
     """
     Remove from *formula*, a conjunction possibly within existentials,
@@ -595,29 +632,22 @@ def _without_asserted_conjuncts(formula, asserted, bound=frozenset()):
         return formula.apply(formula.head, body)
     if not isinstance(formula, Conjunction):
         return formula
-    kept = tuple(
+    asserted = _not_using(asserted, bound)
+    return _with_kept_formulas(formula, tuple(
         conjunct for conjunct in formula.formulas
         if conjunct not in asserted
-        or extract_logic_free_variables(conjunct) & bound
-    )
-    if len(kept) in (0, len(formula.formulas)):
-        return formula
-    if len(kept) == 1:
-        return kept[0]
-    return Conjunction(kept)
+    ))
+
+
+def _absorbed_negation(negation, asserted):
+    return Negation(_without_asserted_conjuncts(negation.formula, asserted))
 
 
 def _absorbed_negations(conjunction):
     """The conjuncts of *conjunction*, with the conjuncts asserted by
     *conjunction* removed from its negated conjunctions."""
-    asserted = frozenset(
-        formula for formula in conjunction.formulas
-        if not isinstance(formula, Negation)
-    )
-    return tuple(
-        Negation(_without_asserted_conjuncts(formula.formula, asserted))
-        if isinstance(formula, Negation) else formula
-        for formula in conjunction.formulas
+    return _rewrite_given_asserted(
+        conjunction, Negation, _absorbed_negation
     )
 
 
@@ -645,6 +675,95 @@ class AbsorbAssertedConjunctsInNegations(LogicExpressionWalker):
     )
     def absorb_in_negations(self, conjunction):
         return self.walk(Conjunction(_absorbed_negations(conjunction)))
+
+
+def _is_contradiction(formula, asserted, bound=frozenset()):
+    """
+    Whether *formula*, a conjunction possibly within existentials, has a
+    negated conjunct ¬A with A one of its conjuncts, or one of the
+    *asserted* formulas not using the *bound* variables.
+    """
+    if isinstance(formula, ExistentialPredicate):
+        return _is_contradiction(
+            formula.body, asserted, bound | {formula.head}
+        )
+    if isinstance(formula, Conjunction):
+        conjuncts = formula.formulas
+    else:
+        conjuncts = (formula,)
+    asserted = _asserted_conjuncts(conjuncts) | _not_using(asserted, bound)
+    return any(
+        isinstance(conjunct, Negation) and conjunct.formula in asserted
+        for conjunct in conjuncts
+    )
+
+
+def _without_contradictions(disjunction, asserted):
+    """
+    The disjunction of the disjuncts of *disjunction* which are not
+    contradictions given the *asserted* formulas, *disjunction* itself if
+    there are none or all of them are.
+    """
+    return _with_kept_formulas(disjunction, tuple(
+        disjunct for disjunct in disjunction.formulas
+        if not _is_contradiction(disjunct, asserted)
+    ))
+
+
+def _without_contradicting_disjuncts(conjunction):
+    return _rewrite_given_asserted(
+        conjunction, Disjunction, _without_contradictions
+    )
+
+
+class RemoveContradictingDisjunctsMixin(PatternWalker):
+    """
+    Remove the disjuncts which are contradictions, a conjunction
+    with a negated conjunct ¬A where A is one of its conjuncts or one
+    asserted by a conjunction of which the disjunction is a conjunct:
+
+        A ∧ (B ∨ (C ∧ ¬A)) ≡ A ∧ B,    B ∨ (A ∧ C ∧ ¬A) ≡ B,
+
+    also through the existentials of the disjuncts, as long as they do not
+    quantify a variable of A. A disjunction all of whose disjuncts are
+    contradictions is left unchanged.
+
+    The translation of a negated existential to rules gives such
+    disjunctions: ¬∃y (B ∧ A), with y not free in A, is ¬∃y B ∨ ¬A.
+    """
+
+    @add_match(
+        Disjunction,
+        lambda disjunction: (
+            _without_contradictions(disjunction, frozenset()) != disjunction
+        )
+    )
+    def remove_contradictions(self, disjunction):
+        return self.walk(_without_contradictions(disjunction, frozenset()))
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: (
+            _without_contradicting_disjuncts(conjunction) !=
+            conjunction.formulas
+        )
+    )
+    def remove_disjuncts_contradicting_the_conjunction(self, conjunction):
+        return self.walk(
+            Conjunction(_without_contradicting_disjuncts(conjunction))
+        )
+
+
+class AbsorbAssertedConjuncts(
+    RemoveContradictingDisjunctsMixin,
+    CollapseConjunctionsMixin,
+    AbsorbAssertedConjunctsInNegations,
+):
+    """
+    Absorb the conjuncts asserted by a conjunction in its negations, see
+    `AbsorbAssertedConjunctsInNegations`, and remove the disjuncts
+    contradicting them, see `RemoveContradictingDisjunctsMixin`.
+    """
 
 
 class StandardiseApart(PatternWalker):
