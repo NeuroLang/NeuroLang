@@ -19,7 +19,10 @@ from ...logic import (
     Union
 )
 from .. import dalvi_suciu_lift
-from ..non_repeating_lift import non_repeating_plan
+from ..non_repeating_lift import (
+    _eliminate_equalities,
+    non_repeating_plan
+)
 from ..probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
@@ -333,3 +336,13 @@ def test_equality_to_a_constant():
     assert testing.eq_prov_relations(
         result, testing.make_prov_set([(expected,)], ("_p_",))
     )
+
+
+def test_equality_is_not_substituted_into_a_rebinding_quantifier():
+    """In ∃u (u = t ∧ ∃t W(u, t)), replacing u by t would capture it."""
+    W = Symbol("W")
+    u = Symbol("u")
+    formula = ExistentialPredicate(u, Conjunction((
+        EQ(u, t), ExistentialPredicate(t, W(u, t))
+    )))
+    assert _eliminate_equalities(formula) == formula
