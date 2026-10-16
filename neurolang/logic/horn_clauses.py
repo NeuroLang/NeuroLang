@@ -281,12 +281,20 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     stack = [(head, expression, set())]
     processed = []
+    # The heads of the auxiliary queries do not restrict the variables of
+    # their subqueries: an auxiliary query would then depend on itself,
+    # through the negation of a subquery.
+    auxiliary_heads = set()
 
     while stack:
         head, exp, restrictive_atoms = stack.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
         body = _restrict_variables(head, body, restrictive_atoms)
-        restrictive_atoms |= _restrictive_atoms(body)
+        auxiliary_heads |= {r[0].functor for r in remainder}
+        restrictive_atoms = restrictive_atoms | {
+            atom for atom in _restrictive_atoms(body)
+            if atom.functor not in auxiliary_heads
+        }
         remainder = [r + (restrictive_atoms,) for r in remainder]
         processed.append(_to_horn_clause(head, body))
         stack += remainder
