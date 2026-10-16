@@ -1845,7 +1845,7 @@ def test_choice_asserted_outside_and_inside_negation_is_absorbed():
 ))
 def test_choice_with_closed_negated_deterministic_query(r_facts, expected):
     """A negated deterministic query without free variables has no
-    conjunct binding them to materialise it with. As no probabilistic
+    conjunct binding them to replace it by a deterministic relation. As no probabilistic
     relation is repeated, it is lifted as a non-repeating query.
     """
     S = Symbol("S")

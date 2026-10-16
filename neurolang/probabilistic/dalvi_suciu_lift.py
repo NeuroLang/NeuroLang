@@ -69,6 +69,7 @@ from ..logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
@@ -77,7 +78,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .deterministic_subqueries import materialise_deterministic_negations
+from .deterministic_subqueries import replace_deterministic_negations
 from .expression_processing import (
     STRICT_COMPARISONS,
     is_builtin,
@@ -151,7 +152,7 @@ class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
         res = expression
         if expression in self.symbol_table:
             value = self.symbol_table[expression]
-            if not isinstance(value, Constant[AbstractSet]):
+            if not isinstance(value, (Constant[AbstractSet], Materialise)):
                 res = value
         return res
 
@@ -205,7 +206,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         # The lifting rules identify variables by their names, which
         # standardising apart makes unambiguous.
         flat_query_body, deterministic_relations = \
-            materialise_deterministic_negations(
+            replace_deterministic_negations(
                 AACN.walk(standardise_apart(flat_query_body)), cpl_program
             )
         flat_query = Implication(query.consequent, flat_query_body)
