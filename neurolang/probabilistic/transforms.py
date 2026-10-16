@@ -293,26 +293,29 @@ def minimise_formulas_containment(components, containment_op, head_vars):
         extract_logic_free_variables(c)
         for c in components
     ]
-    keep = tuple()
     containments = {}
+
+    def contained(i, j):
+        if (i, j) not in containments:
+            c_fv = components_fv[i] & components_fv[j]
+            q = add_existentials_except(components[i], c_fv | head_vars)
+            q_ = add_existentials_except(components[j], c_fv | head_vars)
+            containments[i, j] = containment_op(q_, q)
+            LOG.debug(
+                "Checking containment %s <= %s: %s",
+                q, q_, containments[i, j]
+            )
+        return containments[i, j]
+
+    # Of equivalent components, only the last one is kept: the
+    # containment of an earlier one is computed when needed, as the loop
+    # on it may have stopped before.
+    keep = tuple()
     for i, c in enumerate(components):
-        for j, c_ in enumerate(components):
+        for j in range(len(components)):
             if i == j:
                 continue
-            c_fv = components_fv[i] & components_fv[j]
-            q = add_existentials_except(c, c_fv | head_vars)
-            q_ = add_existentials_except(c_, c_fv | head_vars)
-            is_contained = containments.setdefault(
-                (i, j), containment_op(q_, q)
-            )
-            LOG.debug("Checking containment %s <= %s: %s", q, q_, is_contained)
-            if (
-                is_contained and
-                not (
-                    j < i and
-                    containments.get((j, i), False)
-                )
-            ):
+            if contained(i, j) and not (j < i and contained(j, i)):
                 break
         else:
             keep += (c,)
