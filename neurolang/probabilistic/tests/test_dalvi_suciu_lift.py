@@ -846,12 +846,17 @@ def test_interaction_deterministic_probfact_probchoice_safe():
 @pytest.mark.parametrize("rules", (
     "S(x), S(y)",
     "S(x), S(y) | R(y, x), S(w)",
-), ids=("self-join", "union implying the self-join"))
+    "S(w), R(x, x) | S(y), S(x), S(w)",
+), ids=(
+    "self-join", "union implying the self-join",
+    "three equivalent conjuncts",
+))
 def test_inclusion_exclusion_on_equivalent_formulas(rules):
     """∃x S(x) ∧ ∃y S(y) is ∃x S(x): its two conjuncts and their
     disjunction are equivalent, and the Möbius weights of their lattice
     must count them once. The union adds R(y, x) ∧ S(w), which implies
-    ∃x S(x)."""
+    ∃x S(x). The CNF of the last one has three conjuncts equivalent to
+    ∃x S(x), of which minimisation must keep one."""
     R, S, Z, ans = (Symbol(n) for n in ("R", "S", "Z", "ans"))
     w, x, y = (Symbol(n) for n in ("w", "x", "y"))
     bodies = {
@@ -859,10 +864,13 @@ def test_inclusion_exclusion_on_equivalent_formulas(rules):
         "S(x), S(y) | R(y, x), S(w)": (
             Conjunction((S(x), S(y))), Conjunction((R(y, x), S(w)))
         ),
+        "S(w), R(x, x) | S(y), S(x), S(w)": (
+            Conjunction((S(w), R(x, x))), Conjunction((S(y), S(x), S(w)))
+        ),
     }[rules]
     cpl_program = CPLogicProgram()
     cpl_program.add_probabilistic_facts_from_tuples(
-        R, [(0.5, "a", "b"), (0.4, "b", "a")]
+        R, [(0.5, "a", "b"), (0.4, "b", "a"), (0.2, "a", "a")]
     )
     cpl_program.add_probabilistic_facts_from_tuples(
         S, [(0.3, "a"), (0.6, "b")]
