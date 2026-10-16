@@ -21,6 +21,7 @@ from ..relational_algebra import (
     Projection,
     str2columnstr_constant
 )
+from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
 
 
 class ReplaceDeterministicNegations(LogicExpressionWalker):
@@ -109,8 +110,8 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
     def _relation(self, guard, negation, columns):
         """
         The relational algebra expression of G ∧ ¬N, with numbered
-        columns, marked to be materialised when the plan is evaluated. Its
-        relations are the sets of the extensional database,
+        columns, optimised, and marked to be materialised when the plan
+        is evaluated. Its relations are the sets of the extensional database,
         rather than their symbols, which the lifted solver maps to
         probabilistic sets.
         """
@@ -125,6 +126,7 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         plan = ReplaceSymbolWalker(
             self.program.extensional_database()
         ).walk(plan)
+        plan = RelationalAlgebraOptimiser().walk(plan)
         return Materialise(NumberColumns(plan, column_names))
 
 

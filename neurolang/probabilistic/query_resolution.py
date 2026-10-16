@@ -22,6 +22,7 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,
+    Materialise,
     Projection,
     PushInSelections,
     RelationalAlgebraOperation,
@@ -448,7 +449,17 @@ class FloatArithmeticSimplifier(PatternWalker):
         return self.walk(expression.args[0])
 
 
+class KeepRelationsToMaterialise(PatternWalker):
+    """Leave relations to materialise as they are: their expressions
+    are optimised when they are built, and computed as sets."""
+
+    @add_match(Materialise)
+    def relation_to_materialise(self, expression):
+        return expression
+
+
 class RAQueryOptimiser(
+    KeepRelationsToMaterialise,
     EliminateTrivialProjections,
     PushInSelections,
     RenameOptimizations,
