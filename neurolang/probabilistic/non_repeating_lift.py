@@ -35,7 +35,7 @@ from functools import reduce
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ReplaceExpressionWalker
+from ..expression_walker import ReplaceExpressionWalker, expression_iterator
 from ..expressions import FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
@@ -350,7 +350,8 @@ def _substitute_equalities(conjuncts, variables):
                 for variable, term in (
                     conjunct.args, tuple(reversed(conjunct.args))
                 )
-                if variable in variables and variable != term
+                if variable in variables and variable != term and
+                not ({variable, term} & _bound_variables(conjuncts))
             ),
             None
         )
@@ -363,6 +364,17 @@ def _substitute_equalities(conjuncts, variables):
             if conjunct is not equality
         ]
         variables.discard(variable)
+
+
+def _bound_variables(formulas):
+    """Variables quantified within `formulas`, into which a substitution
+    could be captured."""
+    return {
+        expression.head
+        for formula in formulas
+        for _, expression in expression_iterator(formula)
+        if isinstance(expression, ExistentialPredicate)
+    }
 
 
 def _connected_groups(formulas, variables):
