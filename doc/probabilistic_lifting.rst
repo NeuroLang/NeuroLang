@@ -472,6 +472,54 @@ Existential shattering
 
    the latter being planned by free-variable shattering.
 
+Projection on a choice or a separator variable
+   When the rules above decline :math:`\exists X\, \varphi`, it is planned
+   by projecting the plan of :math:`\varphi`, lifted with all the rules of
+   this page, on variables of :math:`X` made free
+   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.projection_plan`).
+   The quantifiers of the conjuncts of the query are first gathered,
+   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`, which
+   holds as the query is standardised apart: a closed conjunct, such as an
+   atom added by magic sets, does not prevent the projection. The
+   projection is
+
+   * *disjointly*, when a conjunct of :math:`\varphi` is an atom
+     :math:`C(\bar u)` of a probabilistic choice :math:`C` with variables
+     :math:`X'` of :math:`X`, and :math:`C` occurs nowhere else:
+
+     .. math::
+
+        P[\exists X\, (C(\bar u) \land \varphi')] =
+        \sum_a P[(C(\bar u) \land \exists (X - X')\, \varphi')[a/X']];
+
+   * *independently*, when the conjuncts :math:`\psi` of :math:`\varphi`
+     with variables of :math:`X` share no probabilistic relation with the
+     others, :math:`A`, and a variable :math:`v` of :math:`X` is in all the
+     probabilistic atoms of :math:`\psi`, within its negations and
+     existentials too, at a common position for any two atoms of a
+     relation:
+
+     .. math::
+
+        P[\exists X\, (A \land \psi)] = P[A]\, \Big(1 - \prod_a \big(1 -
+        P[(\exists (X - \{v\})\, \psi)[a/v]]\big)\Big).
+
+   For instance, the segregation of a term on the selected study,
+
+   .. math::
+
+      \exists s\, \mathrm{mentions}(s, t) \land \mathrm{selected}(s) \land
+      \lnot\exists s_2\, (\mathrm{mentions}(s_2, t) \land s_2 \neq s),
+
+   is the disjoint projection on :math:`s` of a query that the comparison
+   rule lifts once :math:`s` is free; with :math:`t` projected too, an
+   independent projection on :math:`t` follows. A body that is a union, of
+   which the choice is not a conjunct of every disjunct, and
+   block-independent disjoint relations other than choices, are not
+   covered. The global checks of a single kind of quantifier and of
+   unateness are skipped for a query of the first form, and applied to
+   each query lifted.
+
 Correctness of the plans
 ------------------------
 
@@ -535,8 +583,10 @@ Polynomial time
    :math:`\psi(t)`, with one quantifier less than
    :math:`A \land \lnot\exists t\, \psi(t)`; existential shattering lifts
    :math:`A` and the queries of free-variable shattering; the comparison
-   rule lifts :math:`A` and :math:`\psi(t)`, parts of the query. The
-   Dalvi–Suciu rules, whose recursion terminates [Dalvi2012]_, do not call
+   rule lifts :math:`A` and :math:`\psi(t)`, parts of the query; the
+   projections lift a body with at least one quantifier less, and a part
+   of the query. The Dalvi–Suciu rules, whose recursion terminates
+   [Dalvi2012]_, do not call
    the rules of this section. The order being well founded, the
    construction terminates.
 
@@ -703,6 +753,29 @@ Non-repeating queries
    rewrites remove equalities and negations of disjunctions without adding
    atoms. The plan is thus built from the query alone, and computed in
    polynomial time in the data.
+
+Projection on a choice or a separator variable
+   *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the
+   body (``_split_choice_projection``), so for two values :math:`a \neq b`
+   of :math:`X'` the events imply the different tuples
+   :math:`C(\bar u)[a/X']` and :math:`C(\bar u)[b/X']` of :math:`C`, and are
+   mutually exclusive by Lemma 2: their probabilities add up, which
+   ``DisjointProjection`` computes. :math:`C` occurring nowhere else in the
+   body (the same check), :math:`C(\bar u)` is independent of the rest of
+   the body by Lemma 1, as the plan of the body, lifted with every rule,
+   assumes.
+
+   *Independent projection.* Every probabilistic atom of :math:`\psi` has
+   :math:`v`, and any two atoms of a relation have it at a common position
+   (``_separates``); the query being standardised apart, these atoms
+   depend on :math:`v`. For :math:`a \neq b`, the tuples of
+   :math:`\psi[a/v]` and :math:`\psi[b/v]` thus differ at that position, and
+   none is of a probabilistic choice (also checked): the events are
+   mutually independent by Lemma 1, and their disjunction has the
+   probability that ``IndependentProjection`` computes. :math:`A` sharing
+   no probabilistic relation with :math:`\psi`
+   (``_split_separator_projection``), the join with its plan is a product
+   by Lemma 1.
 
 Dalvi–Suciu rules
    The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu

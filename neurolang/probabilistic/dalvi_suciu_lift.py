@@ -222,8 +222,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             shattered_query, symbol_table = _prepare_and_optimise_query(
                 flat_query, cpl_program, deterministic_relations
             )
+            # The checks skipped for a projection on a choice are applied
+            # to each query lifted.
             ra_query = lift_with_dependent_negations(
-                shattered_query, symbol_table
+                shattered_query, symbol_table,
+                check=_split_choice_projection(
+                    shattered_query.antecedent, symbol_table
+                ) is not None
             )
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -325,6 +330,9 @@ def _prepare_and_optimise_query(
         config.get_probabilistic_solver_check_unate() and
         _split_dependent_conjunct(
             RTO.walk(shattered_query.antecedent), Negation, symbol_table
+        ) is None and
+        _split_choice_projection(
+            shattered_query.antecedent, symbol_table
         ) is None
     ):
         # Otherwise the checks are applied by
@@ -439,6 +447,21 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
     RelationalAlgebraOperation
         lifted plan, possibly containing `NonLiftable` nodes.
     """
+    try:
+        plan = _lift_with_dependent_negations(rule, symbol_table, check)
+    except NonLiftableException:
+        projected_plan = projection_plan(rule, symbol_table)
+        if projected_plan is None:
+            raise
+        return projected_plan
+    if not is_pure_lifted_plan(plan):
+        projected_plan = projection_plan(rule, symbol_table)
+        if projected_plan is not None:
+            return projected_plan
+    return plan
+
+
+def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
     if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
@@ -517,6 +540,219 @@ def existential_shattering_plan(consequent, antecedent, symbol_table):
     if plans is None:
         return None
     return rap.Subtraction(plans[0], negation_plan)
+
+
+def projection_plan(rule, symbol_table):
+    """Plan for `∃X φ`, projecting the plan of `φ`, lifted with every rule,
+    on variables of `X` made free, when their events are mutually
+    exclusive or independent:
+
+    * `C(ū) ∧ φ'` with `C` a probabilistic choice whose atom `C(ū)` has
+      variables `X'` of `X` and which occurs nowhere else: two values of
+      `X'` give two tuples of `C`, at most one of which is true, so the
+      events are mutually exclusive, and the plan is the disjoint
+      projection of `lift(C(ū) ∧ ∃(X - X') φ')`;
+    * `A ∧ ψ`, with `A` the conjuncts without variables of `X` and `ψ`
+      sharing no probabilistic relation with `A`, and `v` a separator
+      variable of `∃(X - {v}) ψ`: the events of different values of `v`
+      have different tuples, and the plan is
+      `lift(A) ⋈ ind-π(lift(∃(X - {v}) ψ))`.
+
+    Parameters
+    ----------
+    rule : Implication
+        rule to plan.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+
+    Returns
+    -------
+    Optional[RelationalAlgebraOperation]
+        the plan, or None if no projection applies.
+    """
+    plan = _choice_projection_plan(rule, symbol_table)
+    if plan is None:
+        plan = _separator_projection_plan(rule, symbol_table)
+    return plan
+
+
+def _choice_projection_plan(rule, symbol_table):
+    split = _split_choice_projection(rule.antecedent, symbol_table)
+    if split is None:
+        return None
+    projected, other_variables, conjuncts = split
+    return _projected_plan(
+        rule.antecedent, Conjunction(conjuncts), projected, other_variables,
+        rap.DisjointProjection, symbol_table
+    )
+
+
+def _separator_projection_plan(rule, symbol_table):
+    split = _split_separator_projection(rule.antecedent, symbol_table)
+    if split is None:
+        return None
+    separator, other_variables, inside, outside = split
+    inside_formula = Conjunction(inside)
+    plan = _projected_plan(
+        add_existentials_except(
+            inside_formula,
+            extract_logic_free_variables(inside_formula) -
+            other_variables - {separator}
+        ),
+        inside_formula, {separator}, other_variables,
+        rap.IndependentProjection, symbol_table
+    )
+    if plan is None or len(outside) == 0:
+        return plan
+    outside_plans = _lift_pure(
+        (Implication(
+            Symbol.fresh()(*extract_logic_free_variables(
+                Conjunction(outside)
+            )),
+            Conjunction(outside)
+        ),),
+        symbol_table
+    )
+    if outside_plans is None:
+        return None
+    return rap.NaturalJoin(outside_plans[0], plan)
+
+
+def _projected_plan(
+    formula, body, projected, other_variables, projection, symbol_table
+):
+    """`projection` of the plan of `body`, the `other_variables`
+    quantified and the `projected` ones free, on the free variables of
+    `formula`."""
+    free_variables = extract_logic_free_variables(formula)
+    body = add_existentials_except(
+        body, extract_logic_free_variables(body) - other_variables
+    )
+    plans = _lift_pure(
+        (Implication(Symbol.fresh()(*(free_variables | projected)), body),),
+        symbol_table
+    )
+    if plans is None:
+        return None
+    return projection(
+        plans[0],
+        tuple(
+            str2columnstr_constant(v.name)
+            for v in sorted(free_variables, key=lambda v: v.name)
+        )
+    )
+
+
+def _existential_variables_and_body(formula):
+    """The variables quantified by `formula`, or by its conjuncts, and the
+    conjunction of their bodies: as the query is standardised apart,
+    A ∧ ∃X ψ ≡ ∃X (A ∧ ψ)."""
+    formula = RTO.walk(formula)
+    conjuncts = (
+        formula.formulas if isinstance(formula, Conjunction) else (formula,)
+    )
+    variables = set()
+    body = []
+    for conjunct in conjuncts:
+        while isinstance(conjunct, ExistentialPredicate):
+            variables.add(conjunct.head)
+            conjunct = conjunct.body
+        if isinstance(conjunct, Conjunction):
+            body.extend(conjunct.formulas)
+        else:
+            body.append(conjunct)
+    if len(body) == 1:
+        return variables, body[0]
+    return variables, Conjunction(tuple(body))
+
+
+def _split_choice_projection(antecedent, symbol_table):
+    """The variables of `∃X (C(ū) ∧ φ)` in `C(ū)`, the other variables of
+    `X` and the conjuncts, if `C` is a probabilistic choice whose atom is
+    a conjunct with variables of `X` and which occurs nowhere else, or
+    None.
+    """
+    variables, body = _existential_variables_and_body(antecedent)
+    if not isinstance(body, Conjunction) or len(variables) == 0:
+        return None
+    functors = [atom.functor for atom in extract_logic_atoms(body)]
+    for conjunct in body.formulas:
+        if (
+            isinstance(conjunct, FunctionApplication) and
+            isinstance(conjunct.functor, Symbol) and
+            is_atom_a_probabilistic_choice_relation(conjunct, symbol_table)
+            and functors.count(conjunct.functor) == 1
+        ):
+            projected = variables & set(conjunct.args)
+            if projected:
+                return projected, variables - projected, body.formulas
+    return None
+
+
+def _split_separator_projection(antecedent, symbol_table):
+    """A separator variable `v` of the conjuncts `ψ` of `∃X φ` with
+    variables of `X`, the other variables of `X`, `ψ` and the other
+    conjuncts, sharing no probabilistic relation with `ψ`, or None.
+    """
+    variables, body = _existential_variables_and_body(antecedent)
+    if len(variables) == 0:
+        return None
+    conjuncts = (
+        body.formulas if isinstance(body, Conjunction) else (body,)
+    )
+    inside = tuple(
+        f for f in conjuncts
+        if not extract_logic_free_variables(f).isdisjoint(variables)
+    )
+    outside = tuple(f for f in conjuncts if f not in inside)
+    deterministic_symbols = _deterministic_symbols(body, symbol_table)
+    if (
+        outside and
+        (_functors(Conjunction(inside)) & _functors(Conjunction(outside)))
+        - deterministic_symbols
+    ):
+        return None
+    for variable in sorted(variables, key=lambda v: v.name):
+        others = variables - {variable}
+        quantified = Conjunction(inside)
+        for other in sorted(others, key=lambda v: v.name):
+            quantified = ExistentialPredicate(other, quantified)
+        if _separates(variable, quantified, symbol_table):
+            return variable, others, inside, outside
+    return None
+
+
+def _separates(variable, formula, symbol_table):
+    """Whether the events of `formula` for different values of `variable`
+    have different tuples: every probabilistic atom of `formula`, within
+    its negations and existentials too, has `variable`, at a common
+    position for any two atoms of a relation, and none is of a
+    probabilistic choice, whose tuples are not independent. Comparisons
+    and deterministic relations do not count."""
+    atoms = [
+        atom for atom in extract_logic_atoms(formula)
+        if isinstance(atom.functor, Symbol) and
+        not is_atom_a_deterministic_relation(atom, symbol_table)
+    ]
+    if any(
+        variable not in atom.args or
+        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        for atom in atoms
+    ):
+        return False
+    positions = [
+        (
+            atom.functor,
+            {i for i, arg in enumerate(atom.args) if arg == variable}
+        )
+        for atom in atoms
+    ]
+    return all(
+        not positions_a.isdisjoint(positions_b)
+        for (functor_a, positions_a), (functor_b, positions_b)
+        in combinations(positions, 2)
+        if functor_a == functor_b
+    )
 
 
 def negation_subtraction_plan(
