@@ -63,7 +63,8 @@ from ..logic.transformations import (
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix
+    convert_to_pnf_with_dnf_matrix,
+    standardise_apart
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -200,9 +201,11 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
+        # The lifting rules identify variables by their names, which
+        # standardising apart makes unambiguous.
         flat_query_body, deterministic_relations = \
             materialise_deterministic_negations(
-                AACN.walk(flat_query_body), cpl_program
+                AACN.walk(standardise_apart(flat_query_body)), cpl_program
             )
         flat_query = Implication(query.consequent, flat_query_body)
         shattered_query, symbol_table = _prepare_and_optimise_query(
@@ -358,8 +361,9 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
 
     A negated conjunct `¬N` sharing no probabilistic symbol with the rest
     `A` of the rule is left to `dalvi_suciu_lift`, which lifts the
-    query as P[A] (1 - P[N]): the query is liftable if and only if `A`
-    and `N` are, being #P-hard otherwise [1]. Otherwise, if the shared
+    query as P[A] (1 - P[N]), as `A` and `N` are independent: the query
+    is liftable when `A` and `N` are, see Fink & Olteanu [1] for queries
+    with negation without repeated relations. Otherwise, if the shared
     relations are tuple-independent, `free_variable_shattering_plan`
     and `negation_subtraction_plan` are tried in turn. They are sound
     but not known to be complete. Shared probabilistic choices are not
