@@ -299,16 +299,21 @@ mentions(s, t)"*.
 3.2 Argument Order and the ``~`` Inverse
 ------------------------------------------
 
-When the EDB relation stores its arguments in the **reverse** order — for
-instance ``reports`` stores ``(study, voxel)`` but you want to query from
-the voxel's perspective — use the ``~`` prefix to swap them:
+The ``~`` prefix swaps the arguments of a verb: the **subject** is matched
+to the **second** column and the **object** to the **first**.  Use it when
+the sentence reads naturally from the other side of the relation.  With
+``mentions(study, term)``:
 
 .. code-block:: squall
 
-    every Voxel that a Study ~reports.
+    obtain every Term that ~mentions a Study.
 
-This maps to ``reports(voxel, study)`` — the ``~`` inverts the arguments
-so the subject is matched to the second column and the object to the first.
+reads *"every term t such that some study s has mentions(s, t)"*: the
+term is the subject of ``~mentions`` and lands in the second column.  The
+same holds when the verb follows its object, as in
+``every Voxel that a Study ~reports`` which maps to
+``reports(voxel, study)`` — useful when the EDB stores the voxel first.
+With more than two arguments, ``~`` reverses all of them.
 
 Our Bayes Factor data stores ``activates(study, region)`` in natural order
 (study first, region second), so no ``~`` is needed.
@@ -399,6 +404,26 @@ general form of this in section 7.1.
     Section 7.1 introduces a closely related pattern — **bare predicate
     calls** with the syntax ``PredicateName (?a, ?b, ?c)`` without a verb —
     which is used in the Bayes Factor rule body.
+
+3.8 Verbs with Several Objects
+-------------------------------
+
+A verb followed by several objects, joined by prepositions, maps to a
+relation with one column per argument, in order: subject first, then each
+object.  With ``weighs(study, term, weight)``:
+
+.. code-block:: squall
+
+    obtain every Study ?s that weighs 'pain' with ?w.
+
+reads ``weighs(s, 'pain', w)``.  The prepositions (``with``, ``by``,
+``to``, …) only separate the objects; they do not select columns.  An
+adjective takes objects in the same way: ``every Voxel that is reported
+by a Study`` reads ``reported(voxel, study)``.
+
+The relation must have exactly that many columns.  To match a ternary
+relation without a verb, use the noun with a tuple subject instead
+(section 10.4): ``where (?s; ?t; ?w) is a Term_weight``.
 
 
 Part 4: Defining Rules
@@ -1115,6 +1140,22 @@ being dropped:
 
 Each returns a single row with one column carrying the aggregate value.
 
+When the aggregated relation has several columns, name the column to
+aggregate with a tuple label and write ``_`` for the others; ``per``
+groups by a labelled column.  With ``term_in_study_tfidf(study, term,
+tfidf)``:
+
+.. code-block:: squall
+
+    obtain the Max of the Term_in_study_tfidf (_; _; ?w).
+    # the largest tf-idf
+    obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s.
+    # one row per study: (study, its largest tf-idf)
+
+Without a label (``obtain the Max of the Term_in_study_tfidf.``) the
+column is ambiguous and the query is rejected with an error showing this
+form.
+
 In addition to these summary functions, **tail aggregations** select a
 threshold below (Top) or above (Bottom) which a quoted fraction or count
 of the values lie.  ``obtain the …`` reads like English here, so the
@@ -1214,8 +1255,8 @@ walking.
 Currently supported:
 
 ``#set_backend('backend')``
-    Switch the relational algebra backend.  ``backend`` may be ``'pandas'``,
-    ``'dask'``, or ``'polars'``.  This calls
+    Switch the relational algebra backend.  ``backend`` may be ``'pandas'``
+    or ``'polars'``.  This calls
     ``neurolang.config.config.set_query_backend`` and therefore changes the
     backend **process-wide**, for every engine, not only for the current
     program (see :doc:`performance`).
@@ -1239,7 +1280,13 @@ tuple belongs to the relation named by ``Noun``:
     define as SelectedPeak every Peak_reported (?i; ?j; ?k; ?s)
         where (?i; ?j; ?k; ?s) is an Activation.
 
-The scalar form works too: ``where ?s is a Selected_study``.
+The scalar form works too: ``where ?s is a Selected_study``.  The tuple
+form can be combined with other conditions in the same ``where`` clause:
+
+.. code-block:: squall
+
+    obtain every Study ?s
+        where (?s; ?t; ?w) is a Term_weight and ?t is 'pain'.
 
 10.5 Nested Relative Clauses
 -----------------------------

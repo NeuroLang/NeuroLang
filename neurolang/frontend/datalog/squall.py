@@ -21,6 +21,7 @@ from ...logic.transformations import (
     CollapseConjunctionsMixin,
     RemoveTrivialOperationsMixin,
 )
+from ...exceptions import NeuroLangException, PredicateArityError
 
 
 
@@ -346,3 +347,55 @@ def make_dimension_type_stripper(predicate_names=None):
 
     _Stripper.__qualname__ = "StripDimensionTypePredicatesMixin"
     return _Stripper
+
+
+def predicate_arity(program, symbol):
+    """
+    Return the number of arguments *symbol* takes in *program*, or None.
+
+    None stands for an unknown arity: a symbol that is not a relation of
+    *program*, such as a function or a predicate not defined yet. The
+    probability column of stored probabilistic facts and choices is not an
+    argument of their atoms, so it is not counted.
+    """
+    try:
+        arity = len(program.predicate_terms(symbol))
+    except (NeuroLangException, AttributeError):
+        return None
+    probabilistic = (
+        getattr(program, "pfact_pred_symbs", set())
+        | getattr(program, "pchoice_pred_symbs", set())
+    )
+    if symbol in probabilistic and isinstance(
+        program.symbol_table[symbol], Constant
+    ):
+        arity -= 1
+    return arity or None
+
+
+class CheckPredicateArities(ExpressionWalker):
+    """
+    Raise `PredicateArityError` for an atom whose arity is not its
+    predicate's.
+
+    The atoms of a query body or of a rule body are checked against the
+    relations of *program*; rule heads and predicates of unknown arity
+    (see `predicate_arity`) are not checked.
+    """
+
+    def __init__(self, program):
+        self.program = program
+
+    @add_match(Implication)
+    def check_rule_body(self, rule):
+        self.walk(rule.antecedent)
+        return rule
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def check_atom(self, atom):
+        arity = predicate_arity(self.program, atom.functor)
+        if arity is not None and arity != len(atom.args):
+            raise PredicateArityError(
+                atom.functor.name, arity, len(atom.args)
+            )
+        return atom

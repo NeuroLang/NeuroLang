@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
-from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     flatten_query
@@ -405,6 +404,27 @@ class SDDWMCSemiRingSolver(
         left.ref()
         right.ref()
         r = left & right
+        r.ref()
+        left.deref()
+        right.deref()
+
+        return r
+
+    def _semiring_monus(self, left, right):
+        return FunctionApplication(
+            Constant(self._internal_monus),
+            (left, right)
+        )
+
+    @staticmethod
+    def _internal_monus(left, right):
+        """Formula of `left` and not `right`, `right` being 0 when the
+        tuple is absent from the subtracted relation."""
+        if not isinstance(right, sdd.SddNode):
+            return left
+        left.ref()
+        right.ref()
+        r = left & ~right
         r.ref()
         left.deref()
         right.deref()
@@ -934,10 +954,7 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-if 'RAS' in config and config["RAS"].get("backend", "pandas") == "dask":
-    solve_succ_query = solve_succ_query_boolean_diagram
-else:
-    solve_succ_query = solve_succ_query_sdd_direct
+solve_succ_query = solve_succ_query_sdd_direct
 
 
 def solve_marg_query(rule, cpl):

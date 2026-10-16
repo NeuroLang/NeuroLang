@@ -3,7 +3,6 @@ from typing import AbstractSet
 
 import pytest
 
-from ..config import config
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
@@ -27,7 +26,9 @@ from ..relational_algebra_provenance import (
     BuildProvenanceAlgebraSetWalkIntoMixin,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
-    RelationalAlgebraSolver
+    RelationalAlgebraSolver,
+    Subtraction,
+    Support
 )
 
 EQ = Constant(operator.eq)
@@ -71,10 +72,6 @@ class SetType(frozenset):
         return self.union(other)
 
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of sets not yet implemented in dask backend",
-)
 def test_set_type_semiring():
     r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
@@ -119,10 +116,6 @@ class StringTestType:
         return hash(self.value)
 
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of strings not yet implemented in dask backend",
-)
 def test_string_semiring():
     r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
@@ -384,6 +377,68 @@ def test_difference():
         tuple(str2columnstr_constant(c) for c in ("x", "y", "w"))
     )
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
+
+
+def test_subtraction():
+    r_left = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y"),
+            iterable=[
+                (0.5, "a", "b"),
+                (0.7, "a", "a"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p1_"),
+    )
+
+    r_right = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p2_", "x", "y"),
+            iterable=[
+                (0.2, "a", "b"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p2_"),
+    )
+
+    r_expected = ProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y"),
+            iterable=[
+                (0.3, "a", "b"),
+                (0.7, "a", "a"),
+                (0.0, "b", "b"),
+            ],
+        )),
+        str2columnstr_constant("_p1_"),
+    )
+
+    op = Subtraction(r_left, r_right)
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
+
+
+def test_support():
+    r = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(0.5, "a", "b"), (0.2, "b", "b")],
+        ),
+        ColumnStr("_p_"),
+    )
+    r_expected = ProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(1.0, "a", "b"), (1.0, "b", "b")],
+        )),
+        str2columnstr_constant("_p_"),
+    )
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(
+        Support(r)
+    )
     assert testing.eq_prov_relations(result, r_expected)
 
 

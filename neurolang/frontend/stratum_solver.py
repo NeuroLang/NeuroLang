@@ -8,6 +8,12 @@ methods; subclasses can change what is done with each stratum, e.g.
 :class:`~neurolang.frontend.show_ra.ShowRAStratumSolver` prints the
 relational algebra plans instead of evaluating them.
 """
+from typing import AbstractSet
+
+from .. import expressions as ir
+from ..datalog.expression_processing import extract_logic_atoms
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
+from ..relational_algebra import NamedRelationalAlgebraFrozenSet
 
 
 class StratumSolver:
@@ -38,3 +44,33 @@ class StratumSolver:
         return self.engine._solve_postprobabilistic_deterministic_stratum(
             solution, postprob_idb
         )
+
+
+def with_empty_relations(solution, prob_idb, program):
+    """
+    Return the relations of ``solution`` and the empty ones ``prob_idb`` uses.
+
+    The chase leaves out of its solution the deterministic intensional
+    predicates of ``program`` without tuples; the rules of ``prob_idb``
+    need their relations, of their arity, to select constants from them.
+    """
+    idb = program.intensional_database()
+    relations = dict(solution.items())
+    heads = {rule.consequent.functor for rule in prob_idb.formulas}
+    for rule in prob_idb.formulas:
+        for atom in extract_logic_atoms(rule.antecedent):
+            if atom.functor in idb and not (
+                atom.functor in heads or atom.functor in relations
+            ):
+                relations[atom.functor] = _empty_relation(len(atom.args))
+    return relations
+
+
+def _empty_relation(arity):
+    """Return an empty relation of ``arity`` columns."""
+    columns = tuple(str(i) for i in range(arity))
+    return ir.Constant[AbstractSet](
+        WrappedRelationalAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(columns, []).to_unnamed()
+        )
+    )

@@ -34,6 +34,7 @@ from ..relational_algebra import (
 from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
+from .range_restriction import unbound_variables_error
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -271,10 +272,21 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 )
 
             if new_output is output:
-                raise CouldNotTranslateConjunctionException(expression)
+                raise self._untranslatable_conjunction_error(expression)
             output = new_output
 
         return output
+
+    @staticmethod
+    def _untranslatable_conjunction_error(expression):
+        """
+        Return the error for the conjunction *expression*, that cannot be
+        translated: its unbound variables, if it has any.
+        """
+        error = unbound_variables_error(expression)
+        if error is None:
+            error = CouldNotTranslateConjunctionException(expression)
+        return error
 
     @add_match(ExistentialPredicate)
     def translate_existential_predicate(self, expression):
@@ -336,14 +348,147 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def process_positive_formulas(classified_formulas):
-        if len(classified_formulas["pos_formulas"]) == 0:
-            output = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet([]))
-        else:
-            output = classified_formulas["pos_formulas"][0]
-            for pos_formula in classified_formulas["pos_formulas"][1:]:
-                output = NaturalJoin(output, pos_formula)
+        pos_formulas = classified_formulas["pos_formulas"]
+        if len(pos_formulas) == 0:
+            return Constant[AbstractSet](NamedRelationalAlgebraFrozenSet([]))
+        sources, targets, new_columns = (
+            TranslateToNamedRA.split_computed_join_columns(classified_formulas)
+        )
+        if len(new_columns) == 0:
+            return TranslateToNamedRA.natural_join(pos_formulas)
+        return TranslateToNamedRA.join_on_computed_columns(
+            sources, targets, new_columns
+        )
 
+    @staticmethod
+    def natural_join(formulas):
+        output = formulas[0]
+        for formula in formulas[1:]:
+            output = NaturalJoin(output, formula)
         return output
+
+    @staticmethod
+    def join_on_computed_columns(sources, targets, new_columns):
+        """
+        Join ``targets`` with ``sources`` extended by ``new_columns``.
+
+        ``new_columns`` maps each column bound by ``targets`` to the
+        expression computing it from the columns of ``sources``, so the
+        natural join is on the computed columns.
+        """
+        extended_projections = tuple(
+            FunctionApplicationListMember(fun_exp, dst_column)
+            for dst_column, fun_exp in new_columns.items()
+        ) + tuple(
+            FunctionApplicationListMember(column, column)
+            for column in TranslateToNamedRA.formulas_columns(sources)
+        )
+        return NaturalJoin(
+            ExtendedProjection(
+                TranslateToNamedRA.natural_join(sources), extended_projections
+            ),
+            TranslateToNamedRA.natural_join(targets),
+        )
+
+    @staticmethod
+    def split_computed_join_columns(classified_formulas):
+        """
+        Find the `x == expr` formulas to compute before a join on `x`.
+
+        Such a formula has `x` bound by some positive formulas, the
+        targets, and the columns of `expr` bound by the others, the
+        sources. Return the sources, the targets and the map from each
+        `x` to its `expr`; the formulas used are removed from the
+        extended projection formulas. The map is empty if there is no
+        such formula.
+        """
+        candidates = TranslateToNamedRA.bound_equality_candidates(
+            classified_formulas
+        )
+        sources, targets, candidates = (
+            TranslateToNamedRA.computable_candidates(
+                classified_formulas["pos_formulas"], candidates
+            )
+        )
+        if len(sources) == 0:
+            return sources, targets, {}
+        classified_formulas["ext_proj_formulas"] = [
+            formula for formula in classified_formulas["ext_proj_formulas"]
+            if formula not in candidates.values()
+        ]
+        return sources, targets, {
+            dst_column: formula.args[1]
+            for dst_column, formula in candidates.items()
+        }
+
+    @staticmethod
+    def computable_candidates(pos_formulas, candidates):
+        """
+        Keep the `x == expr` candidates whose `expr` the sources bind.
+
+        The sources are the positive formulas binding none of the
+        candidate columns. Dropping a candidate can turn a target into a
+        source, so iterate until no candidate is dropped. Return the
+        sources, the targets and the kept candidates.
+        """
+        while True:
+            sources, targets = TranslateToNamedRA.split_formulas_by_columns(
+                pos_formulas, candidates
+            )
+            source_columns = TranslateToNamedRA.formulas_columns(sources)
+            computable = {
+                dst_column: formula
+                for dst_column, formula in candidates.items()
+                if get_expression_columns(formula.args[1]) <= source_columns
+            }
+            if len(computable) == len(candidates):
+                return sources, targets, candidates
+            candidates = computable
+
+    @staticmethod
+    def bound_equality_candidates(classified_formulas):
+        """
+        Map each bound column `x` to its first `x == expr` formula.
+        """
+        named_columns = classified_formulas["named_columns"]
+        candidates = {}
+        for formula in classified_formulas["ext_proj_formulas"]:
+            dst_column = formula.args[0]
+            if dst_column in named_columns:
+                candidates.setdefault(dst_column, formula)
+        return candidates
+
+    @staticmethod
+    def split_formulas_by_columns(formulas, columns):
+        """
+        Split ``formulas`` into those not binding ``columns`` and the rest.
+        """
+        sources = []
+        targets = []
+        for formula in formulas:
+            if TranslateToNamedRA.formula_columns(formula).isdisjoint(columns):
+                sources.append(formula)
+            else:
+                targets.append(formula)
+        return sources, targets
+
+    @staticmethod
+    def formulas_columns(formulas):
+        columns = {}
+        for formula in formulas:
+            columns.update(
+                dict.fromkeys(TranslateToNamedRA.formula_columns(formula))
+            )
+        return columns.keys()
+
+    @staticmethod
+    def formula_columns(formula):
+        if isinstance(formula, Constant):
+            return set(
+                str2columnstr_constant(column)
+                for column in formula.value.columns
+            )
+        return formula.columns()
 
     @staticmethod
     def process_negative_formulas(classified_formulas, output):
@@ -419,6 +564,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @staticmethod
     def process_equality_formulas_constant(output, left, right, named_columns):
         if isinstance(output, Constant[AbstractSet]) and output.value.is_dum():
+            named_columns.add(left)
             return Constant[AbstractSet[Tuple[right.type]]](
                 NamedRelationalAlgebraFrozenSet(
                     (left.value,), [(REBV.walk(right),)]
@@ -479,30 +625,48 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def process_extended_projection_formulas(classified_formulas, output):
-        extended_projections = []
-        to_keep = []
         named_columns = classified_formulas["named_columns"]
-        dst_columns = set()
-        for ext_proj in classified_formulas["ext_proj_formulas"]:
-            dst_column, fun_exp = ext_proj.args
-            cols_for_fun_exp = get_expression_columns(fun_exp)
-            if cols_for_fun_exp.issubset(named_columns):
-                extended_projections.append(
-                    FunctionApplicationListMember(fun_exp, dst_column)
-                )
-                dst_columns.add(dst_column)
-            else:
-                to_keep.append(ext_proj)
-        if len(extended_projections) > 0:
-            for column in classified_formulas["named_columns"]:
+        new_columns = TranslateToNamedRA.split_extended_projection_formulas(
+            classified_formulas
+        )
+        if len(new_columns) > 0:
+            extended_projections = [
+                FunctionApplicationListMember(fun_exp, dst_column)
+                for dst_column, fun_exp in new_columns.items()
+            ]
+            for column in named_columns:
                 extended_projections.append(
                     FunctionApplicationListMember(column, column)
                 )
             output = ExtendedProjection(output, extended_projections)
 
-        named_columns |= dst_columns
-        classified_formulas["ext_proj_formulas"] = to_keep
+        named_columns.update(new_columns)
         return output
+
+    @staticmethod
+    def split_extended_projection_formulas(classified_formulas):
+        """
+        Split the `x == expr` formulas into new columns and filters.
+
+        If `x` is already bound, or is defined by a previous formula of
+        this batch, the equality constrains `x` and is moved to the
+        selection formulas. If every column of `expr` is bound, `x` is
+        returned as a new column mapped to `expr`. Otherwise the formula
+        is kept for a later round.
+        """
+        named_columns = classified_formulas["named_columns"]
+        new_columns = {}
+        to_keep = []
+        for ext_proj in classified_formulas["ext_proj_formulas"]:
+            dst_column, fun_exp = ext_proj.args
+            if dst_column in named_columns.union(new_columns):
+                classified_formulas["selection_formulas"].append(ext_proj)
+            elif get_expression_columns(fun_exp).issubset(named_columns):
+                new_columns[dst_column] = fun_exp
+            else:
+                to_keep.append(ext_proj)
+        classified_formulas["ext_proj_formulas"] = to_keep
+        return new_columns
 
     @staticmethod
     def process_selection_formulas(classified_formulas, output):

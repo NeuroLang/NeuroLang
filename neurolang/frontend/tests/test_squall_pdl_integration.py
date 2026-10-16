@@ -7,6 +7,9 @@ from neurolang.exceptions import ForbiddenDisjunctionError, SymbolNotFoundError
 from neurolang.expressions import Symbol as ir_Symbol
 
 from ..probabilistic_frontend import NeurolangPDL
+from neurolang.exceptions import (
+    SquallSemanticError, WrongArgumentsInPredicateError,
+)
 
 
 @pytest.fixture
@@ -196,6 +199,19 @@ def test_execute_squall_tilde_inversion_end_to_end(nl_author):
     assert rows == {"p1", "p2", "p3"}
 
 
+def test_execute_squall_tilde_inversion_in_relative_vp():
+    """``that ~mentions a Study`` reads ``mentions(study, term)`` backwards."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    engine.add_tuple_set([("pain",), ("fear",), ("joy",)], name="term")
+    engine.add_tuple_set([(1, "pain"), (2, "fear")], name="mentions")
+    result = engine.execute_squall_program(
+        "obtain every Term that ~mentions a Study."
+    )
+    rows = set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    assert rows == {"pain", "fear"}
+
+
 def test_execute_squall_marg_query_walks_without_error():
     """Smoke test: MARG syntax parses and IR is accepted by the solver walk."""
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
@@ -268,6 +284,7 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
     missing transformer handler, etc.) confirms that the conditioned-rule
     transformer methods are wired up end-to-end.
     """
+    from neurolang.exceptions import UnboundVariablesError
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
@@ -287,6 +304,8 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
         pass  # Expected: reached rewrite_conditional_query — plumbing is OK
     except ForbiddenDisjunctionError:
         pass  # Also acceptable: disjunctive queries reached probabilistic solver
+    except UnboundVariablesError:
+        pass  # Also acceptable: the rewritten rule reached the program
     except Exception as exc:
         pytest.fail(
             f"execute_squall_program raised an unexpected exception type for "
@@ -296,10 +315,11 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
 
 def test_execute_squall_body_function_call():
     """Function call in rel_b position produces a valid body atom."""
+    from neurolang.exceptions import UnboundVariablesError
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
-    engine.add_tuple_set([("a", 1), ("b", 2)], name="item_val")
+    engine.add_tuple_set([("a",), ("b",)], name="item_val")
 
     def close_enough(x, y):
         return abs(x - y) < 0.5
@@ -313,6 +333,8 @@ def test_execute_squall_body_function_call():
         )
     except Fol2DatalogTranslationException:
         pass  # Acceptable: reached datalog translation — plumbing is OK
+    except UnboundVariablesError:
+        pass  # Acceptable: ?x and ?y are only bound by close_enough
     except Exception as exc:
         pytest.fail(
             f"Body function call raised unexpected exception: "
@@ -438,6 +460,61 @@ def test_execute_squall_compact_per_list():
     assert any(c >= 4 for c in arg_counts), (
         f"Expected a rule consequent with >=4 args, got arg counts: {arg_counts}"
     )
+
+
+@pytest.fixture
+def nl_ternary():
+    """Engine with ternary weighs/term_weight and voxel relations."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    rows = [(1, "pain", 0.5), (2, "fear", 0.9), (1, "fear", 0.1)]
+    engine.add_tuple_set(rows, name="term_weight")
+    engine.add_tuple_set(rows, name="weighs")
+    engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
+    engine.add_tuple_set([("v1", 1), ("v2", 2)], name="reported")
+    engine.add_tuple_set([("v1",)], name="schaefer_voxels")
+    return engine
+
+
+def _column0_set(result):
+    return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+
+
+def test_execute_squall_tuple_is_a_noun_in_where_conjunction(nl_ternary):
+    """``where (?s; ?t; ?w) is a T and ?t is 'pain'`` filters on ``T``."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
+        "and ?t is 'pain'."
+    )
+    assert _column0_set(result) == {1}
+
+
+def test_execute_squall_prepositional_ternary_verb(nl_ternary):
+    """``that weighs 'fear' with ?w`` reads ``weighs(s, 'fear', w)``."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Study ?s that weighs 'fear' with ?w."
+    )
+    assert _column0_set(result) == {1, 2}
+
+
+def test_execute_squall_too_many_verb_objects_is_an_arity_error(
+    nl_ternary
+):
+    """A ternary use of a binary relation is reported as an arity error."""
+    nl_ternary.add_tuple_set([(1, "pain")], name="mentions")
+    with pytest.raises(WrongArgumentsInPredicateError):
+        nl_ternary.execute_squall_program(
+            "obtain every Study ?s that mentions 'pain' with ?w."
+        )
+
+
+def test_execute_squall_adjective_complement_and_noun(nl_ternary):
+    """``that is reported by a Study and that is a S`` keeps both."""
+    result = nl_ternary.execute_squall_program(
+        "obtain every Voxel that is reported by a Study "
+        "and that is a Schaefer_voxels."
+    )
+    assert _column0_set(result) == {"v1"}
 
 
 def test_execute_squall_where_tuple_is_noun():
@@ -638,11 +715,12 @@ def test_extension_d_for_each_integration(tmp_path):
         nl.add_tuple_set(
             [(1, 10, "s1"), (2, 20, "s2")], name="data"
         )
+        nl.add_tuple_set([(10, 1, "s1"), (20, 2, "s2")], name="indexed")
         nl.execute_squall_program(
             f"define as Result with a probability of "
             f"the Agg_collect of the Data (?v; _; ?s) "
             f"{keyword} ?i, ?s "
-            f"that data(?i, ?v, ?s) holds."
+            f"that indexed(?i, ?s) holds."
         )
         idb = nl.program_ir.intensional_database()
         # find the rule(s) whose consequent functor name contains "result"
@@ -842,6 +920,37 @@ def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
     assert pdf.iloc[0, 0] == "alice", (
         f"Expected 'alice', got {pdf.iloc[0, 0]}"
     )
+
+
+def test_execute_squall_where_label_is_constant_absent_from_set_column():
+    """
+    A ``where ?l is 'value'`` filter matching no row over a relation whose
+    columns come from destroying a set of tuples returns an empty result.
+
+    The constant is pushed below the set destruction, so the relation
+    exploded into ``(I, J, K)`` is empty.  Before the fix, exploding an
+    empty relation into several columns raised ``KeyError ['I', 'J']``.
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("a", frozenset({(0, 0, 0), (1, 1, 1)})),
+         ("b", frozenset({(2, 2, 2)}))],
+        name="atlas",
+    )
+    engine.execute_datalog_program(
+        """
+        voxels(I, J, K, l) :- atlas(l, r), contains(r, (I, J, K)).
+        labels(l, i, j, k) :- voxels(i, j, k, l)
+        """
+    )
+    found = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'a'."
+    )
+    assert set(found) == {("a", 0, 0, 0), ("a", 1, 1, 1)}
+    missing = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'zzz'."
+    )
+    assert len(missing) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1080,6 +1189,71 @@ def test_execute_squall_count_over_nary_relation():
     df = result.as_pandas_dataframe()
     assert df.shape == (1, 1), f"got {df.shape}"
     assert df.iloc[0, 0] == 2
+
+
+@pytest.fixture
+def nl_study_tfidf():
+    """Engine with a 3-column term_in_study_tfidf(study, term, tfidf)."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    engine.add_tuple_set(
+        [(1, "pain", 0.5), (2, "fear", 0.9), (1, "fear", 0.1)],
+        name="term_in_study_tfidf",
+    )
+    return engine
+
+
+def test_execute_squall_max_of_multicolumn_relation_asks_for_column(
+    nl_study_tfidf
+):
+    """Unlabelled Max over a 3-column relation must not use column 0."""
+    with pytest.raises(SquallSemanticError, match=r"\(_; _; \?\w+\)"):
+        nl_study_tfidf.execute_squall_program(
+            "obtain the Max of the Term_in_study_tfidf."
+        )
+
+
+def test_execute_squall_max_of_multicolumn_rule_asks_for_column(nl_study_tfidf):
+    """The same ambiguity in a rule definition is reported too."""
+    with pytest.raises(SquallSemanticError, match="3 columns"):
+        nl_study_tfidf.execute_squall_program(
+            "define as Top_tfidf every Max of the Term_in_study_tfidf."
+        )
+
+
+def test_execute_squall_count_message_uses_squall_name(nl_study_tfidf):
+    """The aggregation is named as written, 'Count', not 'len'."""
+    with pytest.raises(SquallSemanticError, match="'Count' over") as info:
+        nl_study_tfidf.execute_squall_program(
+            "obtain every Count of the Term_in_study_tfidf."
+        )
+    assert "'len'" not in str(info.value)
+
+
+def test_execute_squall_count_of_probabilistic_facts_is_not_multicolumn():
+    """The probability column of a fact set is not an aggregated column."""
+    engine = NeurolangPDL()
+    engine.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.2, "b")], name="pf"
+    )
+    engine.execute_squall_program("define as Pf_count every Count of the Pf.")
+
+
+def test_execute_squall_max_of_named_column(nl_study_tfidf):
+    """``(_; _; ?w)`` selects the value column to aggregate."""
+    result = nl_study_tfidf.execute_squall_program(
+        "obtain the Max of the Term_in_study_tfidf (_; _; ?w)."
+    )
+    assert result.as_pandas_dataframe().values.tolist() == [[0.9]]
+
+
+def test_execute_squall_max_of_named_column_per_group(nl_study_tfidf):
+    """``(?s; _; ?w) per ?s`` aggregates ``?w`` for each study."""
+    result = nl_study_tfidf.execute_squall_program(
+        "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {(1, 0.5), (2, 0.9)}
 
 
 def test_execute_squall_issue879_anaphora_and_conjunction():
