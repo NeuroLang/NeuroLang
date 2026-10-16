@@ -118,6 +118,23 @@ def test_segregation_on_the_selected_study_without_answer_variables():
     _assert_close(_solve(nl, program), expected)
 
 
+def test_closed_conjunct_outside_the_quantifier():
+    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ): a closed deterministic atom outside the
+    quantified variables does not prevent the projection."""
+    choices = {"selected_study": STUDIES}
+    program = SEGREGATION + (
+        "\nq(t, PROB) :- flag('on'), seg(t, s), selected_study(s)"
+    )
+    expected = _enumerated(
+        choices,
+        lambda w, c, a: _segregated(w, c["selected_study"], a[0]),
+        answers=tuple((t,) for t in TERMS)
+    )
+    nl = _engine(True, choices)
+    nl.add_tuple_set([("on",)], name="flag")
+    _assert_close(_solve(nl, program), expected)
+
+
 def test_two_choices_are_projected_in_turn():
     choices = {"selected_study": STUDIES, "selected_term": TERMS}
     program = SEGREGATION + (
