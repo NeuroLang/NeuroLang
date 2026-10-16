@@ -1007,8 +1007,9 @@ def test_push_unnamed_selections_up(r1):
         Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(0))),
         (C_(ColumnInt(1)),)
     )
+    # The column 1 of r1 is the column 0 of the projection.
     res = Selection(
-        Projection(C_(r1), (C_(ColumnInt(1)),)), eq_(C_(ColumnInt(1)), C_(0))
+        Projection(C_(r1), (C_(ColumnInt(1)),)), eq_(C_(ColumnInt(0)), C_(0))
     )
     assert raop.walk(s) == res
 

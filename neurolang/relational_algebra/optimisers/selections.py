@@ -662,12 +662,21 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
     )
     def push_selection_above_projection(self, expression):
+        # Column i of the relation is column attributes.index(i) of the
+        # projection.
+        rew = ew.ReplaceExpressionWalker({
+            column: int2columnint_constant(
+                expression.attributes.index(column)
+            )
+            for column in PushUnnamedSelectionsUp
+            ._extract_column_int_constants(expression.relation.formula)
+        })
         return Selection(
             Projection(
                 expression.relation.relation,
                 expression.attributes
             ),
-            expression.relation.formula
+            rew.walk(expression.relation.formula)
         )
 
     @ew.add_match(
