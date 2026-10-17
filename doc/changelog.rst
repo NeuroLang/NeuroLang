@@ -29,9 +29,18 @@ Unreleased
   and SPECTER2 ``query_similarity`` over its abstracts.  A
   ``text_embeddings`` source can now be engine predicates
   (``source: {predicate: ...}``).  The MNI image of an engine can come
-  from nilearn (bundled) or TemplateFlow (``mni_template``), and the command-line ``--resolution``
-  selects its resolution, also readable in the YAML as ``${resolution}``.
+  from nilearn (bundled) or TemplateFlow (``mni_template``), and the
+  command-line ``--resolution`` selects its resolution, also readable in the YAML as ``${resolution}``.
   See :doc:`engine_configuration`.
+* Documentation: Neurosynth's association and uniformity tests written as
+  ratios of probabilities (lift, relative risk, and the ratio to the
+  brain average), computed in the REPL of the ``neurosynth`` engine, see
+  :ref:`tutorial-neurosynth-tests`.
+* ``.view`` of a result with several value columns shows an overlay per
+  column, each with its own threshold, colormap, symmetry, opacity and
+  visibility, a colour bar and its value at the cursor; ``--fill V`` sets
+  the value of the voxels without one (default 0, hidden). An infinite
+  value is drawn as the largest finite one.
 
 * The ``neurosynth`` engine has a ``cognitive_task(task_id, name,
   description)`` relation: the tasks of the Cognitive Atlas, downloaded

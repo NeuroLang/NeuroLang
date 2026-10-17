@@ -701,6 +701,86 @@ class TestViewLastResult:
         assert "--value" in out and "File not found" not in out
 
 
+@pytest.fixture
+def view_layers(monkeypatch):
+    """Record the images of the viewer page, which is left empty."""
+    calls = []
+
+    def viewer_html(img, background, **kwargs):
+        calls.append((img, kwargs))
+        return "<html></html>"
+
+    monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
+    return calls
+
+
+def _remove_view_files(out):
+    """Remove the images and the page .view wrote, as *out* tells."""
+    for line in out.split("image to: ")[1:]:
+        Path(line.split()[0]).unlink()
+    Path(out.split("viewer to: ")[1].split()[0]).unlink()
+
+
+class TestViewColumns:
+    """Check each value column of the last result is an overlay."""
+
+    QUERY = "ans(i, j, k, a, b) :- voxel(i, j, k), (a == i + 1.5), (b == j - 0.5)"
+
+    def test_one_overlay_per_value_column(self, tiny, view_layers):
+        tiny._execute_and_display(self.QUERY)
+        tiny._handle_dot_command(".view")
+        layers, kwargs = view_layers[-1]
+        assert [name for name, _ in layers] == ["a", "b"]
+        a, b = (img.get_fdata() for _, img in layers)
+        assert a[1, 2, 3] == 2.5 and a[0, 0, 0] == 1.5
+        assert b[1, 2, 3] == 1.5 and b[0, 0, 0] == -0.5
+        assert a[3, 3, 3] == 0 and b[3, 3, 3] == 0
+        assert kwargs["symmetric"] == [False, True]
+        out = _output(tiny)
+        assert "'a'" in out and "'b'" in out
+        _remove_view_files(out)
+
+    def test_missing_values_take_the_fill(self, tiny, view_layers):
+        tiny._execute_and_display(self.QUERY)
+        tiny._handle_dot_command(".view --fill 1")
+        layers, _ = view_layers[-1]
+        a, b = (img.get_fdata() for _, img in layers)
+        assert a[3, 3, 3] == 1 and b[3, 3, 3] == 1
+        assert a[1, 2, 3] == 2.5
+        _remove_view_files(_output(tiny))
+
+    def test_value_picks_one_column(self, tiny, view_layers):
+        tiny._execute_and_display(self.QUERY)
+        tiny._handle_dot_command(".view --value b")
+        img, _ = view_layers[-1]
+        assert isinstance(img, nib.Nifti1Image)
+        assert img.get_fdata()[1, 2, 3] == 1.5
+        _remove_view_files(_output(tiny))
+
+    def test_bad_fill(self, tiny, view_layers):
+        tiny._execute_and_display(self.QUERY)
+        tiny._handle_dot_command(".view --fill abc")
+        assert view_layers == []
+        assert "--fill" in _output(tiny)
+
+    def test_help_tells_the_overlays_and_the_fill(self, tiny):
+        tiny._handle_dot_command(".help view")
+        out = _output(tiny)
+        assert "--fill" in out and "overlay" in out
+
+
+def test_nan_values_take_the_fill():
+    frame = pd.DataFrame({
+        "i": [0, 1], "j": [0, 0], "k": [0, 0], "v": [np.nan, 2.0],
+    })
+    sorts = {"voxel": Sort("voxel", ("i", "j", "k"), "int", space="voxel")}
+    template = nib.Nifti1Image(np.ones((2, 2, 2), np.uint8), np.eye(4))
+    saved = nifti.result_to_nifti(
+        frame, template, sorts, nifti.SaveRequest(Path(), value="v", fill=-1.0)
+    )
+    data = saved.image.get_fdata()
+    assert data[0, 0, 0] == -1 and data[1, 0, 0] == 2 and data[1, 1, 1] == -1
+
 def test_view_keeps_nilearn_warnings_quiet(tiny, tiny_image):
     """Check the warnings of nilearn's viewer do not reach the prompt."""
     import warnings

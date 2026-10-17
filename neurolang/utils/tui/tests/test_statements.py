@@ -66,3 +66,17 @@ def test_split_statements_follows_mode_changes():
         if statement == ".mode squall":
             mode["squall"] = True
     assert statements == [".mode squall", "obtain every\nP."]
+
+
+def test_split_at_commands_keeps_programs_whole():
+    from neurolang.utils.tui.statements import split_at_commands
+
+    text = (
+        "a(x) :- b(x)\nc(x) :- a(x)\n\n.sort x\n  .head 5\n"
+        "ans(x) :-\n  c(x)"
+    )
+    assert split_at_commands(text) == [
+        "a(x) :- b(x)\nc(x) :- a(x)", ".sort x", ".head 5",
+        "ans(x) :-\n  c(x)",
+    ]
+    assert split_at_commands("ans(x) :- P(x)") == ["ans(x) :- P(x)"]

@@ -1,8 +1,10 @@
 /*
- * Interactive viewer of a brain image, inlined in the page that
+ * Interactive viewer of brain images, inlined in the page that
  * neurolang/utils/tui/brain_viewer.py writes (see its docstring for the
- * data). Three orthogonal slices of the image over its background, with
- * a crosshair at the cursor, redrawn when a control or the cursor changes.
+ * data). Three orthogonal slices of the overlays over their background,
+ * with a crosshair at the cursor, redrawn when a control or the cursor
+ * changes. Each overlay has its own threshold, colormap, symmetry,
+ * opacity and visibility; the controls apply to the active one.
  *
  * The volumes are in RAS+ orientation, flattened with the first index
  * fastest. The slices follow nilearn: neurological (left on the left),
@@ -25,10 +27,10 @@
   ];
   var AXIS_NAMES = ['x', 'y', 'z'];
 
-  var viewer = {
-    volume: null, background: null, luts: {}, state: null,
-    sortedAbs: null, sortedValues: null, min: 0, max: 0, maxAbs: 0
-  };
+  // Each layer holds the volume of an overlay and the summary of its
+  // values; the state holds the cursor, the active layer and the
+  // settings of each layer.
+  var viewer = {layers: [], background: null, luts: {}, state: null};
 
   function $(id) { return document.getElementById(id); }
 
@@ -77,29 +79,40 @@
   }
 
   async function decode() {
-    viewer.volume = await decodeOverlay(data.overlay);
+    for (var i = 0; i < data.overlays.length; i++) {
+      var overlay = data.overlays[i];
+      viewer.layers.push(summarise(overlay.name, await decodeOverlay(overlay)));
+    }
     if (data.background) {
       viewer.background = new Uint8Array(await inflate(data.background.data));
     }
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
     }
-    summarise(viewer.volume);
   }
 
-  // The range of the nonzero values, and their sorted lists for the
-  // percentiles: of |v| (symmetric colormap) and of v (one-sided).
-  function summarise(volume) {
+  // The layer of the volume: the range of its nonzero values, and their
+  // sorted lists for the percentiles, of |v| (symmetric colormap) and
+  // of v (one-sided).
+  function summarise(name, volume) {
     var values = [];
     for (var i = 0; i < volume.length; i++) {
       if (volume[i] !== 0 && !isNaN(volume[i])) values.push(volume[i]);
     }
-    viewer.sortedValues = Float32Array.from(values).sort();
-    viewer.sortedAbs = Float32Array.from(values, Math.abs).sort();
+    var layer = {name: name, volume: volume};
+    layer.sortedValues = Float32Array.from(values).sort();
+    layer.sortedAbs = Float32Array.from(values, Math.abs).sort();
     var n = values.length;
-    viewer.min = n ? viewer.sortedValues[0] : 0;
-    viewer.max = n ? viewer.sortedValues[n - 1] : 0;
-    viewer.maxAbs = n ? viewer.sortedAbs[n - 1] : 0;
+    layer.min = n ? layer.sortedValues[0] : 0;
+    layer.max = n ? layer.sortedValues[n - 1] : 0;
+    layer.maxAbs = n ? layer.sortedAbs[n - 1] : 0;
+    return layer;
+  }
+
+  // The settings of the layer l, of the active one by default.
+  function settings(l) {
+    var s = viewer.state;
+    return s.layers[l === undefined ? s.active : l];
   }
 
   /* ---------------------------------------------------------------
@@ -126,28 +139,29 @@
     return Math.min(100, 100 * lo / (sorted.length - 1));
   }
 
-  function percentileSource() {
-    return viewer.state.symmetric ? viewer.sortedAbs : viewer.sortedValues;
+  function percentileSource(l) {
+    var layer = viewer.layers[l];
+    return settings(l).symmetric ? layer.sortedAbs : layer.sortedValues;
   }
 
-  function thresholdValue() {
-    var s = viewer.state;
+  function thresholdValue(l) {
+    var s = settings(l);
     if (s.thresholdMode === 'percentile') {
-      return percentile(percentileSource(), s.threshold);
+      return percentile(percentileSource(l), s.threshold);
     }
     return s.threshold;
   }
 
-  // The colour scale: values from lo to hi span the colormap, and only
-  // the voxels shown(v) are drawn.
-  function scale() {
-    var t = thresholdValue();
-    if (viewer.state.symmetric) {
-      return {lo: -viewer.maxAbs, hi: viewer.maxAbs, threshold: t,
+  // The colour scale of the layer l: values from lo to hi span its
+  // colormap, and only the voxels shown(v) are drawn.
+  function scale(l) {
+    var t = thresholdValue(l), layer = viewer.layers[l];
+    if (settings(l).symmetric) {
+      return {lo: -layer.maxAbs, hi: layer.maxAbs, threshold: t,
               shown: function (v) { return Math.abs(v) >= t; }};
     }
-    var lo = t > 0 ? t : Math.min(0, viewer.min);
-    return {lo: lo, hi: Math.max(viewer.max, lo), threshold: t,
+    var lo = t > 0 ? t : Math.min(0, layer.min);
+    return {lo: lo, hi: Math.max(layer.max, lo), threshold: t,
             shown: function (v) { return v >= t; }};
   }
 
@@ -194,10 +208,23 @@
       Math.floor(ijk[1] / f) + b.shape[1] * Math.floor(ijk[2] / f));
   }
 
-  function fillSlice(view, s) {
+  // The visible layers, in drawing order, with their scale, colours
+  // and opacity.
+  function drawnLayers(scales) {
+    var drawn = [];
+    viewer.layers.forEach(function (layer, l) {
+      var s = settings(l);
+      if (s.visible) {
+        drawn.push({volume: layer.volume, scale: scales[l],
+                    lut: viewer.luts[s.cmap], alpha: s.opacity});
+      }
+    });
+    return drawn;
+  }
+
+  function fillSlice(view, scales) {
     var nh = shape[view.h], nv = shape[view.v];
-    var lut = viewer.luts[viewer.state.cmap];
-    var alpha = viewer.state.opacity;
+    var drawn = drawnLayers(scales);
     var pixels = view.image.data;
     var ijk = viewer.state.cursor.slice();
     for (var y = 0; y < nv; y++) {
@@ -206,13 +233,16 @@
         ijk[view.h] = x;
         var o = 4 * (y * nh + x);
         var grey = viewer.background ? viewer.background[backgroundIndex(ijk)] : 0;
-        var v = viewer.volume[ijk[0] + strides[1] * ijk[1] + strides[2] * ijk[2]];
+        var index = ijk[0] + strides[1] * ijk[1] + strides[2] * ijk[2];
         var r = grey, g = grey, b = grey;
-        if (v !== 0 && s.shown(v)) {
-          var c = 3 * colourIndex(v, s);
-          r = grey + (lut[c] - grey) * alpha;
-          g = grey + (lut[c + 1] - grey) * alpha;
-          b = grey + (lut[c + 2] - grey) * alpha;
+        for (var d = 0; d < drawn.length; d++) {
+          var layer = drawn[d], v = layer.volume[index];
+          if (v !== 0 && layer.scale.shown(v)) {
+            var c = 3 * colourIndex(v, layer.scale), lut = layer.lut;
+            r += (lut[c] - r) * layer.alpha;
+            g += (lut[c + 1] - g) * layer.alpha;
+            b += (lut[c + 2] - b) * layer.alpha;
+          }
         }
         pixels[o] = r; pixels[o + 1] = g; pixels[o + 2] = b; pixels[o + 3] = 255;
       }
@@ -236,8 +266,8 @@
     context.fillText(AXIS_NAMES[view.fixed] + ' = ' + round(mm), 4, height - 10);
   }
 
-  function drawView(view, s) {
-    fillSlice(view, s);
+  function drawView(view, scales) {
+    fillSlice(view, scales);
     view.buffer.getContext('2d').putImageData(view.image, 0, 0);
     var canvas = view.canvas, context = canvas.getContext('2d');
     var w = canvas.width, h = canvas.height;
@@ -270,8 +300,8 @@
 
   function round(v) { return String(Math.round(v * 100) / 100); }
 
-  function ticksOf(s) {
-    var ticks = viewer.state.symmetric
+  function ticksOf(s, l) {
+    var ticks = settings(l).symmetric
       ? [s.lo, -s.threshold, 0, s.threshold, s.hi]
       : [s.lo, s.threshold, s.hi];
     return ticks.filter(function (t, i) {
@@ -279,9 +309,10 @@
     });
   }
 
-  function drawColourBar(s) {
-    var canvas = $('colorbar'), context = canvas.getContext('2d');
-    var lut = viewer.luts[viewer.state.cmap];
+  // The colour bar of the layer l, on its canvas.
+  function drawColourBar(s, l) {
+    var canvas = viewer.layers[l].colorbar, context = canvas.getContext('2d');
+    var lut = viewer.luts[settings(l).cmap];
     var left = 12, width = canvas.width - 2 * left, span = s.hi - s.lo;
     var xOf = function (v) { return left + (span > 0 ? (v - s.lo) / span : 1) * width; };
     context.clearRect(0, 0, canvas.width, canvas.height);
@@ -295,12 +326,12 @@
         context.fillRect(left + x, 2, 1, 16);
       }
     }
-    var ticks = ticksOf(s).map(format);
+    var ticks = ticksOf(s, l).map(format);
     context.fillStyle = '#ddd';
     context.font = '12px system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'top';
-    ticksOf(s).forEach(function (t, i) {
+    ticksOf(s, l).forEach(function (t, i) {
       var x = xOf(t), half = context.measureText(ticks[i]).width / 2 + 1;
       context.fillRect(Math.round(x), 18, 1, 5);
       // Keep the labels at the ends of the bar inside the canvas.
@@ -308,6 +339,7 @@
       context.fillText(ticks[i], at, 26);
     });
     canvas.dataset.ticks = ticks.join(' ');
+    canvas.style.opacity = settings(l).visible ? 1 : 0.4;
   }
 
   function toMm(ijk) {
@@ -323,30 +355,37 @@
       return Math.round(m[r][0] * cursor[0] + m[r][1] * cursor[1] +
                         m[r][2] * cursor[2] + m[r][3]);
     });
-    var value = viewer.volume[cursor[0] + strides[1] * cursor[1] + strides[2] * cursor[2]];
+    var index = cursor[0] + strides[1] * cursor[1] + strides[2] * cursor[2];
+    var several = viewer.layers.length > 1;
     $('mm').textContent = '(' + toMm(cursor).map(round).join(', ') + ')';
     $('voxel').textContent = '(' + voxel.join(', ') + ')';
-    $('value').textContent = String(Number(value.toPrecision(6)));
+    $('value').textContent = viewer.layers.map(function (layer) {
+      var value = String(Number(layer.volume[index].toPrecision(6)));
+      return several ? layer.name + ' ' + value : value;
+    }).join(' · ');
   }
 
   function redraw() {
-    var s = scale();
-    VIEWS.forEach(function (view) { drawView(view, s); });
-    drawColourBar(s);
+    var scales = viewer.layers.map(function (layer, l) { return scale(l); });
+    VIEWS.forEach(function (view) { drawView(view, scales); });
+    scales.forEach(drawColourBar);
     updateReadout();
-    var mode = viewer.state.thresholdMode;
+    var mode = settings().thresholdMode;
     $('threshold-value').textContent =
-      mode === 'percentile' ? '= ' + format(s.threshold) : '';
+      mode === 'percentile' ? '= ' + format(scales[viewer.state.active].threshold) : '';
   }
 
   // The largest threshold of the slider, in the unit of the mode.
   function sliderTop() {
-    return viewer.state.thresholdMode === 'percentile'
-      ? 100 : Math.max(viewer.maxAbs, viewer.max, 1e-12);
+    var layer = viewer.layers[viewer.state.active];
+    return settings().thresholdMode === 'percentile'
+      ? 100 : Math.max(layer.maxAbs, layer.max, 1e-12);
   }
 
   function syncControls() {
-    var s = viewer.state;
+    var s = settings();
+    $('layer').value = String(viewer.state.active);
+    $('visible').checked = s.visible;
     $('threshold').value = Number(s.threshold.toPrecision(6));
     $('threshold').max = s.thresholdMode === 'percentile' ? 100 : '';
     $('threshold-slider').value = Math.round(1000 * s.threshold / sliderTop());
@@ -358,26 +397,26 @@
 
   function setThreshold(value) {
     if (isNaN(value)) return;
-    var top = viewer.state.thresholdMode === 'percentile' ? 100 : Infinity;
-    viewer.state.threshold = Math.min(Math.max(value, 0), top);
+    var top = settings().thresholdMode === 'percentile' ? 100 : Infinity;
+    settings().threshold = Math.min(Math.max(value, 0), top);
     syncControls();
     redraw();
   }
 
   // Switch between a value and a percentile, keeping the threshold.
   function setThresholdMode(mode) {
-    var s = viewer.state;
+    var s = settings(), active = viewer.state.active;
     if (mode === s.thresholdMode) return;
-    var value = thresholdValue();
+    var value = thresholdValue(active);
     s.thresholdMode = mode;
     s.threshold = mode === 'percentile'
-      ? rank(percentileSource(), value) : Math.max(0, value);
+      ? rank(percentileSource(active), value) : Math.max(0, value);
     syncControls();
     redraw();
   }
 
   function setOption(name, value) {
-    viewer.state[name] = value;
+    settings()[name] = value;
     syncControls();
     redraw();
   }
@@ -388,10 +427,43 @@
     redraw();
   }
 
+  // The list of the layers, shown with several, and a colour bar each,
+  // labelled with its name when there are several.
+  function setUpLayers() {
+    var list = $('layer'), bars = $('colorbars');
+    var several = viewer.layers.length > 1;
+    $('layer-control').style.display = several ? '' : 'none';
+    viewer.layers.forEach(function (layer, l) {
+      list.add(new Option(layer.name || 'overlay', String(l)));
+      var canvas = l === 0 ? $('colorbar') : document.createElement('canvas');
+      if (l > 0) {
+        canvas.id = 'colorbar-' + l;
+        canvas.width = $('colorbar').width;
+        canvas.height = $('colorbar').height;
+      }
+      if (several) {
+        var label = document.createElement('div');
+        label.className = 'colorbar-name';
+        label.textContent = layer.name;
+        bars.appendChild(label);
+      }
+      bars.appendChild(canvas);
+      layer.colorbar = canvas;
+    });
+  }
+
   function setUpControls() {
     var cmaps = $('cmap');
     Object.keys(viewer.luts).forEach(function (name) {
       cmaps.add(new Option(name, name));
+    });
+    $('layer').addEventListener('change', function (e) {
+      viewer.state.active = parseInt(e.target.value, 10);
+      syncControls();
+      redraw();
+    });
+    $('visible').addEventListener('change', function (e) {
+      setOption('visible', e.target.checked);
     });
     var onThreshold = function (e) { setThreshold(parseFloat(e.target.value)); };
     $('threshold').addEventListener('change', onThreshold);
@@ -467,6 +539,7 @@
     }
     await decode();
     setUpViews();
+    setUpLayers();
     setUpControls();
     setUpCursor();
     reset();
