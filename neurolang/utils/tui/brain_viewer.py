@@ -9,9 +9,17 @@ the mouse wheel scrolls. Its controls change live, in the browser, the
 threshold (a value or a percentile), the colormap, whether the colormap
 is symmetric, the opacity and the visibility of each overlay, the one
 they apply to being chosen in a list, and the order the overlays are
-drawn in, the later ones over the earlier ones. The page shows the MNI
-coordinates of the voxel under the cursor, the value of each overlay
-there, and a colour bar per overlay.
+drawn in, the later ones over the earlier ones. Other controls set
+NiiVue's display: the view (an axial, coronal or sagittal slice, the
+three slices, in a row, a column or a grid, with or without the 3D
+render, or the 3D render alone), what a drag with the right button does
+(contrast, pan and zoom, measure, angle, 3D slicer), the colour, width
+and 3D drawing of the crosshair, the gamma of the background, NiiVue's
+colour bars, labels, orientation cube and ruler, the radiological
+convention, the interpolation of the voxels and a clip plane of the 3D
+render; NiiVue's hot keys, V and C on the views, cycle the views and the
+clip planes. The page shows the MNI coordinates of the voxel under the
+cursor, the value of each overlay there, and a colour bar per overlay.
 
 The page needs no network: NiiVue (``static/niivue/niivue.umd.js``, a
 copy of its release :data:`NIIVUE_VERSION`), the script of the page

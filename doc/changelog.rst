@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+* The ``.view`` viewer has the controls of NiiVue's display: the view
+  (a slice, the three slices in a row, a column or a grid, with or
+  without the 3D render, or the 3D render alone), the drag mode of the
+  right button (contrast, pan and zoom, measure, angle, 3D slicer), the
+  crosshair's colour, width and 3D drawing, the gamma of the background,
+  NiiVue's colour bars, labels, orientation cube and ruler, the
+  radiological convention, the interpolation and a clip plane; the hot
+  keys V and C keep the controls in step, and Reset restores them.
+
 * The ``.view`` viewer draws its slices with NiiVue (0.69.0, inlined in
   the page, which still needs no network but a browser with WebGL2): the
   order its overlays are drawn in can be changed with ▲ and ▼, and the

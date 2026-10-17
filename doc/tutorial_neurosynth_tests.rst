@@ -168,6 +168,16 @@ gives them the ratio of no effect instead.  Add ``relative_risk`` to the
 head of ``ans`` for a third overlay, its infinite values being drawn as
 its largest finite one.
 
+The second row of controls sets NiiVue's display: ``View`` shows one
+slice, the three slices or the 3D render, ``Layout`` lays the three
+slices out in a row, a column or a grid, ``with 3D`` adding the render;
+``Drag`` chooses what a drag with the right button does (contrast, pan
+and zoom, measure); the crosshair, the gamma of the background, NiiVue's
+own colour bars, orientation cube and ruler, the radiological
+convention, the interpolation and a clip plane of the render have their
+controls too.  On the views, the keys V and C cycle the views and the
+clip planes.
+
 Notes:
 
 - The mask is that of ``cortical_mask``: the average of the uniformity

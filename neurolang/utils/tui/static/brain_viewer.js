@@ -7,7 +7,12 @@
  * drawn in turn, each over the previous ones. Each overlay has its own
  * threshold, colormap, symmetry, opacity and visibility, which the
  * controls set for the active one, and the order the overlays are drawn
- * in can be changed. The colormaps of the page are given to NiiVue so
+ * in can be changed. NiiVue's display is set by controls of its own:
+ * the view, the layout of the slices and the 3D render, the drag mode,
+ * the crosshair, the gamma, NiiVue's colour bar, labels, orientation
+ * cube and ruler, the radiological convention, the interpolation and
+ * the clip plane; its hot keys V and C, on the views, change the view
+ * and the clip plane. The colormaps of the page are given to NiiVue so
  * that it colours a value as the colour bars do:
  *
  * - one-sided, the colormap spans the threshold to the maximum, and the
@@ -23,6 +28,16 @@
   // NiiVue's colormap types: from the minimum to the maximum, or from 0,
   // transparent below the minimum.
   var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
+
+  // The display of NiiVue the page starts with, and Reset restores.
+  var DISPLAY = {
+    sliceType: 'multiplanar', layout: 'row', renderTile: false,
+    dragMode: 'contrast', crosshairColor: '#4fa1ff', crosshairWidth: 1,
+    crosshair3D: false, gamma: 1, colorbar: false, orientationText: true,
+    orientCube: false, ruler: false, radiological: false, smooth: true,
+    clipPlane: false
+  };
+  var SLICE_TYPES = ['axial', 'coronal', 'sagittal', 'multiplanar', 'render'];
 
   // Each layer holds the NiiVue volume of an overlay and the summary of
   // its values; the state holds the cursor, the active layer, the order
@@ -131,9 +146,106 @@
       nv.addVolume(volume);
       viewer.layers.push(summarise(data.overlays[l].name, volume));
     }
+    background.colorbarVisible = false;
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
+  }
+
+  /* ---------------------------------------------------------------
+   * NiiVue's display: the display of the state, set by its controls.
+   */
+
+  // The colour of the crosshair, as NiiVue takes it, from #rrggbb.
+  function hexColour(hex) {
+    return [1, 3, 5].map(function (i) {
+      return parseInt(hex.substr(i, 2), 16) / 255;
+    }).concat([0.85]);
+  }
+
+  function isRow(d) {
+    return d.sliceType === 'multiplanar' && d.layout === 'row';
+  }
+
+  // Set NiiVue's views: the slice type, the layout and the 3D tile, the
+  // views being taller unless they are the 3 slices in a row.
+  function applyViews(d) {
+    var nv = viewer.nv;
+    $('views').classList.toggle('tall', !isRow(d));
+    nv.opts.multiplanarShowRender =
+      niivue.SHOW_RENDER[d.renderTile ? 'ALWAYS' : 'NEVER'];
+    nv.setMultiplanarLayout(niivue.MULTIPLANAR_TYPE[d.layout.toUpperCase()]);
+    nv.setSliceType(SLICE_TYPES.indexOf(d.sliceType));
+    if (nv.resizeListener) nv.resizeListener();
+  }
+
+  function applyDisplay() {
+    var nv = viewer.nv, d = viewer.state.display;
+    nv.opts.dragMode = nv.dragModes[d.dragMode];
+    nv.opts.show3Dcrosshair = d.crosshair3D;
+    nv.opts.isColorbar = d.colorbar;
+    nv.opts.isOrientCube = d.orientCube;
+    nv.opts.isRuler = d.ruler;
+    nv.setCrosshairColor(hexColour(d.crosshairColor));
+    nv.setCrosshairWidth(d.crosshairWidth);
+    nv.setGamma(d.gamma);
+    nv.setIsOrientationTextVisible(d.orientationText);
+    nv.setRadiologicalConvention(d.radiological);
+    nv.setInterpolation(!d.smooth);
+    nv.setClipPlane(d.clipPlane ? [0, 270, 0] : [2, 0, 0]);
+    applyViews(d);
+  }
+
+  // The controls of the display, by id, and the setting each holds.
+  var DISPLAY_CONTROLS = {
+    'slice-type': 'sliceType', 'layout': 'layout',
+    'render-tile': 'renderTile', 'drag-mode': 'dragMode',
+    'crosshair-color': 'crosshairColor',
+    'crosshair-width': 'crosshairWidth', 'crosshair-3d': 'crosshair3D',
+    'gamma': 'gamma', 'nv-colorbar': 'colorbar',
+    'orientation-text': 'orientationText', 'orient-cube': 'orientCube',
+    'ruler': 'ruler', 'radiological': 'radiological', 'smooth': 'smooth',
+    'clip-plane': 'clipPlane'
+  };
+
+  function controlValue(el) {
+    if (el.type === 'checkbox') return el.checked;
+    if (el.type === 'number' || el.type === 'range') {
+      return parseFloat(el.value);
+    }
+    return el.value;
+  }
+
+  function syncDisplayControls() {
+    var d = viewer.state.display;
+    Object.keys(DISPLAY_CONTROLS).forEach(function (id) {
+      var el = $(id), value = d[DISPLAY_CONTROLS[id]];
+      if (el.type === 'checkbox') el.checked = value; else el.value = value;
+    });
+  }
+
+  // Keep the state in step with what NiiVue's hot keys changed.
+  function followHotKeys() {
+    var nv = viewer.nv, d = viewer.state.display;
+    d.sliceType = SLICE_TYPES[nv.opts.sliceType];
+    d.clipPlane = nv.scene.clipPlaneDepthAziElevs[0][0] < 2;
+    $('views').classList.toggle('tall', !isRow(d));
+    if (nv.resizeListener) nv.resizeListener();
+    syncDisplayControls();
+  }
+
+  function setUpDisplay() {
+    Object.keys(DISPLAY_CONTROLS).forEach(function (id) {
+      var el = $(id);
+      var kind = el.type === 'range' || el.type === 'color' ? 'input' : 'change';
+      el.addEventListener(kind, function () {
+        var value = controlValue(el);
+        if (typeof value === 'number' && isNaN(value)) return;
+        viewer.state.display[DISPLAY_CONTROLS[id]] = value;
+        applyDisplay();
+      });
+    });
+    $('gl').addEventListener('keyup', followHotKeys);
   }
 
   // The settings of the layer l, of the active one by default.
@@ -423,9 +535,12 @@
   function reset() {
     viewer.state = JSON.parse(JSON.stringify(data.initial));
     viewer.state.order = viewer.layers.map(function (layer, l) { return l; });
+    viewer.state.display = Object.assign({}, DISPLAY);
     drawInOrder();
     listLayers();
     syncControls();
+    syncDisplayControls();
+    applyDisplay();
     redraw();
   }
 
@@ -501,6 +616,7 @@
     await load();
     setUpLayers();
     setUpControls();
+    setUpDisplay();
     reset();
     moveCursor(data.initial.cursor);
   }
