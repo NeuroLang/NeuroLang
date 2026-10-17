@@ -21,6 +21,7 @@ def data_dir(tmp_path, monkeypatch):
 
     monkeypatch.setattr(neurostore_init, "_fetch_releases", offline)
     monkeypatch.setattr(neurostore_init, "MIN_TERM_STUDIES", 1)
+    monkeypatch.setattr(neurostore_init, "NGRAM_RANGE", (1, 1))
     release = tmp_path / "neurostore" / "2026-10"
     release.mkdir(parents=True)
     pd.DataFrame(
@@ -142,3 +143,14 @@ def test_select_release():
     assert select(releases, "nightly")["version"] == "nightly"
     with pytest.raises(ValueError, match="Unknown NeuroStore release"):
         select(releases, "1999-01")
+
+
+def test_terms_include_word_sequences():
+    abstracts = pd.Series(
+        ["working memory task", "working memory network"], index=["a", "b"]
+    )
+    with patch.object(neurostore_init, "MIN_TERM_STUDIES", 1):
+        terms = neurostore_init._tfidf_terms(abstracts)
+    assert {"working memory", "memory task", "working memory network"} <= set(
+        terms["term"]
+    )

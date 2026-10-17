@@ -13,7 +13,7 @@ engines:
       frequencies, and a probabilistic choice over studies.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith]
+    builtins: [exp, log, startswith, lcase]
     atlases:
       schaefer:
         predicate_name: schaefer
@@ -28,6 +28,18 @@ engines:
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+      cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
+      cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+      cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
+      cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
+    # The Cognitive Atlas ontology, for open-world queries over concepts,
+    # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
+    # triples are facts (``rdfs:label(iri, 'Working memory')``) and its
+    # subclass axioms rewrite the queries.
+    ontologies:
+      - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
+        individuals: true
+        names: prefixed
     text_embeddings:
       study_abstracts:
         ids_from: study
@@ -101,6 +113,14 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      cogat_term:
+        columns: [term]
+        type: str
+        description: "a Cognitive Atlas label, in lower case"
+      cogat_class:
+        columns: [iri]
+        type: str
+        description: "a class of the Cognitive Atlas ontology, by its IRI"
       task:
         columns: [task_id]
         type: str
@@ -188,6 +208,26 @@ engines:
           - study
           - term
           - tfidf
+      cogat_subclass_of:
+        description: >-
+          Cognitive Atlas classes below others, at any depth (concepts,
+          tasks, contrasts), by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
+      cogat_term:
+        description: >-
+          Label of a Cognitive Atlas class in lower case, as the terms of
+          mentions and term_in_study_tfidf
+        arguments:
+          - cogat_class
+          - cogat_term
+      cogat_measures:
+        description: >-
+          Cognitive Atlas contrasts (and tasks) measuring a concept, by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
         arguments:
@@ -214,6 +254,8 @@ engines:
       datalog:
         - "ans(s) :- mentions(s, 'pain')"
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+        - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
+        - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:
         - "obtain every Study that mentions 'pain'."
         - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."

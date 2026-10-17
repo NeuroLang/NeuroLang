@@ -1543,10 +1543,11 @@ def build_engine(
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
     _phase_atlases(nl, cfg, data_dir, name)
+    # Before the rules, which may use the predicates of the ontologies.
+    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
-    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
 
     return nl

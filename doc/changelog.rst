@@ -32,6 +32,12 @@ Unreleased
   from nilearn (bundled) or TemplateFlow (``mni_template``), and the
   command-line ``--resolution`` selects its resolution, also readable in the YAML as ``${resolution}``.
   See :doc:`engine_configuration`.
+* ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+  (``ontologies``, before ``datalog_init``) for open-world queries over its
+  concepts, tasks and contrasts, joined with the studies through
+  ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
+  :doc:`tutorial_cognitive_atlas`.  The TF-IDF of ``neurostore`` covers
+  sequences of up to three words.
 * Documentation: Neurosynth's association and uniformity tests written as
   ratios of probabilities (lift, relative risk, and the ratio to the
   brain average), computed in the REPL of the ``neurosynth`` engine, see

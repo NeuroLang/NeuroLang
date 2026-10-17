@@ -311,7 +311,8 @@ selects the release (``latest``, ``nightly`` or e.g. ``2026-10``).  It has
 all the predicates of ``neurosynth``, with the same names and columns.
 Study ids are NeuroStore's alphanumeric strings.  NeuroStore ships no term
 table, so ``term_in_study_tfidf`` is computed from the study abstracts with
-scikit-learn (unigrams, English stop words, terms in at least 10 studies,
+scikit-learn (words and sequences of two or three, so that terms such as
+``working memory`` exist; English stop words, terms in at least 30 studies,
 values above ``1e-3``) and is not comparable with Neurosynth's
 curated-vocabulary values.  Peaks in spaces other than MNI or Talairach are
 dropped.  It adds ``study_title(study_id, title)``,
@@ -324,6 +325,17 @@ Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
 abstracts; precompute the embeddings with ``python -m
 neurolang.utils.text_embeddings --engine neurostore --data-dir
 neurolang_data``.
+
+The Cognitive Atlas
+-------------------
+
+Both ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+with ``ontologies`` (see :doc:`tutorial_cognitive_atlas`), next to the
+``cognitive_task`` relation: its classes, labels, definitions and axioms are
+facts and constraints that queries use with the engine's data, in the
+open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
+``datalog_init``, the rules of an engine can use the ontology's predicates,
+as ``cogat_subclass_of`` and ``cogat_measures`` do.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

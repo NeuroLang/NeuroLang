@@ -11,7 +11,8 @@ Study ids are NeuroStore's alphanumeric strings, not PubMed integers.
 Registers the predicates of the ``neurosynth`` engine (see
 :func:`neurolang.utils.engines.neurosynth.init.register_tables`) —
 ``term_in_study_tfidf(study_id, term, tfidf)`` is computed here from the
-study abstracts with scikit-learn (unigrams, English stop words, terms found
+study abstracts with scikit-learn (words and sequences of two or three, so
+that terms such as ``working memory`` exist; English stop words, terms found
 in at least ``MIN_TERM_STUDIES`` studies, values above ``TFIDF_THRESHOLD``),
 since NeuroStore ships no term table — plus:
 
@@ -50,7 +51,8 @@ NEUROSTORE_URL = "https://neurostore.org"
 RELEASES_PATH = "/api/neurostore-studyset-releases/"
 RELEASE_ENV_VAR = "NEUROLANG_NEUROSTORE_RELEASE"
 _TIMEOUT = 60
-MIN_TERM_STUDIES = 10
+MIN_TERM_STUDIES = 30
+NGRAM_RANGE = (1, 3)
 TFIDF_THRESHOLD = 1e-3
 _MNI_SPACES = {"MNI"}
 _TALAIRACH_SPACES = {"TAL", "Talairach"}
@@ -174,6 +176,7 @@ def _tfidf_terms(abstracts: pd.Series) -> pd.DataFrame:
         stop_words="english",
         strip_accents="unicode",
         min_df=MIN_TERM_STUDIES,
+        ngram_range=NGRAM_RANGE,
     )
     matrix = vectorizer.fit_transform(abstracts.values).tocoo()
     terms = vectorizer.get_feature_names_out()
