@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* ``.view`` of a result with several value columns shows an overlay per
+  column, each with its own threshold, colormap, symmetry, opacity and
+  visibility, a colour bar and its value at the cursor; ``--fill V`` sets
+  the value of the voxels without one (default 0, hidden). An infinite
+  value is drawn as the largest finite one.
+
 * The ``neurosynth`` engine has a ``cognitive_task(task_id, name,
   description)`` relation: the tasks of the Cognitive Atlas, downloaded
   from its API (``cognitiveatlas.org/api/v-alpha/task``), with their

@@ -34,11 +34,16 @@
   #readout { margin: 8px 0; font-variant-numeric: tabular-nums; }
   #readout b { color: #fff; font-weight: 600; }
   #message { color: #e66; }
+  #colorbars canvas { display: block; }
+  .colorbar-name { color: #bbb; margin-top: 4px; }
 </style>
 </head>
 <body>
 <h1>__TITLE__</h1>
 <div id="controls">
+  <label id="layer-control">Overlay <select id="layer"></select>
+    <input id="visible" type="checkbox"> shown
+  </label>
   <label>Threshold
     <input id="threshold" type="number" min="0" step="any">
     <select id="threshold-mode" title="A value, or a percentile of the nonzero values">
@@ -66,7 +71,7 @@
   MNI <b id="mm"></b> mm &middot; voxel <b id="voxel"></b>
   &middot; value <b id="value"></b>
 </div>
-<canvas id="colorbar" width="480" height="44"></canvas>
+<div id="colorbars"><canvas id="colorbar" width="480" height="44"></canvas></div>
 <p id="message"></p>
 <script id="viewer-data" type="application/json">__DATA__</script>
 <script>
