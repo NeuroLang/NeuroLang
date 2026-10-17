@@ -19,6 +19,10 @@ Unreleased
 
 **New features:**
 
+* Documentation: Neurosynth's association and uniformity tests written as
+  ratios of probabilities (lift, relative risk, and the ratio to the
+  brain average), computed in the REPL of the ``neurosynth`` engine, see
+  :ref:`tutorial-neurosynth-tests`.
 * ``.view`` of a result with several value columns shows an overlay per
   column, each with its own threshold, colormap, symmetry, opacity and
   visibility, a colour bar and its value at the cursor; ``--fill V`` sets
