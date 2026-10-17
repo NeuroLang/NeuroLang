@@ -653,6 +653,28 @@ def test_pasted_statements_run_in_turn(small_app, pipe_session):
     assert small_app.settings.output_format == "table"
 
 
+
+def test_pasted_block_with_comment_lines(small_app, pipe_session):
+    """The ``%`` comment lines of a pasted block, before a rule or a
+    dot-command, run nothing and raise no error."""
+    calls = _recording_execute(small_app)
+    pasted = (
+        "% the rule\nq(x) :- P(x)\n% CSV output\n.format csv\n"
+        "% the query\nans(x) :- q(x)"
+    )
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["% the rule\nq(x) :- P(x)\n% CSV output",
+                     "% the query\nans(x) :- q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert "error" not in _output(small_app).lower()
+
+
+def test_comment_line_alone_runs_nothing(small_app):
+    calls = _recording_execute(small_app)
+    small_app._run_line("% nothing to run")
+    assert calls == []
+    assert _output(small_app) == ""
+
 def test_pasted_mode_applies_to_what_follows(small_app, pipe_session):
     pasted = ".mode squall\nobtain every P."
     small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))

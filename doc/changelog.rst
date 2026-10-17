@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* Documentation: the REPL example of the Neurosynth tests
+  (:ref:`tutorial-neurosynth-tests`) gives the term in the query,
+  ``ratios("vision", i, j, k, ...)``, rather than in a
+  ``term_of_interest`` relation joined in every rule, with a ``%``
+  comment before each line.
+
 * The ``.view`` viewer draws its slices with NiiVue (0.69.0, inlined in
   the page, which still needs no network but a browser with WebGL2): the
   order its overlays are drawn in can be changed with ▲ and ▼, and the
@@ -138,6 +144,11 @@ Unreleased
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
 **Bug fixes:**
+
+* The REPL skips the ``%`` comment lines between statements, e.g. before
+  a dot-command of a pasted block or in a piped batch, which it submitted
+  as programs that failed to parse; a comment line within a statement of
+  several lines no longer ends it.
 
 * Magic sets leave out of a magic rule the atoms sharing no variable with
   its bound arguments, whose product with the magic set was only
