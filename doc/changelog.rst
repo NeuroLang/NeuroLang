@@ -19,6 +19,20 @@ Unreleased
 
 **New features:**
 
+* Engines in :file:`engines.yaml` can inherit from other engines with
+  ``extends`` and from ``abstract`` base entries, so settings common to
+  several engines are declared once.  ``neurosynth`` now extends a shared
+  ``coordinate_meta_analysis`` base.  A new ``neurostore`` engine, built on
+  the same base, loads the NeuroStore database (as fetched by NiMARE) with
+  the predicates of ``neurosynth``, TF-IDF computed from the abstracts, the
+  titles, abstracts and LLM-extracted concepts and domains of the studies,
+  and SPECTER2 ``query_similarity`` over its abstracts.  A
+  ``text_embeddings`` source can now be engine predicates
+  (``source: {predicate: ...}``).  The MNI image of an engine can come
+  from nilearn (bundled) or TemplateFlow (``mni_template``), and the command-line ``--resolution``
+  selects its resolution, also readable in the YAML as ``${resolution}``.
+  See :doc:`engine_configuration`.
+
 * The ``neurosynth`` engine has a ``cognitive_task(task_id, name,
   description)`` relation: the tasks of the Cognitive Atlas, downloaded
   from its API (``cognitiveatlas.org/api/v-alpha/task``), with their

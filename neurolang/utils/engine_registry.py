@@ -38,6 +38,15 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``mni_template`` — where the MNI image defining the voxel grid of an
+  engine with ``requires_mni_mask`` comes from: ``source`` is
+  ``icbm152_2009`` (default), ``nilearn`` (bundled, no download) or
+  ``templateflow``; see :func:`_get_mni_mask`;
+* ``resolution`` — default isotropic resolution (mm) of the MNI image,
+  used when none is requested on the command line;
+* ``extends`` — one engine name, or a list of them, whose configuration
+  is inherited (see :func:`resolve_engine_config`); engines marked
+  ``abstract: true`` only serve as bases and cannot be built or listed;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
   ``f(query, doc) -> similarity``; see
@@ -46,7 +55,7 @@ define:
       text_embeddings:
         study_abstracts:
           ids_from: study
-          source: pubmed
+          source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
 
 Usage
@@ -261,9 +270,111 @@ def _resolve_relation_file(
         return resolved
 
 
+# Top-level keys holding lists that are concatenated (parent first,
+# duplicates dropped) when inherited; every other list is replaced.
+_MERGED_LIST_KEYS = frozenset(
+    {"builtins", "downloads", "ontologies", "dimension_type_predicates"}
+)
+# Keys describing the engine itself, never inherited.
+_NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
+
+
+def _merge_mappings(parent: Dict[str, Any], child: Dict[str, Any]):
+    """Deep-merge two mappings; ``None`` in *child* deletes the entry."""
+    merged = dict(parent)
+    for key, value in child.items():
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_mappings(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_engine_configs(
+    parent: Dict[str, Any], child: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Merge *child* over *parent* engine configurations.
+
+    * ``datalog_init`` texts are concatenated, parent rules first;
+    * the lists in :data:`_MERGED_LIST_KEYS` are concatenated without
+      duplicates;
+    * mappings (``atlases``, ``predicates``, ...) are merged recursively,
+      and an entry set to ``null`` in the child removes the inherited one;
+    * any other value in the child replaces the inherited one.
+    """
+    merged = {
+        k: v for k, v in parent.items() if k not in _NON_INHERITED_KEYS
+    }
+    for key, value in child.items():
+        inherited = merged.get(key)
+        if key == "datalog_init" and inherited and value:
+            merged[key] = inherited.rstrip("\n") + "\n" + value
+        elif key in _MERGED_LIST_KEYS and inherited and value:
+            merged[key] = list(inherited) + [
+                v for v in value if v not in inherited
+            ]
+        elif isinstance(value, dict) and isinstance(inherited, dict):
+            merged[key] = _merge_mappings(inherited, value)
+        elif isinstance(value, dict):
+            merged[key] = _merge_mappings({}, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
+    _stack: Tuple[str, ...] = (),
+) -> Dict[str, Any]:
+    """
+    Return the configuration of *name* with all ``extends`` resolved.
+
+    Parameters
+    ----------
+    engines :
+        The raw ``engines`` mapping of an engine YAML file.
+    name :
+        Engine (or abstract base) to resolve.
+
+    Raises
+    ------
+    ValueError
+        If *name* or one of its bases is unknown, or the ``extends``
+        chain is cyclic.
+
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    raw = engines[name] or {}
+    bases = raw.get("extends", [])
+    if isinstance(bases, str):
+        bases = [bases]
+    resolved: Dict[str, Any] = {}
+    for base in bases:
+        resolved = _merge_engine_configs(
+            resolved, resolve_engine_config(engines, base, _stack + (name,))
+        )
+    merged = _merge_engine_configs(resolved, raw)
+    return {k: v for k, v in merged.items() if k not in _NON_INHERITED_KEYS}
+
+
+def _is_abstract(engines: Dict[str, Dict[str, Any]], name: str) -> bool:
+    return bool((engines[name] or {}).get("abstract", False))
+
+
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
     """
-    Return the names of all registered engines.
+    Return the names of all registered, non-abstract engines.
 
     Parameters
     ----------
@@ -272,8 +383,8 @@ def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    return sorted(config.get("engines", {}).keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    return sorted(n for n in engines if not _is_abstract(engines, n))
 
 
 def get_engine_config(
@@ -281,6 +392,8 @@ def get_engine_config(
 ) -> Dict[str, Any]:
     """
     Return the YAML configuration dict for a single engine.
+
+    Inherited (``extends``) configuration is already merged in.
 
     Parameters
     ----------
@@ -293,17 +406,15 @@ def get_engine_config(
     Raises
     ------
     ValueError
-        If *name* is not a registered engine.
+        If *name* is not a registered, non-abstract engine.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
-    if name not in engines:
-        available = ", ".join(engines.keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    if name in engines and _is_abstract(engines, name):
         raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
+            f"Engine {name!r} is abstract and can only be extended"
         )
-    return dict(engines[name])
+    return resolve_engine_config(engines, name)
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
@@ -317,11 +428,11 @@ def show_engines(yaml_path: Optional[Path] = None) -> None:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
+    engines = _load_yaml_config(yaml_path).get("engines", {})
     print("Available engines:\n")
-    for name in sorted(engines):
-        desc = engines[name].get("description", "").replace("\n", " ").strip()
+    for name in list_engine_names(yaml_path):
+        cfg = resolve_engine_config(engines, name)
+        desc = cfg.get("description", "").replace("\n", " ").strip()
         print(f"  {name}")
         if desc:
             print(f"      {desc}")
@@ -705,6 +816,14 @@ def _fetch_nilearn_template(
         functions use their own global cache (``~/nilearn_data``) rather
         than this path.
     """
+    img = _nilearn_template_image(params)
+    pred_name = params.get("predicate")
+    if pred_name:
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _nilearn_template_image(params: dict) -> nib.Nifti1Image:
+    """Return the nilearn MNI152 template (or mask) named by *params*."""
     variant = params.get("variant", "brain_mask")
     info = _NILEARN_TEMPLATES.get(variant)
     if info is None:
@@ -719,11 +838,7 @@ def _fetch_nilearn_template(
     elif variant in ("brain_mask", "gm_mask", "wm_mask"):
         kwargs["resolution"] = params.get("resolution")
 
-    img = getattr(_nilearn_datasets(), info["func"])(**kwargs)
-
-    pred_name = params.get("predicate")
-    if pred_name:
-        _register_template_predicate(nl, img, pred_name)
+    return getattr(_nilearn_datasets(), info["func"])(**kwargs)
 
 
 def _fetch_templateflow_template(
@@ -735,6 +850,22 @@ def _fetch_templateflow_template(
     Optionally registers a voxel predicate.
     Requires the ``templateflow`` Python package.
 
+    """
+    img = _templateflow_template_image(tpl_name, params)
+    pred_name = params.get("predicate")
+    if pred_name:
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _templateflow_template_image(
+    tpl_name: str, params: dict
+) -> nib.Nifti1Image:
+    """
+    Return the TemplateFlow image named by *params*.
+
+    ``template`` is required; ``resolution``, ``suffix`` (default
+    ``T1w``) and ``desc`` (e.g. ``brain`` with ``suffix: mask``) select
+    the file.
     """
     try:
         from templateflow import api as tflow
@@ -754,22 +885,22 @@ def _fetch_templateflow_template(
     resolution = params.get("resolution")
     suffix = params.get("suffix", "T1w")
 
-    kwargs: Dict[str, Any] = dict(suffix=suffix)
+    kwargs: Dict[str, Any] = dict(suffix=suffix, extension=".nii.gz")
     if resolution is not None:
         kwargs["resolution"] = resolution
+    if params.get("desc") is not None:
+        kwargs["desc"] = params["desc"]
 
-    # templateflow.api.get() returns a Path to the downloaded file
+    # templateflow.api.get() returns a Path (or a list of them)
     tpl_path = tflow.get(tpl_id, **kwargs)
-    if tpl_path is None:
+    if isinstance(tpl_path, (list, tuple)):
+        tpl_path = tpl_path[0] if tpl_path else None
+    if not tpl_path:
         raise FileNotFoundError(
-            f"TemplateFlow template {tpl_id!r} (suffix={suffix}, "
-            f"resolution={resolution}) could not be resolved."
+            f"TemplateFlow template {tpl_id!r} ({kwargs}) "
+            "could not be resolved."
         )
-
-    pred_name = params.get("predicate")
-    if pred_name:
-        img = nib.load(str(tpl_path))
-        _register_template_predicate(nl, img, pred_name)
+    return nib.load(str(tpl_path))
 
 
 def _load_template(
@@ -977,22 +1108,94 @@ def _load_atlas(
         _load_deterministic_atlas(nl, atlas_name, params, data_dir)
 
 
-def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
-    return nib.load(
-        _nilearn_datasets().fetch_icbm152_2009(
-            data_dir=str(data_dir / "icbm")
-        )["t1"]
+_PLACEHOLDER = re.compile(r"^\$\{(\w+)(?::([^}]*))?\}$")
+
+
+def _plain_number(value: Optional[float]) -> Optional[float]:
+    """``2.0`` as the integer 2, which TemplateFlow and nilearn expect."""
+    if value is not None and float(value).is_integer():
+        return int(value)
+    return value
+
+
+def _expand_placeholders(value: Any, variables: Dict[str, Any]) -> Any:
+    """
+    Substitute ``${name}`` / ``${name:default}`` in an engine config.
+
+    Only a string that is wholly a placeholder is replaced, by the value
+    of the variable (keeping its type) or else by the default, read as
+    YAML (``${resolution:2}`` is the integer 2).  Without a value or a
+    default the entry is dropped from its mapping or list.
+    """
+    if isinstance(value, dict):
+        expanded = {k: _expand_placeholders(v, variables) for k, v in value.items()}
+        return {k: v for k, v in expanded.items() if v is not _UNSET}
+    if isinstance(value, list):
+        expanded = [_expand_placeholders(v, variables) for v in value]
+        return [v for v in expanded if v is not _UNSET]
+    match = _PLACEHOLDER.match(value) if isinstance(value, str) else None
+    if match is None:
+        return value
+    name, default = match.groups()
+    if variables.get(name) is not None:
+        return variables[name]
+    if default is not None:
+        return yaml.safe_load(default)
+    return _UNSET
+
+
+_UNSET = object()
+
+
+def _get_mni_mask(
+    data_dir: Path,
+    template: Optional[Dict[str, Any]] = None,
+    resolution: Optional[float] = None,
+) -> nib.Nifti1Image:
+    """
+    Return the MNI image defining the voxel grid of an engine.
+
+    *template* is the engine's ``mni_template`` entry; its ``source`` is
+
+    * ``icbm152_2009`` (default): the ICBM 2009 T1 downloaded by nilearn
+      (from OSF) at 1 mm;
+    * ``nilearn``: one of nilearn's MNI152 templates or masks, bundled
+      with nilearn, so nothing is downloaded (``variant``, default
+      ``brain_mask``, and ``resolution`` in mm, 1 or 2: by default the
+      requested *resolution* if it is one of them, else 2);
+    * ``templateflow``: a TemplateFlow file (``template``, ``suffix``,
+      ``desc``, ``resolution``).
+    """
+    template = template or {}
+    source = template.get("source", "icbm152_2009")
+    if source == "icbm152_2009":
+        return nib.load(
+            _nilearn_datasets().fetch_icbm152_2009(
+                data_dir=str(data_dir / "icbm")
+            )["t1"]
+        )
+    if source == "nilearn":
+        native = resolution if resolution in (1, 2) else 2
+        return _nilearn_template_image({"resolution": native, **template})
+    if source == "templateflow":
+        return _templateflow_template_image("mni_template", template)
+    raise ValueError(
+        f"Unknown mni_template source {source!r}. "
+        "Supported: 'icbm152_2009', 'nilearn', 'templateflow'."
     )
 
 
 def _resolve_mask(
     cfg: dict, data_dir: Path, resolution: Optional[float] = None
 ) -> Optional[nib.Nifti1Image]:
-    """Download the MNI mask if required by the engine config."""
+    """Fetch the MNI mask if required by the engine config."""
     if not cfg.get("requires_mni_mask", False):
         return None
-    mask = _get_mni_mask(data_dir)
-    if resolution is not None:
+    resolution = _plain_number(resolution)
+    mask = _get_mni_mask(data_dir, cfg.get("mni_template"), resolution)
+    if resolution is not None and not np.allclose(
+        nib.affines.voxel_sizes(mask.affine), resolution
+    ):
         # A 3x3 target affine keeps the original origin; scaling a 4x4
         # identity would also scale its homogeneous coordinate.
         mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
@@ -1190,7 +1393,7 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(
-                emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                nl, emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
                 engine_name, data_dir, rel_base_dir,
             ),
             encoder=encoder,
@@ -1203,7 +1406,25 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         )
 
 
-def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
+def _predicate_texts(nl, source):
+    """Read ``{id: (title, text)}`` from engine predicates of the form
+    ``p(id, text)``: ``predicate`` gives the texts, the optional
+    ``title_predicate`` the titles."""
+    def column(name):
+        return {str(row[0]): row[1] for row in nl.symbols[name].value}
+
+    texts = column(source["predicate"])
+    titles = column(source["title_predicate"]) if (
+        "title_predicate" in source
+    ) else {}
+    return {
+        key: (titles.get(key, ""), text) for key, text in texts.items()
+    }
+
+
+def _text_loader(
+    nl, emb_cfg, pubmed_cache, engine_name, data_dir, base_dir
+):
     """Return ``load_texts(keys)`` for a ``text_embeddings`` source."""
     from neurolang.utils import text_embeddings
 
@@ -1213,6 +1434,9 @@ def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
             return text_embeddings.fetch_pubmed_abstracts(
                 keys, cache_path=pubmed_cache, email=emb_cfg.get("email")
             )
+    elif isinstance(source, dict) and "predicate" in source:
+        def load_texts(keys):
+            return _predicate_texts(nl, source)
     elif isinstance(source, dict) and "file" in source:
         def load_texts(keys):
             path = _resolve_relation_file(
@@ -1226,7 +1450,7 @@ def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
     else:
         raise ValueError(
             f"Unknown text_embeddings source {source!r}: use 'pubmed' "
-            "or a mapping with a 'file' key."
+            "or a mapping with a 'file' or a 'predicate' key."
         )
     return load_texts
 
@@ -1248,7 +1472,11 @@ def build_engine(
     data_dir :
         Directory under which downloaded data is cached.
     resolution :
-        If set, resample the MNI mask to the given isotropic resolution (mm).
+        Isotropic resolution (mm) of the MNI mask: the template is fetched
+        at that resolution when its source allows it, else resampled.
+        Engine configs can read it as ``${resolution}`` or
+        ``${resolution:default}``; without it, the engine's ``resolution``
+        entry is the default.
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
@@ -1276,6 +1504,12 @@ def build_engine(
     from neurolang.frontend import NeurolangPDL
 
     cfg = get_engine_config(name, yaml_path)
+    if resolution is None:
+        # The engine's own default, itself possibly a placeholder.
+        resolution = _expand_placeholders(
+            {"r": cfg.get("resolution")}, {}
+        ).get("r")
+    cfg = _expand_placeholders(cfg, {"resolution": _plain_number(resolution)})
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     mask = _resolve_mask(cfg, data_dir, resolution)
