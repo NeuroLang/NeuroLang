@@ -550,8 +550,10 @@ brainViewer.ready.then(function () {
   set('gamma', '2.5', 'input');
   out.gammaDrawn = changed(before, pixels());
   set('clip-plane', true, 'change');
-  out.clip = nv.scene.clipPlaneDepthAziElev[0] < 2;
+  out.clip = nv.scene.clipPlaneDepthAziElevs[0][0] < 2;
   set('slice-type', 'axial', 'change');
+  // NiiVue ignores the keys within its debounce time of the last one.
+  return new Promise(function (r) { setTimeout(r, 200); }).then(function () {
   nv.canvas.dispatchEvent(new KeyboardEvent('keyup', {code: 'KeyV', bubbles: true}));
   out.hotKeyView = nv.opts.sliceType !== nv.sliceTypeAxial;
   out.hotKeyListed = view() === ['axial', 'coronal', 'sagittal', 'multiplanar', 'render'][nv.opts.sliceType];
@@ -564,10 +566,11 @@ brainViewer.ready.then(function () {
     colorbar: nv.opts.isColorbar, cube: nv.opts.isOrientCube,
     ruler: nv.opts.isRuler, radiological: nv.opts.isRadiologicalConvention,
     crosshairWidth: nv.opts.crosshairWidth,
-    clip: nv.scene.clipPlaneDepthAziElev[0] < 2,
+    clip: nv.scene.clipPlaneDepthAziElevs[0][0] < 2,
     checkbox: document.getElementById('nv-colorbar').checked
   };
   report(out);
+  });
 }).catch(function (e) { report({failed: String(e)}); });
 </script>
 """
