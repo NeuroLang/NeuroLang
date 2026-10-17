@@ -1,13 +1,19 @@
 engines:
-  neurosynth:
+  # Abstract engines only hold configuration shared by other engines;
+  # concrete engines pull it in with ``extends`` (a name or a list of
+  # names).  Mappings are merged key by key, ``datalog_init`` rules and
+  # the ``builtins`` / ``downloads`` / ``ontologies`` lists are
+  # concatenated, parent first, and any other value is overridden by the
+  # extending engine.  Set a mapping entry to ``null`` to drop it.
+  coordinate_meta_analysis:
+    abstract: true
     description: >
-      Neurosynth database — forward and reverse inference over
-      reported activation peaks, TF-IDF term frequencies, and a
-      probabilistic choice over studies.
+      Shared setup of the coordinate-based meta-analysis engines
+      (neurosynth, neurostore): reported activation peaks, TF-IDF term
+      frequencies, and a probabilistic choice over studies.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith]
-    python_init: "neurolang.utils.engines.neurosynth.init"
+    builtins: [exp, log, startswith, lcase]
     atlases:
       schaefer:
         predicate_name: schaefer
@@ -22,6 +28,18 @@ engines:
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+      cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
+      cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+      cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
+      cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
+    # The Cognitive Atlas ontology, for open-world queries over concepts,
+    # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
+    # triples are facts (``rdfs:label(iri, 'Working memory')``) and its
+    # subclass axioms rewrite the queries.
+    ontologies:
+      - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
+        individuals: true
+        names: prefixed
     text_embeddings:
       study_abstracts:
         ids_from: study
@@ -95,6 +113,14 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      cogat_term:
+        columns: [term]
+        type: str
+        description: "a Cognitive Atlas label, in lower case"
+      cogat_class:
+        columns: [iri]
+        type: str
+        description: "a class of the Cognitive Atlas ontology, by its IRI"
       task:
         columns: [task_id]
         type: str
@@ -182,6 +208,26 @@ engines:
           - study
           - term
           - tfidf
+      cogat_subclass_of:
+        description: >-
+          Cognitive Atlas classes below others, at any depth (concepts,
+          tasks, contrasts), by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
+      cogat_term:
+        description: >-
+          Label of a Cognitive Atlas class in lower case, as the terms of
+          mentions and term_in_study_tfidf
+        arguments:
+          - cogat_class
+          - cogat_term
+      cogat_measures:
+        description: >-
+          Cognitive Atlas contrasts (and tasks) measuring a concept, by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
         arguments:
@@ -208,10 +254,73 @@ engines:
       datalog:
         - "ans(s) :- mentions(s, 'pain')"
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+        - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
+        - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:
         - "obtain every Study that mentions 'pain'."
         - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
         - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
+
+  neurosynth:
+    extends: coordinate_meta_analysis
+    description: >
+      Neurosynth database — forward and reverse inference over
+      reported activation peaks, TF-IDF term frequencies, and a
+      probabilistic choice over studies.
+    python_init: "neurolang.utils.engines.neurosynth.init"
+
+  neurostore:
+    extends: coordinate_meta_analysis
+    description: >
+      NeuroStore database (the one NiMARE fetches with
+      ``fetch_neurostore``, behind Neurosynth Compose) — the predicates of
+      neurosynth, with TF-IDF term frequencies computed from the study
+      abstracts, plus the abstracts, titles and LLM-extracted cognitive
+      concepts and domains of the studies.
+    python_init: "neurolang.utils.engines.neurostore.init"
+    text_embeddings:
+      study_abstracts:
+        # The texts come with the release: no PubMed download.
+        source:
+          predicate: study_abstract
+          title_predicate: study_title
+        description: >-
+          query_similarity(query, study) returns the cosine similarity
+          between a free-text query and the study's title and abstract,
+          embedded with SPECTER2.
+    sorts:
+      study:
+        type: str
+        description: "a study of the NeuroStore database"
+      text:
+        columns: [text]
+        type: str
+        description: "the title or abstract of a study"
+      concept:
+        columns: [concept]
+        type: str
+        description: "a cognitive concept extracted from the tasks of a study"
+      domain:
+        columns: [domain]
+        type: str
+        description: "a cognitive domain extracted from the tasks of a study"
+    predicates:
+      study_title:
+        description: "Title of a study"
+        arguments: [study, text]
+      study_abstract:
+        description: "Abstract of a study"
+        arguments: [study, text]
+      study_concept:
+        description: "Cognitive concepts extracted from the tasks of a study"
+        arguments: [study, concept]
+      study_domain:
+        description: "Cognitive domains extracted from the tasks of a study"
+        arguments: [study, domain]
+      term_in_study_tfidf:
+        description: >-
+          TF-IDF of the terms of the abstracts, computed from them
+          (NeuroStore ships no term table)
 
   destrieux:
     description: >
@@ -254,6 +363,17 @@ engines:
           - label
           - region
 
+  # Where the MNI image defining the voxel grid comes from is set with
+  # ``mni_template`` (default: the ICBM 2009 T1 downloaded by nilearn).
+  # To avoid the download, an engine can use the one bundled with nilearn
+  # (``resolution: 1`` is the grid of the default) or a TemplateFlow file:
+  #
+  #   my_neurostore:
+  #     extends: neurostore
+  #     mni_template: {source: nilearn, resolution: 1}
+  #     # mni_template: {source: templateflow, template: MNI152NLin2009cAsym,
+  #     #                suffix: mask, desc: brain, resolution: 1}
+  #
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:

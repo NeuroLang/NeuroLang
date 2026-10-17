@@ -8,10 +8,31 @@ Engines are declaratively configured in
 :func:`~neurolang.utils.engine_registry.build_engine`.  Each engine entry
 may specify the following keys, all of them optional:
 
+- ``extends`` — name (or list of names) of engines whose configuration is
+  inherited, see `Sharing configuration between engines`_
+- ``abstract`` — when ``true`` the entry only serves as a base for other
+  engines: it is neither listed nor buildable
 - ``description`` — human-readable summary shown by ``--list-engines``
 - ``requires_mni_mask`` — whether the engine needs an MNI brain mask (it is
   downloaded, optionally resampled with ``--resolution``, and passed to the
   init phases)
+- ``mni_template`` — where the MNI image defining the voxel grid comes from:
+  ``{source: icbm152_2009}`` (default, the ICBM 2009 T1 that nilearn
+  downloads), ``{source: nilearn, variant: brain_mask, resolution: 1}``
+  (bundled with nilearn, no download; ``resolution: 1`` is the grid of the
+  default; ``variant`` is any of the ``templates`` variants below) or
+  ``{source: templateflow, template: MNI152NLin2009cAsym, suffix: mask,
+  desc: brain, resolution: 1}`` (needs ``pip install templateflow``).
+  The command-line ``--resolution MM`` is the resolution of this image: the
+  ``nilearn`` template defaults to it (when it is 1 or 2), and a value
+  that is not the resolution of the image resamples it.  A YAML entry can
+  read it as ``resolution: ${resolution}``, or ``${resolution:2}`` with a
+  default for when no ``--resolution`` is given: such a placeholder
+  replaces any string value of the engine configuration that is wholly
+  one, and an entry with neither value nor default is dropped
+- ``resolution`` — default isotropic resolution (mm) of the MNI image, used
+  when ``--resolution`` is not given (``${resolution}`` placeholders read
+  it too); inherited like any other entry
 - ``use_base_symbols`` — when ``true`` (and an MNI mask is available),
   registers common neuroimaging symbols (``agg_count``,
   ``agg_create_region``, ``agg_create_region_overlay``,
@@ -213,13 +234,21 @@ relation (see :doc:`tutorial_text_embeddings`)::
         function: query_similarity
         description: "Similarity between a query and a study abstract"
 
-``source`` is either ``pubmed`` (titles and abstracts fetched from the NCBI
-E-utilities) or a table of texts, local or remote::
+``source`` is ``pubmed`` (titles and abstracts fetched from the NCBI
+E-utilities), a table of texts, local or remote::
 
         source:
           file: https://example.org/documents.tsv
           id_column: id
           text_columns: [title, abstract]   # first column is the title
+
+or texts the engine already holds as predicates ``p(id, text)``, which is
+how the ``neurostore`` engine embeds the abstracts that come with its
+database, without any download::
+
+        source:
+          predicate: study_abstract
+          title_predicate: study_title      # optional
 
 ``model``, ``document_adapter`` and ``query_adapter`` default to the values
 above.  The engine build only reads the ids.  Texts are fetched and
@@ -227,6 +256,86 @@ embedded on the first query that uses the function, and cached under
 ``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
+
+Sharing configuration between engines
+-------------------------------------
+
+Settings common to several engines live in an ``abstract`` engine that the
+concrete ones pull in with ``extends``.  The built-in ``neurosynth`` and
+``neurostore`` engines both extend ``coordinate_meta_analysis``, which
+provides the MNI mask, the base symbols, the Schaefer atlas, the sorts, the
+predicates and their Datalog rules, and the text embeddings; each engine
+adds its ``python_init`` and what is specific to its database::
+
+    engines:
+      coordinate_meta_analysis:
+        abstract: true
+        requires_mni_mask: true
+        use_base_symbols: true
+        datalog_init: |
+          study_with_peaks(s) :- peak_reported(i, j, k, s).
+        text_embeddings:
+          study_abstracts: {ids_from: study, source: pubmed,
+                            function: query_similarity}
+
+      neurostore:
+        extends: coordinate_meta_analysis
+        python_init: "neurolang.utils.engines.neurostore.init"
+        text_embeddings:
+          study_abstracts:
+            source: {predicate: study_abstract}   # replaces ``pubmed``
+
+With several bases (``extends: [a, b]``) later ones override earlier ones,
+and the engine's own entries override all of them.  Merging works per key:
+
+- ``datalog_init`` texts are concatenated, inherited rules first;
+- ``builtins``, ``downloads``, ``ontologies`` and
+  ``dimension_type_predicates`` are concatenated without duplicates;
+- mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
+  ``predicates``, ``text_embeddings``, ...) are merged recursively, so an
+  engine can change one parameter of an inherited entry; setting an entry
+  to ``null`` removes the inherited one;
+- every other value, lists included (``python_init``, ``description``,
+  ``hidden_predicates``, ...), is replaced.
+
+Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+
+The ``neurostore`` engine
+-------------------------
+
+``neurostore`` loads the NeuroStore database (the one behind Neurosynth
+Compose, which NiMARE fetches with ``fetch_neurostore``).  It downloads a
+release archive from ``neurostore.org``, verifies its checksum and caches it
+under ``<data_dir>/neurostore/<version>``; ``NEUROLANG_NEUROSTORE_RELEASE``
+selects the release (``latest``, ``nightly`` or e.g. ``2026-10``).  It has
+all the predicates of ``neurosynth``, with the same names and columns.
+Study ids are NeuroStore's alphanumeric strings.  NeuroStore ships no term
+table, so ``term_in_study_tfidf`` is computed from the study abstracts with
+scikit-learn (words and sequences of two or three, so that terms such as
+``working memory`` exist; English stop words, terms in at least 30 studies,
+values above ``1e-3``) and is not comparable with Neurosynth's
+curated-vocabulary values.  Peaks in spaces other than MNI or Talairach are
+dropped.  It adds ``study_title(study_id, title)``,
+``study_abstract(study_id, abstract)``, and
+``study_concept(study_id, concept)`` / ``study_domain(study_id, domain)``,
+the cognitive concepts and domains that an LLM extracted from the tasks of
+each study.
+
+Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
+abstracts; precompute the embeddings with ``python -m
+neurolang.utils.text_embeddings --engine neurostore --data-dir
+neurolang_data``.
+
+The Cognitive Atlas
+-------------------
+
+Both ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+with ``ontologies`` (see :doc:`tutorial_cognitive_atlas`), next to the
+``cognitive_task`` relation: its classes, labels, definitions and axioms are
+facts and constraints that queries use with the engine's data, in the
+open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
+``datalog_init``, the rules of an engine can use the ontology's predicates,
+as ``cogat_subclass_of`` and ``cogat_measures`` do.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

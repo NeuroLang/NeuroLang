@@ -19,6 +19,25 @@ Unreleased
 
 **New features:**
 
+* Engines in :file:`engines.yaml` can inherit from other engines with
+  ``extends`` and from ``abstract`` base entries, so settings common to
+  several engines are declared once.  ``neurosynth`` now extends a shared
+  ``coordinate_meta_analysis`` base.  A new ``neurostore`` engine, built on
+  the same base, loads the NeuroStore database (as fetched by NiMARE) with
+  the predicates of ``neurosynth``, TF-IDF computed from the abstracts, the
+  titles, abstracts and LLM-extracted concepts and domains of the studies,
+  and SPECTER2 ``query_similarity`` over its abstracts.  A
+  ``text_embeddings`` source can now be engine predicates
+  (``source: {predicate: ...}``).  The MNI image of an engine can come
+  from nilearn (bundled) or TemplateFlow (``mni_template``), and the
+  command-line ``--resolution`` selects its resolution, also readable in the YAML as ``${resolution}``.
+  See :doc:`engine_configuration`.
+* ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+  (``ontologies``, before ``datalog_init``) for open-world queries over its
+  concepts, tasks and contrasts, joined with the studies through
+  ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
+  :doc:`tutorial_cognitive_atlas`.  The TF-IDF of ``neurostore`` covers
+  sequences of up to three words.
 * The ``.view`` viewer draws its slices with NiiVue (0.69.0, inlined in
   the page, which still needs no network but a browser with WebGL2): the
   order its overlays are drawn in can be changed with ▲ and ▼, and the

@@ -383,10 +383,29 @@ def vocabulary_engine():
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
     nl.add_tuple_set(
-        [(10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4)],
+        [
+            (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
+            (10, "spatial working memory", 0.5),
+        ],
         name="term_in_study_tfidf",
     )
-    nl.execute_datalog_program(_vocabulary_rules())
+    # The Cognitive Atlas of the engine, reduced to a few classes.
+    from neurolang.utils import conftest, engine_registry
+
+    nl.add_symbol(engine_registry._BUILTIN_SYMBOLS["lcase"], name="lcase")
+
+    nl.load_ontology(
+        str(conftest.MINI_COGAT), individuals=True, names="prefixed"
+    )
+    cogat_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if line.startswith("cogat_")
+    ]
+    nl.execute_datalog_program(
+        _vocabulary_rules() + "\n" + "\n".join(cogat_rules)
+    )
     return nl
 
 
