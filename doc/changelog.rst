@@ -133,6 +133,12 @@ Unreleased
 
 **Bug fixes:**
 
+* Magic sets leave out of a magic rule the atoms sharing no variable with
+  its bound arguments, whose product with the magic set was only
+  projected out: the Neurosynth tests of :ref:`tutorial-neurosynth-tests`
+  with the term in the query, ``ratios("vision", i, j, k, ...)``, take
+  13 s instead of 63 s.
+
 * Magic sets pass the values of a stored relation with a constant to the
   rules after it in a query: ``ans(i, j, k, p) :- cognitive_task(_,
   "color-word stroop task", d) & voxel_given_sim(d, i, j, k, p)`` gives

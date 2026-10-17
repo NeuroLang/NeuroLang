@@ -560,24 +560,62 @@ def create_magic_arc_rules(arcs, consequent, magic_head):
     is left out of the rule bodies. Arcs whose body is then empty are
     skipped, their magic predicate being seeded by the magic
     initialization rules.
+
+    The body keeps only the predicates connected to the bound arguments
+    of p, see :func:`connected_literals`: the others would only multiply
+    the magic set by their rows, then be projected out.
     """
     magic_rules = []
     for head, tail in arcs.items():
         if isinstance(head, Negation):
             head = head.formula
         if "b" in head.functor.adornment:
-            new_predicate = magic_predicate(head, adorned=False)
-            body_lits = [p for p in tail if p != consequent]
-            if magic_head is not None:
-                body_lits = [magic_head] + body_lits
-            elif len(body_lits) == 0:
-                continue
-            if not (len(body_lits) == 1 and new_predicate == body_lits[0]):
-                # avoid adding rules of the form magic_p(x) :- magic_p(x)
-                magic_rules.append(
-                    Implication(new_predicate, Conjunction(body_lits))
-                )
+            rule = _magic_arc_rule(head, tail, consequent, magic_head)
+            if rule is not None:
+                magic_rules.append(rule)
     return magic_rules
+
+
+def _magic_arc_rule(head, tail, consequent, magic_head):
+    """The magic rule of the arc of *tail* to *head*, see
+    :func:`create_magic_arc_rules`, or None if it is not needed."""
+    new_predicate = magic_predicate(head, adorned=False)
+    body_lits = [p for p in tail if p != consequent]
+    if magic_head is not None:
+        body_lits = [magic_head] + body_lits
+    body_lits = connected_literals(new_predicate, body_lits)
+    if magic_head is None and len(body_lits) == 0:
+        return None
+    if len(body_lits) == 1 and new_predicate == body_lits[0]:
+        # avoid adding rules of the form magic_p(x) :- magic_p(x)
+        return None
+    return Implication(new_predicate, Conjunction(body_lits))
+
+
+def connected_literals(predicate, literals):
+    """
+    The *literals* sharing a variable with *predicate*, directly or
+    through other literals, in their order.
+
+    Leaving the others out of the body of a magic rule of head
+    *predicate* is sound: a magic predicate restricts a rule whose body
+    has these literals already, and a larger magic set restricts less.
+    """
+    variables = _symbols_of(predicate)
+    connected = set()
+    added = True
+    while added:
+        added = False
+        for i, literal in enumerate(literals):
+            if i not in connected and _symbols_of(literal) & variables:
+                variables |= _symbols_of(literal)
+                connected.add(i)
+                added = True
+    return [literal for i, literal in enumerate(literals) if i in connected]
+
+
+def _symbols_of(literal):
+    return {arg for arg in literal.args if isinstance(arg, Symbol)}
 
 
 def magic_predicate(predicate, i=None, adorned=True):
