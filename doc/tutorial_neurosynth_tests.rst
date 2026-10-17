@@ -177,7 +177,7 @@ at the cursor, here at the right lateral occipital cortex:
 
 The ``Overlay`` list chooses the map the controls apply to, and
 ``shown`` hides it; ``uniformity``, drawn over ``lift``, covers it where
-both pass their threshold.  The voxels without a value, those that no
+both pass their threshold, until ▼ draws it under ``lift``.  The voxels without a value, those that no
 study of the term activates, are 0 and not drawn; ``.view --fill 1``
 gives them the ratio of no effect instead.  Add ``relative_risk`` to the
 head of ``ans`` for a third overlay, its infinite values being drawn as

@@ -3,25 +3,30 @@ An interactive viewer of brain images, as a self-contained HTML page.
 
 :func:`viewer_html` writes a page showing NIfTI images on one grid, its
 overlays, over a background, the MNI152 T1 of nilearn
-(:func:`mni_background`), in three orthogonal slices with a crosshair.
-Its controls change live, in the browser, the threshold (a value or a
-percentile), the colormap, whether the colormap is symmetric, the
-opacity and the visibility of each overlay, the one they apply to being
-chosen in a list; the overlays are drawn in turn, the later ones over
-the earlier ones. The page shows the MNI coordinates of the voxel under
-the cursor, the value of each overlay there, and a colour bar per
-overlay.
+(:func:`mni_background`), with NiiVue [niivue]_: three orthogonal slices
+with a crosshair, drawn with WebGL2, which a click or a drag moves and
+the mouse wheel scrolls. Its controls change live, in the browser, the
+threshold (a value or a percentile), the colormap, whether the colormap
+is symmetric, the opacity and the visibility of each overlay, the one
+they apply to being chosen in a list, and the order the overlays are
+drawn in, the later ones over the earlier ones. The page shows the MNI
+coordinates of the voxel under the cursor, the value of each overlay
+there, and a colour bar per overlay.
 
-The page needs no network: its script (``static/brain_viewer.js``) and
-its data are inlined, the data as a JSON document whose arrays are bytes
-deflated with zlib then base64-encoded, which the page inflates with the
-browser's ``DecompressionStream``. Volumes are flattened in Fortran order
-(the first index varies fastest). The image is first reoriented to the
-closest RAS+ orientation, so the slices are drawn as nilearn draws them:
-neurological, the left hemisphere on the left.
+The page needs no network: NiiVue (``static/niivue/niivue.umd.js``, a
+copy of its release :data:`NIIVUE_VERSION`), the script of the page
+(``static/brain_viewer.js``) and its data are inlined. The data is a JSON
+document holding the overlays and the background as gzipped NIfTI
+images, base64-encoded, and the colormaps as 256 RGB colours, deflated
+with zlib then base64-encoded, which the page inflates with the browser's
+``DecompressionStream``. NiiVue reorients the images itself, and draws
+them as nilearn does: neurological, the left hemisphere on the left.
+
+.. [niivue] https://github.com/niivue/niivue, BSD 2-Clause License.
 """
 
 import base64
+import gzip
 import html
 import json
 import re
@@ -30,6 +35,9 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+
+# The release of NiiVue the page inlines.
+NIIVUE_VERSION = "0.69.0"
 
 # The colormap used when none is asked for.
 DEFAULT_CMAP = "plasma"
@@ -49,9 +57,6 @@ BACKGROUND_MAX_VOXELS = 2 ** 24
 
 _STATIC = Path(__file__).parent / "static"
 
-# The little-endian types of the arrays, as the page reads them.
-_DTYPES = {"float16": "<f2", "float32": "<f4"}
-
 
 def encode_array(array: np.ndarray) -> str:
     """Return the bytes of *array*, deflated then base64-encoded."""
@@ -59,43 +64,30 @@ def encode_array(array: np.ndarray) -> str:
     return base64.b64encode(zlib.compress(raw, 9)).decode("ascii")
 
 
-def _value_type(values: np.ndarray) -> str:
-    """Return ``float16`` if it holds the *values* exactly, else float32."""
-    half = values.astype(np.float16).astype(np.float32)
-    return "float16" if np.array_equal(half, values) else "float32"
+def encode_nifti(data: np.ndarray, affine: np.ndarray) -> str:
+    """Return the NIfTI image of *data* and *affine*, gzipped then
+    base64-encoded, as NiiVue reads it."""
+    image = nib.Nifti1Image(np.asarray(data), affine)
+    return base64.b64encode(
+        gzip.compress(image.to_bytes(), compresslevel=9)
+    ).decode("ascii")
 
 
-def encode_overlay(data: np.ndarray) -> dict:
+def overlay_values(data: np.ndarray) -> np.ndarray:
     """
-    Return the voxel values of the volume *data* as the page reads them.
+    Return the values of the volume *data* the page draws, as float32.
 
-    They are sparse, the flat indices (uint32) of the nonzero voxels and
-    their values, or dense, the values of every voxel, whichever is
-    smaller; the values are half floats when that keeps them exactly.
     NaN stands for no value, as 0; an infinite value is drawn at the end
     of the colour scale, as the largest finite one of its sign.
     """
     data = np.asarray(data, dtype=np.float32)
+    data = data.reshape(data.shape[:3] + (-1,))[..., 0]
     finite = data[np.isfinite(data)]
-    flat = np.nan_to_num(
+    return np.nan_to_num(
         data, nan=0.0,
         posinf=max(finite.max(), 0.0) if finite.size else 0.0,
         neginf=min(finite.min(), 0.0) if finite.size else 0.0,
-    ).ravel(order="F")
-    index = np.flatnonzero(flat)
-    dtype = _value_type(flat[index])
-    itemsize = np.dtype(_DTYPES[dtype]).itemsize
-    overlay = {"dtype": dtype, "count": int(index.size)}
-    if index.size * (4 + itemsize) < flat.size * itemsize:
-        overlay.update(
-            encoding="sparse", index=encode_array(index.astype("<u4")),
-            values=encode_array(flat[index].astype(_DTYPES[dtype])),
-        )
-    else:
-        overlay.update(
-            encoding="dense", values=encode_array(flat.astype(_DTYPES[dtype]))
-        )
-    return overlay
+    )
 
 
 def _colormap(name: str):
@@ -208,25 +200,22 @@ def _threshold_state(threshold) -> dict:
     return {"threshold": float(threshold), "thresholdMode": "value"}
 
 
-def _volume(img) -> tuple:
+def _background_state(background, shape, affine) -> dict:
     """
-    Return *img* reoriented to RAS+: its first volume and its affine.
-
-    The affine maps the voxels of the volume to millimetres.
+    Return the *background* on the grid (*shape*, *affine*) of the
+    overlays, subsampled to stay within :data:`BACKGROUND_MAX_VOXELS`, as
+    the page reads it, zeros without one: NiiVue draws the overlays
+    over a background.
     """
-    canonical = nib.as_closest_canonical(img)
-    data = np.asarray(canonical.dataobj, dtype=np.float32)
-    return data.reshape(data.shape[:3] + (-1,))[..., 0], canonical.affine
-
-
-def _background_state(background, shape, affine):
-    """Return the *background* resampled for the page, None without one."""
     if background is None:
-        return None
-    volume, factor = resample_background(background, shape, affine)
+        volume, factor = np.zeros(shape[:3], dtype=np.uint8), 1
+    else:
+        volume, factor = resample_background(background, shape, affine)
+    subsample = np.diag([factor] * 3 + [1.0])
+    subsample[:3, 3] = (factor - 1) / 2
     return {
-        "shape": list(volume.shape), "factor": factor,
-        "data": encode_array(volume.ravel(order="F")),
+        "nifti": encode_nifti(volume, affine @ subsample),
+        "factor": factor,
     }
 
 
@@ -267,28 +256,29 @@ def viewer_state(
     """
     Return the data of the viewer page of *img*, as a JSON-able dict.
 
-    See :func:`viewer_html`; ``toImageVoxel`` maps the voxels shown, in
-    RAS+ orientation, to those of the images.
+    See :func:`viewer_html`. The ``affine`` maps the voxels of the
+    images, in which the ``cursor`` is, to millimetres.
     """
     layers = _layers(img)
-    volumes = [_volume(image) for _, image in layers]
-    data, affine = volumes[0]
+    first = layers[0][1]
+    volumes = [overlay_values(image.dataobj) for _, image in layers]
+    affine = first.affine
     cmaps = _overlay_cmaps(cmap, len(layers))
     if isinstance(symmetric, (bool, np.bool_)):
         symmetric = [symmetric] * len(layers)
     return {
-        "title": title, "shape": list(data.shape), "affine": affine.tolist(),
-        "toImageVoxel": (
-            np.linalg.inv(layers[0][1].affine) @ affine
-        ).tolist(),
+        "title": title, "shape": list(volumes[0].shape),
+        "affine": affine.tolist(),
         "overlays": [
-            {"name": name, **encode_overlay(volume)}
-            for (name, _), (volume, _) in zip(layers, volumes)
+            {"name": name, "nifti": encode_nifti(volume, affine)}
+            for (name, _), volume in zip(layers, volumes)
         ],
-        "background": _background_state(background, data.shape, affine),
+        "background": _background_state(
+            background, volumes[0].shape, affine
+        ),
         "colormaps": colormap_luts(cmaps),
         "initial": {
-            "cursor": initial_cursor(data), "active": 0,
+            "cursor": initial_cursor(volumes[0]), "active": 0,
             "layers": [
                 {
                     **_threshold_state(threshold), "cmap": layer_cmap,
@@ -329,9 +319,12 @@ def viewer_html(
     parts = {
         "TITLE": html.escape(title),
         "DATA": _script_json(state),
+        "NIIVUE": (_STATIC / "niivue" / "niivue.umd.js").read_text(
+            encoding="utf-8"
+        ),
         "SCRIPT": (_STATIC / "brain_viewer.js").read_text(encoding="utf-8"),
     }
     page = (_STATIC / "brain_viewer.html").read_text(encoding="utf-8")
     return re.sub(
-        r"__(TITLE|DATA|SCRIPT)__", lambda m: parts[m.group(1)], page
+        r"__(TITLE|DATA|NIIVUE|SCRIPT)__", lambda m: parts[m.group(1)], page
     )

@@ -25,10 +25,16 @@ Unreleased
   ``term_of_interest`` relation joined in every rule, with a ``%``
   comment before each line.
 
+* The ``.view`` viewer draws its slices with NiiVue (0.69.0, inlined in
+  the page, which still needs no network but a browser with WebGL2): the
+  order its overlays are drawn in can be changed with ▲ and ▼, and the
+  mouse wheel scrolls through the slices.
+
 * Documentation: Neurosynth's association and uniformity tests written as
   ratios of probabilities (lift, relative risk, and the ratio to the
   brain average), computed in the REPL of the ``neurosynth`` engine, see
   :ref:`tutorial-neurosynth-tests`.
+
 * ``.view`` of a result with several value columns shows an overlay per
   column, each with its own threshold, colormap, symmetry, opacity and
   visibility, a colour bar and its value at the cursor; ``--fill V`` sets
