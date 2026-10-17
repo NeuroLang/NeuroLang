@@ -288,7 +288,9 @@ def _run_in_chrome(tmp_path, html, check):
     """Return what the *check* script writes once the page has loaded,
     the page being offline."""
     page = tmp_path / "page.html"
-    page.write_text(html.replace("</body>", check + "</body>"))
+    # Before the last </body>: the NiiVue bundle holds one.
+    head, _, tail = html.rpartition("</body>")
+    page.write_text(head + check + "</body>" + tail)
     dom = subprocess.run(
         [
             _chrome(), *_CHROME_FLAGS,

@@ -1,41 +1,38 @@
 /*
  * Interactive viewer of brain images, inlined in the page that
  * neurolang/utils/tui/brain_viewer.py writes (see its docstring for the
- * data). Three orthogonal slices of the overlays over their background,
- * with a crosshair at the cursor, redrawn when a control or the cursor
- * changes. Each overlay has its own threshold, colormap, symmetry,
- * opacity and visibility; the controls apply to the active one.
+ * data), after NiiVue, which draws the slices.
  *
- * The volumes are in RAS+ orientation, flattened with the first index
- * fastest. The slices follow nilearn: neurological (left on the left),
- * anterior on the right of the sagittal slice, superior / anterior up.
+ * The background is NiiVue's volume 0 and the overlays its next volumes,
+ * drawn in turn, each over the previous ones. Each overlay has its own
+ * threshold, colormap, symmetry, opacity and visibility, which the
+ * controls set for the active one, and the order the overlays are drawn
+ * in can be changed. The colormaps of the page are given to NiiVue so
+ * that it colours a value as the colour bars do:
+ *
+ * - one-sided, the colormap spans the threshold to the maximum, and the
+ *   values below the threshold are transparent;
+ * - symmetric, it spans -max|v| to max|v|, its upper half for the
+ *   positive values and its lower half for the negative ones, and the
+ *   values of |v| below the threshold are transparent.
  */
 (function () {
   'use strict';
 
   var data = JSON.parse(document.getElementById('viewer-data').textContent);
-  var shape = data.shape;
-  var strides = [1, shape[0], shape[0] * shape[1]];
-  var SIZE = 320;  // pixels of the longest side of the slices
+  // NiiVue's colormap types: from the minimum to the maximum, or from 0,
+  // transparent below the minimum.
+  var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
 
-  // Each view shows the axes h (left to right) and v (bottom to top) at
-  // the cursor's position on the fixed axis.
-  var VIEWS = [
-    {id: 'sagittal', h: 1, v: 2, fixed: 0, labels: ['P', 'A', 'S', 'I']},
-    {id: 'coronal', h: 0, v: 2, fixed: 1, labels: ['L', 'R', 'S', 'I']},
-    {id: 'axial', h: 0, v: 1, fixed: 2, labels: ['L', 'R', 'A', 'P']}
-  ];
-  var AXIS_NAMES = ['x', 'y', 'z'];
-
-  // Each layer holds the volume of an overlay and the summary of its
-  // values; the state holds the cursor, the active layer and the
-  // settings of each layer.
-  var viewer = {layers: [], background: null, luts: {}, state: null};
+  // Each layer holds the NiiVue volume of an overlay and the summary of
+  // its values; the state holds the cursor, the active layer, the order
+  // the layers are drawn in and the settings of each layer.
+  var viewer = {layers: [], luts: {}, state: null, nv: null};
 
   function $(id) { return document.getElementById(id); }
 
   /* ---------------------------------------------------------------
-   * Decoding of the embedded arrays: base64 of zlib-deflated bytes.
+   * Decoding of the embedded colormaps: base64 of zlib-deflated bytes.
    */
 
   function base64Bytes(text) {
@@ -51,53 +48,56 @@
     return new Response(stream).arrayBuffer();
   }
 
-  // An IEEE 754 half float, from its 16 bits.
-  function halfToFloat(h) {
-    var sign = h & 0x8000 ? -1 : 1;
-    var exponent = (h >> 10) & 0x1f;
-    var fraction = h & 0x3ff;
-    if (exponent === 0) return sign * Math.pow(2, -14) * fraction / 1024;
-    if (exponent === 31) return fraction ? NaN : sign * Infinity;
-    return sign * Math.pow(2, exponent - 15) * (1 + fraction / 1024);
-  }
+  /* ---------------------------------------------------------------
+   * The colormaps of NiiVue: for a colormap of the page, the whole of
+   * it, its upper half and its lower half reversed, each transparent at
+   * its first colour, which NiiVue gives the values below the minimum.
+   */
 
-  function floats(buffer, dtype) {
-    if (dtype === 'float32') return new Float32Array(buffer);
-    var halves = new Uint16Array(buffer);
-    var out = new Float32Array(halves.length);
-    for (var i = 0; i < halves.length; i++) out[i] = halfToFloat(halves[i]);
-    return out;
-  }
-
-  async function decodeOverlay(overlay) {
-    var values = floats(await inflate(overlay.values), overlay.dtype);
-    if (overlay.encoding === 'dense') return values;
-    var index = new Uint32Array(await inflate(overlay.index));
-    var volume = new Float32Array(shape[0] * shape[1] * shape[2]);
-    for (var i = 0; i < index.length; i++) volume[index[i]] = values[i];
-    return volume;
-  }
-
-  async function decode() {
-    for (var i = 0; i < data.overlays.length; i++) {
-      var overlay = data.overlays[i];
-      viewer.layers.push(summarise(overlay.name, await decodeOverlay(overlay)));
+  function niivueColormap(lut, index) {
+    var map = {R: [], G: [], B: [], A: [], I: []};
+    for (var i = 0; i < 256; i++) {
+      var c = 3 * index(i);
+      map.R.push(lut[c]); map.G.push(lut[c + 1]); map.B.push(lut[c + 2]);
+      map.A.push(i === 0 ? 0 : 255); map.I.push(i);
     }
-    if (data.background) {
-      viewer.background = new Uint8Array(await inflate(data.background.data));
-    }
-    for (var name in data.colormaps) {
-      viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
-    }
+    return map;
   }
 
-  // The layer of the volume: the range of its nonzero values, and their
-  // sorted lists for the percentiles, of |v| (symmetric colormap) and
-  // of v (one-sided).
+  function colormapKey(name, part) {
+    return 'neurolang_' + name.toLowerCase() + (part ? '_' + part : '');
+  }
+
+  function addColormaps(nv) {
+    Object.keys(viewer.luts).forEach(function (name) {
+      var lut = viewer.luts[name];
+      nv.addColormap(colormapKey(name), niivueColormap(lut, function (i) {
+        return i;
+      }));
+      nv.addColormap(colormapKey(name, 'positive'), niivueColormap(
+        lut, function (i) { return 128 + Math.round(i * 127 / 255); }
+      ));
+      nv.addColormap(colormapKey(name, 'negative'), niivueColormap(
+        lut, function (i) { return 127 - Math.round(i * 127 / 255); }
+      ));
+    });
+  }
+
+  /* ---------------------------------------------------------------
+   * Loading of the volumes.
+   */
+
+  function loadVolume(item, name) {
+    return niivue.NVImage.loadFromBase64({base64: item.nifti, name: name});
+  }
+
+  // The layer of the NiiVue volume: the range of its nonzero values, and
+  // their sorted lists for the percentiles, of |v| (symmetric colormap)
+  // and of v (one-sided).
   function summarise(name, volume) {
-    var values = [];
-    for (var i = 0; i < volume.length; i++) {
-      if (volume[i] !== 0 && !isNaN(volume[i])) values.push(volume[i]);
+    var img = volume.img, values = [];
+    for (var i = 0; i < img.length; i++) {
+      if (img[i] !== 0 && !isNaN(img[i])) values.push(img[i]);
     }
     var layer = {name: name, volume: volume};
     layer.sortedValues = Float32Array.from(values).sort();
@@ -107,6 +107,33 @@
     layer.max = n ? layer.sortedValues[n - 1] : 0;
     layer.maxAbs = n ? layer.sortedAbs[n - 1] : 0;
     return layer;
+  }
+
+  async function load() {
+    for (var name in data.colormaps) {
+      viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
+    }
+    var nv = new niivue.Niivue({
+      backColor: [0, 0, 0, 1], crosshairColor: [0.31, 0.63, 1, 0.85],
+      crosshairWidth: 1, isColorbar: false, isRadiologicalConvention: false,
+      multiplanarShowRender: niivue.SHOW_RENDER.NEVER,
+      multiplanarLayout: niivue.MULTIPLANAR_TYPE.ROW,
+      show3Dcrosshair: false, dragAndDropEnabled: false
+    });
+    await nv.attachTo('gl');
+    addColormaps(nv);
+    var background = await loadVolume(data.background, 'background.nii.gz');
+    background.colormap = 'gray';
+    nv.addVolume(background);
+    for (var l = 0; l < data.overlays.length; l++) {
+      var volume = await loadVolume(data.overlays[l], 'overlay' + l + '.nii.gz');
+      volume.neurolangName = data.overlays[l].name;
+      nv.addVolume(volume);
+      viewer.layers.push(summarise(data.overlays[l].name, volume));
+    }
+    nv.setSliceType(nv.sliceTypeMultiplanar);
+    nv.onLocationChange = function () { updateReadout(); };
+    viewer.nv = nv;
   }
 
   // The settings of the layer l, of the active one by default.
@@ -172,124 +199,30 @@
     return Math.round(255 * Math.min(1, Math.max(0, t)));
   }
 
-  /* ---------------------------------------------------------------
-   * Drawing of the slices.
-   */
-
-  function voxelSizes() {
-    return [0, 1, 2].map(function (c) {
-      var a = data.affine;
-      return Math.hypot(a[0][c], a[1][c], a[2][c]);
-    });
-  }
-
-  // Size the canvases to the millimetres they show, the longest side of
-  // the largest SIZE pixels; each keeps an image of one pixel per voxel.
-  function setUpViews() {
-    var sizes = voxelSizes();
-    var extents = [0, 1, 2].map(function (a) { return shape[a] * sizes[a]; });
-    var pixelsPerMm = SIZE / Math.max.apply(null, extents);
-    VIEWS.forEach(function (view) {
-      view.canvas = $(view.id);
-      view.canvas.width = Math.max(1, Math.round(extents[view.h] * pixelsPerMm));
-      view.canvas.height = Math.max(1, Math.round(extents[view.v] * pixelsPerMm));
-      view.buffer = document.createElement('canvas');
-      view.buffer.width = shape[view.h];
-      view.buffer.height = shape[view.v];
-      view.image = view.buffer.getContext('2d')
-        .createImageData(shape[view.h], shape[view.v]);
-    });
-  }
-
-  // The flat index in the background of the voxel (i, j, k).
-  function backgroundIndex(ijk) {
-    var b = data.background, f = b.factor;
-    return Math.floor(ijk[0] / f) + b.shape[0] * (
-      Math.floor(ijk[1] / f) + b.shape[1] * Math.floor(ijk[2] / f));
-  }
-
-  // The visible layers, in drawing order, with their scale, colours
-  // and opacity.
-  function drawnLayers(scales) {
-    var drawn = [];
-    viewer.layers.forEach(function (layer, l) {
-      var s = settings(l);
-      if (s.visible) {
-        drawn.push({volume: layer.volume, scale: scales[l],
-                    lut: viewer.luts[s.cmap], alpha: s.opacity});
-      }
-    });
-    return drawn;
-  }
-
-  function fillSlice(view, scales) {
-    var nh = shape[view.h], nv = shape[view.v];
-    var drawn = drawnLayers(scales);
-    var pixels = view.image.data;
-    var ijk = viewer.state.cursor.slice();
-    for (var y = 0; y < nv; y++) {
-      ijk[view.v] = nv - 1 - y;
-      for (var x = 0; x < nh; x++) {
-        ijk[view.h] = x;
-        var o = 4 * (y * nh + x);
-        var grey = viewer.background ? viewer.background[backgroundIndex(ijk)] : 0;
-        var index = ijk[0] + strides[1] * ijk[1] + strides[2] * ijk[2];
-        var r = grey, g = grey, b = grey;
-        for (var d = 0; d < drawn.length; d++) {
-          var layer = drawn[d], v = layer.volume[index];
-          if (v !== 0 && layer.scale.shown(v)) {
-            var c = 3 * colourIndex(v, layer.scale), lut = layer.lut;
-            r += (lut[c] - r) * layer.alpha;
-            g += (lut[c + 1] - g) * layer.alpha;
-            b += (lut[c + 2] - b) * layer.alpha;
-          }
-        }
-        pixels[o] = r; pixels[o + 1] = g; pixels[o + 2] = b; pixels[o + 3] = 255;
-      }
+  // Set the NiiVue volume of the layer l as its settings and scale s
+  // tell.
+  function applyLayer(l, s) {
+    var settingsOf = settings(l), volume = viewer.layers[l].volume;
+    if (settingsOf.symmetric) {
+      volume.colormap = colormapKey(settingsOf.cmap, 'positive');
+      volume.colormapNegative = colormapKey(settingsOf.cmap, 'negative');
+      volume.colormapType = ZERO_TO_MAX_TRANSPARENT;
+      volume.cal_min = s.threshold;
+      volume.cal_max = Math.max(s.hi, s.threshold);
+    } else {
+      volume.colormap = colormapKey(settingsOf.cmap);
+      volume.colormapNegative = '';
+      volume.colormapType = MIN_TO_MAX;
+      volume.cal_min = s.lo;
+      volume.cal_max = s.hi;
     }
-  }
-
-  function drawLabels(context, view, width, height) {
-    var cursor = viewer.state.cursor;
-    context.fillStyle = '#fff';
-    context.font = '13px system-ui, sans-serif';
-    context.textBaseline = 'middle';
-    context.textAlign = 'left';
-    context.fillText(view.labels[0], 4, height / 2);
-    context.textAlign = 'right';
-    context.fillText(view.labels[1], width - 4, height / 2);
-    context.textAlign = 'center';
-    context.fillText(view.labels[2], width / 2, 10);
-    context.fillText(view.labels[3], width / 2, height - 10);
-    context.textAlign = 'left';
-    var mm = toMm(cursor)[view.fixed];
-    context.fillText(AXIS_NAMES[view.fixed] + ' = ' + round(mm), 4, height - 10);
-  }
-
-  function drawView(view, scales) {
-    fillSlice(view, scales);
-    view.buffer.getContext('2d').putImageData(view.image, 0, 0);
-    var canvas = view.canvas, context = canvas.getContext('2d');
-    var w = canvas.width, h = canvas.height;
-    context.imageSmoothingEnabled = false;
-    context.drawImage(view.buffer, 0, 0, w, h);
-    // The crosshair, through the centre of the cursor's voxel.
-    var cursor = viewer.state.cursor;
-    var cx = (cursor[view.h] + 0.5) * w / shape[view.h];
-    var cy = (shape[view.v] - cursor[view.v] - 0.5) * h / shape[view.v];
-    context.strokeStyle = 'rgba(80, 160, 255, 0.85)';
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(Math.round(cx) + 0.5, 0);
-    context.lineTo(Math.round(cx) + 0.5, h);
-    context.moveTo(0, Math.round(cy) + 0.5);
-    context.lineTo(w, Math.round(cy) + 0.5);
-    context.stroke();
-    drawLabels(context, view, w, h);
+    volume.cal_minNeg = NaN;
+    volume.cal_maxNeg = NaN;
+    volume.opacity = settingsOf.visible ? settingsOf.opacity : 0;
   }
 
   /* ---------------------------------------------------------------
-   * Colour bar, read-out and controls.
+   * Colour bars, read-out and controls.
    */
 
   function format(v) {
@@ -342,6 +275,7 @@
     canvas.style.opacity = settings(l).visible ? 1 : 0.4;
   }
 
+  // The millimetres of the voxel ijk of the images, and its inverse.
   function toMm(ijk) {
     var a = data.affine;
     return [0, 1, 2].map(function (r) {
@@ -349,25 +283,49 @@
     });
   }
 
-  function updateReadout() {
-    var cursor = viewer.state.cursor, m = data.toImageVoxel;
-    var voxel = [0, 1, 2].map(function (r) {
-      return Math.round(m[r][0] * cursor[0] + m[r][1] * cursor[1] +
-                        m[r][2] * cursor[2] + m[r][3]);
+  function toVoxel(mm) {
+    var a = data.affine;
+    var m = [[a[0][0], a[0][1], a[0][2]], [a[1][0], a[1][1], a[1][2]],
+             [a[2][0], a[2][1], a[2][2]]];
+    var d = [mm[0] - a[0][3], mm[1] - a[1][3], mm[2] - a[2][3]];
+    var det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+      m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    // Cramer's rule, column by column.
+    return [0, 1, 2].map(function (c) {
+      var mc = m.map(function (row, r) {
+        return row.map(function (v, k) { return k === c ? d[r] : v; });
+      });
+      var dc = mc[0][0] * (mc[1][1] * mc[2][2] - mc[1][2] * mc[2][1]) -
+        mc[0][1] * (mc[1][0] * mc[2][2] - mc[1][2] * mc[2][0]) +
+        mc[0][2] * (mc[1][0] * mc[2][1] - mc[1][1] * mc[2][0]);
+      return Math.round(dc / det);
     });
-    var index = cursor[0] + strides[1] * cursor[1] + strides[2] * cursor[2];
+  }
+
+  function cursorMm() {
+    var mm = viewer.nv.frac2mm(viewer.nv.scene.crosshairPos, 0, true);
+    return [mm[0], mm[1], mm[2]];
+  }
+
+  function updateReadout() {
+    if (!viewer.state) return;
+    var mm = cursorMm();
     var several = viewer.layers.length > 1;
-    $('mm').textContent = '(' + toMm(cursor).map(round).join(', ') + ')';
-    $('voxel').textContent = '(' + voxel.join(', ') + ')';
+    $('mm').textContent = '(' + mm.map(round).join(', ') + ')';
+    $('voxel').textContent = '(' + toVoxel(mm).join(', ') + ')';
     $('value').textContent = viewer.layers.map(function (layer) {
-      var value = String(Number(layer.volume[index].toPrecision(6)));
+      var vox = layer.volume.mm2vox(mm);
+      var value = layer.volume.getValue(vox[0], vox[1], vox[2]);
+      value = String(Number(Number(value).toPrecision(6)));
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
   }
 
   function redraw() {
     var scales = viewer.layers.map(function (layer, l) { return scale(l); });
-    VIEWS.forEach(function (view) { drawView(view, scales); });
+    scales.forEach(function (s, l) { applyLayer(l, s); });
+    viewer.nv.updateGLVolume();
     scales.forEach(drawColourBar);
     updateReadout();
     var mode = settings().thresholdMode;
@@ -393,6 +351,9 @@
     $('cmap').value = s.cmap;
     $('symmetric').checked = s.symmetric;
     $('opacity').value = s.opacity;
+    var position = viewer.state.order.indexOf(viewer.state.active);
+    $('layer-up').disabled = position === viewer.state.order.length - 1;
+    $('layer-down').disabled = position === 0;
   }
 
   function setThreshold(value) {
@@ -421,34 +382,69 @@
     redraw();
   }
 
-  function reset() {
-    viewer.state = JSON.parse(JSON.stringify(data.initial));
+  /* ---------------------------------------------------------------
+   * The order the overlays are drawn in, shown from the top in the list
+   * of the layers and in the colour bars.
+   */
+
+  function drawInOrder() {
+    viewer.state.order.forEach(function (l, position) {
+      viewer.nv.setVolume(viewer.layers[l].volume, position + 1);
+    });
+  }
+
+  function listLayers() {
+    var list = $('layer'), bars = $('colorbars');
+    var several = viewer.layers.length > 1;
+    list.innerHTML = '';
+    viewer.state.order.slice().reverse().forEach(function (l) {
+      var layer = viewer.layers[l];
+      list.add(new Option(layer.name || 'overlay', String(l)));
+      if (several) bars.appendChild(layer.label);
+      bars.appendChild(layer.colorbar);
+    });
+  }
+
+  // Draw the active layer over the next one (step 1) or under the
+  // previous one (step -1).
+  function moveLayer(step) {
+    var order = viewer.state.order;
+    var position = order.indexOf(viewer.state.active);
+    var to = position + step;
+    if (to < 0 || to >= order.length) return;
+    order[position] = order[to];
+    order[to] = viewer.state.active;
+    drawInOrder();
+    listLayers();
     syncControls();
     redraw();
   }
 
-  // The list of the layers, shown with several, and a colour bar each,
-  // labelled with its name when there are several.
+  function reset() {
+    viewer.state = JSON.parse(JSON.stringify(data.initial));
+    viewer.state.order = viewer.layers.map(function (layer, l) { return l; });
+    drawInOrder();
+    listLayers();
+    syncControls();
+    redraw();
+  }
+
+  // A colour bar per layer, labelled with its name when there are
+  // several, and the list of the layers, shown with several.
   function setUpLayers() {
-    var list = $('layer'), bars = $('colorbars');
     var several = viewer.layers.length > 1;
     $('layer-control').style.display = several ? '' : 'none';
     viewer.layers.forEach(function (layer, l) {
-      list.add(new Option(layer.name || 'overlay', String(l)));
       var canvas = l === 0 ? $('colorbar') : document.createElement('canvas');
       if (l > 0) {
         canvas.id = 'colorbar-' + l;
         canvas.width = $('colorbar').width;
         canvas.height = $('colorbar').height;
       }
-      if (several) {
-        var label = document.createElement('div');
-        label.className = 'colorbar-name';
-        label.textContent = layer.name;
-        bars.appendChild(label);
-      }
-      bars.appendChild(canvas);
       layer.colorbar = canvas;
+      layer.label = document.createElement('div');
+      layer.label.className = 'colorbar-name';
+      layer.label.textContent = layer.name;
     });
   }
 
@@ -462,6 +458,8 @@
       syncControls();
       redraw();
     });
+    $('layer-up').addEventListener('click', function () { moveLayer(1); });
+    $('layer-down').addEventListener('click', function () { moveLayer(-1); });
     $('visible').addEventListener('change', function (e) {
       setOption('visible', e.target.checked);
     });
@@ -481,55 +479,18 @@
     $('opacity').addEventListener('input', function (e) {
       setOption('opacity', parseFloat(e.target.value));
     });
-    $('reset').addEventListener('click', reset);
+    $('reset').addEventListener('click', function () {
+      reset();
+      moveCursor(data.initial.cursor);
+    });
   }
 
-  /* ---------------------------------------------------------------
-   * Cursor: click or drag on a slice, arrow keys (Page Up / Down
-   * through the slices) on the focused one.
-   */
-
+  // Move the cursor to the voxel ijk of the images.
   function moveCursor(ijk) {
-    viewer.state.cursor = ijk.map(function (v, a) {
-      return Math.min(Math.max(Math.round(v), 0), shape[a] - 1);
-    });
-    redraw();
-  }
-
-  function pointAt(view, event) {
-    var rect = view.canvas.getBoundingClientRect();
-    var cursor = viewer.state.cursor.slice();
-    cursor[view.h] = Math.floor((event.clientX - rect.left) / rect.width * shape[view.h]);
-    cursor[view.v] = shape[view.v] - 1 -
-      Math.floor((event.clientY - rect.top) / rect.height * shape[view.v]);
-    moveCursor(cursor);
-  }
-
-  var KEY_STEPS = {
-    ArrowLeft: ['h', -1], ArrowRight: ['h', 1], ArrowUp: ['v', 1],
-    ArrowDown: ['v', -1], PageUp: ['fixed', 1], PageDown: ['fixed', -1]
-  };
-
-  function setUpCursor() {
-    VIEWS.forEach(function (view) {
-      var canvas = view.canvas;
-      canvas.addEventListener('pointerdown', function (e) {
-        canvas.setPointerCapture(e.pointerId);
-        canvas.focus();
-        pointAt(view, e);
-      });
-      canvas.addEventListener('pointermove', function (e) {
-        if (e.buttons) pointAt(view, e);
-      });
-      canvas.addEventListener('keydown', function (e) {
-        var step = KEY_STEPS[e.key];
-        if (!step) return;
-        e.preventDefault();
-        var cursor = viewer.state.cursor.slice();
-        cursor[view[step[0]]] += step[1];
-        moveCursor(cursor);
-      });
-    });
+    var nv = viewer.nv;
+    nv.scene.crosshairPos = nv.mm2frac(toMm(ijk), 0, true);
+    nv.drawScene();
+    updateReadout();
   }
 
   async function start() {
@@ -537,16 +498,16 @@
       throw new Error('This browser cannot read the page\'s data ' +
                       '(no DecompressionStream): use a recent browser.');
     }
-    await decode();
-    setUpViews();
+    await load();
     setUpLayers();
     setUpControls();
-    setUpCursor();
     reset();
+    moveCursor(data.initial.cursor);
   }
 
   window.brainViewer = {
     viewer: viewer,
+    get nv() { return viewer.nv; },
     moveCursor: moveCursor,
     ready: start().catch(function (error) {
       $('message').textContent = 'The viewer failed: ' + error.message;
