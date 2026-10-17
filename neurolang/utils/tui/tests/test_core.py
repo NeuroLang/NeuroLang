@@ -657,7 +657,8 @@ def test_pasted_mode_applies_to_what_follows(small_app, pipe_session):
     pasted = ".mode squall\nobtain every P."
     small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
     assert small_app.settings.squall
-    assert "2 rows" in _output(small_app)
+    out = _output(small_app)
+    assert out.index("Mode: SQUALL") < out.index("Running query")
 
 
 def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
