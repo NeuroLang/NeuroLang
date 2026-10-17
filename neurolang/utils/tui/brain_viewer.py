@@ -1,12 +1,16 @@
 """
-An interactive viewer of a brain image, as a self-contained HTML page.
+An interactive viewer of brain images, as a self-contained HTML page.
 
-:func:`viewer_html` writes a page showing a NIfTI image over a background,
-the MNI152 T1 of nilearn (:func:`mni_background`), in three orthogonal
-slices with a crosshair. Its controls change live, in the browser, the
-threshold (a value or a percentile), the colormap, whether the colormap
-is symmetric and the opacity of the image; the page shows the MNI
-coordinates and the value of the voxel under the cursor.
+:func:`viewer_html` writes a page showing NIfTI images on one grid, its
+overlays, over a background, the MNI152 T1 of nilearn
+(:func:`mni_background`), in three orthogonal slices with a crosshair.
+Its controls change live, in the browser, the threshold (a value or a
+percentile), the colormap, whether the colormap is symmetric, the
+opacity and the visibility of each overlay, the one they apply to being
+chosen in a list; the overlays are drawn in turn, the later ones over
+the earlier ones. The page shows the MNI coordinates of the voxel under
+the cursor, the value of each overlay there, and a colour bar per
+overlay.
 
 The page needs no network: its script (``static/brain_viewer.js``) and
 its data are inlined, the data as a JSON document whose arrays are bytes
@@ -29,6 +33,10 @@ import numpy as np
 
 # The colormap used when none is asked for.
 DEFAULT_CMAP = "plasma"
+
+# The colormaps of the overlays after the first, in turn: the first has
+# the colormap asked for, :data:`DEFAULT_CMAP` by default.
+OVERLAY_CMAPS = ("viridis", "cool", "hot", "cividis", "magma")
 
 # The colormaps the page offers, from matplotlib and nilearn.
 COLORMAPS = (
@@ -64,10 +72,15 @@ def encode_overlay(data: np.ndarray) -> dict:
     They are sparse, the flat indices (uint32) of the nonzero voxels and
     their values, or dense, the values of every voxel, whichever is
     smaller; the values are half floats when that keeps them exactly.
-    NaN stands for no value, as 0.
+    NaN stands for no value, as 0; an infinite value is drawn at the end
+    of the colour scale, as the largest finite one of its sign.
     """
+    data = np.asarray(data, dtype=np.float32)
+    finite = data[np.isfinite(data)]
     flat = np.nan_to_num(
-        np.asarray(data, dtype=np.float32), nan=0.0
+        data, nan=0.0,
+        posinf=max(finite.max(), 0.0) if finite.size else 0.0,
+        neginf=min(finite.min(), 0.0) if finite.size else 0.0,
     ).ravel(order="F")
     index = np.flatnonzero(flat)
     dtype = _value_type(flat[index])
@@ -217,6 +230,37 @@ def _background_state(background, shape, affine):
     }
 
 
+def _layers(img) -> list:
+    """
+    Return the overlays *img* stands for, as (name, image) pairs.
+
+    *img* is an image, an overlay without a name, or a sequence of
+    (name, image) pairs on one grid.
+    """
+    if isinstance(img, nib.spatialimages.SpatialImage):
+        return [("", img)]
+    layers = list(img)
+    first = layers[0][1]
+    for name, other in layers[1:]:
+        if other.shape[:3] != first.shape[:3] or not np.allclose(
+            other.affine, first.affine
+        ):
+            raise ValueError(
+                f"The overlay {name!r} is not on the grid of the first one."
+            )
+    return layers
+
+
+def _overlay_cmaps(cmap, count: int) -> list:
+    """
+    Return the colormaps of *count* overlays: *cmap* for the first, then
+    those of :data:`OVERLAY_CMAPS` other than it, in turn.
+    """
+    first = cmap or DEFAULT_CMAP
+    others = [name for name in OVERLAY_CMAPS if name != first]
+    return [first] + [others[n % len(others)] for n in range(count - 1)]
+
+
 def viewer_state(
     img, background, *, title, threshold, cmap, symmetric
 ) -> dict:
@@ -224,20 +268,35 @@ def viewer_state(
     Return the data of the viewer page of *img*, as a JSON-able dict.
 
     See :func:`viewer_html`; ``toImageVoxel`` maps the voxels shown, in
-    RAS+ orientation, to those of *img*.
+    RAS+ orientation, to those of the images.
     """
-    data, affine = _volume(img)
-    cmap = cmap or DEFAULT_CMAP
+    layers = _layers(img)
+    volumes = [_volume(image) for _, image in layers]
+    data, affine = volumes[0]
+    cmaps = _overlay_cmaps(cmap, len(layers))
+    if isinstance(symmetric, (bool, np.bool_)):
+        symmetric = [symmetric] * len(layers)
     return {
         "title": title, "shape": list(data.shape), "affine": affine.tolist(),
-        "toImageVoxel": (np.linalg.inv(img.affine) @ affine).tolist(),
-        "overlay": encode_overlay(data),
+        "toImageVoxel": (
+            np.linalg.inv(layers[0][1].affine) @ affine
+        ).tolist(),
+        "overlays": [
+            {"name": name, **encode_overlay(volume)}
+            for (name, _), (volume, _) in zip(layers, volumes)
+        ],
         "background": _background_state(background, data.shape, affine),
-        "colormaps": colormap_luts([cmap]),
+        "colormaps": colormap_luts(cmaps),
         "initial": {
-            **_threshold_state(threshold), "cmap": cmap,
-            "symmetric": bool(symmetric), "opacity": 1.0,
-            "cursor": initial_cursor(data),
+            "cursor": initial_cursor(data), "active": 0,
+            "layers": [
+                {
+                    **_threshold_state(threshold), "cmap": layer_cmap,
+                    "symmetric": bool(layer_symmetric), "opacity": 1.0,
+                    "visible": True,
+                }
+                for layer_cmap, layer_symmetric in zip(cmaps, symmetric)
+            ],
         },
     }
 
@@ -253,11 +312,15 @@ def viewer_html(
     """
     Return the HTML page of an interactive viewer of the image *img*.
 
-    *background* is drawn under it (e.g. :func:`mni_background`), or
-    nothing if None. The page starts with the *threshold*, a value or a
-    percentile such as ``"95%"`` of the nonzero (absolute, when
-    symmetric) values; the colormap *cmap*, :data:`DEFAULT_CMAP` if None;
-    and a colormap *symmetric* around 0 or not. Its controls change them.
+    *img* is an image, or a sequence of (name, image) pairs on one grid,
+    each an overlay. *background* is drawn under them (e.g.
+    :func:`mni_background`), or nothing if None. Each overlay starts with
+    the *threshold*, a value or a percentile such as ``"95%"`` of its
+    nonzero (absolute, when symmetric) values; the first with the
+    colormap *cmap*, :data:`DEFAULT_CMAP` if None, the others with those
+    of :data:`OVERLAY_CMAPS`; and with a colormap symmetric around 0 or
+    not, as *symmetric*, a bool or one per overlay, tells. Its controls
+    change them.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
