@@ -77,3 +77,24 @@ def split_statements(
             buffer = []
     if buffer:
         yield "\n".join(buffer)
+
+
+def split_at_commands(text: str) -> list:
+    """
+    Return the dot-commands of *text*, a line each, and the programs
+    between them, in order.
+
+    A program keeps its lines, blank ones included: it is one submission.
+    """
+    parts, program = [], []
+    for line in text.splitlines():
+        if line.lstrip().startswith("."):
+            if "\n".join(program).strip():
+                parts.append("\n".join(program).strip())
+            program = []
+            parts.append(line.strip())
+        else:
+            program.append(line)
+    if "\n".join(program).strip():
+        parts.append("\n".join(program).strip())
+    return parts
