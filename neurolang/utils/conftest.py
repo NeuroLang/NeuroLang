@@ -6,7 +6,7 @@ import pytest
 
 from neurolang.utils import engine_registry
 
-MINI_COGAT = Path(__file__).parent / "data" / "mini_cogat.owl"
+MINI_COGAT = Path(__file__).parent / "tests" / "mini_cogat.owl"
 
 
 @pytest.fixture(autouse=True)
