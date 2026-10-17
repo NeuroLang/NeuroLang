@@ -71,53 +71,63 @@ In the REPL
 
 Neurosynth works on the 2 mm MNI grid, a study activating the voxels
 within 6 mm of its peaks, and a term being in the studies with a TF-IDF
-above 0.001.  The REPL of the ``neurosynth`` engine, on the 2 mm grid::
+above 0.001.  Start the REPL of the ``neurosynth`` engine on the 2 mm
+grid::
 
     python -m neurolang.utils.cli -e neurosynth -d neurolang_data -r 2 -i
 
-The session below computes the three ratios of the term ``pain`` over
-the voxels of ``cortical_mask``, rules and dot-commands typed at the
-prompt::
+and paste this block at the prompt.  It computes the lift and the
+uniformity ratio of the term ``pain`` over the voxels of
+``cortical_mask``, shows the five voxels of the largest uniformity
+ratios, and opens both maps in the viewer::
 
-    nl(neurosynth:DL)> term_of_interest('pain')
+    term_of_interest('pain')
+    term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
+    activation(i, j, k, s) :- cortical_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+    n_voxels(count(i, j, k)) :- cortical_mask(i, j, k)
+    selected_voxel(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m)
+    p_a(i, j, k, PROB) :- activation(i, j, k, s) & selected_study(s)
+    p_term(t, PROB) :- term_of_interest(t) & term_in_study(s, t) & selected_study(s)
+    p_a_given_t(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
+    p_any_voxel_given_t(t, PROB) :- (activation(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
+    ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+    .sort uniformity:desc
+    .head 5
+    ans(i, j, k, lift, uniformity) :- ratios(t, i, j, k, lift, relative_risk, uniformity)
+    .view
+
+The REPL runs the rules as one submission, then each dot-command and the
+query in turn, and prints the following; on a terminal, it opens the
+viewer in the browser rather than telling to::
+
     defined term_of_interest/1
-    nl(neurosynth:DL)> term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
     defined term_in_study/2
-    nl(neurosynth:DL)> activation(i, j, k, s) :- cortical_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
     defined activation/4
-    nl(neurosynth:DL)> n_voxels(count(i, j, k)) :- cortical_mask(i, j, k)
     defined n_voxels/1
-    nl(neurosynth:DL)> selected_voxel(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m)
     defined selected_voxel/3
-    nl(neurosynth:DL)> p_a(i, j, k, PROB) :- activation(i, j, k, s) & selected_study(s)
     defined p_a/4
-    nl(neurosynth:DL)> p_term(t, PROB) :- term_of_interest(t) & term_in_study(s, t) & selected_study(s)
     defined p_term/2
-    nl(neurosynth:DL)> p_a_given_t(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
     defined p_a_given_t/5
-    nl(neurosynth:DL)> p_any_voxel_given_t(t, PROB) :- (activation(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
     defined p_any_voxel_given_t/2
-    nl(neurosynth:DL)> ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
     defined ratios/7
-    nl(neurosynth:DL)> .sort uniformity:desc
-    nl(neurosynth:DL)> .head 5
-    nl(neurosynth:DL)> ans(t, i, j, k, lift, relative_risk, uniformity) :- ratios(t, i, j, k, lift, relative_risk, uniformity)
     Running query...
-    ╭──────┬────┬────┬────┬────────────────────┬────────────────────┬───────────────────╮
-    │ t    │ i  │ j  │ k  │ lift               │ relative_risk      │ uniformity        │
-    ├──────┼────┼────┼────┼────────────────────┼────────────────────┼───────────────────┤
-    │ pain │ 32 │ 76 │ 38 │ 2.226988767904886  │ 2.3336275822882424 │ 8.429294107164303 │
-    │ pain │ 68 │ 77 │ 36 │ 1.8881881487320984 │ 1.952783650458069  │ 8.124620826182461 │
-    │ pain │ 68 │ 78 │ 35 │ 1.6834056926626453 │ 1.7273707168648837 │ 8.02306306585518  │
-    │ pain │ 68 │ 78 │ 36 │ 1.7016328231323106 │ 1.7472909722488281 │ 8.02306306585518  │
-    │ pain │ 32 │ 78 │ 36 │ 1.5440078879368966 │ 1.5759370284621674 │ 8.02306306585518  │
-    ╰──────┴────┴────┴────┴────────────────────┴────────────────────┴───────────────────╯
+    ╭────┬────┬────┬────────────────────┬───────────────────╮
+    │ i  │ j  │ k  │ lift               │ uniformity        │
+    ├────┼────┼────┼────────────────────┼───────────────────┤
+    │ 32 │ 76 │ 38 │ 2.226988767904886  │ 8.429294107164303 │
+    │ 68 │ 77 │ 36 │ 1.8881881487320984 │ 8.124620826182461 │
+    │ 68 │ 78 │ 35 │ 1.6834056926626453 │ 8.02306306585518  │
+    │ 68 │ 78 │ 36 │ 1.7016328231323106 │ 8.02306306585518  │
+    │ 32 │ 78 │ 36 │ 1.5440078879368966 │ 8.02306306585518  │
+    ╰────┴────┴────┴────────────────────┴───────────────────╯
     128248 rows · showing 1–5 · .more for next
-    Query completed in 13.40 s
-    nl(neurosynth:DL)> .save pain_uniformity.nii.gz --value uniformity
-    Saved NIfTI image to: pain_uniformity.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'uniformity' per voxel)
-    nl(neurosynth:DL)> .save pain_lift.nii.gz --value lift
-    Saved NIfTI image to: pain_lift.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'lift' per voxel)
+    Query completed in 13.67 s
+    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_iqj9l527.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'lift' per voxel)
+    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_iiwq4x8r.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'uniformity' per voxel)
+    Colormap of 'lift': one-sided, the image has no negative values (--symmetric for a symmetric one).
+    Colormap of 'uniformity': one-sided, the image has no negative values (--symmetric for a symmetric one).
+    Saved the viewer to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_k39mctvq.html
+    Open it in a browser to see the image.
 
 The rules, in order:
 
@@ -142,13 +152,29 @@ The voxels of the largest uniformity ratios, ``(32, 76, 38)`` and
 insula: the studies of pain activate them 8 times more often than the
 average voxel of the cortex.
 
+``.view`` shows each value column of the result as an overlay, here
+``lift`` and ``uniformity``, each from the 95th percentile of its
+values, with its colormap and colour bar; the read-out gives both values
+at the cursor, here at the left anterior insula:
+
+.. image:: _static/neurosynth_pain_view.png
+   :alt: The lift and uniformity maps of pain in the viewer
+
+The ``Overlay`` list chooses the map the controls apply to, and
+``shown`` hides it; ``uniformity``, drawn over ``lift``, covers it where
+both pass their threshold.  The voxels without a value, those that no
+study of the term activates, are 0 and not drawn; ``.view --fill 1``
+gives them the ratio of no effect instead.  Add ``relative_risk`` to the
+head of ``ans`` for a third overlay, its infinite values being drawn as
+its largest finite one.
+
 Notes:
 
 - The mask is that of ``cortical_mask``: the average of the uniformity
   test is over the cortex, whereas Neurosynth's is over the whole brain.
 - A voxel which no study of the term activates is not in the result: its
-  three ratios are 0.  The relative risk is infinite at a voxel which
-  only the studies of the term activate.
+  ratios are 0.  The relative risk is infinite at a voxel which only the
+  studies of the term activate.
 - The lift and the relative risk are largest at voxels which few studies
   activate, where they are the least stable: weigh them with
   :math:`P(A_v)`, or with the :math:`\chi^2` statistic above.
