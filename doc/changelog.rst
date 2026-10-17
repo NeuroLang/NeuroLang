@@ -38,10 +38,16 @@ Unreleased
   ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
   :doc:`tutorial_cognitive_atlas`.  The TF-IDF of ``neurostore`` covers
   sequences of up to three words.
+* The ``.view`` viewer draws its slices with NiiVue (0.69.0, inlined in
+  the page, which still needs no network but a browser with WebGL2): the
+  order its overlays are drawn in can be changed with ▲ and ▼, and the
+  mouse wheel scrolls through the slices.
+
 * Documentation: Neurosynth's association and uniformity tests written as
   ratios of probabilities (lift, relative risk, and the ratio to the
   brain average), computed in the REPL of the ``neurosynth`` engine, see
   :ref:`tutorial-neurosynth-tests`.
+
 * ``.view`` of a result with several value columns shows an overlay per
   column, each with its own threshold, colormap, symmetry, opacity and
   visibility, a colour bar and its value at the cursor; ``--fill V`` sets
@@ -151,6 +157,12 @@ Unreleased
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
 **Bug fixes:**
+
+* Magic sets leave out of a magic rule the atoms sharing no variable with
+  its bound arguments, whose product with the magic set was only
+  projected out: the Neurosynth tests of :ref:`tutorial-neurosynth-tests`
+  with the term in the query, ``ratios("vision", i, j, k, ...)``, take
+  13 s instead of 63 s.
 
 * Magic sets pass the values of a stored relation with a constant to the
   rules after it in a query: ``ans(i, j, k, p) :- cognitive_task(_,

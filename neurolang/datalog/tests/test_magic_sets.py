@@ -367,6 +367,45 @@ def test_edb_atom_without_constant_does_not_seed_magic_sets():
     with raises(NoConstantPredicateFoundError):
         magic_rewrite(q(y), dl)
 
+
+def test_magic_rules_leave_out_unconnected_atoms():
+    """
+    A magic rule keeps only the atoms left of its arc which share a
+    variable, maybe through other atoms, with its bound arguments: the
+    magic set of ``anc`` does not depend on ``anc2(z, w)``, whose
+    product with it would only be projected out.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), anc2(z, x1) & anc(x, y) & par(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, y), par(x, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+    magic_anc = [
+        rule for rule in mr.formulas
+        if rule.consequent.functor.name.startswith("magic_anc^")
+    ]
+    assert len(magic_anc) > 0
+    for rule in magic_anc:
+        assert all(
+            not atom.functor.name.startswith("anc2")
+            for atom in rule.antecedent.formulas
+        ), rule
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (c, d)}
+
 def test_resolution_works_builtin():
     edb = Eb_(
         [
