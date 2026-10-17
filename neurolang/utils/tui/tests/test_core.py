@@ -623,3 +623,44 @@ def test_command_messages(small_app, line, message):
     small_app.console.width = 1000
     small_app._handle_dot_command(line)
     assert message in _output(small_app)
+
+
+# The escape sequences a terminal sends around pasted text.
+PASTE = "\x1b[200~{}\x1b[201~"
+
+
+def _recording_execute(app):
+    """Record the programs *app* executes, its list."""
+    calls = []
+    original = app._execute
+
+    def recording(program):
+        calls.append(program)
+        return original(program)
+
+    app._execute = recording
+    return calls
+
+
+def test_pasted_statements_run_in_turn(small_app, pipe_session):
+    """A pasted block of rules, dot-commands and queries runs as if each
+    statement were typed at the prompt."""
+    calls = _recording_execute(small_app)
+    pasted = "q(x) :- P(x)\n.format csv\nans(x) :-\n  q(x)\n.format table"
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["q(x) :- P(x)", "ans(x) :-\n  q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert small_app.settings.output_format == "table"
+
+
+def test_pasted_mode_applies_to_what_follows(small_app, pipe_session):
+    pasted = ".mode squall\nobtain every P."
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert small_app.settings.squall
+    assert "2 rows" in _output(small_app)
+
+
+def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
+    calls = _recording_execute(small_app)
+    small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
+    assert calls == ["ans(x) :-\n  P(x)"]
