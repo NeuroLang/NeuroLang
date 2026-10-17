@@ -642,12 +642,14 @@ the voxels without a value, not in the result or NaN, take the value of
 --fill (default: 0, no value: hidden). A nonzero fill is a value of
 every other voxel of the grid, which the percentiles count. The viewer
 is an HTML page, saved to a temporary file and opened in the browser when
-the REPL runs on a terminal; it needs no network. It shows the overlays
-over the MNI152 T1 in three slices (left hemisphere on the left), the
-later ones over the earlier ones: click or drag to move the cursor, whose
-MNI coordinates and values it tells. Its controls change, live, for the
-overlay chosen in their list (shown, or hidden), what these options start
-each overlay with:
+the REPL runs on a terminal; it needs no network, but a browser with
+WebGL2. It shows the overlays over the MNI152 T1 in three slices, drawn
+by NiiVue (left hemisphere on the left), the later ones over the earlier
+ones: click or drag to move the cursor, whose MNI coordinates and values
+it tells, and scroll to move through the slices. Its controls change,
+live, for the overlay chosen in their list (shown, or hidden; ▲ and ▼
+draw it over the next one or under the previous one), what these options
+start each overlay with:
   --threshold T|P%      hide the voxels below T, or below the P-th
                         percentile of the nonzero values (default: 95%,
                         the top 5% of the voxels)
