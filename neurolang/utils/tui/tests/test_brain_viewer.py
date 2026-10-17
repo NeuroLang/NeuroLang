@@ -1,6 +1,7 @@
 """Tests for the interactive brain viewer page that ``.view`` writes."""
 
 import base64
+import gzip
 import json
 import os
 import re
@@ -31,14 +32,17 @@ def _decode(text, dtype):
     return np.frombuffer(zlib.decompress(base64.b64decode(text)), dtype)
 
 
-def _overlay_volume(overlay, shape):
-    """Return the volume an encoded overlay stands for."""
-    values = _decode(overlay["values"], overlay["dtype"]).astype(np.float32)
-    if overlay["encoding"] == "dense":
-        return values.reshape(shape, order="F")
-    flat = np.zeros(int(np.prod(shape)), dtype=np.float32)
-    flat[_decode(overlay["index"], np.uint32)] = values
-    return flat.reshape(shape, order="F")
+def _nifti(item):
+    """Return the NIfTI image of an item of the page: base64 of gzip."""
+    data = gzip.decompress(base64.b64decode(item["nifti"]))
+    return nib.Nifti1Image.from_bytes(data)
+
+
+def _overlay_volume(overlay, shape=None):
+    """Return the volume of an overlay of the page."""
+    volume = np.asarray(_nifti(overlay).dataobj)
+    assert shape is None or volume.shape == shape
+    return volume
 
 
 def _state(html):
@@ -55,42 +59,28 @@ def _image(data, affine=AFFINE):
 
 
 class TestOverlayEncoding:
-    """Check the voxel values are embedded compactly, and losslessly."""
+    """Check the overlays are embedded as gzipped NIfTI images."""
 
-    def test_sparse_round_trip(self):
+    def test_round_trip(self):
         data = np.zeros((20, 30, 10), dtype=np.float32)
         data[1, 2, 3], data[19, 29, 9], data[5, 0, 7] = 0.25, -1.5, 3.1
-        overlay = brain_viewer.encode_overlay(data)
-        assert overlay["encoding"] == "sparse" and overlay["count"] == 3
-        assert np.array_equal(_overlay_volume(overlay, data.shape), data)
-
-    def test_dense_round_trip(self):
-        rng = np.random.default_rng(0)
-        data = rng.normal(size=(6, 7, 8)).astype(np.float32)
-        overlay = brain_viewer.encode_overlay(data)
-        assert overlay["encoding"] == "dense"
-        assert overlay["dtype"] == "float32"
-        assert np.array_equal(_overlay_volume(overlay, data.shape), data)
-
-    def test_exact_values_take_half_floats(self):
-        data = np.zeros((10, 10, 10), dtype=np.uint8)
-        data[2:4, 3, 5] = 1
-        overlay = brain_viewer.encode_overlay(data)
-        assert overlay["dtype"] == "float16"
-        assert np.array_equal(_overlay_volume(overlay, data.shape), data)
-
-    def test_dense_when_smaller_than_sparse(self):
-        data = np.ones((5, 5, 5), dtype=np.float32)
-        data[0, 0, 0] = 0
-        overlay = brain_viewer.encode_overlay(data)
-        assert overlay["encoding"] == "dense"
-        assert np.array_equal(_overlay_volume(overlay, data.shape), data)
+        image = _nifti({"nifti": brain_viewer.encode_nifti(data, AFFINE)})
+        assert np.array_equal(np.asarray(image.dataobj), data)
+        assert np.allclose(image.affine, AFFINE)
 
     def test_nan_is_no_value(self):
         data = np.zeros((4, 4, 4), dtype=np.float32)
         data[0, 0, 0], data[1, 1, 1] = np.nan, 2.0
-        volume = _overlay_volume(brain_viewer.encode_overlay(data), (4, 4, 4))
+        volume = brain_viewer.overlay_values(data)
         assert volume[0, 0, 0] == 0 and volume[1, 1, 1] == 2
+
+    def test_infinite_values_take_the_largest_finite_ones(self):
+        """An infinite value is drawn at the end of the colour scale."""
+        data = np.zeros((2, 2, 2), dtype=np.float32)
+        data[0, 0, 0], data[1, 0, 0] = np.inf, 3.0
+        data[0, 1, 0], data[1, 1, 0] = -np.inf, -2.0
+        volume = brain_viewer.overlay_values(data)
+        assert volume[0, 0, 0] == 3.0 and volume[0, 1, 0] == -2.0
 
 
 class TestColormaps:
@@ -151,7 +141,7 @@ class TestBackground:
 
 
 class TestPage:
-    """Check the page holds its controls, its data and no external URL."""
+    """Check the page holds NiiVue, its controls, its data and no URL."""
 
     @pytest.fixture
     def html(self):
@@ -167,8 +157,9 @@ class TestPage:
         for control in (
             'id="threshold"', 'id="threshold-slider"',
             'id="threshold-mode"', 'id="cmap"', 'id="symmetric"',
-            'id="opacity"', 'id="reset"', 'id="colorbar"',
-            'id="sagittal"', 'id="coronal"', 'id="axial"', 'id="readout"',
+            'id="opacity"', 'id="reset"', 'id="colorbar"', 'id="gl"',
+            'id="layer"', 'id="layer-up"', 'id="layer-down"',
+            'id="visible"', 'id="readout"',
         ):
             assert control in html
 
@@ -183,30 +174,45 @@ class TestPage:
             }],
         }
         assert [o["name"] for o in state["overlays"]] == [""]
-        assert state["shape"] == [4, 4, 4]
         assert np.array_equal(state["affine"], AFFINE)
         assert "viridis" in state["colormaps"]
-        assert state["background"]["factor"] == 1
+
+    def test_the_overlay_keeps_its_grid(self, html):
+        image = _nifti(_state(html)["overlays"][0])
+        assert image.shape == (4, 4, 4)
+        assert np.allclose(image.affine, AFFINE)
+        assert np.asarray(image.dataobj)[1, 2, 3] == -2
+
+    def test_background_on_the_grid_of_the_overlays(self, html):
+        background = _nifti(_state(html)["background"])
+        assert background.shape == (4, 4, 4)
+        assert np.allclose(background.affine, AFFINE)
+        assert np.asarray(background.dataobj).dtype == np.uint8
+
+    def test_without_a_background_one_of_zeros(self):
+        state = _state(brain_viewer.viewer_html(
+            _image(np.ones((2, 2, 2), np.float32)), None, title="t",
+            threshold=0.5, cmap=None, symmetric=False,
+        ))
+        background = np.asarray(_nifti(state["background"]).dataobj)
+        assert background.shape == (2, 2, 2) and not background.any()
 
     def test_value_threshold_and_default_colormap(self):
         html = brain_viewer.viewer_html(
             _image(np.ones((2, 2, 2), np.float32)), None, title="t",
             threshold=0.5, cmap=None, symmetric=False,
         )
-        state = _state(html)
-        layer = state["initial"]["layers"][0]
+        layer = _state(html)["initial"]["layers"][0]
         assert layer["threshold"] == 0.5
         assert layer["thresholdMode"] == "value"
         assert layer["cmap"] == brain_viewer.DEFAULT_CMAP
-        assert state["background"] is None
 
     def test_default_colormap_is_plasma_and_percentile_threshold(self):
         html = brain_viewer.viewer_html(
             _image(np.ones((2, 2, 2), np.float32)), None, title="t",
             threshold="95%", cmap=None, symmetric=False,
         )
-        state = _state(html)
-        layer = state["initial"]["layers"][0]
+        layer = _state(html)["initial"]["layers"][0]
         assert layer["cmap"] == "plasma"
         assert layer["threshold"] == 95.0
         assert layer["thresholdMode"] == "percentile"
@@ -214,25 +220,23 @@ class TestPage:
     def test_title_is_escaped(self, html):
         assert "<title>signed &lt;map&gt;</title>" in html
 
+    def test_niivue_is_inlined(self, html):
+        bundle = (
+            Path(brain_viewer.__file__).parent / "static" / "niivue"
+            / "niivue.umd.js"
+        ).read_text(encoding="utf-8")
+        assert bundle in html
+        assert "<script src" not in html
+        assert html.count("</script>") == 3
+
     def test_no_external_urls(self, html):
-        assert not re.search(r"https?://|//cdn|\bsrc=|\bhref=", html)
-
-    def test_script_is_inlined(self, html):
-        assert "function" in html and "<script src" not in html
-        assert html.count("</script>") == 2
-
-    def test_canonical_orientation(self):
-        flip = np.diag([-2.0, 2.0, 2.0, 1.0])
-        data = np.zeros((4, 4, 4), dtype=np.float32)
-        data[0, 1, 2] = 5.0
-        state = _state(brain_viewer.viewer_html(
-            _image(data, flip), None, title="t", threshold=0,
-            cmap="hot", symmetric=False,
-        ))
-        assert state["affine"][0][0] > 0
-        volume = _overlay_volume(state["overlays"][0], (4, 4, 4))
-        assert volume[3, 1, 2] == 5.0
-        assert state["initial"]["cursor"] == [3, 1, 2]
+        """No URL outside the NiiVue bundle, whose comments have some."""
+        bundle = (
+            Path(brain_viewer.__file__).parent / "static" / "niivue"
+            / "niivue.umd.js"
+        ).read_text(encoding="utf-8")
+        page = html.replace(bundle, "")
+        assert not re.search(r"https?://|//cdn|\bsrc=|\bhref=", page)
 
     def test_cursor_on_the_peak(self):
         data = np.zeros((5, 5, 5), dtype=np.float32)
@@ -242,6 +246,19 @@ class TestPage:
             symmetric=True,
         ))
         assert state["initial"]["cursor"] == [3, 2, 4]
+
+    def test_cursor_in_the_voxels_of_the_image(self):
+        """The cursor is in the voxels of the image as it is, NiiVue
+        reorienting it to draw it."""
+        flip = np.diag([-2.0, 2.0, 2.0, 1.0])
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[0, 1, 2] = 5.0
+        state = _state(brain_viewer.viewer_html(
+            _image(data, flip), None, title="t", threshold=0,
+            cmap="hot", symmetric=False,
+        ))
+        assert state["initial"]["cursor"] == [0, 1, 2]
+        assert np.array_equal(state["affine"], flip)
 
 
 _CHROME_PATHS = (
@@ -259,81 +276,120 @@ def _chrome():
     return next((p for p in found if p), None)
 
 
-# Driven through the page's controls, then the results are written to the
-# DOM, which Chrome dumps once the page has settled.
-_BROWSER_CHECK = """
+# The flags running WebGL2 in headless Chrome, which NiiVue draws with.
+_CHROME_FLAGS = (
+    "--headless=new", "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader", "--no-first-run",
+    "--host-rules=MAP * ~NOTFOUND",
+)
+
+
+def _run_in_chrome(tmp_path, html, check):
+    """Return what the *check* script writes once the page has loaded,
+    the page being offline."""
+    page = tmp_path / "page.html"
+    page.write_text(html.replace("</body>", check + "</body>"))
+    dom = subprocess.run(
+        [
+            _chrome(), *_CHROME_FLAGS,
+            f"--user-data-dir={tmp_path / 'profile'}",
+            "--virtual-time-budget=20000", "--dump-dom", page.as_uri(),
+        ],
+        capture_output=True, text=True, timeout=180,
+    ).stdout
+    return json.loads(
+        re.search(r'<pre id="test-result">(.*?)</pre>', dom, re.S).group(1)
+    )
+
+
+# The helpers of the checks: the pixels NiiVue draws, read right after
+# it draws them, and the setting of a control as the user would.
+_CHECK_HELPERS = """
 <script>
 window.addEventListener('error', function (e) {
   window.__errors = (window.__errors || []).concat([String(e.message)]);
 });
+function pixels() {
+  var nv = brainViewer.nv, gl = nv.gl;
+  nv.drawScene();
+  var w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  var p = new Uint8Array(4 * w * h);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, p);
+  return p;
+}
+function changed(a, b) {
+  for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
+  return false;
+}
+function set(id, value, kind) {
+  var el = document.getElementById(id);
+  if (el.type === 'checkbox') el.checked = value; else el.value = value;
+  el.dispatchEvent(new Event(kind || 'input', {bubbles: true}));
+}
+function click(id) {
+  document.getElementById(id).dispatchEvent(new Event('click'));
+}
+function report(out) {
+  out.errors = window.__errors || [];
+  document.getElementById('test-result').textContent = JSON.stringify(out);
+}
+</script>
+<pre id="test-result">pending</pre>
+"""
+
+_BROWSER_CHECK = _CHECK_HELPERS + """
+<script>
 brainViewer.ready.then(function () {
-  var out = {errors: window.__errors || []};
-  var axial = document.getElementById('axial');
-  function pixels() {
-    var c = axial.getContext('2d');
-    return Array.from(c.getImageData(0, 0, axial.width, axial.height).data);
-  }
-  function changed(a, b) {
-    return a.some(function (v, i) { return v !== b[i]; });
-  }
-  function set(id, value, kind) {
-    var el = document.getElementById(id);
-    if (el.type === 'checkbox') el.checked = value; else el.value = value;
-    el.dispatchEvent(new Event(kind || 'input', {bubbles: true}));
-  }
-  out.readout = document.getElementById('readout').textContent;
+  var out = {};
+  var volume = brainViewer.nv.volumes[1];
+  out.volumes = brainViewer.nv.volumes.length;
   var before = pixels();
   set('symmetric', false, 'change');
+  out.oneSidedNegative = volume.colormapNegative;
   var oneSided = pixels();
   out.symmetric = changed(before, oneSided);
   set('threshold', '2.5', 'change');
+  out.calMin = volume.cal_min;
   var thresholded = pixels();
   out.threshold = changed(oneSided, thresholded);
   set('cmap', 'viridis', 'change');
+  out.colormap = volume.colormap;
   out.cmap = changed(thresholded, pixels());
   out.colorbarTicks = document.getElementById('colorbar').dataset.ticks;
   brainViewer.moveCursor([1, 2, 3]);
   out.value = document.getElementById('value').textContent;
   out.mm = document.getElementById('mm').textContent;
-  set('reset', null, 'click');
+  out.voxel = document.getElementById('voxel').textContent;
+  click('reset');
   out.resetCmap = document.getElementById('cmap').value;
-  out.errors = window.__errors || [];
-  document.getElementById('test-result').textContent = JSON.stringify(out);
-}).catch(function (e) {
-  document.getElementById('test-result').textContent =
-    JSON.stringify({errors: [String(e)]});
-});
+  out.resetNegative = volume.colormapNegative;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
 </script>
-<pre id="test-result">pending</pre>
 """
 
 
 @pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
 def test_the_page_in_a_headless_browser(tmp_path):
-    """Check the page runs, and its controls redraw the slices."""
+    """Check the page runs offline, and its controls set the NiiVue
+    overlay and redraw it."""
     data = np.zeros((4, 4, 4), dtype=np.float32)
     data[1, 2, 3], data[0, 0, 3], data[2, 2, 3] = -2.0, 3.0, 1.0
     html = brain_viewer.viewer_html(
         _image(data), _image(np.linspace(0, 1, 64).reshape(4, 4, 4)),
         title="signed", threshold=0.5, cmap="hot", symmetric=True,
     )
-    page = tmp_path / "page.html"
-    page.write_text(html.replace("</body>", _BROWSER_CHECK + "</body>"))
-    dom = subprocess.run(
-        [
-            _chrome(), "--headless", "--disable-gpu", "--no-first-run",
-            f"--user-data-dir={tmp_path / 'profile'}",
-            "--virtual-time-budget=10000", "--dump-dom", page.as_uri(),
-        ],
-        capture_output=True, text=True, timeout=120,
-    ).stdout
-    result = json.loads(
-        re.search(r'<pre id="test-result">(.*?)</pre>', dom, re.S).group(1)
-    )
-    assert result["errors"] == []
+    result = _run_in_chrome(tmp_path, html, _BROWSER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert result["volumes"] == 2
+    assert result["oneSidedNegative"] == ""
+    assert result["resetNegative"] != ""
+    assert result["calMin"] == 2.5
+    assert result["colormap"].endswith("viridis")
     assert result["threshold"] and result["cmap"] and result["symmetric"]
     assert result["value"] == "-2"
     assert result["mm"] == "(-1, -1, -1)"
+    assert result["voxel"] == "(1, 2, 3)"
     assert result["resetCmap"] == "hot"
     assert "3" in result["colorbarTicks"]
 
@@ -385,32 +441,15 @@ class TestLayers:
             )
 
 
-def test_infinite_values_take_the_largest_finite_ones():
-    """An infinite value is drawn at the end of the colour scale."""
-    data = np.zeros((2, 2, 2), dtype=np.float32)
-    data[0, 0, 0], data[1, 0, 0] = np.inf, 3.0
-    data[0, 1, 0], data[1, 1, 0] = -np.inf, -2.0
-    volume = _overlay_volume(brain_viewer.encode_overlay(data), (2, 2, 2))
-    assert volume[0, 0, 0] == 3.0 and volume[0, 1, 0] == -2.0
-
-
-_LAYERS_CHECK = """
+_LAYERS_CHECK = _CHECK_HELPERS + """
 <script>
 brainViewer.ready.then(function () {
   var out = {};
-  var axial = document.getElementById('axial');
-  function pixels() {
-    var c = axial.getContext('2d');
-    return Array.from(c.getImageData(0, 0, axial.width, axial.height).data);
-  }
-  function changed(a, b) {
-    return a.some(function (v, i) { return v !== b[i]; });
-  }
-  function set(id, value, kind) {
-    var el = document.getElementById(id);
-    if (el.type === 'checkbox') el.checked = value; else el.value = value;
-    el.dispatchEvent(new Event(kind || 'input', {bubbles: true}));
-  }
+  var names = function () {
+    return brainViewer.nv.volumes.slice(1).map(function (v) {
+      return v.neurolangName;
+    });
+  };
   out.colorbars = document.querySelectorAll('#colorbars canvas').length;
   out.layerShown = getComputedStyle(
     document.getElementById('layer-control')).display !== 'none';
@@ -422,43 +461,46 @@ brainViewer.ready.then(function () {
   var before = pixels();
   set('visible', false, 'change');
   out.hidden = changed(before, pixels());
-  document.getElementById('test-result').textContent = JSON.stringify(out);
-}).catch(function (e) {
-  document.getElementById('test-result').textContent =
-    JSON.stringify({error: String(e)});
-});
+  out.hiddenOpacity = brainViewer.nv.volumes[2].opacity;
+  set('visible', true, 'change');
+  out.order = names();
+  set('layer', '0', 'change');
+  var drawn = pixels();
+  click('layer-up');
+  out.raised = names();
+  out.raisedChanged = changed(drawn, pixels());
+  click('layer-down');
+  out.lowered = names();
+  click('layer-up');
+  click('reset');
+  out.reset = names();
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
 </script>
-<pre id="test-result">pending</pre>
 """
 
 
 @pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
 def test_the_overlays_in_a_headless_browser(tmp_path):
     """Check each overlay has a colour bar, a value at the cursor and
-    its own controls, and that hiding one redraws the slices."""
+    its own controls, that hiding one redraws the slices, and that the
+    order they are drawn in changes."""
     first = np.zeros((4, 4, 4), dtype=np.float32)
     second = np.zeros((4, 4, 4), dtype=np.float32)
-    first[1, 2, 3], second[1, 2, 3], second[2, 2, 3] = 2.0, 5.0, 4.0
+    first[1:3, 1:3, :], second[1:3, 1:3, :] = 2.0, 5.0
     html = brain_viewer.viewer_html(
         [("lift", _image(first)), ("uniformity", _image(second))],
         None, title="layers", threshold=0.5, cmap="hot",
         symmetric=[False, False],
     )
-    page = tmp_path / "page.html"
-    page.write_text(html.replace("</body>", _LAYERS_CHECK + "</body>"))
-    dom = subprocess.run(
-        [
-            _chrome(), "--headless", "--disable-gpu", "--no-first-run",
-            f"--user-data-dir={tmp_path / 'profile'}",
-            "--virtual-time-budget=10000", "--dump-dom", page.as_uri(),
-        ],
-        capture_output=True, text=True, timeout=120,
-    ).stdout
-    result = json.loads(
-        re.search(r'<pre id="test-result">(.*?)</pre>', dom, re.S).group(1)
-    )
-    assert "error" not in result
+    result = _run_in_chrome(tmp_path, html, _LAYERS_CHECK)
+    assert result["errors"] == [] and "failed" not in result
     assert result["colorbars"] == 2 and result["layerShown"]
     assert result["value"] == "lift 2 · uniformity 5"
     assert result["firstCmap"] == "hot" and result["secondCmap"] != "hot"
-    assert result["hidden"]
+    assert result["hidden"] and result["hiddenOpacity"] == 0
+    assert result["order"] == ["lift", "uniformity"]
+    assert result["raised"] == ["uniformity", "lift"]
+    assert result["raisedChanged"]
+    assert result["lowered"] == ["lift", "uniformity"]
+    assert result["reset"] == ["lift", "uniformity"]
