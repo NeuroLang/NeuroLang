@@ -85,6 +85,7 @@ a guided walkthrough.
    tutorial_squall
    tutorial_datalog
    tutorial_text_embeddings
+   tutorial_neurosynth_tests
    concepts
    probabilistic_lifting
    engine_configuration

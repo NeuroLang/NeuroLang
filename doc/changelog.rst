@@ -19,6 +19,11 @@ Unreleased
 
 **New features:**
 
+* Documentation: Neurosynth's association and uniformity tests written as
+  ratios of probabilities (lift, relative risk, and the ratio to the
+  brain average), computed in the REPL of the ``neurosynth`` engine, see
+  :ref:`tutorial-neurosynth-tests`.
+
 * The ``neurosynth`` engine has a ``cognitive_task(task_id, name,
   description)`` relation: the tasks of the Cognitive Atlas, downloaded
   from its API (``cognitiveatlas.org/api/v-alpha/task``), with their
