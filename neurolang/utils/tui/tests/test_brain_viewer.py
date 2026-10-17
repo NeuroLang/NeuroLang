@@ -506,3 +506,102 @@ def test_the_overlays_in_a_headless_browser(tmp_path):
     assert result["raisedChanged"]
     assert result["lowered"] == ["lift", "uniformity"]
     assert result["reset"] == ["lift", "uniformity"]
+
+
+_DISPLAY_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv, out = {};
+  var view = function () { return document.getElementById('slice-type').value; };
+  var before = pixels();
+  set('slice-type', 'render', 'change');
+  out.render = nv.opts.sliceType === nv.sliceTypeRender;
+  out.renderDrawn = changed(before, pixels());
+  set('slice-type', 'axial', 'change');
+  out.axial = nv.opts.sliceType === nv.sliceTypeAxial;
+  set('slice-type', 'multiplanar', 'change');
+  set('layout', 'grid', 'change');
+  out.grid = nv.opts.multiplanarLayout === niivue.MULTIPLANAR_TYPE.GRID;
+  set('render-tile', true, 'change');
+  out.renderTile = nv.opts.multiplanarShowRender === niivue.SHOW_RENDER.ALWAYS;
+  set('drag-mode', 'pan', 'change');
+  out.pan = nv.opts.dragMode === nv.dragModes.pan;
+  before = pixels();
+  set('nv-colorbar', true, 'change');
+  out.colorbar = nv.opts.isColorbar;
+  out.colorbarDrawn = changed(before, pixels());
+  set('orient-cube', true, 'change');
+  out.cube = nv.opts.isOrientCube;
+  set('ruler', true, 'change');
+  out.ruler = nv.opts.isRuler;
+  set('orientation-text', false, 'change');
+  out.orientationText = nv.opts.isOrientationTextVisible;
+  set('crosshair-width', '3', 'change');
+  out.crosshairWidth = nv.opts.crosshairWidth;
+  set('crosshair-color', '#ff0000', 'input');
+  out.crosshairColor = Array.from(nv.opts.crosshairColor).slice(0, 3);
+  set('crosshair-3d', true, 'change');
+  out.crosshair3D = nv.opts.show3Dcrosshair;
+  set('radiological', true, 'change');
+  out.radiological = nv.opts.isRadiologicalConvention;
+  set('smooth', false, 'change');
+  out.nearest = nv.opts.isNearestInterpolation;
+  before = pixels();
+  set('gamma', '2.5', 'input');
+  out.gammaDrawn = changed(before, pixels());
+  set('clip-plane', true, 'change');
+  out.clip = nv.scene.clipPlaneDepthAziElev[0] < 2;
+  set('slice-type', 'axial', 'change');
+  nv.canvas.dispatchEvent(new KeyboardEvent('keyup', {code: 'KeyV', bubbles: true}));
+  out.hotKeyView = nv.opts.sliceType !== nv.sliceTypeAxial;
+  out.hotKeyListed = view() === ['axial', 'coronal', 'sagittal', 'multiplanar', 'render'][nv.opts.sliceType];
+  click('reset');
+  out.reset = {
+    view: view(), sliceType: nv.opts.sliceType === nv.sliceTypeMultiplanar,
+    layout: nv.opts.multiplanarLayout === niivue.MULTIPLANAR_TYPE.ROW,
+    renderTile: nv.opts.multiplanarShowRender === niivue.SHOW_RENDER.NEVER,
+    drag: nv.opts.dragMode === nv.dragModes.contrast,
+    colorbar: nv.opts.isColorbar, cube: nv.opts.isOrientCube,
+    ruler: nv.opts.isRuler, radiological: nv.opts.isRadiologicalConvention,
+    crosshairWidth: nv.opts.crosshairWidth,
+    clip: nv.scene.clipPlaneDepthAziElev[0] < 2,
+    checkbox: document.getElementById('nv-colorbar').checked
+  };
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_niivue_display_controls_in_a_headless_browser(tmp_path):
+    """Check the controls of NiiVue's display: the view (a slice, the
+    three slices, with or without the 3D render, or the 3D render), the
+    layout, the drag mode, the colour bar, orientation cube, ruler and
+    labels, the crosshair, the radiological convention, the
+    interpolation, the gamma and the clip plane; that the view hot key
+    keeps the list of the views in step; and that Reset restores them."""
+    data = np.zeros((8, 8, 8), dtype=np.float32)
+    data[2:6, 2:6, 2:6] = 3.0
+    html = brain_viewer.viewer_html(
+        _image(data), _image(np.linspace(0, 1, 512).reshape(8, 8, 8)),
+        title="display", threshold=0.5, cmap="hot", symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _DISPLAY_CHECK)
+    assert result["errors"] == [] and "failed" not in result, result
+    assert result["render"] and result["renderDrawn"] and result["axial"]
+    assert result["grid"] and result["renderTile"] and result["pan"]
+    assert result["colorbar"] and result["colorbarDrawn"]
+    assert result["cube"] and result["ruler"]
+    assert result["orientationText"] is False
+    assert result["crosshairWidth"] == 3
+    assert result["crosshairColor"] == [1, 0, 0]
+    assert result["crosshair3D"] and result["radiological"]
+    assert result["nearest"] and result["gammaDrawn"] and result["clip"]
+    assert result["hotKeyView"] and result["hotKeyListed"]
+    assert result["reset"] == {
+        "view": "multiplanar", "sliceType": True, "layout": True,
+        "renderTile": True, "drag": True, "colorbar": False,
+        "cube": False, "ruler": False, "radiological": False,
+        "crosshairWidth": 1, "clip": False, "checkbox": False,
+    }
