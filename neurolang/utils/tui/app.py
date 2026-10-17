@@ -40,7 +40,7 @@ from .provenance import column_sorts
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope, record_squall_rules
 from .submission import Submission, submission_outline
-from .statements import is_complete, split_statements
+from .statements import is_complete, split_at_commands, split_statements
 from .transcript import Transcript, is_transcript_command
 
 
@@ -484,9 +484,18 @@ class InteractiveTuiApp:
         Run the dot-command or the query on *line*.
 
         It is recorded in the transcript, unless it is ``.transcript``.
+        Input with dot-commands among other lines, such as a pasted
+        block, runs in turn each dot-command and each program between
+        them, so that a ``.mode`` applies to what follows it; a program
+        of several lines is one submission, as when typed.
         """
         text = line.strip()
         if not text:
+            return
+        parts = split_at_commands(text)
+        if len(parts) > 1:
+            for part in parts:
+                self._run_line(part)
             return
         if is_transcript_command(text):
             self._handle_dot_command(text)

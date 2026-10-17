@@ -175,10 +175,14 @@ class TestPage:
     def test_initial_state(self, html):
         state = _state(html)
         assert state["initial"] == {
-            "threshold": 95.0, "thresholdMode": "percentile",
-            "cmap": "viridis", "symmetric": True, "opacity": 1.0,
-            "cursor": [0, 0, 0],
+            "cursor": [0, 0, 0], "active": 0,
+            "layers": [{
+                "threshold": 95.0, "thresholdMode": "percentile",
+                "cmap": "viridis", "symmetric": True, "opacity": 1.0,
+                "visible": True,
+            }],
         }
+        assert [o["name"] for o in state["overlays"]] == [""]
         assert state["shape"] == [4, 4, 4]
         assert np.array_equal(state["affine"], AFFINE)
         assert "viridis" in state["colormaps"]
@@ -190,9 +194,10 @@ class TestPage:
             threshold=0.5, cmap=None, symmetric=False,
         )
         state = _state(html)
-        assert state["initial"]["threshold"] == 0.5
-        assert state["initial"]["thresholdMode"] == "value"
-        assert state["initial"]["cmap"] == brain_viewer.DEFAULT_CMAP
+        layer = state["initial"]["layers"][0]
+        assert layer["threshold"] == 0.5
+        assert layer["thresholdMode"] == "value"
+        assert layer["cmap"] == brain_viewer.DEFAULT_CMAP
         assert state["background"] is None
 
     def test_default_colormap_is_plasma_and_percentile_threshold(self):
@@ -201,9 +206,10 @@ class TestPage:
             threshold="95%", cmap=None, symmetric=False,
         )
         state = _state(html)
-        assert state["initial"]["cmap"] == "plasma"
-        assert state["initial"]["threshold"] == 95.0
-        assert state["initial"]["thresholdMode"] == "percentile"
+        layer = state["initial"]["layers"][0]
+        assert layer["cmap"] == "plasma"
+        assert layer["threshold"] == 95.0
+        assert layer["thresholdMode"] == "percentile"
 
     def test_title_is_escaped(self, html):
         assert "<title>signed &lt;map&gt;</title>" in html
@@ -224,7 +230,7 @@ class TestPage:
             cmap="hot", symmetric=False,
         ))
         assert state["affine"][0][0] > 0
-        volume = _overlay_volume(state["overlay"], (4, 4, 4))
+        volume = _overlay_volume(state["overlays"][0], (4, 4, 4))
         assert volume[3, 1, 2] == 5.0
         assert state["initial"]["cursor"] == [3, 1, 2]
 
@@ -330,3 +336,129 @@ def test_the_page_in_a_headless_browser(tmp_path):
     assert result["mm"] == "(-1, -1, -1)"
     assert result["resetCmap"] == "hot"
     assert "3" in result["colorbarTicks"]
+
+
+class TestLayers:
+    """Check several images on one grid become the overlays of a page."""
+
+    @pytest.fixture
+    def state(self):
+        first = np.zeros((4, 4, 4), dtype=np.float32)
+        second = np.zeros((4, 4, 4), dtype=np.float32)
+        first[1, 2, 3], second[0, 0, 0], second[1, 1, 1] = 2.0, -1.0, 4.0
+        return _state(brain_viewer.viewer_html(
+            [("lift", _image(first)), ("uniformity", _image(second))],
+            None, title="t", threshold="95%", cmap="hot",
+            symmetric=[False, True],
+        ))
+
+    def test_one_overlay_per_image(self, state):
+        assert [o["name"] for o in state["overlays"]] == [
+            "lift", "uniformity"
+        ]
+        assert _overlay_volume(state["overlays"][0], (4, 4, 4))[1, 2, 3] == 2
+        second = _overlay_volume(state["overlays"][1], (4, 4, 4))
+        assert second[0, 0, 0] == -1 and second[1, 1, 1] == 4
+
+    def test_each_overlay_has_its_own_settings(self, state):
+        layers = state["initial"]["layers"]
+        assert [layer["symmetric"] for layer in layers] == [False, True]
+        assert layers[0]["cmap"] == "hot"
+        assert layers[1]["cmap"] != "hot"
+        assert all(layer["visible"] for layer in layers)
+        assert all(
+            layer["threshold"] == 95.0
+            and layer["thresholdMode"] == "percentile" for layer in layers
+        )
+        assert {layer["cmap"] for layer in layers} <= set(state["colormaps"])
+        assert state["initial"]["active"] == 0
+
+    def test_the_cursor_starts_on_the_peak_of_the_first(self, state):
+        assert state["initial"]["cursor"] == [1, 2, 3]
+
+    def test_the_images_must_share_a_grid(self):
+        with pytest.raises(ValueError, match="grid"):
+            brain_viewer.viewer_html(
+                [("a", _image(np.ones((2, 2, 2), np.float32))),
+                 ("b", _image(np.ones((3, 2, 2), np.float32)))],
+                None, title="t", threshold=0, cmap=None, symmetric=False,
+            )
+
+
+def test_infinite_values_take_the_largest_finite_ones():
+    """An infinite value is drawn at the end of the colour scale."""
+    data = np.zeros((2, 2, 2), dtype=np.float32)
+    data[0, 0, 0], data[1, 0, 0] = np.inf, 3.0
+    data[0, 1, 0], data[1, 1, 0] = -np.inf, -2.0
+    volume = _overlay_volume(brain_viewer.encode_overlay(data), (2, 2, 2))
+    assert volume[0, 0, 0] == 3.0 and volume[0, 1, 0] == -2.0
+
+
+_LAYERS_CHECK = """
+<script>
+brainViewer.ready.then(function () {
+  var out = {};
+  var axial = document.getElementById('axial');
+  function pixels() {
+    var c = axial.getContext('2d');
+    return Array.from(c.getImageData(0, 0, axial.width, axial.height).data);
+  }
+  function changed(a, b) {
+    return a.some(function (v, i) { return v !== b[i]; });
+  }
+  function set(id, value, kind) {
+    var el = document.getElementById(id);
+    if (el.type === 'checkbox') el.checked = value; else el.value = value;
+    el.dispatchEvent(new Event(kind || 'input', {bubbles: true}));
+  }
+  out.colorbars = document.querySelectorAll('#colorbars canvas').length;
+  out.layerShown = getComputedStyle(
+    document.getElementById('layer-control')).display !== 'none';
+  brainViewer.moveCursor([1, 2, 3]);
+  out.value = document.getElementById('value').textContent;
+  out.firstCmap = document.getElementById('cmap').value;
+  set('layer', '1', 'change');
+  out.secondCmap = document.getElementById('cmap').value;
+  var before = pixels();
+  set('visible', false, 'change');
+  out.hidden = changed(before, pixels());
+  document.getElementById('test-result').textContent = JSON.stringify(out);
+}).catch(function (e) {
+  document.getElementById('test-result').textContent =
+    JSON.stringify({error: String(e)});
+});
+</script>
+<pre id="test-result">pending</pre>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_overlays_in_a_headless_browser(tmp_path):
+    """Check each overlay has a colour bar, a value at the cursor and
+    its own controls, and that hiding one redraws the slices."""
+    first = np.zeros((4, 4, 4), dtype=np.float32)
+    second = np.zeros((4, 4, 4), dtype=np.float32)
+    first[1, 2, 3], second[1, 2, 3], second[2, 2, 3] = 2.0, 5.0, 4.0
+    html = brain_viewer.viewer_html(
+        [("lift", _image(first)), ("uniformity", _image(second))],
+        None, title="layers", threshold=0.5, cmap="hot",
+        symmetric=[False, False],
+    )
+    page = tmp_path / "page.html"
+    page.write_text(html.replace("</body>", _LAYERS_CHECK + "</body>"))
+    dom = subprocess.run(
+        [
+            _chrome(), "--headless", "--disable-gpu", "--no-first-run",
+            f"--user-data-dir={tmp_path / 'profile'}",
+            "--virtual-time-budget=10000", "--dump-dom", page.as_uri(),
+        ],
+        capture_output=True, text=True, timeout=120,
+    ).stdout
+    result = json.loads(
+        re.search(r'<pre id="test-result">(.*?)</pre>', dom, re.S).group(1)
+    )
+    assert "error" not in result
+    assert result["colorbars"] == 2 and result["layerShown"]
+    assert result["value"] == "lift 2 · uniformity 5"
+    assert result["firstCmap"] == "hot" and result["secondCmap"] != "hot"
+    assert result["hidden"]

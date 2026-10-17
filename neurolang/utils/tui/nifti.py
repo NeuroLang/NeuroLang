@@ -94,12 +94,14 @@ class SaveRequest(NamedTuple):
     What ``.save`` writes: its *path* and, for NIfTI, the columns to use.
 
     *value* names the value column and *points* the voxel columns; when
-    None, they follow from the result and the engine's sorts.
+    None, they follow from the result and the engine's sorts. *fill* is
+    the value of the voxels without one: not in the result, or NaN.
     """
 
     path: Path
     value: Optional[str] = None
     points: Optional[PointColumns] = None
+    fill: float = 0.0
 
 
 class SavedImage(NamedTuple):
@@ -127,7 +129,7 @@ _OPTION_FORMS = {
     "--value": "--value COLUMN", "--voxel": "--voxel I J K",
     "--mm": "--mm X Y Z", "--threshold": "--threshold T",
     "--cmap": "--cmap NAME", "--symmetric": "--symmetric",
-    "--one-sided": "--one-sided",
+    "--one-sided": "--one-sided", "--fill": "--fill V",
 }
 
 
@@ -421,12 +423,23 @@ def _image_dtype(values: np.ndarray):
     return np.float32
 
 
-def _volume(per_voxel: pd.Series, shape: tuple) -> np.ndarray:
-    """Return the volume of *shape* holding the values of *per_voxel*."""
+def _volume(
+    per_voxel: pd.Series, shape: tuple, fill: float = 0.0
+) -> np.ndarray:
+    """
+    Return the volume of *shape* holding the values of *per_voxel*.
+
+    The other voxels, and those whose value is NaN, are *fill*.
+    """
     values = per_voxel.to_numpy()
-    data = np.zeros(shape, dtype=_image_dtype(values))
+    dtype = _image_dtype(values)
+    if dtype != np.float32 and float(fill) != int(fill):
+        dtype = np.float32
+    data = np.full(shape, fill, dtype=dtype)
     indices = per_voxel.index.to_frame().to_numpy(dtype=int).reshape(-1, 3)
     data[tuple(indices.T)] = values
+    if data.dtype.kind == "f":
+        data[np.isnan(data)] = fill
     return data
 
 
@@ -456,7 +469,10 @@ def result_to_nifti(
         else np.ones(inside.sum(), dtype=np.uint8)
     )
     per_voxel = _max_per_voxel(indices[inside], values)
-    image = nib.Nifti1Image(_volume(per_voxel, shape), template.affine)
+    fill = request.fill if value is not None else 0
+    image = nib.Nifti1Image(
+        _volume(per_voxel, shape, fill), template.affine
+    )
     return SavedImage(
         image, value, len(per_voxel), int(len(df) - inside.sum()),
         points.grid,
@@ -516,6 +532,27 @@ def result_image(app, block, request: SaveRequest) -> SavedImage:
         block.frame, engine_grid(app._nl, points.grid), sorts,
         request._replace(points=points), block.sorts,
     )
+
+
+def value_columns(app, block, request: SaveRequest) -> list:
+    """
+    Return the value columns of the result *block* that ``.view`` shows.
+
+    They are the column of the *request*'s ``--value`` if given, else
+    the numeric columns that are neither of the voxels nor of an entity
+    when there are several (each is an overlay), else the one column
+    :func:`value_column` finds, None for a mask.
+    """
+    if request.value is not None:
+        return [request.value]
+    frame = block.frame
+    sorts = _engine_sorts(app.settings.engine_name)
+    points = request.points or point_columns(frame, sorts, block.sorts)
+    others = [c for c in frame.columns if c not in points.columns]
+    measures = _measure_columns(frame, others, sorts, block.sorts)
+    if len(measures) > 1:
+        return measures
+    return [value_column(frame, points, sorts, None, block.sorts)]
 
 
 def _engine_sorts(engine_name: str) -> dict:
@@ -590,7 +627,7 @@ VIEW_THRESHOLD = "95%"
 
 VIEW_USAGE = (
     ".view [PATH.nii[.gz]] [--threshold T|P%] [--cmap NAME] "
-    "[--symmetric | --one-sided]"
+    "[--symmetric | --one-sided] [--fill V]"
 )
 
 VIEW_HELP = """\
@@ -598,21 +635,30 @@ VIEW_HELP = """\
 in a browser.
 
 Without a path, the last result is converted into an image as .save
-converts it, with its options --value, --voxel and --mm. The viewer is an
-HTML page, saved to a temporary file and opened in the browser when the
-REPL runs on a terminal; it needs no network. It shows the image over the
-MNI152 T1 in three slices (left hemisphere on the left): click or drag to
-move the cursor, whose MNI coordinates and value it tells. Its controls
-change, live, what these options start with:
+converts it, with its options --value, --voxel and --mm. A result with
+several value columns, numeric ones that are neither of the voxels nor
+of an entity, gives an overlay per column, unless --value picks one;
+the voxels without a value, not in the result or NaN, take the value of
+--fill (default: 0, no value: hidden). A nonzero fill is a value of
+every other voxel of the grid, which the percentiles count. The viewer
+is an HTML page, saved to a temporary file and opened in the browser when
+the REPL runs on a terminal; it needs no network. It shows the overlays
+over the MNI152 T1 in three slices (left hemisphere on the left), the
+later ones over the earlier ones: click or drag to move the cursor, whose
+MNI coordinates and values it tells. Its controls change, live, for the
+overlay chosen in their list (shown, or hidden), what these options start
+each overlay with:
   --threshold T|P%      hide the voxels below T, or below the P-th
                         percentile of the nonzero values (default: 95%,
                         the top 5% of the voxels)
   --cmap NAME           the colormap, of matplotlib or nilearn (default:
-                        plasma)
+                        plasma), of the first overlay; the others take
+                        viridis, cool, hot... in turn
   --symmetric           a colormap symmetric around 0, hiding |v| < T
   --one-sided           a colormap from the threshold to the maximum
-Without either, the colormap is symmetric when the image has negative
-values. The page also sets the opacity of the image."""
+Without either, the colormap of an overlay is symmetric when it has
+negative values. The page also sets the opacity of each overlay; an
+infinite value is drawn as the largest finite one."""
 
 
 HELP_TOPICS["view"] = VIEW_HELP
@@ -621,6 +667,7 @@ HELP_TOPICS["view"] = VIEW_HELP
 # path, the options of .save tell how to convert the last result.
 _VIEW_OPTIONS = {
     "--threshold": 1, "--cmap": 1, "--symmetric": 0, "--one-sided": 0,
+    "--fill": 1,
 }
 
 
@@ -650,18 +697,36 @@ def parse_view_args(arg: str) -> ViewRequest:
     )
     if len(paths) > 1:
         raise SaveError(f"Usage: {VIEW_USAGE}")
-    conversion = {k: v for k, v in options.items() if k in _SAVE_OPTIONS}
+    conversion = {
+        k: v for k, v in options.items() if k in _SAVE_OPTIONS
+        or k == "--fill"
+    }
     if paths and conversion:
         raise SaveError(
             f"{', '.join(conversion)}: options to view the last result, "
             "not a file."
         )
+    save = _save_request(Path("last.nii.gz"), {
+        k: v for k, v in conversion.items() if k != "--fill"
+    })
+    if "--fill" in conversion:
+        save = save._replace(fill=_fill_value(conversion["--fill"][0]))
     return ViewRequest(
-        Path(paths[0]).expanduser() if paths else None,
-        _save_request(Path("last.nii.gz"), conversion),
+        Path(paths[0]).expanduser() if paths else None, save,
         view_threshold(options.get("--threshold", [None])[0]),
         options.get("--cmap", [None])[0], _symmetry_option(options),
     )
+
+
+def _fill_value(text: str) -> float:
+    """Return the value of ``--fill`` *text*, or raise a SaveError."""
+    try:
+        value = float(text)
+    except ValueError:
+        value = float("nan")
+    if not np.isfinite(value):
+        raise SaveError(f"--fill takes a number, not {text!r}.")
+    return value
 
 
 def view_threshold(text: Optional[str]):
@@ -695,20 +760,25 @@ def _symmetry_option(options: dict) -> Optional[bool]:
     return False if "--one-sided" in options else None
 
 
-def symmetry(console, path: Path, symmetric: Optional[bool]) -> bool:
+def symmetry(
+    console, image: nib.Nifti1Image, symmetric: Optional[bool],
+    name: str = "",
+) -> bool:
     """
-    Return whether the colormap of the image *path* is symmetric.
+    Return whether the colormap of the *image* is symmetric.
 
     Unless *symmetric* says, it is when the image has negative values;
-    *console* is then told which was chosen and how to change it.
+    *console* is then told which was chosen and how to change it, for
+    the overlay *name* if given.
     """
     if symmetric is not None:
         return symmetric
-    signed = bool((np.asanyarray(read_nifti(path).dataobj) < 0).any())
+    signed = bool((np.asanyarray(image.dataobj) < 0).any())
+    colormap = f"Colormap of {name!r}" if name else "Colormap"
     console.print(
-        "Colormap: symmetric, the image has negative values (--one-sided "
-        "for a one-sided one)." if signed else
-        "Colormap: one-sided, the image has no negative values "
+        f"{colormap}: symmetric, the image has negative values "
+        "(--one-sided for a one-sided one)." if signed else
+        f"{colormap}: one-sided, the image has no negative values "
         "(--symmetric for a symmetric one).",
         style="dim", markup=False,
     )
@@ -728,35 +798,45 @@ def _check_cmap(name: Optional[str]) -> None:
         raise SaveError(f"Unknown colormap {name!r}.")
 
 
-def _viewer_page(app, path: Path, request: ViewRequest, title: str) -> str:
+def _viewer_page(app, layers: list, request: ViewRequest, title: str) -> str:
     """
-    Return the viewer page, entitled *title*, of the image *path*.
+    Return the viewer page, entitled *title*, of the images *layers*.
 
-    It starts as *request* asks. The image is drawn over the MNI152 T1
-    template of nilearn, whatever the engine's template, a mask, is;
-    nilearn's warnings are kept off the prompt.
+    *layers* are (name, path) pairs, an overlay each; a single one is
+    shown without its name. The page starts as *request* asks. The images
+    are drawn over the MNI152 T1 template of nilearn, whatever the
+    engine's template, a mask, is; nilearn's warnings are kept off the
+    prompt.
     """
     _check_cmap(request.cmap)
-    symmetric = symmetry(app.console, path, request.symmetric)
+    images = [(name, read_nifti(path)) for name, path in layers]
+    several = len(images) > 1
+    symmetric = [
+        symmetry(
+            app.console, image, request.symmetric, name if several else ""
+        )
+        for name, image in images
+    ]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return brain_viewer.viewer_html(
-            read_nifti(path), brain_viewer.mni_background(),
-            title=title, threshold=request.threshold, cmap=request.cmap,
-            symmetric=symmetric,
+            images if several else images[0][1],
+            brain_viewer.mni_background(), title=title,
+            threshold=request.threshold, cmap=request.cmap,
+            symmetric=symmetric if several else symmetric[0],
         )
 
 
-def _view_nifti(app, path: Path, request: ViewRequest, title: str) -> None:
+def _view_nifti(app, layers: list, request: ViewRequest, title: str) -> None:
     """
-    Show the NIfTI image *path* in the brain viewer, as *request* asks.
+    Show the NIfTI images *layers* in the brain viewer, as *request* asks.
 
-    The viewer page, entitled *title*, is saved as an HTML file whose
-    path is printed, and opened in a browser when the REPL runs on a
-    terminal.
+    *layers* are (name, path) pairs, an overlay each. The viewer page,
+    entitled *title*, is saved as an HTML file whose path is printed,
+    and opened in a browser when the REPL runs on a terminal.
     """
     try:
-        html = _html_file(_viewer_page(app, path, request, title))
+        html = _html_file(_viewer_page(app, layers, request, title))
     except Exception as exc:
         app.console.print(
             f"Visualisation failed: {exc}", style="red", markup=False
@@ -895,13 +975,15 @@ def cmd_save(app, arg: str) -> None:
         _save_block(app, block, request._replace(path=path))
 
 
-def last_result_image(app, request: SaveRequest) -> Optional[Path]:
+def last_result_images(app, request: SaveRequest) -> Optional[list]:
     """
-    Save the last result as a NIfTI image in a temporary file, its path.
+    Save the last result as NIfTI images in temporary files.
 
     The result, the last ``obtain`` block of a SQUALL program with
-    several, is converted as ``.save`` converts it, as *request* asks.
-    Return None, and tell why, if there is no result or it has no voxels.
+    several, is converted as ``.save`` converts it, as *request* asks,
+    into an image per value column (:func:`value_columns`). Return the
+    (column name, path) of each, or None, telling why, if there is no
+    result or it has no voxels.
     """
     if not app.results:
         app.console.print(
@@ -909,19 +991,28 @@ def last_result_image(app, request: SaveRequest) -> Optional[Path]:
             "file.[/yellow]"
         )
         return None
+    block = app.results[-1]
     try:
-        saved = result_image(app, app.results[-1], request)
+        saved = [
+            result_image(app, block, request._replace(value=column))
+            for column in value_columns(app, block, request)
+        ]
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
-    fd, name = tempfile.mkstemp(suffix=".nii.gz", prefix="neurolang_view_")
-    os.close(fd)
-    write_nifti(saved.image, name)
-    app.console.print(
-        saved_image_message(Path(name), saved), style="green",
-        markup=False,
-    )
-    return Path(name)
+    layers = []
+    for image in saved:
+        fd, name = tempfile.mkstemp(
+            suffix=".nii.gz", prefix="neurolang_view_"
+        )
+        os.close(fd)
+        write_nifti(image.image, name)
+        app.console.print(
+            saved_image_message(Path(name), image), style="green",
+            markup=False,
+        )
+        layers.append((str(image.value or "mask"), Path(name)))
+    return layers
 
 
 @command(
@@ -933,22 +1024,28 @@ def cmd_view(app, arg: str) -> None:
     Show the NIfTI image of *arg*, or the last result, in the brain viewer.
 
     Without a path, the last result is converted as ``.save`` would, its
-    options included, into a temporary ``.nii.gz`` file.
+    options included, into temporary ``.nii.gz`` files, an overlay per
+    value column.
     """
     try:
         request = parse_view_args(arg)
     except SaveError as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return
-    path = request.path or last_result_image(app, request.save)
-    if path is None:
-        return
-    if not path.is_file():
+    if request.path is None:
+        layers = last_result_images(app, request.save)
+        if layers is None:
+            return
+    elif not request.path.is_file():
         app.console.print(
-            f"File not found: {path}", style="red", markup=False
+            f"File not found: {request.path}", style="red", markup=False
         )
         return
-    _view_nifti(app, path, request, _view_title(app, request, path))
+    else:
+        layers = [(request.path.name, request.path)]
+    _view_nifti(
+        app, layers, request, _view_title(app, request, layers[0][1])
+    )
 
 
 def _view_title(app, request: ViewRequest, path: Path) -> str:
