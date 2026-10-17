@@ -23,6 +23,8 @@ from neurolang.utils.tui.statements import (  # noqa: E402
     ("obtain every P.", True, True),
     ("obtain every P", True, False),
     ("", True, True),
+    ("ans(x) :-  % the head", False, False),
+    ("ans(x) :- P(x)  % all of P", False, True),
 ])
 def test_is_complete(text, squall, complete):
     assert is_complete(text, squall) is complete
