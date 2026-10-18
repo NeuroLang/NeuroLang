@@ -40,6 +40,13 @@ TRIMMED_DATASETS = ("icbm", "fsl")
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
+# Where the system keeps its certificate authorities.
+SYSTEM_CERTIFICATES = (
+    Path("/etc/ssl/certs/ca-certificates.crt"),
+    Path("/etc/pki/tls/certs/ca-bundle.crt"),
+    Path("/etc/ssl/cert.pem"),
+)
+
 
 def build_wheel(output: Path) -> str:
     """Build NeuroLang's wheel in *output* and return its file name."""
@@ -53,14 +60,31 @@ def build_wheel(output: Path) -> str:
         [uv, "build", "--wheel", "--out-dir", str(output), str(REPOSITORY)],
         env={**os.environ, "PATH": path},
     )
+    # uv ignores everything in the directory it builds in, and the
+    # documentation is deployed by committing it: the page would be lost.
+    (output / ".gitignore").unlink(missing_ok=True)
     return next(output.glob("neurolang-*.whl")).name
 
 
 def build_engine(data_dir: Path) -> None:
-    """Build the engine on *data_dir*, which downloads what it lacks."""
+    """
+    Build the engine on *data_dir*, which downloads what it lacks.
+
+    The certificate of a host, nitrc.org's for the Harvard-Oxford atlas,
+    may be refused with the authorities of ``certifi`` and accepted with
+    those of the system: the download is then tried again with them.
+    """
+    import requests
     from neurolang.utils import engine_registry
 
-    engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+    try:
+        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+    except requests.exceptions.SSLError:
+        system = next((c for c in SYSTEM_CERTIFICATES if c.is_file()), None)
+        if system is None:
+            raise
+        os.environ["REQUESTS_CA_BUNDLE"] = str(system)
+        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
 
 
 def trim(data_dir: Path) -> None:
