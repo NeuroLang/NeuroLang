@@ -20,8 +20,8 @@ argument, here ``'working memory'``::
 The 5% of the studies closest to the definition play the role of the studies
 of the term in Neurosynth's *uniformity test*: the map is the probability
 :math:`P(A_v \mid T)` that such a study activates the voxel :math:`v`,
-divided by its average :math:`P(A_V \mid T)` over the cortex, which is 1 when
-the studies activate the cortex uniformly (see
+divided by its average :math:`P(A_V \mid T)` over the brain, which is 1 when
+the studies activate the brain uniformly (see
 :ref:`tutorial-neurosynth-tests`).  The map is compared with the one of the
 studies that mention the term.
 
@@ -83,13 +83,14 @@ print(definition.as_pandas_dataframe().iloc[0, 0])
 # Studies close to the definition
 # -------------------------------
 # The similarity of every study to the definition, and the cutoff of the top
-# ``TOP_PERCENT`` % of them, an aggregation of the similarities.
+# ``TOP_PERCENT`` % of them, an aggregation of the similarities.  A study
+# without abstract has a similarity of 0 and is left out.
 
 nl.execute_datalog_program(
     f"""
     definition(t, d) :- cogat_term(c, t) & skos:definition(c, d).
     similarity(t, s, v) :- study(s) & definition(t, d) &
-        (v == query_similarity(d, s)).
+        (v == query_similarity(d, s)) & (v > 0).
     cutoff(t, percentile(v, {100 - TOP_PERCENT})) :- similarity(t, s, v).
     similar(t, s) :- similarity(t, s, v) & cutoff(t, c) & (v >= c).
     term_study(t, s) :- mentions(s, t).
@@ -131,7 +132,7 @@ for _, row in similarity.head(10).iterrows():
 # Uniformity ratios
 # -----------------
 # ``selected_study`` is a uniform choice over the studies and
-# ``selected_voxel`` over the voxels of the cortex, so that the probabilities
+# ``selected_voxel`` over the voxels of the brain, so that the probabilities
 # below are proportions of studies and of voxels.  A study activates the
 # voxels within 3 voxels (6 mm) of one of its peaks.  The uniformity ratio
 # of a selection of studies is :math:`P(A_v \mid T) / P(A_V \mid T)`, and the
@@ -139,11 +140,11 @@ for _, row in similarity.head(10).iterrows():
 
 nl.execute_datalog_program(
     """
-    activation(i, j, k, s) :- cortical_mask(i, j, k) &
+    activation(i, j, k, s) :- brain_mask(i, j, k) &
         peak_reported(i1, j1, k1, s) &
         (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3).
-    n_voxels(count(i, j, k)) :- cortical_mask(i, j, k).
-    selected_voxel(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m).
+    n_voxels(count(i, j, k)) :- brain_mask(i, j, k).
+    selected_voxel(i, j, k) ^ (1 / m) :- brain_mask(i, j, k) & n_voxels(m).
     """
 )
 for name in ("similar", "term_study"):

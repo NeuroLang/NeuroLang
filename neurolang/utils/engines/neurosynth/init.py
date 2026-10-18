@@ -12,6 +12,8 @@ Registers the following predicates:
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
+* ``brain_mask(i, j, k)`` — the voxels of the MNI template grid inside the
+  MNI152 brain mask (whole brain, subcortical structures included).
 * ``cortical_mask(i, j, k)`` — the voxels of the MNI template grid in the
   cortex, labelled by the Harvard–Oxford cortical atlas (maximum
   probability, 25% threshold, 2 mm).
@@ -129,6 +131,8 @@ def register_tables(
         name="cortical_mask",
     )
     nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
+    nl.add_tuple_set(_brain_voxels(mask), name="brain_mask")
+    nl.symbol_table["brain_mask"].value.might_have_duplicates = False
     nl.add_tuple_set(
         fetch_cognitive_atlas_tasks(data_dir), name="cognitive_task"
     )
@@ -165,6 +169,18 @@ def fetch_cognitive_atlas_tasks(data_dir: Path) -> pd.DataFrame:
         "description": tasks["definition_text"].fillna("").str.strip(),
     })
     return tasks[tasks["name"] != ""].reset_index(drop=True)
+
+
+def _brain_voxels(mask: nib.Nifti1Image) -> np.ndarray:
+    """The (i, j, k) indices of the voxels of the *mask* grid inside the
+    MNI152 brain mask of nilearn (bundled with it, nothing is downloaded),
+    resampled to that grid by nearest neighbour: the whole brain, the
+    subcortical structures and the cerebellum included."""
+    brain = nilearn_datasets().load_mni152_brain_mask(resolution=2)
+    resampled = nilearn_image().resample_to_img(
+        brain, mask, interpolation="nearest"
+    )
+    return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
 
 
 def _cortical_voxels(

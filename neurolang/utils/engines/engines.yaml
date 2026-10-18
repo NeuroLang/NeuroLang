@@ -166,6 +166,13 @@ engines:
         description: "Every voxel index (i, j, k) of the MNI template grid"
         arguments:
           - voxel
+      brain_mask:
+        description: >-
+          The voxels (i, j, k) of the MNI template grid inside the MNI152
+          brain mask: the whole brain, subcortical structures and cerebellum
+          included
+        arguments:
+          - voxel
       cortical_mask:
         description: >-
           The voxels (i, j, k) of the MNI template grid in the cortex

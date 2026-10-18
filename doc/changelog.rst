@@ -40,7 +40,9 @@ Unreleased
   sequences of up to three words.  The gallery example
   ``plot_cognitive_atlas_uniformity.py`` links the Cognitive Atlas definition
   of a term to the studies with SPECTER2 and computes its uniformity map.
-  The engines of a custom YAML file can extend the built-in ones.
+  The engines of a custom YAML file can extend the built-in ones.  A
+  ``brain_mask(i, j, k)`` predicate gives the whole brain (MNI152 brain mask)
+  next to ``cortical_mask``.
 * Documentation: the REPL example of the Neurosynth tests
   (:ref:`tutorial-neurosynth-tests`) gives the term in the query,
   ``ratios("vision", i, j, k, ...)``, rather than in a
