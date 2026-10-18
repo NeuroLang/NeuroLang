@@ -45,6 +45,11 @@ Unreleased
   over its concepts, tasks and contrasts, joined with the studies through
   ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
   :doc:`tutorial_cognitive_atlas`.
+* NeuroLang has a logo (:file:`doc/_static/logo/`): the brain written as
+  a probabilistic program. It heads the README and the documentation,
+  whose colours become those of the logo, and is the favicon of the
+  documentation, of the web application and of the ``.view`` viewer.
+
 * The ``.view`` viewer has the controls of NiiVue's display: the view
   (a slice, the three slices in a row, a column or a grid, with or
   without the 3D render, or the 3D render alone), the drag mode of the

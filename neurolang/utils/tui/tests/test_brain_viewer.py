@@ -230,13 +230,16 @@ class TestPage:
         assert html.count("</script>") == 3
 
     def test_no_external_urls(self, html):
-        """No URL outside the NiiVue bundle, whose comments have some."""
+        """No URL outside the NiiVue bundle, whose comments have some,
+        but the favicon's data URI."""
         bundle = (
             Path(brain_viewer.__file__).parent / "static" / "niivue"
             / "niivue.umd.js"
         ).read_text(encoding="utf-8")
         page = html.replace(bundle, "")
-        assert not re.search(r"https?://|//cdn|\bsrc=|\bhref=", page)
+        assert not re.search(
+            r'https?://|//cdn|\bsrc=|\bhref=(?!"data:)', page
+        )
 
     def test_cursor_on_the_peak(self):
         data = np.zeros((5, 5, 5), dtype=np.float32)
@@ -260,6 +263,22 @@ class TestPage:
         assert state["initial"]["cursor"] == [0, 1, 2]
         assert np.array_equal(state["affine"], flip)
 
+
+
+def test_the_page_has_the_neurolang_favicon():
+    """The page's icon is NeuroLang's favicon, inlined: the page needs
+    no network."""
+    page = brain_viewer.viewer_html(
+        _image(np.ones((2, 2, 2), np.float32)), None, title="t",
+        threshold=0, cmap=None, symmetric=False,
+    )
+    icon = re.search(
+        r'<link rel="icon" type="image/svg\+xml" '
+        r'href="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)">', page
+    )
+    assert icon is not None
+    svg = base64.b64decode(icon.group(1)).decode()
+    assert svg.startswith("<svg") and "prefers-color-scheme:dark" in svg
 
 _CHROME_PATHS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",

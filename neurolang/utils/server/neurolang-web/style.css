@@ -6,8 +6,12 @@ body {
 }
 
 .main.menu .item img.logo {
-  margin-right: 1.5em;
-  width: 4em;
+  height: 2.6em;
+  width: auto;
+}
+
+.main.menu .item img.inria.logo {
+  height: 1.4em;
 }
 
 .main.menu .item .github.icon {
