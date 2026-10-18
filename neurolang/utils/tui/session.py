@@ -617,7 +617,7 @@ _DOC_RULES = 6
 def _print_doc(app, info) -> None:
     """Print the documentation of the predicate *info*."""
     title = info.signature() + f" · {info.kind}"
-    if info.probabilistic:
+    if info.probabilistic and info.kind != "probabilistic":
         title += " · probabilistic"
     lines = [title]
     text = app.predicate_docs.get(info.name) or _engine_description(

@@ -2,6 +2,7 @@
 
 import io
 
+import pandas as pd
 import pytest
 
 pytest.importorskip("prompt_toolkit")
@@ -34,6 +35,9 @@ def engine(tmp_path):
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
     nl.add_tuple_set([(10,), (11,)], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame({"study_id": [10, 11]}), name="selected_study"
+    )
     path = tmp_path / "vocab.ttl"
     path.write_text(GRAPH)
     nl.load_ontology(str(path), individuals=True, names="prefixed")
@@ -168,3 +172,9 @@ def test_completion_offers_the_ontologies_after_two_characters(app):
     assert not [n for n in _completions(app, "r") if n.startswith("rdfs:")]
     assert "rdfs:subClassOf" in _completions(app, "rd")
     assert "ex:name" in _completions(app, ".doc ex")
+
+
+def test_doc_names_the_kind_of_a_probabilistic_predicate_once(app):
+    output = _run(app, ".doc selected_study")
+    assert output.splitlines()[0].count("probabilistic") == 1
+    assert "2 facts" in output
