@@ -161,6 +161,8 @@ class InteractiveTuiApp:
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
         self.squall_rules: dict = {}
+        # The documentation written with .doc, by predicate name.
+        self.predicate_docs: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)

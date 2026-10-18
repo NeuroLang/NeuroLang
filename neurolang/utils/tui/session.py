@@ -15,6 +15,7 @@ last query is rewritten (``.rewritten``) or translated from SQUALL to
 Datalog, and the Datalog rules of a predicate (``.datalog``).
 """
 
+import difflib
 import re
 import shlex
 import traceback
@@ -47,6 +48,7 @@ from neurolang.utils.cli import (
 )
 
 from .commands import _switch, command
+from . import squall_sorts
 from .catalog import is_user_symbol, listed, predicate_catalog
 from .submission import predicate_extent
 
@@ -333,6 +335,7 @@ def cmd_clear(app, arg: str) -> None:
     open_session_scope(app._nl)
     app.loaded_relations.clear()
     app.squall_rules.clear()
+    app.predicate_docs.clear()
     for line in lines or ["nothing to clear"]:
         app.console.print(line, style="green", markup=False)
 
@@ -496,27 +499,177 @@ def _print_predicates_text(app, infos) -> None:
 _PREDICATE_COLUMNS = ("Predicate", "Kind", "Columns")
 
 
+def _catalog(app) -> dict:
+    """Return the predicates of the engine and of the session, by name."""
+    engine = app.settings.engine_name
+    signatures = engine_registry.get_signatures(engine) if engine else {}
+    return predicate_catalog(
+        app._nl, _declared_columns(engine), app.loaded_relations, signatures,
+    )
+
+
+_ONTOLOGY_WORDS = ("ontology", "ontologies")
+
+
 @command(
     ".predicates", "List the predicates of the engine and of the session, "
-    "with their kind and columns",
+    "with their kind and columns; those of the ontologies on request",
+    ".predicates [all|ontologies]",
 )
 def cmd_predicates(app, arg: str) -> None:
     """
     Print the predicates of the engine, by kind and name.
 
     A predicate the engine declares the arguments of shows its
-    entities.
+    entities. The predicates of the ontologies the engine loaded, a
+    thousand of them for a large ontology, are listed with ``all`` and
+    alone with ``ontologies``; otherwise only their number is given.
     """
-    engine = app.settings.engine_name
-    signatures = engine_registry.get_signatures(engine) if engine else {}
-    infos = listed(predicate_catalog(
-        app._nl, _declared_columns(engine), app.loaded_relations,
-        signatures,
-    ))
+    choice = arg.strip().lower()
+    if choice not in ("", "all", *_ONTOLOGY_WORDS):
+        _warn(app, "Usage: .predicates [all|ontologies]")
+        app.failed = True
+        return
+    catalog = _catalog(app)
+    infos = listed(catalog, ontologies=bool(choice))
+    if choice in _ONTOLOGY_WORDS:
+        infos = [info for info in infos if info.kind == "ontology"]
     if app.console.is_terminal:
         _print_predicates_table(app, infos)
     else:
         _print_predicates_text(app, infos)
+    hidden = sum(info.kind == "ontology" for info in catalog.values())
+    if hidden and not choice:
+        app.console.print(
+            f"({_plural(hidden, 'ontology predicate')} not shown: "
+            ".predicates ontologies lists them)", style="dim", markup=False,
+        )
+
+
+def _find_predicate(catalog: dict, name: str):
+    """Return the info of the predicate *name* in *catalog*, or None."""
+    if name in catalog:
+        return catalog[name]
+    folded = [
+        info for key, info in catalog.items() if key.lower() == name.lower()
+    ]
+    return folded[0] if len(folded) == 1 else None
+
+
+def _unknown_predicate_message(catalog: dict, name: str) -> str:
+    """Return the message telling that *name* is not a predicate."""
+    message = f"Unknown predicate {name!r}."
+    close = difflib.get_close_matches(name, catalog, n=3)
+    if close:
+        message += " Did you mean " + " or ".join(close) + "?"
+    return message
+
+
+def _engine_description(app, name: str) -> str:
+    """Return the description the engine's configuration gives *name*."""
+    engine = app.settings.engine_name
+    if not engine:
+        return ""
+    info = engine_registry.get_predicates(engine).get(name, {})
+    return " ".join(str(info.get("description", "")).split())
+
+
+def _argument_lines(app, info) -> list:
+    """Return the lines describing the entities *info* relates."""
+    engine = app.settings.engine_name
+    sorts = engine_registry.get_sorts(engine) if engine else {}
+    lines = []
+    for position, argument in enumerate(info.arguments or (), start=1):
+        text = f"  {position}. {squall_sorts.argument_text(argument, True)}"
+        description = getattr(sorts.get(argument.sort), "description", "")
+        lines.append(f"{text}: {description}" if description else text)
+    return lines
+
+
+def _definition_lines(app, info) -> list:
+    """Return the lines on the facts, rules or origin of *info*."""
+    symbol_table = app._nl.program_ir.symbol_table
+    value = symbol_table.get(Symbol(info.name))
+    extent = predicate_extent(value) if value is not None else None
+    lines = []
+    if extent is not None:
+        _, size, unit = extent
+        lines.append(f"{_plural(size, unit)}")
+    ontology = getattr(app._nl, "ontology_symbols", {}).get(info.name)
+    if ontology:
+        lines.append("from the ontology " + ", ".join(
+            Path(path).name for path in ontology
+        ))
+    if isinstance(value, DatalogUnion):
+        shown = value.formulas[:_DOC_RULES]
+        lines += [rule_text(rule) for rule in shown]
+        if len(value.formulas) > len(shown):
+            lines.append(
+                f"... and {len(value.formulas) - len(shown)} more: "
+                f".datalog {info.name}"
+            )
+    return lines
+
+
+_DOC_RULES = 6
+
+
+def _print_doc(app, info) -> None:
+    """Print the documentation of the predicate *info*."""
+    title = info.signature() + f" · {info.kind}"
+    if info.probabilistic:
+        title += " · probabilistic"
+    lines = [title]
+    text = app.predicate_docs.get(info.name) or _engine_description(
+        app, info.name
+    )
+    if text:
+        lines.append(text)
+    if app.predicate_docs.get(info.name) and _engine_description(
+        app, info.name
+    ):
+        lines.append("Engine: " + _engine_description(app, info.name))
+    arguments = _argument_lines(app, info)
+    if arguments:
+        lines += ["Arguments:"] + arguments
+    lines += _definition_lines(app, info)
+    if not text:
+        lines.append(f"(no documentation: .doc {info.name} TEXT writes one)")
+    for line in lines:
+        app.console.print(line, markup=False, highlight=False, soft_wrap=True)
+
+
+@command(
+    ".doc", "Show the documentation of a predicate, or write one for the "
+    "session", ".doc PREDICATE [TEXT]",
+)
+def cmd_doc(app, arg: str) -> None:
+    """
+    Document a predicate: its description, entities, facts and rules.
+
+    The description is the engine's, if it declares one, or the note
+    ``.doc PREDICATE TEXT`` wrote in this session (any predicate of the
+    engine or of the session, an ontology's too); a note stays until
+    ``.clear`` and shows first.
+    """
+    name, _, text = arg.strip().partition(" ")
+    if not name:
+        _warn(app, "Usage: .doc PREDICATE [TEXT]")
+        app.failed = True
+        return
+    catalog = _catalog(app)
+    info = _find_predicate(catalog, name)
+    if info is None:
+        _warn(app, _unknown_predicate_message(catalog, name))
+        app.failed = True
+        return
+    if text.strip():
+        app.predicate_docs[info.name] = text.strip()
+        app.console.print(
+            f"documented {info.name}", style="green", markup=False
+        )
+        return
+    _print_doc(app, info)
 
 
 @command(".engines", "List the available engines")

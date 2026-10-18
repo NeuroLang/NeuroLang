@@ -317,12 +317,27 @@ class NeurolangPDL(QueryBuilderDatalog):
         for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
+        names_added = {name for name in constraints}
+        names_added |= {symbol.name for symbol in est_knowledge}
+        names_added |= {symbol.name for symbol in entity_rules}
         if individuals:
             for name, rows in onto.parse_individuals().items():
                 self.add_tuple_set(rows, name=name)
+                names_added.add(name)
+        self._record_ontology_symbols(names_added, paths)
 
         self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol
+
+    def _record_ontology_symbols(self, names, paths) -> None:
+        """Remember the files the predicates of the ontologies come from."""
+        files = tuple([paths] if isinstance(paths, str) else map(str, paths))
+        registry = getattr(self, "ontology_symbols", None)
+        if registry is None:
+            registry = self.ontology_symbols = {}
+        for name in names:
+            known = registry.get(name, ())
+            registry[name] = tuple(dict.fromkeys(known + files))
 
     @property
     def current_program(self) -> List[fe.Expression]:
