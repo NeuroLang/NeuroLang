@@ -19,6 +19,11 @@ Unreleased
 
 **New features:**
 
+* NeuroLang has a logo (:file:`doc/_static/logo/`): the brain written as
+  a probabilistic program. It heads the README and the documentation,
+  whose colours become those of the logo, and is the favicon of the
+  documentation, of the web application and of the ``.view`` viewer.
+
 * The ``.view`` viewer has the controls of NiiVue's display: the view
   (a slice, the three slices in a row, a column or a grid, with or
   without the 3D render, or the 3D render alone), the drag mode of the
