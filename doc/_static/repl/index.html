@@ -25,6 +25,10 @@
   button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; cursor: pointer; }
   button.secondary { background: #21262d; border: 1px solid #30363d; }
   button:disabled { opacity: .5; cursor: default; }
+  #version { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; font-family: system-ui, sans-serif; color: #8b949e; }
+  #version input { background: #161b22; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: .3rem .5rem; font: 13px ui-monospace, Menlo, monospace; }
+  #version input[name=repo] { width: 14rem; }
+  #version input[name=ref] { width: 12rem; }
   .examples { margin-top: 1rem; font-family: system-ui, sans-serif; color: #8b949e; }
   .examples button { margin: .15rem .25rem .15rem 0; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
 </style>
@@ -40,6 +44,14 @@
     <a href="../../tutorial_neurosynth_tests.html" style="color:#58a6ff">uniformity-test tutorial</a>,
     may not fit; type <code>.help</code> for the commands.
   </p>
+  <form id="version">
+    NeuroLang from
+    <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">
+    at
+    <input name="ref" placeholder="branch, tag or commit" aria-label="Branch, tag or commit" spellcheck="false">
+    <button class="secondary">Run this version</button>
+    <span>(empty: the version built with this page)</span>
+  </form>
   <div id="status" role="status">Starting…</div>
   <div id="log" aria-live="polite"></div>
   <form id="form">

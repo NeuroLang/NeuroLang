@@ -23,7 +23,9 @@ Unreleased
   install: https://neurolang.github.io/_static/repl/index.html runs
   ``neurolang-query -i --engine neurosynth --resolution 2`` on Pyodide,
   with the REPL's commands and output, and ``.view`` shows its viewer
-  below the output.  It is :class:`neurolang.utils.tui.web.WebRepl`
+  below the output.  ``?ref=BRANCH`` in its address runs the NeuroLang
+  of that branch, tag or commit, read from GitHub (``&repo=OWNER/NAME``
+  for a fork).  It is :class:`neurolang.utils.tui.web.WebRepl`
   driven by a page (:file:`doc/_static/repl/`), whose bundle, NeuroLang's
   wheel and the data of the engine, :file:`doc/make_repl_bundle.py`
   builds with the documentation.  To run in Pyodide, ``pysdd``, which has

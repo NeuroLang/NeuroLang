@@ -4,6 +4,8 @@ const log = document.getElementById("log");
 const input = document.getElementById("input");
 const run = document.getElementById("run");
 const form = document.getElementById("form");
+const version = document.getElementById("version");
+const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const inputs = [];
 let historyIndex = 0;
 let worker = null;
@@ -35,12 +37,22 @@ function setReady(ready) {
   if (ready) input.focus();
 }
 
+// The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH.
+function requestedVersion() {
+  const params = new URLSearchParams(location.search);
+  return { repo: params.get("repo") || DEFAULT_REPO, ref: params.get("ref") || "" };
+}
+
 function start() {
   if (worker) worker.terminate();
+  const { repo, ref } = requestedVersion();
+  version.elements.repo.value = repo;
+  version.elements.ref.value = ref;
   log.replaceChildren();
   statusBox.className = "";
   setReady(false);
   worker = new Worker("worker.js", { type: "module" });
+  worker.postMessage({ type: "start", repo, ref });
   worker.onmessage = ({ data }) => {
     if (data.type === "status") {
       statusBox.textContent = data.message;
@@ -49,6 +61,10 @@ function start() {
       statusBox.textContent = `The REPL could not start: ${data.message}`;
     } else if (data.type === "ready") {
       statusBox.textContent = "Ready.";
+      const source = document.createElement("pre");
+      source.className = "entry-input";
+      source.textContent = `NeuroLang: ${data.source}`;
+      append(source);
       append(output(data.banner));
       setReady(true);
     } else if (data.type === "reply") {
@@ -90,6 +106,18 @@ input.addEventListener("keydown", (event) => {
   }
 });
 document.getElementById("restart").addEventListener("click", start);
+version.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const params = new URLSearchParams();
+  const { repo, ref } = Object.fromEntries(new FormData(version));
+  if (ref.trim()) {
+    params.set("ref", ref.trim());
+    if (repo.trim() !== DEFAULT_REPO) params.set("repo", repo.trim());
+  }
+  const query = params.toString();
+  history.replaceState(null, "", query ? `?${query}` : location.pathname);
+  start();
+});
 for (const button of document.querySelectorAll(".example")) {
   button.addEventListener("click", () => {
     input.value = button.textContent;
