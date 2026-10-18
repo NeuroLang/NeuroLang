@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+* The interactive query REPL runs in the browser, with nothing to
+  install: https://neurolang.github.io/_static/repl/index.html runs
+  ``neurolang-query -i --engine neurosynth --resolution 2`` on Pyodide,
+  with the REPL's commands and output, and ``.view`` shows its viewer
+  below the output.  It is :class:`neurolang.utils.tui.web.WebRepl`
+  driven by a page (:file:`doc/_static/repl/`), whose bundle, NeuroLang's
+  wheel and the data of the engine, :file:`doc/make_repl_bundle.py`
+  builds with the documentation.  To run in Pyodide, ``pysdd``, which has
+  no WebAssembly build, became optional, as the queries that lifted
+  inference solves do not need it, and queries run in the calling thread
+  where threads cannot start.
+
 * NeuroLang has a logo (:file:`doc/_static/logo/`): the brain written as
   a probabilistic program. It heads the README and the documentation,
   whose colours become those of the logo, and is the favicon of the
