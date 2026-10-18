@@ -22,27 +22,20 @@ Unreleased
 * Engines in :file:`engines.yaml` can inherit from other engines with
   ``extends`` and from ``abstract`` base entries, so settings common to
   several engines are declared once.  ``neurosynth`` now extends a shared
-  ``coordinate_meta_analysis`` base.  A new ``neurostore`` engine, built on
-  the same base, loads the NeuroStore database (as fetched by NiMARE) with
-  the predicates of ``neurosynth``, TF-IDF computed from the abstracts, the
-  titles, abstracts and LLM-extracted concepts and domains of the studies,
-  and SPECTER2 ``query_similarity`` over its abstracts.  A
-  ``text_embeddings`` source can now be engine predicates
-  (``source: {predicate: ...}``).  The MNI image of an engine can come
-  from nilearn (bundled) or TemplateFlow (``mni_template``), and the
-  command-line ``--resolution`` selects its resolution, also readable in the YAML as ``${resolution}``.
-  See :doc:`engine_configuration`.
+  ``coordinate_meta_analysis`` base.  See :doc:`engine_configuration`.
+* A new ``neurostore`` engine, built on the same base, loads the NeuroStore
+  database (as fetched by NiMARE) with the predicates of ``neurosynth``,
+  TF-IDF computed from the abstracts (words and sequences of up to three
+  words), the titles, abstracts and LLM-extracted concepts and domains of
+  the studies, and SPECTER2 ``query_similarity`` over its abstracts
+  (a ``text_embeddings`` source can now be engine predicates,
+  ``source: {predicate: ...}``).  A ``brain_mask(i, j, k)`` predicate gives
+  the whole brain (MNI152 brain mask) next to ``cortical_mask``.
 * ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
-  (``ontologies``, before ``datalog_init``) for open-world queries over its
-  concepts, tasks and contrasts, joined with the studies through
+  (``ontologies``, now loaded before ``datalog_init``) for open-world queries
+  over its concepts, tasks and contrasts, joined with the studies through
   ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
-  :doc:`tutorial_cognitive_atlas`.  The TF-IDF of ``neurostore`` covers
-  sequences of up to three words.  The gallery example
-  ``plot_cognitive_atlas_uniformity.py`` links the Cognitive Atlas definition
-  of a term to the studies with SPECTER2 and computes its uniformity map.
-  The engines of a custom YAML file can extend the built-in ones.  A
-  ``brain_mask(i, j, k)`` predicate gives the whole brain (MNI152 brain mask)
-  next to ``cortical_mask``.
+  :doc:`tutorial_cognitive_atlas`.
 * Documentation: the REPL example of the Neurosynth tests
   (:ref:`tutorial-neurosynth-tests`) gives the term in the query,
   ``ratios("vision", i, j, k, ...)``, rather than in a

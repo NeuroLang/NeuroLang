@@ -16,23 +16,6 @@ may specify the following keys, all of them optional:
 - ``requires_mni_mask`` — whether the engine needs an MNI brain mask (it is
   downloaded, optionally resampled with ``--resolution``, and passed to the
   init phases)
-- ``mni_template`` — where the MNI image defining the voxel grid comes from:
-  ``{source: icbm152_2009}`` (default, the ICBM 2009 T1 that nilearn
-  downloads), ``{source: nilearn, variant: brain_mask, resolution: 1}``
-  (bundled with nilearn, no download; ``resolution: 1`` is the grid of the
-  default; ``variant`` is any of the ``templates`` variants below) or
-  ``{source: templateflow, template: MNI152NLin2009cAsym, suffix: mask,
-  desc: brain, resolution: 1}`` (needs ``pip install templateflow``).
-  The command-line ``--resolution MM`` is the resolution of this image: the
-  ``nilearn`` template defaults to it (when it is 1 or 2), and a value
-  that is not the resolution of the image resamples it.  A YAML entry can
-  read it as ``resolution: ${resolution}``, or ``${resolution:2}`` with a
-  default for when no ``--resolution`` is given: such a placeholder
-  replaces any string value of the engine configuration that is wholly
-  one, and an entry with neither value nor default is dropped
-- ``resolution`` — default isotropic resolution (mm) of the MNI image, used
-  when ``--resolution`` is not given (``${resolution}`` placeholders read
-  it too); inherited like any other entry
 - ``use_base_symbols`` — when ``true`` (and an MNI mask is available),
   registers common neuroimaging symbols (``agg_count``,
   ``agg_create_region``, ``agg_create_region_overlay``,
@@ -298,10 +281,7 @@ and the engine's own entries override all of them.  Merging works per key:
 - every other value, lists included (``python_init``, ``description``,
   ``hidden_predicates``, ...), is replaced.
 
-Unknown bases and cyclic ``extends`` chains raise ``ValueError``.  The engines
-of a custom YAML file (``yaml_path``) can extend the built-in ones too: a file
-with ``my_neurostore: {extends: neurostore, mni_template: {source: nilearn}}``
-defines the engine ``my_neurostore`` and nothing else.
+Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
 
 The ``neurostore`` engine
 -------------------------

@@ -105,25 +105,3 @@ def test_builtin_engines():
     with pytest.raises(ValueError, match="abstract"):
         get_engine_config("coordinate_meta_analysis")
 
-
-def test_a_custom_file_extends_the_builtin_engines(tmp_path):
-    path = _write(
-        tmp_path,
-        """
-        engines:
-          mine:
-            extends: neurostore
-            description: mine
-            mni_template: {source: nilearn}
-          neurosynth:
-            description: overridden
-        """,
-    )
-    cfg = get_engine_config("mine", path)
-    assert cfg["mni_template"] == {"source": "nilearn"}
-    assert cfg["python_init"].endswith("neurostore.init")
-    assert "study_with_peaks" in cfg["datalog_init"]
-    assert list_engine_names(path) == ["mine", "neurosynth"]
-    assert get_engine_config("neurosynth", path)["description"] == "overridden"
-    with pytest.raises(ValueError, match="Unknown engine"):
-        get_engine_config("neurostore", path)

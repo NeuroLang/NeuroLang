@@ -370,17 +370,6 @@ engines:
           - label
           - region
 
-  # Where the MNI image defining the voxel grid comes from is set with
-  # ``mni_template`` (default: the ICBM 2009 T1 downloaded by nilearn).
-  # To avoid the download, an engine can use the one bundled with nilearn
-  # (``resolution: 1`` is the grid of the default) or a TemplateFlow file:
-  #
-  #   my_neurostore:
-  #     extends: neurostore
-  #     mni_template: {source: nilearn, resolution: 1}
-  #     # mni_template: {source: templateflow, template: MNI152NLin2009cAsym,
-  #     #                suffix: mask, desc: brain, resolution: 1}
-  #
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:
