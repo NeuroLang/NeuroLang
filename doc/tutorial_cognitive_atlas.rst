@@ -137,6 +137,39 @@ to three words of the abstracts, so multi-word concepts such as *working
 memory* or *spatial working memory* are terms; the ``neurosynth`` vocabulary
 has its own multi-word terms.
 
+Linking a definition to the studies with SPECTER2
+-------------------------------------------------
+
+A term does not need to be mentioned: the ontology defines the concept it
+names with a text, and SPECTER2 (see :ref:`tutorial-text-embeddings`) measures
+how close the title and abstract of every study are to that text.  With the
+term as the first argument of every rule, the definition of ``'working
+memory'`` is the query of ``query_similarity``, and the 5% of the studies
+closest to it are the studies of the term, whose uniformity map is computed
+as in :ref:`tutorial-neurosynth-tests`::
+
+    definition(t, d) :- cogat_term(c, t) & skos:definition(c, d)
+    similarity(t, s, v) :- study(s) & definition(t, d) & (v == query_similarity(d, s))
+    cutoff(t, percentile(v, 95)) :- similarity(t, s, v)
+    similar(t, s) :- similarity(t, s, v) & cutoff(t, c) & (v >= c)
+
+``examples/plot_cognitive_atlas_uniformity.py`` (in the example gallery)
+computes the map for ``'working memory'`` in the ``neurostore`` engine and
+compares it with the map of the studies that mention the term.  In the
+2026-10 release the mean similarity of the 36,883 studies with an abstract is
+0.66 (standard deviation 0.11); 1,845 studies are in the top 5%, 496 of them
+among the 2,031 that mention *working memory*, the others being about its
+neighbours, for instance cognitive control and goal maintenance.  Both
+uniformity maps show the fronto-parietal regions and the medial frontal
+cortex; their voxels in the cortex correlate at 0.95 (the top 5%
+of their voxels overlap with a Dice coefficient of 0.84), and the largest
+ratios are 8.2 for the studies close to the definition and 9.4 for those
+that mention the term.
+
+The abstracts are embedded once (about 70 minutes on 32 CPU cores for the
+36,884 studies, minutes on a GPU), then cached; see
+:ref:`tutorial-text-embeddings` to compute them ahead of time.
+
 Using the ontology without an engine
 ------------------------------------
 

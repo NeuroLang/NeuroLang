@@ -393,7 +393,8 @@ def get_engine_config(
     """
     Return the YAML configuration dict for a single engine.
 
-    Inherited (``extends``) configuration is already merged in.
+    Inherited (``extends``) configuration is already merged in; the
+    engines of a custom file can extend the built-in ones.
 
     Parameters
     ----------
@@ -414,7 +415,19 @@ def get_engine_config(
         raise ValueError(
             f"Engine {name!r} is abstract and can only be extended"
         )
-    return resolve_engine_config(engines, name)
+    if yaml_path is None:
+        return resolve_engine_config(engines, name)
+    if name not in engines:
+        raise ValueError(
+            f"Unknown engine: {name!r}. "
+            f"Available engines: {', '.join(engines)}"
+        )
+    # A custom file can extend the built-in engines.
+    return resolve_engine_config({**_builtin_engines(), **engines}, name)
+
+
+def _builtin_engines() -> Dict[str, Dict[str, Any]]:
+    return _load_yaml_config().get("engines", {})
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:

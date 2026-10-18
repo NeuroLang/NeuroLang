@@ -298,7 +298,10 @@ and the engine's own entries override all of them.  Merging works per key:
 - every other value, lists included (``python_init``, ``description``,
   ``hidden_predicates``, ...), is replaced.
 
-Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+Unknown bases and cyclic ``extends`` chains raise ``ValueError``.  The engines
+of a custom YAML file (``yaml_path``) can extend the built-in ones too: a file
+with ``my_neurostore: {extends: neurostore, mni_template: {source: nilearn}}``
+defines the engine ``my_neurostore`` and nothing else.
 
 The ``neurostore`` engine
 -------------------------

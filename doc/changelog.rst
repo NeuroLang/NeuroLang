@@ -37,7 +37,10 @@ Unreleased
   concepts, tasks and contrasts, joined with the studies through
   ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
   :doc:`tutorial_cognitive_atlas`.  The TF-IDF of ``neurostore`` covers
-  sequences of up to three words.
+  sequences of up to three words.  The gallery example
+  ``plot_cognitive_atlas_uniformity.py`` links the Cognitive Atlas definition
+  of a term to the studies with SPECTER2 and computes its uniformity map.
+  The engines of a custom YAML file can extend the built-in ones.
 * Documentation: the REPL example of the Neurosynth tests
   (:ref:`tutorial-neurosynth-tests`) gives the term in the query,
   ``ratios("vision", i, j, k, ...)``, rather than in a
