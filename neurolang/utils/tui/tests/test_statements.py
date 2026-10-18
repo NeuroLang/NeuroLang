@@ -23,6 +23,8 @@ from neurolang.utils.tui.statements import (  # noqa: E402
     ("obtain every P.", True, True),
     ("obtain every P", True, False),
     ("", True, True),
+    ("ans(x) :-  % the head", False, False),
+    ("ans(x) :- P(x)  % all of P", False, True),
 ])
 def test_is_complete(text, squall, complete):
     assert is_complete(text, squall) is complete
@@ -80,3 +82,28 @@ def test_split_at_commands_keeps_programs_whole():
         "ans(x) :-\n  c(x)",
     ]
     assert split_at_commands("ans(x) :- P(x)") == ["ans(x) :- P(x)"]
+
+
+def test_split_statements_skips_comment_lines():
+    """A ``%`` comment line between statements is no statement; within a
+    statement of several lines, it stays in it, for the parser."""
+    lines = [
+        "% the rules\n", "a(x) :- P(x)\n", "  % the head\n", ".head 5\n",
+        "ans(x) :-\n", "% inside\n", "  a(x)\n",
+    ]
+    assert list(split_statements(lines, lambda: False)) == [
+        "a(x) :- P(x)", ".head 5", "ans(x) :-\n% inside\n  a(x)",
+    ]
+
+
+def test_split_at_commands_drops_comment_only_programs():
+    from neurolang.utils.tui.statements import split_at_commands
+
+    text = (
+        "% the rules\na(x) :- b(x)\n% sort\n.sort x\n% page\n.head 5\n"
+        "ans(x) :- a(x)\n% view\n.view"
+    )
+    assert split_at_commands(text) == [
+        "% the rules\na(x) :- b(x)\n% sort", ".sort x", ".head 5",
+        "ans(x) :- a(x)\n% view", ".view",
+    ]

@@ -40,7 +40,12 @@ from .provenance import column_sorts
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope, record_squall_rules
 from .submission import Submission, submission_outline
-from .statements import is_complete, split_at_commands, split_statements
+from .statements import (
+    is_comment,
+    is_complete,
+    split_at_commands,
+    split_statements,
+)
 from .transcript import Transcript, is_transcript_command
 
 
@@ -490,7 +495,7 @@ class InteractiveTuiApp:
         of several lines is one submission, as when typed.
         """
         text = line.strip()
-        if not text:
+        if not text or is_comment(text):
             return
         parts = split_at_commands(text)
         if len(parts) > 1:
