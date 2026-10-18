@@ -420,10 +420,16 @@ def vocabulary_engine():
             "datalog_init"
         ].splitlines()
         if re.match(
-            r"(term_in_study|activated|p_[a-z_]+|"
-            r"lift|relative_risk|uniformity|ratios)\(", line
+            r"(term_in_study|activated|p_[a-z_]+|study_similarity|"
+            r"cutoff_similarity|similar_study|"
+            r"lift|relative_risk|uniformity|ratios)(_llm)?\(", line
         )
     ]
+
+    def query_similarity(query: str, study: int) -> float:
+        return {10: 0.9, 11: 0.5}[study]
+
+    nl.add_symbol(query_similarity, name="query_similarity")
     nl.execute_datalog_program(
         _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
     )

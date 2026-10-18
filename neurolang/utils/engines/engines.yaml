@@ -38,6 +38,16 @@ engines:
       relative_risk(t, i, j, k, r) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
       uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
       ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+      study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
+      cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
+      similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
+      p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)
+      p_a_given_similar(q, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
+      p_any_voxel_given_similar(q, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
+      lift_llm(q, i, j, k, l) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & (l == pat / pa)
+      relative_risk_llm(q, i, j, k, r) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
+      uniformity_llm(q, i, j, k, u) :- p_a_given_similar(q, i, j, k, pat) & p_any_voxel_given_similar(q, pbar) & (u == pat / pbar)
+      ratios_llm(q, i, j, k, lift, relative_risk, uniformity) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & p_any_voxel_given_similar(q, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
       cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
       cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
@@ -123,6 +133,14 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      query:
+        columns: [query]
+        type: str
+        description: "a free-text query"
+      similarity:
+        columns: [similarity]
+        type: float
+        description: "a cosine similarity between SPECTER2 embeddings"
       lift:
         columns: [lift]
         type: float
@@ -287,6 +305,52 @@ engines:
         probability: true
         arguments:
           - voxel
+      study_similarity:
+        description: >-
+          Cosine similarity of the title and abstract of a study to a
+          free-text query, with SPECTER2 (the studies with a text); the first
+          query embeds the abstracts, which takes a while and needs
+          ``pip install "neurolang[embeddings]"``
+        arguments:
+          - query
+          - study
+          - similarity
+      similar_study:
+        description: >-
+          The 5% of the studies closest to a free-text query by
+          study_similarity
+        arguments:
+          - query
+          - study
+      lift_llm:
+        description: "lift of a free-text query: the studies of similar_study are the studies of the term"
+        arguments:
+          - query
+          - voxel
+          - lift
+      relative_risk_llm:
+        description: "relative_risk of a free-text query (see lift_llm)"
+        arguments:
+          - query
+          - voxel
+          - relative_risk
+      uniformity_llm:
+        description: >-
+          uniformity of a free-text query: the uniformity ratio of the 5% of
+          the studies closest to the text with SPECTER2, as for the studies
+          of a term
+        arguments:
+          - query
+          - voxel
+          - uniformity
+      ratios_llm:
+        description: "The lift, relative risk and uniformity ratio of a free-text query"
+        arguments:
+          - query
+          - voxel
+          - lift
+          - relative_risk
+          - uniformity
       cogat_subclass_of:
         description: >-
           Cognitive Atlas classes below others, at any depth (concepts,
@@ -334,6 +398,7 @@ engines:
         - "ans(s) :- mentions(s, 'pain')"
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
         - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
+        - "ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)"
         - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
         - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:

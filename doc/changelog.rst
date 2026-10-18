@@ -36,6 +36,10 @@ Unreleased
   uniformity tests, as predicates: ``uniformity('working memory', i, j, k, u)``,
   ``lift``, ``relative_risk`` and ``ratios`` (over the whole brain, with a new
   ``selected_voxel`` choice); see :ref:`tutorial-neurosynth-tests`.
+  With SPECTER2, ``uniformity_llm('a description', i, j, k, u)``, ``lift_llm``,
+  ``relative_risk_llm`` and ``ratios_llm`` do the same for a free text: the
+  studies of the term are the 5% closest to it (``study_similarity``,
+  ``similar_study``).
 * ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
   (``ontologies``, now loaded before ``datalog_init``) for open-world queries
   over its concepts, tasks and contrasts, joined with the studies through

@@ -306,6 +306,8 @@ each study.
 
 Like ``neurosynth``, it defines the ``lift``, ``relative_risk``,
 ``uniformity`` and ``ratios`` of a term (:doc:`tutorial_neurosynth_tests`).
+With SPECTER2 over its abstracts it also defines them for a free text,
+``uniformity_llm('a description', i, j, k, u)`` and the like.
 
 Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
 abstracts; precompute the embeddings with ``python -m
