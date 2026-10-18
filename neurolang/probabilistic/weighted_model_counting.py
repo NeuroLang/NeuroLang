@@ -8,7 +8,6 @@ from typing import AbstractSet
 
 import numpy as np
 import pandas as pd
-from pysdd import sdd
 
 from ..datalog.expression_processing import (
     extract_logic_predicates,
@@ -57,6 +56,22 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .query_resolution import lift_solve_marg_query as _solve_marg_query
+
+try:
+    from pysdd import sdd
+except ImportError:  # pysdd has no WebAssembly build, e.g. for Pyodide
+
+    class _MissingPysdd:
+        """Stand for pysdd, to tell what is missing when it is used."""
+
+        def __getattr__(self, name):
+            raise ImportError(
+                "Weighted model counting needs pysdd, which is not "
+                "installed: install it with `pip install pysdd`. Queries "
+                "that lifted inference solves do not need it."
+            )
+
+    sdd = _MissingPysdd()
 
 LOG = logging.getLogger(__name__)
 

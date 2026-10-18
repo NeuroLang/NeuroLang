@@ -32,6 +32,14 @@ jobs:
       - name: Build HTML documentation
         run: make -C doc html SPHINXOPTS="--keep-going"
 
+      # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheel and
+      # the data of the neurosynth engine from beside its page. If this step
+      # fails, the documentation is still deployed, with the REPL's page
+      # telling that it could not start.
+      - name: Build the in-browser REPL's bundle
+        continue-on-error: true
+        run: python doc/make_repl_bundle.py doc/_build/html/_static/repl
+
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
         with:
