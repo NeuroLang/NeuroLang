@@ -66,6 +66,33 @@ of the term,
        \frac{\bar p}{1 - \bar p}.
 
 
+Predefined in the engines
+-------------------------
+
+The ``neurosynth`` and ``neurostore`` engines define these ratios for any
+term, so that a query is one line, with the term as a constant (the engine then
+computes the rules for it only)::
+
+    ans(i, j, k, uniformity) :- uniformity('working memory', i, j, k, uniformity)
+    ans(i, j, k, lift) :- lift('vision', i, j, k, lift)
+    ans(i, j, k, lift, relative_risk, uniformity) :-
+        ratios('pain', i, j, k, lift, relative_risk, uniformity)
+
+``lift``, ``relative_risk``, ``uniformity`` and ``ratios`` are the quantities
+of the previous section, as predicates ``(term, voxel, ratio…)``, and they are
+listed by ``--list-predicates``.  Their definitions are the rules of the
+next section, with three differences: a term is in a study when its TF-IDF is
+above 0.001 (``term_in_study``), a study activates the voxels of the whole
+brain within 6 mm of its peaks (``activated``; ``brain_mask``), and the
+average of the uniformity test is over the brain rather than over
+``cortical_mask``, so that the subcortical structures, the cerebellum and
+the hippocampus are in the map; ``selected_voxel`` is the uniform choice over
+the voxels of the brain.  The maps of *working memory* take about ten seconds
+for the uniformity ratio and half a minute for the three ratios on the 2 mm
+grid.  In the ``neurostore`` engine the terms are those of
+:ref:`its TF-IDF <tutorial-cognitive-atlas>`.  A probabilistic query needs
+the term as a constant: without one the rules cannot be rewritten for it.
+
 In the REPL
 -----------
 

@@ -530,12 +530,13 @@ class TestNeurosynthDeclarations:
         assert hidden <= set(engine_registry.get_predicates("neurosynth"))
 
     def test_probability_declared_for_the_choice(self):
-        """Check ``selected_study`` is the probabilistic predicate."""
+        """Check the choices over the studies and the voxels are the
+        probabilistic predicates."""
         from neurolang.utils import engine_registry
 
         assert engine_registry.get_probabilistic_predicates(
             "neurosynth"
-        ) == {"selected_study"}
+        ) == {"selected_study", "selected_voxel"}
 
 
 class TestPredicateArguments:

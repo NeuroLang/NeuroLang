@@ -28,6 +28,16 @@ engines:
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+      term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
+      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+      p_a(i, j, k, PROB) :- activated(i, j, k, s) & selected_study(s)
+      p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
+      p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_any_voxel_given_t(t, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      lift(t, i, j, k, l) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & (l == pat / pa)
+      relative_risk(t, i, j, k, r) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
+      uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
+      ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
       cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
       cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
@@ -113,6 +123,18 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      lift:
+        columns: [lift]
+        type: float
+        description: "a lift P(A_v | T) / P(A_v), 1 under independence"
+      relative_risk:
+        columns: [relative_risk]
+        type: float
+        description: "a relative risk P(A_v | T) / P(A_v | not T), 1 under independence"
+      uniformity:
+        columns: [uniformity]
+        type: float
+        description: "a uniformity ratio P(A_v | T) / P(A_V | T), 1 under uniformity"
       cogat_term:
         columns: [term]
         type: str
@@ -215,6 +237,56 @@ engines:
           - study
           - term
           - tfidf
+      term_in_study:
+        description: "Studies with a term, its TF-IDF being above 0.001"
+        arguments:
+          - study
+          - term
+      activated:
+        description: >-
+          Studies activating a voxel of the brain mask: one of their peaks is
+          within 3 voxels (6 mm)
+        arguments:
+          - voxel
+          - study
+      lift:
+        description: >-
+          Lift P(A_v | T) / P(A_v) of the activation of a voxel by the studies
+          of a term: 1 under independence (association test)
+        arguments:
+          - term
+          - voxel
+          - lift
+      relative_risk:
+        description: >-
+          Relative risk P(A_v | T) / P(A_v | not T) of the activation of a
+          voxel by the studies of a term: 1 under independence
+        arguments:
+          - term
+          - voxel
+          - relative_risk
+      uniformity:
+        description: >-
+          Uniformity ratio P(A_v | T) / P(A_V | T): the proportion of the
+          studies of a term activating a voxel, over its average across the
+          brain; 1 under uniformity (uniformity test)
+        arguments:
+          - term
+          - voxel
+          - uniformity
+      ratios:
+        description: "The lift, relative risk and uniformity ratio of a term at a voxel"
+        arguments:
+          - term
+          - voxel
+          - lift
+          - relative_risk
+          - uniformity
+      selected_voxel:
+        description: "Uniform probabilistic choice over the voxels of the brain mask"
+        probability: true
+        arguments:
+          - voxel
       cogat_subclass_of:
         description: >-
           Cognitive Atlas classes below others, at any depth (concepts,
@@ -261,6 +333,7 @@ engines:
       datalog:
         - "ans(s) :- mentions(s, 'pain')"
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+        - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
         - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
         - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:

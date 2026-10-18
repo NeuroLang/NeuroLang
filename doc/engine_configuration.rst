@@ -304,6 +304,9 @@ dropped.  It adds ``study_title(study_id, title)``,
 the cognitive concepts and domains that an LLM extracted from the tasks of
 each study.
 
+Like ``neurosynth``, it defines the ``lift``, ``relative_risk``,
+``uniformity`` and ``ratios`` of a term (:doc:`tutorial_neurosynth_tests`).
+
 Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
 abstracts; precompute the embeddings with ``python -m
 neurolang.utils.text_embeddings --engine neurostore --data-dir

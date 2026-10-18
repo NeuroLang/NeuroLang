@@ -1,6 +1,9 @@
 """Tests for the core of the interactive REPL."""
 
+import re
+
 import pandas as pd
+
 import pytest
 
 pytest.importorskip("prompt_toolkit")
@@ -403,8 +406,26 @@ def vocabulary_engine():
         ].splitlines()
         if line.startswith("cogat_")
     ]
+    # The predefined analyses (lift, uniformity) over the two voxels.
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="brain_mask")
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame({"study_id": [10, 11]}), name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame([(1, 2, 3), (4, 5, 6)], columns=["i", "j", "k"]),
+        name="selected_voxel",
+    )
+    analysis_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if re.match(
+            r"(term_in_study|activated|p_[a-z_]+|"
+            r"lift|relative_risk|uniformity|ratios)\(", line
+        )
+    ]
     nl.execute_datalog_program(
-        _vocabulary_rules() + "\n" + "\n".join(cogat_rules)
+        _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
     )
     return nl
 

@@ -14,6 +14,8 @@ Registers the following predicates:
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
 * ``brain_mask(i, j, k)`` — the voxels of the MNI template grid inside the
   MNI152 brain mask (whole brain, subcortical structures included).
+* ``selected_voxel(i, j, k)`` — uniform probabilistic choice over the voxels
+  of the brain mask.
 * ``cortical_mask(i, j, k)`` — the voxels of the MNI template grid in the
   cortex, labelled by the Harvard–Oxford cortical atlas (maximum
   probability, 25% threshold, 2 mm).
@@ -131,8 +133,14 @@ def register_tables(
         name="cortical_mask",
     )
     nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
-    nl.add_tuple_set(_brain_voxels(mask), name="brain_mask")
+    brain = _brain_voxels(mask)
+    nl.add_tuple_set(brain, name="brain_mask")
     nl.symbol_table["brain_mask"].value.might_have_duplicates = False
+    # A uniform choice over the voxels of the brain, as selected_study is over
+    # the studies: the average over the brain of the uniformity test.
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame(brain, columns=["i", "j", "k"]), name="selected_voxel"
+    )
     nl.add_tuple_set(
         fetch_cognitive_atlas_tasks(data_dir), name="cognitive_task"
     )

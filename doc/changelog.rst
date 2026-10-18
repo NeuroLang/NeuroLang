@@ -31,6 +31,11 @@ Unreleased
   (a ``text_embeddings`` source can now be engine predicates,
   ``source: {predicate: ...}``).  A ``brain_mask(i, j, k)`` predicate gives
   the whole brain (MNI152 brain mask) next to ``cortical_mask``.
+* The ``neurosynth`` and ``neurostore`` engines define the lift, relative
+  risk and uniformity ratio of a term, Neurosynth's association and
+  uniformity tests, as predicates: ``uniformity('working memory', i, j, k, u)``,
+  ``lift``, ``relative_risk`` and ``ratios`` (over the whole brain, with a new
+  ``selected_voxel`` choice); see :ref:`tutorial-neurosynth-tests`.
 * ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
   (``ontologies``, now loaded before ``datalog_init``) for open-world queries
   over its concepts, tasks and contrasts, joined with the studies through
