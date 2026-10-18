@@ -475,7 +475,9 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         metavar="MM",
-        help="Isotropic MNI resolution in mm (default: native).",
+        help="Isotropic MNI resolution in mm (default: native). The MNI "
+        "template is fetched at that resolution when its source allows, "
+        "else resampled; engine YAML reads it as ${resolution}.",
     )
     parser.add_argument(
         "--format",

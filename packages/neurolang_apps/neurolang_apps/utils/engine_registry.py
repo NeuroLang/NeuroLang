@@ -42,6 +42,12 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``mni_template`` — where the MNI image defining the voxel grid of an
+  engine with ``requires_mni_mask`` comes from: ``source`` is
+  ``icbm152_2009`` (default), ``nilearn`` (bundled, no download) or
+  ``templateflow``; see :func:`_get_mni_mask`;
+* ``resolution`` — default isotropic resolution (mm) of the MNI image,
+  used when none is requested on the command line;
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
   ``abstract: true`` only serve as bases and cannot be built or listed;
@@ -417,7 +423,8 @@ def get_engine_config(
     """
     Return the YAML configuration dict for a single engine.
 
-    Inherited (``extends``) configuration is already merged in.
+    Inherited (``extends``) configuration is already merged in; the
+    engines of a custom file can extend the built-in ones.
 
     Parameters
     ----------
@@ -438,7 +445,19 @@ def get_engine_config(
         raise ValueError(
             f"Engine {name!r} is abstract and can only be extended"
         )
-    return resolve_engine_config(engines, name)
+    if yaml_path is None:
+        return resolve_engine_config(engines, name)
+    if name not in engines:
+        raise ValueError(
+            f"Unknown engine: {name!r}. "
+            f"Available engines: {', '.join(engines)}"
+        )
+    # A custom file can extend the built-in engines.
+    return resolve_engine_config({**_builtin_engines(), **engines}, name)
+
+
+def _builtin_engines() -> Dict[str, Dict[str, Any]]:
+    return _load_yaml_config().get("engines", {})
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
@@ -873,6 +892,14 @@ def _fetch_nilearn_template(
         functions use their own global cache (``~/nilearn_data``) rather
         than this path.
     """
+    img = _nilearn_template_image(params)
+    pred_name = params.get("predicate")
+    if pred_name:
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _nilearn_template_image(params: dict) -> nib.Nifti1Image:
+    """Return the nilearn MNI152 template (or mask) named by *params*."""
     variant = params.get("variant", "brain_mask")
     info = _NILEARN_TEMPLATES.get(variant)
     if info is None:
@@ -887,11 +914,7 @@ def _fetch_nilearn_template(
     elif variant in ("brain_mask", "gm_mask", "wm_mask"):
         kwargs["resolution"] = params.get("resolution")
 
-    img = getattr(_nilearn_datasets(), info["func"])(**kwargs)
-
-    pred_name = params.get("predicate")
-    if pred_name:
-        _register_template_predicate(nl, img, pred_name)
+    return getattr(_nilearn_datasets(), info["func"])(**kwargs)
 
 
 def _fetch_templateflow_template(
@@ -903,6 +926,22 @@ def _fetch_templateflow_template(
     Optionally registers a voxel predicate.
     Requires the ``templateflow`` Python package.
 
+    """
+    img = _templateflow_template_image(tpl_name, params)
+    pred_name = params.get("predicate")
+    if pred_name:
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _templateflow_template_image(
+    tpl_name: str, params: dict
+) -> nib.Nifti1Image:
+    """
+    Return the TemplateFlow image named by *params*.
+
+    ``template`` is required; ``resolution``, ``suffix`` (default
+    ``T1w``) and ``desc`` (e.g. ``brain`` with ``suffix: mask``) select
+    the file.
     """
     try:
         from templateflow import api as tflow
@@ -922,22 +961,22 @@ def _fetch_templateflow_template(
     resolution = params.get("resolution")
     suffix = params.get("suffix", "T1w")
 
-    kwargs: Dict[str, Any] = dict(suffix=suffix)
+    kwargs: Dict[str, Any] = dict(suffix=suffix, extension=".nii.gz")
     if resolution is not None:
         kwargs["resolution"] = resolution
+    if params.get("desc") is not None:
+        kwargs["desc"] = params["desc"]
 
-    # templateflow.api.get() returns a Path to the downloaded file
+    # templateflow.api.get() returns a Path (or a list of them)
     tpl_path = tflow.get(tpl_id, **kwargs)
-    if tpl_path is None:
+    if isinstance(tpl_path, (list, tuple)):
+        tpl_path = tpl_path[0] if tpl_path else None
+    if not tpl_path:
         raise FileNotFoundError(
-            f"TemplateFlow template {tpl_id!r} (suffix={suffix}, "
-            f"resolution={resolution}) could not be resolved."
+            f"TemplateFlow template {tpl_id!r} ({kwargs}) "
+            "could not be resolved."
         )
-
-    pred_name = params.get("predicate")
-    if pred_name:
-        img = nib.load(str(tpl_path))
-        _register_template_predicate(nl, img, pred_name)
+    return nib.load(str(tpl_path))
 
 
 def _load_template(
@@ -1296,22 +1335,94 @@ def _load_atlas(
         _load_deterministic_atlas(nl, atlas_name, params, data_dir)
 
 
-def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
-    return nib.load(
-        _nilearn_datasets().fetch_icbm152_2009(
-            data_dir=str(data_dir / "icbm")
-        )["t1"]
+_PLACEHOLDER = re.compile(r"^\$\{(\w+)(?::([^}]*))?\}$")
+
+
+def _plain_number(value: Optional[float]) -> Optional[float]:
+    """``2.0`` as the integer 2, which TemplateFlow and nilearn expect."""
+    if value is not None and float(value).is_integer():
+        return int(value)
+    return value
+
+
+def _expand_placeholders(value: Any, variables: Dict[str, Any]) -> Any:
+    """
+    Substitute ``${name}`` / ``${name:default}`` in an engine config.
+
+    Only a string that is wholly a placeholder is replaced, by the value
+    of the variable (keeping its type) or else by the default, read as
+    YAML (``${resolution:2}`` is the integer 2).  Without a value or a
+    default the entry is dropped from its mapping or list.
+    """
+    if isinstance(value, dict):
+        expanded = {k: _expand_placeholders(v, variables) for k, v in value.items()}
+        return {k: v for k, v in expanded.items() if v is not _UNSET}
+    if isinstance(value, list):
+        expanded = [_expand_placeholders(v, variables) for v in value]
+        return [v for v in expanded if v is not _UNSET]
+    match = _PLACEHOLDER.match(value) if isinstance(value, str) else None
+    if match is None:
+        return value
+    name, default = match.groups()
+    if variables.get(name) is not None:
+        return variables[name]
+    if default is not None:
+        return yaml.safe_load(default)
+    return _UNSET
+
+
+_UNSET = object()
+
+
+def _get_mni_mask(
+    data_dir: Path,
+    template: Optional[Dict[str, Any]] = None,
+    resolution: Optional[float] = None,
+) -> nib.Nifti1Image:
+    """
+    Return the MNI image defining the voxel grid of an engine.
+
+    *template* is the engine's ``mni_template`` entry; its ``source`` is
+
+    * ``icbm152_2009`` (default): the ICBM 2009 T1 downloaded by nilearn
+      (from OSF) at 1 mm;
+    * ``nilearn``: one of nilearn's MNI152 templates or masks, bundled
+      with nilearn, so nothing is downloaded (``variant``, default
+      ``brain_mask``, and ``resolution`` in mm, 1 or 2: by default the
+      requested *resolution* if it is one of them, else 2);
+    * ``templateflow``: a TemplateFlow file (``template``, ``suffix``,
+      ``desc``, ``resolution``).
+    """
+    template = template or {}
+    source = template.get("source", "icbm152_2009")
+    if source == "icbm152_2009":
+        return nib.load(
+            _nilearn_datasets().fetch_icbm152_2009(
+                data_dir=str(data_dir / "icbm")
+            )["t1"]
+        )
+    if source == "nilearn":
+        native = resolution if resolution in (1, 2) else 2
+        return _nilearn_template_image({"resolution": native, **template})
+    if source == "templateflow":
+        return _templateflow_template_image("mni_template", template)
+    raise ValueError(
+        f"Unknown mni_template source {source!r}. "
+        "Supported: 'icbm152_2009', 'nilearn', 'templateflow'."
     )
 
 
 def _resolve_mask(
     cfg: dict, data_dir: Path, resolution: Optional[float] = None
 ) -> Optional[nib.Nifti1Image]:
-    """Download the MNI mask if required by the engine config."""
+    """Fetch the MNI mask if required by the engine config."""
     if not cfg.get("requires_mni_mask", False):
         return None
-    mask = _get_mni_mask(data_dir)
-    if resolution is not None:
+    resolution = _plain_number(resolution)
+    mask = _get_mni_mask(data_dir, cfg.get("mni_template"), resolution)
+    if resolution is not None and not np.allclose(
+        nib.affines.voxel_sizes(mask.affine), resolution
+    ):
         # A 3x3 target affine keeps the original origin; scaling a 4x4
         # identity would also scale its homogeneous coordinate.
         mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
@@ -1595,7 +1706,11 @@ def build_engine(
     data_dir :
         Directory under which downloaded data is cached.
     resolution :
-        If set, resample the MNI mask to the given isotropic resolution (mm).
+        Isotropic resolution (mm) of the MNI mask: the template is fetched
+        at that resolution when its source allows it, else resampled.
+        Engine configs can read it as ``${resolution}`` or
+        ``${resolution:default}``; without it, the engine's ``resolution``
+        entry is the default.
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
@@ -1623,6 +1738,12 @@ def build_engine(
     from neurolang.frontend import NeurolangPDL
 
     cfg = get_engine_config(name, yaml_path)
+    if resolution is None:
+        # The engine's own default, itself possibly a placeholder.
+        resolution = _expand_placeholders(
+            {"r": cfg.get("resolution")}, {}
+        ).get("r")
+    cfg = _expand_placeholders(cfg, {"resolution": _plain_number(resolution)})
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     mask = _resolve_mask(cfg, data_dir, resolution)
