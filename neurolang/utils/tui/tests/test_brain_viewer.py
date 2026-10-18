@@ -230,13 +230,16 @@ class TestPage:
         assert html.count("</script>") == 3
 
     def test_no_external_urls(self, html):
-        """No URL outside the NiiVue bundle, whose comments have some."""
+        """No URL outside the NiiVue bundle, whose comments have some,
+        but the favicon's data URI."""
         bundle = (
             Path(brain_viewer.__file__).parent / "static" / "niivue"
             / "niivue.umd.js"
         ).read_text(encoding="utf-8")
         page = html.replace(bundle, "")
-        assert not re.search(r"https?://|//cdn|\bsrc=|\bhref=", page)
+        assert not re.search(
+            r'https?://|//cdn|\bsrc=|\bhref=(?!"data:)', page
+        )
 
     def test_cursor_on_the_peak(self):
         data = np.zeros((5, 5, 5), dtype=np.float32)

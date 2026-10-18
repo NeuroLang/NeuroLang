@@ -23,7 +23,8 @@ cursor, the value of each overlay there, and a colour bar per overlay.
 
 The page needs no network: NiiVue (``static/niivue/niivue.umd.js``, a
 copy of its release :data:`NIIVUE_VERSION`), the script of the page
-(``static/brain_viewer.js``) and its data are inlined. The data is a JSON
+(``static/brain_viewer.js``), its data and NeuroLang's favicon
+(``static/favicon.svg``) are inlined. The data is a JSON
 document holding the overlays and the background as gzipped NIfTI
 images, base64-encoded, and the colormaps as 256 RGB colours, deflated
 with zlib then base64-encoded, which the page inflates with the browser's
@@ -331,8 +332,12 @@ def viewer_html(
             encoding="utf-8"
         ),
         "SCRIPT": (_STATIC / "brain_viewer.js").read_text(encoding="utf-8"),
+        "FAVICON": base64.b64encode(
+            (_STATIC / "favicon.svg").read_bytes()
+        ).decode("ascii"),
     }
     page = (_STATIC / "brain_viewer.html").read_text(encoding="utf-8")
     return re.sub(
-        r"__(TITLE|DATA|NIIVUE|SCRIPT)__", lambda m: parts[m.group(1)], page
+        r"__(TITLE|DATA|NIIVUE|SCRIPT|FAVICON)__",
+        lambda m: parts[m.group(1)], page,
     )

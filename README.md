@@ -1,4 +1,9 @@
-# NeuroLang
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NeuroLang/NeuroLang/master/doc/_static/logo/svg/neurolang-lockup-dark.svg">
+    <img alt="NeuroLang" src="https://raw.githubusercontent.com/NeuroLang/NeuroLang/master/doc/_static/logo/svg/neurolang-lockup.svg" width="420">
+  </picture>
+</h1>
 
 [![Tests](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml/badge.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
 [![Coverage](https://raw.githubusercontent.com/NeuroLang/NeuroLang/gh-pages/coverage.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
