@@ -77,30 +77,42 @@ grid::
     python -m neurolang.utils.cli -e neurosynth -d neurolang_data -r 2 -i
 
 and paste this block at the prompt.  It computes the lift and the
-uniformity ratio of the term ``pain`` over the voxels of
+uniformity ratio of the term ``vision`` over the voxels of
 ``cortical_mask``, shows the five voxels of the largest uniformity
-ratios, and opens both maps in the viewer::
+ratios, and opens both maps in the viewer.  Each line is preceded by a
+``%`` comment saying what it computes, which the REPL skips::
 
-    term_of_interest('pain')
+    % T: the selected study has the term t, its TF-IDF being above 0.001
     term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
+    % A_v: the study s activates the voxel (i, j, k) of the cortex, within 3 voxels (6 mm) of one of its peaks
     activation(i, j, k, s) :- cortical_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+    % M: the number of voxels of the cortex
     n_voxels(count(i, j, k)) :- cortical_mask(i, j, k)
+    % V: a uniform choice over the voxels of the cortex, each of probability 1 / M
     selected_voxel(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m)
+    % P(A_v): the probability that the selected study activates the voxel
     p_a(i, j, k, PROB) :- activation(i, j, k, s) & selected_study(s)
-    p_term(t, PROB) :- term_of_interest(t) & term_in_study(s, t) & selected_study(s)
-    p_a_given_t(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
-    p_any_voxel_given_t(t, PROB) :- (activation(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_of_interest(t) & term_in_study(s, t) & selected_study(s))
+    % P(T): the probability that the selected study has the term, the proportion of the studies with it
+    p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
+    % P(A_v | T): the probability that a study with the term activates the voxel
+    p_a_given_t(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+    % P(A_V | T): the same for the selected voxel, the average of P(A_v | T) over the cortex
+    p_any_voxel_given_t(t, PROB) :- (activation(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+    % the lift P(A_v | T) / P(A_v), the relative risk P(A_v | T) / P(A_v | not T) and the uniformity ratio P(A_v | T) / P(A_V | T)
     ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+    % sort the results by decreasing uniformity ratio
     .sort uniformity:desc
+    % show the first 5 rows
     .head 5
-    ans(i, j, k, lift, uniformity) :- ratios(t, i, j, k, lift, relative_risk, uniformity)
+    % the ratios of the term vision: magic sets compute the rules above for it only
+    ans(i, j, k, lift, uniformity) :- ratios("vision", i, j, k, lift, relative_risk, uniformity)
+    % open the lift and uniformity maps in the viewer
     .view
 
 The REPL runs the rules as one submission, then each dot-command and the
 query in turn, and prints the following; on a terminal, it opens the
 viewer in the browser rather than telling to::
 
-    defined term_of_interest/1
     defined term_in_study/2
     defined activation/4
     defined n_voxels/1
@@ -111,54 +123,57 @@ viewer in the browser rather than telling to::
     defined p_any_voxel_given_t/2
     defined ratios/7
     Running query...
-    ╭────┬────┬────┬────────────────────┬───────────────────╮
-    │ i  │ j  │ k  │ lift               │ uniformity        │
-    ├────┼────┼────┼────────────────────┼───────────────────┤
-    │ 32 │ 76 │ 38 │ 2.226988767904886  │ 8.429294107164303 │
-    │ 68 │ 77 │ 36 │ 1.8881881487320984 │ 8.124620826182461 │
-    │ 68 │ 78 │ 35 │ 1.6834056926626453 │ 8.02306306585518  │
-    │ 68 │ 78 │ 36 │ 1.7016328231323106 │ 8.02306306585518  │
-    │ 32 │ 78 │ 36 │ 1.5440078879368966 │ 8.02306306585518  │
-    ╰────┴────┴────┴────────────────────┴───────────────────╯
-    128248 rows · showing 1–5 · .more for next
-    Query completed in 13.67 s
-    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_iqj9l527.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'lift' per voxel)
-    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_iiwq4x8r.nii.gz (128248 voxels of the 99×117×95 template grid, value: the max of 'uniformity' per voxel)
+    ╭────┬────┬────┬───────────────────┬────────────────────╮
+    │ i  │ j  │ k  │ lift              │ uniformity         │
+    ├────┼────┼────┼───────────────────┼────────────────────┤
+    │ 74 │ 32 │ 38 │ 5.217901365952598 │ 10.953869296339628 │
+    │ 73 │ 32 │ 36 │ 5.121273562879402 │ 10.953869296339628 │
+    │ 72 │ 32 │ 37 │ 5.55224704372663  │ 10.576149665431366 │
+    │ 74 │ 32 │ 37 │ 4.917084854014599 │ 10.198430034523103 │
+    │ 73 │ 32 │ 38 │ 5.05757299270073  │ 10.198430034523103 │
+    ╰────┴────┴────┴───────────────────┴────────────────────╯
+    102691 rows · showing 1–5 · .more for next
+    Query completed in 14.75 s
+    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_6xbrumiu.nii.gz (102691 voxels of the 99×117×95 template grid, value: the max of 'lift' per voxel)
+    Saved NIfTI image to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_5iz4zp45.nii.gz (102691 voxels of the 99×117×95 template grid, value: the max of 'uniformity' per voxel)
     Colormap of 'lift': one-sided, the image has no negative values (--symmetric for a symmetric one).
     Colormap of 'uniformity': one-sided, the image has no negative values (--symmetric for a symmetric one).
-    Saved the viewer to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_k39mctvq.html
+    Saved the viewer to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_r_39o2rq.html
     Open it in a browser to see the image.
 
-The rules, in order:
+The comments say what each line computes; some points need more words:
 
-- ``term_of_interest`` names the term.  It is joined in the probabilistic
-  rules, so that they are only computed for this term; change it to map
-  another one.
+- The term is only given in the query, ``ratios("vision", ...)``: magic
+  sets pass the constant ``"vision"`` to ``ratios``, then to
+  ``p_term``, ``p_a_given_t``, ``p_any_voxel_given_t`` and
+  ``term_in_study``, so that the probabilistic rules are only computed
+  for this term.  Change it in the query to map another one; the rules
+  stay defined.
 - ``activation`` holds the voxels within 6 mm, 3 voxels of the grid, of a
   peak of each study, the ``EUCLIDEAN`` distance being in voxels.
-- ``selected_voxel`` is a uniform choice over the voxels of the mask,
-  each of probability :math:`1/M`.
-- ``p_a``, ``p_term`` and ``p_a_given_t`` are :math:`P(A_v)`, :math:`P(T)`
-  and :math:`P(A_v \mid T)`; ``p_any_voxel_given_t`` is
-  :math:`\bar p = P(A_V \mid T)`, a single probability per term.
-- ``ratios`` divides them.  The relative risk is computed from these
-  probabilities, as :math:`P(A_v \mid \lnot T) = (P(A_v) - P(A_v \mid T)
+- ``p_any_voxel_given_t`` is :math:`\bar p = P(A_V \mid T)`, a single
+  probability per term: the selected study and the selected voxel are
+  chosen independently, so it is the average over the :math:`M` voxels
+  of :math:`P(A_v \mid T)`.
+- ``ratios`` divides the probabilities.  The relative risk is computed
+  from them, as :math:`P(A_v \mid \lnot T) = (P(A_v) - P(A_v \mid T)
   P(T)) / (1 - P(T))`, rather than with a query conditioned on
   ``~term_in_study(s, t)``, which is slower.
 
-The voxels of the largest uniformity ratios, ``(32, 76, 38)`` and
-``(68, 77, 36)`` of the grid, are at :math:`(-34, 18, 4)` and
-:math:`(38, 20, 0)` mm in MNI space, in the left and right anterior
-insula: the studies of pain activate them 8 times more often than the
-average voxel of the cortex.
+The voxels of the largest uniformity ratios, ``(74, 32, 38)`` and
+``(73, 32, 36)`` of the grid, are at :math:`(50, -70, 4)` and
+:math:`(48, -70, 0)` mm in MNI space, in the right lateral occipital
+cortex (inferior division), around the motion area MT+ (V5): the
+studies of vision activate them 11 times more often than the average
+voxel of the cortex.
 
 ``.view`` shows each value column of the result as an overlay, here
 ``lift`` and ``uniformity``, each from the 95th percentile of its
 values, with its colormap and colour bar; the read-out gives both values
-at the cursor, here at the left anterior insula:
+at the cursor, here at the right lateral occipital cortex:
 
-.. image:: _static/neurosynth_pain_view.png
-   :alt: The lift and uniformity maps of pain in the viewer
+.. image:: _static/neurosynth_vision_view.png
+   :alt: The lift and uniformity maps of vision in the viewer
 
 The ``Overlay`` list chooses the map the controls apply to, and
 ``shown`` hides it; ``uniformity``, drawn over ``lift``, covers it where
