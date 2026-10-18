@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* The REPL has ``.doc PREDICATE``, which documents a predicate: its
+  description (the engine's, or a note written with ``.doc PREDICATE TEXT``
+  for the session, which ``.clear`` forgets), the entities it relates, its
+  number of facts or its rules, and the ontology it comes from; ``.doc``
+  completes the names of the predicates.  The predicates of the ontologies
+  an engine loaded, many with a large ontology, are no longer listed by
+  ``.predicates``: ``.predicates ontologies`` lists them (``all`` lists every
+  predicate), and the completion offers them once two characters are typed.
+  :meth:`~neurolang.frontend.NeurolangPDL.load_ontology` records them in
+  ``ontology_symbols``.
 * The ``.view`` viewer has the controls of NiiVue's display: the view
   (a slice, the three slices in a row, a column or a grid, with or
   without the 3D render, or the 3D render alone), the drag mode of the

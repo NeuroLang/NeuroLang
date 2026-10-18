@@ -40,6 +40,23 @@ from .value_completion import (
 # Kinds of predicates offered after the relations and rules.
 _LATE_KINDS = frozenset({"function"})
 
+# ``.doc`` followed by the start of a predicate name.
+_DOC_COMMAND = re.compile(r"\.doc\s+(\S*)\Z")
+
+
+def _offered(info, prefix: str) -> bool:
+    """
+    Return whether the predicate *info* is offered for the *prefix* typed.
+
+    The predicates of the ontologies, which are many, are offered once
+    two characters are typed (``rd`` for ``rdfs:label``), the classes
+    named by their IRI never: ``.doc`` and ``.predicates ontologies``
+    list them.
+    """
+    if info.kind != "ontology":
+        return True
+    return len(prefix) >= 2 and not info.name.startswith(("http", "<"))
+
 
 _IDENTIFIER_END = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -219,6 +236,12 @@ class NeuroLangReplCompleter(Completer):
     def get_completions(self, document, complete_event):
         """Yield the completions of the text before the cursor."""
         text = document.text_before_cursor
+        documented = _DOC_COMMAND.match(text)
+        if documented:
+            yield from self._predicate_completions(
+                self._predicates(), documented.group(1)
+            )
+            return
         if text.startswith("."):
             yield from self._command_completions(text)
             return
@@ -252,7 +275,7 @@ class NeuroLangReplCompleter(Completer):
         """Return the predicates of *catalog* SQUALL offers, lowercased."""
         return {
             name.lower(): info for name, info in catalog.items()
-            if name not in self._hidden
+            if name not in self._hidden and info.kind != "ontology"
         }
 
     def _quoted_column(self, before: str, catalog: dict):
@@ -295,7 +318,7 @@ class NeuroLangReplCompleter(Completer):
         """Yield the predicates starting with *prefix*, functions last."""
         infos = sorted(
             (info for name, info in catalog.items()
-             if name.startswith(prefix)),
+             if name.startswith(prefix) and _offered(info, prefix)),
             key=lambda info: (info.kind in _LATE_KINDS, info.name),
         )
         for info in infos:
