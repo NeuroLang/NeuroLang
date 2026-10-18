@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroLang interactive query REPL, in your browser</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  main { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 .25rem; }
+  h1 code { color: #7ee787; }
+  p.note { color: #8b949e; margin: .25rem 0 1rem; font-family: system-ui, sans-serif; }
+  #status { padding: .5rem .75rem; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 1rem; }
+  #status.error { border-color: #f85149; color: #f85149; }
+  #log { display: flex; flex-direction: column; gap: .75rem; }
+  .entry-input { color: #7ee787; white-space: pre-wrap; margin: 0; }
+  .entry-output { overflow-x: auto; }
+  .entry-output pre { margin: 0; }
+  iframe { width: 100%; height: 34rem; border: 1px solid #30363d; border-radius: 6px; background: #000; }
+  form { margin-top: 1rem; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 6rem; background: #161b22; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: .5rem; font: inherit; resize: vertical; }
+  textarea:disabled { opacity: .5; }
+  .buttons { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; flex-wrap: wrap; }
+  button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; cursor: pointer; }
+  button.secondary { background: #21262d; border: 1px solid #30363d; }
+  button:disabled { opacity: .5; cursor: default; }
+  .examples { margin-top: 1rem; font-family: system-ui, sans-serif; color: #8b949e; }
+  .examples button { margin: .15rem .25rem .15rem 0; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1><code>neurolang-query -i --engine neurosynth --resolution 2</code></h1>
+  <p class="note">
+    NeuroLang's interactive query REPL, running entirely in your browser (Python
+    on <a href="https://pyodide.org" style="color:#58a6ff">Pyodide</a>). The first
+    visit downloads about 100&nbsp;MB, which your browser keeps. Queries that need
+    gigabytes of memory, such as the whole of the
+    <a href="../../tutorial_neurosynth_tests.html" style="color:#58a6ff">uniformity-test tutorial</a>,
+    may not fit; type <code>.help</code> for the commands.
+  </p>
+  <div id="status" role="status">Starting…</div>
+  <div id="log" aria-live="polite"></div>
+  <form id="form">
+    <textarea id="input" spellcheck="false" disabled
+      placeholder="Datalog, as in the REPL; Ctrl+Enter (⌘+Enter) runs it"></textarea>
+    <div class="buttons">
+      <button id="run" disabled>Run</button>
+      <button id="restart" type="button" class="secondary">Restart session</button>
+    </div>
+  </form>
+  <div class="examples">Try:
+    <button type="button" class="secondary example">ans(s) :- mentions(s, "pain")</button>
+    <button type="button" class="secondary example">ans(name, description) :- cognitive_task(_, name, description)</button>
+    <button type="button" class="secondary example">ans(t, count(s)) :- mentions(s, t)</button>
+  </div>
+</main>
+<script src="repl.js"></script>
+</body>
+</html>
