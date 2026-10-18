@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The ``.view`` viewer has the controls of NiiVue's display: the view
+  (a slice, the three slices in a row, a column or a grid, with or
+  without the 3D render, or the 3D render alone), the drag mode of the
+  right button (contrast, pan and zoom, measure, angle, 3D slicer), the
+  crosshair's colour, width and 3D drawing, the gamma of the background,
+  NiiVue's colour bars, labels, orientation cube and ruler, the
+  radiological convention, the interpolation and a clip plane; the hot
+  keys V and C keep the controls in step, and Reset restores them.
 * Documentation: the REPL example of the Neurosynth tests
   (:ref:`tutorial-neurosynth-tests`) gives the term in the query,
   ``ratios("vision", i, j, k, ...)``, rather than in a
