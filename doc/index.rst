@@ -91,6 +91,7 @@ a guided walkthrough.
    tutorial_datalog
    tutorial_text_embeddings
    tutorial_neurosynth_tests
+   tutorial_cognitive_atlas
    concepts
    probabilistic_lifting
    engine_configuration

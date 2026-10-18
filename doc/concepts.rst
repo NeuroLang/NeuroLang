@@ -228,7 +228,7 @@ builds an engine, it runs up to ten phases, in this order:
 
 #. **Downloads** (``downloads``) — fetches files from URLs into the data
    directory.  This runs after the Python init but before templates,
-   atlases, Datalog init, relations and ontologies, so files fetched here
+   atlases, ontologies, Datalog init and relations, so files fetched here
    are available to those later phases (but not to ``python_init``).
    Supports archive extraction::
 
@@ -314,6 +314,21 @@ builds an engine, it runs up to ten phases, in this order:
    Supported atlases: ``destrieux`` (deterministic), ``schaefer``
    (deterministic), ``difumo`` (probabilistic).
 
+#. **Ontologies** (``ontologies``) — loads OWL/RDF ontologies from URLs
+   or local paths, one file per ``url`` or several, loaded together, with
+   ``urls``.  ``format`` is the rdflib format (guessed from the file
+   extension by default); with ``individuals: true`` every triple is also
+   loaded as a fact, and ``names: prefixed`` names classes and properties
+   ``prefix:local`` (see :ref:`neurolang-rdf-data`)::
+
+       ontologies:
+         - url: "https://example.com/ontology.owl"
+         - urls:
+             - "https://example.com/vocab.ttl"
+             - "data/instances.ttl"
+           individuals: true
+           names: prefixed
+
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
    of Datalog rules.  These are evaluated after templates and atlases
    so they can reference template-derived voxel predicates and atlas
@@ -354,21 +369,6 @@ builds an engine, it runs up to ten phases, in this order:
          selected_study:
            source: study
            description: "Uniform choice over studies"
-
-#. **Ontologies** (``ontologies``) — loads OWL/RDF ontologies from URLs
-   or local paths, one file per ``url`` or several, loaded together, with
-   ``urls``.  ``format`` is the rdflib format (guessed from the file
-   extension by default); with ``individuals: true`` every triple is also
-   loaded as a fact, and ``names: prefixed`` names classes and properties
-   ``prefix:local`` (see :ref:`neurolang-rdf-data`)::
-
-       ontologies:
-         - url: "https://example.com/ontology.owl"
-         - urls:
-             - "https://example.com/vocab.ttl"
-             - "data/instances.ttl"
-           individuals: true
-           names: prefixed
 
 All phases are optional — include only what your engine needs.
 If ``use_base_symbols`` and the declarative YAML fields (``atlases``,

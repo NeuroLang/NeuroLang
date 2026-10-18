@@ -398,9 +398,36 @@ def _fake_schaefer(nl, cfg, data_dir, name):
     )
 
 
+# The predicates of a free-text query: computed for the text a query gives
+# as a constant, not for every text (``solve_all`` cannot).
+FREE_TEXT_PREDICATES = frozenset({
+    "study_similarity", "similar_study", "lift_llm", "relative_risk_llm",
+    "uniformity_llm", "ratios_llm",
+})
+
+
+def _without_free_text_rules(config):
+    """Return the engine *config* without the rules of a free-text query."""
+    names = FREE_TEXT_PREDICATES | {
+        "cutoff_similarity", "p_similar", "p_a_given_similar",
+        "p_any_voxel_given_similar",
+    }
+    rules = [
+        line for line in config["datalog_init"].splitlines()
+        if line.split("(")[0] not in names
+    ]
+    return {**config, "datalog_init": "\n".join(rules)}
+
+
 @pytest.fixture(scope="module")
 def small_neurosynth():
     """Build the neurosynth engine of the registry on tiny mock data."""
+    return _build_small_neurosynth()
+
+
+def _build_small_neurosynth(free_text=True):
+    """Build the neurosynth engine on tiny data, with the free-text rules
+    of its configuration or without."""
     import nibabel as nib
 
     from neurolang.utils import engine_registry
@@ -429,7 +456,15 @@ def small_neurosynth():
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
-        return engine_registry.build_engine("neurosynth", Path("unused"))
+        if free_text:
+            return engine_registry.build_engine("neurosynth", Path("unused"))
+        config = engine_registry.get_engine_config
+
+        def get_config(name, yaml_path=None):
+            return _without_free_text_rules(config(name, yaml_path))
+
+        with patch.object(engine_registry, "get_engine_config", get_config):
+            return engine_registry.build_engine("neurosynth", Path("unused"))
 
 
 _TYPES = {
@@ -500,16 +535,19 @@ def _check_argument(nl, solution, name, argument, start):
 class TestNeurosynthDeclarations:
     """Check the declared arguments against the symbols of the engine."""
 
-    def test_every_declaration_matches_its_symbol(self, small_neurosynth):
+    def test_every_declaration_matches_its_symbol(self):
         """Check the column count, order and types of each predicate."""
         from neurolang.utils import engine_registry
 
+        small_neurosynth = _build_small_neurosynth(free_text=False)
         predicates = engine_registry.get_predicates("neurosynth")
         signatures = engine_registry.get_signatures("neurosynth")
         with small_neurosynth.scope:
             solution = small_neurosynth.solve_all()
         assert set(signatures) == set(predicates)
         for name, arguments in signatures.items():
+            if name in FREE_TEXT_PREDICATES:
+                continue
             frame = _relation(small_neurosynth, solution, name)
             probability = int(bool(predicates[name].get("probability")))
             assert frame.shape[1] == predicates[name]["arity"] + probability
@@ -530,12 +568,13 @@ class TestNeurosynthDeclarations:
         assert hidden <= set(engine_registry.get_predicates("neurosynth"))
 
     def test_probability_declared_for_the_choice(self):
-        """Check ``selected_study`` is the probabilistic predicate."""
+        """Check the choices over the studies and the voxels are the
+        probabilistic predicates."""
         from neurolang.utils import engine_registry
 
         assert engine_registry.get_probabilistic_predicates(
             "neurosynth"
-        ) == {"selected_study"}
+        ) == {"selected_study", "selected_voxel"}
 
 
 class TestPredicateArguments:

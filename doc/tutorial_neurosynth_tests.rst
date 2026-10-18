@@ -66,6 +66,60 @@ of the term,
        \frac{\bar p}{1 - \bar p}.
 
 
+Predefined in the engines
+-------------------------
+
+The ``neurosynth`` and ``neurostore`` engines define these ratios for any
+term, so that a query is one line, with the term as a constant (the engine then
+computes the rules for it only)::
+
+    ans(i, j, k, uniformity) :- uniformity('working memory', i, j, k, uniformity)
+    ans(i, j, k, lift) :- lift('vision', i, j, k, lift)
+    ans(i, j, k, lift, relative_risk, uniformity) :-
+        ratios('pain', i, j, k, lift, relative_risk, uniformity)
+
+``lift``, ``relative_risk``, ``uniformity`` and ``ratios`` are the quantities
+of the previous section, as predicates ``(term, voxel, ratio…)``, and they are
+listed by ``--list-predicates``.  Their definitions are the rules of the
+next section, with three differences: a term is in a study when its TF-IDF is
+above 0.001 (``term_in_study``), a study activates the voxels of the whole
+brain within 6 mm of its peaks (``activated``; ``brain_mask``), and the
+average of the uniformity test is over the brain rather than over
+``cortical_mask``, so that the subcortical structures, the cerebellum and
+the hippocampus are in the map; ``selected_voxel`` is the uniform choice over
+the voxels of the brain.  The maps of *working memory* take about ten seconds
+for the uniformity ratio and half a minute for the three ratios on the 2 mm
+grid.  In the ``neurostore`` engine the terms are those of
+:ref:`its TF-IDF <tutorial-cognitive-atlas>`.  A probabilistic query needs
+the term as a constant: without one the rules cannot be rewritten for it.
+
+Free-text queries
+-----------------
+
+The same ratios exist for a free text instead of a term, with the suffix
+``_llm``: ``uniformity_llm``, ``lift_llm``, ``relative_risk_llm`` and
+``ratios_llm``.  The studies of the "term" are then the 5% of the studies
+closest to the text, by the cosine similarity of the SPECTER2 embeddings of
+their title and abstract to the text (see :doc:`tutorial_text_embeddings`)::
+
+    ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)
+
+``study_similarity(text, study, similarity)`` gives the similarity of every
+study with a text, and ``similar_study(text, study)`` the studies of the top
+5%, which one can use in rules of one's own.  As for a term, the text is a
+constant of the query.  Neither it nor the predicates can be computed for
+every text, so they are left out of ``solve_all``.  The first query embeds the
+abstracts (the model, about 430 MB, and the embeddings are cached; see
+:doc:`tutorial_text_embeddings` to compute them ahead of time) and needs
+``pip install "neurolang[embeddings]"``.
+
+SPECTER2 is for descriptions that do not contain the term: for a keyword,
+its TF-IDF, that is ``uniformity('pain', ...)``, is the better selection.  On
+36 Neurosynth terms described by three sentences that contain neither the
+term nor its variants, the map of the studies close to the text identified the
+term among the 36 first in about a third of the cases, against a fifth for the
+TF-IDF of the same sentence.
+
 In the REPL
 -----------
 

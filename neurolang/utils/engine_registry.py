@@ -38,6 +38,9 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``extends`` — one engine name, or a list of them, whose configuration
+  is inherited (see :func:`resolve_engine_config`); engines marked
+  ``abstract: true`` only serve as bases and cannot be built or listed;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
   ``f(query, doc) -> similarity``; see
@@ -46,7 +49,7 @@ define:
       text_embeddings:
         study_abstracts:
           ids_from: study
-          source: pubmed
+          source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
 
 Usage
@@ -261,9 +264,111 @@ def _resolve_relation_file(
         return resolved
 
 
+# Top-level keys holding lists that are concatenated (parent first,
+# duplicates dropped) when inherited; every other list is replaced.
+_MERGED_LIST_KEYS = frozenset(
+    {"builtins", "downloads", "ontologies", "dimension_type_predicates"}
+)
+# Keys describing the engine itself, never inherited.
+_NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
+
+
+def _merge_mappings(parent: Dict[str, Any], child: Dict[str, Any]):
+    """Deep-merge two mappings; ``None`` in *child* deletes the entry."""
+    merged = dict(parent)
+    for key, value in child.items():
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_mappings(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_engine_configs(
+    parent: Dict[str, Any], child: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Merge *child* over *parent* engine configurations.
+
+    * ``datalog_init`` texts are concatenated, parent rules first;
+    * the lists in :data:`_MERGED_LIST_KEYS` are concatenated without
+      duplicates;
+    * mappings (``atlases``, ``predicates``, ...) are merged recursively,
+      and an entry set to ``null`` in the child removes the inherited one;
+    * any other value in the child replaces the inherited one.
+    """
+    merged = {
+        k: v for k, v in parent.items() if k not in _NON_INHERITED_KEYS
+    }
+    for key, value in child.items():
+        inherited = merged.get(key)
+        if key == "datalog_init" and inherited and value:
+            merged[key] = inherited.rstrip("\n") + "\n" + value
+        elif key in _MERGED_LIST_KEYS and inherited and value:
+            merged[key] = list(inherited) + [
+                v for v in value if v not in inherited
+            ]
+        elif isinstance(value, dict) and isinstance(inherited, dict):
+            merged[key] = _merge_mappings(inherited, value)
+        elif isinstance(value, dict):
+            merged[key] = _merge_mappings({}, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
+    _stack: Tuple[str, ...] = (),
+) -> Dict[str, Any]:
+    """
+    Return the configuration of *name* with all ``extends`` resolved.
+
+    Parameters
+    ----------
+    engines :
+        The raw ``engines`` mapping of an engine YAML file.
+    name :
+        Engine (or abstract base) to resolve.
+
+    Raises
+    ------
+    ValueError
+        If *name* or one of its bases is unknown, or the ``extends``
+        chain is cyclic.
+
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    raw = engines[name] or {}
+    bases = raw.get("extends", [])
+    if isinstance(bases, str):
+        bases = [bases]
+    resolved: Dict[str, Any] = {}
+    for base in bases:
+        resolved = _merge_engine_configs(
+            resolved, resolve_engine_config(engines, base, _stack + (name,))
+        )
+    merged = _merge_engine_configs(resolved, raw)
+    return {k: v for k, v in merged.items() if k not in _NON_INHERITED_KEYS}
+
+
+def _is_abstract(engines: Dict[str, Dict[str, Any]], name: str) -> bool:
+    return bool((engines[name] or {}).get("abstract", False))
+
+
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
     """
-    Return the names of all registered engines.
+    Return the names of all registered, non-abstract engines.
 
     Parameters
     ----------
@@ -272,8 +377,8 @@ def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    return sorted(config.get("engines", {}).keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    return sorted(n for n in engines if not _is_abstract(engines, n))
 
 
 def get_engine_config(
@@ -281,6 +386,8 @@ def get_engine_config(
 ) -> Dict[str, Any]:
     """
     Return the YAML configuration dict for a single engine.
+
+    Inherited (``extends``) configuration is already merged in.
 
     Parameters
     ----------
@@ -293,17 +400,15 @@ def get_engine_config(
     Raises
     ------
     ValueError
-        If *name* is not a registered engine.
+        If *name* is not a registered, non-abstract engine.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
-    if name not in engines:
-        available = ", ".join(engines.keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    if name in engines and _is_abstract(engines, name):
         raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
+            f"Engine {name!r} is abstract and can only be extended"
         )
-    return dict(engines[name])
+    return resolve_engine_config(engines, name)
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
@@ -317,11 +422,11 @@ def show_engines(yaml_path: Optional[Path] = None) -> None:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
+    engines = _load_yaml_config(yaml_path).get("engines", {})
     print("Available engines:\n")
-    for name in sorted(engines):
-        desc = engines[name].get("description", "").replace("\n", " ").strip()
+    for name in list_engine_names(yaml_path):
+        cfg = resolve_engine_config(engines, name)
+        desc = cfg.get("description", "").replace("\n", " ").strip()
         print(f"  {name}")
         if desc:
             print(f"      {desc}")
@@ -1190,7 +1295,7 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(
-                emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                nl, emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
                 engine_name, data_dir, rel_base_dir,
             ),
             encoder=encoder,
@@ -1203,7 +1308,25 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         )
 
 
-def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
+def _predicate_texts(nl, source):
+    """Read ``{id: (title, text)}`` from engine predicates of the form
+    ``p(id, text)``: ``predicate`` gives the texts, the optional
+    ``title_predicate`` the titles."""
+    def column(name):
+        return {str(row[0]): row[1] for row in nl.symbols[name].value}
+
+    texts = column(source["predicate"])
+    titles = column(source["title_predicate"]) if (
+        "title_predicate" in source
+    ) else {}
+    return {
+        key: (titles.get(key, ""), text) for key, text in texts.items()
+    }
+
+
+def _text_loader(
+    nl, emb_cfg, pubmed_cache, engine_name, data_dir, base_dir
+):
     """Return ``load_texts(keys)`` for a ``text_embeddings`` source."""
     from neurolang.utils import text_embeddings
 
@@ -1213,6 +1336,9 @@ def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
             return text_embeddings.fetch_pubmed_abstracts(
                 keys, cache_path=pubmed_cache, email=emb_cfg.get("email")
             )
+    elif isinstance(source, dict) and "predicate" in source:
+        def load_texts(keys):
+            return _predicate_texts(nl, source)
     elif isinstance(source, dict) and "file" in source:
         def load_texts(keys):
             path = _resolve_relation_file(
@@ -1226,7 +1352,7 @@ def _text_loader(emb_cfg, pubmed_cache, engine_name, data_dir, base_dir):
     else:
         raise ValueError(
             f"Unknown text_embeddings source {source!r}: use 'pubmed' "
-            "or a mapping with a 'file' key."
+            "or a mapping with a 'file' or a 'predicate' key."
         )
     return load_texts
 
@@ -1309,10 +1435,11 @@ def build_engine(
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
     _phase_atlases(nl, cfg, data_dir, name)
+    # Before the rules, which may use the predicates of the ontologies.
+    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
-    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
 
     return nl

@@ -19,6 +19,32 @@ Unreleased
 
 **New features:**
 
+* Engines in :file:`engines.yaml` can inherit from other engines with
+  ``extends`` and from ``abstract`` base entries, so settings common to
+  several engines are declared once.  ``neurosynth`` now extends a shared
+  ``coordinate_meta_analysis`` base.  See :doc:`engine_configuration`.
+* A new ``neurostore`` engine, built on the same base, loads the NeuroStore
+  database (as fetched by NiMARE) with the predicates of ``neurosynth``,
+  TF-IDF computed from the abstracts (words and sequences of up to three
+  words), the titles, abstracts and LLM-extracted concepts and domains of
+  the studies, and SPECTER2 ``query_similarity`` over its abstracts
+  (a ``text_embeddings`` source can now be engine predicates,
+  ``source: {predicate: ...}``).  A ``brain_mask(i, j, k)`` predicate gives
+  the whole brain (MNI152 brain mask) next to ``cortical_mask``.
+* The ``neurosynth`` and ``neurostore`` engines define the lift, relative
+  risk and uniformity ratio of a term, Neurosynth's association and
+  uniformity tests, as predicates: ``uniformity('working memory', i, j, k, u)``,
+  ``lift``, ``relative_risk`` and ``ratios`` (over the whole brain, with a new
+  ``selected_voxel`` choice); see :ref:`tutorial-neurosynth-tests`.
+  With SPECTER2, ``uniformity_llm('a description', i, j, k, u)``, ``lift_llm``,
+  ``relative_risk_llm`` and ``ratios_llm`` do the same for a free text: the
+  studies of the term are the 5% closest to it (``study_similarity``,
+  ``similar_study``).
+* ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+  (``ontologies``, now loaded before ``datalog_init``) for open-world queries
+  over its concepts, tasks and contrasts, joined with the studies through
+  ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
+  :doc:`tutorial_cognitive_atlas`.
 * NeuroLang has a logo (:file:`doc/_static/logo/`): the brain written as
   a probabilistic program. It heads the README and the documentation,
   whose colours become those of the logo, and is the favicon of the
