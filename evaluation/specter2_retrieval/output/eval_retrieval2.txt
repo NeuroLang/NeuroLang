@@ -1,0 +1,24 @@
+== E3 Neurosynth / MeSH
+fusion and lexical-free positives
+  (526 queries)             MAP  nDCG@10   P@10  R@100
+  SPECTER2                0.175    0.360  0.339  0.255
+  TF-IDF                  0.264    0.497  0.474  0.339
+  fusion z-score          0.296    0.516  0.496  0.375
+  fusion RRF              0.273    0.490  0.471  0.357
+  positives sharing no content word with the query: 43% on average; on the 385 queries with >= 10 of them, share of those retrieved in the top 100: SPECTER2 9.7%, TF-IDF 0.1%, chance 0.7%
+
+== E4 NeuroStore / LLM concepts
+fusion and lexical-free positives
+  (536 queries)             MAP  nDCG@10   P@10  R@100
+  SPECTER2                0.077    0.178  0.170  0.171
+  TF-IDF                  0.192    0.359  0.346  0.345
+  fusion z-score          0.196    0.361  0.349  0.347
+  fusion RRF              0.159    0.303  0.287  0.311
+  positives sharing no content word with the query: 21% on average; on the 228 queries with >= 10 of them, share of those retrieved in the top 100: SPECTER2 2.0%, TF-IDF 0.0%, chance 0.3%
+
+== E5 related studies: the 10 nearest studies of 3000 Neurosynth studies (each with >= 3 MeSH headings), judged by shared MeSH headings
+  neighbour definition                 MeSH Jaccard shared headings (mean)
+  SPECTER2 (title+abstract docs)              0.197                 3.15
+  SPECTER2 abstract-only docs                 0.194                 3.11
+  TF-IDF                                      0.193                 3.10
+  random                                      0.107                 1.85

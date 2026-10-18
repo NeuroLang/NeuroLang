@@ -266,7 +266,7 @@ v0.1a21 (2026-10-21)
 * Free-text meta-analytic queries: the gallery example
   ``plot_cognitive_atlas_uniformity.py`` selects the studies close to the
   Cognitive Atlas definition of a term with SPECTER2 and computes their
-  uniformity map, and :file:`experiments/text_meta_analysis` evaluates
+  uniformity map, and :file:`evaluation/text_meta_analysis` evaluates
   SPECTER2 queries without the vocabulary term against the maps of the
   Neurosynth terms.
 * ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology

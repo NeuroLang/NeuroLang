@@ -131,28 +131,21 @@ for _, row in similarity.head(10).iterrows():
 # %%
 # Uniformity ratios
 # -----------------
-# ``selected_study`` is a uniform choice over the studies and
-# ``selected_voxel`` over the voxels of the brain, so that the probabilities
-# below are proportions of studies and of voxels.  A study activates the
-# voxels within 3 voxels (6 mm) of one of its peaks.  The uniformity ratio
-# of a selection of studies is :math:`P(A_v \mid T) / P(A_V \mid T)`, and the
-# rules apply to both selections, ``similar`` and ``term_study``.
+# The engine predefines ``selected_study``, a uniform choice over the
+# studies, ``selected_voxel``, one over the voxels of the brain, and
+# ``activated(i, j, k, s)``, a study activating the voxels within 3 voxels
+# (6 mm) of one of its peaks, so that the probabilities below are
+# proportions of studies and of voxels.  The uniformity ratio of a selection
+# of studies is :math:`P(A_v \mid T) / P(A_V \mid T)`, which the engine
+# computes for the studies of a term as ``uniformity(term, i, j, k, u)``; the
+# same rules apply to the selections ``similar`` and ``term_study``.
 
-nl.execute_datalog_program(
-    """
-    activation(i, j, k, s) :- brain_mask(i, j, k) &
-        peak_reported(i1, j1, k1, s) &
-        (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3).
-    n_voxels(count(i, j, k)) :- brain_mask(i, j, k).
-    selected_voxel(i, j, k) ^ (1 / m) :- brain_mask(i, j, k) & n_voxels(m).
-    """
-)
 for name in ("similar", "term_study"):
     nl.execute_datalog_program(
         f"""
-        {name}_given(t, i, j, k, PROB) :- (activation(i, j, k, s) &
+        {name}_given(t, i, j, k, PROB) :- (activated(i, j, k, s) &
             selected_study(s)) // ({name}(t, s) & selected_study(s)).
-        {name}_any(t, PROB) :- (activation(i, j, k, s) &
+        {name}_any(t, PROB) :- (activated(i, j, k, s) &
             selected_voxel(i, j, k) & selected_study(s)) //
             ({name}(t, s) & selected_study(s)).
         {name}_uniformity(t, i, j, k, u) :- {name}_given(t, i, j, k, p) &

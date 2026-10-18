@@ -1,0 +1,71 @@
+split 1 / 10 done; acc@1 raw SPECTER2 32.4 TF-IDF 20.4
+split 2 / 10 done; acc@1 raw SPECTER2 29.6 TF-IDF 15.7
+split 3 / 10 done; acc@1 raw SPECTER2 33.3 TF-IDF 19.4
+split 4 / 10 done; acc@1 raw SPECTER2 34.3 TF-IDF 23.1
+split 5 / 10 done; acc@1 raw SPECTER2 31.5 TF-IDF 22.2
+split 6 / 10 done; acc@1 raw SPECTER2 31.5 TF-IDF 18.5
+split 7 / 10 done; acc@1 raw SPECTER2 31.5 TF-IDF 20.4
+split 8 / 10 done; acc@1 raw SPECTER2 36.1 TF-IDF 24.1
+split 9 / 10 done; acc@1 raw SPECTER2 33.3 TF-IDF 21.3
+split 10 / 10 done; acc@1 raw SPECTER2 35.2 TF-IDF 20.4
+== identification of the term among 36, raw correlation; chance acc@1 = 2.8%; 10 random splits of the literature (reference maps from one half, selections from the other)
+  selection                    acc@1   acc@3   acc@5 | acc@1 95% CI      | precision | discrimination
+  SPECTER2                     32.9%   60.6%   72.0% | [20.6, 45.4]%      | 0.28 | +0.203
+  TF-IDF                       20.6%   45.4%   56.2% | [11.5, 30.3]%      | 0.18 | +0.149
+  fusion (z-score)             25.7%   54.8%   65.6% | [15.6, 36.9]%      | 0.23 | +0.182
+  random                        3.0%    8.2%   13.2% | [ 0.0,  8.7]%      | 0.03 | +0.011
+  SPECTER2, term as query      40.8%   64.4%   73.1% | (36 term labels, context)
+  TF-IDF, term as query        50.6%   73.9%   81.9% | (36 term labels, context)
+  ceiling                      51.4%   74.7%   81.7% | ceiling: gold studies of the query half
+  SPECTER2 - TF-IDF acc@1: +12.3 points, 95% CI [+5.0, +19.8] (bootstrap over terms)
+  SPECTER2 - fusion acc@1: +7.1 points, 95% CI [+0.6, +13.8]
+== identification of the term among 36, centered correlation (common network removed); chance acc@1 = 2.8%; 10 random splits of the literature (reference maps from one half, selections from the other)
+  selection                    acc@1   acc@3   acc@5 | acc@1 95% CI      | precision | discrimination
+  SPECTER2                     36.9%   67.7%   80.3% | [24.8, 50.0]%      | 0.28 | +0.346
+  TF-IDF                       29.8%   59.8%   74.5% | [19.1, 41.9]%      | 0.18 | +0.255
+  fusion (z-score)             33.9%   65.7%   79.4% | [22.8, 46.4]%      | 0.23 | +0.311
+  random                        3.3%    9.2%   14.9% | [ 0.8,  7.0]%      | 0.03 | +0.005
+  SPECTER2, term as query      49.2%   79.4%   88.6% | (36 term labels, context)
+  TF-IDF, term as query        55.0%   85.0%   93.1% | (36 term labels, context)
+  ceiling                      55.0%   83.9%   93.3% | ceiling: gold studies of the query half
+  SPECTER2 - TF-IDF acc@1: +7.1 points, 95% CI [+1.1, +13.1] (bootstrap over terms)
+  SPECTER2 - fusion acc@1: +3.1 points, 95% CI [-1.2, +7.8]
+per term (mean rank of the right term over 3 paraphrases and 10 splits; precision of the selection):
+                  n_studies  mean_rank_specter2  mean_rank_tfidf  mean_rank_fusion  precision_specter2  precision_tfidf
+term                                                                                                                   
+auditory             1252.0                1.00             1.17              1.00                0.44             0.23
+somatosensory         674.0                1.00             2.43              1.00                0.40             0.20
+reward                922.0                1.00             2.53              1.27                0.41             0.30
+object                851.0                1.00             2.37              1.87                0.27             0.11
+working memory       1091.0                1.00             1.07              1.00                0.23             0.17
+semantic             1031.0                1.03             1.23              1.17                0.41             0.32
+pain                  516.0                1.20             4.20              1.73                0.35             0.18
+reading               521.0                1.30             1.77              1.77                0.42             0.25
+face                  896.0                1.37             1.33              1.20                0.21             0.17
+eye movements         116.0                1.43             4.00              2.67                0.20             0.17
+episodic memory       332.0                1.73             4.67              1.83                0.19             0.12
+anxiety               449.0                1.77            11.70              4.90                0.25             0.10
+autobiographical      143.0                1.80             4.20              1.80                0.26             0.13
+decision making       509.0                1.80             7.43              4.70                0.36             0.12
+inhibition            601.0                1.90             4.37              4.37                0.25             0.11
+speech                642.0                1.90             2.67              1.90                0.45             0.27
+schizophrenia         715.0                1.90             3.47              2.70                0.52             0.29
+fear                  363.0                2.20             2.80              2.30                0.26             0.24
+music                 163.0                3.23             8.70              7.37                0.37             0.18
+voice                 121.0                3.27             4.00              3.57                0.28             0.18
+numerical             114.0                3.57             5.40              4.40                0.38             0.21
+conflict              337.0                3.93             4.07              3.87                0.27             0.15
+depression            502.0                4.23            10.33              6.30                0.37             0.21
+vision                137.0                4.47             5.80              3.20                0.07             0.06
+empathy               187.0                4.60             8.63              7.30                0.30             0.12
+imagery               312.0                5.27             6.43              5.73                0.10             0.05
+default mode          777.0                7.10             2.57              3.67                0.19             0.20
+aging                 293.0                7.30             7.73              7.30                0.43             0.28
+placebo               332.0                7.77             9.80              8.90                0.20             0.16
+reasoning             182.0                9.07            13.67              8.73                0.26             0.15
+naming                179.0                9.63             8.50              8.90                0.08             0.17
+disgust               103.0               10.23            16.87             15.77                0.12             0.10
+planning              258.0               11.90             7.83              8.47                0.10             0.08
+stress                321.0               14.53            15.53             14.93                0.21             0.15
+addiction             135.0               18.03            19.03             17.10                0.30             0.23
+sleep                 154.0               28.37            32.43             30.73                0.37             0.21

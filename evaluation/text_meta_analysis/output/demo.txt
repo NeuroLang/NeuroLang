@@ -1,0 +1,11 @@
+[fetch_atlas_schaefer_2018] Dataset directory found: /tmp/nsdata2/ns_syn/schaefer_2018
+D1 text query: 'cortical response to noxious heat applied to the skin'
+   selected 516 studies (the term 'pain' has 516); map vs the 'pain' map: r=0.916 Dice=0.762 (16s)
+   closest studies: Temporal and intensity coding of pain in human cortex.; Tactile attention tasks enhance activation in somatosen; Fast reaction to different sensory modalities activates
+D2 text query: 'holding information in mind over a delay'
+   2182 studies close to the text, 1869 of them do not mention 'working memory' (the term tags 1091 studies); map of the untagged ones vs the 'working memory' map: r=0.856 Dice=0.650
+   some untagged studies: Role of left inferior prefrontal cortex in retrieval of sema; A common network of functional areas for attention and eye m; Cortical fMRI activation produced by attentive tracking of m; Common inhibitory mechanism in human inferior prefrontal cor
+D3 text query: 'acquisition and extinction of conditioned shock expectancy'
+   P(a peak in the amygdala): all studies 0.137 | studies close to the text 0.366 (lift 2.67) | studies tagged 'fear' 0.446 (lift 3.25)
+   133 of the studies close to the text report an amygdala peak; their uniformity map vs the map of all text-selected studies: r=0.868, max ratio 27.1 vs 12.7
+saved
