@@ -198,6 +198,13 @@ Unreleased
 
 **Bug fixes:**
 
+* A probabilistic query no longer fails with ``AttributeError: type object
+  'Unknown' has no attribute '__origin__'`` when the program has a
+  query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
+  m) :- ...``, that the query does not use, or whose rule's body is empty:
+  the choice is then over no tuple, as a query-based probabilistic fact
+  over no tuple already was.
+
 * The REPL skips the ``%`` comment lines between statements, e.g. before
   a dot-command of a pasted block or in a piped batch, which it submitted
   as programs that failed to parse; a comment line within a statement of
