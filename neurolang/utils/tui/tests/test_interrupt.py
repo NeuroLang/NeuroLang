@@ -64,3 +64,17 @@ def test_second_ctrl_c_exits_when_stuck_in_native_code(monkeypatch):
         release.set()
     assert exc_info.value.code == interrupt.EXIT_STATUS
     assert stuck == [True]
+
+
+def test_runs_in_the_calling_thread_where_there_are_no_threads(monkeypatch):
+    """WebAssembly, e.g. Pyodide, cannot start threads: no worker then."""
+    monkeypatch.setattr(interrupt.sys, "platform", "emscripten")
+
+    def no_thread(*args, **kwargs):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", no_thread)
+    assert (
+        interrupt.call_interruptibly(threading.get_ident)
+        == threading.get_ident()
+    )
