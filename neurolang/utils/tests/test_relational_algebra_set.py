@@ -8,13 +8,10 @@ from ..relational_algebra_set import (
 )
 
 try:
-    from ..relational_algebra_set import dask_sql
-    HAS_DASK = True
-    fixture_ids = ["pandas", "dask_sql"]
-    fixture_params = [(pandas,), (dask_sql,)]
-
+    from ..relational_algebra_set import polars
+    fixture_ids = ["pandas", "polars"]
+    fixture_params = [(pandas,), (polars,)]
 except ImportError:
-    HAS_DASK = False
     fixture_ids = ["pandas"]
     fixture_params = [(pandas,)]
 
@@ -825,6 +822,36 @@ def test_named_ra_set_from_other(ra_module):
     assert fourth.is_dee()
 
 
+class _Unordered:
+    """A hashable value without an order, as the SDD nodes of weighted
+    model counting."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __eq__(self, other):
+        return isinstance(other, _Unordered) and self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __lt__(self, other):
+        raise TypeError("not ordered")
+
+
+def test_named_ra_union_of_unordered_values():
+    """A union needs no order on the values: the provenance column of
+    weighted model counting holds SDD nodes."""
+    a, b, c = (_Unordered(n) for n in "abc")
+    first = pandas.NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), [(1, a), (2, b)]
+    )
+    second = pandas.NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), [(2, b), (3, c)]
+    )
+    assert set(first | second) == {(1, a), (2, b), (3, c)}
+
+
 def test_named_ra_union(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(7, 8), (9, 2)]
@@ -1218,6 +1245,22 @@ def test_explode_multi_columns(ra_module):
     )
     result = relation.explode("z", ("v", "w"))
     assert result == expected
+
+
+def test_explode_multi_columns_empty_relation(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=[(0, 1, frozenset({(3, 4)}))],
+    ).selection({"x": 2})
+    for empty in (
+        relation,
+        ra_module.NamedRelationalAlgebraFrozenSet(
+            columns=["x", "y", "z"], iterable=[]
+        ),
+    ):
+        result = empty.explode("z", ("v", "w"))
+        assert result.columns == ("x", "y", "z", "v", "w")
+        assert len(result) == 0
 
 
 def test_aggregate_repeated_group_column(ra_module):

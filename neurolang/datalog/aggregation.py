@@ -40,6 +40,7 @@ from .expression_processing import (
     is_aggregation_rule,
 )
 from .expressions import AggregationApplication, TranslateToLogic
+from .range_restriction import check_range_restriction
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -48,20 +49,42 @@ AGG_MEAN = Symbol("mean")
 AGG_COUNT = Symbol("count")
 AGG_SUM = Symbol("sum")
 AGG_STD = Symbol("std")
+AGG_MIN = Symbol("min")
+AGG_AVG = Symbol("avg")
 
 
 def is_builtin_aggregation_functor(functor):
-    return functor in (AGG_MAX, AGG_MEAN, AGG_COUNT, AGG_SUM, AGG_STD)
+    return functor in (
+        AGG_MAX, AGG_MIN, AGG_MEAN, AGG_AVG, AGG_COUNT, AGG_SUM, AGG_STD
+    )
 
 
 class BuiltinAggregationMixin:
     constant_max = Constant(numpy.max)
+    constant_min = Constant(numpy.min)
     constant_mean = Constant(numpy.mean)
+    constant_avg = Constant(numpy.mean)
     constant_sum = Constant(sum)
     constant_std = Constant(numpy.std)
 
     def function_count(self, *iterables: typing.Iterable) -> int:
         return len(next(iter(iterables)))
+
+    def function_percentile(
+        self, values: typing.Iterable, q: float
+    ) -> float:
+        """
+        Return the ``q``-th percentile of ``values``, ignoring NaNs.
+
+        ``q`` is in ``[0, 100]`` and the percentile is linearly
+        interpolated, as in :func:`numpy.nanpercentile`.  The rows in the
+        top ``p``% of a column ``v`` are those with
+        ``v >= percentile(v, 100 - p)``; with ties or interpolation, they
+        can be slightly more than ``p``%.
+        """
+        return float(
+            numpy.nanpercentile(numpy.asarray(values, dtype=float), q)
+        )
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):
@@ -101,6 +124,7 @@ class DatalogWithAggregationMixin(PatternWalker):
         antecedent = expression.antecedent
 
         self._validate_aggregation_implication_syntax(consequent, antecedent)
+        check_range_restriction(expression, self.symbol_table)
 
         if consequent.functor in self.symbol_table:
             eb = self._new_intensional_internal_representation(consequent)

@@ -6,6 +6,7 @@ from .. import expressions as ir
 from ..datalog import DatalogProgram
 from ..datalog.chase import Chase
 from ..datalog.aggregation import (
+    BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation
 )
@@ -90,6 +91,7 @@ class RegionFrontendDatalogSolver(
     CommandsMixin,
     NumpyFunctionsMixin,
     DatalogWithAggregationMixin,
+    BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,
     ExpressionBasicEvaluator,

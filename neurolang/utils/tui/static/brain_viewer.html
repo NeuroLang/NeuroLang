@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,__FAVICON__">
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 12px 16px; background: #111; color: #ddd;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 10px; }
+  #controls {
+    display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
+    margin-bottom: 10px;
+  }
+  #controls label { display: inline-flex; gap: 6px; align-items: center; }
+  #threshold { width: 7em; }
+  #threshold-slider { width: 180px; }
+  #opacity { width: 100px; }
+  #threshold-value { color: #999; min-width: 6em; }
+  input, select, button {
+    background: #222; color: #ddd; border: 1px solid #444;
+    border-radius: 3px; font: inherit;
+  }
+  button { padding: 2px 10px; cursor: pointer; }
+  #layer-control button { padding: 2px 6px; }
+  #display {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    margin-bottom: 10px; color: #bbb;
+  }
+  #display label { display: inline-flex; gap: 6px; align-items: center; }
+  #crosshair-width { width: 3.5em; }
+  #crosshair-color { padding: 0; width: 2.2em; height: 1.5em; }
+  #gamma { width: 90px; }
+  #hot-keys { color: #888; }
+  #views { width: 960px; max-width: 100%; height: 340px; }
+  #views.tall { height: 640px; }
+  #gl { width: 100%; height: 100%; display: block; outline: none; }
+  #readout { margin: 8px 0; font-variant-numeric: tabular-nums; }
+  #readout b { color: #fff; font-weight: 600; }
+  #message { color: #e66; }
+  #colorbars canvas { display: block; }
+  .colorbar-name { color: #bbb; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h1>__TITLE__</h1>
+<div id="controls">
+  <label id="layer-control">Overlay <select id="layer"></select>
+    <button id="layer-up" type="button" title="Draw it over the next one">▲</button>
+    <button id="layer-down" type="button" title="Draw it under the previous one">▼</button>
+    <input id="visible" type="checkbox"> shown
+  </label>
+  <label>Threshold
+    <input id="threshold" type="number" min="0" step="any">
+    <select id="threshold-mode" title="A value, or a percentile of the nonzero values">
+      <option value="value">value</option>
+      <option value="percentile">percentile</option>
+    </select>
+    <input id="threshold-slider" type="range" min="0" max="1000" step="1">
+    <span id="threshold-value"></span>
+  </label>
+  <label>Colormap <select id="cmap"></select></label>
+  <label title="Symmetric around 0, or from the threshold to the maximum">
+    <input id="symmetric" type="checkbox"> symmetric
+  </label>
+  <label>Opacity
+    <input id="opacity" type="range" min="0" max="1" step="0.05">
+  </label>
+  <button id="reset" type="button">Reset</button>
+</div>
+<div id="display">
+  <label>View <select id="slice-type">
+    <option value="axial">axial</option>
+    <option value="coronal">coronal</option>
+    <option value="sagittal">sagittal</option>
+    <option value="multiplanar">3 slices</option>
+    <option value="render">3D render</option>
+  </select></label>
+  <label title="The layout of the 3 slices">Layout <select id="layout">
+    <option value="row">row</option>
+    <option value="column">column</option>
+    <option value="grid">grid</option>
+    <option value="auto">auto</option>
+  </select>
+    <input id="render-tile" type="checkbox"> with 3D
+  </label>
+  <label title="What dragging with the right button does">Drag
+    <select id="drag-mode">
+      <option value="contrast">contrast</option>
+      <option value="pan">pan / zoom</option>
+      <option value="measurement">measure</option>
+      <option value="angle">angle</option>
+      <option value="slicer3D">3D slicer</option>
+      <option value="none">none</option>
+    </select>
+  </label>
+  <label>Crosshair
+    <input id="crosshair-color" type="color">
+    <input id="crosshair-width" type="number" min="0" max="10" step="1">
+    <input id="crosshair-3d" type="checkbox"> in 3D
+  </label>
+  <label title="The gamma of the background">Gamma
+    <input id="gamma" type="range" min="0.1" max="4" step="0.05">
+  </label>
+  <label><input id="nv-colorbar" type="checkbox"> colour bar</label>
+  <label><input id="orientation-text" type="checkbox"> labels</label>
+  <label><input id="orient-cube" type="checkbox"> orientation cube</label>
+  <label><input id="ruler" type="checkbox"> ruler</label>
+  <label title="Left on the right of the slices">
+    <input id="radiological" type="checkbox"> radiological</label>
+  <label title="Interpolate the voxels, rather than drawing them as blocks">
+    <input id="smooth" type="checkbox"> smooth</label>
+  <label title="Cut the 3D render">
+    <input id="clip-plane" type="checkbox"> clip plane</label>
+  <span id="hot-keys" title="With the views focused">keys: V view &middot; C clip plane</span>
+</div>
+<div id="views"><canvas id="gl" tabindex="0"></canvas></div>
+<div id="readout">
+  MNI <b id="mm"></b> mm &middot; voxel <b id="voxel"></b>
+  &middot; value <b id="value"></b>
+</div>
+<div id="colorbars"><canvas id="colorbar" width="480" height="44"></canvas></div>
+<p id="message"></p>
+<script id="viewer-data" type="application/json">__DATA__</script>
+<script>
+__NIIVUE__
+</script>
+<script>
+__SCRIPT__
+</script>
+</body>
+</html>

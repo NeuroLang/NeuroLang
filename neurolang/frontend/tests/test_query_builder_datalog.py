@@ -36,3 +36,37 @@ def test_show_ra_deterministic_frontend_reports_wrong_arity_error():
                 "label(l) :- schaefer(l, r).\nans(l) :- label(l).",
                 show_ra=show_ra,
             )
+
+
+def test_query_with_two_constants_on_a_derived_predicate():
+    """Magic sets seed ``magic_q2^bbf(5, 'a')``, a rule of two constants."""
+    from neurolang.frontend import NeurolangDL
+
+    nl = NeurolangDL()
+    nl.add_tuple_set([(5, "a", 2), (5, "b", 3), (2, "a", 4)], name="e")
+    nl.execute_datalog_program(
+        "q(x, y, z) :- e(x, y, z)\nq2(x, y, z) :- q(x, y, z)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.z,), e.q2(5, "a", e.z))
+    assert set(res) == {(2,)}
+
+
+def test_negation_within_an_existential_is_kept():
+    """
+    Check that ``exists(y; …, ~B(y))`` keeps the negation of ``B``.
+
+    The parser used to drop the negated conjuncts of an existential, so
+    the query below answered the rows of ``R`` without any ``S`` instead
+    of those without an ``S`` outside ``U``.
+    """
+    from neurolang.frontend import NeurolangDL
+
+    nl = NeurolangDL()
+    nl.add_tuple_set([("a",), ("b",)], name="R")
+    nl.add_tuple_set([("a", 1), ("b", 2)], name="S")
+    nl.add_tuple_set([("a", 1)], name="U")
+    res = nl.execute_datalog_program(
+        "ans(x) :- R(x), ~exists(y; S(x, y), ~U(x, y))"
+    )
+    assert set(res.as_pandas_dataframe()["x"]) == {"a"}

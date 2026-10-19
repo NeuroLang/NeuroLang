@@ -1,16 +1,24 @@
 import operator
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
+import pytest
 from pytest import fixture
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Negation, Disjunction
+from ...exceptions import NotRankedException
+from ...logic import Conjunction, Disjunction, ExistentialPredicate, Negation
+from ...logic.expression_processing import extract_logic_atoms
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
-from ..ranking import verify_that_the_query_is_ranked, partially_rank_query
+from ..ranking import (
+    partially_rank_query,
+    rank_query,
+    verify_that_the_query_is_ranked
+)
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -134,3 +142,41 @@ def test_cant_rank_repeated():
     res = partially_rank_query(query, symbol_table)
 
     assert not verify_that_the_query_is_ranked(res)
+
+
+def test_query_with_comparison_ranked():
+    query = Conjunction((Q(x, y), P(z, y), NE(z, x)))
+    assert verify_that_the_query_is_ranked(query)
+
+
+def _pairs(*tuples):
+    types = tuple(type(value) for value in tuples[0])
+    return Constant[AbstractSet[Tuple[types]]](
+        WrappedRelationalAlgebraSet(tuples), verify_type=False
+    )
+
+
+def test_rank_query_symmetric_pair():
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y, Conjunction((Q(x, y), Q(y, x)))
+    ))
+    symbol_table = {Q: _pairs((1, 2), (2, 1), (1, 1))}
+    assert not verify_that_the_query_is_ranked(query)
+    res = rank_query(query, symbol_table)
+    assert verify_that_the_query_is_ranked(res)
+    assert Q not in {atom.functor for atom in extract_logic_atoms(res)}
+
+
+@pytest.mark.parametrize("tuples", (
+    ((frozenset({1}), frozenset({1, 2})), (frozenset({1, 2}), frozenset())),
+    ((1, "a"), (2, "b")),
+), ids=("sets", "integers and strings"))
+def test_rank_query_needs_a_total_order(tuples):
+    """Ranking compares the values of the columns of the ranked
+    variables: their type must have a total order and an equality, the
+    same for all of them."""
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y, Conjunction((Q(x, y), Q(y, x)))
+    ))
+    with pytest.raises(NotRankedException):
+        rank_query(query, {Q: _pairs(*tuples)})

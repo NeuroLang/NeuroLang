@@ -4,8 +4,8 @@ import pandas as pd
 import pytest
 from pytest import raises
 
-
 from ... import expression_walker, expressions
+from ...frontend import NeurolangDL
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from ...frontend.probabilistic_frontend import NeurolangPDL
 from ...logic import Negation, Union as LogicUnion
@@ -17,9 +17,11 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
+from ..expression_processing import extract_logic_free_variables
 from ..exceptions import (
     BoundAggregationApplicationError,
     NegationInMagicSetsRewriteError,
+    NoConstantPredicateFoundError,
 )
 from ..magic_sets import (
     AdornedSymbol,
@@ -61,6 +63,7 @@ flat = S_("flat")
 anc = S_("anc")
 par = S_("par")
 anc2 = S_("anc2")
+anc3 = S_("anc3")
 q = S_("q")
 a = C_("a")
 b = C_("b")
@@ -315,6 +318,94 @@ def test_resolution_works_query_free():
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
 
+
+def test_resolution_works_constant_in_edb_atom():
+    """
+    An atom of the extensional database with a constant binds the
+    variables of the atoms after it: ``x`` in ``anc(x, y)``, the magic
+    set of ``anc`` holding the children of ``a``.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), par(a, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("magic_anc^bf")
+        and par(a, x) in rule.antecedent.formulas
+        for rule in mr.formulas
+    )
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((c,)), C_((d,))}
+
+
+def test_edb_atom_without_constant_does_not_seed_magic_sets():
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), par(z, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    with raises(NoConstantPredicateFoundError):
+        magic_rewrite(q(y), dl)
+
+
+def test_magic_rules_leave_out_unconnected_atoms():
+    """
+    A magic rule keeps only the atoms left of its arc which share a
+    variable, maybe through other atoms, with its bound arguments: the
+    magic set of ``anc`` does not depend on ``anc2(z, w)``, whose
+    product with it would only be projected out.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), anc2(z, x1) & anc(x, y) & par(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, y), par(x, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+    magic_anc = [
+        rule for rule in mr.formulas
+        if rule.consequent.functor.name.startswith("magic_anc^")
+    ]
+    assert len(magic_anc) > 0
+    for rule in magic_anc:
+        assert all(
+            not atom.functor.name.startswith("anc2")
+            for atom in rule.antecedent.formulas
+        ), rule
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (c, d)}
+
 def test_resolution_works_builtin():
     edb = Eb_(
         [
@@ -411,6 +502,44 @@ def test_resolution_works_repeated_predicate_different_constants_nested():
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((b,))}
+
+
+def test_resolution_works_constants_in_different_rules():
+    """
+    Check that every constant of an adorned predicate seeds its magic set.
+
+    anc(a, x) is met once anc^bf was adorned from anc(c, y); its constant
+    must still get a magic init rule.
+    """
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(x, y), anc2(x) & anc3(y)),
+            Imp_(anc2(x), anc(a, x)),
+            Imp_(anc3(y), anc(c, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x, y), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e, d)) for e in (b, c, d)}
 
 
 def test_resolution_works_aggregation():
@@ -746,3 +875,172 @@ def test_magic_init_rules_walk_twice_no_crash():
         "Magic init rules are not idempotent: symbol table changed after "
         "walking magic rules a second time"
     )
+
+
+def _magic_rewrite_and_solve(code, edb, query):
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(query, dl)
+
+    for rule in mr.formulas:
+        assert (
+            extract_logic_free_variables(rule.consequent) <=
+            extract_logic_free_variables(rule.antecedent)
+        ), f"magic rule {rule} is not range restricted"
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    return Chase(dl).build_chase_solution()[goal].value
+
+
+def test_resolution_works_same_predicate_shared_variable_constants():
+    """
+    ``q(x) :- anc(x, b), anc(x, c)`` binds ``x`` of the second ``anc`` call
+    through the first one: its magic rule must be
+    ``magic_anc^bb(x, c) :- anc^fb(x, b)``, not the seed
+    ``magic_anc^bb(x, c) :- ()`` with ``x`` free.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(a, c)), F_(par(b, c)), F_(par(d, b))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, b) & anc(x, c)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    res = _magic_rewrite_and_solve(code, edb, q(x))
+    assert res == {C_((e,)) for e in (a, d)}
+
+
+def test_resolution_works_same_predicate_positive_and_negated():
+    edb = Eb_([F_(par(a, b)), F_(par(a, c)), F_(par(b, c)), F_(par(d, b))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, c) & Negation(anc(x, b))),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    res = _magic_rewrite_and_solve(code, edb, q(x))
+    assert res == {C_((b,))}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize(
+    "threshold,query,expected",
+    [
+        ("", "ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')", {1}),
+        (
+            ", (v > 0.03)",
+            "ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')",
+            {1},
+        ),
+        ("", "ans(s) :- mentions(s, 'pain'), ~mentions(s, 'emotion')", {2, 3}),
+        (
+            ", (v > 0.03)",
+            "ans(s) :- mentions(s, 'pain'), ~mentions(s, 'emotion')",
+            {3},
+        ),
+    ],
+)
+def test_frontend_same_idb_predicate_different_constants(
+    frontend, threshold, query, expected
+):
+    nl = frontend()
+    nl.add_tuple_set(
+        [(1, "pain", 0.5), (1, "emotion", 0.5), (2, "pain", 0.01),
+         (3, "pain", 0.5)],
+        name="tfidf",
+    )
+    nl.execute_datalog_program(
+        f"mentions(s, t) :- tfidf(s, t, v){threshold}"
+    )
+    res = nl.execute_datalog_program(query)
+    assert set(res.as_pandas_dataframe().s) == expected
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_idb_predicate_several_bound_constants(frontend):
+    nl = frontend()
+    nl.add_tuple_set(
+        [(10, 20, 30, 1), (11, 20, 30, 1), (10, 20, 30, 2)],
+        name="peak_reported",
+    )
+    res = nl.execute_datalog_program(
+        "reports(s, i, j, k) :- peak_reported(i, j, k, s)\n"
+        "ans(s) :- reports(s, 10, 20, 30)"
+    )
+    assert set(res.as_pandas_dataframe().s) == {1, 2}
+
+
+def test_adorned_symbol_predicates_keep_their_own_rules():
+    """
+    Rewrite the rules of a predicate whose symbol is an AdornedSymbol.
+
+    The conditional query sugar defines ``anc^cond_num``, an
+    ``AdornedSymbol`` of ``anc``. Adorning it again must neither take the
+    rules of ``anc`` for its own nor give it the name of an adornment of
+    ``anc``.
+    """
+    anc_num = AdornedSymbol(anc, "cond_num", None)
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)), F_(par(d, a))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(x, b)),
+            Imp_(anc(x, y), anc_num(x, y) & par(y, z)),
+            Imp_(anc_num(x, y), par(x, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+    heads = {rule.consequent.functor for rule in mr.formulas}
+    num_heads = [
+        head for head in heads
+        if isinstance(head, AdornedSymbol) and head.adornment == "cond_num"
+    ]
+    assert len(num_heads) == 1, heads
+    assert num_heads[0].expression != anc
+    dl.walk(mr)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {(a,)}
+
+
+# A function of a variable that only the query binds, as the similarity
+# of a query text to a study: the rule is solved only for the query texts
+# magic sets pass to it.
+def _similarity(text: str, study: int) -> float:
+    return float(len(text) % study == 0)
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_variable_bound_by_an_edb_atom_with_a_constant(frontend):
+    nl = frontend()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set(
+        [("t1", "motor task", "move"), ("t2", "reading task", "read it")],
+        name="task",
+    )
+    nl.add_symbol(_similarity, name="similarity")
+    res = nl.execute_datalog_program(
+        "close(q, s) :- study(s) & (v == similarity(q, s)) & (v > .5)\n"
+        'ans(s) :- task(_, "motor task", d) & close(d, s)'
+    )
+    assert set(res.as_pandas_dataframe().s) == {1, 2}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_edb_atom_with_a_constant_binding_an_aggregate(frontend):
+    """The value an EDB atom with a constant gives to an aggregate is not
+    bound by magic sets: the query is solved as without the binding."""
+    nl = frontend()
+    nl.add_tuple_set([(1, 2), (1, 3), (2, 2)], name="e")
+    nl.add_tuple_set([("a",), ("b",)], name="r")
+    res = nl.execute_datalog_program(
+        "c(count(x)) :- r(x)\n"
+        "ans(n) :- e(1, n) & c(n)"
+    )
+    assert set(res.as_pandas_dataframe().n) == {2}

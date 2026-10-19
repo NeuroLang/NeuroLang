@@ -12,6 +12,7 @@ busy, a second Ctrl+C exits the process.
 
 import ctypes
 import os
+import sys
 import threading
 import time
 
@@ -65,7 +66,12 @@ def call_interruptibly(function, on_stuck=lambda: None):
 
     Exceptions of *function*, including the KeyboardInterrupt raised in
     it by Ctrl+C, are raised again. See :func:`_stop` for *on_stuck*.
+
+    Where threads cannot be started, as in WebAssembly, *function* runs
+    in the calling thread and cannot be interrupted.
     """
+    if sys.platform == "emscripten":
+        return function()
     outcome = {}
     done = threading.Event()
 

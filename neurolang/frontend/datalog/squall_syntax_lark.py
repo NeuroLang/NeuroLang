@@ -16,7 +16,7 @@ Basic sentences::
 Relative clauses::
 
     every study that plays        →  ∀x. study(x) ∧ plays(x)
-    every study that ~reports X   →  ∀x. study(x) ∧ reports(x, X)
+    every study that ~reports X   →  ∀x. study(x) ∧ reports(X, x)
 
 Negation-as-failure (Datalog \\+)::
 
@@ -70,6 +70,7 @@ from ...datalog.expressions import AggregationApplication as _AggApp
 from ...exceptions import SquallSemanticError
 from ...expressions import (
     Constant,
+    Expression,
     FunctionApplication,
     Query,
     Symbol,
@@ -181,8 +182,10 @@ class _AnonymousVar:
     """
 
     def __init__(self):
-        # Allocate one fresh symbol per anonymous slot.
+        # Allocate one fresh symbol per anonymous slot, tagged so that
+        # aggregations can leave the column out of the aggregated values.
         self._sym = Symbol.fresh()
+        self._sym._squall_anonymous = True
 
     def as_symbol(self):
         return self._sym
@@ -926,12 +929,7 @@ class SquallTransformer(Transformer):
             # Determine aggregation arguments from captured variables.
             # tuple-labeled npc (e.g. "of the Foo (?i;?j;?k;?p)") captures
             # all column variables as a tuple in the first entry.
-            if captured and isinstance(captured[0], tuple):
-                agg_args = tuple(captured[0])
-            elif captured and isinstance(captured[0], Symbol):
-                agg_args = tuple(captured)
-            else:
-                agg_args = (Symbol.fresh(),)
+            agg_args = _rule_body_agg_vars(captured)
 
             agg_expr = _AggApp(agg_func_const, agg_args)
             head_args = [agg_expr]
@@ -1069,7 +1067,7 @@ class SquallTransformer(Transformer):
     def s_np_vp(self, args):
         np = args[0]
         vp = args[1]
-        return np(vp)
+        return np(_as_predicate(vp))
 
     def s_for(self, args):
         np = args[0]
@@ -1228,32 +1226,14 @@ class SquallTransformer(Transformer):
                     ):
                         bare_body = bare_body.formulas[0]
 
-                    if per_vars:
-                        # Explicit groupby: use the captured witness variable
-                        # (same as the original single-var path).
-                        if captured_flat:
-                            agg_args = (captured_flat[0],)
-                        elif isinstance(npc_formula, ExistentialPredicate):
-                            agg_args = (npc_formula.head,)
-                        else:
-                            agg_args = (Symbol.fresh(),)
-                    else:
-                        # No explicit groupby: use all captured vars (covers
-                        # tuple-labeled npcs such as "the Foo (?i;?j;?k;?p)").
-                        if captured_flat:
-                            agg_args = tuple(captured_flat)
-                        else:
-                            free_vars = extract_logic_free_variables(bare_body)
-                            if free_vars:
-                                agg_args = tuple(
-                                    sorted(free_vars, key=lambda s: s.name)
-                                )
-                            elif isinstance(npc_formula, ExistentialPredicate):
-                                agg_args = (npc_formula.head,)
-                            else:
-                                agg_args = (Symbol.fresh(),)
+                    agg_args = _named_agg_vars(
+                        captured_flat, per_vars
+                    ) or _fallback_agg_vars(
+                        captured_flat, per_vars, bare_body, npc_formula
+                    )
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
+                    agg_expr._per_vars = list(per_vars)
                     d(agg_expr)  # adds agg_expr to head_args
 
                     # Conjoin any trailing relative clause (e.g. "such that Voxel(…)")
@@ -1350,17 +1330,9 @@ class SquallTransformer(Transformer):
                     ):
                         bare_body = bare_body.formulas[0]
 
-                    if per_vars:
-                        agg_args = (captured_flat[0],) if captured_flat else (Symbol.fresh(),)
-                    else:
-                        if captured_flat:
-                            agg_args = tuple(captured_flat)
-                        else:
-                            free_vars = extract_logic_free_variables(bare_body)
-                            if free_vars:
-                                agg_args = tuple(sorted(free_vars, key=lambda s: s.name))
-                            else:
-                                agg_args = (Symbol.fresh(),)
+                    agg_args = _named_agg_vars(
+                        captured_flat, per_vars
+                    ) or _fallback_agg_vars(captured_flat, per_vars, bare_body)
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
                     agg_expr._per_vars = list(per_vars)
@@ -1906,8 +1878,17 @@ class SquallTransformer(Transformer):
         return ('_rel', lambda x: noun(*body_syms))
 
     def rel_adj1(self, args):
+        """
+        Handle ``adj1 [cp]``: ``reported`` or ``reported by a Study``.
+
+        With a complement the adjective is n-ary like a verb:
+        ``x is reported by a Study`` builds ``reported(x, study)``.
+        """
         adj = args[0]
-        return ('_rel', adj)
+        cp = args[1] if len(args) > 1 else None
+        if cp is None:
+            return ('_rel', adj)
+        return ('_rel', lambda x: _apply_ops(cp, adj, x))
 
     def comparison(self, args):
         tokens = []
@@ -1999,10 +1980,22 @@ class SquallTransformer(Transformer):
         return rel
 
     def vpbe_npc(self, args):
+        """
+        Handle ``is a Noun`` / ``is 'value'``.
+
+        A tuple subject, ``(?s; ?t; ?w) is a Term_weight``, fills the
+        noun's columns: ``term_weight(s, t, w)``.
+        """
         npc = args[0]
-        if callable(npc) and not isinstance(npc, (Symbol, Constant)):
-            return lambda x: npc(lambda y: Constant(eq)(x, y))
-        return lambda x: Constant(eq)(x, npc)
+        if not callable(npc) or isinstance(npc, (Symbol, Constant)):
+            return lambda x: Constant(eq)(x, npc)
+        ng1 = getattr(npc, '_npc_ng1', None)
+
+        def vp(x):
+            if isinstance(x, tuple) and ng1 is not None:
+                return ng1(x)
+            return npc(lambda y: Constant(eq)(x, y))
+        return vp
 
     def vphave_noun2(self, args):
         noun2 = args[0]
@@ -2035,20 +2028,23 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def npc_det(self, args):
+        """
+        Handle ``det ng1`` complements; the CPS keeps ``ng1`` as ``_npc_ng1``.
+        """
         items = [a for a in args if a is not None]
-        if len(items) >= 2:
-            det_val = items[0]
-            ng1 = items[1]
-            if callable(det_val) and not isinstance(det_val, (Symbol, Constant)):
-                return det_val(ng1)
-            return self.det_the([])(ng1)
-        elif len(items) == 1:
-            ng1 = items[0]
-            return self.det_the([])(ng1)
-        raise self._make_error(
-            "Empty noun phrase complement — expected a noun or determiner "
-            "+ noun after the verb."
-        )
+        if not items:
+            raise self._make_error(
+                "Empty noun phrase complement — expected a noun or "
+                "determiner + noun after the verb."
+            )
+        ng1 = items[-1]
+        det_val = items[0] if len(items) >= 2 else None
+        if callable(det_val) and not isinstance(det_val, (Symbol, Constant)):
+            npc = det_val(ng1)
+        else:
+            npc = self.det_the([])(ng1)
+        npc._npc_ng1 = ng1
+        return npc
 
     # ---- Operations / Prepositional Phrases ----
 
@@ -2062,14 +2058,17 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def ops_rec(self, args):
+        """
+        Chain the objects of an n-ary verb: ``weighs ?t with ?w``.
+
+        The result is a CPS over all the objects, so ``x weighs ?t with ?w``
+        builds ``weighs(x, t, w)``.
+        """
         prev = args[0]
         new_op = args[-1]
         if callable(prev) and callable(new_op):
             def combined(f):
-                return lambda x: _conj_flat(
-                    prev(f)(x) if callable(prev(f)) else prev(f),
-                    new_op(f)(x) if callable(new_op(f)) else new_op(f)
-                )
+                return prev(lambda *ys: new_op(lambda z: f(*ys, z)))
             return combined
         return new_op
 
@@ -2085,28 +2084,12 @@ class SquallTransformer(Transformer):
     def bool_disjunction(self, args):
         if len(args) == 1:
             return args[0]
-        formulas = []
-        for a in args:
-            if isinstance(a, tuple) and a[0] == '_rel':
-                formulas.append(a[1])
-            else:
-                formulas.append(a)
-        if all(callable(f) and not isinstance(f, (Symbol, Constant, FunctionApplication)) for f in formulas):
-            return lambda x: Disjunction(tuple(f(x) for f in formulas))
-        return Disjunction(tuple(formulas))
+        return _combine_bool(args, Disjunction)
 
     def bool_conjunction(self, args):
         if len(args) == 1:
             return args[0]
-        formulas = []
-        for a in args:
-            if isinstance(a, tuple) and a[0] == '_rel':
-                formulas.append(a[1])
-            else:
-                formulas.append(a)
-        if all(callable(f) and not isinstance(f, (Symbol, Constant, FunctionApplication)) for f in formulas):
-            return lambda x: Conjunction(tuple(f(x) for f in formulas))
-        return Conjunction(tuple(formulas))
+        return _combine_bool(args, Conjunction)
 
     def bool_negation(self, args):
         inner = args[0]
@@ -2155,7 +2138,7 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def expr_atom_tuple(self, args):
-        return tuple(args)
+        return tuple(_unwrap_label(a) for a in args)
 
     def expr_atom_fun(self, args):
         func = args[0]
@@ -2381,10 +2364,10 @@ class SquallTransformer(Transformer):
         formula = ops(capturing_d)
 
         if captured_vars:
-            head_vars = [
+            head_vars = _with_group_vars([
                 v for v in captured_vars
                 if isinstance(v, (Symbol, _AggApp))
-            ]
+            ])
             while isinstance(formula, (UniversalPredicate, ExistentialPredicate)):
                 formula = formula.body
             if isinstance(formula, Implication):
@@ -2686,6 +2669,127 @@ def _extract_datalog_body(cps_np, head_args):
     return body_parts
 
 
+def _as_predicate(item):
+    """
+    Unwrap a ``('_rel', f)`` item and turn a bare verb Symbol into a predicate.
+    """
+    if isinstance(item, tuple) and len(item) == 2 and item[0] == '_rel':
+        item = item[1]
+    if isinstance(item, Symbol):
+        return functools.partial(_apply_verb, item)
+    return item
+
+
+def _apply_verb(verb, *args):
+    """
+    Apply a bare verb to its subject, spreading a tuple subject.
+    """
+    if len(args) == 1 and isinstance(args[0], (tuple, list)):
+        args = tuple(args[0])
+    return verb(*args)
+
+
+def _is_predicate(item):
+    return callable(item) and not isinstance(item, Expression)
+
+
+def _combine_bool(args, operation):
+    """
+    Combine the operands of ``and`` / ``or``.
+
+    Predicates (verb phrases, relative clauses) are combined into one
+    predicate; formulas (sentences) into one formula.
+    """
+    predicates = [_as_predicate(a) for a in args]
+    if all(_is_predicate(f) for f in predicates):
+        return lambda x: operation(tuple(f(x) for f in predicates))
+    return operation(_bool_formulas(args))
+
+
+def _bool_formulas(args):
+    """
+    Return the operands of a sentence-level ``and`` / ``or`` as formulas.
+    """
+    formulas = tuple(
+        a[1] if isinstance(a, tuple) and a[0] == '_rel' else a for a in args
+    )
+    if any(_is_predicate(f) for f in formulas):
+        raise SquallSemanticError(
+            "Cannot combine a relative clause or verb phrase with a full "
+            "sentence using 'and'/'or'.  Repeat the relative pronoun "
+            "('that …' / 'where …') before each part, e.g. "
+            "'every Study that mentions a Term and where ?x is …'."
+        )
+    return formulas
+
+
+def _with_group_vars(head_vars):
+    """
+    Prepend the ``per`` group variables of aggregations to obtained columns.
+
+    ``obtain every Max of the T (?s; _; ?w) per ?s`` yields one row per
+    ``?s`` with its maximum ``?w``.
+    """
+    groups = []
+    for v in head_vars:
+        for g in getattr(v, '_per_vars', ()):
+            if g not in groups and g not in head_vars:
+                groups.append(g)
+    return groups + list(head_vars)
+
+
+def _named_agg_vars(captured, per_vars):
+    """
+    Select the aggregated variables among the npc variables.
+
+    Columns labelled ``_`` are left out.  With ``per`` groups only the
+    first named non-group variable is aggregated, so that
+    ``the Max of the T (?s; _; ?w) per ?s`` aggregates ``?w``.  Returns an
+    empty tuple when nothing is left; callers then fall back to
+    ``_fallback_agg_vars``.
+    """
+    named = tuple(
+        v for v in captured
+        if isinstance(v, Symbol) and not getattr(v, '_squall_anonymous', False)
+    )
+    if per_vars:
+        return tuple(v for v in named if v not in per_vars)[:1]
+    return named
+
+
+def _rule_body_agg_vars(captured):
+    """
+    Aggregated variables of a ``define as X every Agg of the R`` body.
+
+    A tuple-labelled npc (``of the Foo (?i; ?j; _)``) captures all its
+    columns as one tuple; ``_`` columns are left out.
+    """
+    if captured and isinstance(captured[0], tuple):
+        agg_args = tuple(captured[0])
+    elif captured and isinstance(captured[0], Symbol):
+        agg_args = tuple(captured)
+    else:
+        return (Symbol.fresh(),)
+    return _named_agg_vars(agg_args, ()) or agg_args
+
+
+def _fallback_agg_vars(captured, per_vars, bare_body, npc_formula=None):
+    """
+    Aggregated variables when ``_named_agg_vars`` selected none.
+
+    Uses the first captured variable when grouping, otherwise all captured
+    variables or, failing that, the free variables of the npc body.
+    """
+    if captured:
+        return (captured[0],) if per_vars else tuple(captured)
+    free_vars = () if per_vars else extract_logic_free_variables(bare_body)
+    if free_vars:
+        return tuple(sorted(free_vars, key=lambda s: s.name))
+    if isinstance(npc_formula, ExistentialPredicate):
+        return (npc_formula.head,)
+    return (Symbol.fresh(),)
+
+
 def _agg_slot_var(agg_expr, bare_body):
     """Pick the variable a trailing relative clause's object slot must join on.
 
@@ -2775,26 +2879,19 @@ def _conj_flat(a, b):
 
 
 def _apply_ops(ops, verb, subject):
-    """Apply operation arguments to a transitive verb."""
-    # When verb is an _InverseVerbSymbol (from the ``~`` prefix), the
-    # ResolveInvertedFunctionApplicationMixin walker will reverse the
-    # argument tuple.  In relative-clause context the caller already
-    # supplies (object, subject) so the reversal is correct, but in
-    # ``such that`` sentence context the caller supplies (subject, object)
-    # and the reversal would swap them.  We detect the wrapper here and
-    # pre-swap so the final result is (subject, object) in both cases.
-    is_inverse = isinstance(verb, _InverseVerbSymbol)
+    """
+    Apply operation arguments to a transitive verb.
+
+    The subject always comes first in the surface order.  When ``verb`` is
+    an ``_InverseVerbSymbol`` (``~`` prefix) the resulting
+    ``InvertedFunctionApplication`` is reversed later, so ``x ~v y``
+    becomes ``v(y, x)``.
+    """
     if callable(ops) and not isinstance(ops, (Symbol, Constant)):
-        if is_inverse:
-            return ops(lambda *objs: verb(*objs, subject))
         return ops(lambda *objs: verb(subject, *objs))
     elif isinstance(ops, tuple):
-        if is_inverse:
-            return verb(*ops, subject)
         return verb(subject, *ops)
     else:
-        if is_inverse:
-            return verb(ops, subject)
         return verb(subject, ops)
 
 

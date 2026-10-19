@@ -74,6 +74,12 @@ def is_contained_rule(q1, q2):
         dp.walk(f)
     dp.walk(q1)
     solution = chase.Chase(dp).build_chase_solution()
+    if len(frozen_head.args) == 0:
+        # A nullary fact is derived when its relation is not empty; its
+        # membership in the facts of the solution is not tested, as their
+        # type differs from that of the frozen head.
+        relation = solution.get(frozen_head.functor)
+        return relation is not None and not relation.value.is_empty()
     return frozen_head in solution.as_set()
 
 
@@ -83,17 +89,14 @@ def is_contained(q1, q2):
     for 2 non-recursive positive ∃ logic queries,
     without constants, computes whether q1←q2.
 
-    caveat: the free variables of q1 and q2 should be
-    the same, else the queries are judge as not contained.
+    The free variables are treated as constants. Each disjunct of
+    q2 must imply a disjunct of q1. A disjunct d2 implies a disjunct
+    d1 if the free variables of d1 are included in those of d2 and
+    ∃(fv(d2) - fv(d1)) d2 implies d1. This test is sound, and complete
+    when the queries have the same free variables in every disjunct.
     '''
     s = Symbol.fresh()
     programs = []
-    if (
-        extract_logic_free_variables(q1) !=
-        extract_logic_free_variables(q2)
-    ):
-        LOG.debug("The free variables are different")
-        return False
     for query in (q1, q2):
         program = convert_pos_logic_query_to_datalog_rules(query, s)
         LOG.debug("Canonical program for %s", query)
@@ -101,11 +104,19 @@ def is_contained(q1, q2):
 
     for q2_ in programs[1]:
         for q1_ in programs[0]:
-            if is_contained_rule(q1_, q2_):
+            if _disjunct_implies(q2_, q1_):
                 break
         else:
             return False
     return True
+
+
+def _disjunct_implies(q2_, q1_):
+    head_args = q1_.consequent.args
+    if not set(head_args) <= set(q2_.consequent.args):
+        return False
+    q2_ = Implication(q2_.consequent.functor(*head_args), q2_.antecedent)
+    return is_contained_rule(q1_, q2_)
 
 
 def convert_pos_logic_query_to_datalog_rules(query, head):
@@ -122,9 +133,14 @@ def convert_pos_logic_query_to_datalog_rules(query, head):
         program = antecedent.formulas
     else:
         program = (antecedent,)
+    # The head arguments are sorted so that the rules of two queries
+    # with the same free variables have the same head.
     program = [
         Implication(
-            head(*(q_args & extract_logic_free_variables(formula))),
+            head(*sorted(
+                q_args & extract_logic_free_variables(formula),
+                key=lambda variable: variable.name
+            )),
             mei.walk(formula)
         )
         for formula in program

@@ -38,6 +38,19 @@ define:
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
   use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
+* ``extends`` — one engine name, or a list of them, whose configuration
+  is inherited (see :func:`resolve_engine_config`); engines marked
+  ``abstract: true`` only serve as bases and cannot be built or listed;
+* ``text_embeddings`` — semantic search over document texts (e.g. PubMed
+  abstracts) with SPECTER2, registered as a function
+  ``f(query, doc) -> similarity``; see
+  :mod:`neurolang.utils.text_embeddings`::
+
+      text_embeddings:
+        study_abstracts:
+          ids_from: study
+          source: pubmed          # or {file: ...} or {predicate: ...}
+          function: query_similarity
 
 Usage
 -----
@@ -68,10 +81,12 @@ Usage
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
+
 import numpy as np
 import yaml
 
@@ -93,10 +108,85 @@ def _builtin_startswith(prefix: str, s: str) -> bool:
     return s.startswith(prefix)
 
 
+def _builtin_lcase(s) -> str:
+    """Return *s* in lower case, as SPARQL's ``LCASE``."""
+    return str(s).lower()
+
+
+def _builtin_ucase(s) -> str:
+    """Return *s* in upper case, as SPARQL's ``UCASE``."""
+    return str(s).upper()
+
+
+def _builtin_strlen(s) -> int:
+    """Return the number of characters of *s*, as SPARQL's ``STRLEN``."""
+    return len(str(s))
+
+
+def _builtin_strstarts(s, prefix) -> bool:
+    """Return True if *s* starts with *prefix*, as SPARQL's ``STRSTARTS``."""
+    return str(s).startswith(str(prefix))
+
+
+def _builtin_strends(s, suffix) -> bool:
+    """Return True if *s* ends with *suffix*, as SPARQL's ``STRENDS``."""
+    return str(s).endswith(str(suffix))
+
+
+def _builtin_str_contains(s, part) -> bool:
+    """Return True if *part* is in *s*, as SPARQL's ``CONTAINS``."""
+    return str(part) in str(s)
+
+
+def _builtin_regex(s, pattern) -> bool:
+    """
+    Return True if *pattern* matches in *s*, as SPARQL's ``REGEX``.
+
+    Flags are written in the pattern, e.g. ``(?i)`` for SPARQL's ``"i"``.
+    """
+    return re.search(str(pattern), str(s)) is not None
+
+
+def _builtin_round(x) -> float:
+    """Return *x* rounded to an integer, halves away from 0, as ``ROUND``."""
+    x = float(x)
+    return float(np.sign(x) * np.floor(abs(x) + 0.5))
+
+
+def _builtin_int(x) -> int:
+    """Return *x* as an integer, as SPARQL's ``xsd:integer`` cast."""
+    return int(float(x))
+
+
+def _builtin_float(x) -> float:
+    """Return *x* as a float, as SPARQL's ``xsd:double`` cast."""
+    return float(x)
+
+
+def _builtin_str(x) -> str:
+    """Return *x* as a string, as SPARQL's ``STR``."""
+    return str(x)
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
     "log": np.log,
     "startswith": _builtin_startswith,
+    # String and numeric functions of SPARQL, e.g. for RDF engines.
+    "lcase": _builtin_lcase,
+    "ucase": _builtin_ucase,
+    "strlen": _builtin_strlen,
+    "strstarts": _builtin_strstarts,
+    "strends": _builtin_strends,
+    "str_contains": _builtin_str_contains,
+    "regex": _builtin_regex,
+    "round": _builtin_round,
+    "abs": abs,
+    "floor": lambda x: float(np.floor(float(x))),
+    "ceil": lambda x: float(np.ceil(float(x))),
+    "int": _builtin_int,
+    "float": _builtin_float,
+    "str": _builtin_str,
 }
 
 
@@ -174,9 +264,111 @@ def _resolve_relation_file(
         return resolved
 
 
+# Top-level keys holding lists that are concatenated (parent first,
+# duplicates dropped) when inherited; every other list is replaced.
+_MERGED_LIST_KEYS = frozenset(
+    {"builtins", "downloads", "ontologies", "dimension_type_predicates"}
+)
+# Keys describing the engine itself, never inherited.
+_NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
+
+
+def _merge_mappings(parent: Dict[str, Any], child: Dict[str, Any]):
+    """Deep-merge two mappings; ``None`` in *child* deletes the entry."""
+    merged = dict(parent)
+    for key, value in child.items():
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_mappings(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_engine_configs(
+    parent: Dict[str, Any], child: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Merge *child* over *parent* engine configurations.
+
+    * ``datalog_init`` texts are concatenated, parent rules first;
+    * the lists in :data:`_MERGED_LIST_KEYS` are concatenated without
+      duplicates;
+    * mappings (``atlases``, ``predicates``, ...) are merged recursively,
+      and an entry set to ``null`` in the child removes the inherited one;
+    * any other value in the child replaces the inherited one.
+    """
+    merged = {
+        k: v for k, v in parent.items() if k not in _NON_INHERITED_KEYS
+    }
+    for key, value in child.items():
+        inherited = merged.get(key)
+        if key == "datalog_init" and inherited and value:
+            merged[key] = inherited.rstrip("\n") + "\n" + value
+        elif key in _MERGED_LIST_KEYS and inherited and value:
+            merged[key] = list(inherited) + [
+                v for v in value if v not in inherited
+            ]
+        elif isinstance(value, dict) and isinstance(inherited, dict):
+            merged[key] = _merge_mappings(inherited, value)
+        elif isinstance(value, dict):
+            merged[key] = _merge_mappings({}, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
+    _stack: Tuple[str, ...] = (),
+) -> Dict[str, Any]:
+    """
+    Return the configuration of *name* with all ``extends`` resolved.
+
+    Parameters
+    ----------
+    engines :
+        The raw ``engines`` mapping of an engine YAML file.
+    name :
+        Engine (or abstract base) to resolve.
+
+    Raises
+    ------
+    ValueError
+        If *name* or one of its bases is unknown, or the ``extends``
+        chain is cyclic.
+
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    raw = engines[name] or {}
+    bases = raw.get("extends", [])
+    if isinstance(bases, str):
+        bases = [bases]
+    resolved: Dict[str, Any] = {}
+    for base in bases:
+        resolved = _merge_engine_configs(
+            resolved, resolve_engine_config(engines, base, _stack + (name,))
+        )
+    merged = _merge_engine_configs(resolved, raw)
+    return {k: v for k, v in merged.items() if k not in _NON_INHERITED_KEYS}
+
+
+def _is_abstract(engines: Dict[str, Dict[str, Any]], name: str) -> bool:
+    return bool((engines[name] or {}).get("abstract", False))
+
+
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
     """
-    Return the names of all registered engines.
+    Return the names of all registered, non-abstract engines.
 
     Parameters
     ----------
@@ -185,8 +377,8 @@ def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    return sorted(config.get("engines", {}).keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    return sorted(n for n in engines if not _is_abstract(engines, n))
 
 
 def get_engine_config(
@@ -194,6 +386,8 @@ def get_engine_config(
 ) -> Dict[str, Any]:
     """
     Return the YAML configuration dict for a single engine.
+
+    Inherited (``extends``) configuration is already merged in.
 
     Parameters
     ----------
@@ -206,17 +400,15 @@ def get_engine_config(
     Raises
     ------
     ValueError
-        If *name* is not a registered engine.
+        If *name* is not a registered, non-abstract engine.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
-    if name not in engines:
-        available = ", ".join(engines.keys())
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    if name in engines and _is_abstract(engines, name):
         raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
+            f"Engine {name!r} is abstract and can only be extended"
         )
-    return dict(engines[name])
+    return resolve_engine_config(engines, name)
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
@@ -230,11 +422,11 @@ def show_engines(yaml_path: Optional[Path] = None) -> None:
         ``engines/engines.yaml``.
 
     """
-    config = _load_yaml_config(yaml_path)
-    engines = config.get("engines", {})
+    engines = _load_yaml_config(yaml_path).get("engines", {})
     print("Available engines:\n")
-    for name in sorted(engines):
-        desc = engines[name].get("description", "").replace("\n", " ").strip()
+    for name in list_engine_names(yaml_path):
+        cfg = resolve_engine_config(engines, name)
+        desc = cfg.get("description", "").replace("\n", " ").strip()
         print(f"  {name}")
         if desc:
             print(f"      {desc}")
@@ -330,21 +522,85 @@ class Sort(NamedTuple):
 
     Its entities span *columns*, whose values are of the *type*; a sort of
     N > 1 columns reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+
+    The *space* of a sort of points tells what its columns are: ``voxel``
+    for the indices ``(i, j, k)`` of a grid, ``mm`` for coordinates
+    ``(x, y, z)`` in millimetres in the space of the engine's template,
+    ``""`` otherwise. The *grid* of a sort of voxels is the grid it
+    indexes: that of the engine's template (see :func:`build_engine`)
+    when ``""`` or ``template``, else that of the atlas of this name.
     """
 
     name: str
     columns: Tuple[str, ...]
     type: str = ""
     description: str = ""
+    space: str = ""
+    grid: str = ""
+
+
+SORT_SPACES = ("voxel", "mm")
+
+# The grid of the engine's template, which the voxels of a sort index
+# unless it names another grid.
+TEMPLATE_GRID = "template"
+
+
+def engine_grid_names(cfg: Dict[str, Any]) -> Tuple[str, ...]:
+    """
+    Return the names of the grids of the engine *cfg*.
+
+    They are the template's and those of the atlases it loads.
+    """
+    return (TEMPLATE_GRID, *(cfg.get("atlases") or {}))
+
+
+def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
+    """
+    Return the grid the sort *name* declared by *info* indexes, or "".
+
+    Only a sort of ``space: voxel`` names a grid, one of *grids*.
+    """
+    grid = str(info.get("grid", ""))
+    if grid and info.get("space") != "voxel":
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; only a sort of "
+            "space: voxel indexes a grid"
+        )
+    if grid and grid not in grids:
+        raise ValueError(
+            f"sort {name!r} names the grid {grid!r}; the grids of the "
+            f"engine are {', '.join(grids)}"
+        )
+    return grid
+
+
+def _declared_sort(
+    name: str, info: Dict[str, Any], grids=(TEMPLATE_GRID,)
+) -> Sort:
+    """
+    Return the sort *name* declared by *info*, checking its space.
+
+    Its grid, if any, is one of *grids*.
+    """
+    space = str(info.get("space", ""))
+    if space and space not in SORT_SPACES:
+        raise ValueError(
+            f"sort {name!r} declares the space {space!r}; a space is "
+            f"one of {', '.join(SORT_SPACES)}"
+        )
+    return Sort(
+        name, tuple(info["columns"]), str(info.get("type", "")),
+        str(info.get("description", "")).strip(), space,
+        _sort_grid(name, info, grids),
+    )
 
 
 def _declared_sorts(cfg: Dict[str, Any]) -> Dict[str, Sort]:
     """Return the sorts the engine *cfg* declares, by name."""
+    grids = engine_grid_names(cfg)
     return {
-        name: Sort(
-            name, tuple(info["columns"]), str(info.get("type", "")),
-            str(info.get("description", "")).strip(),
-        )
+        name: _declared_sort(name, info, grids)
         for name, info in (cfg.get("sorts") or {}).items()
     }
 
@@ -700,6 +956,18 @@ def _label_name(val: Any) -> str:
     return name
 
 
+def _register_grid(nl, name: str, img) -> None:
+    """
+    Register the grid of the image *img* as the grid *name* of *nl*.
+
+    The voxel indices of a sort naming the grid (``grid: name``) index
+    it: ``.save`` writes them with its shape and affine.
+    """
+    if getattr(nl, "grids", None) is None:
+        nl.grids = {}
+    nl.grids[name] = img
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path
 ) -> None:
@@ -712,6 +980,7 @@ def _load_deterministic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     pred_name = params.get("predicate_name", atlas_name)
     labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
     regions = ExplicitVBR.from_spatial_image_labels(
@@ -720,26 +989,6 @@ def _load_deterministic_atlas(
     rows = [(_label_name(v), regions[k]) for k, v in labels]
 
     nl.add_tuple_set(rows, name=pred_name)
-    _register_region_grid(nl, pred_name, img)
-
-
-def _register_region_grid(nl, pred_name: str, image) -> None:
-    """Record the grid of the regions of the atlas relation *pred_name*."""
-    grids = getattr(nl, "_region_grids", None)
-    if grids is None:
-        grids = nl._region_grids = {}
-    grids[pred_name] = (np.asarray(image.affine), tuple(image.shape[:3]))
-
-
-def region_grids(nl) -> dict:
-    """
-    Return the grids of the atlas relations of *nl*, by name: the affine
-    and the shape of the image whose voxels their regions list.
-
-    The engine may store a region as the list of its voxels, without its
-    grid, which this tells.
-    """
-    return dict(getattr(nl, "_region_grids", None) or {})
 
 
 def _load_probabilistic_atlas(
@@ -767,6 +1016,7 @@ def _load_probabilistic_atlas(
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
+    _register_grid(nl, atlas_name, img)
     n_components = img.shape[-1]
     labels = list(atl_data["labels"])
     threshold = float(params.get("threshold", 0.5))
@@ -852,16 +1102,6 @@ def _resolve_mask(
         # identity would also scale its homogeneous coordinate.
         mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
     return mask
-
-
-def engine_mask(
-    name: str, data_dir: Path, resolution: Optional[float] = None
-) -> Optional[nib.Nifti1Image]:
-    """
-    Return the MNI mask whose grid the voxels of engine *name* index, as
-    :func:`build_engine` gets it, or None when the engine has none.
-    """
-    return _resolve_mask(get_engine_config(name), Path(data_dir), resolution)
 
 
 def _phase_builtins(nl, cfg):
@@ -989,13 +1229,132 @@ def _phase_probabilistic_choices(nl, cfg):
         )
 
 
-def _phase_ontologies(nl, cfg, data_dir, engine_name):
-    for onto_cfg in cfg.get("ontologies", []):
-        url = onto_cfg["url"]
+_ONTOLOGY_OPTIONS = ("format", "individuals", "names")
+
+
+def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
+    """
+    Return the local path of the ontology file *source*.
+
+    A URL is downloaded (and cached) to ``{data_dir}/{engine_name}/``; a
+    local path is relative to *base_dir* (default: the built-in
+    ``engines/`` directory).
+    """
+    if source.startswith(("http://", "https://")):
         onto_dir = str(data_dir / engine_name)
-        onto_file = Path(url).name
-        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
-        nl.load_ontology(result[0])
+        result = _fetch_files(
+            onto_dir, [(Path(source).name, source, {})], verbose=1
+        )
+        return result[0]
+    return str((base_dir or _ENGINES_DIR) / Path(source).expanduser())
+
+
+def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
+    """
+    Load the engine's ``ontologies``.
+
+    Each entry gives a file with ``url`` (a URL or a local path), or
+    several, loaded together, with ``urls``. ``format``, ``individuals``
+    and ``names`` are passed to
+    :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
+    """
+    for onto_cfg in cfg.get("ontologies", []):
+        sources = onto_cfg.get("urls") or [onto_cfg["url"]]
+        paths = [
+            _ontology_file(source, engine_name, data_dir, base_dir)
+            for source in sources
+        ]
+        options = {
+            key: onto_cfg[key] for key in _ONTOLOGY_OPTIONS if key in onto_cfg
+        }
+        nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
+
+
+def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
+    """
+    Register the document indexes declared in ``text_embeddings``.
+
+    Only the ids are read here; texts are fetched and embedded on first use.
+    """
+    entries = cfg.get("text_embeddings", {})
+    if not entries:
+        return
+    from neurolang.utils import text_embeddings
+
+    emb_dir = data_dir / engine_name / "embeddings"
+    nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
+    for emb_name, emb_cfg in entries.items():
+        encoder = text_embeddings.Specter2Encoder(
+            model_dir=emb_dir / "models",
+            **{
+                key: emb_cfg[key]
+                for key in ("model", "document_adapter", "query_adapter")
+                if key in emb_cfg
+            },
+        )
+        index = text_embeddings.EmbeddingIndex(
+            ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
+            load_texts=_text_loader(
+                nl, emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                engine_name, data_dir, rel_base_dir,
+            ),
+            encoder=encoder,
+            cache_path=emb_dir / f"{emb_name}.npz",
+        )
+        nl.text_embedding_indexes[emb_name] = index
+        nl.add_symbol(
+            text_embeddings.make_similarity_function(index),
+            name=emb_cfg["function"],
+        )
+
+
+def _predicate_texts(nl, source):
+    """Read ``{id: (title, text)}`` from engine predicates of the form
+    ``p(id, text)``: ``predicate`` gives the texts, the optional
+    ``title_predicate`` the titles."""
+    def column(name):
+        return {str(row[0]): row[1] for row in nl.symbols[name].value}
+
+    texts = column(source["predicate"])
+    titles = column(source["title_predicate"]) if (
+        "title_predicate" in source
+    ) else {}
+    return {
+        key: (titles.get(key, ""), text) for key, text in texts.items()
+    }
+
+
+def _text_loader(
+    nl, emb_cfg, pubmed_cache, engine_name, data_dir, base_dir
+):
+    """Return ``load_texts(keys)`` for a ``text_embeddings`` source."""
+    from neurolang.utils import text_embeddings
+
+    source = emb_cfg.get("source", "pubmed")
+    if source == "pubmed":
+        def load_texts(keys):
+            return text_embeddings.fetch_pubmed_abstracts(
+                keys, cache_path=pubmed_cache, email=emb_cfg.get("email")
+            )
+    elif isinstance(source, dict) and "predicate" in source:
+        def load_texts(keys):
+            return _predicate_texts(nl, source)
+    elif isinstance(source, dict) and "file" in source:
+        def load_texts(keys):
+            path = _resolve_relation_file(
+                source, engine_name, data_dir, base_dir=base_dir
+            )
+            return text_embeddings.load_text_table(
+                path,
+                source.get("id_column", "id"),
+                source.get("text_columns", ["title", "abstract"]),
+            )
+    else:
+        raise ValueError(
+            f"Unknown text_embeddings source {source!r}: use 'pubmed' "
+            "or a mapping with a 'file' or a 'predicate' key."
+        )
+    return load_texts
 
 
 def build_engine(
@@ -1023,7 +1382,14 @@ def build_engine(
     Returns
     -------
     NeurolangPDL
-        A fully initialised engine ready for query execution.
+        A fully initialised engine ready for query execution. Its
+        ``template`` attribute is the MNI image whose grid the voxel
+        indices of the engine refer to (the sorts of ``space: voxel``),
+        resampled to *resolution* if given, or None if the engine does
+        not require the MNI mask. Its ``grids`` attribute holds the
+        images of the grids voxel indices may index, by name: the
+        template, as ``template``, and each atlas, under its name (the
+        sorts naming a ``grid``).
 
     Raises
     ------
@@ -1061,15 +1427,19 @@ def build_engine(
     else:
         nl = NeurolangPDL()
 
+    nl.template = mask
+    nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
     _phase_atlases(nl, cfg, data_dir, name)
+    # Before the rules, which may use the predicates of the ontologies.
+    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
-    _phase_ontologies(nl, cfg, data_dir, name)
 
     return nl
