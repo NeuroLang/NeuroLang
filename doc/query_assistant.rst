@@ -101,6 +101,17 @@ and text-to-SPARQL systems.
     Thought / Action / Observation text protocol that any chat model can
     follow.
 
+    The final answer is then verified by back-translation. In a request
+    of its own, which does not show the question, the model says in
+    English what the query returns, from the predicates, the query and
+    the first rows of its answer. In another request, it judges whether
+    that answers the question. A ``no`` rejects the final answer: the
+    agent gets the English reading and the reason as the observation of
+    its ``final_answer``, and corrects its query. ``verify_rounds`` (1 by
+    default, 0 to turn the check off) is the number of answers the check
+    may reject; after them, the answer is kept with a warning. The REPL
+    and ``neurolang-query --ask`` show the English reading of the query.
+
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
 
@@ -154,6 +165,7 @@ order:
       temperature: 0.0
       timeout: 60
       preview_rows: 10
+      verify_rounds: 1       # ReAct: answers back-translation may reject
 
 The ``api`` of a provider is one of:
 

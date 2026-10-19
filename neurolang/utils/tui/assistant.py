@@ -180,6 +180,20 @@ def _switch_language(app, language: str) -> None:
         )
 
 
+def _show_verification(app, result) -> None:
+    """Print the query read back in English and the verdict of its check."""
+    if not result.back_translation:
+        return
+    app.console.print(
+        f"[dim]Reads back as: {escape(result.back_translation)}[/dim]"
+    )
+    if result.verified is False:
+        app.console.print(
+            "[yellow]The check found that the query may not answer the "
+            f"question: {escape(result.verification)}[/yellow]"
+        )
+
+
 def _show_result(app, result) -> None:
     """Print the query of the agent's *result* and put it in the prompt."""
     if result.valid:
@@ -189,6 +203,7 @@ def _show_result(app, result) -> None:
         ))
         if result.explanation:
             app.console.print(escape(result.explanation), style="dim")
+        _show_verification(app, result)
     else:
         app.failed = True
         app.console.print(

@@ -290,6 +290,77 @@ def system_prompt(
     return "\n\n".join(parts)
 
 
+BACK_TRANSLATION = """\
+You explain queries of NeuroLang, a probabilistic logic programming
+language, in plain English. Given the predicates of an engine, a
+{language} query and the first rows of its answer, say in one or two
+sentences what the query returns: what a row of its answer is, and the
+conditions its rows satisfy. Describe only what the query computes,
+without guessing the question it was written for."""
+
+VERIFICATION = """\
+You check whether a query answers a question. Given the engine and its
+predicates, the question, what the query returns (in English) and the
+first rows of its answer, decide whether the query answers the
+question: it returns the kind of answer asked for, with the conditions
+the question states, and no others. The engine's definitions are the
+question's: a word of the question that a predicate stands for means
+that predicate, with the thresholds of its description (e.g. "mention"
+is the predicate mentions), and constants written as the engine stores
+them (e.g. coordinates converted to its grid) are the question's. Check
+each condition of the question in a short sentence, then end with a
+line `VERDICT: yes` or `VERDICT: no`."""
+
+
+def _engine_part(engine_description: str) -> str:
+    """Return the description of the engine as a part of a message."""
+    if not engine_description:
+        return ""
+    return f"# The engine\n{' '.join(engine_description.split())}\n\n"
+
+
+def back_translation_request(
+    query: str, language: str, schema: str, rows: str,
+    engine_description: str = "",
+) -> list:
+    """Return the messages asking to translate *query* into English."""
+    name = LANGUAGE_NAMES[language]
+    return [
+        {"role": "system", "content": BACK_TRANSLATION.format(language=name)},
+        {"role": "user", "content": (
+            _engine_part(engine_description)
+            + f"# Predicates\n{schema}\n\n# {name} query\n{query}\n\n"
+            f"# First rows of its answer\n{rows}"
+        )},
+    ]
+
+
+def verification_request(
+    question: str, english: str, rows: str, schema: str = "",
+    engine_description: str = "",
+) -> list:
+    """Return the messages asking whether *english* answers *question*."""
+    predicates = f"# Predicates\n{schema}\n\n" if schema else ""
+    return [
+        {"role": "system", "content": VERIFICATION},
+        {"role": "user", "content": (
+            _engine_part(engine_description) + predicates
+            + f"# Question\n{question}\n\n# What the query returns\n"
+            f"{english}\n\n# First rows of its answer\n{rows}"
+        )},
+    ]
+
+
+def verification_rejection(english: str, reason: str) -> str:
+    """Return the observation rejecting a final answer after its check."""
+    return (
+        "The answer is rejected: read back in English, the query "
+        f"returns: {english}\nThis does not answer the question: {reason}\n"
+        "Correct the query, check it with run_query and call final_answer "
+        "again."
+    )
+
+
 def repair_prompt(query: str, error: str, language: str) -> str:
     """Return the message asking the model to correct its *query*."""
     return (
