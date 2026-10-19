@@ -12,6 +12,15 @@ Registers the following predicates:
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
+* ``brain_mask(i, j, k)`` — the voxels of the MNI template grid inside the
+  MNI152 brain mask (whole brain, subcortical structures included).
+* ``selected_voxel(i, j, k)`` — uniform probabilistic choice over the voxels
+  of the brain mask.
+* ``cortical_mask(i, j, k)`` — the voxels of the MNI template grid in the
+  cortex, labelled by the Harvard–Oxford cortical atlas (maximum
+  probability, 25% threshold, 2 mm).
+* ``cognitive_task(task_id, name, description)`` — the tasks of the
+  Cognitive Atlas, with their descriptions.
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
 ``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
@@ -20,6 +29,7 @@ Predicate names are lowercase to match SQUALL's case-folding convention
 (see ``intransitive`` in ``squall_syntax_lark.py``).
 """
 
+import json
 from pathlib import Path
 
 import nibabel as nib
@@ -32,6 +42,13 @@ from neurolang.frontend.neurosynth_utils import (
     fetch_neurosynth_peak_data,
     get_ns_term_study_associations,
 )
+from neurolang.utils.nilearn_compat import (
+    fetch_files,
+    nilearn_datasets,
+    nilearn_image,
+)
+
+COGNITIVE_ATLAS_TASKS_URL = "https://www.cognitiveatlas.org/api/v-alpha/task"
 
 
 def init_engine(
@@ -50,14 +67,48 @@ def init_engine(
 
     """
     activations = fetch_neurosynth_peak_data(data_dir, verbose=0)
-    peak_data = _process_peaks(activations, mask)
-    study_ids = peak_data[["study_id"]].drop_duplicates()
+    peak_data = process_peaks(activations, mask)
 
     term_data = get_ns_term_study_associations(
         data_dir, verbose=0, convert_study_ids=True, tfidf_threshold=1e-3
     )
     term_data = term_data.rename(columns={"id": "study_id"})
     term_data["study_id"] = term_data["study_id"].astype(StudyID)
+    register_tables(nl, mask, data_dir, peak_data, term_data)
+
+
+def register_tables(
+    nl: NeurolangPDL,
+    mask: nib.Nifti1Image,
+    data_dir: Path,
+    peak_data: pd.DataFrame,
+    term_data: pd.DataFrame,
+) -> pd.DataFrame:
+    """Register the predicates every coordinate-based engine provides.
+
+    Shared by the ``neurosynth`` and ``neurostore`` engines.
+
+    Parameters
+    ----------
+    nl :
+        Fresh :class:`~neurolang.frontend.NeurolangPDL` instance.
+    mask :
+        MNI template image defining the voxel grid.
+    data_dir :
+        Directory under which downloaded data is cached.
+    peak_data :
+        Columns ``i, j, k, study_id``, as returned by
+        :func:`process_peaks`.
+    term_data :
+        Columns ``study_id, term, tfidf`` with ``StudyID`` ids.
+
+    Returns
+    -------
+    The distinct ``study_id`` frame, for engines registering more
+    study-level relations.
+
+    """
+    study_ids = peak_data[["study_id"]].drop_duplicates()
 
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
@@ -77,12 +128,88 @@ def init_engine(
     # The indices of a grid are distinct: say so, sparing the queries that
     # use the 8.7M-row grid its deduplication.
     nl.symbol_table["voxel"].value.might_have_duplicates = False
+    nl.add_tuple_set(
+        _cortical_voxels(fetch_cortical_atlas(data_dir), mask),
+        name="cortical_mask",
+    )
+    nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
+    brain = _brain_voxels(mask)
+    nl.add_tuple_set(brain, name="brain_mask")
+    nl.symbol_table["brain_mask"].value.might_have_duplicates = False
+    # A uniform choice over the voxels of the brain, as selected_study is over
+    # the studies: the average over the brain of the uniformity test.
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame(brain, columns=["i", "j", "k"]), name="selected_voxel"
+    )
+    nl.add_tuple_set(
+        fetch_cognitive_atlas_tasks(data_dir), name="cognitive_task"
+    )
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
+    return study_ids
 
-def _process_peaks(
-    activations: pd.DataFrame, mni_mask: nib.Nifti1Image
+
+def fetch_cortical_atlas(data_dir: Path) -> nib.Nifti1Image:
+    """The Harvard–Oxford cortical atlas, maximum probability at a 25%
+    threshold, on its 2 mm grid; 0 is outside the cortex."""
+    atlas = nilearn_datasets().fetch_atlas_harvard_oxford(
+        "cort-maxprob-thr25-2mm", data_dir=str(data_dir), verbose=0
+    )
+    return nilearn_image().load_img(atlas.maps)
+
+
+def fetch_cognitive_atlas_tasks(data_dir: Path) -> pd.DataFrame:
+    """The tasks of the Cognitive Atlas, from its API, as the columns
+    ``task_id``, ``name`` and ``description``, stripped. A task without
+    a description has an empty one; one without a name is left out."""
+    path = fetch_files(
+        str(Path(data_dir) / "cognitive_atlas"),
+        [(
+            "tasks.json", COGNITIVE_ATLAS_TASKS_URL,
+            {"move": "tasks.json"},
+        )],
+        verbose=0,
+    )[0]
+    with open(path) as file:
+        tasks = pd.DataFrame(json.load(file))
+    tasks = pd.DataFrame({
+        "task_id": tasks["id"],
+        "name": tasks["name"].fillna("").str.strip(),
+        "description": tasks["definition_text"].fillna("").str.strip(),
+    })
+    return tasks[tasks["name"] != ""].reset_index(drop=True)
+
+
+def _brain_voxels(mask: nib.Nifti1Image) -> np.ndarray:
+    """The (i, j, k) indices of the voxels of the *mask* grid inside the
+    MNI152 brain mask of nilearn (bundled with it, nothing is downloaded),
+    resampled to that grid by nearest neighbour: the whole brain, the
+    subcortical structures and the cerebellum included."""
+    brain = nilearn_datasets().load_mni152_brain_mask(resolution=2)
+    resampled = nilearn_image().resample_to_img(
+        brain, mask, interpolation="nearest"
+    )
+    return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
+
+
+def _cortical_voxels(
+    atlas: nib.Nifti1Image, mask: nib.Nifti1Image
+) -> np.ndarray:
+    """The (i, j, k) indices of the voxels of the *mask* grid labelled
+    by the *atlas*, resampled to that grid by nearest neighbour."""
+    resampled = nilearn_image().resample_to_img(
+        atlas, mask, interpolation="nearest"
+    )
+    return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
+
+def process_peaks(
+    activations: pd.DataFrame,
+    mni_mask: nib.Nifti1Image,
+    study_id_type: type = StudyID,
 ) -> pd.DataFrame:
-    """Convert MNI / Talairach peak coordinates to voxel indices."""
+    """Convert MNI / Talairach peak coordinates to voxel indices.
+
+    The ``study_id`` of the result is cast to *study_id_type*.
+    """
     mni_peaks = activations.loc[activations.space == "MNI"][
         ["x", "y", "z", "id"]
     ].rename(columns={"id": "study_id"})
@@ -111,14 +238,10 @@ def _process_peaks(
             proj_mat,
         )[:, 0:3]
     )
-    projected_df = pd.DataFrame(
-        np.hstack(
-            [projected, non_mni_peaks[["study_id"]].values.astype(StudyID)]
-        ),
-        columns=["x", "y", "z", "study_id"],
-    )
+    projected_df = pd.DataFrame(projected, columns=["x", "y", "z"])
+    projected_df["study_id"] = non_mni_peaks["study_id"].values
     peak_data = pd.concat([projected_df, mni_peaks]).astype(
-        {"x": int, "y": int, "z": int, "study_id": StudyID}
+        {"x": int, "y": int, "z": int, "study_id": study_id_type}
     )
 
     ijk_positions = np.round(
@@ -132,6 +255,4 @@ def _process_peaks(
     peak_data["k"] = ijk_positions[:, 2]
     peak_data = peak_data[["i", "j", "k", "study_id"]]
     return peak_data
-
-
 

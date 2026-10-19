@@ -392,12 +392,14 @@ def test_ccq_transformation_example_2_12():
     c2 = ExistentialPredicate(x3, R(x3),)
     c3 = ExistentialPredicate(y3, T(y3),)
 
+    # Dalvi & Suciu, Examples 2.12 and 3.5: the disjunctions are minimised
+    # as c0 implies c2, and c1 implies c3.
     expected = Conjunction((
         Disjunction((
-            c0, c1, c3
+            c0, c3
         )),
         Disjunction((
-            c0, c1, c2
+            c1, c2
         )),
     ))
 

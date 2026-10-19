@@ -113,12 +113,7 @@ class TypeResolutionMixin(PatternWalker):
                     UserWarning,
                 )
                 continue
-            if isinstance(entry, Constant):
-                col_types = self._column_types_from_entry(entry)
-            elif isinstance(entry, Union):
-                col_types = self._column_types_from_idb_entry(entry)
-            else:
-                continue
+            col_types = self._predicate_column_types(pred.functor, entry)
             if col_types is None:
                 continue
             for i, arg in enumerate(pred.args):
@@ -171,6 +166,15 @@ class TypeResolutionMixin(PatternWalker):
                     continue
                 self._set_or_unify_type(head_arg, arg.type)
 
+    def _predicate_column_types(self, functor, entry):
+        """The types of the arguments of the predicate `functor`, whose
+        symbol table entry is `entry`, or None if unknown."""
+        if isinstance(entry, Constant):
+            return self._column_types_from_entry(entry)
+        if isinstance(entry, Union):
+            return self._column_types_from_idb_entry(entry)
+        return None
+
     def _column_types_from_entry(self, entry):
         if isinstance(entry.value, WrappedRelationalAlgebraSet):
             row_type = entry.value.row_type
@@ -220,4 +224,21 @@ class TypeResolutionMixin(PatternWalker):
                     except NeuroLangTypeException:
                         unified.append(t1)
                 col_types = tuple(unified)
+        return col_types
+
+
+class ProbabilisticTypeResolutionMixin(TypeResolutionMixin):
+    """
+    `TypeResolutionMixin` for programs with probabilistic facts and
+    choices, whose relations have the probability as their first column:
+    the types of their arguments are those of the following columns.
+    """
+
+    def _predicate_column_types(self, functor, entry):
+        col_types = super()._predicate_column_types(functor, entry)
+        if col_types is not None and (
+            functor in self.pfact_pred_symbs or
+            functor in self.pchoice_pred_symbs
+        ):
+            return col_types[1:]
         return col_types

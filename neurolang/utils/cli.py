@@ -486,17 +486,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "--save",
         metavar="PATH",
         default=None,
-        help="Also save the result in PATH: as a table in CSV, TSV or JSON "
-        "(.csv, .tsv, .json, optionally .gz), or as a NIfTI brain image "
-        "(.nii, .nii.gz) when it has a region column or the voxel columns "
-        "i, j, k (and at most one value column, e.g. a probability). A "
-        "result of several obtain statements gives a file per statement.",
+        help="Also save the result in PATH, as the REPL's .save does: a "
+        "table in CSV or TSV (.csv, .tsv, optionally .gz), or a NIfTI "
+        "brain image (.nii, .nii.gz) when it has voxel columns, on the "
+        "engine's grid, with at most one value column, e.g. a "
+        "probability. A result of several obtain statements gives a file "
+        "per statement. Needs the tui extra.",
     )
     parser.add_argument(
         "--view",
         action="store_true",
-        help="At the end, open the brain image of the result in the "
-        "browser, on the MNI template (nilearn's viewer).",
+        help="At the end, show the brain image of the result in the "
+        "viewer of the REPL's .view, an HTML page opened in the browser "
+        "(its path is printed). Needs the tui extra.",
     )
     parser.add_argument(
         "--list-predicates",
@@ -1119,110 +1121,93 @@ def _print_result(result, args, sort_by, column_names=None) -> None:
         print(output)
 
 
-def _result_frames(result, column_names) -> dict:
+def _export_session(args, nl, result, column_names, program):
     """
-    Return the DataFrames of a query *result*, by ``obtain`` statement
-    (the key ``None`` for a single result).
+    Return the headless session of the REPL's ``.save`` and ``.view``
+    commands (:mod:`neurolang.utils.tui.nifti`) holding the *result* of
+    *program*: its engine, its result blocks with the sorts of their
+    columns, and consoles on the standard error.
     """
+    from types import SimpleNamespace
+
+    from rich.console import Console
+
+    from neurolang.utils.tui.provenance import column_sorts
+    from neurolang.utils.tui.results import ResultBlock
+
+    sorts = column_sorts(nl, args.engine, program, bool(args.squall))
+    sort_by = _parse_sort_spec(args.sort)
     column_names = column_names or {}
-    if isinstance(result, dict):
-        return {
-            key: result_to_dataframe(sub_result, column_names.get(key))
-            for key, sub_result in result.items()
-        }
-    if result is None or isinstance(result, bool):
-        return {}
-    names = next(iter(column_names.values()), None)
-    return {None: result_to_dataframe(result, names)}
+    keyed = result if isinstance(result, dict) else {"": result}
+    blocks = []
+    for key, value in keyed.items():
+        if value is None or isinstance(value, bool):
+            continue
+        names = column_names.get(key) if isinstance(result, dict) else (
+            next(iter(column_names.values()), None)
+        )
+        df = result_to_dataframe(value, names)
+        if not df.empty:
+            df = sort_dataframe(df, sort_by)
+        block_sorts = sorts.get(key) if isinstance(result, dict) else (
+            next(iter(sorts.values()), None)
+        )
+        if block_sorts is not None and len(block_sorts) != len(df.columns):
+            block_sorts = None
+        blocks.append(ResultBlock(df, key, sorts=block_sorts))
+    return SimpleNamespace(
+        settings=SimpleNamespace(engine_name=args.engine), _nl=nl,
+        results=blocks, failed=False,
+        console=Console(stderr=True), err_console=Console(stderr=True),
+    )
 
 
-def _keyed_path(path: Path, key) -> Path:
-    """Return *path* for the result of the statement *key*, if any."""
-    if key is None:
-        return path
-    name = path.name
-    stem, dot, rest = name.partition(".")
-    return path.with_name(f"{stem}_{key}{dot}{rest}")
-
-
-def _region_grid_lookup(nl):
+def _save_and_view(result, args, column_names, nl, program) -> None:
     """
-    Return the function giving the grid of a region of *nl* stored as its
-    voxels: the grid of the atlas relation holding it, else None.
-    """
-    index = None
-
-    def grid_of(value):
-        nonlocal index
-        if index is None:
-            index = {}
-            for name, grid in engine_registry.region_grids(nl).items():
-                relation = getattr(nl.symbols, name).value
-                rows = relation.unwrap() if hasattr(relation, "unwrap") \
-                    else relation
-                for row in rows:
-                    for cell in row:
-                        if isinstance(cell, tuple):
-                            index[cell] = grid
-        try:
-            return index.get(value)
-        except TypeError:
-            return None
-    return grid_of
-
-
-def _save_and_view(result, args, sort_by, column_names, nl=None) -> None:
-    """
-    Save the *result* in ``--save`` and open its image with ``--view``.
+    Save the *result* of *program* in ``--save`` and show its image with
+    ``--view``, as the REPL's ``.save`` and ``.view`` do for its last
+    result: a table as CSV or TSV (``.csv``, ``.tsv``, optionally
+    ``.gz``), or a NIfTI image on the engine's grid (``.nii``,
+    ``.nii.gz``), and the image in the viewer's HTML page, opened in a
+    browser when stderr is a terminal. They need the ``tui`` extra.
 
     Problems are reported on stderr and exit with status 1, after the
     result was printed.
     """
     if not (args.save or args.view):
         return
-    from neurolang.utils import result_export
-
-    mask = None
-    grid_of = _region_grid_lookup(nl) if nl is not None else None
-
-    def image_of(df):
-        nonlocal mask
-        needs_grid = not result_export.region_columns(df)
-        if needs_grid and mask is None:
-            mask = engine_registry.engine_mask(
-                args.engine, Path(args.data_dir), args.resolution
-            )
-        image = result_export.result_image(df, mask, grid_of)
-        if image.outside:
-            print(
-                f"note: {image.outside} voxel(s) outside the engine's grid "
-                "are left out of the image", file=sys.stderr,
-            )
-        return image
-
     try:
-        if args.save:
-            result_export.check_path(args.save)
-        frames = _result_frames(result, column_names)
-        if not frames:
-            raise result_export.ExportError("the query gave no rows.")
-        images = {}
-        for key, df in frames.items():
-            if args.save:
-                path = _keyed_path(Path(args.save), key)
-                if result_export.is_image_path(path):
-                    images[key] = image_of(df)
-                    written = result_export.save_image(images[key], path)
-                else:
-                    result_export.save_table(sort_dataframe(df, sort_by), path)
-                    written = [path]
-                for path in written:
-                    print(f"Saved {path}", file=sys.stderr)
-            if args.view:
-                image = images.get(key) or image_of(df)
-                result_export.view_image(image, title=key or "")
-    except result_export.ExportError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        from neurolang.utils.tui import nifti
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] not in (
+            "prompt_toolkit", "rich"
+        ):
+            raise
+        print(
+            "Error: --save and --view need the optional dependencies of "
+            'the interactive mode. Install them with:\n    pip install '
+            '"neurolang[tui]"', file=sys.stderr,
+        )
+        sys.exit(1)
+    session = _export_session(args, nl, result, column_names, program)
+    if not session.results:
+        print("Error: the query gave no result to save.", file=sys.stderr)
+        sys.exit(1)
+    if args.save:
+        suffix = nifti.split_suffix(Path(args.save))[1].lower()
+        if suffix not in (
+            ".csv", ".csv.gz", ".tsv", ".tsv.gz", ".nii", ".nii.gz"
+        ):
+            print(
+                f"Error: cannot tell the format of {args.save}: use .csv, "
+                ".tsv (optionally .gz) for a table, or .nii, .nii.gz for "
+                "an image.", file=sys.stderr,
+            )
+            sys.exit(1)
+        nifti.cmd_save(session, shlex.quote(args.save))
+    if args.view and not session.failed:
+        nifti.cmd_view(session, "")
+    if session.failed:
         sys.exit(1)
 
 
@@ -1246,7 +1231,7 @@ def _run_query(args) -> None:
     )
     column_names = _result_column_names(args, program)
     _print_result(result, args, sort_by, column_names)
-    _save_and_view(result, args, sort_by, column_names, nl)
+    _save_and_view(result, args, column_names, nl, program)
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
@@ -1504,7 +1489,7 @@ def _run_ask(args) -> None:
         sort_by = _parse_sort_spec(args.sort)
         column_names = _result_column_names(args, result.query)
         _print_result(output, args, sort_by, column_names)
-        _save_and_view(output, args, sort_by, column_names, nl)
+        _save_and_view(output, args, column_names, nl, result.query)
 
 
 def main(argv: Optional[list] = None) -> None:

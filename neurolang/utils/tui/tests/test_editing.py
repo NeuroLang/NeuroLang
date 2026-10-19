@@ -74,6 +74,17 @@ class TestNeuroLangReplCompleter:
     def test_grammar_completion(self, completer):
         assert ":-" in _texts(completer, "ans(x) ")
 
+    def test_unlexable_character_does_not_crash(self, completer):
+        # The lexer rejects "$"; the grammar then offers nothing.
+        assert _texts(completer, "a(x) :- b(x)\nans(x) $ ") == []
+
+    def test_comment_lines_are_skipped(self, completer):
+        text = "% the studies\na(x) :- b(x) % b is stored\nans(x) "
+        assert ":-" in _texts(completer, text)
+
+    def test_nothing_offered_inside_a_comment(self, completer):
+        assert _texts(completer, "ans(x) :- b(x) % b is ") == []
+
     def test_squall_keywords(self):
         completer = NeuroLangReplCompleter(squall_keywords=squall_keywords())
         assert "obtain" in _texts(completer, "ob")
@@ -230,17 +241,29 @@ def test_tab_completes_at_the_prompt(app):
     from prompt_toolkit.output import DummyOutput
 
     with create_pipe_input() as pipe:
-        # Completion is asynchronous: type the keys as a person would.
-        pipe.send_text(".hel")
-        timers = [
-            threading.Timer(0.5, pipe.send_text, ["\t"]),
-            threading.Timer(1.0, pipe.send_text, ["\r\x04"]),
-        ]
-        for timer in timers:
-            timer.start()
-        app.run(app._make_session(input=pipe, output=DummyOutput()))
-        for timer in timers:
-            timer.join()
+        session = app._make_session(input=pipe, output=DummyOutput())
+
+        def wait_for(text):
+            deadline = time.monotonic() + 30
+            while (
+                session.default_buffer.text != text and
+                time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+
+        def type_keys():
+            # Completion is asynchronous: wait for each key to take effect
+            # before typing the next one, however slow the machine.
+            pipe.send_text(".hel")
+            wait_for(".hel")
+            pipe.send_text("\t")
+            wait_for(".help")
+            pipe.send_text("\r\x04")
+
+        typist = threading.Thread(target=type_keys)
+        typist.start()
+        app.run(session)
+        typist.join()
     assert "Dot commands:" in app.console.file.getvalue()
 
 
@@ -525,6 +548,9 @@ class TestSquallGrammarCompletion:
         clause = "that mentions a term and "
         sentence = "obtain every study that reports a peak and " + clause * 4
         assert 140 < len(sentence) <= 200
+        # build the grammar first: this measures each completion, not the
+        # one-time construction of the parser (about 4 times longer)
+        _words(squall_app, "obtain every ")
         start = time.perf_counter()
         words = _words(squall_app, sentence)
         _words(squall_app, "obtain every study that ")

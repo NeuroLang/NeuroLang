@@ -24,10 +24,13 @@ class TestNeurosynthEngineStudyIdConsistency:
     dtype.  It is expected to **fail** until the inconsistency is fixed.
     """
 
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cognitive_atlas_tasks")
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
     @patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
     @patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
     def test_study_id_consistency(
-        self, mock_get_term, mock_get_peaks, tmp_path
+        self, mock_get_term, mock_get_peaks, mock_atlas, mock_tasks,
+        tmp_path
     ):
         """All study_id columns should share the same integer dtype."""
         from neurolang.utils.engines.neurosynth.init import init_engine
@@ -56,6 +59,9 @@ class TestNeurosynthEngineStudyIdConsistency:
         mask = nib.Nifti1Image(
             np.ones((10, 10, 10), dtype=np.uint8),
             np.eye(4),
+        )
+        mock_atlas.return_value = nib.Nifti1Image(
+            np.zeros((10, 10, 10), dtype=np.int16), np.eye(4)
         )
 
         # ---- Mock NeurolangPDL to capture add_tuple_set calls ---------------
@@ -90,13 +96,191 @@ class TestNeurosynthEngineStudyIdConsistency:
             )
 
 
+@patch("neurolang.utils.engines.neurosynth.init.fetch_cognitive_atlas_tasks")
+@patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
+@patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
+@patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
+def test_neurosynth_cortical_mask(
+    mock_get_term, mock_get_peaks, mock_atlas, mock_tasks
+):
+    """``cortical_mask(i, j, k)`` holds the voxels of the engine's grid
+    labelled by the cortical atlas, resampled to that grid: here an atlas
+    shifted by two voxels along i, and larger than the grid."""
+    import nibabel as nib
+
+    from neurolang.utils.engines.neurosynth.init import init_engine
+
+    mock_get_peaks.return_value = pd.DataFrame({
+        "id": [1], "x": [0.0], "y": [0.0], "z": [0.0], "space": ["MNI"],
+    })
+    mock_get_term.return_value = pd.DataFrame({
+        "id": [StudyID(1)], "term": ["memory"], "tfidf": [0.5],
+    })
+    labels = np.zeros((14, 10, 10), dtype=np.int16)
+    labels[3, 4, 5] = 7
+    labels[5, 0, 9] = 2
+    labels[13, 0, 0] = 1  # outside the grid of the engine
+    affine = np.eye(4)
+    affine[0, 3] = -2
+    mock_atlas.return_value = nib.Nifti1Image(labels, affine)
+    mask = nib.Nifti1Image(np.ones((10, 10, 10), dtype=np.uint8), np.eye(4))
+
+    nl = MagicMock()
+    init_engine(nl, mask, data_dir=Path("unused"))
+
+    sets = {
+        call.kwargs["name"]: call.args[0]
+        for call in nl.add_tuple_set.call_args_list
+    }
+    assert {tuple(v) for v in sets["cortical_mask"]} == {(1, 4, 5), (3, 0, 9)}
+
+
+_COGNITIVE_ATLAS_TASKS = pd.DataFrame({
+    "task_id": ["tsk_1", "trm_2"],
+    "name": ["stop signal task", "n-back task"],
+    "description": ["Stop when a signal appears.", ""],
+})
+
+
+@patch("neurolang.utils.engines.neurosynth.init.fetch_cognitive_atlas_tasks")
+@patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
+@patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
+@patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
+def test_neurosynth_cognitive_atlas_tasks(
+    mock_get_term, mock_get_peaks, mock_atlas, mock_tasks
+):
+    """``cognitive_task(task_id, name, description)`` holds the tasks of
+    the Cognitive Atlas."""
+    import nibabel as nib
+
+    from neurolang.utils.engines.neurosynth.init import init_engine
+
+    mock_get_peaks.return_value = pd.DataFrame({
+        "id": [1], "x": [0.0], "y": [0.0], "z": [0.0], "space": ["MNI"],
+    })
+    mock_get_term.return_value = pd.DataFrame({
+        "id": [StudyID(1)], "term": ["memory"], "tfidf": [0.5],
+    })
+    mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+    mock_atlas.return_value = nib.Nifti1Image(
+        np.zeros((4, 4, 4), dtype=np.int16), np.eye(4)
+    )
+    mock_tasks.return_value = _COGNITIVE_ATLAS_TASKS
+
+    nl = MagicMock()
+    init_engine(nl, mask, data_dir=Path("unused"))
+
+    sets = {
+        call.kwargs["name"]: call.args[0]
+        for call in nl.add_tuple_set.call_args_list
+    }
+    pd.testing.assert_frame_equal(
+        sets["cognitive_task"], _COGNITIVE_ATLAS_TASKS
+    )
+
+
+def test_fetch_cognitive_atlas_tasks(tmp_path):
+    """The tasks of the Cognitive Atlas API, with their names and
+    descriptions stripped, a missing description empty, and the tasks
+    without a name left out."""
+    import json
+
+    from neurolang.utils.engines.neurosynth import init
+
+    tasks = tmp_path / "tasks.json"
+    tasks.write_text(json.dumps([
+        {"id": "tsk_1", "name": " stop signal task ",
+         "definition_text": "Stop when a signal appears.\n"},
+        {"id": "trm_2", "name": "n-back task", "definition_text": None},
+        {"id": "trm_3", "name": "", "definition_text": "None"},
+    ]))
+    with patch.object(init, "fetch_files", return_value=[str(tasks)]) as fetch:
+        result = init.fetch_cognitive_atlas_tasks(tmp_path)
+
+    (directory, files), _ = fetch.call_args
+    assert directory == str(tmp_path / "cognitive_atlas")
+    assert files[0][1] == init.COGNITIVE_ATLAS_TASKS_URL
+    pd.testing.assert_frame_equal(result, _COGNITIVE_ATLAS_TASKS)
+
+
+GRAPH = """
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+ex:Dog a owl:Class ; rdfs:subClassOf ex:Animal .
+ex:Animal a owl:Class .
+ex:rex a ex:Dog ; ex:name "Rex" .
+"""
+
+
+def test_ontologies_load_local_files_with_options(tmp_path):
+    """``ontologies`` loads local files together, with their options."""
+    from neurolang.utils import engine_registry
+
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "vocab.ttl").write_text(GRAPH)
+    (tmp_path / "data" / "more.nt").write_text(
+        '<http://example.org/rex> <http://example.org/age> "3" .\n'
+    )
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  pets:\n"
+        "    ontologies:\n"
+        "      - urls: [data/vocab.ttl, data/more.nt]\n"
+        "        individuals: true\n"
+        "        names: prefixed\n"
+    )
+    nl = engine_registry.build_engine(
+        "pets", tmp_path / "cache", yaml_path=config
+    )
+    animals = nl.execute_datalog_program(
+        "ans(n, a) :- ex:Animal(x), ex:name(x, n), ex:age(x, a)"
+    )
+    assert set(animals) == {("Rex", "3")}
+
+
+def test_sparql_builtins(tmp_path):
+    """The SPARQL-like builtins apply to strings and numbers."""
+    from neurolang.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  words:\n"
+        "    builtins: [lcase, strlen, str_contains, regex, round, int,"
+        " strstarts]\n"
+    )
+    nl = engine_registry.build_engine(
+        "words", tmp_path / "cache", yaml_path=config
+    )
+    nl.add_tuple_set(
+        [("a", "Russia", "12", 2.5), ("b", "France", "7", -2.5)],
+        name="country",
+    )
+    result = nl.execute_datalog_program(
+        "ans(x, l, n, q, r) :- country(x, c, s, v), (l == lcase(c)), "
+        "(n == strlen(c)), (q == int(s)), (r == round(v))"
+    )
+    assert set(result) == {
+        ("a", "russia", 6, 12, 3.0), ("b", "france", 6, 7, -3.0)
+    }
+    matched = nl.execute_datalog_program(
+        "ans(x) :- country(x, c, s, v), str_contains(lcase(c), 'russ'), "
+        "regex(c, '(?i)^RU'), strstarts(c, 'R')"
+    )
+    assert set(matched) == {("a",)}
+
+
 class TestNeurosynthEngineVocabulary:
     """Check the vocabulary predicates the neurosynth engine defines."""
 
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cognitive_atlas_tasks")
+    @patch("neurolang.utils.engines.neurosynth.init.fetch_cortical_atlas")
     @patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
     @patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
     def test_term_relation_holds_distinct_terms(
-        self, mock_get_term, mock_get_peaks
+        self, mock_get_term, mock_get_peaks, mock_atlas, mock_tasks
     ):
         """Check that ``term`` lists every TF-IDF term once."""
         import nibabel as nib
@@ -113,6 +297,9 @@ class TestNeurosynthEngineVocabulary:
             "tfidf": [0.5, 0.3, 0.7],
         })
         mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+        mock_atlas.return_value = nib.Nifti1Image(
+            np.zeros((4, 4, 4), dtype=np.int16), np.eye(4)
+        )
         nl = MagicMock()
 
         init_engine(nl, mask, data_dir="unused")
@@ -211,9 +398,36 @@ def _fake_schaefer(nl, cfg, data_dir, name):
     )
 
 
+# The predicates of a free-text query: computed for the text a query gives
+# as a constant, not for every text (``solve_all`` cannot).
+FREE_TEXT_PREDICATES = frozenset({
+    "study_similarity", "similar_study", "lift_llm", "relative_risk_llm",
+    "uniformity_llm", "ratios_llm",
+})
+
+
+def _without_free_text_rules(config):
+    """Return the engine *config* without the rules of a free-text query."""
+    names = FREE_TEXT_PREDICATES | {
+        "cutoff_similarity", "p_similar", "p_a_given_similar",
+        "p_any_voxel_given_similar",
+    }
+    rules = [
+        line for line in config["datalog_init"].splitlines()
+        if line.split("(")[0] not in names
+    ]
+    return {**config, "datalog_init": "\n".join(rules)}
+
+
 @pytest.fixture(scope="module")
 def small_neurosynth():
     """Build the neurosynth engine of the registry on tiny mock data."""
+    return _build_small_neurosynth()
+
+
+def _build_small_neurosynth(free_text=True):
+    """Build the neurosynth engine on tiny data, with the free-text rules
+    of its configuration or without."""
     import nibabel as nib
 
     from neurolang.utils import engine_registry
@@ -229,14 +443,28 @@ def small_neurosynth():
         "tfidf": [0.5, 0.3, 0.02],
     })
     mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+    cortex = np.zeros((4, 4, 4), dtype=np.int16)
+    cortex[1, 2, 3] = 1
     init = "neurolang.utils.engines.neurosynth.init"
     with patch(f"{init}.fetch_neurosynth_peak_data", return_value=peaks), \
             patch(f"{init}.get_ns_term_study_associations",
                   return_value=terms), \
+            patch(f"{init}.fetch_cortical_atlas",
+                  return_value=nib.Nifti1Image(cortex, np.eye(4))), \
+            patch(f"{init}.fetch_cognitive_atlas_tasks",
+                  return_value=_COGNITIVE_ATLAS_TASKS), \
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
-        return engine_registry.build_engine("neurosynth", Path("unused"))
+        if free_text:
+            return engine_registry.build_engine("neurosynth", Path("unused"))
+        config = engine_registry.get_engine_config
+
+        def get_config(name, yaml_path=None):
+            return _without_free_text_rules(config(name, yaml_path))
+
+        with patch.object(engine_registry, "get_engine_config", get_config):
+            return engine_registry.build_engine("neurosynth", Path("unused"))
 
 
 _TYPES = {
@@ -307,16 +535,19 @@ def _check_argument(nl, solution, name, argument, start):
 class TestNeurosynthDeclarations:
     """Check the declared arguments against the symbols of the engine."""
 
-    def test_every_declaration_matches_its_symbol(self, small_neurosynth):
+    def test_every_declaration_matches_its_symbol(self):
         """Check the column count, order and types of each predicate."""
         from neurolang.utils import engine_registry
 
+        small_neurosynth = _build_small_neurosynth(free_text=False)
         predicates = engine_registry.get_predicates("neurosynth")
         signatures = engine_registry.get_signatures("neurosynth")
         with small_neurosynth.scope:
             solution = small_neurosynth.solve_all()
         assert set(signatures) == set(predicates)
         for name, arguments in signatures.items():
+            if name in FREE_TEXT_PREDICATES:
+                continue
             frame = _relation(small_neurosynth, solution, name)
             probability = int(bool(predicates[name].get("probability")))
             assert frame.shape[1] == predicates[name]["arity"] + probability
@@ -337,12 +568,13 @@ class TestNeurosynthDeclarations:
         assert hidden <= set(engine_registry.get_predicates("neurosynth"))
 
     def test_probability_declared_for_the_choice(self):
-        """Check ``selected_study`` is the probabilistic predicate."""
+        """Check the choices over the studies and the voxels are the
+        probabilistic predicates."""
         from neurolang.utils import engine_registry
 
         assert engine_registry.get_probabilistic_predicates(
             "neurosynth"
-        ) == {"selected_study"}
+        ) == {"selected_study", "selected_voxel"}
 
 
 class TestPredicateArguments:
@@ -503,6 +735,16 @@ class TestDeclaredSorts:
             "study", ("study_id",), "int", sorts["study"].description
         )
 
+    def test_cognitive_task_is_declared(self):
+        """Check ``cognitive_task`` relates a task, its name and its
+        description."""
+        from neurolang.utils import engine_registry
+
+        predicates = engine_registry.get_predicates("neurosynth")
+        assert predicates["cognitive_task"]["columns"] == [
+            "task_id", "name", "description"
+        ]
+
 
 def _engine_yaml(tmp_path, extra: str, more: str = "") -> Path:
     """Write an engine ``e`` declaring ``p(s, i, j, k)`` with *extra*."""
@@ -516,3 +758,148 @@ def _engine_yaml(tmp_path, extra: str, more: str = "") -> Path:
         + more
     )
     return path
+
+
+class TestSortSpaces:
+    """Check the sorts declaring the space of their coordinates."""
+
+    def test_space_is_read(self, tmp_path):
+        """Check a sort keeps its declared space, empty by default."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      voxel: {columns: [i, j, k], type: int, space: voxel}\n"
+            "      mni: {columns: [x, y, z], type: float, space: mm}\n"
+            "      study: {columns: [s], type: int}\n"
+        )
+        sorts = engine_registry.get_sorts("e", path)
+        assert sorts["voxel"].space == "voxel"
+        assert sorts["mni"].space == "mm"
+        assert sorts["study"].space == ""
+
+    def test_unknown_space_is_rejected(self, tmp_path):
+        """Check a space is ``voxel`` or ``mm``."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      voxel: {columns: [i, j, k], type: int, space: grid}\n"
+        )
+        with pytest.raises(ValueError, match="grid"):
+            engine_registry.get_sorts("e", path)
+
+    def test_neurosynth_spaces(self):
+        """Check neurosynth declares its template grid and MNI millimetres."""
+        from neurolang.utils import engine_registry
+
+        sorts = engine_registry.get_sorts("neurosynth")
+        assert sorts["voxel"].space == "voxel"
+        assert sorts["mni"] == engine_registry.Sort(
+            "mni", ("x", "y", "z"), "float", sorts["mni"].description, "mm"
+        )
+        assert sorts["voxel"].grid == ""
+        # The Schaefer atlas indexes its own grid, not the template's.
+        assert sorts["atlas_voxel"].space == "voxel"
+        assert sorts["atlas_voxel"].grid == "schaefer"
+
+    @pytest.mark.parametrize("grid", ["template", "schaefer"])
+    def test_grid_is_read(self, tmp_path, grid):
+        """Check a sort of voxels names the grid it indexes."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n      schaefer: {n_rois: 100}\n"
+            "    sorts:\n"
+            "      v: {columns: [i, j, k], type: int, space: voxel, "
+            f"grid: {grid}}}\n"
+        )
+        assert engine_registry.get_sorts("e", path)["v"].grid == grid
+
+    def test_unknown_grid_is_rejected(self, tmp_path):
+        """Check a grid is the template's or one of the engine's atlases."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n      schaefer: {n_rois: 100}\n"
+            "    sorts:\n"
+            "      v: {columns: [i, j, k], type: int, space: voxel, "
+            "grid: nowhere}\n"
+        )
+        with pytest.raises(ValueError, match="nowhere") as info:
+            engine_registry.get_sorts("e", path)
+        assert "template, schaefer" in str(info.value)
+        with pytest.raises(ValueError, match="nowhere"):
+            engine_registry.get_predicates("e", path)
+
+    def test_grid_of_a_sort_not_of_voxels_is_rejected(self, tmp_path):
+        """Check only a sort of ``space: voxel`` names a grid."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    sorts:\n"
+            "      p: {columns: [x, y, z], type: float, space: mm, "
+            "grid: template}\n"
+        )
+        with pytest.raises(ValueError, match="space: voxel"):
+            engine_registry.get_sorts("e", path)
+
+
+class TestEngineTemplate:
+    """Check an engine keeps the template its voxel indices refer to."""
+
+    def test_the_template_is_the_mask(self, small_neurosynth):
+        """Check the voxel grid of neurosynth is the MNI mask's."""
+        template = small_neurosynth.template
+        assert template.shape == (4, 4, 4)
+        assert np.array_equal(template.affine, np.eye(4))
+
+    def test_no_template_without_a_mask(self, tmp_path):
+        """Check an engine not requiring the MNI mask has no template."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text("engines:\n  e:\n    description: bare\n")
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        assert nl.template is None
+        assert nl.grids == {}
+
+    def test_the_template_is_a_grid(self, small_neurosynth):
+        """Check the template is the engine's ``template`` grid."""
+        assert small_neurosynth.grids["template"] is (
+            small_neurosynth.template
+        )
+
+    def test_an_atlas_is_a_grid(self, tmp_path, monkeypatch):
+        """Check loading an atlas registers its image as a grid."""
+        import nibabel as nib
+
+        from neurolang.utils import engine_registry
+
+        data = np.zeros((3, 5, 2), dtype=np.int16)
+        data[2, 4, 1], data[0, 0, 0] = 1, 2
+        affine = np.diag([3.0, 3.0, 3.0, 1.0])
+        nib.save(nib.Nifti1Image(data, affine), tmp_path / "atlas.nii")
+        monkeypatch.setitem(
+            engine_registry._ATLAS_REGISTRY, "schaefer", {
+                "fetch": lambda **kw: {
+                    "maps": str(tmp_path / "atlas.nii"),
+                    "labels": ["Background", "A", "B"],
+                },
+                "probabilistic": False,
+            },
+        )
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n    atlases:\n"
+            "      schaefer: {predicate_name: parcels}\n"
+        )
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        grid = nl.grids["schaefer"]
+        assert grid.shape == (3, 5, 2)
+        assert np.array_equal(grid.affine, affine)

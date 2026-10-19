@@ -10,12 +10,14 @@ from ...logic import (
     Disjunction,
     ExistentialPredicate,
     Implication,
-    Negation
+    Negation,
+    Union
 )
 from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     Difference,
+    Materialise,
     NameColumns,
     Projection,
     str2columnstr_constant
@@ -26,6 +28,8 @@ from ...relational_algebra_provenance import (
 )
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
+from ..cplogic import testing
+from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
@@ -838,3 +842,124 @@ def test_interaction_deterministic_probfact_probchoice_safe():
     )
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+@pytest.mark.parametrize("rules", (
+    "S(x), S(y)",
+    "S(x), S(y) | R(y, x), S(w)",
+    "S(w), R(x, x) | S(y), S(x), S(w)",
+), ids=(
+    "self-join", "union implying the self-join",
+    "three equivalent conjuncts",
+))
+def test_inclusion_exclusion_on_equivalent_formulas(rules):
+    """∃x S(x) ∧ ∃y S(y) is ∃x S(x): its two conjuncts and their
+    disjunction are equivalent, and the Möbius weights of their lattice
+    must count them once. The union adds R(y, x) ∧ S(w), which implies
+    ∃x S(x). The CNF of the last one has three conjuncts equivalent to
+    ∃x S(x), of which minimisation must keep one."""
+    R, S, Z, ans = (Symbol(n) for n in ("R", "S", "Z", "ans"))
+    w, x, y = (Symbol(n) for n in ("w", "x", "y"))
+    bodies = {
+        "S(x), S(y)": (Conjunction((S(x), S(y))),),
+        "S(x), S(y) | R(y, x), S(w)": (
+            Conjunction((S(x), S(y))), Conjunction((R(y, x), S(w)))
+        ),
+        "S(w), R(x, x) | S(y), S(x), S(w)": (
+            Conjunction((S(w), R(x, x))), Conjunction((S(y), S(x), S(w)))
+        ),
+    }[rules]
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, "a", "b"), (0.4, "b", "a"), (0.2, "a", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        S, [(0.3, "a"), (0.6, "b")]
+    )
+    cpl_program.walk(Union(tuple(Implication(Z(), b) for b in bodies)))
+    result = dalvi_suciu_lift.solve_succ_query(
+        Implication(ans(), Z()), cpl_program
+    )
+    expected = 1 - (1 - 0.3) * (1 - 0.6)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_symbols_of_relations_to_materialise_are_kept_in_plans():
+    """Like constant sets, relations marked to be materialised are left
+    behind their symbols, rather than inlined in the plan.
+    """
+    relation = Materialise(Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x",), [(1,)])
+    ))
+    symbol = Symbol.fresh()
+    replace = dalvi_suciu_lift.ReplaceAllSymbolsButConstantSets(
+        {symbol: relation}
+    )
+
+    assert replace.walk(symbol) == symbol
+
+
+@pytest.mark.parametrize("rules", (
+    "S(x), S(y)",
+    "S(x), S(y) | R(y, x), S(w)",
+    "S(w), R(x, x) | S(y), S(x), S(w)",
+), ids=(
+    "self-join", "union implying the self-join",
+    "three equivalent conjuncts",
+))
+def test_inclusion_exclusion_on_equivalent_formulas(rules):
+    """∃x S(x) ∧ ∃y S(y) is ∃x S(x): its two conjuncts and their
+    disjunction are equivalent, and the Möbius weights of their lattice
+    must count them once. The union adds R(y, x) ∧ S(w), which implies
+    ∃x S(x). The CNF of the last one has three conjuncts equivalent to
+    ∃x S(x), of which minimisation must keep one."""
+    R, S, Z, ans = (Symbol(n) for n in ("R", "S", "Z", "ans"))
+    w, x, y = (Symbol(n) for n in ("w", "x", "y"))
+    bodies = {
+        "S(x), S(y)": (Conjunction((S(x), S(y))),),
+        "S(x), S(y) | R(y, x), S(w)": (
+            Conjunction((S(x), S(y))), Conjunction((R(y, x), S(w)))
+        ),
+        "S(w), R(x, x) | S(y), S(x), S(w)": (
+            Conjunction((S(w), R(x, x))), Conjunction((S(y), S(x), S(w)))
+        ),
+    }[rules]
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, "a", "b"), (0.4, "b", "a"), (0.2, "a", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        S, [(0.3, "a"), (0.6, "b")]
+    )
+    cpl_program.walk(Union(tuple(Implication(Z(), b) for b in bodies)))
+    result = dalvi_suciu_lift.solve_succ_query(
+        Implication(ans(), Z()), cpl_program
+    )
+    expected = 1 - (1 - 0.3) * (1 - 0.6)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+@pytest.mark.parametrize("answer", (False, True))
+def test_choice_with_a_repeated_variable(answer):
+    """C(x, x) on a probabilistic choice C is ranked into a selection of C,
+    which is still a choice: its tuples are mutually exclusive."""
+    C, Z, ans, x = (Symbol(n) for n in ("C", "Z", "ans", "x"))
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.3, "b", "b"), (0.2, "a", "a")]
+    )
+    if answer:
+        cpl_program.walk(Union((Implication(Z(x), C(x, x)),)))
+        query = Implication(ans(x), Z(x))
+        expected = testing.make_prov_set(
+            [(0.3, "b"), (0.2, "a")], ("_p_", "x")
+        )
+    else:
+        cpl_program.walk(Union((Implication(Z(), C(x, x)),)))
+        query = Implication(ans(), Z())
+        expected = testing.make_prov_set([(0.5,)], ("_p_",))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(result, expected)

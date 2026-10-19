@@ -1,4 +1,4 @@
-from functools import reduce
+from itertools import product
 import logging
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
@@ -22,7 +22,7 @@ from ..logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
-from ..logic.unification import compose_substitutions, most_general_unifier
+from ..logic.unification import most_general_unifier
 from .containment import is_contained
 
 
@@ -289,34 +289,56 @@ def split_positive_negative_formulas(nary_logic_operation):
 
 
 def minimise_formulas_containment(components, containment_op, head_vars):
-    components_fv = [
-        extract_logic_free_variables(c)
-        for c in components
-    ]
+    containments = _ComponentContainments(
+        components, containment_op, head_vars
+    )
+    # Of equivalent components, only the last one is kept: the
+    # containment of an earlier one is computed when needed, as the loop
+    # on it may have stopped before.
     keep = tuple()
-    containments = {}
     for i, c in enumerate(components):
-        for j, c_ in enumerate(components):
+        for j in range(len(components)):
             if i == j:
                 continue
-            c_fv = components_fv[i] & components_fv[j]
-            q = add_existentials_except(c, c_fv | head_vars)
-            q_ = add_existentials_except(c_, c_fv | head_vars)
-            is_contained = containments.setdefault(
-                (i, j), containment_op(q_, q)
-            )
-            LOG.debug("Checking containment %s <= %s: %s", q, q_, is_contained)
-            if (
-                is_contained and
-                not (
-                    j < i and
-                    containments.get((j, i), False)
-                )
+            if containments.contained(i, j) and not (
+                j < i and containments.contained(j, i)
             ):
                 break
         else:
             keep += (c,)
     return keep
+
+
+class _ComponentContainments:
+    """Memoised containments between `components`, each existentially
+    quantified except for the free variables it has in common with the
+    other and `head_vars`."""
+
+    def __init__(self, components, containment_op, head_vars):
+        self.components = components
+        self.components_fv = [
+            extract_logic_free_variables(c) for c in components
+        ]
+        self.containment_op = containment_op
+        self.head_vars = head_vars
+        self.containments = {}
+
+    def contained(self, i, j):
+        """Whether `containment_op` holds for the components `j` and
+        `i`."""
+        if (i, j) not in self.containments:
+            c_fv = (
+                self.components_fv[i] & self.components_fv[j] |
+                self.head_vars
+            )
+            q = add_existentials_except(self.components[i], c_fv)
+            q_ = add_existentials_except(self.components[j], c_fv)
+            self.containments[i, j] = self.containment_op(q_, q)
+            LOG.debug(
+                "Checking containment %s <= %s: %s",
+                q, q_, self.containments[i, j]
+            )
+        return self.containments[i, j]
 
 
 def add_existentials_except(query, variables):
@@ -368,26 +390,44 @@ def unify_existential_variables(query):
     if not isinstance(query, Disjunction):
         return original_query
 
-    unifiers = []
+    # The renaming must be injective within each clause: a class of
+    # unified variables has at most one variable of each clause.
+    representative = {}
+    clauses = {}
+    for i, clause in enumerate(query.formulas):
+        for variable in (
+            extract_logic_free_variables(clause) - variables_to_project
+        ):
+            representative[variable] = variable
+            clauses.setdefault(variable, set()).add(i)
+
+    def find(variable):
+        while representative[variable] != variable:
+            variable = representative[variable]
+        return variable
+
     for i, clause in enumerate(query.formulas):
         atoms = extract_logic_atoms(clause)
         for clause_ in query.formulas[i + 1:]:
-            atoms_ = extract_logic_atoms(clause_)
-            unifiers += [
-                most_general_unifier(a, a_)
-                for a in atoms
-                for a_ in atoms_
-            ]
-    unifiers = reduce(
-        compose_substitutions,
-        (u[0] for u in unifiers if u is not None),
-        {}
-    )
-    unifiers = {
-        k: v for k, v in unifiers.items()
-        if variables_to_project.isdisjoint((k, v))
+            for a, a_ in product(atoms, extract_logic_atoms(clause_)):
+                unifier = most_general_unifier(a, a_)
+                if unifier is None:
+                    continue
+                for variable, term in unifier[0].items():
+                    if variable not in representative or (
+                        term not in representative
+                    ):
+                        continue
+                    root, root_ = find(variable), find(term)
+                    if root != root_ and clauses[root].isdisjoint(
+                        clauses[root_]
+                    ):
+                        representative[root] = root_
+                        clauses[root_] |= clauses.pop(root)
+    substitution = {
+        variable: find(variable) for variable in representative
+        if find(variable) != variable
     }
-    for i in range(len(unifiers)):
-        query = ReplaceExpressionWalker(unifiers).walk(query)
+    query = ReplaceExpressionWalker(substitution).walk(query)
     query = add_existentials_except(query, variables_to_project)
     return query

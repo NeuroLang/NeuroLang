@@ -277,6 +277,55 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     )
 
 
+class PredicateArityError(WrongArgumentsInPredicateError):
+    """
+    A predicate is used with a number of arguments other than its columns.
+
+    Parameters
+    ----------
+    predicate : str
+        Name of the predicate.
+    arity : int
+        Number of columns of the predicate.
+    used : int
+        Number of arguments the predicate is used with.
+
+    Notes
+    -----
+    The message only states the counts. When a single argument is used for
+    a predicate with several columns, as a SQUALL noun without ``in ND``
+    does, `suggestion` tells how to use all its columns; when more
+    arguments than columns are used, as a SQUALL verb with too many
+    objects does, it points to a tuple subject on the relation storing
+    the extra value.
+    """
+
+    def __init__(self, predicate, arity, used):
+        """Build the message from the predicate name and the counts."""
+        columns = "column" if arity == 1 else "columns"
+        super().__init__(
+            f"`{predicate}` has {arity} {columns} but is used with {used}"
+        )
+        self.predicate = predicate
+        self.arity = arity
+        self.used = used
+        if used == 1 and arity > 1:
+            self.suggestion = (
+                f"If `{predicate}` is a noun, use `in {arity}D` or a tuple "
+                f"of {arity} variables such as `("
+                + "; ".join(f"?x{i}" for i in range(1, arity + 1))
+                + ")`."
+            )
+        elif used > arity:
+            self.suggestion = (
+                f"If `{predicate}` is a verb with several objects, as in "
+                "`?s weighs ?t with ?w`, its relation needs one column per "
+                "argument. To use a value stored in another relation, "
+                "name that relation with a tuple subject, e.g. "
+                "`where (?s; ?t; ?w) is a Term_in_study_tfidf`."
+            )
+
+
 class TranslateToNamedRAException(NeuroLangException):
     """
     Base exception for errors translating Datalog to Named Relational Algebra.
@@ -312,6 +361,9 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     Generally speaking, the formula must be expressed in *conjunctive normal
     form* (CNF) or *disjunctive normal form* (DNF): as either a conjunction of
     disjunctions or disjunction of conjunctions.
+
+    A conjunction with variables that are not bound by any of its positive
+    atoms raises :class:`UnboundVariablesError` instead.
 
     See 5.4.7 from [1]_.
 
@@ -396,6 +448,108 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
     def __init__(self, formula):
         super().__init__(f"Negative predicate {formula} is not safe range")
         self.formula = formula
+
+
+class UnboundVariablesError(ForbiddenExpressionError):
+    """
+    This rule is not *range restricted*: some of its variables do not
+    appear in any positive atom of its body.
+
+    Every variable of a rule must occur in a non-negated predicate of the
+    body, or be defined by an equality ``x == expression`` whose
+    expression only uses such variables. Functions, comparisons and
+    negated predicates can only filter the values of bound variables,
+    they cannot enumerate them. See 5.2 from [1]_.
+
+    Examples
+    --------
+    .. code-block:: text
+
+        reports_close(i, j, k, s) :- (
+            (euclidean(i, j, k, i1, j1, k1) < 2.)
+            & voxel(i, j, k) & peak_reported(i, j, k, s)
+        )
+
+    Variables ``i1``, ``j1`` and ``k1`` appear only as arguments of the
+    function ``euclidean``. A valid rule binds them with a predicate:
+
+    .. code-block:: text
+
+        reports_close(i, j, k, s) :- (
+            (euclidean(i, j, k, i1, j1, k1) < 2.)
+            & voxel(i, j, k) & peak_reported(i1, j1, k1, s)
+        )
+
+    Parameters
+    ----------
+    rule : str or None
+        Name of the head predicate of the rule, None for a query or when
+        the rule is unknown.
+    variables : tuple of str
+        Names of the unbound variables.
+    occurrences : tuple of str
+        The formulas of the body where the unbound variables appear.
+    example : str, optional
+        A predicate that would bind the variables in the body.
+    query : bool
+        Whether the body is the body of a query.
+
+    .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
+        (Addison Wesley, 1995), Addison-Wesley.
+    """
+
+    def __init__(
+        self, rule, variables, occurrences, example=None, query=False
+    ):
+        self.rule = rule
+        self.variables = tuple(variables)
+        self.occurrences = tuple(occurrences)
+        self.example = example
+        self.query = query
+        super().__init__(self._message())
+        self.suggestion = self._suggestion()
+
+    def __reduce__(self):
+        return type(self), (
+            self.rule, self.variables, self.occurrences, self.example,
+            self.query,
+        )
+
+    def located(self, rule=None, query=False):
+        """
+        Return this error, reported for the rule named *rule*, or for a
+        query.
+        """
+        return type(self)(
+            rule, self.variables, self.occurrences, self.example, query
+        )
+
+    def _names(self):
+        return ", ".join(self.variables)
+
+    def _message(self):
+        if self.rule is not None:
+            where = self.rule
+        else:
+            where = "the query" if self.query else "a rule body"
+        plural = len(self.variables) > 1
+        return (
+            f"In {where}: the variable{'s' if plural else ''} "
+            f"{self._names()} {'appear' if plural else 'appears'} only in "
+            + " and ".join(f"`{o}`" for o in self.occurrences)
+            + "; every variable must appear in a positive atom of the "
+            "rule body, or be defined by an equality `x == expression` "
+            "over such variables"
+        )
+
+    def _suggestion(self):
+        tip = f"Add a predicate over {self._names()} to the rule body"
+        if self.example:
+            return f"{tip}, such as {self.example}."
+        return (
+            f"{tip}, or define each with an equality such as "
+            f"`{self.variables[0]} == <expression over bound variables>`."
+        )
 
 
 class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):

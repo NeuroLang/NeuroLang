@@ -232,11 +232,11 @@ def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
 def test_probability_columns_labelled_by_role(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "σ[p > 0.0]" in out
-    assert "γ[by=(x), p = sum(p)]" in out
+    assert "γ[by=(l), p = sum(p)]" in out
     assert "π_ext[p(active) * p(picked) * 1.0 -> p" in out
     assert "active(p(active), x)" in out
     assert "picked(p(picked), x)" in out
@@ -301,8 +301,8 @@ def test_collapse_false_prints_full_plans(capsys):
 def test_collapse_probabilistic_tables(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "active(p(active), x) ‹3 rows›" in out
     assert "π_ext[p(active) * p(picked) * 1.0 -> p, " in out
@@ -317,8 +317,8 @@ def test_collapse_constant_argument(capsys):
 def test_probabilistic_plans_name_their_solver(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "[solver: small dichotomy theorem (safe plan)]" in out
 
@@ -341,9 +341,15 @@ def test_probabilistic_plans_name_lifted_solver(capsys):
 
 
 def knows_engine():
-    """Return an engine whose ``knowing`` query needs the WMC solver."""
+    """Return an engine whose ``knowing`` query needs the WMC solver.
+
+    ``person`` is probabilistic, and ``knowing`` contains the #P-hard
+    self-join ``∃z, w person(z) ∧ knows(z, w) ∧ person(w)``.
+    """
     nl = NeurolangPDL()
-    nl.add_tuple_set([("a",), ("b",)], name="person")
+    nl.add_probabilistic_facts_from_tuples(
+        [(1.0, "a"), (1.0, "b")], name="person"
+    )
     nl.add_probabilistic_facts_from_tuples(
         [(0.5, "a", "b")], name="knows"
     )
@@ -354,7 +360,8 @@ def knows_engine():
 
 
 KNOWING = (
-    "knowing(x, PROB) :- knows(x, y), person(x), person(y).\n"
+    "knowing(x, PROB) :- knows(x, y), person(x), person(y), "
+    "knows(z, w), person(z), person(w).\n"
 )
 
 
@@ -480,8 +487,9 @@ def test_query_with_constant_on_a_named_predicate(capsys):
         "reach(x, y) :- reach(x, z), edge(z, y).\n"
         "ans(y) :- reach(1, y).",
     )
-    assert "── query ans(y) :-\n    reach(1, y) ──" in out
-    assert "reach(1, y) ‹from 6 rows›" in out
+    # the constant is propagated by magic sets into the query rule
+    assert "── rule ans(y) :-\n    reach^bf_0(1, y) ──" in out
+    assert "reach^bf_0(1, y) ‹from 3 rows›" in out
 
 
 def test_query_on_a_probabilistic_predicate_has_no_size(capsys):
@@ -602,11 +610,13 @@ def test_conditional_query_header_shares_variable_names(capsys):
     """Check the header and both parts name fresh variables alike."""
     out = forward_inference_output(capsys)
     header = out.split("── conditional query ")[1].split(" ──\n")[0]
-    assert header.startswith("label_reports(s₀, p) = P(\n")
-    assert "  | selected_study(s₁), mentions(s₁, 'memory')\n)" in header
-    assert "schaefer_label(s₀)" in header
-    assert "── rule label_reports^cond_den(PROB()) :-\n" \
-        "    selected_study(s₁),\n" in out
+    # the rules are those rewritten with magic sets for 'memory'
+    assert header.startswith("label_reports_0(s₀, p) = P(\n")
+    assert "  | mentions^fb_0(s₁, 'memory'), selected_study(s₁)\n)" in header
+    assert "schaefer_label^b_0(s₀)" in header
+    assert "── rule label_reports_0^cond_den(PROB()) :-\n" \
+        "    mentions^fb_0(s₁, 'memory'),\n" \
+        "    selected_study(s₁) ──\n" in out
 
 
 ANALYZE = ShowRAOptions(analyze=True)

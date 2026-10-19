@@ -1,16 +1,16 @@
-from neurolang.config import config
+from neurolang.config import check_query_backend, config
 from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
 
 _backend = config["RAS"].get("backend") if "RAS" in config else None
+if _backend is not None:
+    try:
+        check_query_backend(_backend)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid [RAS] backend in the NeuroLang configuration: {e}"
+        ) from None
 
-if _backend == "dask":
-    from .dask_sql import (
-        NamedRelationalAlgebraFrozenSet,
-        RelationalAlgebraFrozenSet,
-        RelationalAlgebraSet,
-        RelationalAlgebraStringExpression,
-    )
-elif _backend == "polars":
+if _backend == "polars":
     from .polars import (
         NamedRelationalAlgebraFrozenSet,
         RelationalAlgebraFrozenSet,

@@ -1,6 +1,7 @@
 import functools
 import json
 import os
+import re
 from typing import Tuple
 
 from lark import Lark, Transformer
@@ -32,7 +33,9 @@ from ...utils.interactive_parsing import LarkCompleter
 from .lark_errors import lark_errors_as_neurolang
 
 # Aggregation function names recognised in rule head arguments.
-AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
+AGGREGATION_FUNCS = frozenset(
+    {"count", "sum", "max", "min", "mean", "avg", "std", "percentile"}
+)
 
 
 GRAMMAR = u"""
@@ -147,13 +150,7 @@ cmd_args : cmd_arg ("," cmd_arg)*
          | keyword_item
 
 keyword_item : identifier "=" pos_item
-pos_item : arithmetic_operation | python_string
-
-python_string : PYTHON_STRING
-PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
-              | SINGLE_QUOTE NO_SING_QUOTE_STR SINGLE_QUOTE
-NO_DBL_QUOTE_STR : /[^"]*/
-NO_SING_QUOTE_STR : /[^']*/
+pos_item : arithmetic_operation
 
 ?function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
                      | id_application
@@ -185,7 +182,7 @@ fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text | tuple_literal
+?literal : number | text | iri | tuple_literal
 
 tuple_literal : "(" argument ("," argument)+ ")"
 
@@ -194,15 +191,19 @@ identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
 IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\\/#%._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
-CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*(?:\\:[a-zA-Z_][a-zA-Z0-9_-]*(?=\\s*\\())?\\b/
 
 exists : EXISTS_WORD | EXISTS_SYMBOL
 EXISTS_WORD : "exists" | "EXISTS"
 EXISTS_SYMBOL : "\u2203"
 
 text : TEXT
-TEXT : DOUBLE_QUOTE /[a-zA-Z0-9 ]*/ DOUBLE_QUOTE
-     | SINGLE_QUOTE /[a-zA-Z0-9 ]*/ SINGLE_QUOTE
+TEXT : DOUBLE_QUOTE /[^"\\n]*/ DOUBLE_QUOTE
+     | SINGLE_QUOTE /[^'\\n]*/ SINGLE_QUOTE
+
+// An IRI, as in SPARQL and Turtle: <http://example.org/a>
+iri : IRI
+IRI : /<[a-zA-Z][a-zA-Z0-9+.-]*:[^<>"{}|^`\\\\\\s]*>/
 DOUBLE_QUOTE : "\\""
 SINGLE_QUOTE : "'"
 
@@ -433,7 +434,10 @@ class DatalogTransformer(Transformer):
 
         if isinstance(body_or_cond, tuple):
             group_vars, conjunction, agg_fn_call, result_var = body_or_cond
-            return self._build_aggregate_rule(head, group_vars, conjunction, agg_fn_call, result_var)
+            result = self._build_aggregate_rule(
+                head, group_vars, conjunction, agg_fn_call, result_var
+            )
+            return self._ans_main_rule_as_query(head, result)
 
         if isinstance(body_or_cond, Conjunction):
             regular, prob_specs = self._extract_special_body_atoms(
@@ -442,23 +446,47 @@ class DatalogTransformer(Transformer):
             if prob_specs:
                 new_body = Conjunction(regular) if regular else Constant(True)
                 result = self._build_prob_rule(head, prob_specs, new_body)
-                # PROB body desugaring now produces an Implication for the
-                # main formula.  Wrap as Query when the head is ans so that
-                # execute_datalog_program can dispatch it as a query.
-                if isinstance(head, Expression) and head.functor == Symbol("ans"):
-                    formulas = list(result.formulas)
-                    main = formulas[-1]
-                    if isinstance(main, Implication):
-                        formulas[-1] = Query(
-                            main.consequent, main.antecedent
-                        )
-                        return Union(tuple(formulas))
-                return result
+                return self._ans_main_rule_as_query(head, result)
 
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
             return Query(ast[0], body_or_cond)
         else:
             return Implication(ast[0], body_or_cond)
+
+    @staticmethod
+    def _ans_main_rule_as_query(head, result):
+        """
+        PROB and AGGREGATE body desugaring produce an Implication for the
+        main formula, alone or last in a Union. Wrap it as Query when the
+        head is ans so that execute_datalog_program can dispatch it as a
+        query. A query head cannot hold an aggregation, so a main formula
+        ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
+        queried as ``ans(t, n) :- fresh(t, n)``.
+        """
+        if not (
+            isinstance(head, Expression) and head.functor == Symbol("ans")
+        ):
+            return result
+        if isinstance(result, Implication):
+            result = Union((result,))
+        formulas = list(result.formulas)
+        main = formulas[-1]
+        if not isinstance(main, Implication):
+            return result
+        if any(
+            isinstance(arg, AggregationApplication)
+            for arg in main.consequent.args
+        ):
+            fresh_pred_sym = Symbol.fresh()
+            formulas[-1] = Implication(
+                fresh_pred_sym(*main.consequent.args), main.antecedent
+            )
+            formulas.append(
+                Query(head, Conjunction((fresh_pred_sym(*head.args),)))
+            )
+        else:
+            formulas[-1] = Query(main.consequent, main.antecedent)
+        return Union(tuple(formulas))
 
     @staticmethod
     def _classify_prob_predicate(pred):
@@ -855,10 +883,10 @@ class DatalogTransformer(Transformer):
 
     def existential_predicate(self, ast):
         ast1 = ast[1].children
-        exp = []
-        for i in ast1:
-            if isinstance(i, FunctionApplication):
-                exp.append(i)
+        # Every predicate of the body: atoms and comparisons, but also
+        # negations and nested existentials, which are not function
+        # applications. The variables and the separator are left out.
+        exp = [i for i in ast1[1:] if isinstance(i, Expression)]
 
         if len(exp) == 1:
             exp = exp[0]
@@ -909,24 +937,27 @@ class DatalogTransformer(Transformer):
                 result.append(arg)
         return result
 
+    @staticmethod
+    def _expand_implicit_prob(arguments):
+        """
+        Return the head *arguments* with a bare ``PROB`` made explicit.
+
+        ``PROB`` alone stands for the probability of the other head
+        terms: ``p(x, PROB, y)`` is ``p(x, PROB(x, y), y)``.
+        """
+        if PROB not in arguments:
+            return arguments
+        ix_prob = arguments.index(PROB)
+        others = arguments[:ix_prob] + arguments[ix_prob + 1:]
+        return (
+            arguments[:ix_prob] + [PROB(*others)] + arguments[ix_prob + 1:]
+        )
+
     def head_predicate(self, ast):
         if ast[1] is not None:
             arguments = list(ast[1])
             arguments = self._wrap_aggregation_args(arguments)
-
-            if PROB in arguments:
-                ix_prob = arguments.index(PROB)
-                arguments_not_prob = (
-                    arguments[:ix_prob] +
-                    arguments[ix_prob + 1:]
-                )
-                prob_arg = PROB(*arguments_not_prob)
-                arguments = (
-                    arguments[:ix_prob] +
-                    [prob_arg] +
-                    arguments[ix_prob + 1:]
-                )
-
+            arguments = self._expand_implicit_prob(arguments)
             ast = ast[0](*arguments)
         else:
             ast = ast[0]()
@@ -941,6 +972,7 @@ class DatalogTransformer(Transformer):
                 arguments = list(arguments_raw) if arguments_raw else []
 
             arguments = self._wrap_aggregation_args(arguments)
+            arguments = self._expand_implicit_prob(arguments)
             return Symbol("ans")(*arguments)
         else:
             return Symbol("ans")()
@@ -1006,10 +1038,7 @@ class DatalogTransformer(Transformer):
         return tuple(ast)
 
     def pos_item(self, ast):
-        ast = ast[0]
-        if not isinstance(ast, Expression):
-            return Constant((ast.children[0]).value.replace('"', ''))
-        return ast
+        return ast[0]
 
     def lambda_application(self, ast):
         if not isinstance(ast[0], Expression):
@@ -1171,7 +1200,10 @@ class DatalogTransformer(Transformer):
         return Symbol((ast[0]).value)
 
     def text(self, ast):
-        return Constant((ast[0].replace("'", "")).replace('"', ''))
+        return Constant(ast[0][1:-1])
+
+    def iri(self, ast):
+        return Constant(ast[0][1:-1])
 
     def tuple_literal(self, ast):
         # Filter out Lark terminal tokens (commas, parens) which are str/Token
@@ -1205,6 +1237,35 @@ class DatalogTransformer(Transformer):
         return ast
 
 
+_IRI = re.compile(r'<[a-zA-Z][a-zA-Z0-9+.-]*:[^<>"{}|^`\\\s]*>')
+
+
+def strip_comment(line):
+    """
+    Return *line* without its ``%`` comment, if any.
+
+    A ``%`` within a string or an IRI does not start a comment.
+    """
+    in_single = False
+    in_double = False
+    i = 0
+    while i < len(line):
+        c = line[i]
+        if c == "'" and not in_double:
+            in_single = not in_single
+        elif c == '"' and not in_single:
+            in_double = not in_double
+        elif c == '<' and not in_single and not in_double:
+            iri = _IRI.match(line, i)
+            if iri:
+                i = iri.end()
+                continue
+        elif c == '%' and not in_single and not in_double:
+            return line[:i]
+        i += 1
+    return line
+
+
 def _preprocess(code):
     """Strip % comments and trailing Prolog-style dots before Lark parsing.
 
@@ -1214,17 +1275,7 @@ def _preprocess(code):
     lines = code.split('\n')
     processed = []
     for line in lines:
-        # Strip % comments (not inside strings)
-        in_single = False
-        in_double = False
-        for i, c in enumerate(line):
-            if c == "'" and not in_double:
-                in_single = not in_single
-            elif c == '"' and not in_single:
-                in_double = not in_double
-            elif c == '%' and not in_single and not in_double:
-                line = line[:i]
-                break
+        line = strip_comment(line)
         # Strip trailing Prolog-style dot
         stripped = line.rstrip()
         if stripped.endswith('.') and stripped != '.':

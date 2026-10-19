@@ -48,6 +48,7 @@ TERMINALS_TO_CATEGORIES = {
     'IDENTIFIER_REGEXP': CATEGORIES[11],
     'IMPLICATION': CATEGORIES[9],
     'INT': CATEGORIES[1],
+    'IRI': CATEGORIES[11],
     'LAMBDA': CATEGORIES[5],
     'LPAR': CATEGORIES[0],
     'LSQB': CATEGORIES[0],
@@ -165,6 +166,8 @@ class LarkCompleter:
                 t_pattern = '<string>'
             elif (t_name == 'TEXT'):
                 t_pattern = '<text>'
+            elif (t_name == 'IRI'):
+                t_pattern = '<iri>'
             else:
                 t_pattern = t_pattern.replace(
                     '\\\\+', '+').replace('\\\\-', '-')

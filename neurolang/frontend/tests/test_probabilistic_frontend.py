@@ -10,16 +10,22 @@ from ...exceptions import (
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
     SymbolNotFoundError,
+    UnboundVariablesError,
     UnsupportedProgramError,
     UnsupportedQueryError,
     WrongArgumentsInPredicateError
 )
+from ...expressions import Symbol
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
-from ...probabilistic import dalvi_suciu_lift
+from ...probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver
+)
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    RepeatedTuplesInProbabilisticRelationError
+    RepeatedTuplesInProbabilisticRelationError,
+    UnsupportedSolverError
 )
 from ...regions import SphericalVolume
 from ...utils.relational_algebra_set import (
@@ -283,6 +289,103 @@ def test_dry_run_prints_magic_rules_of_a_bound_query(capsys):
     out = capsys.readouterr().out
     assert "magic_mentions" in out
     assert "tfidf(s, t, v)" in out
+
+
+SIMILARITIES = {
+    ("math", "a"): .9, ("math", "b"): .8, ("math", "c"): .1,
+    ("lang", "c"): .9,
+}
+
+CLOSE = "close(q, s) :- study(s) & (sim == f(q, s)) & (sim > .5)\n"
+P_GIVEN_CLOSE = (
+    "p_given_close(q, i, PROB) :- (peak(i, s) & selected_study(s)) "
+    "// (close(q, s) & selected_study(s))\n"
+)
+
+
+def build_similarity_engine():
+    """
+    Build an engine with a scalar function ``f(q, s)`` of a query text.
+
+    ``close(q, s)`` holds for the studies ``s`` similar to ``q``: a and b
+    for 'math', c for 'lang'. Study a reports peaks 1 and 2, b reports
+    3 and c reports 1.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "a"), (3, "b"), (1, "c")], name="peak")
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="study")
+    nl.add_tuple_set([("math",)], name="topic")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="selected_study"
+    )
+
+    @nl.add_symbol
+    def f(q: str, s: str) -> float:
+        return SIMILARITIES.get((q, s), 0.)
+
+    return nl
+
+
+def test_marg_query_constant_flows_through_rule_head():
+    """
+    Check that a constant of a query binds a variable of a MARG rule.
+
+    ``q`` is bound only by the constant 'math' of the query, which magic
+    sets carry through the head of ``p_given_close`` into ``close``. The
+    result is that of binding ``q`` with ``topic(q)`` in ``close``.
+    """
+    expected = {(1, .5), (2, .5), (3, .5)}
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE + P_GIVEN_CLOSE + "ans(i, p) :- p_given_close('math', i, p)"
+    )
+    assert set(res) == expected
+
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE.replace("study(s)", "topic(q) & study(s)") + P_GIVEN_CLOSE
+        + "ans(i, p) :- p_given_close('math', i, p)"
+    )
+    assert set(res) == expected
+
+
+def test_marg_query_conditioned_on_rule_with_constant():
+    """Check a MARG rule conditioned on a rule with a constant."""
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE
+        + "math_study(s) :- close('math', s)\n"
+        + "p_given_math(i, PROB) :- (peak(i, s) & selected_study(s)) "
+        "// (math_study(s) & selected_study(s))\n"
+        + "ans(i, p) :- p_given_math(i, p)"
+    )
+    assert set(res) == {(1, .5), (2, .5), (3, .5)}
+
+
+def test_marg_query_several_constants():
+    """
+    Check a MARG rule called with two constants in one rule.
+
+    The probabilities of 'math' cannot bind the call for 'lang', as they
+    are computed after the magic sets.
+    """
+    nl = build_similarity_engine()
+    res = nl.execute_datalog_program(
+        CLOSE + P_GIVEN_CLOSE
+        + "both(i, p, r) :- p_given_close('math', i, p) "
+        "& p_given_close('lang', i, r)\n"
+        + "ans(i, p, r) :- both(i, p, r)"
+    )
+    assert set(res) == {(1, .5, 1.)}
+
+
+def test_marg_query_unbound_variable():
+    """Check the error of a MARG query leaving a function argument free."""
+    nl = build_similarity_engine()
+    with pytest.raises(UnboundVariablesError, match=r"In close: .*\bq\b"):
+        nl.execute_datalog_program(
+            CLOSE + P_GIVEN_CLOSE + "ans(q, i, p) :- p_given_close(q, i, p)"
+        )
 
 
 def test_deterministic_query():
@@ -686,6 +789,36 @@ def test_post_probabilistic_aggregation():
     assert_almost_equal(res.to_unnamed(), expected)
 
 
+
+@pytest.mark.parametrize(
+    "query, columns, rows",
+    [
+        ("ans(count(s)) :- pain(s)", ("count",), {(2,)}),
+        (
+            "ans(t, count(s)) :- term(s, t)", ("t", "count"),
+            {("pain", 2), ("fear", 1)},
+        ),
+    ],
+)
+def test_aggregate_query_on_a_rule(query, columns, rows):
+    """
+    An aggregate in the head of a query on one rule-defined predicate.
+
+    It used to raise AttributeError: 'FunctionApplication' object has no
+    attribute 'name', the aggregate being taken for a variable.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s2", "pain"), ("s2", "fear")], name="tfidf"
+    )
+    nl.execute_datalog_program(
+        "pain(s) :- tfidf(s, 'pain')\nterm(s, t) :- tfidf(s, t)"
+    )
+    res = nl.execute_datalog_program(query)
+    assert res.columns == columns
+    result = res.as_pandas_dataframe().itertuples(index=False, name=None)
+    assert set(result) == rows
+
 def test_empty_result_query():
     nl = NeurolangPDL()
     A = nl.add_tuple_set([("f",), ("d",)], name="A")
@@ -743,6 +876,80 @@ def test_trivial_probability_query_result():
         res = nl.query((e.p, e.x), e.D[e.x, e.p])
     assert set(res) == b
 
+
+
+def _mentions_engine():
+    """Return an engine where studies mention terms, a study chosen."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "pain"), ("s1", "fear"), ("s2", "pain")], name="mentions"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    return nl
+
+
+def _rows(result):
+    return {
+        (t, round(p, 4))
+        for t, p in result.as_pandas_dataframe().itertuples(index=False)
+    }
+
+
+def test_datalog_query_with_probability_in_its_head():
+    """``ans(t, PROB(t)) :- …`` used to return an empty result."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)"
+    )
+    assert res.columns == ("t", "PROB")
+    assert _rows(res) == {("pain", 1.0), ("fear", 0.5)}
+
+
+def test_datalog_conditional_query_with_probability_in_its_head():
+    """``ans(t, PROB(t)) :- … // …`` used to raise AttributeError."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- (mentions(s, t), selected_study(s)) // "
+        "(selected_study(s), mentions(s, 'fear'))"
+    )
+    assert _rows(res) == {("pain", 1.0), ("fear", 1.0)}
+
+
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "ans(t, PROB) :- mentions(s, t), selected_study(s)",
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)",
+    ],
+)
+def test_datalog_query_with_implicit_probability_in_its_head(query):
+    """``PROB`` alone in the head stands for ``PROB`` of the other terms."""
+    nl = _mentions_engine()
+    res = nl.execute_datalog_program(query)
+    assert res.columns == ("t", "PROB")
+    assert _rows(res) == {("pain", 1.0), ("fear", 0.5)}
+
+@pytest.mark.parametrize(
+    "option", [{"dry_run": True}, {"show_rewritten": True}, {"show_ra": True}]
+)
+def test_query_with_probability_in_its_head_printed(option, capsys):
+    nl = _mentions_engine()
+    nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)", **option
+    )
+    assert "mentions(s, t)" in capsys.readouterr().out
+
+def test_query_with_probability_in_its_head_leaves_program_unchanged():
+    nl = _mentions_engine()
+    before = set(nl.symbol_table.symbols_by_type(object))
+    nl.execute_datalog_program(
+        "ans(t, PROB(t)) :- mentions(s, t), selected_study(s)"
+    )
+    assert set(nl.symbol_table.symbols_by_type(object)) == before
 
 def test_equality():
     nl = NeurolangPDL()
@@ -1578,6 +1785,33 @@ def test_qbased_pchoice_equiprobable():
     assert_almost_equal(sol, expected)
 
 
+def test_qbased_pchoice_unused_by_the_query():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="P")
+    nl.add_tuple_set([(1,), (3,)], name="R")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,)], name="Selected"
+    )
+    with nl.environment as e:
+        e.S[e.count(e.x)] = e.P(e.x)
+        (e.Q ^ (1. / e.p))[e.x] = e.P(e.x) & e.S(e.p)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x) & e.Selected(e.x)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {(1, 0.5)}
+    assert_almost_equal(sol, expected)
+
+
+def test_qbased_pchoice_empty():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.8, "b")], name="P")
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+    with nl.environment as e:
+        (e.Q ^ e.p)[e.x] = e.P(e.p, e.x) & (e.p > 0.8)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Q(e.y)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    assert_almost_equal(sol, RelationalAlgebraFrozenSet([]))
+
+
 def test_noisy_or_probabilistic_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
@@ -1782,3 +2016,273 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
+
+
+def test_min_and_avg_aggregations():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a", 3), ("a", 1), ("b", 2)], name="p")
+    low = nl.execute_datalog_program(
+        "low(x, v) :- AGGREGATE[x](p(x, y) @ min(y)) = v\n"
+        "ans(x, v) :- low(x, v)"
+    )
+    assert set(low) == {("a", 1), ("b", 2)}
+    average = nl.execute_datalog_program(
+        "average(v) :- AGGREGATE[](p(x, y) @ avg(y)) = v\n"
+        "ans(v) :- average(v)"
+    )
+    assert set(average) == {(2.0,)}
+
+
+def test_constant_on_empty_deterministic_idb_in_probabilistic_rule():
+    """
+    Solve a probabilistic rule over an empty deterministic predicate.
+
+    ``m`` has no tuple, and so no relation in the solution of the
+    deterministic stratum: selecting ``m(s, "memory")`` crashed.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "memory", 0.5), ("s2", "pain", 0.6)], name="tfidf"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.execute_datalog_program(
+        "m(s, t) :- tfidf(s, t, v) & (v > 100)\n"
+        "q(x, PROB(x)) :- m(s, 'memory'), selected_study(s), tfidf(s, x, v)"
+    )
+    with nl.scope as e:
+        res = nl.query((e.x, e.p), e.q(e.x, e.p))
+    assert len(res) == 0
+
+
+@pytest.mark.parametrize("equality", ("(t == 't1')", "('t1' == t)"))
+@pytest.mark.parametrize("negated", (False, True))
+def test_equality_to_a_constant_within_an_existential(equality, negated):
+    """
+    An equality to a constant within ``exists(…)`` is not inlined.
+
+    The equality rewrites looked for equalities in the whole body but only
+    rewrote the top-level conjuncts, rewriting such a rule again and
+    again until the recursion limit.
+    """
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [(0.4, "s1"), (0.6, "s2")], name="C"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "s1", "t1"), (0.5, "s2", "t2")], name="M"
+    )
+    negation = "~" if negated else ""
+    res = nl.execute_datalog_program(
+        f"q(s, PROB) :- C(s), {negation}exists(t; M(s, t), {equality})\n"
+        "ans(s, p) :- q(s, p)"
+    )
+    probabilities = {
+        s: p for s, p in res.as_pandas_dataframe().itertuples(index=False)
+        if p > 0
+    }
+    expected = {"s1": 0.2, "s2": 0.6} if negated else {"s1": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for s, p in expected.items():
+        assert probabilities[s] == pytest.approx(p)
+
+
+def test_forward_inference_given_a_single_term_is_lifted():
+    """The probability that the selected study reports a peak near a
+    voxel, given that it mentions t and no other term, is lifted: the
+    choice within the negation is absorbed by the one outside it.
+    """
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_tuple_set(
+        [(0, 0, 0, "s0"), (3, 3, 3, "s2"), (0, 0, 1, "s3")],
+        name="peak_reported",
+    )
+    nl.add_tuple_set([(0, 0, 0), (3, 3, 3)], name="voxel")
+    nl.add_tuple_set(
+        [
+            ("s0", "pain"), ("s1", "pain"), ("s1", "joy"),
+            ("s2", "joy"), ("s3", "joy"),
+        ],
+        name="mentions",
+    )
+    nl.add_tuple_set([("pain",), ("joy",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s0",), ("s1",), ("s2",), ("s3",)], name="selected_study"
+    )
+
+    @nl.add_symbol
+    def euclidean(
+        i: int, j: int, k: int, i1: int, j1: int, k1: int
+    ) -> float:
+        return float(np.sqrt((i - i1) ** 2 + (j - j1) ** 2 + (k - k1) ** 2))
+
+    nl.execute_datalog_program(
+        "near_peak(i, j, k, s) :- voxel(i, j, k) & "
+        "peak_reported(i1, j1, k1, s), "
+        "(euclidean(i, j, k, i1, j1, k1) <= 2)\n"
+        "activation(i, j, k, s) :- near_peak(i, j, k, s), "
+        "selected_study(s)\n"
+        "term_association(s, t) :- mentions(s, t), selected_study(s)\n"
+        "forward(i, j, k, t, PROB) :- activation(i, j, k, s) // "
+        "(term_association(s, t) & ~exists(t1; term(t1), "
+        "term_association(s, t1), (t1 != t)))\n"
+    )
+    res = nl.solve_all()["forward"].as_pandas_dataframe()
+
+    assert set(res.itertuples(index=False, name=None)) == {
+        (0, 0, 0, "pain", 1.0),
+        (0, 0, 0, "joy", 0.5),
+        (3, 3, 3, "joy", 0.5),
+    }
+
+
+@pytest.mark.parametrize("kind", ("facts", "choice"))
+def test_argument_types_of_probabilistic_relations(kind):
+    """The types of the arguments of a probabilistic relation are those of
+    its columns after the probability column."""
+    nl = NeurolangPDL()
+    tuples = [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")]
+    if kind == "facts":
+        nl.add_probabilistic_facts_from_tuples(tuples, name="R")
+    else:
+        nl.add_probabilistic_choice_from_tuples(tuples, name="R")
+    nl.execute_datalog_program("q(x, PROB) :- R(x, y), R(y, x)")
+    q = nl.program_ir.intensional_database()[Symbol("q")].formulas[0]
+    assert all(
+        arg.type is str
+        for atom in q.antecedent.formulas for arg in atom.args
+    ), q.antecedent
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    probabilities = {
+        row[0]: row[1] for row in result.itertuples(index=False)
+    }
+    if kind == "facts":
+        expected = {"a": 1 - (1 - 0.5 * 0.3) * (1 - 0.2), "b": 0.5 * 0.3}
+    else:
+        expected = {"a": 0.2}
+    assert probabilities.keys() == expected.keys()
+    for value, p in expected.items():
+        assert probabilities[value] == pytest.approx(p)
+
+
+@pytest.mark.parametrize("program, expected", (
+    (
+        "q(PROB) :- selected_study(s), "
+        "~exists(s2; selected_study(s2), (s2 != s))",
+        {(): 1.},
+    ),
+    (
+        "q(t, PROB) :- mentions(s, t), selected_study(s), "
+        "~exists(s2; mentions(s2, t), selected_study(s2), (s2 != s))",
+        {("a",): (0.4 + 0.7) / 3},
+    ),
+), ids=("choice twice", "choice twice with facts"))
+def test_weighted_model_counting_of_a_choice_occurring_twice(
+    program, expected
+):
+    """A probabilistic choice is a single random variable: a selected
+    study is the only one selected."""
+    from ...probabilistic import weighted_model_counting
+    nl = NeurolangPDL(
+        probabilistic_solvers=(weighted_model_counting.solve_succ_query,),
+        probabilistic_marg_solvers=(weighted_model_counting.solve_marg_query,),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.4, "s1", "a"), (0.7, "s2", "a")], name="mentions"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected_study"
+    )
+    nl.execute_datalog_program(program)
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    probabilities = {
+        tuple(row[:-1]): row[-1]
+        for row in result.itertuples(index=False)
+    }
+    assert probabilities.keys() == expected.keys()
+    for answer, p in expected.items():
+        assert probabilities[answer] == pytest.approx(p)
+
+
+@pytest.mark.parametrize("query, expected", (
+    ("ans(x, p) :- m(x, p), d(x)", {("a", .5), ("b", .5)}),
+    ("ans(x, p) :- m(x, p), (x == 'a')", {("a", .5)}),
+    ("ans(x, q) :- m(x, p), n(x, p1), (q == p1 / p)",
+     {("a", .4 / .5), ("b", .1 / .5)}),
+))
+def test_conjunctive_query_on_probabilistic_queries(query, expected):
+    """A query whose body is a conjunction is solved with the
+    probabilistic queries it depends on."""
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set([("a",), ("b",)], name="c")
+    nl.add_probabilistic_facts_from_tuples([(.4, "a"), (.1, "b")], name="f")
+    nl.add_tuple_set([("a",), ("b",)], name="d")
+    result = nl.execute_datalog_program(
+        "m(x, PROB) :- c(x)\n"
+        "n(x, PROB) :- f(x)\n" + query
+    )
+
+    rows = set(result.as_pandas_dataframe().itertuples(index=False))
+    assert len(rows) == len(expected)
+    for (x, p), (x_expected, p_expected) in zip(
+        sorted(rows), sorted(expected)
+    ):
+        assert x == x_expected
+        assert p == pytest.approx(p_expected)
+
+
+def _engine_with_two_witnesses(selected, solvers=None):
+    """`R` has two rows for x = 1, so ∃y R(1, y) has two witnesses."""
+    if solvers is None:
+        nl = NeurolangPDL()
+    else:
+        nl = NeurolangPDL(
+            probabilistic_solvers=(solvers.solve_succ_query,),
+            probabilistic_marg_solvers=(solvers.solve_marg_query,),
+        )
+    nl.add_tuple_set([(1, "a"), (1, "c"), (2, "b")], name="R")
+    if selected == "facts":
+        nl.add_probabilistic_facts_from_tuples(
+            [(0.5, 1), (0.5, 2)], name="Selected"
+        )
+    else:
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(1,), (2,)], name="Selected"
+        )
+    return nl
+
+
+def _query_with_deterministic_existential(nl):
+    with nl.environment as e:
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Selected(e.x)
+        return nl.query((e.x, e.p), e.Query(e.x, e.p))
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+@pytest.mark.parametrize(
+    "solvers", [None, dalvi_suciu_lift], ids=["default", "lift"]
+)
+def test_existential_variable_of_deterministic_relation_only(
+    selected, solvers
+):
+    """P(∃y R(1, y) ∧ Selected(1)) is P(Selected(1)) however many rows
+    of the deterministic `R` witness ∃y: they are the same event."""
+    nl = _engine_with_two_witnesses(selected, solvers)
+    sol = _query_with_deterministic_existential(nl)
+    assert len(sol) == 2
+    assert_almost_equal(sol, {(1, 0.5), (2, 0.5)})
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+def test_small_dichotomy_declines_existential_of_deterministic_relation(
+    selected
+):
+    nl = _engine_with_two_witnesses(
+        selected, small_dichotomy_theorem_based_solver
+    )
+    with pytest.raises(UnsupportedSolverError):
+        _query_with_deterministic_existential(nl)

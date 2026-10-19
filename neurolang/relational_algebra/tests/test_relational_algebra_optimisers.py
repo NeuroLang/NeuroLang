@@ -14,6 +14,7 @@ from ..optimisers import (
     GreedyJoinOrdering,
     PushInSelections,
     PushProjectionsDown,
+    PushUnnamedSelectionsUp,
     RelationalAlgebraOptimiser,
     RenameOptimizations,
     RewriteSelections,
@@ -42,6 +43,7 @@ from ..relational_algebra import (
     ReplaceNull,
     Selection,
     eq_,
+    int2columnint_constant,
     str2columnstr_constant
 )
 
@@ -1005,8 +1007,9 @@ def test_push_unnamed_selections_up(r1):
         Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(0))),
         (C_(ColumnInt(1)),)
     )
+    # The column 1 of r1 is the column 0 of the projection.
     res = Selection(
-        Projection(C_(r1), (C_(ColumnInt(1)),)), eq_(C_(ColumnInt(1)), C_(0))
+        Projection(C_(r1), (C_(ColumnInt(1)),)), eq_(C_(ColumnInt(0)), C_(0))
     )
     assert raop.walk(s) == res
 
@@ -1617,3 +1620,31 @@ def test_flatten_and_reorder_joins_only_rewrites_nested_joins():
     assert sorted(map(id, result.relations)) == sorted(map(id, (a, b, c)))
     assert Opt().walk(result) is result
     assert _same_result(chain, result)
+
+
+class _PushUnnamedSelectionsUp(PushUnnamedSelectionsUp, ExpressionWalker):
+    pass
+
+
+def test_push_selection_above_a_reordering_projection():
+    """The columns of the selection are those of the relation, and become
+    those of the projection, at their positions in its attributes."""
+    c0, c1, c2 = (int2columnint_constant(i) for i in range(3))
+    relation = Constant[AbstractSet[Tuple[int, int, int]]](
+        WrappedRelationalAlgebraSet([(1, 1, 2), (1, 2, 2)])
+    )
+    expression = Projection(
+        Selection(relation, eq_(c0, c1)), (c1, c2, c0)
+    )
+    solver = RelationalAlgebraSolver()
+    expected = solver.walk(expression).value
+    assert set(expected) == {(1, 2, 1)}
+    rewritten = _PushUnnamedSelectionsUp().walk(expression)
+    assert solver.walk(rewritten).value == expected
+
+    expression = Projection(
+        Selection(relation, C_(operator.lt)(c1, c0)), (c1, c0)
+    )
+    assert _PushUnnamedSelectionsUp().walk(expression) == Selection(
+        Projection(relation, (c1, c0)), C_(operator.lt)(c0, c1)
+    )
