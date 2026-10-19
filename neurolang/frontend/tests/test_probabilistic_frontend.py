@@ -1761,6 +1761,33 @@ def test_qbased_pchoice_equiprobable():
     assert_almost_equal(sol, expected)
 
 
+def test_qbased_pchoice_unused_by_the_query():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="P")
+    nl.add_tuple_set([(1,), (3,)], name="R")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,)], name="Selected"
+    )
+    with nl.environment as e:
+        e.S[e.count(e.x)] = e.P(e.x)
+        (e.Q ^ (1. / e.p))[e.x] = e.P(e.x) & e.S(e.p)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x) & e.Selected(e.x)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {(1, 0.5)}
+    assert_almost_equal(sol, expected)
+
+
+def test_qbased_pchoice_empty():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.8, "b")], name="P")
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+    with nl.environment as e:
+        (e.Q ^ e.p)[e.x] = e.P(e.p, e.x) & (e.p > 0.8)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Q(e.y)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    assert_almost_equal(sol, RelationalAlgebraFrozenSet([]))
+
+
 def test_noisy_or_probabilistic_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(

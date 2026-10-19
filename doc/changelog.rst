@@ -211,6 +211,13 @@ Unreleased
   which now predefines ``selected_voxel``, ``p_a``, ``p_a_given_t`` and
   ``ratios`` over the brain, it failed on its second definition of
   ``selected_voxel`` and added its rules to those of the others.
+  
+* A probabilistic query no longer fails with ``AttributeError: type object
+  'Unknown' has no attribute '__origin__'`` when the program has a
+  query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
+  m) :- ...``, that the query does not use, or whose rule's body is empty:
+  the choice is then over no tuple, as a query-based probabilistic fact
+  over no tuple already was.
 
 * The REPL skips the ``%`` comment lines between statements, e.g. before
   a dot-command of a pasted block or in a piped batch, which it submitted

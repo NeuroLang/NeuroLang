@@ -163,7 +163,13 @@ class CPLogicMixin(PatternWalker):
             symbol, self.pchoice_pred_symb_set_symb
         )
         type_, iterable = self.infer_iterable_type(iterable)
-        self._check_iterable_prob_type(type_)
+        # The set of a query-based choice whose rule's body is empty, or
+        # was not computed since the query does not use the choice, is
+        # empty and untyped: it chooses nothing, as an empty set of
+        # probabilistic facts.
+        is_empty = hasattr(iterable, '__len__') and len(iterable) == 0
+        if not is_empty:
+            self._check_iterable_prob_type(type_)
         if symbol in self.symbol_table:
             raise ForbiddenDisjunctionError(
                 "Cannot define multiple probabilistic choices with the same "
@@ -172,7 +178,8 @@ class CPLogicMixin(PatternWalker):
         ra_set = Constant[typing.AbstractSet[type_]](
             self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
-        check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
+        if not is_empty:
+            check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
         self.symbol_table[symbol.cast(typing.AbstractSet[ra_set.value.row_type])] = ra_set
 
     @staticmethod
