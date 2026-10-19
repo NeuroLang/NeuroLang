@@ -134,32 +134,32 @@ and paste this block at the prompt.  It computes the lift and the
 uniformity ratio of the term ``vision`` over the voxels of
 ``cortical_mask``, shows the five voxels of the largest uniformity
 ratios, and opens both maps in the viewer.  Each line is preceded by a
-``%`` comment saying what it computes, which the REPL skips::
+``%`` comment saying what it computes, which the REPL skips.  The rules
+which differ from the engine's, being over the cortex, end with
+``_cortex``, as a second rule for a predicate of the engine would add to
+its rules rather than replace them::
 
-    % T: the selected study has the term t, its TF-IDF being above 0.001
-    term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
+    % T, term_in_study(s, t), and P(T), p_term(t, PROB), are the engine's: the TF-IDF of the term t in the study s is above 0.001
     % A_v: the study s activates the voxel (i, j, k) of the cortex, within 3 voxels (6 mm) of one of its peaks
     activation(i, j, k, s) :- cortical_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
     % M: the number of voxels of the cortex
     n_voxels(count(i, j, k)) :- cortical_mask(i, j, k)
     % V: a uniform choice over the voxels of the cortex, each of probability 1 / M
-    selected_voxel(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m)
+    selected_voxel_cortex(i, j, k) ^ (1 / m) :- cortical_mask(i, j, k) & n_voxels(m)
     % P(A_v): the probability that the selected study activates the voxel
-    p_a(i, j, k, PROB) :- activation(i, j, k, s) & selected_study(s)
-    % P(T): the probability that the selected study has the term, the proportion of the studies with it
-    p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
+    p_a_cortex(i, j, k, PROB) :- activation(i, j, k, s) & selected_study(s)
     % P(A_v | T): the probability that a study with the term activates the voxel
-    p_a_given_t(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+    p_a_given_t_cortex(t, i, j, k, PROB) :- (activation(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
     % P(A_V | T): the same for the selected voxel, the average of P(A_v | T) over the cortex
-    p_any_voxel_given_t(t, PROB) :- (activation(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+    p_any_voxel_given_t_cortex(t, PROB) :- (activation(i, j, k, s) & selected_voxel_cortex(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
     % the lift P(A_v | T) / P(A_v), the relative risk P(A_v | T) / P(A_v | not T) and the uniformity ratio P(A_v | T) / P(A_V | T)
-    ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+    ratios_cortex(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t_cortex(t, i, j, k, pat) & p_a_cortex(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t_cortex(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
     % sort the results by decreasing uniformity ratio
     .sort uniformity:desc
     % show the first 5 rows
     .head 5
     % the ratios of the term vision: magic sets compute the rules above for it only
-    ans(i, j, k, lift, uniformity) :- ratios("vision", i, j, k, lift, relative_risk, uniformity)
+    ans(i, j, k, lift, uniformity) :- ratios_cortex("vision", i, j, k, lift, relative_risk, uniformity)
     % open the lift and uniformity maps in the viewer
     .view
 
@@ -167,15 +167,13 @@ The REPL runs the rules as one submission, then each dot-command and the
 query in turn, and prints the following; on a terminal, it opens the
 viewer in the browser rather than telling to::
 
-    defined term_in_study/2
     defined activation/4
     defined n_voxels/1
-    defined selected_voxel/3
-    defined p_a/4
-    defined p_term/2
-    defined p_a_given_t/5
-    defined p_any_voxel_given_t/2
-    defined ratios/7
+    defined selected_voxel_cortex/3
+    defined p_a_cortex/4
+    defined p_a_given_t_cortex/5
+    defined p_any_voxel_given_t_cortex/2
+    defined ratios_cortex/7
     Running query...
     ╭────┬────┬────┬───────────────────┬────────────────────╮
     │ i  │ j  │ k  │ lift              │ uniformity         │
@@ -197,19 +195,19 @@ viewer in the browser rather than telling to::
 
 The comments say what each line computes; some points need more words:
 
-- The term is only given in the query, ``ratios("vision", ...)``: magic
-  sets pass the constant ``"vision"`` to ``ratios``, then to
-  ``p_term``, ``p_a_given_t``, ``p_any_voxel_given_t`` and
+- The term is only given in the query, ``ratios_cortex("vision", ...)``:
+  magic sets pass the constant ``"vision"`` to ``ratios_cortex``, then to
+  ``p_term``, ``p_a_given_t_cortex``, ``p_any_voxel_given_t_cortex`` and
   ``term_in_study``, so that the probabilistic rules are only computed
   for this term.  Change it in the query to map another one; the rules
   stay defined.
 - ``activation`` holds the voxels within 6 mm, 3 voxels of the grid, of a
   peak of each study, the ``EUCLIDEAN`` distance being in voxels.
-- ``p_any_voxel_given_t`` is :math:`\bar p = P(A_V \mid T)`, a single
+- ``p_any_voxel_given_t_cortex`` is :math:`\bar p = P(A_V \mid T)`, a single
   probability per term: the selected study and the selected voxel are
   chosen independently, so it is the average over the :math:`M` voxels
   of :math:`P(A_v \mid T)`.
-- ``ratios`` divides the probabilities.  The relative risk is computed
+- ``ratios_cortex`` divides the probabilities.  The relative risk is computed
   from them, as :math:`P(A_v \mid \lnot T) = (P(A_v) - P(A_v \mid T)
   P(T)) / (1 - P(T))`, rather than with a query conditioned on
   ``~term_in_study(s, t)``, which is slower.
@@ -255,8 +253,92 @@ Notes:
   ratios are 0.  The relative risk is infinite at a voxel which only the
   studies of the term activate.
 - The lift and the relative risk are largest at voxels which few studies
-  activate, where they are the least stable: weigh them with
-  :math:`P(A_v)`, or with the :math:`\chi^2` statistic above.
+  activate, where they are the least stable: to rank the voxels as
+  Neurosynth's association test does, use the mutual information of
+  :ref:`the next section <neurosynth-mutual-information>`.
+
+.. _neurosynth-mutual-information:
+
+Ranking the voxels as Neurosynth does
+-------------------------------------
+
+Neurosynth's association map is not a map of the lift: it is the
+:math:`z`-score of the :math:`\chi^2` test, kept where it passes a false
+discovery rate of 0.01.  The statistic multiplies the squared distance of
+the lift to 1 by :math:`N\, P(A_v)\, P(T) / (P(\lnot A_v)\, P(\lnot T))`,
+which weighs down the voxels that few studies activate.  The two maps
+differ most for a frequent term.  *prefrontal* is in 4,400 of the 14,371
+studies, so its lift is at most :math:`1 / P(T) = 3.27`, and that maximum
+is reached at :math:`(12, -104, 18)` mm, in the occipital pole, which only
+2 studies activate, both of them with the term.  Neurosynth's largest
+:math:`z`, 10.1, is at :math:`(42, 38, 30)` mm, in the right dorsolateral
+prefrontal cortex, where 247 of the 473 studies activating the voxel have
+the term: a lift of only 1.71.
+
+The *mutual information* of :math:`T` and :math:`A_v` is the expectation
+of the logarithm of the lift over the four combinations of the term and
+the activation,
+
+.. math::
+
+   I_v = \sum_{x \in \{T, \lnot T\}} \sum_{y \in \{A_v, \lnot A_v\}}
+       P(x, y) \log \frac{P(x, y)}{P(x)\, P(y)},
+
+0 under independence, and :math:`2 N I_v` is the likelihood-ratio
+statistic of the same independence test, which follows the same
+:math:`\chi^2` distribution with one degree of freedom.  It is a rule over
+the probabilities that the engine predefines, ``p_term``, ``p_a`` and
+``p_a_given_t``, the probabilities of the four combinations being
+
+.. math::
+
+   P(T, A_v) = P(T)\, P(A_v \mid T), \quad
+   P(T, \lnot A_v) = P(T) - P(T, A_v), \quad
+   P(\lnot T, A_v) = P(A_v) - P(T, A_v), \quad
+   P(\lnot T, \lnot A_v) = 1 - P(A_v) - P(T) + P(T, A_v).
+
+The rule keeps the voxels which the term activates more often than the
+other studies do, :math:`P(A_v \mid T) > P(A_v)`, as Neurosynth's
+positive map does::
+
+    mutual_information(t, i, j, k, mi) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & (pat > pa) & (mi == pt * pat * log(pat / pa) + pt * (1 - pat) * log((1 - pat) / (1 - pa)) + (pa - pt * pat) * log((pa - pt * pat) / (pa * (1 - pt))) + (1 - pa - pt + pt * pat) * log((1 - pa - pt + pt * pat) / ((1 - pa) * (1 - pt))))
+    ans(i, j, k, mi) :- mutual_information("prefrontal", i, j, k, mi)
+
+It takes about 25 seconds on the 2 mm grid.  To compare it with Neurosynth,
+take the 5% of the 235,375 voxels of ``brain_mask`` with the largest
+values of each map, 11,769 voxels, and measure the overlap of the two sets
+with the Dice coefficient, :math:`2 |A \cap B| / (|A| + |B|)`.  For *prefrontal*, against Neurosynth's association
+map (its image 4382, downloaded from
+https://neurosynth.org/api/images/4382/download):
+
+==========================================================  ======
+Map ranking the voxels                                       Dice
+==========================================================  ======
+``mutual_information``                                       0.826
+:math:`z` of the :math:`\chi^2` test, recomputed             0.824
+:math:`P(A_v \mid T) - P(A_v)`                               0.707
+Lift :math:`P(A_v \mid T) / P(A_v)`, or the relative risk    0.514
+:math:`P(A_v \mid T)`                                        0.227
+==========================================================  ======
+
+The mutual information ranks the voxels as the :math:`z`-score does: the
+:math:`z` recomputed from the same counts overlaps no more with
+Neurosynth's map, so what differs comes from the data, such as how the
+Talairach peaks are converted to MNI, rather than from the statistic.  The voxels of its top 5% are activated by a
+median of 246 studies, against 143 for the lift's.
+
+A probability of association can be derived from it: comparing the model
+in which the term and the activation are independent with the one in
+which they are not, the Bayesian information criterion approximates the
+log of the Bayes factor by :math:`N I_v - \tfrac{1}{2} \log N`, so that,
+for a prior of 0.5,
+
+.. math::
+
+   P(\text{association} \mid \text{data}) \approx
+       \frac{1}{1 + \sqrt{N}\, e^{-N I_v}},
+
+which ranks the voxels as :math:`I_v` does.
 
 .. [yarkoni2011] T. Yarkoni, R. A. Poldrack, T. E. Nichols, D. C. Van
    Essen and T. D. Wager. Large-scale automated synthesis of human
