@@ -8,6 +8,8 @@ const input = document.getElementById("input");
 const run = document.getElementById("run");
 const form = document.getElementById("form");
 const version = document.getElementById("version");
+const versionDetails = document.getElementById("version-details");
+const versionSummary = document.getElementById("version-summary");
 const search = document.getElementById("search");
 const searchInput = document.getElementById("search-input");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
@@ -47,6 +49,12 @@ function viewer(page) {
   return frame;
 }
 
+// Show *message* in the status; a spinner while the REPL is busy.
+function setStatus(message, state = "") {
+  statusBox.textContent = message;
+  statusBox.className = state;
+}
+
 function setReady(ready) {
   input.disabled = !ready;
   run.disabled = !ready;
@@ -64,19 +72,20 @@ function start() {
   const { repo, ref } = requestedVersion();
   version.elements.repo.value = repo;
   version.elements.ref.value = ref;
+  versionSummary.textContent = ref ? `${repo} at ${ref}` : "the build of this page";
+  versionDetails.open = Boolean(ref);
   log.replaceChildren();
-  statusBox.className = "";
+  setStatus("Starting…", "busy");
   setReady(false);
   worker = new Worker("worker.js", { type: "module" });
   worker.postMessage({ type: "start", repo, ref });
   worker.onmessage = ({ data }) => {
     if (data.type === "status") {
-      statusBox.textContent = data.message;
+      setStatus(data.message, "busy");
     } else if (data.type === "error") {
-      statusBox.className = "error";
-      statusBox.textContent = `The REPL could not start: ${data.message}`;
+      setStatus(`The REPL could not start: ${data.message}`, "error");
     } else if (data.type === "ready") {
-      statusBox.textContent = "Ready.";
+      setStatus("Ready.");
       const source = document.createElement("pre");
       source.className = "entry-input";
       source.textContent = `NeuroLang: ${data.source}`;
@@ -84,7 +93,7 @@ function start() {
       append(output(data.banner));
       setReady(true);
     } else if (data.type === "reply") {
-      statusBox.textContent = data.failed ? "Ready (the last statement failed)." : "Ready.";
+      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
       append(output(data.html));
       for (const table of data.tables ?? []) append(renderTable(table));
       for (const page of data.viewers) append(viewer(page));
@@ -105,7 +114,7 @@ function submit() {
   append(echo);
   input.value = "";
   setReady(false);
-  statusBox.textContent = "Running…";
+  setStatus("Running…", "busy");
   worker.postMessage({ id: nextId++, text });
 }
 
@@ -194,6 +203,12 @@ input.addEventListener("keydown", (event) => {
   }
 });
 document.getElementById("history").addEventListener("click", openSearch);
+const copyCommand = document.getElementById("copy-command");
+copyCommand.addEventListener("click", async () => {
+  await navigator.clipboard?.writeText(document.getElementById("command").textContent);
+  copyCommand.textContent = "Copied";
+  setTimeout(() => { copyCommand.textContent = "Copy"; }, 1200);
+});
 document.getElementById("restart").addEventListener("click", start);
 version.addEventListener("submit", (event) => {
   event.preventDefault();

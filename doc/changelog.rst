@@ -19,6 +19,11 @@ Unreleased
 
 **New features:**
 
+* The page of the REPL in the browser has the logo, a header with links to
+  the documentation, the tutorial and the source, the command it runs to
+  copy, and a status that shows when it is busy; the choice of the
+  NeuroLang version is folded away.
+
 * The REPL in the browser shows a result as a table to sort by clicking
   a column, to filter (``stroop`` keeps the rows with the word,
   ``name:stroop`` those whose column ``name`` has it), to page through, to
