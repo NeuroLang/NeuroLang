@@ -139,7 +139,8 @@ repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
 def submit(text):
     reply = repl.submit(text)
     return json.dumps(
-        {"html": reply.html, "viewers": reply.viewers, "failed": reply.failed}
+        {"html": reply.html, "viewers": reply.viewers,
+         "failed": reply.failed, "tables": reply.tables}
     )
 `);
   const banner = pyodide.runPython("repl.banner()");
@@ -165,6 +166,6 @@ onmessage = async ({ data }) => {
     postMessage({ type: "reply", id: data.id, ...reply });
   } catch (error) {
     const text = String(error).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-    postMessage({ type: "reply", id: data.id, failed: true, viewers: [], html: `<pre>${text}</pre>` });
+    postMessage({ type: "reply", id: data.id, failed: true, viewers: [], tables: [], html: `<pre>${text}</pre>` });
   }
 };

@@ -19,6 +19,21 @@ Unreleased
 
 **New features:**
 
+* The page of the REPL in the browser has the logo, a header with links to
+  the documentation, the tutorial and the source, the command it runs to
+  copy, and a status that shows when it is busy; the choice of the
+  NeuroLang version is folded away.
+
+* The REPL in the browser shows a result as a table to sort by clicking
+  a column, to filter (``stroop`` keeps the rows with the word,
+  ``name:stroop`` those whose column ``name`` has it), to page through, to
+  copy and to download as CSV, instead of the text table of the terminal;
+  ``Ctrl+R`` searches the history of the inputs, which lasts between
+  visits, as in a shell (``Ctrl+R`` again for an older match, ``Ctrl+S``
+  for a newer one, ``Enter`` to take it, ``Esc`` to cancel), and Up and
+  Down browse it.  :class:`neurolang.utils.tui.web.WebRepl` returns a
+  result's rows as data (``Reply.tables``).
+  
 * An LLM query assistant writes a Datalog or SQUALL query from a
   question in natural language: ``.ask QUESTION`` in the interactive
   mode, which puts the query in the next prompt (``.llm QUESTION`` is
@@ -38,6 +53,7 @@ Unreleased
   in :doc:`query_assistant`.  The benchmark that measures it is in
   `neurolang-text2query-bench
   <https://github.com/NeuroLang/neurolang-text2query-bench>`_.
+  
 * ``neurolang-query --save PATH`` writes the result as CSV or TSV, or as
   a NIfTI image on the grid of the engine, and ``--view`` shows its image
   in the viewer of the REPL, as ``.save`` and ``.view`` do (they need
@@ -61,6 +77,7 @@ Unreleased
   ``extends`` and from ``abstract`` base entries, so settings common to
   several engines are declared once.  ``neurosynth`` now extends a shared
   ``coordinate_meta_analysis`` base.  See :doc:`engine_configuration`.
+  
 * A new ``neurostore`` engine, built on the same base, loads the NeuroStore
   database (as fetched by NiMARE) with the predicates of ``neurosynth``,
   TF-IDF computed from the abstracts (words and sequences of up to three
