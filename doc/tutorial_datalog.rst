@@ -981,6 +981,35 @@ append ``:desc`` for descending order)::
         --sort "w:desc" \
         "ans(t, w) :- term_in_study_tfidf(s, t, w)"
 
+Saving and viewing the results
+------------------------------
+
+``--save PATH`` also writes the result in a file, and ``--view`` shows
+its brain image in the viewer of the interactive mode, as the REPL's
+``.save`` and ``.view`` do for its last result (see ``.help save`` and
+``.help view`` there for the details).  They need the ``tui`` extra
+(``pip install "neurolang[tui]"``).
+
+* ``--save out.csv`` or ``out.tsv`` (optionally ``.gz``) writes the table
+  of the result, sorted as ``--sort`` asks.
+* ``--save out.nii`` or ``out.nii.gz`` writes a NIfTI image on the grid of
+  the engine's template.  The voxels are the columns of the result of a
+  sort the engine declares as voxel indices, or as millimetres, such as
+  ``i, j, k``; the value of a voxel is its probability or its one other
+  numeric column, such as a count, else 1.  A SQUALL program of several
+  ``obtain`` statements gives a file per statement.
+* ``--view`` writes the viewer's HTML page, prints its path and opens it
+  in a browser when the standard error is a terminal.
+
+For instance, the map of the number of studies mentioning pain that
+report each voxel::
+
+    neurolang-query --engine neurosynth --save pain.nii.gz --view \
+        "n_pain(i, j, k, count(s)) :- reports(s, i, j, k), mentions(s, 'pain').
+         ans(i, j, k, n) :- n_pain(i, j, k, n)"
+
+Both work with ``--ask``, which then runs the query it writes.
+
 Inspecting query plans
 ----------------------
 

@@ -19,6 +19,30 @@ Unreleased
 
 **New features:**
 
+* An LLM query assistant writes a Datalog or SQUALL query from a
+  question in natural language: ``.ask QUESTION`` in the interactive
+  mode, which puts the query in the next prompt (``.llm QUESTION`` is
+  the shortcut for the ReAct agent writing Datalog), and
+  ``neurolang-query --ask QUESTION`` on the command line, where ``--run``
+  also runs the query and ``-v`` and ``-vv`` show the reasoning and tool
+  calls of its steps, and the messages sent to the model.  Two
+  strategies are offered: in-context learning, whose few-shot examples
+  are the closest to the question (BM25), with validation and repair on
+  the engine, and a ReAct agent that explores the engine with tools
+  (``search_values``, ``run_query``, ``check_query``…), by native tool
+  calls or a text protocol.  The providers, OpenRouter, Albert,
+  Anthropic, any OpenAI- or Anthropic-compatible server or a local
+  command, are set in a YAML file, their keys read from the environment
+  (``neurolang/utils/llm/llm.example.yaml``).  The queries are shown on
+  their lines, highlighted.  It needs the ``llm`` extra and is described
+  in :doc:`query_assistant`.  The benchmark that measures it is in
+  `neurolang-text2query-bench
+  <https://github.com/NeuroLang/neurolang-text2query-bench>`_.
+* ``neurolang-query --save PATH`` writes the result as CSV or TSV, or as
+  a NIfTI image on the grid of the engine, and ``--view`` shows its image
+  in the viewer of the REPL, as ``.save`` and ``.view`` do (they need
+  the ``tui`` extra).
+
 * The interactive query REPL runs in the browser, with nothing to
   install: https://neurolang.github.io/_static/repl/index.html runs
   ``neurolang-query -i --engine neurosynth --resolution 2`` on Pyodide,

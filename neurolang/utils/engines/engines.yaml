@@ -10,7 +10,10 @@ engines:
     description: >
       Shared setup of the coordinate-based meta-analysis engines
       (neurosynth, neurostore): reported activation peaks, TF-IDF term
-      frequencies, and a probabilistic choice over studies.
+      frequencies, and a probabilistic choice over studies.  Voxels
+      (i, j, k) index the 1 mm MNI152 grid (at the default resolution):
+      the MNI point (x, y, z) in mm is the voxel (x + 98, y + 134,
+      z + 72), and distances between voxels are in mm.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, lcase]

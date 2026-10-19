@@ -20,7 +20,7 @@ from prompt_toolkit.completion import Completion
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Symbol
 
-from . import squall_sorts
+from neurolang.utils import squall_sorts
 
 # The kinds of predicates whose values are read without solving anything.
 VALUE_KINDS = frozenset({"stored", "loaded"})

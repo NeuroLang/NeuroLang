@@ -95,6 +95,7 @@ a guided walkthrough.
    concepts
    probabilistic_lifting
    engine_configuration
+   query_assistant
    performance
    auto_examples/index
    api

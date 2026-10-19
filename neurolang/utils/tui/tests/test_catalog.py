@@ -12,7 +12,7 @@ from rich.console import Console  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang.utils import engine_registry  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
-from neurolang.utils.tui.catalog import (  # noqa: E402
+from neurolang.utils.predicate_catalog import (  # noqa: E402
     PredicateInfo,
     predicate_catalog,
 )
