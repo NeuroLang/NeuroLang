@@ -160,8 +160,60 @@ def test_llm_shows_and_changes_the_settings(app):
     assert "Provider: second — anthropic" in output(app)
     app._run_line(".llm provider third")
     assert app.failed and "Unknown LLM provider 'third'" in output(app)
-    app._run_line(".llm colour")
-    assert "Usage: .llm" in output(app)
+    for line in (".llm strategy fast", ".llm strategy", ".llm provider"):
+        app.failed = False
+        app._run_line(line)
+        assert app.failed and "Usage: .llm [provider NAME" in output(app)
+    assert app.assistant.strategy == "react"
+
+
+REACT_PAIN = (
+    'Thought: run it\nAction: run_query\nAction Input: {"query": '
+    '"ans(s) :- mentions(s, \'pain\')"}',
+    'Action: final_answer\nAction Input: {"query": '
+    '"ans(s) :- mentions(s, \'pain\')", "explanation": "pain"}',
+)
+
+
+def test_llm_question_writes_datalog_with_react(app):
+    """
+    ``.llm QUESTION`` uses ReAct and Datalog, although the configuration
+    says ICL and the session is in SQUALL mode.
+    """
+    app.settings.squall = True
+    client = script(app, *REACT_PAIN)
+    app._run_line(".llm Which studies mention pain?")
+    text = output(app)
+    assert not app.failed
+    assert "Asking first (m1, react)" in text
+    assert "→ run_query()\n      ans(s) :- mentions(s, 'pain')" in text
+    assert "DATALOG query" in text and "Switched to Datalog mode" in text
+    assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+    assert not app.settings.squall
+    system = client.requests[0]["messages"][0]["content"]
+    assert "Answer in Datalog only" in system and "Action Input:" in system
+    assert app.assistant.strategy is None
+
+
+def test_llm_one_word_question(app):
+    script(app, *REACT_PAIN)
+    app._run_line(".llm pain?")
+    assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+
+
+def test_llm_question_without_httpx(app, monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_httpx(name, *args, **kwargs):
+        if name == "httpx":
+            raise ImportError(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_httpx)
+    app._run_line(".llm Which studies?")
+    assert app.failed and 'pip install "neurolang[llm]"' in output(app)
 
 
 def test_settings_select_the_provider(app):
@@ -174,6 +226,7 @@ def test_settings_select_the_provider(app):
 def test_help_lists_the_assistant_commands():
     text = help_text()
     assert ".ask" in text and ".llm" in text
+    assert "Write a Datalog query with the ReAct agent" in text
 
 
 def test_next_prompt_is_prefilled(app):
