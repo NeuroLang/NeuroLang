@@ -232,11 +232,11 @@ def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
 def test_probability_columns_labelled_by_role(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "σ[p > 0.0]" in out
-    assert "γ[by=(x), p = sum(p)]" in out
+    assert "γ[by=(l), p = sum(p)]" in out
     assert "π_ext[p(active) * p(picked) * 1.0 -> p" in out
     assert "active(p(active), x)" in out
     assert "picked(p(picked), x)" in out
@@ -301,8 +301,8 @@ def test_collapse_false_prints_full_plans(capsys):
 def test_collapse_probabilistic_tables(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "active(p(active), x) ‹3 rows›" in out
     assert "π_ext[p(active) * p(picked) * 1.0 -> p, " in out
@@ -317,8 +317,8 @@ def test_collapse_constant_argument(capsys):
 def test_probabilistic_plans_name_their_solver(capsys):
     out = show_ra_output(
         capsys,
-        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
-        "ans(x, q) :- z(x, q).",
+        "z(l, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(l, q) :- z(l, q).",
     )
     assert "[solver: small dichotomy theorem (safe plan)]" in out
 
