@@ -15,7 +15,10 @@ from typing import Callable, Optional
 
 from prompt_toolkit.completion import Completer, Completion
 
-from neurolang.frontend.datalog.standard_syntax import AGGREGATION_FUNCS
+from neurolang.frontend.datalog.standard_syntax import (
+    AGGREGATION_FUNCS,
+    strip_comment,
+)
 from neurolang.utils.interactive_parsing import LarkCompleter
 from neurolang.utils.query_highlight import DATALOG_KEYWORDS
 
@@ -357,6 +360,10 @@ class NeuroLangReplCompleter(Completer):
             result = self._lark.complete(text)
         except Exception:
             return None
+        if not isinstance(result.token_options, dict):
+            # The lexer rejected a character: only the terminal names
+            # are given, so *text* is treated as invalid.
+            return None
         values = {
             value
             for container in result.token_options.values()
@@ -370,8 +377,15 @@ class NeuroLangReplCompleter(Completer):
 
         Predicates are offered where the grammar accepts an identifier,
         or, if the text before *prefix* is invalid, after any word.
+        Nothing is offered inside a ``%`` comment, and the comments
+        of earlier lines are left out.
         """
-        options = self._grammar_options(text[:len(text) - len(prefix)])
+        lines = text[:len(text) - len(prefix)].split("\n")
+        if strip_comment(lines[-1]) != lines[-1]:
+            return
+        options = self._grammar_options(
+            "\n".join(strip_comment(line) for line in lines)
+        )
         identifier, values = options or (bool(prefix), set())
         if identifier:
             yield from self._predicate_completions(catalog, prefix)

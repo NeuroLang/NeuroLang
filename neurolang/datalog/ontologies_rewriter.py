@@ -182,14 +182,15 @@ class OntologyRewriter:
 
     def _get_term(self, q, sigma_con):
         q_args = []
+        # Only atoms are rewritten: a negated atom has no functor.
         if isinstance(q, NaryLogicOperator):
             q_args = [
                 formula
                 for formula in q.formulas
-                if formula.functor == sigma_con.functor
+                if getattr(formula, "functor", None) == sigma_con.functor
             ]
         else:
-            if q.functor == sigma_con.functor:
+            if getattr(q, "functor", None) == sigma_con.functor:
                 q_args.append(q)
 
         return q_args

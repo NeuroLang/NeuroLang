@@ -1,16 +1,22 @@
 engines:
-  neurosynth:
+  # Abstract engines only hold configuration shared by other engines;
+  # concrete engines pull it in with ``extends`` (a name or a list of
+  # names).  Mappings are merged key by key, ``datalog_init`` rules and
+  # the ``builtins`` / ``downloads`` / ``ontologies`` lists are
+  # concatenated, parent first, and any other value is overridden by the
+  # extending engine.  Set a mapping entry to ``null`` to drop it.
+  coordinate_meta_analysis:
+    abstract: true
     description: >
-      Neurosynth database — forward and reverse inference over
-      reported activation peaks, TF-IDF term frequencies, and a
-      probabilistic choice over studies.  Voxels (i, j, k) index the
-      1 mm MNI152 grid (at the default resolution): the MNI point
-      (x, y, z) in mm is the voxel (x + 98, y + 134, z + 72), and
-      distances between voxels are in mm.
+      Shared setup of the coordinate-based meta-analysis engines
+      (neurosynth, neurostore): reported activation peaks, TF-IDF term
+      frequencies, and a probabilistic choice over studies.  Voxels
+      (i, j, k) index the 1 mm MNI152 grid (at the default resolution):
+      the MNI point (x, y, z) in mm is the voxel (x + 98, y + 134,
+      z + 72), and distances between voxels are in mm.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith]
-    python_init: "neurolang.utils.engines.neurosynth.init"
+    builtins: [exp, log, startswith, lcase]
     atlases:
       schaefer:
         predicate_name: schaefer
@@ -25,6 +31,50 @@ engines:
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
+      term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
+      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+      p_a(i, j, k, PROB) :- activated(i, j, k, s) & selected_study(s)
+      p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
+      p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_any_voxel_given_t(t, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      lift(t, i, j, k, l) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & (l == pat / pa)
+      relative_risk(t, i, j, k, r) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
+      uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
+      ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+      study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
+      cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
+      similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
+      p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)
+      p_a_given_similar(q, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
+      p_any_voxel_given_similar(q, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
+      lift_llm(q, i, j, k, l) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & (l == pat / pa)
+      relative_risk_llm(q, i, j, k, r) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
+      uniformity_llm(q, i, j, k, u) :- p_a_given_similar(q, i, j, k, pat) & p_any_voxel_given_similar(q, pbar) & (u == pat / pbar)
+      ratios_llm(q, i, j, k, lift, relative_risk, uniformity) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & p_any_voxel_given_similar(q, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+      cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
+      cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+      cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
+      cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
+    # The Cognitive Atlas ontology, for open-world queries over concepts,
+    # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
+    # triples are facts (``rdfs:label(iri, 'Working memory')``) and its
+    # subclass axioms rewrite the queries.
+    ontologies:
+      - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
+        individuals: true
+        names: prefixed
+    text_embeddings:
+      study_abstracts:
+        ids_from: study
+        source: pubmed
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: query_similarity
+        description: >-
+          query_similarity(query, study) returns the cosine similarity
+          between a free-text query and the study's title and abstract
+          (PubMed), embedded with SPECTER2.
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -37,6 +87,18 @@ engines:
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
+    #
+    # ``space`` tells what the columns of a sort of points are, for
+    # ``.save out.nii.gz`` in the REPL, which writes a result on a grid:
+    # ``space: voxel`` marks the indices (i, j, k) of the grid the sort
+    # names with ``grid`` (an atlas of the engine, by its key under
+    # ``atlases``), by default that of the engine's template (the MNI
+    # mask), written as they are; ``space: mm`` coordinates (x, y, z) in
+    # millimetres, converted to the nearest voxel of the template with
+    # the inverse of its affine.  A result's columns take the sort of the
+    # argument of the predicate their variable comes from in the query,
+    # else of the sort they are named as.  ``atlas_voxel`` indexes the
+    # grid of the 2 mm Schaefer atlas, not the template's.
     sorts:
       study:
         columns: [study_id]
@@ -53,10 +115,18 @@ engines:
       voxel:
         columns: [i, j, k]
         type: int
+        space: voxel
         description: "a voxel of the MNI template grid, in 3D"
+      mni:
+        columns: [x, y, z]
+        type: float
+        space: mm
+        description: "a point in MNI space, in millimetres, in 3D"
       atlas_voxel:
         columns: [i, j, k]
         type: int
+        space: voxel
+        grid: schaefer
         description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
       label:
         columns: [label]
@@ -66,6 +136,46 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      query:
+        columns: [query]
+        type: str
+        description: "a free-text query"
+      similarity:
+        columns: [similarity]
+        type: float
+        description: "a cosine similarity between SPECTER2 embeddings"
+      lift:
+        columns: [lift]
+        type: float
+        description: "a lift P(A_v | T) / P(A_v), 1 under independence"
+      relative_risk:
+        columns: [relative_risk]
+        type: float
+        description: "a relative risk P(A_v | T) / P(A_v | not T), 1 under independence"
+      uniformity:
+        columns: [uniformity]
+        type: float
+        description: "a uniformity ratio P(A_v | T) / P(A_V | T), 1 under uniformity"
+      cogat_term:
+        columns: [term]
+        type: str
+        description: "a Cognitive Atlas label, in lower case"
+      cogat_class:
+        columns: [iri]
+        type: str
+        description: "a class of the Cognitive Atlas ontology, by its IRI"
+      task:
+        columns: [task_id]
+        type: str
+        description: "a task of the Cognitive Atlas"
+      task_name:
+        columns: [name]
+        type: str
+        description: "the name of a task of the Cognitive Atlas"
+      task_description:
+        columns: [description]
+        type: str
+        description: "the description of a task of the Cognitive Atlas"
     # Each predicate declares its arguments, in column order: the entities
     # it relates, each a sort over the columns it spans, named alone or as
     # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
@@ -99,6 +209,28 @@ engines:
         description: "Every voxel index (i, j, k) of the MNI template grid"
         arguments:
           - voxel
+      brain_mask:
+        description: >-
+          The voxels (i, j, k) of the MNI template grid inside the MNI152
+          brain mask: the whole brain, subcortical structures and cerebellum
+          included
+        arguments:
+          - voxel
+      cortical_mask:
+        description: >-
+          The voxels (i, j, k) of the MNI template grid in the cortex
+          (Harvard–Oxford cortical atlas, maximum probability, 25%
+          threshold)
+        arguments:
+          - voxel
+      cognitive_task:
+        description: >-
+          The tasks of the Cognitive Atlas (cognitiveatlas.org), with their
+          names and descriptions
+        arguments:
+          - task
+          - task_name
+          - task_description
       term:
         description: "Every term of the TF-IDF vocabulary"
         arguments:
@@ -126,6 +258,122 @@ engines:
           - study
           - term
           - tfidf
+      term_in_study:
+        description: "Studies with a term, its TF-IDF being above 0.001"
+        arguments:
+          - study
+          - term
+      activated:
+        description: >-
+          Studies activating a voxel of the brain mask: one of their peaks is
+          within 3 voxels (6 mm)
+        arguments:
+          - voxel
+          - study
+      lift:
+        description: >-
+          Lift P(A_v | T) / P(A_v) of the activation of a voxel by the studies
+          of a term: 1 under independence (association test)
+        arguments:
+          - term
+          - voxel
+          - lift
+      relative_risk:
+        description: >-
+          Relative risk P(A_v | T) / P(A_v | not T) of the activation of a
+          voxel by the studies of a term: 1 under independence
+        arguments:
+          - term
+          - voxel
+          - relative_risk
+      uniformity:
+        description: >-
+          Uniformity ratio P(A_v | T) / P(A_V | T): the proportion of the
+          studies of a term activating a voxel, over its average across the
+          brain; 1 under uniformity (uniformity test)
+        arguments:
+          - term
+          - voxel
+          - uniformity
+      ratios:
+        description: "The lift, relative risk and uniformity ratio of a term at a voxel"
+        arguments:
+          - term
+          - voxel
+          - lift
+          - relative_risk
+          - uniformity
+      selected_voxel:
+        description: "Uniform probabilistic choice over the voxels of the brain mask"
+        probability: true
+        arguments:
+          - voxel
+      study_similarity:
+        description: >-
+          Cosine similarity of the title and abstract of a study to a
+          free-text query, with SPECTER2 (the studies with a text); the first
+          query embeds the abstracts, which takes a while and needs
+          ``pip install "neurolang[embeddings]"``
+        arguments:
+          - query
+          - study
+          - similarity
+      similar_study:
+        description: >-
+          The 5% of the studies closest to a free-text query by
+          study_similarity
+        arguments:
+          - query
+          - study
+      lift_llm:
+        description: "lift of a free-text query: the studies of similar_study are the studies of the term"
+        arguments:
+          - query
+          - voxel
+          - lift
+      relative_risk_llm:
+        description: "relative_risk of a free-text query (see lift_llm)"
+        arguments:
+          - query
+          - voxel
+          - relative_risk
+      uniformity_llm:
+        description: >-
+          uniformity of a free-text query: the uniformity ratio of the 5% of
+          the studies closest to the text with SPECTER2, as for the studies
+          of a term
+        arguments:
+          - query
+          - voxel
+          - uniformity
+      ratios_llm:
+        description: "The lift, relative risk and uniformity ratio of a free-text query"
+        arguments:
+          - query
+          - voxel
+          - lift
+          - relative_risk
+          - uniformity
+      cogat_subclass_of:
+        description: >-
+          Cognitive Atlas classes below others, at any depth (concepts,
+          tasks, contrasts), by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
+      cogat_term:
+        description: >-
+          Label of a Cognitive Atlas class in lower case, as the terms of
+          mentions and term_in_study_tfidf
+        arguments:
+          - cogat_class
+          - cogat_term
+      cogat_measures:
+        description: >-
+          Cognitive Atlas contrasts (and tasks) measuring a concept, by IRI
+        arguments:
+          - cogat_class
+          - cogat_class
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
         arguments:
@@ -152,10 +400,75 @@ engines:
       datalog:
         - "ans(s) :- mentions(s, 'pain')"
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+        - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
+        - "ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)"
+        - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
+        - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:
         - "obtain every Study that mentions 'pain'."
         - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
         - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
+
+  neurosynth:
+    extends: coordinate_meta_analysis
+    description: >
+      Neurosynth database — forward and reverse inference over
+      reported activation peaks, TF-IDF term frequencies, and a
+      probabilistic choice over studies.
+    python_init: "neurolang.utils.engines.neurosynth.init"
+
+  neurostore:
+    extends: coordinate_meta_analysis
+    description: >
+      NeuroStore database (the one NiMARE fetches with
+      ``fetch_neurostore``, behind Neurosynth Compose) — the predicates of
+      neurosynth, with TF-IDF term frequencies computed from the study
+      abstracts, plus the abstracts, titles and LLM-extracted cognitive
+      concepts and domains of the studies.
+    python_init: "neurolang.utils.engines.neurostore.init"
+    text_embeddings:
+      study_abstracts:
+        # The texts come with the release: no PubMed download.
+        source:
+          predicate: study_abstract
+          title_predicate: study_title
+        description: >-
+          query_similarity(query, study) returns the cosine similarity
+          between a free-text query and the study's title and abstract,
+          embedded with SPECTER2.
+    sorts:
+      study:
+        type: str
+        description: "a study of the NeuroStore database"
+      text:
+        columns: [text]
+        type: str
+        description: "the title or abstract of a study"
+      concept:
+        columns: [concept]
+        type: str
+        description: "a cognitive concept extracted from the tasks of a study"
+      domain:
+        columns: [domain]
+        type: str
+        description: "a cognitive domain extracted from the tasks of a study"
+    predicates:
+      study_title:
+        description: "Title of a study"
+        arguments: [study, text]
+      study_abstract:
+        description: "Abstract of a study"
+        arguments: [study, text]
+      study_concept:
+        description: "Cognitive concepts extracted from the tasks of a study"
+        arguments: [study, concept]
+      study_domain:
+        description: "Cognitive domains extracted from the tasks of a study"
+        arguments: [study, domain]
+      term_in_study_tfidf:
+        description: >-
+          TF-IDF of the terms of the abstracts, computed from them
+          (NeuroStore ships no term table)
 
   destrieux:
     description: >

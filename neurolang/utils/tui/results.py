@@ -1,10 +1,14 @@
 """Paged display of query results as tables."""
 
 from dataclasses import dataclass
+from typing import Optional
 
+import numpy as np
 import pandas as pd
 from rich import box
 from rich.table import Table
+
+from neurolang.regions import ExplicitVBR
 
 DEFAULT_PAGE_SIZE = 20
 
@@ -15,16 +19,40 @@ class ResultBlock:
     The rows of a query result and how many of them have been shown.
 
     The title names the ``obtain`` of a SQUALL program with several.
+    *sorts* holds the sort of each column of the frame, as the query
+    tells it (see :func:`~.provenance.column_sorts`), or None.
     """
 
     frame: pd.DataFrame
     title: str = ""
     shown: int = 0
+    sorts: Optional[tuple] = None
 
     @property
     def remaining(self) -> int:
         """Return the number of rows not shown yet."""
         return len(self.frame) - self.shown
+
+
+def cell_text(value) -> str:
+    """
+    Return the text of a cell of a result table holding *value*.
+
+    A region shows its number of voxels and its centroid in millimetres,
+    ``VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)``, rather than its
+    affine and voxel arrays.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, ExplicitVBR):
+        return region_text(value)
+    return str(value)
+
+
+def region_text(region: ExplicitVBR) -> str:
+    """Return the number of voxels of *region* and its centroid, in mm."""
+    centroid = ", ".join(f"{c:.1f}" for c in np.mean(region.to_xyz(), axis=0))
+    return f"VBR(n_voxels={len(region.voxels)}, centroid=({centroid}) mm)"
 
 
 def rows_table(df: pd.DataFrame) -> Table:
@@ -33,7 +61,7 @@ def rows_table(df: pd.DataFrame) -> Table:
     for col in df.columns:
         table.add_column(str(col), overflow="fold")
     for row in df.itertuples(index=False):
-        table.add_row(*["" if v is None else str(v) for v in row])
+        table.add_row(*[cell_text(v) for v in row])
     return table
 
 

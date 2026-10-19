@@ -8,9 +8,7 @@ from typing import AbstractSet
 
 import numpy as np
 import pandas as pd
-from pysdd import sdd
 
-from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     flatten_query
@@ -58,6 +56,22 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .query_resolution import lift_solve_marg_query as _solve_marg_query
+
+try:
+    from pysdd import sdd
+except ImportError:  # pysdd has no WebAssembly build, e.g. for Pyodide
+
+    class _MissingPysdd:
+        """Stand for pysdd, to tell what is missing when it is used."""
+
+        def __getattr__(self, name):
+            raise ImportError(
+                "Weighted model counting needs pysdd, which is not "
+                "installed: install it with `pip install pysdd`. Queries "
+                "that lifted inference solves do not need it."
+            )
+
+    sdd = _MissingPysdd()
 
 LOG = logging.getLogger(__name__)
 
@@ -411,6 +425,27 @@ class SDDWMCSemiRingSolver(
 
         return r
 
+    def _semiring_monus(self, left, right):
+        return FunctionApplication(
+            Constant(self._internal_monus),
+            (left, right)
+        )
+
+    @staticmethod
+    def _internal_monus(left, right):
+        """Formula of `left` and not `right`, `right` being 0 when the
+        tuple is absent from the subtracted relation."""
+        if not isinstance(right, sdd.SddNode):
+            return left
+        left.ref()
+        right.ref()
+        r = left & ~right
+        r.ref()
+        left.deref()
+        right.deref()
+
+        return r
+
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
         relation_symbol = deterministic_set.relation
@@ -556,13 +591,17 @@ class SDDWMCSemiRingSolver(
             tagged_ras_set = NamedRelationalAlgebraFrozenSet(
                 new_columns, tagged_df
             )
-        return ProvenanceAlgebraSet(
+        # A choice is a single random variable: its other occurrences use
+        # the same Boolean variables.
+        prov_set = ProvenanceAlgebraSet(
             NumberColumns(
                 Constant[AbstractSet](tagged_ras_set, verify_type=False),
                 tuple(str2columnstr_constant(c) for c in new_columns)
             ),
             int2columnint_constant(prob_column)
         )
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
 
     def generate_sdd_expression(
         self, adjusted_probability, tag_expressions, previous_expression
@@ -934,10 +973,7 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-if 'RAS' in config and config["RAS"].get("backend", "pandas") == "dask":
-    solve_succ_query = solve_succ_query_boolean_diagram
-else:
-    solve_succ_query = solve_succ_query_sdd_direct
+solve_succ_query = solve_succ_query_sdd_direct
 
 
 def solve_marg_query(rule, cpl):

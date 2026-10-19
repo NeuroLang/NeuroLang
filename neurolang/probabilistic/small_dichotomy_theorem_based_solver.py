@@ -184,6 +184,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         _verify_fact_and_choice_e_quantification(symbol_table, unified_query)
+        _verify_deterministic_e_quantification(symbol_table, unified_query)
         original_symbols = set(symbol_table)
         shattered_query_antecedent = shatter_constants(
             unified_query.antecedent, symbol_table
@@ -273,6 +274,32 @@ def _verify_fact_and_choice_e_quantification(symbol_table, shattered_query):
                 "occurring in probabilistic fact but not in any probabilistic "
                 "choice, or disjunctive queries"
             )
+
+
+def _verify_deterministic_e_quantification(symbol_table, shattered_query):
+    """The projection on the head adds the probabilities of the tuples it
+    merges, which are different events only when they differ on a
+    probabilistic atom: those differing on a variable of deterministic
+    atoms only are the same event."""
+    e_vars = (
+        extract_logic_free_variables(shattered_query.antecedent) -
+        extract_logic_free_variables(shattered_query.consequent)
+    )
+    if e_vars - _probabilistic_atoms_variables(shattered_query, symbol_table):
+        raise UnsupportedSolverError(
+            "Cannot solve queries with existentially quantified variable "
+            "occurring in deterministic relations only"
+        )
+
+
+def _probabilistic_atoms_variables(shattered_query, symbol_table):
+    return {
+        arg
+        for atom in extract_logic_atoms(shattered_query.antecedent)
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table) or
+        is_atom_a_probabilistic_fact_relation(atom, symbol_table)
+        for arg in atom.args
+    }
 
 
 def _extract_antecedent_probabilistic_predicates(datalog_rule, symbol_table):

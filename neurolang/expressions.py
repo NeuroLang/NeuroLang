@@ -416,15 +416,18 @@ class Expression(metaclass=ExpressionMeta):
 
     def __lt__(self, other):
         """
-        You shouldn't have to compare Expressions, but need it when
-        using Dask RAS because we use the "first" aggregate function to get
-        a single value for each grouped_by column and this function uses
-        sort (on only one value, but still).
+        Compare Expressions, always answering -1 with a warning.
+
+        You shouldn't have to compare Expressions. This is only defined so
+        that sorting a container holding Expressions (for instance a
+        dataframe column of Expressions in a relational algebra set) does not
+        fail outright.
 
         Returns
         -------
         int
             Always -1
+
         """
         warnings.warn(
             "You are comparing together Expressions. "

@@ -83,10 +83,8 @@ only one.
   `AGGREGATE[](study(s) @ count(s)) = n` (count, sum, max, min, mean).
 - Probabilities over probabilistic relations (e.g. a probabilistic
   choice): `ans(t, p) :- PROB[mentioned_term(t)] = p`, conditional
-  `PROB[a(x) // b(x)] = p`. Compare a probability, or a value computed
-  from one, in a rule of its own that the query reads:
-  `strong(t, bf) :- bayes_factor(t, bf), (bf > 3.16)` and
-  `ans(t, bf) :- strong(t, bf)`.
+  `PROB[a(x) // b(x)] = p`; a probability can be compared like any value:
+  `ans(t, bf) :- bayes_factor(t, bf), (bf > 3.16)`.
 - Distances: `(euclidean(i, j, k, 74, 130, 52) < 6)` keeps the points
   within 6 of a point; between the points of two relations it is fast
   only when both are stored relations, not rules.

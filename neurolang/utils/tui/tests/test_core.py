@@ -1,6 +1,9 @@
 """Tests for the core of the interactive REPL."""
 
+import re
+
 import pandas as pd
+
 import pytest
 
 pytest.importorskip("prompt_toolkit")
@@ -25,6 +28,41 @@ class TestDfToRichTable:
         df = pd.DataFrame({"a": [1], "b": [2.5], "c": ["x"]})
         table = rows_table(df)
         assert [c.header for c in table.columns] == ["a", "b", "c"]
+
+
+class TestRegionCells:
+    """Check regions show compactly in result tables."""
+
+    def _rendered(self, df):
+        console = _console()
+        console.print(rows_table(df))
+        return console.file.getvalue()
+
+    def test_region_shows_its_size_and_centroid(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+
+        affine = np.diag([2.0, 2.0, 2.0, 1.0])
+        affine[:3, 3] = [-10.0, 0.0, 4.0]
+        region = ExplicitVBR(
+            np.array([[1, 1, 1], [1, 2, 1]]), affine, image_dim=(4, 4, 4)
+        )
+        out = self._rendered(pd.DataFrame({"label": ["a"], "r": [region]}))
+        assert "VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)" in out
+        assert "affine" not in out
+
+    def test_region_cell(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+        from neurolang.utils.tui.results import cell_text
+
+        region = ExplicitVBR(np.array([[0, 0, 0]]), np.eye(4))
+        assert cell_text(region) == (
+            "VBR(n_voxels=1, centroid=(0.0, 0.0, 0.0) mm)"
+        )
+        assert cell_text(None) == "" and cell_text(1.5) == "1.5"
 
 
 def _console():
@@ -348,10 +386,53 @@ def vocabulary_engine():
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
     nl.add_tuple_set(
-        [(10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4)],
+        [
+            (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
+            (10, "spatial working memory", 0.5),
+        ],
         name="term_in_study_tfidf",
     )
-    nl.execute_datalog_program(_vocabulary_rules())
+    # The Cognitive Atlas of the engine, reduced to a few classes.
+    from neurolang.utils import conftest, engine_registry
+
+    nl.add_symbol(engine_registry._BUILTIN_SYMBOLS["lcase"], name="lcase")
+
+    nl.load_ontology(
+        str(conftest.MINI_COGAT), individuals=True, names="prefixed"
+    )
+    cogat_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if line.startswith("cogat_")
+    ]
+    # The predefined analyses (lift, uniformity) over the two voxels.
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="brain_mask")
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame({"study_id": [10, 11]}), name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame([(1, 2, 3), (4, 5, 6)], columns=["i", "j", "k"]),
+        name="selected_voxel",
+    )
+    analysis_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if re.match(
+            r"(term_in_study|activated|p_[a-z_]+|study_similarity|"
+            r"cutoff_similarity|similar_study|"
+            r"lift|relative_risk|uniformity|ratios)(_llm)?\(", line
+        )
+    ]
+
+    def query_similarity(query: str, study: int) -> float:
+        return {10: 0.9, 11: 0.5}[study]
+
+    nl.add_symbol(query_similarity, name="query_similarity")
+    nl.execute_datalog_program(
+        _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
+    )
     return nl
 
 
@@ -588,3 +669,67 @@ def test_command_messages(small_app, line, message):
     small_app.console.width = 1000
     small_app._handle_dot_command(line)
     assert message in _output(small_app)
+
+
+# The escape sequences a terminal sends around pasted text.
+PASTE = "\x1b[200~{}\x1b[201~"
+
+
+def _recording_execute(app):
+    """Record the programs *app* executes, its list."""
+    calls = []
+    original = app._execute
+
+    def recording(program):
+        calls.append(program)
+        return original(program)
+
+    app._execute = recording
+    return calls
+
+
+def test_pasted_statements_run_in_turn(small_app, pipe_session):
+    """A pasted block of rules, dot-commands and queries runs as if each
+    statement were typed at the prompt."""
+    calls = _recording_execute(small_app)
+    pasted = "q(x) :- P(x)\n.format csv\nans(x) :-\n  q(x)\n.format table"
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["q(x) :- P(x)", "ans(x) :-\n  q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert small_app.settings.output_format == "table"
+
+
+
+def test_pasted_block_with_comment_lines(small_app, pipe_session):
+    """The ``%`` comment lines of a pasted block, before a rule or a
+    dot-command, run nothing and raise no error."""
+    calls = _recording_execute(small_app)
+    pasted = (
+        "% the rule\nq(x) :- P(x)\n% CSV output\n.format csv\n"
+        "% the query\nans(x) :- q(x)"
+    )
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["% the rule\nq(x) :- P(x)\n% CSV output",
+                     "% the query\nans(x) :- q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert "error" not in _output(small_app).lower()
+
+
+def test_comment_line_alone_runs_nothing(small_app):
+    calls = _recording_execute(small_app)
+    small_app._run_line("% nothing to run")
+    assert calls == []
+    assert _output(small_app) == ""
+
+def test_pasted_mode_applies_to_what_follows(small_app, pipe_session):
+    pasted = ".mode squall\nobtain every P."
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert small_app.settings.squall
+    out = _output(small_app)
+    assert out.index("Mode: SQUALL") < out.index("Running query")
+
+
+def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
+    calls = _recording_execute(small_app)
+    small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
+    assert calls == ["ans(x) :-\n  P(x)"]

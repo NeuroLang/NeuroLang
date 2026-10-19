@@ -1,9 +1,11 @@
-from typing import AbstractSet, Tuple
+from operator import eq, lt
+from typing import AbstractSet, Callable, Tuple
 
 import pytest
 
 from neurolang.type_system import Unknown
 
+from ... import exceptions
 from ...expression_walker import ExpressionBasicEvaluator, IdentityWalker
 from ...expressions import (
     Constant,
@@ -15,7 +17,7 @@ from ...expressions import (
     Symbol,
     is_leq_informative
 )
-from ...logic import ExistentialPredicate, Implication, Union
+from ...logic import Conjunction, ExistentialPredicate, Implication, Union
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .. import DatalogProgram, Fact
 from ..basic_representation import UnionOfConjunctiveQueries
@@ -262,6 +264,37 @@ def test_not_conjunctive():
 
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x, y), R(Q(x))))
+
+
+def test_unbound_variables_rejected():
+    dl = Datalog()
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    f = S_('f')
+    x = S_('x')
+    y = S_('y')
+    dl.symbol_table[f] = C_[Callable[[int, int], int]](lambda a, b: a - b)
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        dl.walk(Imp_(Q(x), Conjunction((R(x), C_(lt)(f(x, y), C_(2))))))
+    assert exc_info.value.variables == ('y',)
+    assert exc_info.value.rule == 'Q'
+    assert Q not in dl.symbol_table
+
+    with pytest.raises(exceptions.UnboundVariablesError):
+        dl.walk(Imp_(Q(x), Conjunction((R(x), f(x, y)))))
+
+    dl.walk(Imp_(Q(x, y), Conjunction((R(x), C_(eq)(y, f(x, C_(1)))))))
+    dl.walk(Imp_(
+        Q(x, y), Conjunction((R(x), R(y), C_(lt)(f(x, y), C_(2))))
+    ))
+    dl.walk(Imp_(Q(x, y), Conjunction((R(x), S_('T')(x, y)))))
+    dl.walk(Imp_(Q(x, y), Conjunction((R(x), C_(lt)(x, y)))))
+    assert len(dl.symbol_table[Q].formulas) == 4
+
+    generated = S_.fresh()
+    dl.walk(Imp_(generated(x), Conjunction((R(x), C_(lt)(x, y)))))
+    assert generated in dl.symbol_table
 
 
 def test_infer_iterable_type():

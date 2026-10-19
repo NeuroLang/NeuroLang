@@ -1,10 +1,12 @@
-from operator import contains, eq, gt, mul, not_
+from operator import add, contains, eq, gt, mul, not_
 from typing import AbstractSet, Callable, Tuple
 
 import numpy
 import pytest
 
+from ... import exceptions
 from ...exceptions import NeuroLangException
+from ...expression_walker import expression_iterator
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Disjunction, ExistentialPredicate
 from ...relational_algebra import (
@@ -16,11 +18,15 @@ from ...relational_algebra import (
     FunctionApplicationListMember,
     NameColumns,
     NaturalJoin,
+    Product,
     Projection,
+    RelationalAlgebraOptimiser,
+    RelationalAlgebraSolver,
     Selection,
     Union,
     str2columnstr_constant,
 )
+from ..chase.relational_algebra import NamedRelationalAlgebraOptimiser
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
@@ -232,6 +238,22 @@ def test_selection():
     assert res == Selection(fa_trans, expected_builtin_condition)
 
 
+def test_selection_over_unbound_variable():
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    exp = Conjunction((R1(x), C_(gt)(x, y)))
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        TranslateToNamedRA().walk(exp)
+    assert exc_info.value.variables == ("y",)
+    assert exc_info.value.rule is None
+    assert str(exc_info.value).startswith(
+        "In a rule body: the variable y appears only in `x > y`"
+    )
+    assert "normal form" not in exc_info.value.suggestion
+
+
 def test_extended_projection():
     x = S_("x")
     y = S_("y")
@@ -327,6 +349,205 @@ def test_extended_projection_algebraic_expression():
     )
 
 
+@pytest.mark.parametrize("swap", [False, True])
+def test_equality_expression_with_bound_variable_is_selection(swap):
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    condition = (C_(mul)(x, C_(3)), y)
+    if not swap:
+        condition = condition[::-1]
+    exp = Conjunction((R1(x, y), C_(eq)(*condition)))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+
+    res = TranslateToNamedRA().walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_x, cs_y),
+    )
+    assert res == Selection(fa_trans, C_(eq)(cs_y, C_(mul)(cs_x, C_(3))))
+
+
+def test_equality_expression_with_variable_bound_by_other_atom():
+    i = S_("i")
+    i1 = S_("i1")
+    di = S_("di")
+    q = S_("q")
+    v = S_("v")
+    exp = Conjunction((q(i1, di), v(i), C_(eq)(i, C_(add)(i1, di))))
+    cs_i = C_(ColumnStr("i"))
+    cs_i1 = C_(ColumnStr("i1"))
+    cs_di = C_(ColumnStr("di"))
+
+    res = TranslateToNamedRA().walk(exp)
+    q_trans = NameColumns(
+        Projection(q, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_i1, cs_di),
+    )
+    v_trans = NameColumns(Projection(v, (C_(ColumnInt(0)),)), (cs_i,))
+    assert res == NaturalJoin(
+        ExtendedProjection(
+            q_trans,
+            (
+                FunctionApplicationListMember(C_(add)(cs_i1, cs_di), cs_i),
+                FunctionApplicationListMember(cs_i1, cs_i1),
+                FunctionApplicationListMember(cs_di, cs_di),
+            ),
+        ),
+        v_trans,
+    )
+
+
+def test_second_equality_on_computed_join_column_is_selection():
+    i = S_("i")
+    i1 = S_("i1")
+    di = S_("di")
+    q = S_("q")
+    v = S_("v")
+    exp = Conjunction(
+        (
+            q(i1, di),
+            v(i),
+            C_(eq)(i, C_(add)(i1, di)),
+            C_(eq)(i, C_(mul)(di, C_(2))),
+        )
+    )
+    cs_i = C_(ColumnStr("i"))
+    cs_i1 = C_(ColumnStr("i1"))
+    cs_di = C_(ColumnStr("di"))
+
+    res = TranslateToNamedRA().walk(exp)
+    q_trans = NameColumns(
+        Projection(q, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_i1, cs_di),
+    )
+    v_trans = NameColumns(Projection(v, (C_(ColumnInt(0)),)), (cs_i,))
+    assert res == Selection(
+        NaturalJoin(
+            ExtendedProjection(
+                q_trans,
+                (
+                    FunctionApplicationListMember(
+                        C_(add)(cs_i1, cs_di), cs_i
+                    ),
+                    FunctionApplicationListMember(cs_i1, cs_i1),
+                    FunctionApplicationListMember(cs_di, cs_di),
+                ),
+            ),
+            v_trans,
+        ),
+        C_(eq)(cs_i, C_(mul)(cs_di, C_(2))),
+    )
+
+
+def neighbourhood_conjunction():
+    """
+    Return the conjunction of the voxels close to a reported peak.
+
+    It is the body of ``reports_close(i, j, k, s) :-
+    peak_reported(i1, j1, k1, s), offset(di, dj, dk), (i == i1 + di),
+    (j == j1 + dj), (k == k1 + dk), voxel(i, j, k)``.
+    """
+    i, j, k, s = S_("i"), S_("j"), S_("k"), S_("s")
+    i1, j1, k1 = S_("i1"), S_("j1"), S_("k1")
+    di, dj, dk = S_("di"), S_("dj"), S_("dk")
+    return Conjunction(
+        (
+            S_("peak_reported")(i1, j1, k1, s),
+            S_("offset")(di, dj, dk),
+            C_(eq)(i, C_(add)(i1, di)),
+            C_(eq)(j, C_(add)(j1, dj)),
+            C_(eq)(k, C_(add)(k1, dk)),
+            S_("voxel")(i, j, k),
+        )
+    )
+
+
+def test_equalities_on_bound_variables_join_on_computed_columns():
+    cs = {
+        name: C_(ColumnStr(name))
+        for name in ("i", "j", "k", "s", "i1", "j1", "k1", "di", "dj", "dk")
+    }
+
+    def named(symbol, *columns):
+        return NameColumns(
+            Projection(
+                S_(symbol),
+                tuple(C_(ColumnInt(n)) for n in range(len(columns))),
+            ),
+            tuple(cs[c] for c in columns),
+        )
+
+    res = TranslateToNamedRA().walk(neighbourhood_conjunction())
+    sources = NaturalJoin(
+        named("peak_reported", "i1", "j1", "k1", "s"),
+        named("offset", "di", "dj", "dk"),
+    )
+    computed = tuple(
+        FunctionApplicationListMember(
+            C_(add)(cs[f"{c}1"], cs[f"d{c}"]), cs[c]
+        )
+        for c in "ijk"
+    ) + tuple(
+        FunctionApplicationListMember(cs[c], cs[c])
+        for c in ("i1", "j1", "k1", "s", "di", "dj", "dk")
+    )
+    assert res == NaturalJoin(
+        ExtendedProjection(sources, computed),
+        named("voxel", "i", "j", "k"),
+    )
+
+
+def test_optimised_neighbourhood_plan_has_no_product_with_voxel():
+    res = TranslateToNamedRA().walk(neighbourhood_conjunction())
+    res = NamedRelationalAlgebraOptimiser().walk(res)
+    res = RelationalAlgebraOptimiser().walk(res)
+    voxel = S_("voxel")
+    nodes = [node for _, node in expression_iterator(res)]
+    assert not any(isinstance(node, Selection) for node in nodes)
+    assert any(isinstance(node, ExtendedProjection) for node in nodes)
+    for node in nodes:
+        if isinstance(node, Product):
+            assert all(
+                voxel not in (n for _, n in expression_iterator(relation))
+                for relation in node.relations
+            )
+
+
+def test_two_equality_expressions_on_same_unbound_variable():
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    R1 = S_("R1")
+    exp = Conjunction(
+        (
+            R1(x, y),
+            C_(eq)(z, C_(mul)(x, C_(3))),
+            C_(eq)(z, C_(mul)(y, C_(2))),
+        )
+    )
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
+
+    res = TranslateToNamedRA().walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (cs_x, cs_y),
+    )
+    assert isinstance(res, Selection)
+    assert res.formula == C_(eq)(cs_z, C_(mul)(cs_y, C_(2)))
+    assert isinstance(res.relation, ExtendedProjection)
+    assert res.relation.relation == fa_trans
+    new_column, *kept_columns = res.relation.projection_list
+    assert new_column == FunctionApplicationListMember(
+        C_(mul)(cs_x, C_(3)), cs_z
+    )
+    assert all(m.fun_exp == m.dst_column for m in kept_columns)
+    assert {m.dst_column for m in kept_columns} == {cs_x, cs_y}
+
+
 def test_set_destroy():
     r1 = S_("R1")
     x = S_("x")
@@ -386,6 +607,31 @@ def test_only_equality():
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
+
+
+def test_only_equalities_to_constants_keep_all_columns():
+    exp = Conjunction((
+        C_(eq)(S_("x"), C_(1)),
+        C_(eq)(S_("y"), C_(2)),
+        C_(eq)(S_("z"), C_(3)),
+    ))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(1, 2, 3)]
+    )
+
+
+def test_only_equalities_to_constants():
+    """Translate ``x = 3 & y = 'a'``, as in ``magic_p(3, 'a') :- ()``."""
+    exp = Conjunction((C_(eq)(S_("x"), C_(3)), C_(eq)(S_("y"), C_("a"))))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(3, "a")]
+    )
 
 
 def test_disjunction():

@@ -3,7 +3,12 @@
 .. raw:: html
 
    <div class="nl-hero">
-     <h1>NeuroLang</h1>
+     <h1 class="nl-hero-logo">
+       <img class="only-light" alt="NeuroLang"
+            src="_static/logo/svg/neurolang-lockup-stacked.svg">
+       <img class="only-dark" alt="NeuroLang"
+            src="_static/logo/svg/neurolang-lockup-stacked-dark.svg">
+     </h1>
      <p class="nl-tagline">
        Probabilistic Logic Programming for Neuroimaging Analysis
      </p>
@@ -84,7 +89,11 @@ a guided walkthrough.
    tutorial
    tutorial_squall
    tutorial_datalog
+   tutorial_text_embeddings
+   tutorial_neurosynth_tests
+   tutorial_cognitive_atlas
    concepts
+   probabilistic_lifting
    engine_configuration
    query_assistant
    performance

@@ -342,19 +342,26 @@ def _in_child(function, timeout, memory_mb):
     writes, so forking is cheap. It is killed when it runs longer than
     *timeout* seconds (QueryTimeout) or uses more than *memory_mb* MB
     (QueryTooLarge), so that a runaway query cannot bring the parent
-    down. Without fork, *function* runs in a thread with *timeout*.
+    down. Without fork, or when the system refuses it (a parent too
+    large to copy where the memory is not overcommitted), *function* runs
+    in a thread with *timeout* only.
     """
     if not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
     read, write = os.pipe()
-    with warnings.catch_warnings():
-        # A child deadlocked by a lock of another thread is killed at
-        # the timeout like any other stuck query.
-        warnings.filterwarnings(
-            "ignore", message=".*multi-threaded, use of fork",
-            category=DeprecationWarning,
-        )
-        pid = os.fork()
+    try:
+        with warnings.catch_warnings():
+            # A child deadlocked by a lock of another thread is killed at
+            # the timeout like any other stuck query.
+            warnings.filterwarnings(
+                "ignore", message=".*multi-threaded, use of fork",
+                category=DeprecationWarning,
+            )
+            pid = os.fork()
+    except OSError:
+        os.close(read)
+        os.close(write)
+        return _with_timeout(function, timeout)
     if pid == 0:  # the child
         os.close(read)
         try:

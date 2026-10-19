@@ -146,3 +146,49 @@ def test_containment_mixed():
     assert not is_contained(r3, r5)
     assert not is_contained(r5, r3)
     assert is_contained(r6, r5)
+
+
+def test_containment_different_free_variables():
+    R = Symbol('R')
+    T = Symbol('T')
+    t = Symbol('t')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    r_xy = R(x, y)
+    r_x = ExistentialPredicate(t, R(x, t))
+    r_x_or_t_xy = Disjunction((r_x, T(x, y)))
+
+    # R(x, y) implies ∃t R(x, t) for every y
+    assert is_contained(r_x, r_xy)
+    # but ∃t R(x, t) does not imply R(x, y), which depends on y
+    assert not is_contained(r_xy, r_x)
+    # ∃t R(x, t) implies ∃t R(x, t) ∨ T(x, y) for every y
+    assert is_contained(r_x_or_t_xy, r_x)
+    assert not is_contained(r_x, r_x_or_t_xy)
+
+
+def test_containment_independent_of_variable_names_order():
+    R = Symbol('R')
+    T = Symbol('T')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    # The disjuncts have different free variables, the containment
+    # test must not depend on the order in which they are collected.
+    assert is_contained(Disjunction((T(y), R(x, y))), R(x, y))
+    assert is_contained(Disjunction((R(x, y), T(y))), R(x, y))
+
+
+def test_containment_of_closed_queries():
+    """Queries without free variables give nullary heads, whose facts
+    must be found in the chase solution."""
+    S_ = Symbol("S_")
+    T_ = Symbol("T_")
+    x_ = Symbol("x_")
+    y_ = Symbol("y_")
+    q1 = ExistentialPredicate(x_, S_(x_))
+    q2 = ExistentialPredicate(y_, S_(y_))
+    assert is_contained(q1, q2)
+    assert is_contained(q2, q1)
+    assert not is_contained(ExistentialPredicate(x_, T_(x_)), q1)

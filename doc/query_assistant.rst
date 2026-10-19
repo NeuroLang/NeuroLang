@@ -36,8 +36,8 @@ in the prompt, where it can be read, edited and run:
 
 From the command line, ``--ask`` prints the query, and ``--run`` also
 runs it. ``--save PATH`` and ``--view`` run it too, and save its result
-as a table or a NIfTI image, or open its image in the browser (see
-"Saving and viewing the results" in the Datalog tutorial):
+as a table or a NIfTI image, or show its image in the viewer (see "Saving
+and viewing the results" in the Datalog tutorial):
 
 .. code-block:: bash
 

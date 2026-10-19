@@ -7,7 +7,6 @@ from typing import AbstractSet
 
 from ....datalog.expression_processing import (
     UnifyVariableEqualitiesMixin,
-    extract_logic_atoms,
 )
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
@@ -23,7 +22,6 @@ from ....utils import log_performance
 from ...frontend_extensions import NumpyFunctionsMixin
 from ....utils.euclidean_join import euclidean_distance, euclidean_join
 from ....type_system import is_leq_informative
-from ....utils.various import FrozenNDArray
 from ....regions import ExplicitVBR
 
 #: Reserved symbol of the Euclidean distance spatial-bound sugar.
@@ -895,6 +893,79 @@ def _is_contains_atom(atom):
     return is_leq_informative(atom.args[0].type, ExplicitVBR)
 
 
+def region_voxels(region: ExplicitVBR) -> typing.Tuple:
+    """
+    Return the voxels of *region* as a tuple of coordinate tuples.
+
+    Values without voxels, such as the elements of a column of unknown
+    type which are not regions, are returned unchanged.
+
+    Parameters
+    ----------
+    region : ExplicitVBR
+        Region whose voxels are returned.
+
+    Returns
+    -------
+    tuple
+        The voxel coordinates of the region, each a tuple of ints.
+    """
+    voxels = getattr(region, "voxels", None)
+    if voxels is None:
+        return region
+    return tuple(map(tuple, voxels.tolist()))
+
+
+#: Built-in computing the voxels of a region during evaluation.
+REGION_VOXELS = Constant(region_voxels)
+
+
+def _is_region_contains(formula):
+    """
+    Return whether *formula* is a ``contains`` atom over a region.
+
+    Parameters
+    ----------
+    formula : Expression
+        Conjunct of a rule antecedent.
+
+    Returns
+    -------
+    bool
+        Whether *formula* is ``contains(r, ...)`` with ``r`` a region.
+    """
+    return isinstance(formula, FunctionApplication) and _is_contains_atom(
+        formula
+    )
+
+
+def _region_voxels_formulas(formula):
+    """
+    Return the conjuncts replacing a ``contains`` atom over a region.
+
+    ``contains(r, x)`` becomes ``v == region_voxels(r), contains(v, x)``
+    with a fresh ``v``, other formulas are kept.
+
+    Parameters
+    ----------
+    formula : Expression
+        Conjunct of a rule antecedent.
+
+    Returns
+    -------
+    tuple of Expression
+        The conjuncts replacing *formula*.
+    """
+    if not _is_region_contains(formula):
+        return (formula,)
+    region, *elements = formula.args
+    voxels = Symbol[typing.Tuple].fresh()
+    return (
+        Constant(operator.eq)(voxels, REGION_VOXELS(region)),
+        formula.functor(voxels, *elements),
+    )
+
+
 class TranslateRegionDestroy(PatternWalker):
     """
     Syntactic sugar for rules using contains/Destroy with
@@ -902,102 +973,28 @@ class TranslateRegionDestroy(PatternWalker):
 
     ExplicitVBR values aren't iterable (no ``__iter__`` to avoid breaking
     Constant type inference), so the contains/Destroy pipeline can't
-    explode them. This walker pre-converts ExplicitVBR values in EDB
-    columns to tuples of voxels before the chase processes the rule.
+    explode them. This walker rewrites ``contains(r, x)``, with ``r`` a
+    region, as ``v == region_voxels(r), contains(v, x)``: the voxels of
+    each region are computed during evaluation and the relation storing
+    the regions is left unchanged.
     """
 
     @add_match(
-        Implication,
-        lambda imp: (
-            isinstance(imp.antecedent, Conjunction)
-            and any(
-                _is_contains_atom(a)
-                for a in extract_logic_atoms(imp.antecedent)
-            )
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            _is_region_contains(formula)
+            for formula in implication.antecedent.formulas
         ),
     )
     def region_destroy(self, implication):
-        """Pre-explode ExplicitVBR column before Destroy processing."""
-        atoms = extract_logic_atoms(implication.antecedent)
-        for atom in list(atoms):
-            if not _is_contains_atom(atom):
-                continue
-            region_var = atom.args[0]
-            self._convert_region_edb_column(atoms, region_var)
-        return delegate_to_next_match(
-            self, implication, type(self).region_destroy
-        )
-
-    def _convert_region_edb_column(self, formulas, region_var):
-        for formula in formulas:
-            if (
-                not isinstance(formula.functor, Symbol)
-                or region_var not in formula.args
-            ):
-                continue
-            pred_value = self._resolve_edb(formula.functor)
-            if pred_value is None:
-                continue
-            ras = pred_value.value
-            if not hasattr(ras, "columns"):
-                continue
-            col_idx = formula.args.index(region_var)
-            col_name = ras.columns[col_idx]
-            new_ras = self._explode_voxel_column(ras, col_name)
-            if new_ras is not None:
-                pred_value.value = new_ras
-            return True
-        return False
-
-    def _resolve_edb(self, symbol):
-        try:
-            val = self.symbol_table.get(symbol)
-        except Exception:
-            return None
-        if isinstance(val, Constant):
-            return val
-        return None
-
-    @staticmethod
-    def _explode_voxel_column(ras, col_name):
-        """Build a new RAS with the voxel column exploded into tuples.
-
-        Uses only the public RAS interface. The ``unwrap()`` method
-        is used when available (``WrappedRelationalAlgebraSet``) to
-        avoid ``Constant``-wrapped rows that break tuple indexing.
-
-        Returns None if the column does not contain voxels (no conversion
-        needed).
         """
-        if ras.is_empty():
-            return None
-        columns = list(ras.columns)
-        col_idx = columns.index(col_name)
-
-        # Unwrap to avoid Constant[tuple] rows from WrappedRA
-        inner = ras.unwrap() if hasattr(ras, 'unwrap') else ras
-
-        first_row = next(iter(inner), None)
-        if first_row is None:
-            return None
-        first_val = first_row[col_idx]
-        if not hasattr(first_val, 'voxels') or isinstance(
-            first_val, (str, bytes)
-        ):
-            return None
-
-        new_rows = []
-        for row in inner:
-            val = row[col_idx]
-            if hasattr(val, 'voxels') and len(val.voxels) > 0:
-                exploded = tuple(
-                    FrozenNDArray(v) for v in val.voxels
-                )
-                new_row = list(row)
-                new_row[col_idx] = exploded
-                new_rows.append(tuple(new_row))
-
-        if not new_rows:
-            return None
-
-        return type(ras)(iterable=new_rows)
+        Compute the voxels of the destructured regions during evaluation.
+        """
+        formulas = tuple(
+            new_formula
+            for formula in implication.antecedent.formulas
+            for new_formula in _region_voxels_formulas(formula)
+        )
+        return self.walk(
+            Implication(implication.consequent, Conjunction(formulas))
+        )

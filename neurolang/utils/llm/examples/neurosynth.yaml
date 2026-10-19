@@ -160,8 +160,7 @@ examples:
       term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
       joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
       bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
-      strong(t, bf) :- bayes_factor(t, bf), (bf > 3.16)
-      ans(t, bf) :- strong(t, bf)
+      ans(t, bf) :- bayes_factor(t, bf), (bf > 3.16)
 
   - question: What is the Bayes factor of the term fear for activations within 10 mm of the voxel (74, 130, 52)?
     squall: |-

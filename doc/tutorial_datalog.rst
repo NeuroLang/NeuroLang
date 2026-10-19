@@ -536,7 +536,11 @@ the right fusiform gyrus are evaluated.
 
     Magic-sets works when the constant appears on an IDB (rule-defined)
     predicate, as it does here (``bayes_factor`` is defined by a rule).
-    For EDB predicates the optimisation does not apply.
+    A constant on an EDB predicate does not restrict that predicate, but
+    its rows bind its variables in the IDB predicates right of it: in
+    ``ans(x) :- e("c", y) & p(y, x)``, with ``e`` an EDB predicate and
+    ``p`` defined by rules, the values of ``y`` in the rows of ``e``
+    with ``"c"`` are passed to ``p``.
 
 
 Part 9: The Complete Program
@@ -640,6 +644,21 @@ Global aggregation (no group-by) uses empty brackets:
     total_studies(cnt) :-
         AGGREGATE[](study(s) @ count(s)) = cnt.
 
+An aggregation can also be written directly in the head of a rule, the
+variables of the head being the group-by variables.  This form accepts
+aggregation functions with constant parameters, such as
+``percentile(v, q)``: the ``q``-th percentile of ``v``, with ``q`` in
+``[0, 100]``, ignoring NaN values.  It keeps, for instance, the top 10% of
+the scores of each query:
+
+.. code-block:: none
+
+    cutoff(q, percentile(v, 90)) :- score(q, s, v).
+    top_score(q, s) :- score(q, s, v), cutoff(q, t), (v >= t).
+
+Percentiles are linearly interpolated and ties are kept, so the top 10%
+can hold slightly more than 10% of the rows.
+
 10.2 Existential Predicates
 ----------------------------
 
@@ -690,7 +709,7 @@ into a relation:
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend
-(``'pandas'``, ``'dask'`` or ``'polars'``) from Datalog code, use the SQUALL
+(``'pandas'`` or ``'polars'``) from Datalog code, use the SQUALL
 ``#set_backend`` directive or, from Python,
 ``neurolang.config.config.set_query_backend(...)``; see :doc:`performance`.
 Note that the backend is a process-wide setting.
@@ -965,39 +984,31 @@ append ``:desc`` for descending order)::
 Saving and viewing the results
 ------------------------------
 
-``--save PATH`` also writes the result in a file, in the format its
-extension names:
+``--save PATH`` also writes the result in a file, and ``--view`` shows
+its brain image in the viewer of the interactive mode, as the REPL's
+``.save`` and ``.view`` do for its last result (see ``.help save`` and
+``.help view`` there for the details).  They need the ``tui`` extra
+(``pip install "neurolang[tui]"``).
 
-* ``.csv``, ``.tsv`` or ``.json`` (optionally followed by ``.gz``): the
-  table of the result, sorted as ``--sort`` asks. Regions are written as
-  their size, ``<region of N voxels>``.
-* ``.nii`` or ``.nii.gz``: a NIfTI brain image, when the result has a
-  region column, or the voxel columns ``i``, ``j``, ``k`` of the engine's
-  MNI grid with at most one other, numeric column giving the value of each
-  voxel (1 without it), such as a probability or a count. Voxels outside
-  the grid, like the few peaks Neurosynth reports outside the template's
-  box, are left out, with a note. One region gives its image, in its own
-  grid (an overlay gives its values); several regions give a label image,
-  the region of row *n* having the value *n* + 1, and their other columns
-  are written beside it in ``<name>_labels.csv``.
+* ``--save out.csv`` or ``out.tsv`` (optionally ``.gz``) writes the table
+  of the result, sorted as ``--sort`` asks.
+* ``--save out.nii`` or ``out.nii.gz`` writes a NIfTI image on the grid of
+  the engine's template.  The voxels are the columns of the result of a
+  sort the engine declares as voxel indices, or as millimetres, such as
+  ``i, j, k``; the value of a voxel is its probability or its one other
+  numeric column, such as a count, else 1.  A SQUALL program of several
+  ``obtain`` statements gives a file per statement.
+* ``--view`` writes the viewer's HTML page, prints its path and opens it
+  in a browser when the standard error is a terminal.
 
-A SQUALL program of several ``obtain`` statements gives a file per
-statement, its name suffixed with the statement's.
-
-``--view`` opens the image of the result in the browser at the end, over
-the MNI template, with nilearn's viewer. For instance, the map of the
-number of studies mentioning pain that report each voxel::
+For instance, the map of the number of studies mentioning pain that
+report each voxel::
 
     neurolang-query --engine neurosynth --save pain.nii.gz --view \
         "n_pain(i, j, k, count(s)) :- reports(s, i, j, k), mentions(s, 'pain').
          ans(i, j, k, n) :- n_pain(i, j, k, n)"
 
-and the Schaefer parcels, as a label image::
-
-    neurolang-query --engine neurosynth --save schaefer.nii.gz \
-        "ans(l, r) :- schaefer(l, r)"
-
-Both work with ``--ask`` too, which then runs the query it writes.
+Both work with ``--ask``, which then runs the query it writes.
 
 Inspecting query plans
 ----------------------
