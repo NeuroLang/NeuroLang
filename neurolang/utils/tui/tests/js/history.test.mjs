@@ -59,7 +59,7 @@ test("no match leaves the draft", () => {
 });
 
 test("typing more of the query searches again from the newest", () => {
-  const search = new ReverseSearch(history("abc", "abd", "xyz"));
+  const search = new ReverseSearch(history("abc", "abx", "xyz"));
   search.type("ab");
   search.older();
   search.type("abc");
