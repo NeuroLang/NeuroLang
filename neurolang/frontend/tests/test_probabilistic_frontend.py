@@ -18,10 +18,14 @@ from ...exceptions import (
 from ...expressions import Symbol
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
-from ...probabilistic import dalvi_suciu_lift
+from ...probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver
+)
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    RepeatedTuplesInProbabilisticRelationError
+    RepeatedTuplesInProbabilisticRelationError,
+    UnsupportedSolverError
 )
 from ...regions import SphericalVolume
 from ...utils.relational_algebra_set import (
@@ -2209,3 +2213,56 @@ def test_conjunctive_query_on_probabilistic_queries(query, expected):
     ):
         assert x == x_expected
         assert p == pytest.approx(p_expected)
+
+
+def _engine_with_two_witnesses(selected, solvers=None):
+    """`R` has two rows for x = 1, so ∃y R(1, y) has two witnesses."""
+    if solvers is None:
+        nl = NeurolangPDL()
+    else:
+        nl = NeurolangPDL(
+            probabilistic_solvers=(solvers.solve_succ_query,),
+            probabilistic_marg_solvers=(solvers.solve_marg_query,),
+        )
+    nl.add_tuple_set([(1, "a"), (1, "c"), (2, "b")], name="R")
+    if selected == "facts":
+        nl.add_probabilistic_facts_from_tuples(
+            [(0.5, 1), (0.5, 2)], name="Selected"
+        )
+    else:
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(1,), (2,)], name="Selected"
+        )
+    return nl
+
+
+def _query_with_deterministic_existential(nl):
+    with nl.environment as e:
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Selected(e.x)
+        return nl.query((e.x, e.p), e.Query(e.x, e.p))
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+@pytest.mark.parametrize(
+    "solvers", [None, dalvi_suciu_lift], ids=["default", "lift"]
+)
+def test_existential_variable_of_deterministic_relation_only(
+    selected, solvers
+):
+    """P(∃y R(1, y) ∧ Selected(1)) is P(Selected(1)) however many rows
+    of the deterministic `R` witness ∃y: they are the same event."""
+    nl = _engine_with_two_witnesses(selected, solvers)
+    sol = _query_with_deterministic_existential(nl)
+    assert len(sol) == 2
+    assert_almost_equal(sol, {(1, 0.5), (2, 0.5)})
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+def test_small_dichotomy_declines_existential_of_deterministic_relation(
+    selected
+):
+    nl = _engine_with_two_witnesses(
+        selected, small_dichotomy_theorem_based_solver
+    )
+    with pytest.raises(UnsupportedSolverError):
+        _query_with_deterministic_existential(nl)
