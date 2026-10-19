@@ -2,7 +2,7 @@
 Completion of the interactive REPL input.
 
 The predicates offered are read from the engine each time a completion
-is requested (:func:`~.catalog.predicate_catalog`), so that the
+is requested (:func:`~neurolang.utils.predicate_catalog.predicate_catalog`), so that the
 relations and the rules added during the session, e.g. with ``.load``,
 are offered as soon as they exist. Inside the arguments of a predicate,
 the names of its columns and the variables of the rule are offered. The
@@ -20,10 +20,11 @@ from neurolang.frontend.datalog.standard_syntax import (
     strip_comment,
 )
 from neurolang.utils.interactive_parsing import LarkCompleter
+from neurolang.utils.query_highlight import DATALOG_KEYWORDS
 
 from .commands import COMMANDS
-from . import squall_sorts
-from .squall_completion import (
+from neurolang.utils import squall_sorts
+from neurolang.utils.squall_completion import (
     SquallGrammarOptions,
     allowed_terminals,
     current_sentence,
@@ -50,10 +51,7 @@ GRAMMAR_OPERATORS = frozenset({":-", "~", "//", "::", ":=", "-:"})
 # The grammar's words not worth offering.
 GRAMMAR_NOISE = frozenset({"lambda", "st"})
 # The words of the Datalog grammar, which cannot name variables.
-KEYWORDS = frozenset({
-    "AGGREGATE", "EXISTS", "MARG", "PROB", "SUCC", "ans", "exists",
-    "False", "True", "lambda", "st",
-})
+KEYWORDS = DATALOG_KEYWORDS
 
 
 def identifier_prefix(text: str) -> str:
@@ -177,16 +175,16 @@ class NeuroLangReplCompleter(Completer):
     """
     Complete dot-commands, predicates, their columns and the grammar.
 
-    *predicates* returns the :class:`~.catalog.PredicateInfo` of the
+    *predicates* returns the :class:`~neurolang.utils.predicate_catalog.PredicateInfo` of the
     engine's predicates, by name; it is called at each completion.
     Datalog input is completed with the LALR grammar's *lark_completer*,
     SQUALL input with the Earley grammar's *squall_grammar* (see
-    :mod:`~.squall_completion`). Without them, or where the input is
+    :mod:`~neurolang.utils.squall_completion`). Without them, or where the input is
     invalid, the predicates and *squall_keywords* starting with the word
     being typed are offered. *is_squall* tells whether the input is SQUALL.
     The predicates named in *hidden* are not offered in SQUALL, and
     their declared arguments choose the nouns and verbs offered (see
-    :mod:`~.squall_sorts`).
+    :mod:`~neurolang.utils.squall_sorts`).
 
     Inside a quoted string, the values of the column it fills are
     offered, as *column_values* gives them (see
@@ -318,7 +316,7 @@ class NeuroLangReplCompleter(Completer):
         Yield the predicates and keywords SQUALL accepts before *prefix*.
 
         Where a name is allowed, the nouns or the verbs that fit (see
-        :func:`~.squall_sorts.name_slot`) are offered; after a noun, the
+        :func:`~neurolang.utils.squall_sorts.name_slot`) are offered; after a noun, the
         phrases naming its columns. If the sentence is invalid, yield
         the predicates and the *squall_keywords* starting with *prefix*.
         """

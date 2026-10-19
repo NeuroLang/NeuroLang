@@ -33,6 +33,31 @@ Unreleased
   for a newer one, ``Enter`` to take it, ``Esc`` to cancel), and Up and
   Down browse it.  :class:`neurolang.utils.tui.web.WebRepl` returns a
   result's rows as data (``Reply.tables``).
+  
+* An LLM query assistant writes a Datalog or SQUALL query from a
+  question in natural language: ``.ask QUESTION`` in the interactive
+  mode, which puts the query in the next prompt (``.llm QUESTION`` is
+  the shortcut for the ReAct agent writing Datalog), and
+  ``neurolang-query --ask QUESTION`` on the command line, where ``--run``
+  also runs the query and ``-v`` and ``-vv`` show the reasoning and tool
+  calls of its steps, and the messages sent to the model.  Two
+  strategies are offered: in-context learning, whose few-shot examples
+  are the closest to the question (BM25), with validation and repair on
+  the engine, and a ReAct agent that explores the engine with tools
+  (``search_values``, ``run_query``, ``check_query``…), by native tool
+  calls or a text protocol.  The providers, OpenRouter, Albert,
+  Anthropic, any OpenAI- or Anthropic-compatible server or a local
+  command, are set in a YAML file, their keys read from the environment
+  (``neurolang/utils/llm/llm.example.yaml``).  The queries are shown on
+  their lines, highlighted.  It needs the ``llm`` extra and is described
+  in :doc:`query_assistant`.  The benchmark that measures it is in
+  `neurolang-text2query-bench
+  <https://github.com/NeuroLang/neurolang-text2query-bench>`_.
+  
+* ``neurolang-query --save PATH`` writes the result as CSV or TSV, or as
+  a NIfTI image on the grid of the engine, and ``--view`` shows its image
+  in the viewer of the REPL, as ``.save`` and ``.view`` do (they need
+  the ``tui`` extra).
 
 * The interactive query REPL runs in the browser, with nothing to
   install: https://neurolang.github.io/_static/repl/index.html runs
@@ -52,6 +77,7 @@ Unreleased
   ``extends`` and from ``abstract`` base entries, so settings common to
   several engines are declared once.  ``neurosynth`` now extends a shared
   ``coordinate_meta_analysis`` base.  See :doc:`engine_configuration`.
+  
 * A new ``neurostore`` engine, built on the same base, loads the NeuroStore
   database (as fetched by NiMARE) with the predicates of ``neurosynth``,
   TF-IDF computed from the abstracts (words and sequences of up to three
@@ -212,6 +238,20 @@ Unreleased
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
 **Bug fixes:**
+
+* A probabilistic query with a variable occurring only in deterministic
+  relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the
+  probabilities over the values of ``y`` rather than their probability,
+  e.g. 1.0 rather than 0.5 for an ``x`` of two rows of ``r``: those rows
+  are the same event.  The lifted plan of the deterministic subquery
+  ``∃y r(x, y)`` keeps its tuples with a probability of 1, and the small
+  dichotomy theorem solver leaves such a query to the lifted solver.
+* A probabilistic query no longer fails with ``AttributeError: type object
+  'Unknown' has no attribute '__origin__'`` when the program has a
+  query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
+  m) :- ...``, that the query does not use, or whose rule's body is empty:
+  the choice is then over no tuple, as a query-based probabilistic fact
+  over no tuple already was.
 
 * The REPL skips the ``%`` comment lines between statements, e.g. before
   a dot-command of a pasted block or in a piped batch, which it submitted

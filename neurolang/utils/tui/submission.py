@@ -17,7 +17,7 @@ from neurolang.frontend.datalog.squall_syntax_lark import (
     parser as squall_parser,
 )
 
-from .catalog import is_user_symbol
+from neurolang.utils.predicate_catalog import is_user_symbol
 
 
 def _plural(count: int, noun: str) -> str:

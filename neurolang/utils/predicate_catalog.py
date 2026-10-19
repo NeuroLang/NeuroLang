@@ -18,7 +18,7 @@ from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.probabilistic.expressions import ProbabilisticQuery
 from neurolang.utils.cli import _is_generated_column
 
-from . import squall_sorts
+from neurolang.utils import squall_sorts
 
 
 class PredicateInfo(NamedTuple):

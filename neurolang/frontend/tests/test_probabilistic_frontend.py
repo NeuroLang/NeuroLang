@@ -18,10 +18,14 @@ from ...exceptions import (
 from ...expressions import Symbol
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
-from ...probabilistic import dalvi_suciu_lift
+from ...probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver
+)
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    RepeatedTuplesInProbabilisticRelationError
+    RepeatedTuplesInProbabilisticRelationError,
+    UnsupportedSolverError
 )
 from ...regions import SphericalVolume
 from ...utils.relational_algebra_set import (
@@ -265,6 +269,26 @@ def test_show_rewritten_query_on_rule_with_constant(flags, capsys):
     out = capsys.readouterr().out
     assert "── rewritten program ──" in out
     assert "magic_talks" in out
+
+
+def test_dry_run_prints_magic_rules_of_a_bound_query(capsys):
+    """
+    A dry run of a query binding a rule's argument prints its magic rules.
+
+    They used to be missing from the program when the rewritten program
+    was printed, which made the dry run fail with a KeyError.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="study")
+    nl.add_tuple_set([(1, "pain", 0.5), (2, "fear", 0.5)], name="tfidf")
+    nl.execute_datalog_program("mentions(s, t) :- tfidf(s, t, v), (v > 0.03)")
+    with nl.scope:
+        nl.execute_squall_program(
+            "obtain every Study that mentions 'pain'.", dry_run=True
+        )
+    out = capsys.readouterr().out
+    assert "magic_mentions" in out
+    assert "tfidf(s, t, v)" in out
 
 
 SIMILARITIES = {
@@ -1761,6 +1785,33 @@ def test_qbased_pchoice_equiprobable():
     assert_almost_equal(sol, expected)
 
 
+def test_qbased_pchoice_unused_by_the_query():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="P")
+    nl.add_tuple_set([(1,), (3,)], name="R")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,)], name="Selected"
+    )
+    with nl.environment as e:
+        e.S[e.count(e.x)] = e.P(e.x)
+        (e.Q ^ (1. / e.p))[e.x] = e.P(e.x) & e.S(e.p)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x) & e.Selected(e.x)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {(1, 0.5)}
+    assert_almost_equal(sol, expected)
+
+
+def test_qbased_pchoice_empty():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.8, "b")], name="P")
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+    with nl.environment as e:
+        (e.Q ^ e.p)[e.x] = e.P(e.p, e.x) & (e.p > 0.8)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Q(e.y)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    assert_almost_equal(sol, RelationalAlgebraFrozenSet([]))
+
+
 def test_noisy_or_probabilistic_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
@@ -2182,3 +2233,56 @@ def test_conjunctive_query_on_probabilistic_queries(query, expected):
     ):
         assert x == x_expected
         assert p == pytest.approx(p_expected)
+
+
+def _engine_with_two_witnesses(selected, solvers=None):
+    """`R` has two rows for x = 1, so ∃y R(1, y) has two witnesses."""
+    if solvers is None:
+        nl = NeurolangPDL()
+    else:
+        nl = NeurolangPDL(
+            probabilistic_solvers=(solvers.solve_succ_query,),
+            probabilistic_marg_solvers=(solvers.solve_marg_query,),
+        )
+    nl.add_tuple_set([(1, "a"), (1, "c"), (2, "b")], name="R")
+    if selected == "facts":
+        nl.add_probabilistic_facts_from_tuples(
+            [(0.5, 1), (0.5, 2)], name="Selected"
+        )
+    else:
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(1,), (2,)], name="Selected"
+        )
+    return nl
+
+
+def _query_with_deterministic_existential(nl):
+    with nl.environment as e:
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Selected(e.x)
+        return nl.query((e.x, e.p), e.Query(e.x, e.p))
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+@pytest.mark.parametrize(
+    "solvers", [None, dalvi_suciu_lift], ids=["default", "lift"]
+)
+def test_existential_variable_of_deterministic_relation_only(
+    selected, solvers
+):
+    """P(∃y R(1, y) ∧ Selected(1)) is P(Selected(1)) however many rows
+    of the deterministic `R` witness ∃y: they are the same event."""
+    nl = _engine_with_two_witnesses(selected, solvers)
+    sol = _query_with_deterministic_existential(nl)
+    assert len(sol) == 2
+    assert_almost_equal(sol, {(1, 0.5), (2, 0.5)})
+
+
+@pytest.mark.parametrize("selected", ["facts", "choice"])
+def test_small_dichotomy_declines_existential_of_deterministic_relation(
+    selected
+):
+    nl = _engine_with_two_witnesses(
+        selected, small_dichotomy_theorem_based_solver
+    )
+    with pytest.raises(UnsupportedSolverError):
+        _query_with_deterministic_existential(nl)

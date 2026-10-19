@@ -47,7 +47,7 @@ from neurolang.utils.cli import (
 )
 
 from .commands import _switch, command
-from .catalog import is_user_symbol, listed, predicate_catalog
+from neurolang.utils.predicate_catalog import is_user_symbol, listed, predicate_catalog
 from .submission import predicate_extent
 
 def open_session_scope(nl) -> None:
