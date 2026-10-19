@@ -22,7 +22,7 @@ CONFIG = {
         "second": {"base_url": "http://llm.test/v1", "model": "m2",
                    "api": "anthropic", "tool_calling": "native"},
     },
-    "assistant": {"strategy": "icl", "max_repairs": 1},
+    "assistant": {"strategy": "icl", "max_repairs": 1, "verify_rounds": 0},
 }
 PAIN = "obtain every Study that mentions 'pain'."
 
@@ -252,3 +252,17 @@ def test_query_text_styles_the_query():
     styles = {text.plain[span.start:span.end]: span.style
               for span in text.spans}
     assert styles[":-"] == "bold blue" and styles["study"] == "blue"
+
+
+def test_ask_shows_the_query_read_back(app):
+    app.assistant._config.assistant.verify_rounds = 1
+    script(
+        app, *REACT_PAIN, "Every study of the database.",
+        "VERDICT: no\nIt is not about pain.",
+        *REACT_PAIN[1:], "Every study again.", "VERDICT: no\nStill not.",
+    )
+    app._run_line(".llm Which studies mention pain?")
+    text = output(app)
+    assert "→ verify()" in text
+    assert "Reads back as: Every study again." in text
+    assert "may not answer the question: Still not." in text
