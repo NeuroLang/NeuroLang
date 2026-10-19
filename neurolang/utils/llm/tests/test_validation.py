@@ -217,7 +217,21 @@ def test_aggregation_well_used(nl):
     assert check_query(nl, query, "datalog").ok
 
 
-def test_previews_stop_slow_queries(nl, monkeypatch):
+@pytest.fixture
+def forking():
+    """Skip the test where the system refuses to fork (no memory left)."""
+    import os
+
+    try:
+        pid = os.fork()
+    except (AttributeError, OSError) as exc:
+        pytest.skip(f"cannot fork: {exc}")
+    if pid == 0:
+        os._exit(0)
+    os.waitpid(pid, 0)
+
+
+def test_previews_stop_slow_queries(forking, nl, monkeypatch):
     import time
 
     from .. import validation
@@ -245,7 +259,7 @@ def test_search_matches_iris_and_shows_varied_predicates(nl):
     assert found[-1] == "… and 3 more"
 
 
-def test_previews_in_a_child_process(nl):
+def test_previews_in_a_child_process(forking, nl):
     preview = run_preview(
         nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,
         memory_mb=4096,
@@ -256,7 +270,7 @@ def test_previews_in_a_child_process(nl):
     assert not failed.ok and "parse error" in failed.text
 
 
-def test_previews_stop_queries_using_too_much_memory(nl, monkeypatch):
+def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
     import time
 
     from .. import validation
@@ -271,3 +285,19 @@ def test_previews_stop_queries_using_too_much_memory(nl, monkeypatch):
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=200
     )
     assert not preview.ok and "too much memory" in preview.text
+
+
+def test_previews_without_fork_run_in_a_thread(nl, monkeypatch):
+    """A system refusing to fork (ENOMEM) must not fail the preview."""
+    import errno
+    import os
+
+    def no_memory():
+        raise OSError(errno.ENOMEM, "Cannot allocate memory")
+
+    monkeypatch.setattr(os, "fork", no_memory)
+    preview = run_preview(
+        nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,
+        memory_mb=4096,
+    )
+    assert preview.ok and preview.rows == 4
