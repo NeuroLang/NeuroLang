@@ -1209,7 +1209,7 @@ def symbol_or_deterministic_plan(rule, symbol_table):
         result = TranslateToNamedRA().walk(rule)
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         has_safe_plan = True
-        res = rap.Projection(result, proj_cols)
+        res = rap.Support(rap.Projection(result, proj_cols))
     return has_safe_plan, res
 
 

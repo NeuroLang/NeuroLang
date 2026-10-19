@@ -212,6 +212,14 @@ Unreleased
   ``ratios`` over the brain, it failed on its second definition of
   ``selected_voxel`` and added its rules to those of the others.
   
+* A probabilistic query with a variable occurring only in deterministic
+  relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the
+  probabilities over the values of ``y`` rather than their probability,
+  e.g. 1.0 rather than 0.5 for an ``x`` of two rows of ``r``: those rows
+  are the same event.  The lifted plan of the deterministic subquery
+  ``∃y r(x, y)`` keeps its tuples with a probability of 1, and the small
+  dichotomy theorem solver leaves such a query to the lifted solver.
+  
 * A probabilistic query no longer fails with ``AttributeError: type object
   'Unknown' has no attribute '__origin__'`` when the program has a
   query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
