@@ -4,8 +4,11 @@ The LLM query assistant in the REPL: ``.ask`` and ``.llm``.
 ``.ask <question>`` turns the question into a query of the session's
 language with an LLM (see :mod:`neurolang.utils.llm`), printing the
 steps of the agent as they run. The query is not run: it is put in the
-next prompt, to be read, edited and run with Enter. ``.llm`` shows and
-changes the provider and the strategy of the assistant.
+next prompt, to be read, edited and run with Enter. ``.llm <question>``
+does the same with the ReAct agent writing Datalog, whatever the mode
+and the configured strategy. ``.llm`` alone, ``.llm provider NAME``,
+``.llm strategy icl|react`` and ``.llm reload`` show and change the
+provider and the strategy of the assistant.
 
 The assistant needs the ``llm`` extra; the REPL works without it.
 """
@@ -26,6 +29,10 @@ LLM_DEPENDENCIES = ("httpx",)
 LANGUAGE_FLAGS = {"--squall": "squall", "--datalog": "datalog"}
 STRATEGY_FLAGS = {"--icl": "icl", "--react": "react"}
 ASK_USAGE = ".ask [--squall|--datalog] [--icl|--react] QUESTION"
+LLM_SETTINGS_USAGE = ".llm [provider NAME|strategy icl|react|reload]"
+LLM_USAGE = ".llm [QUESTION|provider NAME|strategy icl|react|reload]"
+# The first words of .llm that change the settings rather than ask.
+LLM_SETTINGS = ("provider", "strategy", "reload")
 
 
 @dataclass
@@ -221,6 +228,19 @@ def cmd_ask(app, arg: str) -> None:
         return
     if not _llm_available(app):
         return
+    _run_assistant(app, question, language, strategy)
+
+
+def _run_assistant(
+    app, question: str, language: Optional[str] = None,
+    strategy: Optional[str] = None,
+) -> None:
+    """
+    Write a query answering *question* and put it in the next prompt.
+
+    *language* and *strategy* override those of the session and of the
+    configuration when given.
+    """
     from neurolang.utils.llm import (
         LLMConfigError,
         LLMError,
@@ -274,15 +294,26 @@ def _llm_status(app) -> None:
 
 
 @command(
-    ".llm", "Show or change the LLM provider and strategy of .ask",
-    ".llm [provider NAME|strategy icl|react|reload]",
+    ".llm",
+    "Write a Datalog query with the ReAct agent (whatever the mode and "
+    "strategy), or show or change the LLM settings",
+    LLM_USAGE,
 )
 def cmd_llm(app, arg: str) -> None:
-    """Show the assistant's configuration, or change it."""
+    """
+    Ask the ReAct agent for a Datalog query answering the question *arg*,
+    or show the assistant's configuration, or change it.
+
+    *arg* changes the settings when its first word is one of
+    :data:`LLM_SETTINGS`; any other text is a question.
+    """
     if not _llm_available(app):
         return
-    from neurolang.utils.llm import LLMConfigError
     action, _, value = arg.strip().partition(" ")
+    if action and action not in LLM_SETTINGS:
+        _run_assistant(app, arg.strip(), "datalog", "react")
+        return
+    from neurolang.utils.llm import LLMConfigError
     value = value.strip()
     state = app.assistant
     try:
@@ -296,8 +327,8 @@ def cmd_llm(app, arg: str) -> None:
         elif action:
             app.failed = True
             app.console.print(
-                "[yellow]Usage: .llm [provider NAME|strategy icl|react|"
-                "reload][/yellow]"
+                f"[yellow]Usage: {escape(LLM_SETTINGS_USAGE)}, or "
+                ".llm QUESTION[/yellow]"
             )
             return
         _llm_status(app)

@@ -176,6 +176,17 @@ In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME`` and
 ``--icl`` and ``--react`` choose the language and the strategy for one
 question.
 
+``.llm QUESTION`` is the shortcut for ``.ask --react --datalog QUESTION``:
+it always writes Datalog with the ReAct agent, whatever ``.mode``, ``.llm
+strategy`` and the ``strategy`` and ``language`` of the configuration, and
+puts the query in the next prompt, switching the session to Datalog. A
+question cannot start with ``provider``, ``strategy`` or ``reload``, which
+change the settings:
+
+.. code-block:: text
+
+    nl(neurosynth:DL)> .llm Which studies report an activation within 6 mm of the left amygdala?
+
 .. note::
 
    The question, the description of the engine's predicates, some of
