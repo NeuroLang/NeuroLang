@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* The REPL in the browser shows a result as a table to sort by clicking
+  a column, to filter (``stroop`` keeps the rows with the word,
+  ``name:stroop`` those whose column ``name`` has it), to page through, to
+  copy and to download as CSV, instead of the text table of the terminal;
+  ``Ctrl+R`` searches the history of the inputs, which lasts between
+  visits, as in a shell (``Ctrl+R`` again for an older match, ``Ctrl+S``
+  for a newer one, ``Enter`` to take it, ``Esc`` to cancel), and Up and
+  Down browse it.  :class:`neurolang.utils.tui.web.WebRepl` returns a
+  result's rows as data (``Reply.tables``).
+
 * The interactive query REPL runs in the browser, with nothing to
   install: https://neurolang.github.io/_static/repl/index.html runs
   ``neurolang-query -i --engine neurosynth --resolution 2`` on Pyodide,
