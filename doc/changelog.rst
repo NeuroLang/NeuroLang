@@ -198,6 +198,14 @@ Unreleased
 
 **Bug fixes:**
 
+* A probabilistic query with a variable occurring only in deterministic
+  relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the
+  probabilities over the values of ``y`` rather than their probability,
+  e.g. 1.0 rather than 0.5 for an ``x`` of two rows of ``r``: those rows
+  are the same event.  The lifted plan of the deterministic subquery
+  ``∃y r(x, y)`` keeps its tuples with a probability of 1, and the small
+  dichotomy theorem solver leaves such a query to the lifted solver.
+
 * The REPL skips the ``%`` comment lines between statements, e.g. before
   a dot-command of a pasted block or in a piped batch, which it submitted
   as programs that failed to parse; a comment line within a statement of
