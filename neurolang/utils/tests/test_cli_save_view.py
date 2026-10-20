@@ -98,7 +98,7 @@ def test_save_and_view_with_ask(engine, viewer, tmp_path, monkeypatch):
     config.write_text(
         "default_provider: fake\nproviders:\n  fake: {api: openai, "
         "base_url: 'http://llm.test/v1', model: m, tool_calling: text}\n"
-        "assistant: {strategy: react, few_shot_k: 0}\n"
+        "assistant: {strategy: react, few_shot_k: 0, verify_rounds: 0}\n"
     )
     answer = (
         'Action: final_answer\nAction Input: {"query": '

@@ -91,7 +91,11 @@ class AssistantConfig:
     keep the one most of them agree on (self-consistency).
     *query_timeout* and *query_memory_mb* stop a query the agent runs
     after that many seconds, or when it uses that much memory: it runs in
-    a child process.
+    a child process. *verify_rounds* is the number of final answers of
+    the ReAct agent that its verification may reject: each final answer
+    is translated back into English, without the question, and the
+    model judges whether that answers the question; 0 turns the
+    verification off.
     """
 
     strategy: str = "react"
@@ -105,6 +109,7 @@ class AssistantConfig:
     preview_rows: int = 10
     query_timeout: float = 30.0
     query_memory_mb: float = 4096.0
+    verify_rounds: int = 1
 
 
 @dataclass

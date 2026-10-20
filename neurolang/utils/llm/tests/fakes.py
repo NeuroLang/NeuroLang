@@ -42,7 +42,11 @@ def provider(tool_calling="text", api="openai"):
 
 
 def assistant_config(**options):
-    """Return assistant settings for the tests."""
-    return AssistantConfig(
-        **{"max_steps": 4, "max_repairs": 2, "few_shot_k": 2, **options}
-    )
+    """
+    Return assistant settings for the tests: the ReAct answers are not
+    verified unless *verify_rounds* is given.
+    """
+    return AssistantConfig(**{
+        "max_steps": 4, "max_repairs": 2, "few_shot_k": 2,
+        "verify_rounds": 0, **options,
+    })
