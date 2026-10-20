@@ -2,11 +2,14 @@
 
 from ....datalog import Conjunction
 from ....expression_walker import ExpressionWalker
-from ....expressions import Constant, FunctionApplication, Symbol
+from ....expressions import Constant, FunctionApplication, Query, Symbol
+from ....logic import Implication, Negation
 from ..squall import (
+    ResolvePredicateLemmas,
     StripDimensionTypePredicatesMixin,
     _DIMENSION_TYPE_PREDICATE_NAMES,
     make_dimension_type_stripper,
+    predicate_lemma,
 )
 
 
@@ -99,6 +102,93 @@ class TestStripDimensionTypePredicatesMixin:
             f"probability should have been replaced; got {functors}"
         )
         assert "voxel" in functors
+
+
+class TestPredicateLemmas:
+    """Verb and noun forms are matched to defined predicates by lemma."""
+
+    def test_predicate_lemma_folds_verb_and_noun_forms(self):
+        """Inflected forms share the lemma of their base form."""
+        for word in ("mentions", "mention", "mentioned", "mentioning"):
+            assert predicate_lemma(word) == "mention"
+        assert predicate_lemma("studies") == predicate_lemma("study")
+        assert predicate_lemma("has") == predicate_lemma("have")
+
+    def test_predicate_lemma_uses_last_underscore_part(self):
+        """Only the last underscore-separated word is lemmatised."""
+        assert predicate_lemma("peak_reports") == "peak_report"
+        assert predicate_lemma("peak_reported") == "peak_report"
+        assert predicate_lemma("term_in_study_tfidf") == "term_in_study_tfidf"
+
+    def test_undefined_verb_resolves_to_unique_lemma_match(self):
+        """`mention` becomes the only defined predicate with its lemma."""
+        x = Symbol("x")
+        query = Query(x, Negation(Symbol("mention")(x, Constant("fear"))))
+        resolver = ResolvePredicateLemmas({"mentions", "study"})
+        result = resolver.walk(query)
+        assert result == Query(
+            x, Negation(Symbol("mentions")(x, Constant("fear")))
+        )
+
+    def test_undefined_noun_resolves_to_unique_lemma_match(self):
+        """A plural noun refers to the singular predicate."""
+        x = Symbol("x")
+        resolver = ResolvePredicateLemmas({"study"})
+        assert resolver.walk(Symbol("studies")(x)) == Symbol("study")(x)
+
+    def test_exact_match_wins(self):
+        """A defined name is never replaced by a lemma match."""
+        x = Symbol("x")
+        atom = Symbol("mention")(x, Constant("fear"))
+        resolver = ResolvePredicateLemmas({"mention", "mentions"})
+        assert resolver.walk(atom) is atom
+        assert resolver.ambiguous == {}
+
+    def test_ambiguous_lemma_left_unchanged(self):
+        """Several candidates: the word is kept and candidates recorded."""
+        x, y = Symbol("x"), Symbol("y")
+        atom = Symbol("report")(x, y)
+        resolver = ResolvePredicateLemmas({"reports", "reported"})
+        assert resolver.walk(atom) is atom
+        assert resolver.ambiguous == {"report": ("reported", "reports")}
+
+    def test_rule_heads_variables_and_constants_kept(self):
+        """Only body predicates are renamed, never heads or terms."""
+        mentioned = Symbol("mentioned")
+        rule = Implication(
+            Symbol("mentioning")(mentioned),
+            mentioned(mentioned, Constant("mention")),
+        )
+        resolver = ResolvePredicateLemmas({"mentions"})
+        assert resolver.walk(rule) == Implication(
+            Symbol("mentioning")(mentioned),
+            Symbol("mentions")(mentioned, Constant("mention")),
+        )
+
+
+    def test_lemma_candidate_with_other_arity_not_used(self):
+        """A unary `mentioning` atom never becomes the binary `mentions`."""
+        atom = Symbol("mentioning")(Symbol("x"))
+        resolver = ResolvePredicateLemmas({"mentions"}, {"mentions": 2}.get)
+        assert resolver.walk(atom) is atom
+        assert resolver.ambiguous == {}
+
+    def test_arity_filter_applies_before_ambiguity(self):
+        """Only candidates of the atom's arity compete."""
+        x, y = Symbol("x"), Symbol("y")
+        arities = {"reports": 2, "reported": 1}
+        resolver = ResolvePredicateLemmas(set(arities), arities.get)
+        assert resolver.walk(Symbol("report")(x, y)) == Symbol("reports")(x, y)
+        assert resolver.ambiguous == {}
+
+    def test_tuple_argument_counts_its_columns(self):
+        """A `(?i; ?j; ?k)` tuple argument counts as three columns."""
+        voxel = (Symbol("i"), Symbol("j"), Symbol("k"))
+        resolver = ResolvePredicateLemmas({"reports"}, {"reports": 3}.get)
+        assert (
+            resolver.walk(Symbol("reported")(voxel))
+            == Symbol("reports")(voxel)
+        )
 
 
 class TestMakeDimensionTypeStripper:

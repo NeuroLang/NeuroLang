@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from neurolang.exceptions import ForbiddenDisjunctionError
+from neurolang.exceptions import ForbiddenDisjunctionError, SymbolNotFoundError
 from neurolang.expressions import Symbol as ir_Symbol
 
 from ..probabilistic_frontend import NeurolangPDL
@@ -951,6 +951,106 @@ def test_execute_squall_where_label_is_constant_absent_from_set_column():
         "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'zzz'."
     )
     assert len(missing) == 0
+
+
+# ---------------------------------------------------------------------------
+# Verb and noun forms are matched to predicates by lemma
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_studies():
+    """Fixture: studies with the terms they mention and the peaks they report."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    engine.add_tuple_set([("p1",), ("p2",), ("p3",)], name="peak")
+    engine.add_tuple_set(
+        [("s1", "fear"), ("s2", "pain"), ("s3", "fear")], name="mentions"
+    )
+    engine.add_tuple_set([("s1", "p1"), ("s2", "p2")], name="reports")
+    return engine
+
+
+def _first_column(result):
+    return sorted(result.as_pandas_dataframe().iloc[:, 0])
+
+
+def test_execute_squall_negated_verb_lemma(nl_studies):
+    """`does not mention` refers to the `mentions` predicate."""
+    result = nl_studies.execute_squall_program(
+        "obtain every Study that does not mention 'fear'."
+    )
+    assert _first_column(result) == ["s2"]
+
+
+def test_execute_squall_past_tense_verb_lemma(nl_studies):
+    """`mentioned` refers to the `mentions` predicate."""
+    result = nl_studies.execute_squall_program(
+        "obtain every Study that mentioned 'pain'."
+    )
+    assert _first_column(result) == ["s2"]
+
+
+def test_execute_squall_object_relative_verb_lemma(nl_studies):
+    """`that a Study reported` refers to the `reports` predicate."""
+    result = nl_studies.execute_squall_program(
+        "obtain every Peak that a Study reported."
+    )
+    assert _first_column(result) == ["p1", "p2"]
+
+
+def test_execute_squall_verb_lemma_in_rule_body(nl_studies):
+    """Rule bodies are resolved too; the rule head keeps its name."""
+    result = nl_studies.execute_squall_program(
+        "define as Fearful every Study that mentioned 'fear'. "
+        "obtain every Study that is fearful."
+    )
+    assert _first_column(result) == ["s1", "s3"]
+    assert ir_Symbol("fearful") in nl_studies.program_ir.symbol_table
+
+
+def test_execute_squall_exact_predicate_name_wins(nl_studies):
+    """A predicate named exactly like the word is used, not a lemma match."""
+    nl_studies.add_tuple_set([("s2", "fear")], name="mention")
+    result = nl_studies.execute_squall_program(
+        "obtain every Study that does not mention 'fear'."
+    )
+    assert _first_column(result) == ["s1", "s3"]
+
+
+def test_execute_squall_ambiguous_verb_lemma_not_resolved(nl_studies):
+    """Several predicates with the same lemma: the error names them."""
+    nl_studies.add_tuple_set([("s3", "p3")], name="reported")
+    with pytest.raises(SymbolNotFoundError, match="reported.*reports"):
+        nl_studies.execute_squall_program(
+            "obtain every Study that does not report a Peak."
+        )
+
+
+def test_execute_squall_lemma_candidate_needs_same_arity(nl_studies):
+    """A unary `mentioning` is not silently resolved to binary `mentions`."""
+    with pytest.raises(SymbolNotFoundError, match="mentioning"):
+        nl_studies.execute_squall_program(
+            "obtain every Study that is mentioning."
+        )
+
+
+def test_execute_squall_lemma_arity_of_probabilistic_predicates(nl_studies):
+    """The probability column does not count in a predicate's arity."""
+    nl_studies.add_probabilistic_choice_from_tuples(
+        [(0.5, "s1"), (0.5, "s2")], name="choose"
+    )
+    nl_studies.execute_squall_program(
+        "define as probably Picks every Study. "
+        "define as Lucky every Study that is chosen. "
+        "define as Kept every Study that is picked."
+    )
+    symbol_table = nl_studies.program_ir.symbol_table
+    for head, body_predicate in (("lucky", "choose"), ("kept", "picks")):
+        rule = symbol_table[ir_Symbol(head)].formulas[0]
+        functors = {
+            atom.functor.name for atom in rule.antecedent.formulas
+        }
+        assert body_predicate in functors
 
 
 # ---------------------------------------------------------------------------

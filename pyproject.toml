@@ -36,6 +36,7 @@ dependencies = [
     "pandas>=1.5",
     "pysdd",
     "lark>=1.1.2",
+    "lemminflect>=0.2.3",
     "scikit-learn",
     "matplotlib",
     "seaborn",

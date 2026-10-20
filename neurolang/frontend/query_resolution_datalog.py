@@ -8,7 +8,8 @@ from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.range_restriction import check_range_restriction
 from ..exceptions import (
-    ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
+    ForbiddenDisjunctionError, NeuroLangException, SymbolNotFoundError,
+    UnsupportedProgramError,
 )
 from ..exceptions import UnboundVariablesError
 from typing import (
@@ -45,9 +46,11 @@ from ..datalog.expressions import (
     predicate_identity,
 )
 from ..logic.transformations import RemoveTrivialOperations
+from ..probabilistic.expressions import ProbabilisticPredicate
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.pretty_printer import DatalogPrettyPrinter
+from .datalog.squall import ResolvePredicateLemmas, atom_arity
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -68,6 +71,44 @@ from .show_ra import (
 )
 
 __all__ = ["QueryBuilderDatalog"]
+
+
+def _squall_rules(parsed):
+    """Return the rules and choice definitions of a parsed SQUALL program."""
+    if isinstance(parsed, SquallProgram):
+        return parsed.rules_and_choice_defs
+    if isinstance(parsed, logic.Union):
+        return parsed.formulas
+    return [parsed]
+
+
+def _squall_rule_signature(rule):
+    """
+    Return the predicate a SQUALL rule or choice defines and its arity.
+
+    The arity counts the arguments of the head as written: the PROB term
+    of a ``with probability`` head counts, the probability of a
+    ``probably`` fact or of a choice does not.
+    """
+    if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+        return rule.head_symbol, atom_arity(rule.head_vars)
+    head = getattr(rule, "consequent", None)
+    if isinstance(head, ProbabilisticPredicate):
+        head = head.body
+    if not isinstance(head, ir.FunctionApplication):
+        return None, None
+    return head.functor, atom_arity(head.args)
+
+
+def _name_lemma_candidates(exc, ambiguous):
+    """Add the predicates an ambiguous verb form could refer to."""
+    for name, candidates in ambiguous.items():
+        if str(exc).endswith(f" {name}"):
+            return SymbolNotFoundError(
+                f"{exc}; it matches several predicates by lemma: "
+                + ", ".join(candidates)
+            )
+    return exc
 
 
 def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
@@ -480,8 +521,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                         "e.g. #set_backend('pandas')."
                     )
 
-    def _walk_squall_rule(self, rule):
+    def _walk_squall_rule(self, rule, lemmas):
         """Walk a single SQUALL rule or choice definition into the engine."""
+        if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+            rule.body_formula = lemmas.walk(rule.body_formula)
+        else:
+            rule = lemmas.walk(rule)
         self._check_squall_rule_body(rule)
         if isinstance(rule, EquiprobableChoiceDef):
             self._handle_equiprobable_choice(rule)
@@ -495,20 +540,56 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             except Fol2DatalogTranslationException as e:
                 raise _wrap_fol_error_for_squall(e) from e
 
-    def _walk_squall_rules(self, parsed):
+    def _walk_squall_rules(self, parsed, lemmas):
         """Walk all rule definitions from a parsed SQUALL program into the engine."""
-        if not isinstance(parsed, SquallProgram):
-            # Legacy non-SquallProgram parse tree
-            if isinstance(parsed, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                self._walk_squall_rule(parsed)
-            elif isinstance(parsed, logic.Union):
-                for r in parsed.formulas:
-                    self._walk_squall_rule(r)
-            else:
-                self._walk_squall_rule(parsed)
-            return
-        for rule in parsed.rules_and_choice_defs:
-            self._walk_squall_rule(rule)
+        for rule in _squall_rules(parsed):
+            self._walk_squall_rule(rule, lemmas)
+
+    def _squall_lemma_resolver(self, parsed):
+        """
+        Build the walker matching SQUALL verb forms to defined predicates.
+
+        Predicates are defined by the engine's symbol table or by the
+        program's own rules and choice definitions, whose head arity
+        takes precedence.
+        """
+        defined = {
+            symbol.name for symbol in self.program_ir.symbol_table
+            if isinstance(symbol, ir.Symbol) and not symbol.is_fresh
+        }
+        head_arities = {}
+        for rule in _squall_rules(parsed):
+            head, arity = _squall_rule_signature(rule)
+            if isinstance(head, ir.Symbol):
+                head_arities[head.name] = arity or None
+
+        def arity(name):
+            if name in head_arities:
+                return head_arities[name]
+            return self._predicate_arity(ir.Symbol(name))
+
+        return ResolvePredicateLemmas(defined | head_arities.keys(), arity)
+
+    def _predicate_arity(self, symbol):
+        """
+        Return the arity of an engine predicate, or None when unknown.
+
+        The probability column of stored probabilistic facts and choices
+        is not an argument of their atoms, so it is not counted.
+        """
+        try:
+            arity = len(self.program_ir.predicate_terms(symbol))
+        except NeuroLangException:
+            return None
+        probabilistic = (
+            getattr(self.program_ir, "pfact_pred_symbs", set())
+            | getattr(self.program_ir, "pchoice_pred_symbs", set())
+        )
+        if symbol in probabilistic and isinstance(
+            self.program_ir.symbol_table[symbol], ir.Constant
+        ):
+            arity -= 1
+        return arity or None
 
     def _execute_single_squall_query(self, query, rules_and_choice_defs,
                                      show_rewritten=False, dry_run=False,
@@ -563,6 +644,22 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         finally:
             self.program_ir.pop_scope()
         return ra
+
+    def _execute_squall_query_by_lemma(
+        self, query, rules_and_choice_defs, lemmas, **options
+    ):
+        """
+        Execute an obtain clause after matching its verb forms by lemma.
+
+        A predicate left undefined because several predicates share its
+        lemma is reported with those candidates.
+        """
+        try:
+            return self._execute_single_squall_query(
+                lemmas.walk(query), rules_and_choice_defs, **options
+            )
+        except SymbolNotFoundError as e:
+            raise _name_lemma_candidates(e, lemmas.ambiguous) from e
 
     def execute_squall_program(
         self, code: str, show_rewritten: bool = False, dry_run: bool = False,
@@ -620,14 +717,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         parsed = squall_parser(code)
 
         self._process_squall_commands(parsed)
+        lemmas = self._squall_lemma_resolver(parsed)
 
         # Rules-only (no obtain) — backward-compat: returns Union/Implication
         if not isinstance(parsed, SquallProgram):
-            self._walk_squall_rules(parsed)
+            self._walk_squall_rules(parsed, lemmas)
             return None
 
         # Walk all rule definitions into the engine (global scope).
-        self._walk_squall_rules(parsed)
+        self._walk_squall_rules(parsed, lemmas)
 
         if not parsed.queries:
             return None
@@ -636,8 +734,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         results = {}
         for i, q in enumerate(parsed.queries):
             key = parsed.query_names.get(i, f"obtain_{i}")
-            ra = self._execute_single_squall_query(
-                q, parsed.rules_and_choice_defs,
+            ra = self._execute_squall_query_by_lemma(
+                q, parsed.rules_and_choice_defs, lemmas,
                 show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
             )
