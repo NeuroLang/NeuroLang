@@ -23,8 +23,7 @@ from ..expressions import (
     Symbol,
     sure_is_not_pattern
 )
-from ..logic import FALSE, Conjunction, Disjunction, Implication
-from ..logic.expression_processing import extract_logic_free_variables
+from ..logic import FALSE, Implication
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -50,7 +49,6 @@ from ..relational_algebra_provenance import (
 from ..utils import log_performance
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .expression_processing import lift_optimization_for_choice_predicates
-from .transforms import add_existentials_except
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
@@ -766,7 +764,6 @@ def _prepare_and_translate_query(query_predicate, cpl_program):
         if flat_query == FALSE:
             ra_query = _build_empty_result_set(variables_to_project)
         else:
-            flat_query = _project_disjuncts(flat_query, variables_to_project)
             with log_performance(LOG, "Translation and lifted optimisation"):
                 ra_query = TranslateToNamedRA().walk(flat_query)
                 ra_query = Projection(ra_query, variables_to_project)
@@ -779,42 +776,6 @@ def _prepare_and_translate_query(query_predicate, cpl_program):
                 ra_query = WMCOptimiser().walk(ra_query)
                 ra_query = RAQueryOptimiser().walk(ra_query)
     return flat_query, ra_query
-
-
-def _project_disjuncts(flat_query, variables_to_project):
-    """
-    Quantify existentially, in each disjunct of a disjunction of
-    *flat_query*, the variables it alone has, so that the relations of
-    the union of the disjuncts have the same columns: a rule of the query
-    may have a variable that its head does not have, such as ``s2`` in
-    ``a(t, s) :- m(s, 'x'), m(s2, t), c(s)``. The disjunction is
-    *flat_query* or one of its conjuncts; the variables projected by the
-    query, and those of the other conjuncts, are kept. The projection of
-    a variable is the disjunction over its values, as the final
-    projection of the query computes.
-    """
-    kept = {Symbol(column.value) for column in variables_to_project}
-    if not isinstance(flat_query, Conjunction):
-        return _project_disjunction(flat_query, kept)
-    formulas = flat_query.formulas
-    return Conjunction(tuple(
-        _project_disjunction(formula, kept.union(*(
-            extract_logic_free_variables(other)
-            for other in formulas[:i] + formulas[i + 1:]
-        )))
-        for i, formula in enumerate(formulas)
-    ))
-
-
-def _project_disjunction(formula, kept):
-    """*formula*, if a disjunction with each disjunct quantified on its
-    free variables but those *kept*."""
-    if not isinstance(formula, Disjunction):
-        return formula
-    return Disjunction(tuple(
-        add_existentials_except(disjunct, kept)
-        for disjunct in formula.formulas
-    ))
 
 
 def sdd_solver_global_model(solver, set_probabilities):

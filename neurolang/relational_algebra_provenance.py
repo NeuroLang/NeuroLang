@@ -19,7 +19,6 @@ from .relational_algebra import (
     ConcatenateConstantColumn,
     Difference,
     ExtendedProjection,
-    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -158,18 +157,6 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
         )
 
 
-class WeightedOuterNaturalJoin(WeightedNaturalJoin):
-    """
-    The weighted sum of the probabilities of *relations*, over the tuples
-    of any of them: a tuple missing from a relation has the probability 0
-    there, as a lifted plan leaves out the tuples of probability 0.
-
-    The sum of :math:`P[A \\lor B] = P[A] + P[B] - P[A \\land B]` needs
-    the tuples of :math:`A` or :math:`B` that are not those of
-    :math:`A \\land B`, which :class:`WeightedNaturalJoin` leaves out.
-    """
-
-
 class LiftedPlanProjection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
@@ -208,16 +195,6 @@ class DisjointProjection(LiftedPlanProjection):
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
     @add_match(
-        WeightedOuterNaturalJoin,
-        lambda join_op: all(
-            isinstance(relation, ProvenanceAlgebraSet)
-            for relation in join_op.relations
-        )
-    )
-    def prov_weighted_outer_join(self, join_op):
-        return self._weighted_join(join_op, outer=True)
-
-    @add_match(
         WeightedNaturalJoin,
         lambda join_op: all(
             isinstance(relation, ProvenanceAlgebraSet)
@@ -225,14 +202,6 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
         )
     )
     def prov_weighted_join(self, join_op):
-        return self._weighted_join(join_op)
-
-    def _weighted_join(self, join_op, outer=False):
-        """
-        Return the weighted sum of the probabilities of the relations of
-        *join_op*, on their natural join, or with *outer* on their full
-        outer join, a missing probability being 0.
-        """
         relations = join_op.relations
         weights = join_op.weights
 
@@ -265,13 +234,7 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
 
         relation = relations[0]
         for relation_ in relations[1:]:
-            if outer:
-                relation = FullOuterNaturalJoin(relation, relation_)
-            else:
-                relation = NaturalJoin(relation, relation_)
-        if outer:
-            for prov_column in prov_columns:
-                relation = ReplaceNull(relation, prov_column, Constant(0.))
+            relation = NaturalJoin(relation, relation_)
 
         prov_col = str2columnstr_constant(Symbol.fresh().name)
         dst_prov_expr = sum(prov_columns[1:], prov_columns[0])

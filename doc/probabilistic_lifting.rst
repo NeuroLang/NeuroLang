@@ -86,10 +86,6 @@ result from the probabilities of its inputs.
    * - ``WeightedNaturalJoin`` (Σ)
      - :math:`\sum_j w_j \, p_j`
      - inclusion–exclusion with Möbius weights
-   * - ``WeightedOuterNaturalJoin`` (Σ)
-     - :math:`\sum_j w_j \, p_j`, a missing :math:`p_j` being 0
-     - :math:`P[A] + P[B] - P[A \land B]` for a union with a disjoint
-       projection
    * - ``Support``
      - :math:`1`
      - the tuples of a plan, to give values to its variables
@@ -404,29 +400,8 @@ Disjoint projection
    with constants in all its positions, occurs in a conjunctive query, the
    values of the projected variables give mutually exclusive events whose
    probabilities add up [Suciu2011]_ (section 4.3.1). For a union of
-   conjunctive queries, a disjunct :math:`A` with such an atom is
-   separated from the disjunction :math:`B` of the other disjuncts with
-   :math:`P[A \lor B] = P[A] + P[B] - P[A \land B]`, :math:`A` and
-   :math:`B` each within its own existentials in :math:`A \land B`. The
-   sum is taken over the tuples of :math:`A` or :math:`B`, a tuple missing
-   from a plan having the probability 0 there
-   (``WeightedOuterNaturalJoin``): no tuple of :math:`A \land B` is a
-   tuple of :math:`A` alone, say, when no study is in both. The rule
-   applies only when :math:`A` and :math:`B` have all the free variables
-   of the union: a disjunct without one, e.g. once a deterministic
-   :math:`\exists s_2\, M(s_2, t)` common to all the disjuncts has been
-   factored out of them, is true for every value of it, which a plan
-   cannot give.
-
-   The variables projected become free in the conjunctive query lifted
-   below the projection. Two atoms of the same choice in it, such as
-   :math:`C(s) \land C(f)` in :math:`\exists s\, (A(s) \land C(s))
-   \land \exists f\, (B(f) \land C(f))`, are then the same tuple: their
-   variables are made equal
-   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.unify_choice_atoms`),
-   as the rewriting of the choices does before lifting (`Preparing the
-   query`_). The rule declines a
-   query it would lift again unchanged.
+   conjunctive queries, the disjuncts with such an atom are separated
+   with :math:`P[A \lor B] = P[A] + P[B] - P[A \land B]`.
 
 Inclusion–exclusion
    For a conjunction :math:`Q_1 \land \dots \land Q_n` in conjunctive normal
@@ -645,42 +620,6 @@ Polynomial time
    [Dalvi2012]_, do not call
    the rules of this section. The order being well founded, the
    construction terminates.
-
-Disjoint projection of a union
-   :math:`P[A \lor B] = P[A] + P[B] - P[A \land B]` holds for any events.
-   :math:`A` is a disjunct of the union and :math:`B` the disjunction of
-   the others, so :math:`A \lor B` is the union; each keeps its own
-   existentials in :math:`A \land B`, the quantified variables of the
-   disjuncts having been renamed apart, so the conjunction is the
-   intersection of the two events. A lifted plan computes
-   :math:`P[\varphi\theta]` for the :math:`\theta` of its support and
-   leaves out those of probability 0 (the probabilistic model above), so
-   the sum, for a :math:`\theta` of the support of :math:`A` or :math:`B`,
-   takes as 0 the probability of a plan that does not have it
-   (``WeightedOuterNaturalJoin``). This needs every plan to give values to
-   all the free variables of the union: the rule checks that :math:`A`
-   and :math:`B` have them all (``_apply_disjoint_project_ucq_rule``), so
-   that :math:`A \land B` has them too, and a :math:`\theta` missing from
-   a plan is one of probability 0 for it. The recursion lifts :math:`A`, with one
-   disjunct, :math:`B` and :math:`A \land B`, whose disjunctive normal
-   form :math:`\bigvee_i (A \land B_i)` has one disjunct less than the
-   union: the number of disjuncts decreases.
-
-Choice atoms in a disjoint projection
-   Below the disjoint projection on the variables :math:`\bar v` of the
-   atoms of a choice :math:`C`, the query is lifted for every value of
-   :math:`\bar v`, which are free in it. By Lemma 2, two atoms
-   :math:`C(\bar x)` and :math:`C(\bar y)` of it are true together only if
-   :math:`\bar x = \bar y`, so :math:`C(\bar x) \land C(\bar y) \equiv
-   C(\bar x) \land \bar x = \bar y`, and replacing a variable of
-   :math:`\bar y` by the corresponding term of :math:`\bar x` preserves
-   the event for the values where it holds and leaves it impossible
-   elsewhere. Only atoms whose arguments are all free are made equal, so
-   that no replaced variable is bound by a quantifier of the query, and
-   the free variables of the projected query, the columns of the plan, are
-   kept: one is never replaced, and two of them, or two constants, are
-   left as they are. The rule recurses only on a query it changed, with
-   fewer quantifiers or fewer variables, so its recursion terminates.
 
 Absorption in negations
    In every world, for every :math:`\theta`: if :math:`A\theta` holds,
