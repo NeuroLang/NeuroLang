@@ -1310,6 +1310,62 @@ def test_union_with_a_rule_local_variable_and_a_negation():
     )
 
 
+def test_clauses_are_range_restricted():
+    """
+    A clause that is a disjunction with a negated atom whose variable no
+    positive atom of the disjunct binds is not safe range; a negation
+    alone, a clause of a conjunction, is not a disjunction.
+    """
+    f, t = Symbol("f"), Symbol("t")
+    A, B = Symbol("A"), Symbol("B")
+    unsafe = Conjunction((
+        ExistentialPredicate(f, A(f, t)),
+        Disjunction((ExistentialPredicate(f, A(f, t)), Negation(B(t)))),
+    ))
+    safe = Conjunction((
+        ExistentialPredicate(f, A(f, t)),
+        Disjunction((
+            ExistentialPredicate(f, A(f, t)),
+            Conjunction((B(t), A(f, t))),
+        )),
+    ))
+    negation_alone = Conjunction((
+        ExistentialPredicate(f, A(f, t)), Negation(B(t))
+    ))
+    assert not dalvi_suciu_lift._clauses_are_range_restricted(unsafe)
+    assert dalvi_suciu_lift._clauses_are_range_restricted(safe)
+    assert dalvi_suciu_lift._clauses_are_range_restricted(negation_alone)
+
+
+def test_union_whose_normal_form_has_an_unsafe_clause():
+    """
+    The union of a rule with a negation and a rule with a choice unrelated
+    to its head: factoring out the atom they share gives the clause
+    ``exists s M(s, t) or not L(t)``, which is not safe range and was lifted
+    apart (``ValueError``). The conjunctive normal form is not used then.
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = {0: "ab", 1: "bc", 2: "cd"}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(s, t) for s, terms in mentions.items() for t in terms],
+        name="mentions",
+    )
+    nl.add_tuple_set([("a",)], name="lang")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in mentions], name="selected_study"
+    )
+    result = nl.execute_datalog_program(
+        "a(t) :- mentions(s, t), selected_study(s), ~lang(t).\n"
+        "a(t) :- mentions(s, t), selected_study(f), mentions(f, 'c').\n"
+        "ans(t, p) :- PROB[a(t)] = p."
+    )
+    assert dict(result) == pytest.approx(
+        {"a": 2 / 3, "b": 1.0, "c": 2 / 3, "d": 2 / 3}
+    )
+
+
 def test_union_with_a_self_join_of_the_choice_in_a_rule():
     """
     A rule of a union joins the choice twice: the equality that makes the

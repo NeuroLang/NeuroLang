@@ -453,6 +453,24 @@ Inclusion–exclusion
    is applied only when all the conjuncts have the same free variables,
    for which the containment test is sound.
 
+Clauses of the conjunctive normal form
+   The conjunctive normal form :math:`K_1 \land \dots \land K_n` of a
+   union is used to remove redundant atoms, to split it into independent
+   components, and for inclusion–exclusion. The clauses are lifted apart,
+   each into a relation of its free variables, and then joined. A clause
+   that is a disjunction with a negated atom none of whose variables a
+   positive atom of the same disjunct binds, such as :math:`\exists s\,
+   M(s, t) \lor \lnot L(t)`, is not safe range: its answers are not a
+   finite set of values of :math:`t`, though the conjunction it comes from
+   is (another clause binds :math:`t`). The conversion makes such clauses
+   from safe rules when it factors out an atom they share, as in
+   :math:`(M(s, t) \land C(s) \land \lnot L(t)) \lor (M(s', t) \land
+   C(f) \land M(f, c))`. The normal form is then not used
+   (``_clauses_are_range_restricted``): the rules that follow, the
+   disjoint separator among them, apply to the union as it is, and a union
+   none of them lifts is declined, which is sound. A negation alone as a
+   clause is not a disjunction, and is the difference of a conjunction.
+
 Negations and comparisons sharing relations
 --------------------------------------------
 

@@ -1166,14 +1166,18 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     deterministic_symbols = _deterministic_symbols(rule, symbol_table)
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
-    if len(extract_logic_atoms(rule_cnf)) < len(extract_logic_atoms(rule)):
+    # The clauses of the conjunctive normal form are lifted apart.
+    cnf_is_usable = _clauses_are_range_restricted(rule_cnf)
+    if cnf_is_usable and (
+        len(extract_logic_atoms(rule_cnf)) < len(extract_logic_atoms(rule))
+    ):
         # Minimisation removed redundant atoms: the base cases
         # might apply to the minimised rule.
         return dalvi_suciu_lift(RTO.walk(rule_cnf), symbol_table)
     connected_components = symbol_connected_components(
         rule_cnf, ignore_symbols=deterministic_symbols
     )
-    if len(connected_components) > 1:
+    if cnf_is_usable and len(connected_components) > 1:
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
@@ -1198,12 +1202,50 @@ def dalvi_suciu_lift(rule, symbol_table):
         return plan
 
     if (
+        cnf_is_usable and
         len(rule_cnf.formulas) > 1 and
         _have_the_same_free_variables(rule_cnf.formulas)
     ):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
+
+
+def _clauses_are_range_restricted(cnf):
+    """
+    Whether no clause of the conjunction *cnf* is a disjunction with a
+    disjunct that does not bind a free variable of the clause by a
+    positive atom.
+
+    The clauses are lifted apart, each into a relation of its free
+    variables. A clause such as :math:`\\exists s\\, M(s, t) \\lor \\lnot
+    L(t)` is not safe range, although the conjunction it comes from is: the
+    negated atom is only restricted by the other conjuncts. The conversion
+    to conjunctive normal form of a union of safe rules, with a negation in
+    one, makes such clauses when it factors out a shared atom. A clause
+    that is a negation alone is one of a conjunction, whose negative
+    components are differences, and is not a disjunction.
+    """
+    clauses = cnf.formulas if isinstance(cnf, Conjunction) else (cnf,)
+    for clause in clauses:
+        free = extract_logic_free_variables(clause)
+        matrix = clause
+        while isinstance(matrix, Quantifier):
+            matrix = matrix.body
+        if not isinstance(matrix, Disjunction):
+            continue
+        for disjunct in matrix.formulas:
+            restricted = set()
+            for formula in extract_logic_predicates(disjunct):
+                if not isinstance(formula, Negation) and not (
+                    is_comparison(formula)
+                ):
+                    restricted |= extract_logic_free_variables(formula)
+            if not (free & extract_logic_free_variables(disjunct)) <= (
+                restricted
+            ):
+                return False
+    return True
 
 
 def _functors(formula):
