@@ -18,7 +18,14 @@ from ..datalog.expression_processing import (
 from ..datalog.magic_sets import random_predicate_symbols
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Negation, Union
+from ..logic import (
+    TRUE,
+    Conjunction,
+    Disjunction,
+    Implication,
+    Negation,
+    Union,
+)
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import Projection, RelationalAlgebraSolver
 from ..utils import OrderedSet
@@ -406,6 +413,23 @@ def lift_optimization_for_choice_predicates(query, program):
     """
     if len(program.pchoice_pred_symbs) == 0:
         return query
+    # Two atoms of a choice are the same tuple only when they are true
+    # together, in a conjunction: the disjuncts of a disjunction are
+    # optimised apart, and the atoms of a conjunction are not unified with
+    # those within its disjunctions.
+    if isinstance(query, Disjunction):
+        return Disjunction(tuple(
+            lift_optimization_for_choice_predicates(formula, program)
+            for formula in query.formulas
+        ))
+    if isinstance(query, Conjunction) and any(
+        isinstance(formula, Disjunction) for formula in query.formulas
+    ):
+        return Conjunction(tuple(
+            lift_optimization_for_choice_predicates(formula, program)
+            if isinstance(formula, Disjunction) else formula
+            for formula in query.formulas
+        ))
     positive_predicates = OrderedSet()
     negative_predicates = OrderedSet()
     for pred in extract_logic_predicates(query):

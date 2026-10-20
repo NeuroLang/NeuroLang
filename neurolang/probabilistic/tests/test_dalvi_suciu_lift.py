@@ -963,3 +963,273 @@ def test_choice_with_a_repeated_variable(answer):
         expected = testing.make_prov_set([(0.5,)], ("_p_",))
     result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("rules, expected", [
+    # Disjuncts sharing studies, and disjoint: P[A and B] is 0, left out
+    # of the plan of the conjunction.
+    ((("language",), ("speech",)), 0.5),
+    ((("language",), ("pain",)), 0.75),
+    # Three disjuncts: the tail is the disjunction of the two others.
+    ((("language",), ("speech",), ("pain",)), 0.75),
+    ((("pain",), ("speech",), ("memory",)), 0.75),
+    # A conjunctive disjunct.
+    ((("language", "speech"), ("pain",)), 0.5),
+])
+def test_union_of_rules_joining_a_choice(rules, expected):
+    """
+    A union of rules each joining the probabilistic choice, under PROB,
+    crashed: it is lifted by the disjoint separator, one disjoint
+    projection on the study.
+    """
+    from ...frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,), (4,)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [(1, "language"), (2, "speech"), (2, "language"), (3, "pain"),
+         (4, "memory")],
+        name="mentions",
+    )
+    program = "\n".join(
+        "a(s) :- " + ", ".join(f"mentions(s, '{t}')" for t in terms)
+        + ", selected_study(s)"
+        for terms in rules
+    ) + "\nans(p) :- PROB[a(s)] = p"
+    result = nl.execute_datalog_program(program)
+    assert [p for p, in result] == [pytest.approx(expected)]
+
+def test_union_by_term_with_a_variable_of_a_rule_alone():
+    """
+    A union whose rules have a variable that their head has not
+    (``s2``): the deterministic ``mentions(s2, t)`` is factored out of the
+    union, whose disjuncts then do not all have ``t``. The probability of
+    a disjunct without ``t`` holds for every ``t``, which the sum of the
+    plans cannot give, so the disjoint projection of the union declines
+    it; the query is computed exactly, by weighted model counting, whose
+    union of the rules projects out ``s2``.
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = [
+        (0, "a"), (0, "c"), (1, "a"), (1, "d"), (1, "e"), (2, "a"),
+        (2, "c"), (2, "e"), (3, "a"), (3, "c"), (3, "d"), (4, "b"),
+        (5, "b"), (5, "c"), (5, "d"),
+    ]
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected_study"
+    )
+    nl.add_tuple_set(mentions, name="mentions")
+    result = nl.execute_datalog_program(
+        "a(t, s) :- mentions(s, t), selected_study(s)\n"
+        "a(t, s) :- mentions(s, 'a'), mentions(s, 'c'), mentions(s2, t), "
+        "selected_study(s)\n"
+        "a(t, s) :- mentions(s, 'd'), mentions(s2, t), selected_study(s)\n"
+        "ans(t, p) :- PROB[a(t, s)] = p"
+    )
+    m = set(mentions)
+    expected = {
+        t: sum(
+            (s, t) in m or ((s, "a") in m and (s, "c") in m)
+            or (s, "d") in m
+            for s in range(6)
+        ) / 6
+        for t in "abcde"
+    }
+    assert dict(result) == pytest.approx(expected)
+
+def test_union_with_a_choice_on_a_free_and_on_a_bound_variable():
+    """
+    The choice is on the free variable s in one rule and on a variable of
+    its own, f, in the other: the choice optimisation unified C(s) and
+    C(f) across the disjuncts, as if they were a conjunction, and the
+    first solver gave no answer; the disjuncts are now optimised apart.
+    """
+    from ...frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,), (4,)], name="selected_study"
+    )
+    nl.add_tuple_set([(1,), (2,), (3,), (4,)], name="study")
+    nl.add_tuple_set(
+        [(1, "x"), (2, "y"), (3, "x"), (4, "z")], name="mentions"
+    )
+    result = nl.execute_datalog_program(
+        "a(s) :- selected_study(s), mentions(s, 'x')\n"
+        "a(s) :- study(s), selected_study(f), mentions(f, 'y')\n"
+        "ans(s, p) :- PROB[a(s)] = p"
+    )
+    assert dict(result) == pytest.approx({1: 0.5, 2: 0.25, 3: 0.5, 4: 0.25})
+
+def test_unions_mixing_free_and_bound_choice_variables_are_declined():
+    """A choice on a free variable in a disjunct and on a bound one in
+    another is declined before lifting; on the same variable kind in
+    every disjunct, it is lifted."""
+    s, f, x = Symbol("s"), Symbol("f"), Symbol("x")
+    M, C = Symbol("M"), Symbol("C")
+    symbol_table = {
+        C: ProbabilisticChoiceSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                columns=("p", "v"), iterable=[(0.5, 1), (0.5, 2)]
+            )),
+            Constant(ColumnStr("p")),
+        ),
+        M: Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("v", "w"), iterable=[(1, "a"), (2, "b")]
+        )),
+    }
+    mixed = Disjunction((
+        Conjunction((C(s), M(s, Constant("a")))),
+        ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("b"))))),
+    ))
+    assert dalvi_suciu_lift._mixes_free_and_bound_choice_variables(
+        mixed, symbol_table
+    )
+    bound = Disjunction((
+        ExistentialPredicate(s, Conjunction((C(s), M(s, x)))),
+        ExistentialPredicate(f, Conjunction((C(f), M(f, x)))),
+    ))
+    assert not dalvi_suciu_lift._mixes_free_and_bound_choice_variables(
+        bound, symbol_table
+    )
+
+
+def _choice_union_engine():
+    from ...frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,), (4,)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [(1, "language"), (2, "speech"), (2, "language"), (3, "pain"),
+         (4, "memory")],
+        name="mentions",
+    )
+    return nl
+
+
+def _plan_of(program):
+    """The plan of the lifted query of *program*, whose solving is
+    stopped once the plan is made."""
+    plans = []
+    original = dalvi_suciu_lift.is_pure_lifted_plan
+
+    def record(plan):
+        plans.append(plan)
+        return original(plan)
+
+    dalvi_suciu_lift.is_pure_lifted_plan = record
+    try:
+        _choice_union_engine().execute_datalog_program(program)
+    finally:
+        dalvi_suciu_lift.is_pure_lifted_plan = original
+    return plans[-1]
+
+
+def test_disjoint_separator_plans_a_union_in_one_projection():
+    """The union over the choice is one disjoint projection on the study,
+    of the choice joined with the support of the deterministic union."""
+    plan = _plan_of(
+        "a(s) :- mentions(s, 'language'), selected_study(s)\n"
+        "a(s) :- mentions(s, 'speech'), selected_study(s)\n"
+        "a(s) :- mentions(s, 'pain'), selected_study(s)\n"
+        "ans(p) :- PROB[a(s)] = p"
+    )
+    assert isinstance(plan, DisjointProjection)
+    assert "Σ" not in repr(plan)
+
+
+def _choice_table():
+    s = Symbol("s")
+    C, M = Symbol("C"), Symbol("M")
+    return s, C, M, {
+        C: ProbabilisticChoiceSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                columns=("p", "v"), iterable=[(0.5, 1), (0.5, 2)]
+            )),
+            Constant(ColumnStr("p")),
+        ),
+        M: Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("v", "w"), iterable=[(1, "a"), (2, "b")]
+        )),
+    }
+
+
+def test_disjoint_separator_aligns_the_choice_atoms():
+    s, C, M, symbol_table = _choice_table()
+    f = Symbol("f")
+    union = Disjunction((
+        ExistentialPredicate(s, Conjunction((C(s), M(s, Constant("a"))))),
+        ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("b"))))),
+    ))
+    applies, plan = dalvi_suciu_lift.disjoint_separator(union, symbol_table)
+    assert applies and isinstance(plan, DisjointProjection)
+
+
+def test_disjoint_separator_declines():
+    """No separator: a disjunct without the choice, a choice of two
+    columns aligned on one only, a negation, or a disjunct without a free
+    variable of the query."""
+    s, C, M, symbol_table = _choice_table()
+    f, u, t = Symbol("f"), Symbol("u"), Symbol("t")
+    C2 = Symbol("C2")
+    symbol_table[C2] = ProbabilisticChoiceSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("p", "v", "w"), iterable=[(0.5, 1, "a"), (0.5, 2, "b")]
+        )),
+        Constant(ColumnStr("p")),
+    )
+    queries = [
+        Disjunction((
+            ExistentialPredicate(s, Conjunction((C(s), M(s, t)))),
+            ExistentialPredicate(f, M(f, t)),
+        )),
+        Disjunction((
+            ExistentialPredicate(s, Conjunction((C2(s, t), M(s, t)))),
+            ExistentialPredicate(f, ExistentialPredicate(u, Conjunction((
+                C2(f, u), M(f, t)
+            )))),
+        )),
+        ExistentialPredicate(s, Conjunction((
+            C(s), Negation(M(s, Constant("a")))
+        ))),
+        Disjunction((
+            ExistentialPredicate(s, Conjunction((C(s), M(s, t)))),
+            ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("a"))))),
+        )),
+    ]
+    for query in queries:
+        assert dalvi_suciu_lift.disjoint_separator(
+            query, symbol_table
+        ) == (False, None), query
+
+
+def test_union_with_a_self_join_of_the_choice_in_a_rule():
+    """
+    A rule of a union joins the choice twice: the equality that makes the
+    two atoms the same tuple holds in that rule only, which the unification
+    of the variables took for the whole body, turning the union into a
+    conjunction.
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = [
+        (0, "b"), (0, "c"), (1, "a"), (1, "d"), (2, "a"), (2, "c"), (3, "a")
+    ]
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(4)], name="selected_study"
+    )
+    nl.add_tuple_set(mentions, name="mentions")
+    result = nl.execute_datalog_program(
+        "a(t) :- selected_study(s), selected_study(f), mentions(s, t), "
+        "mentions(f, 'b')\n"
+        "a(t) :- selected_study(s), mentions(s, t), mentions(s, 'c')\n"
+        "ans(t, p) :- PROB[a(t)] = p"
+    )
+    assert dict(result) == pytest.approx({"a": 0.25, "b": 0.25, "c": 0.5})

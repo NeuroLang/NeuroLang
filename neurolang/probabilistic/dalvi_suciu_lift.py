@@ -13,7 +13,6 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
-    NeuroLangException,
     NonLiftableException,
     NotInFONegE,
     NotRankedException,
@@ -30,8 +29,7 @@ from ..expression_walker import (
 from ..expressions import (
     Constant,
     FunctionApplication,
-    Symbol,
-    TypedSymbolTableMixin
+    Symbol
 )
 from ..logic import (
     FALSE,
@@ -42,7 +40,6 @@ from ..logic import (
     NaryLogicOperator,
     Negation,
     Quantifier,
-    Union,
     UniversalPredicate
 )
 from ..logic.expression_processing import (
@@ -60,7 +57,6 @@ from ..logic.transformations import (
     MoveNegationsToAtoms,
     MoveQuantifiersUp,
     PushQuantifiersDown,
-    RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix,
@@ -88,7 +84,6 @@ from .expression_processing import (
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
-    ProbabilisticFactSet,
     classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
@@ -295,6 +290,27 @@ def _non_repeating_query_plan(
     return plan, symbol_table, unified_query
 
 
+def _unify_variable_equalities(query):
+    """
+    Unify the variables of the equalities of *query*, in each disjunct of
+    its body apart: an equality holds in its disjunct only. A disjunct
+    whose unification would replace a variable of the head keeps its
+    equalities, the head being that of every disjunct.
+    """
+    if not isinstance(query.antecedent, Disjunction):
+        return UnifyVariableEqualities().walk(query)
+    disjuncts = []
+    for disjunct in query.antecedent.formulas:
+        unified = UnifyVariableEqualities().walk(
+            Implication(query.consequent, disjunct)
+        )
+        disjuncts.append(
+            unified.antecedent if unified.consequent == query.consequent
+            else disjunct
+        )
+    return Implication(query.consequent, Disjunction(tuple(disjuncts)))
+
+
 def _prepare_and_optimise_query(
     flat_query, cpl_program, deterministic_relations=None
 ):
@@ -304,7 +320,7 @@ def _prepare_and_optimise_query(
         for f in flat_query_body.formulas
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
-    unified_query = UnifyVariableEqualities().walk(flat_query)
+    unified_query = _unify_variable_equalities(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
@@ -481,6 +497,8 @@ def _lift_with_dependent_negations(rule, symbol_table, check):
             _verify_that_the_query_has_one_quantifier(rule)
             _verify_that_the_query_is_unate(rule, symbol_table)
         ucq_rule = MNTA.walk(MQU.walk(convert_rule_to_ucq(rule)))
+        if _mixes_free_and_bound_choice_variables(ucq_rule, symbol_table):
+            return NonLiftable(antecedent)
         plan = dalvi_suciu_lift(ucq_rule, symbol_table)
         if not is_pure_lifted_plan(plan):
             shattered_plan = existential_shattering_plan(
@@ -1151,7 +1169,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_svs:
         return plan
 
-    has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
+    has_safe_plan, plan = disjoint_separator(rule_dnf, symbol_table)
     if has_safe_plan:
         return plan
 
@@ -1464,164 +1482,266 @@ def connected_components(adjacency_matrix):
     return components
 
 
-def disjoint_project(rule_dnf, symbol_table):
+def disjoint_separator(query, symbol_table):
     """
-    Rule that extends the lifted query processing algorithm to handle
-    Block-Independent Disjoint (BID) tables which encode mutual exclusivity
-    assumptions on top of the tuple-independent assumption of probabilistic
-    tables.
+    The disjoint projection of a union of conjunctive queries on the
+    variables of its probabilistic choices, the counterpart, for choices,
+    of the projection on a separator variable [Dalvi2012]_.
 
-    Modifications to the lifted query processing algorithm that are necessary
-    to extend it to BID tables are detailed in section 4.3.1 of [1]_.
+    The query is rewritten in prenex normal form with a DNF matrix,
+    :math:`\\exists \\bar y\\, \\bigvee_i Q_i`. A choice :math:`C` is a
+    separator when every disjunct has a single atom of it, :math:`C(\\bar
+    u_i)`, and these atoms can be made the same atom :math:`C(\\bar z)`:
+    position by position, either all their terms are quantified variables,
+    which are renamed to those of the first disjunct, or they are all the
+    same free variable or constant. Then every :math:`Q_i(\\bar a)` implies
+    :math:`C(\\bar a)`, the tuples of a choice are mutually exclusive, so
+    the events :math:`\\bigvee_i Q_i(\\bar a)` for different values
+    :math:`\\bar a` of the renamed variables are too, and
 
-    Two variants of the rule exist: one for conjunctive queries, and one for
-    disjunctive queries.
+    .. math::
 
-    [1] Suciu, Dan, Dan Olteanu, Christopher Ré, and Christoph Koch, eds.
-    Probabilistic Databases. Synthesis Lectures on Data Management 16. San
-    Rafael, Calif.: Morgan & Claypool Publ, 2011.
+        P\\Big[\\exists \\bar z \\bigvee_i Q_i\\Big]
+        = \\sum_{\\bar a} P\\Big[\\bigvee_i Q_i(\\bar a)\\Big]
 
+    the disjoint projection of Suciu et al. (2011, section 4.3.1),
+    applied to a union of conjunctive queries. When the other atoms are
+    deterministic, :math:`P[C(\\bar a) \\land D(\\bar a)] =
+    P[C(\\bar a)]\\,[D(\\bar a)]`, planned as the choice joined with the
+    support of the deterministic union, whatever the number of
+    disjuncts; otherwise the union is lifted for every :math:`\\bar a` by
+    the other rules. A conjunctive query is the union of a single
+    disjunct.
+
+    The rule declines a union with a negation, whose deterministic support
+    would turn it into a difference the plan reads as an independent
+    negation, or with a disjunct without a free variable of the query,
+    true for every value of it, which a plan cannot give. Its proof is in
+    ``doc/probabilistic_lifting.rst``.
+
+    Returns whether the rule applies and its plan.
     """
-    if len(rule_dnf.formulas) == 1:
-        conjunctive_query = rule_dnf.formulas[0]
-        return disjoint_project_conjunctive_query(
-            conjunctive_query, symbol_table
-        )
-    return disjoint_project_disjunctive_query(rule_dnf, symbol_table)
-
-
-def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
-    """
-    First variant of the disjoint project on a CQ in CNF.
-
-    A disjoint project operator is applied whenever any of the atoms in the CQ
-    has only constants in its key positions and has at least one variable in a
-    non-key position.
-
-    Note: as variables are removed through shattering, this only applies to
-    all probabilistic choice variables.
-
-    """
-    free_variables = extract_logic_free_variables(conjunctive_query)
-    atoms_with_constants_in_all_key_positions = set(
-        atom
-        for atom in extract_logic_atoms(conjunctive_query)
-        if is_probabilistic_atom_with_constants_in_all_key_positions(
-            atom, symbol_table
-        )
-    )
-    if not atoms_with_constants_in_all_key_positions:
+    free_variables = extract_logic_free_variables(query)
+    matrix = convert_to_pnf_with_dnf_matrix(query)
+    quantified = set()
+    while isinstance(matrix, ExistentialPredicate):
+        quantified.add(matrix.head)
+        matrix = matrix.body
+    if isinstance(matrix, Disjunction):
+        disjuncts = list(matrix.formulas)
+    else:
+        disjuncts = [matrix]
+    if any(
+        not free_variables <= extract_logic_free_variables(disjunct)
+        for disjunct in disjuncts
+    ):
+        # A disjunct without a free variable is true for every value of
+        # it, which a plan cannot give.
         return False, None
-    nonkey_variables = set.union(
-        *(
-            extract_nonkey_variables(atom, symbol_table)
-            for atom in atoms_with_constants_in_all_key_positions
-        )
+    if any(
+        isinstance(formula, Negation)
+        for disjunct in disjuncts
+        for formula in extract_logic_predicates(disjunct)
+    ):
+        # The deterministic support would translate a negation into a
+        # difference, which the plan reads as an independent negation, and
+        # lifting the rest would separate the choice atoms from the
+        # negations whose variables only they bind.
+        return False, None
+    separators, substitutions, choice_atoms = _choice_separators(
+        disjuncts, quantified, symbol_table
     )
-    for atom in atoms_with_constants_in_all_key_positions:
-        # A ranked or shattered choice is a selection of a choice, whose
-        # tuples are still mutually exclusive.
-        if not is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-            raise NeuroLangException(
-                "Any atom with constants in all its key positions should be "
-                "a probabilistic choice atom"
-            )
-    conjunctive_query = (
-        RemoveExistentialOnVariables(nonkey_variables)
-        .walk(conjunctive_query)
-    )
-    plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
+    if not separators:
+        return False, None
+    disjuncts = [
+        ReplaceExpressionWalker(substitution).walk(disjunct)
+        if substitution else disjunct
+        for disjunct, substitution in zip(disjuncts, substitutions)
+    ]
+    kept = free_variables | separators
     attributes = tuple(
-        str2columnstr_constant(v.name)
-        for v in free_variables
+        str2columnstr_constant(v.name) for v in free_variables
     )
-    plan = rap.DisjointProjection(plan, attributes)
-    return True, plan
-
-
-def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
-    """
-    Second variant of the disjoint project on a UCQ in DNF.
-
-    This rule applies whenever the given query Q can be written as Q = Q1 v Q',
-    where the conjunctive query Q1 has an atom where all key attribute are
-    constants, and Q' is any other UCQ.
-
-    Then we return P(Q) = P(Q1) + P(Q') - P(Q1 ∧ Q') with subsequent recursive
-    calls to the resolution algorithms. Note that a disjoint project should be
-    applied during the calculation of P(Q1) and P(Q1 ∧ Q').
-
-    """
-    matching_disjuncts = (
-        _get_disjuncts_containing_atom_with_all_key_attributes(
-            disjunctive_query, symbol_table
+    remainder_atoms = [
+        atom for disjunct in disjuncts
+        for atom in extract_logic_atoms(disjunct)
+        if atom not in choice_atoms
+    ]
+    if all(
+        is_atom_a_deterministic_relation(atom, symbol_table)
+        for atom in remainder_atoms
+    ):
+        # Every disjunct is the choice atoms conjoined with deterministic
+        # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
+        # support. A disjunct keeps the choice atoms only if they bind some
+        # of its variables that its positive atoms do not.
+        deterministic = add_existentials_except(
+            RTO.walk(Disjunction(tuple(
+                _without_unneeded_atoms(disjunct, choice_atoms, kept)
+                for disjunct in disjuncts
+            ))),
+            kept,
         )
+        support = rap.Support(rap.Projection(
+            TranslateToNamedRA().walk(
+                MakeExistentialsImplicit().walk(deterministic)
+            ),
+            tuple(str2columnstr_constant(v.name) for v in kept),
+        ))
+        plan = reduce(
+            rap.NaturalJoin,
+            (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            support,
+        )
+        return True, rap.DisjointProjection(plan, attributes)
+    body = add_existentials_except(
+        RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
-    for disjunct in matching_disjuncts:
-        has_safe_plan, plan = _apply_disjoint_project_ucq_rule(
-            disjunctive_query, disjunct, symbol_table
-        )
-        if has_safe_plan:
-            return has_safe_plan, plan
-    return False, None
+    plan = dalvi_suciu_lift(body, symbol_table)
+    return True, rap.DisjointProjection(plan, attributes)
 
 
-def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
-    matching_disjuncts = set()
-    for disjunct in ucq.formulas:
-        if any(
-            is_probabilistic_atom_with_constants_in_all_key_positions(
-                atom, symbol_table
-            )
-            for atom in extract_logic_atoms(disjunct)
+def _mixes_free_and_bound_choice_variables(ucq, symbol_table):
+    """
+    Whether a probabilistic choice of the union *ucq* has a free variable
+    of it in a disjunct and a bound variable in another, as in
+    :math:`(C(s) \\land A(s)) \\lor \\exists f\\, (C(f) \\land B(f))`.
+
+    The choice has no separator (:func:`disjoint_separator`), and the
+    conversion to conjunctive normal form keeps creating disjunctions of
+    its atoms: the planning did not end in reasonable time on such
+    queries. They are declined, and solved by weighted model counting.
+    """
+    free = extract_logic_free_variables(ucq)
+    body = ucq
+    while isinstance(body, ExistentialPredicate):
+        body = body.body
+    if not isinstance(body, Disjunction):
+        return False
+    kinds = {}
+    for disjunct in body.formulas:
+        for atom in extract_logic_atoms(disjunct):
+            if not is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+                continue
+            for arg in atom.args:
+                if isinstance(arg, Symbol):
+                    kinds.setdefault(atom.functor, set()).add(arg in free)
+    return any(len(found) == 2 for found in kinds.values())
+
+
+def _without_unneeded_atoms(disjunct, atoms, variables):
+    """
+    The conjunctive *disjunct* without the *atoms*, unless they bind one of
+    its *variables* that its other atoms do not.
+    """
+    others = [
+        formula for formula in _conjuncts(disjunct) if formula not in atoms
+    ]
+    bound = set()
+    for formula in others:
+        if isinstance(formula, FunctionApplication) and not (
+            is_comparison(formula)
         ):
-            matching_disjuncts.add(disjunct)
-    return matching_disjuncts
+            bound |= extract_logic_free_variables(formula)
+    needed = extract_logic_free_variables(disjunct) & variables
+    if not others or not needed <= bound:
+        return disjunct
+    return Conjunction(tuple(others)) if len(others) > 1 else others[0]
 
 
-def _apply_disjoint_project_ucq_rule(
-    disjunctive_query: Union,
-    disjunct: Conjunction,
-    symbol_table: TypedSymbolTableMixin,
-):
-    free_vars = extract_logic_free_variables(disjunctive_query)
-    head = add_existentials_except(disjunct, free_vars)
-    head_plan = dalvi_suciu_lift(head, symbol_table)
-    if not is_pure_lifted_plan(head_plan):
-        return False, None
-    tail = set(disjunctive_query.formulas) - {disjunct}
-    tail = add_existentials_except(
-        Conjunction(tuple(tail)),
-        free_vars,
-    )
-    tail_plan = dalvi_suciu_lift(tail, symbol_table)
-    if not is_pure_lifted_plan(tail_plan):
-        return False, None
-    head_and_tail = add_existentials_except(
-        Conjunction(disjunctive_query.formulas), free_vars
-    )
-    head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
-    if not is_pure_lifted_plan(head_and_tail_plan):
-        return False, None
-    return True, rap.WeightedNaturalJoin(
-        (head_plan, tail_plan, head_and_tail_plan),
-        (Constant(1), Constant(1), Constant(-1)),
-    )
-
-
-def extract_nonkey_variables(atom, symbol_table):
+def _choice_separators(disjuncts, quantified, symbol_table):
     """
-    Get all variables in the atom that occur on non-key attributes.
-
-    Makes the assumption that the atom is probabilistic.
-
-    As we only support probabilistic choices and not all BID tables, this can
-    only be a variable occurring in a probabilistic choice.
-
+    Return the quantified variables of the choice atoms that every one of
+    the *disjuncts* has and that can be made the same atom (see
+    :func:`disjoint_separator`), the renaming of each disjunct which makes
+    them so, and these atoms, as in the first disjunct.
     """
-    if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-        return {arg for arg in atom.args if isinstance(arg, Symbol)}
-    return set()
+    atoms_by_disjunct = [
+        [
+            atom for atom in extract_logic_atoms(disjunct)
+            if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+            and atom in _conjuncts(disjunct)
+        ]
+        for disjunct in disjuncts
+    ]
+    substitutions = [{} for _ in disjuncts]
+    separators = set()
+    separator_atoms = []
+    for functor in {atom.functor for atom in atoms_by_disjunct[0]}:
+        atoms = []
+        for disjunct_atoms in atoms_by_disjunct:
+            same = {a for a in disjunct_atoms if a.functor == functor}
+            if len(same) != 1:
+                break
+            atoms.append(same.pop())
+        else:
+            renamings = _align_choice_atoms(atoms, quantified)
+            if renamings is None or not _renamings_are_safe(
+                disjuncts, substitutions, renamings
+            ):
+                continue
+            target = [
+                arg for arg in atoms[0].args if arg in quantified
+            ]
+            if not target:
+                continue
+            separators.update(target)
+            separator_atoms.append(atoms[0])
+            for substitution, renaming in zip(substitutions, renamings):
+                substitution.update(renaming)
+    return separators, substitutions, set(separator_atoms)
+
+
+def _renamings_are_safe(disjuncts, substitutions, renamings):
+    """
+    Whether each renaming of a disjunct captures none of its variables (a
+    variable is renamed into one the disjunct does not have) and agrees
+    with the renaming of the disjunct already chosen for other choices.
+    """
+    for disjunct, substitution, renaming in zip(
+        disjuncts, substitutions, renamings
+    ):
+        variables = extract_logic_free_variables(disjunct)
+        for term, target in renaming.items():
+            if target in variables or substitution.get(term, target) != (
+                target
+            ):
+                return False
+    return True
+
+
+def _conjuncts(formula):
+    """The conjuncts of *formula*, or itself if not a conjunction."""
+    if isinstance(formula, Conjunction):
+        return formula.formulas
+    return (formula,)
+
+
+def _align_choice_atoms(atoms, quantified):
+    """
+    Return, for each of the choice *atoms*, the renaming of its quantified
+    variables into those of the first atom, or None if they cannot be made
+    the same atom: at a position, the terms must be all quantified
+    variables, or all the same free variable or constant.
+    """
+    first = atoms[0]
+    renamings = [{}]
+    for atom in atoms[1:]:
+        renaming = {}
+        for term, target in zip(atom.args, first.args):
+            if target in quantified:
+                if term not in quantified or (
+                    renaming.get(term, target) != target
+                ):
+                    return None
+                if term != target:
+                    renaming[term] = target
+            elif term != target:
+                return None
+        if len(set(renaming.values())) != len(renaming):
+            return None
+        renamings.append(renaming)
+    return renamings
 
 
 def has_separator_variables(query, symbol_table):
@@ -2023,29 +2143,3 @@ def mobius_function(formula, formula_containments, known_weights=None):
 def powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
-
-
-def is_probabilistic_atom_with_constants_in_all_key_positions(
-    atom, symbol_table
-):
-    """
-    As we only handle probabilistic choice relations (and not more general BID
-    tables), which are relations with no key attribute, there are only two
-    cases:
-    (1) if the atom is a probabilistic choice, then it validates the
-    requirement of having constants in all key positions (it has no key
-    attribute), or
-    (2) if the atom is a tuple-independent relation, all its attributes are key
-    attributes, and so all its terms must be constants for the requirement to
-    be validated.
-
-    """
-    return is_atom_a_probabilistic_choice_relation(atom, symbol_table) or (
-        not is_atom_a_deterministic_relation(atom, symbol_table)
-        and (
-            isinstance(atom.functor, Symbol)
-            and atom.functor in symbol_table
-            and isinstance(symbol_table[atom.functor], ProbabilisticFactSet)
-            and all(isinstance(arg, Constant) for arg in atom.args)
-        )
-    )

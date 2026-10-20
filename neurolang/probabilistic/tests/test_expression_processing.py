@@ -10,7 +10,7 @@ from ...datalog.wrapped_collections import (
 )
 from ...exceptions import UnexpectedExpressionError
 from ...expressions import Constant, Symbol
-from ...logic import TRUE, Conjunction, Implication, Union
+from ...logic import TRUE, Conjunction, Disjunction, Implication, Union
 from ...utils.relational_algebra_set import pandas as pandas_ras
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import DistributionDoesNotSumToOneError
@@ -20,6 +20,7 @@ from ..expression_processing import (
     get_probchoice_variable_equalities,
     group_preds_by_functor,
     is_probabilistic_predicate_symbol,
+    lift_optimization_for_choice_predicates,
 )
 from ..expressions import PROB, ProbabilisticFact, ProbabilisticQuery
 
@@ -210,3 +211,30 @@ def test_probabilistic_predicate_symbols_agree_with_magic_sets():
     assert probabilistic == (
         probabilistic_symbols(program) - {W, PW}
     ).intersection(symbols)
+
+
+def test_choice_atoms_are_unified_within_a_conjunction_only():
+    """Two atoms of a choice are the same tuple when they are true
+    together: within a conjunction, not across the disjuncts of a
+    disjunction."""
+    C, M = Symbol("C"), Symbol("M")
+    s, f = Symbol("s"), Symbol("f")
+    program = CPLogicProgram()
+    program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a"), (0.5, "b")]
+    )
+    program.add_extensional_predicate_from_tuples(M, [("a", "x")])
+    union = Disjunction((
+        Conjunction((C(s), M(s, Constant("x")))),
+        Conjunction((C(f), M(f, Constant("y")))),
+    ))
+    assert lift_optimization_for_choice_predicates(union, program) == union
+    nested = Conjunction((M(s, Constant("z")), union))
+    assert lift_optimization_for_choice_predicates(nested, program) == nested
+    conjunction = Conjunction((C(s), C(f), M(f, Constant("y"))))
+    unified = lift_optimization_for_choice_predicates(conjunction, program)
+    equalities = [
+        set(formula.args) for formula in unified.formulas
+        if isinstance(formula.functor, Constant)
+    ]
+    assert equalities == [{s, f}]

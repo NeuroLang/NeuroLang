@@ -985,6 +985,22 @@ class RemoveDuplicatedAntecedentPredicates(PatternWalker):
         )
 
 
+def _contains_disjunction(formula):
+    """Whether the logic *formula* has a disjunction in it."""
+    stack = [formula]
+    while stack:
+        formula = stack.pop()
+        if isinstance(formula, Disjunction):
+            return True
+        if isinstance(formula, Conjunction):
+            stack += formula.formulas
+        elif isinstance(formula, Quantifier):
+            stack.append(formula.body)
+        elif isinstance(formula, Negation):
+            stack.append(formula.formula)
+    return False
+
+
 class UnifyVariableEqualitiesMixin(PatternWalker):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), ...),
@@ -999,7 +1015,11 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         and any(
             is_var_equality_to_var_or_const(formula)
             for formula in extract_logic_predicates(implication.antecedent)
-        ),
+        )
+        # The unification rebuilds the body as the conjunction of its
+        # predicates: an equality within a disjunct holds in that disjunct
+        # only, and the union would become a conjunction.
+        and not _contains_disjunction(implication.antecedent),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
         eq_sets = self.extract_variable_equalities(implication.antecedent)
