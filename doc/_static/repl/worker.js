@@ -28,7 +28,7 @@ const PYODIDE_PACKAGES = [
 ];
 const PYPI_PACKAGES = [
   "lark", "typing_inspect", "rdflib", "nibabel", "seaborn", "rich",
-  "prompt_toolkit",
+  "prompt_toolkit", "httpx",
 ];
 
 const status = (message) => postMessage({ type: "status", message });
@@ -140,16 +140,40 @@ def submit(text):
     reply = repl.submit(text)
     return json.dumps(
         {"html": reply.html, "viewers": reply.viewers,
-         "failed": reply.failed, "tables": reply.tables}
+         "failed": reply.failed, "tables": reply.tables,
+         "prompt": reply.prompt}
     )
+
+# The providers of the AI assistant, for the page's form: none when this
+# version of NeuroLang predates it.
+try:
+    from neurolang.utils.llm.browser import providers_for_form
+except ImportError:
+    providers_for_form = list
+
+def llm_providers():
+    return json.dumps(providers_for_form())
 `);
   const banner = pyodide.runPython("repl.banner()");
-  postMessage({ type: "ready", banner, source });
+  const providers = JSON.parse(pyodide.runPython("llm_providers()"));
+  postMessage({ type: "ready", banner, source, providers });
+  repl = pyodide.globals.get("repl");
   return pyodide.globals.get("submit");
 }
 
 // The page starts the worker with the version to run, then submits.
 let submit = null;
+let repl = null;
+
+// The visitor's key is given to the REPL, in this worker's memory: from
+// here it goes to the provider, and to no one else.
+function useKey({ provider, key, model, baseUrl }) {
+  if (!key) {
+    repl.clear_llm();
+  } else {
+    repl.set_llm(provider, key, model ?? "", baseUrl ?? "");
+  }
+}
 
 onmessage = async ({ data }) => {
   if (data.type === "start") {
@@ -161,6 +185,17 @@ onmessage = async ({ data }) => {
     return;
   }
   if (!submit) return;
+  if (data.type === "llm") {
+    try {
+      useKey(data);
+      postMessage({ type: "llm", ok: true });
+    } catch (error) {
+      // A ValueError of Python says what is wrong with the choices.
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "llm", ok: false, message: message.replace(/^\w+Error: /, "") });
+    }
+    return;
+  }
   try {
     const reply = JSON.parse(submit(data.text));
     postMessage({ type: "reply", id: data.id, ...reply });

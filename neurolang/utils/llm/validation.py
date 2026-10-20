@@ -17,6 +17,7 @@ import pickle
 import re
 import signal
 import subprocess
+import sys
 import threading
 import time
 import warnings
@@ -108,9 +109,10 @@ def _with_timeout(function, timeout):
 
     It runs in a worker thread in which :class:`QueryTimeout` is raised
     when the time is up; the query stops as soon as it runs Python code
-    again. Without *timeout*, *function* runs as it is.
+    again. Without *timeout*, or where threads cannot be started, as in
+    WebAssembly, *function* runs as it is.
     """
-    if not timeout:
+    if not timeout or sys.platform == "emscripten":
         return function()
     outcome = {}
     done = threading.Event()
@@ -346,7 +348,7 @@ def _in_child(function, timeout, memory_mb):
     large to copy where the memory is not overcommitted), *function* runs
     in a thread with *timeout* only.
     """
-    if not hasattr(os, "fork"):
+    if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
     read, write = os.pipe()
     try:

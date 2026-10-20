@@ -1,5 +1,6 @@
 // The page of the in-browser REPL: it shows what worker.js answers.
 import { History, ReverseSearch } from "./history.js";
+import { LlmSettings } from "./llm_settings.js";
 import { renderTable } from "./table_view.js";
 
 const statusBox = document.getElementById("status");
@@ -12,6 +13,11 @@ const versionDetails = document.getElementById("version-details");
 const versionSummary = document.getElementById("version-summary");
 const search = document.getElementById("search");
 const searchInput = document.getElementById("search-input");
+const llmForm = document.getElementById("llm");
+const llmDetails = document.getElementById("llm-details");
+const llmSummary = document.getElementById("llm-summary");
+const llmError = document.getElementById("llm-error");
+const llmBase = document.getElementById("llm-base");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 
 function storage() {
@@ -22,7 +28,17 @@ function storage() {
   }
 }
 
+function sessionStore() {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 const history = new History(storage());
+const llmSettings = new LlmSettings(storage(), sessionStore());
+let providers = []; // those of the AI assistant, from the worker
 let browsing = history.entries.length; // the entry Up and Down are on
 let draft = ""; // what was typed before browsing
 let reverse = null; // the Ctrl+R search under way
@@ -67,6 +83,53 @@ function requestedVersion() {
   return { repo: params.get("repo") || DEFAULT_REPO, ref: params.get("ref") || "" };
 }
 
+// The AI assistant: the form, and the key given to the worker.
+function llmChoices() {
+  const data = Object.fromEntries(new FormData(llmForm));
+  return {
+    provider: data.provider, model: data.model.trim(), baseUrl: (data.baseUrl ?? "").trim(),
+    key: data.key.trim(), remember: llmForm.elements.remember.checked,
+  };
+}
+
+function showProvider() {
+  const preset = providers.find((p) => p.id === llmForm.elements.provider.value);
+  llmForm.elements.model.placeholder = preset?.model || "the model's name";
+  llmBase.hidden = !preset || Boolean(preset.base_url);
+  llmForm.elements.baseUrl.required = !llmBase.hidden;
+}
+
+function setProviders(list) {
+  providers = list;
+  const select = llmForm.elements.provider;
+  select.replaceChildren(...providers.map((p) => new Option(p.label, p.id)));
+  const saved = llmSettings.load();
+  if (providers.some((p) => p.id === saved.provider)) select.value = saved.provider;
+  llmForm.elements.model.value = saved.model;
+  llmForm.elements.baseUrl.value = saved.baseUrl;
+  llmForm.elements.key.value = saved.key;
+  llmForm.elements.remember.checked = saved.remember;
+  select.disabled = providers.length === 0;
+  for (const button of llmForm.querySelectorAll("button:not(#llm-forget)")) {
+    button.disabled = providers.length === 0;
+  }
+  if (providers.length === 0) {
+    llmSummary.textContent = "not in this version of NeuroLang";
+    return;
+  }
+  showProvider();
+  if (saved.key) useKey(); else llmSummary.textContent = "bring your own API key";
+}
+
+// Give the worker the key of the form; it says whether it takes it.
+function useKey() {
+  llmError.hidden = true;
+  const choices = llmChoices();
+  worker.postMessage({ type: "llm", ...choices });
+  const preset = providers.find((p) => p.id === choices.provider);
+  llmSummary.textContent = `${preset?.label ?? choices.provider}, key in use`;
+}
+
 function start() {
   if (worker) worker.terminate();
   const { repo, ref } = requestedVersion();
@@ -86,14 +149,22 @@ function start() {
       setStatus(`The REPL could not start: ${data.message}`, "error");
     } else if (data.type === "ready") {
       setStatus("Ready.");
+      setProviders(data.providers ?? []);
       const source = document.createElement("pre");
       source.className = "entry-input";
       source.textContent = `NeuroLang: ${data.source}`;
       append(source);
       append(output(data.banner));
       setReady(true);
+    } else if (data.type === "llm") {
+      if (!data.ok) {
+        llmError.textContent = data.message;
+        llmError.hidden = false;
+        llmSummary.textContent = "bring your own API key";
+      }
     } else if (data.type === "reply") {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
+      if (data.prompt) input.value = data.prompt; // what the assistant wrote
       append(output(data.html));
       for (const table of data.tables ?? []) append(renderTable(table));
       for (const page of data.viewers) append(viewer(page));
@@ -208,6 +279,20 @@ copyCommand.addEventListener("click", async () => {
   await navigator.clipboard?.writeText(document.getElementById("command").textContent);
   copyCommand.textContent = "Copied";
   setTimeout(() => { copyCommand.textContent = "Copy"; }, 1200);
+});
+llmForm.elements.provider.addEventListener("change", showProvider);
+llmForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  llmSettings.save(llmChoices());
+  useKey();
+});
+document.getElementById("llm-forget").addEventListener("click", () => {
+  llmSettings.forget();
+  llmForm.elements.key.value = "";
+  llmForm.elements.remember.checked = false;
+  worker.postMessage({ type: "llm", key: "" });
+  llmError.hidden = true;
+  llmSummary.textContent = "bring your own API key";
 });
 document.getElementById("restart").addEventListener("click", start);
 version.addEventListener("submit", (event) => {

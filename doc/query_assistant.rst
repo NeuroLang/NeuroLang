@@ -193,6 +193,16 @@ change the settings:
    their rows and the results of the queries the agent runs are sent to
    the provider.
 
+In the browser
+--------------
+
+The `REPL in the browser <_static/repl/index.html>`_ runs the assistant with
+your own API key, which you give in the page: Anthropic, OpenAI, OpenRouter
+or any server speaking the OpenAI API at the address you give (it must
+accept calls from web pages). The key stays in the tab, or on the device if
+you ask, and is sent to the provider and nowhere else. ``.ask`` and ``.llm``
+work as in a terminal; the query they write is put in the input of the page.
+
 Evaluation
 ----------
 

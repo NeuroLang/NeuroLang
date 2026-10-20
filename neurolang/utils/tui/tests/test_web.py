@@ -159,3 +159,87 @@ class TestTables:
     def test_no_rows_are_left_for_more(self, repl):
         repl.submit("ans(x, n) :- person(x, n)")
         assert repl.submit(".more").tables == []
+
+
+# The LLM assistant, with the key of the page's visitor.
+SECRET = "sk-test-0123456789"
+ASK = "```datalog\nans(x) :- person(x, n)\n```\nEveryone."
+
+
+def test_the_providers_of_the_page_are_listed_for_its_form():
+    from neurolang.utils.llm.browser import providers_for_form as llm_providers
+
+    providers = {p["id"]: p for p in llm_providers()}
+    assert {"anthropic", "openai", "openrouter", "custom"} <= set(providers)
+    assert providers["anthropic"]["model"]
+    assert providers["custom"]["base_url"] == ""
+    assert not any("key" in p for p in providers.values())
+
+
+def test_ask_without_a_key_tells_to_add_it_in_the_page(repl):
+    reply = repl.submit(".ask Who is there?")
+    assert reply.failed
+    assert "API key" in reply.html and "AI assistant" in reply.html
+    assert "environment variable" not in reply.html
+
+
+def test_ask_with_a_key_puts_the_query_in_the_input(repl):
+    from neurolang.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([ASK])
+    reply = repl.submit(".ask --icl Who is there?")
+    assert not reply.failed
+    assert reply.prompt == "ans(x) :- person(x, n)"
+    assert "Asking anthropic" in reply.html
+    assert repl.submit("1").prompt == ""
+
+
+def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
+    import httpx
+
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": ASK}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        httpx, "Client",
+        lambda **kw: real_client(
+            **{**kw, "transport": httpx.MockTransport(handler)}
+        ),
+    )
+    repl.set_llm("anthropic", SECRET, model="claude-test")
+    reply = repl.submit(".ask --icl Who is there?")
+    [request] = seen
+    assert request.headers["x-api-key"] == SECRET
+    assert request.headers["anthropic-dangerous-direct-browser-access"] == "true"
+    assert b"claude-test" in request.content
+    assert SECRET not in reply.html
+    assert SECRET not in repl.submit(".llm").html
+    assert SECRET not in repr(repl.app.assistant.config().provider())
+
+
+def test_a_custom_provider_takes_the_address_of_its_api(repl):
+    repl.set_llm("custom", "k", model="qwen3", base_url="http://localhost:11434/v1")
+    html = repl.submit(".llm").html
+    assert "http://localhost:11434/v1" in html and "qwen3" in html
+
+
+def test_clearing_the_key_forgets_it(repl):
+    repl.set_llm("openai", SECRET)
+    repl.clear_llm()
+    reply = repl.submit(".ask Who is there?")
+    assert reply.failed and "API key" in reply.html
+
+
+def test_an_unknown_provider_is_refused(repl):
+    with pytest.raises(ValueError, match="nonesuch"):
+        repl.set_llm("nonesuch", SECRET)
+    with pytest.raises(ValueError, match="address"):
+        repl.set_llm("custom", SECRET, model="m")

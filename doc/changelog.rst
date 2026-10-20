@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The REPL in the browser has the AI assistant (``.ask``, ``.llm``) with
+  the visitor's own API key, given in the page for Anthropic, OpenAI,
+  OpenRouter or any OpenAI-compatible server. The key stays in the tab
+  (or on the device, if asked), goes only from the page to the provider,
+  and the query the assistant writes is put in the input. The LLM clients
+  send their requests with the browser's ``XMLHttpRequest``
+  (``neurolang.utils.llm.browser``), and queries run inline where there
+  are no threads nor processes.
 * The page of the REPL in the browser has the logo, a header with links to
   the documentation, the tutorial and the source, the command it runs to
   copy, and a status that shows when it is busy; the choice of the

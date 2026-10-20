@@ -17,6 +17,7 @@ format of its API.
 
 import json
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -439,5 +440,13 @@ CLIENTS = {
 def make_client(
     provider: ProviderConfig, timeout: float = 60.0, transport=None
 ):
-    """Return the chat client of *provider*."""
+    """
+    Return the chat client of *provider*.
+
+    In a browser (Pyodide) the requests are sent by the browser itself.
+    """
+    if transport is None and sys.platform == "emscripten":
+        from .browser import BrowserTransport
+
+        transport = BrowserTransport()
     return CLIENTS[provider.api](provider, timeout, transport)

@@ -49,6 +49,13 @@
   #version input { background: var(--raised); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem; font: 13px var(--mono); }
   #version input[name=repo] { width: 14rem; }
   #version input[name=ref] { width: 12rem; }
+  #llm { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .6rem .9rem; max-width: 46rem; }
+  #llm label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
+  #llm label.check { flex-direction: row; align-items: center; gap: .5rem; align-self: end; }
+  #llm input:not([type=checkbox]), #llm select { background: var(--raised); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; font: 13px var(--mono); }
+  #llm .row { display: flex; gap: .5rem; flex-wrap: wrap; grid-column: 1 / -1; }
+  #llm .note { grid-column: 1 / -1; margin: 0; max-width: 42rem; font-size: .85rem; }
+  #llm-error { color: #f85149; }
   #status { display: flex; align-items: center; gap: .6rem; padding: .5rem .85rem; margin: 0 0 1rem; border: 1px solid var(--border); border-radius: 999px; width: fit-content; max-width: 100%; background: var(--panel); font-family: var(--sans); font-size: .9rem; }
   #status::before { content: ""; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: #3fb950; }
   #status.busy::before { width: .8rem; height: .8rem; background: none; border: 2px solid var(--border); border-top-color: var(--blue); animation: spin .8s linear infinite; }
@@ -150,6 +157,37 @@
         <span>(empty: the version built with this page)</span>
       </form>
     </details>
+    <details id="llm-details">
+      <summary>AI assistant: <span id="llm-summary">bring your own API key</span></summary>
+      <form id="llm">
+        <label>Provider
+          <select name="provider" aria-label="Provider" disabled></select>
+        </label>
+        <label>Model
+          <input name="model" spellcheck="false" autocomplete="off" aria-label="Model">
+        </label>
+        <label id="llm-base" hidden>API address
+          <input name="baseUrl" placeholder="https://…/v1" spellcheck="false" autocomplete="off" aria-label="Address of the API">
+        </label>
+        <label>API key
+          <input name="key" type="password" autocomplete="off" spellcheck="false" required aria-label="API key">
+        </label>
+        <label class="check"><input type="checkbox" name="remember"> Remember it on this device</label>
+        <div class="row">
+          <button class="secondary" disabled>Use this key</button>
+          <button id="llm-forget" type="button" class="secondary">Forget the key</button>
+        </div>
+        <p id="llm-error" class="note" role="alert" hidden></p>
+        <p class="note">
+          Then <code>.ask which studies mention pain?</code> writes a query and puts it in the input,
+          for you to read and run; <code>.llm …</code> asks the ReAct agent for a Datalog query.
+          Your key goes from this page to the provider you choose, and nowhere else: not to NeuroLang,
+          not in the address. It is kept for this tab only unless you ask to remember it on this device.
+          Prefer a key with a spending limit. The provider must accept calls from web pages
+          (Anthropic, OpenAI and OpenRouter do; a local server needs its CORS enabled).
+        </p>
+      </form>
+    </details>
   </section>
 
   <div id="status" class="busy" role="status">Starting…</div>
@@ -173,6 +211,7 @@
     <button type="button" class="secondary example">ans(s) :- mentions(s, "pain")</button>
     <button type="button" class="secondary example">ans(name, description) :- cognitive_task(_, name, description)</button>
     <button type="button" class="secondary example">ans(t, count(s)) :- mentions(s, t)</button>
+    <button type="button" class="secondary example">.ask which studies mention pain?</button> (with your key)
   </div>
 
   <footer>
