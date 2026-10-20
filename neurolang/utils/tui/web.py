@@ -11,6 +11,11 @@ A submission's ``.view`` pages are returned, to be shown by the page,
 rather than saved in a file and opened in a browser. So are its results,
 as data (:func:`table_payload`) for the page to show as a table to sort,
 filter and page through, in place of the text table of the terminal.
+
+The LLM assistant (``.ask``, ``.llm``) works with the visitor's own API
+key: the page gives it to :meth:`WebRepl.set_llm`, which keeps it in the
+memory of the session, and the worker sends it to the provider and to
+no one else.
 """
 
 import io
@@ -41,7 +46,6 @@ HTML_FORMAT = (
     "<code>{code}</code></pre>"
 )
 
-
 class _PrintedOn(io.TextIOBase):
     """A file whose text is printed on a console, to be recorded with it."""
 
@@ -63,14 +67,16 @@ class Reply:
 
     *html* is its output, *viewers* the HTML pages of the brain viewer
     the submission made (``.view``), *tables* its results (see
-    :func:`table_payload`), and *failed* tells whether a statement of it
-    failed.
+    :func:`table_payload`), *failed* tells whether a statement of it
+    failed, and *prompt* is the query the assistant wrote, for the page
+    to put in its input.
     """
 
     html: str
     viewers: List[str] = field(default_factory=list)
     failed: bool = False
     tables: List[dict] = field(default_factory=list)
+    prompt: str = ""
 
 
 def _kind(column: pd.Series) -> str:
@@ -160,6 +166,36 @@ class WebRepl:
         )
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
+        try:
+            # Until the visitor gives a key, the assistant asks for it.
+            self.set_llm("anthropic", "")
+        except ImportError:  # the llm extra is not installed
+            pass
+
+    def set_llm(
+        self, provider: str, api_key: str, model: str = "",
+        base_url: str = "",
+    ) -> None:
+        """
+        Make the assistant (``.ask``, ``.llm``) use *provider* with *api_key*.
+
+        The key is kept in memory, to be sent to the provider and to no
+        one else. *model* and *base_url* default to the provider's (see
+        :data:`neurolang.utils.llm.browser.PROVIDERS`); a ValueError tells
+        what is wrong with them.
+        """
+        from neurolang.utils.llm.browser import browser_config
+
+        state = self.app.assistant
+        state._config = browser_config(provider, api_key, model, base_url)
+        state.provider = provider
+
+    def clear_llm(self) -> None:
+        """Forget the key of the assistant."""
+        provider = self.app.assistant.config().provider()
+        self.set_llm(
+            provider.name, "", provider.model, provider.base_url
+        )
 
     def banner(self) -> str:
         """Return the HTML of the REPL's welcome: its command and banner."""
@@ -187,7 +223,10 @@ class WebRepl:
                     "[dim]The session cannot end in a page: reload it to "
                     "start a new one.[/dim]"
                 )
-        return Reply(self._output(), viewers, self.app.failed, self._tables)
+        prompt, self.app.pending_input = self.app.pending_input, ""
+        return Reply(
+            self._output(), viewers, self.app.failed, self._tables, prompt
+        )
 
     def _print_block(self, block: ResultBlock) -> None:
         """Keep the rows of *block* for the page, and say how many."""

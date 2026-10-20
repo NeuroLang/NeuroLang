@@ -19,6 +19,17 @@ Unreleased
 
 **New features:**
 
+* The page of the REPL in the browser is a small interface: a box to ask
+  the AI assistant, a box for the Datalog or SQUALL code with its history
+  in a dropdown, and the result as a table or in the brain viewer.
+* The REPL in the browser has the AI assistant (``.ask``, ``.llm``) with
+  the visitor's own API key, given in the page for Anthropic, OpenAI,
+  OpenRouter or any OpenAI-compatible server. The key stays in the tab
+  (or on the device, if asked), goes only from the page to the provider,
+  and the query the assistant writes is put in the input. The LLM clients
+  send their requests with the browser's ``XMLHttpRequest``
+  (``neurolang.utils.llm.browser``), and queries run inline where there
+  are no threads nor processes.
 * The coordinate meta-analysis engines (``neurosynth``, ``neurostore``)
   have the peaks in MNI millimetres, ``peak_mni(x, y, z, study)``, the
   Destrieux atlas of the cortex and the Tian atlas of the subcortex beside
