@@ -103,6 +103,12 @@ and text-to-SPARQL systems.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
+When you run the query put in the prompt, its rules are local to it as
+well: in the REPL, the rules of a submission with a query (``ans`` or
+``obtain``) are discarded after it, so that the next query can define
+rules of the same names (``active``, ``seed``…) without adding to
+these. ``.scope off`` keeps them in the session; rules submitted
+without a query are kept in any case.
 
 Once a query is accepted, one more request asks the model for a line
 explaining each of its rules, which is written above the rule as a

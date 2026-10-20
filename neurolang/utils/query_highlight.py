@@ -41,7 +41,7 @@ DATALOG_OPERATORS = frozenset({
 # The ANSI colours of the kinds of fragments, readable on light and dark
 # terminals, as the REPL shows them.
 ANSI = {
-    "comment": "2;3",
+    "comment": "3;37",
     "keyword": "1;35",
     "operator": "1;34",
     "predicate": "34",

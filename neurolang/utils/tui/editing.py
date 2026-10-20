@@ -67,9 +67,10 @@ class NeuroLangLexer(Lexer):
             yield (f"class:{kind}" if kind else ""), text
 
 
-# Readable on light and dark terminals: ANSI colours, no hex.
+# Readable on light and dark terminals: ANSI colours, no hex; comments
+# in ANSI's light grey.
 STYLE = Style.from_dict({
-    "comment": "italic ansibrightblack",
+    "comment": "italic ansigray",
     "keyword": "bold ansimagenta",
     "operator": "bold ansiblue",
     "predicate": "ansiblue",

@@ -37,6 +37,12 @@ Unreleased
   ``--steps N`` on the command line set the most steps of the ReAct
   agent.
 
+* In the REPL, the rules of a submission with a query (``ans`` or
+  ``obtain``) are local to it: they are discarded after it, so that two
+  queries defining ``active`` do not join their rules.  ``.scope off``
+  keeps them in the session, as before.  Comments are shown in a lighter
+  grey.
+
 * ``.view`` and ``.save`` (and ``--view``, ``--save``) paint a result on
   the regions of an atlas, ``ans(l, p)``, region by region: a sort of
   region labels names its atlas with ``atlas`` in ``engines.yaml``.

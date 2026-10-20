@@ -149,7 +149,7 @@ def _target_language(app, flag: Optional[str], config) -> str:
 # The rich styles of the kinds of fragments of a query, as the prompt
 # highlights them (``editing.STYLE``).
 QUERY_STYLES = {
-    "comment": "dim italic",
+    "comment": "italic white",  # ANSI's light grey, as at the prompt
     "keyword": "bold magenta",
     "operator": "bold blue",
     "predicate": "blue",
