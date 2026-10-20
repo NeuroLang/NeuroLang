@@ -608,7 +608,10 @@ a non-strict one, and the reserved uppercase ``EUCLIDEAN`` behaves as
 ``euclidean``.  When both points are ranged by stored relations, as here,
 the pairs of points within the distance are computed once, when the rule
 is defined, rather than by comparing every voxel with every peak; the
-coordinates of each point must then be distinct variables.
+coordinates of each point must then be distinct variables.  A point of
+numbers, such as ``euclidean(?x, ?y, ?z, -24, -4, -20)``, counts as
+ranged by a stored relation of its own, so the points within the
+distance of a given coordinate are found the same way.
 
 
 Part 5: Probabilistic Rules
