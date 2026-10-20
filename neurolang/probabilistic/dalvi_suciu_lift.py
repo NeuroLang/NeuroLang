@@ -1511,11 +1511,12 @@ def disjoint_separator(query, symbol_table):
     the other rules. A conjunctive query is the union of a single
     disjunct.
 
-    The rule declines a union with a negation, whose deterministic support
-    would turn it into a difference the plan reads as an independent
-    negation, or with a disjunct without a free variable of the query,
-    true for every value of it, which a plan cannot give. Its proof is in
-    ``doc/probabilistic_lifting.rst``.
+    The rule declines a union of several disjuncts with a negation, whose
+    lifting did not end in reasonable time, and a union with a disjunct
+    without a free variable of the query, true for every value of it,
+    which a plan cannot give. A conjunctive query with a negation is
+    lifted, not through the support of its deterministic part. Its proof
+    is in ``doc/probabilistic_lifting.rst``.
 
     Returns whether the rule applies and its plan.
     """
@@ -1542,15 +1543,15 @@ def disjoint_separator(query, symbol_table):
         # A disjunct without a free variable is true for every value of
         # it, which a plan cannot give.
         return False, None
-    if any(
+    has_negation = any(
         isinstance(formula, Negation)
         for disjunct in disjuncts
         for formula in extract_logic_predicates(disjunct)
-    ):
-        # The deterministic support would translate a negation into a
-        # difference, which the plan reads as an independent negation, and
-        # lifting the rest would separate the choice atoms from the
-        # negations whose variables only they bind.
+    )
+    if has_negation and len(disjuncts) > 1:
+        # The sum is sound with negations (see the documentation), but
+        # lifting the rest of a union with negations did not end in
+        # reasonable time.
         return False, None
     separators, substitutions, choice_atoms = _choice_separators(
         disjuncts, quantified, symbol_table
@@ -1571,7 +1572,9 @@ def disjoint_separator(query, symbol_table):
         for atom in extract_logic_atoms(disjunct)
         if atom not in choice_atoms
     ]
-    if all(
+    # The support of a negation would be a difference, which the plan reads
+    # as an independent negation: the rest is lifted instead.
+    if not has_negation and all(
         is_atom_a_deterministic_relation(atom, symbol_table)
         for atom in remainder_atoms
     ):

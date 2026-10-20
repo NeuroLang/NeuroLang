@@ -432,9 +432,9 @@ Disjoint separator
    lifted for every :math:`\bar a` by the other rules. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
-   them, every free variable of the query, and no negation. It is tried
-   after the separator variables, a conjunctive query being the union of
-   a single disjunct.
+   them, every free variable of the query, and no negation unless there is
+   a single disjunct. It is tried after the separator variables, a
+   conjunctive query being the union of a single disjunct.
 
 Inclusion–exclusion
    For a conjunction :math:`Q_1 \land \dots \land Q_n` in conjunctive normal
@@ -864,9 +864,11 @@ Disjoint separator
    with :math:`D(\bar a)` true or false in every world, so its probability
    is :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds and 0 elsewhere:
    the join of the choice with the support of :math:`D`. The choice atoms
-   are kept in :math:`D`, which is then range-restricted. A negation is
-   excluded: its translation, a ``Difference``, would be read in the plan
-   as an independent negation.
+   are kept in :math:`D`, which is then range-restricted. With a negation
+   in the query the plan does not use the support: the translation of a
+   negation, a ``Difference``, would be read in the plan as an independent
+   negation. This is a constraint of the representation of plans, not of
+   the identity, which holds with negations (*Sign of the other literals*).
 
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
@@ -875,73 +877,95 @@ Disjoint separator
    *Termination.* The rule lifts the union with the variables of the
    choice free, one quantifier less, or lifts nothing (deterministic rest).
 
+   *Sign of the other literals.* Let :math:`Q = \exists \bar z\,
+   \bigvee_i Q_i`, each :math:`Q_i` a conjunction of literals, positive
+   or negated, with the positive literal :math:`C(\bar z, \bar u)` as
+   a conjunct, :math:`C` a choice, :math:`\bar z` quantified and
+   :math:`\bar u` free variables or constants (what ``_choice_separators``
+   establishes: it takes the atoms among the conjuncts of a disjunct, so
+   a negated atom of :math:`C` is never a separator). Then, for fixed
+   values of the free variables,
+
+   .. math::
+
+      P[Q] = \sum_{\bar a} P\Big[\bigvee_i Q_i[\bar a/\bar z]\Big].
+
+   *Proof.* A world in which :math:`\bigvee_i Q_i[\bar a/\bar z]` holds
+   satisfies :math:`C(\bar a, \bar u)`, as every :math:`Q_i` has it as a
+   conjunct. For :math:`\bar a \neq \bar b`, no world satisfies both
+   :math:`C(\bar a, \bar u)` and :math:`C(\bar b, \bar u)` (Lemma 2, the
+   tuples of a choice are mutually exclusive), so the events for
+   :math:`\bar a` and :math:`\bar b` are disjoint. Their union over all
+   :math:`\bar a` is :math:`Q`, and the probability of a disjoint union is
+   the sum of the probabilities. :math:`\square`
+
+   The proof uses only that every disjunct has the positive conjunct
+   :math:`C(\bar z, \bar u)` and Lemma 2: the other literals, positive
+   or negated, are never looked at.
+
    *Coverage of the disjoint projection.* The rule lifts every query that
    the disjoint projection of Suciu et al. [Suciu2011]_ (section 4.3.1)
-   lifted, but the ones listed here. For a choice :math:`C`, a relation
+   lifted, but the two listed here. For a choice :math:`C`, a relation
    without key attribute, the disjoint projection applies to a
    conjunctive query :math:`\exists \bar y\, Q` that has an atom
-   :math:`C(\bar u)` with a quantified variable :math:`z`; it sums over
-   the values of the variables :math:`\bar z` of the choice atoms that
-   are quantified, and lifts the query with them free, which is
+   :math:`C(\bar u)` with a quantified variable; it sums over the values
+   of the variables :math:`\bar z` of the choice atoms that are
+   quantified, and lifts the query with them free, which is
    :math:`\exists \bar y'\, Q` with :math:`\bar y' = \bar y \setminus
-   \bar z`, in the old implementation (``disjoint_project_conjunctive_query``)
-   by removing the existential quantifiers of :math:`\bar z`. The old
-   rule was tried at the place of ``disjoint_separator``, after the
-   separator variables, on the same query. For such a query, in prenex
-   form with a single disjunct, with no negation and one atom of each
-   choice:
+   \bar z`: the old implementation
+   (``disjoint_project_conjunctive_query``) removed the existential
+   quantifiers of :math:`\bar z`. It was tried at the place of
+   ``disjoint_separator``, after the separator variables, on the same
+   query. For such a query, in prenex form with a single disjunct and one
+   atom of each choice:
 
    * ``_align_choice_atoms`` has one atom to align and returns the empty
      renaming, ``_renamings_are_safe`` holds, and the disjunct is not
      changed;
    * the separators are the quantified variables of the choice atoms,
      :math:`\bar z`, which is not empty, so the rule applies;
-   * the free variables are those of the only disjunct, so the free-variable
-     condition and the prenex condition (``_has_quantifier``) hold;
-   * when the other atoms are not all deterministic, the rule lifts
-     ``add_existentials_except`` on the free variables and
-     :math:`\bar z`: the quantifiers of all the variables but those, the
-     very query the old rule lifted, and projects with
-     ``DisjointProjection`` on the free variables, as the old rule did.
-     The plans are the same;
-   * when they are all deterministic, the old rule lifted
-     :math:`C(\bar a) \land D(\bar a)` by the algorithm, whose plan gives
-     :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds, and the new plan
-     is the join of the choice with the support of :math:`D`: the same
-     probabilities (*Deterministic rest*), without lifting :math:`D`.
+   * the free variables are those of the only disjunct, so the
+     free-variable condition and the prenex condition
+     (``_has_quantifier``) hold, and there is no union to decline;
+   * the sum is the one of the old rule (*Sign of the other literals*),
+     negations included, and the rule lifts
+     ``add_existentials_except`` on the free variables and :math:`\bar z`:
+     the quantifiers of all the variables but those, the very query the
+     old rule lifted, projected with ``DisjointProjection`` on the free
+     variables as the old rule did. The plans are the same;
+   * when the other atoms are all deterministic and there is no negation,
+     the old rule lifted :math:`C(\bar a) \land D(\bar a)` by the
+     algorithm, whose plan gives :math:`P[C(\bar a)]` where :math:`D(\bar
+     a)` holds, and the new plan is the join of the choice with the
+     support of :math:`D`: the same probabilities (*Deterministic rest*),
+     without lifting :math:`D`.
 
-   The rule declines, where the old rule applied, in three cases:
+   The rule declines, where the old rule applied, in two cases:
 
-   * *A negation* in the query. The old rule recursed on it with no check.
-     The unions of rules with a negation were not lifted correctly (on 90
-     random unions of one to three rules with a negation, over a uniform
-     choice, the old code gave 57 wrong results, and the rule as it is,
-     which declines them, raises an error in 29 and no wrong result);
-     for the queries of a single rule with a negation, the remaining rules
-     solve all 75 random ones correctly, before and after the change. This
-     part is verified by experiment, not proved. Lifting the rest of a
-     union with a negation, the choice atoms kept, was tried: the planning
-     of some unions did not end in reasonable time.
    * *A choice atom without a quantified variable,* all its terms being
      free variables or constants. There is no sum to take: the old rule
      removed no quantifier and lifted the same query again, making no
      progress. The solver answers such queries before the algorithm is
-     called (checked on ``a(s) :- C(s), M(s, 'a')`` with ``s`` free).
+     called.
    * *Several atoms of the same choice* in a conjunction with different
      variables (``len(same) != 1`` in ``_choice_separators``). The rewriting
      of the choices (Lemma 2) makes them one atom before the algorithm
-     runs, so the queries the solver gives it have none (checked on a rule
-     joining the choice twice, answered without the rule); a query that
-     still has them, given to the algorithm directly, is declined where the old rule
-     took the variables of both.
+     runs, so the queries the solver gives it have none; a query that
+     still has them, given to the algorithm directly, is declined where
+     the old rule took the variables of both.
 
    An atom of a tuple-independent relation with only constants did not
-   trigger the old rule: it raised an exception. On unions, the old rule
-   was a different one (``P[A \lor B] = P[A] + P[B] - P[A \land B]`` with
-   its own conditions, removed); ``disjoint_separator`` lifts the unions
+   trigger the old rule: it raised an exception.
+
+   On unions, the old rule was a different one (:math:`P[A \lor B] = P[A]
+   + P[B] - P[A \land B]` with its own conditions, removed). The identity
+   above holds for a union with negations too; the rule declines a union
+   of several disjuncts with a negation for the cost of lifting it, not
+   because the identity fails. ``disjoint_separator`` lifts the unions
    whose every disjunct has the choice in a single projection, and the
    other unions are lifted by inclusion–exclusion, applied to the
-   conjunctive queries that the rule lifts.
+   conjunctive queries that the rule lifts; that this covers all that the
+   old union rule lifted is not proved.
 
 Rewriting of the choices
    By Lemma 2, :math:`C(\bar x) \land C(\bar y) \equiv C(\bar x) \land
