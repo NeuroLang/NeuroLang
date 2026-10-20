@@ -331,7 +331,8 @@ class Agent:
     The examples of the prompt are chosen among *examples*, a list of
     :class:`~.examples.Example`, by default the engine's bank, and the
     engine is described by *description*, by default the description
-    of its configuration.
+    of its configuration, and *guidance* tells how to answer on it, by
+    default its configuration's ``assistant_guidance``.
     """
 
     strategy = ""
@@ -341,6 +342,7 @@ class Agent:
         language: str, engine_name: str = "", client=None, loaded=None,
         on_step: Optional[Callable] = None, exclude_question: str = "",
         examples: Optional[list] = None, description: Optional[str] = None,
+        guidance: Optional[str] = None,
     ):
         self.nl = nl
         self.provider = provider
@@ -353,6 +355,7 @@ class Agent:
         self.exclude_question = exclude_question
         self.examples = examples
         self.description = description
+        self.guidance = guidance
 
     def system_prompt(self, question: str, text_tools: bool = False) -> str:
         """Return the system prompt for *question*."""
@@ -365,15 +368,20 @@ class Agent:
         )
         description = self.description
         if description is None:
-            description = ""
-            if self.engine_name in engine_registry.list_engine_names():
-                description = engine_registry.get_engine_config(
-                    self.engine_name
-                ).get("description", "")
+            description = self._engine_config().get("description", "")
+        guidance = self.guidance
+        if guidance is None:
+            guidance = self._engine_config().get("assistant_guidance", "")
         return prompts.system_prompt(
             self.language, self.context.schema_summary(), examples,
-            self.strategy, text_tools, description,
+            self.strategy, text_tools, description, guidance,
         )
+
+    def _engine_config(self) -> dict:
+        """Return the configuration of the engine, if it is registered."""
+        if self.engine_name in engine_registry.list_engine_names():
+            return engine_registry.get_engine_config(self.engine_name)
+        return {}
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):

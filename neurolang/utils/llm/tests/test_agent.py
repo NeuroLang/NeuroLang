@@ -322,3 +322,28 @@ def test_empty_final_answer_recalls_the_query_with_rows(nl):
     assert "Your query that gave rows was:\nans(s) :- mentions(s, 'pain')" \
         in steps[1].observation
     assert result.query == "ans(s) :- mentions(s, 'pain')"
+
+
+def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):
+    from neurolang.utils import engine_registry
+
+    monkeypatch.setattr(
+        engine_registry, "list_engine_names", lambda: ["guided"]
+    )
+    monkeypatch.setattr(engine_registry, "get_engine_config", lambda *a: {
+        "description": "Studies and terms.",
+        "assistant_guidance": "Answer with   probabilities.",
+    })
+    react = ReactAgent(
+        nl, provider(), assistant_config(), "datalog", engine_name="guided",
+        client=ScriptedClient([]),
+    )
+    prompt = react.system_prompt("Which studies mention pain?")
+    assert "The engine: Studies and terms." in prompt
+    assert "# How to answer on this engine\nAnswer with probabilities." \
+        in prompt
+    given = ReactAgent(
+        nl, provider(), assistant_config(), "datalog", engine_name="guided",
+        client=ScriptedClient([]), guidance="",
+    )
+    assert "How to answer" not in given.system_prompt("Which studies?")
