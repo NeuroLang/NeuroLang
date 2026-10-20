@@ -19,6 +19,37 @@ Unreleased
 
 **New features:**
 
+* The coordinate meta-analysis engines (``neurosynth``, ``neurostore``)
+  have the peaks in MNI millimetres, ``peak_mni(x, y, z, study)``, the
+  Destrieux atlas of the cortex and the Tian atlas of the subcortex beside
+  Schaefer, and for each atlas ``{atlas}_activated(label, study)``: the
+  studies with a peak within 3 mm of a voxel of a region.  The LLM
+  assistant answers their questions with probabilistic query answering
+  (an engine's ``assistant_guidance`` goes into its prompt), with
+  Destrieux for the classical anatomy and Schaefer and Tian for the
+  functional anatomy; the neurosynth example bank is rewritten so, with
+  examples of the co-activation of regions and of points.
+
+* The LLM assistant writes the query it accepted with a comment line
+  explaining each rule, from one more request to the model (``%`` lines
+  in Datalog, which runs as it is; ``comment_rules: false`` turns it
+  off).  ``.llm --steps N``, ``.ask --steps N``, ``.llm steps N`` and
+  ``--steps N`` on the command line set the most steps of the ReAct
+  agent.
+
+* In the REPL, the rules of a submission with a query (``ans`` or
+  ``obtain``) are local to it: they are discarded after it, so that two
+  queries defining ``active`` do not join their rules.  ``.scope off``
+  keeps them in the session, as before.  Comments are shown in a lighter
+  grey.
+
+* ``.view`` and ``.save`` (and ``--view``, ``--save``) paint a result on
+  the regions of an atlas, ``ans(l, p)``, region by region: a sort of
+  region labels names its atlas with ``atlas`` in ``engines.yaml``.
+  ``.view`` shows a result of pairs of regions or points with a value,
+  such as their co-activation, as a network drawn by NiiVue's connectome
+  view, over the brain.
+
 * The page of the REPL in the browser has the logo, a header with links to
   the documentation, the tutorial and the source, the command it runs to
   copy, and a status that shows when it is busy; the choice of the
@@ -238,6 +269,13 @@ Unreleased
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
 **Bug fixes:**
+
+* A Euclidean distance bound to a point given by numbers,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, was
+  computed for every row (14 s on the peaks of neurosynth), and the
+  reserved ``EUCLIDEAN`` raised an error: the point is now ranged by a
+  stored relation of its own, so the points within the distance are
+  precomputed as for two relations (well under a second).
 
 * A probabilistic query with a variable occurring only in deterministic
   relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the

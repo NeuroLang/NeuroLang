@@ -300,13 +300,100 @@ def viewer_state(
     }
 
 
+# The radius, in millimetres, of the largest node and of the thickest edge
+# of a network.
+NODE_RADIUS = 4.0
+EDGE_RADIUS = 1.5
+
+# The opacity the overlays of a network start with, for its edges to
+# show on the slices.
+NETWORK_OVERLAY_OPACITY = 0.5
+
+# The number of edges a percentile threshold shows at least, all of them
+# when there are fewer.
+MIN_SHOWN_EDGES = 20
+
+
+def edge_threshold(values, threshold, at_least: int = 0) -> float:
+    """
+    Return the smallest |value| of the edges shown: *threshold*, a value,
+    or the percentile ``"P%"`` of the |*values*|, lowered to show the
+    *at_least* largest.
+    """
+    magnitudes = np.sort(np.abs(np.asarray(values, dtype=float)))[::-1]
+    if not (isinstance(threshold, str) and threshold.endswith("%")):
+        return float(threshold)
+    if not magnitudes.size:
+        return 0.0
+    minimum = float(np.percentile(magnitudes, float(threshold[:-1])))
+    if at_least:
+        minimum = min(minimum, magnitudes[:at_least][-1])
+    return float(minimum)
+
+
+def connectome_state(names, coordinates, edges, threshold) -> dict:
+    """
+    Return the network of *edges* as NiiVue draws it, a JSON-able dict.
+
+    The nodes have *names* and the millimetre *coordinates* of their
+    centre; an edge ``(first, second, value)`` joins two of them, by
+    index. Only the edges of |value| at least the threshold
+    (:func:`edge_threshold`; a percentile shows the
+    :data:`MIN_SHOWN_EDGES` largest at least) are drawn, and the nodes
+    they join: the
+    colour and the size of a node is its strength, the sum of the values
+    of its edges drawn, and the colour and the thickness of an edge its
+    value.
+    """
+    minimum = edge_threshold(
+        [w for _, _, w in edges], threshold, MIN_SHOWN_EDGES
+    )
+    shown = [e for e in edges if abs(e[2]) >= minimum and e[2] != 0]
+    strength = np.zeros(len(names))
+    for first, second, weight in shown:
+        strength[first] += weight
+        strength[second] += weight
+    kept = sorted({n for first, second, _ in shown for n in (first, second)})
+    position = {n: p for p, n in enumerate(kept)}
+    top_node = max((abs(strength[n]) for n in kept), default=0.0) or 1.0
+    top_edge = max((abs(w) for _, _, w in shown), default=0.0) or 1.0
+    return {
+        "name": "network",
+        "nodeColormap": "winter", "nodeColormapNegative": "cool",
+        "nodeMinColor": 0.0, "nodeMaxColor": float(top_node),
+        "nodeScale": NODE_RADIUS,
+        "edgeColormap": "warm", "edgeColormapNegative": "cool",
+        "edgeMin": float(minimum), "edgeMax": float(top_edge),
+        "edgeScale": EDGE_RADIUS / top_edge,
+        "legendLineThickness": 0, "showLegend": False,
+        "nodes": [
+            {
+                "name": str(names[n]),
+                "x": float(coordinates[n][0]), "y": float(coordinates[n][1]),
+                "z": float(coordinates[n][2]),
+                "colorValue": float(strength[n]),
+                "sizeValue": float(max(abs(strength[n]) / top_node, 0.4)),
+            }
+            for n in kept
+        ],
+        "edges": [
+            {
+                "first": position[first], "second": position[second],
+                "colorValue": float(weight),
+            }
+            for first, second, weight in shown
+        ],
+    }
+
+
 def _script_json(state: dict) -> str:
     """Return *state* as JSON that cannot end the script element it is in."""
     return json.dumps(state, separators=(",", ":")).replace("<", "\\u003c")
 
 
 def viewer_html(
-    img, background, *, title: str, threshold, cmap, symmetric: bool
+    img, background, *, title: str, threshold, cmap, symmetric: bool,
+    connectome=None,
 ) -> str:
     """
     Return the HTML page of an interactive viewer of the image *img*.
@@ -319,12 +406,19 @@ def viewer_html(
     colormap *cmap*, :data:`DEFAULT_CMAP` if None, the others with those
     of :data:`OVERLAY_CMAPS`; and with a colormap symmetric around 0 or
     not, as *symmetric*, a bool or one per overlay, tells. Its controls
-    change them.
+    change them. A *connectome*, a network of :func:`connectome_state`,
+    is drawn in the 3D render, which the page then starts with, beside
+    the slices, and its strongest edges are listed.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
         symmetric=symmetric,
     )
+    if connectome is not None:
+        state["connectome"] = connectome
+        state["initial"]["display"] = {"renderTile": True, "layout": "grid"}
+        for layer in state["initial"]["layers"]:
+            layer["opacity"] = NETWORK_OVERLAY_OPACITY
     parts = {
         "TITLE": html.escape(title),
         "DATA": _script_json(state),

@@ -627,3 +627,42 @@ def test_the_niivue_display_controls_in_a_headless_browser(tmp_path):
         "cube": False, "ruler": False, "radiological": False,
         "crosshairWidth": 1, "clip": False, "checkbox": False,
     }
+
+
+_NETWORK_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv;
+  var out = {
+    meshes: nv.meshes.length,
+    nodes: nv.meshes.length ? nv.meshes[0].nodes.length : 0,
+    renderTile: document.getElementById('render-tile').checked,
+    listed: document.querySelectorAll('#edges li').length,
+    count: document.getElementById('network-count').textContent,
+    first: document.querySelector('#edges li').textContent,
+    errors: window.__errors || []
+  };
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_network_in_a_headless_browser(tmp_path):
+    """Check NiiVue draws a network, in the 3D render, and the page lists
+    its strongest edges."""
+    network = brain_viewer.connectome_state(
+        ["a", "b", "c"], np.array([[0.0, 0, 0], [10, 0, 0], [0, 10, 0]]),
+        [(0, 1, 0.1), (1, 2, 0.2), (0, 2, 0.4)], 0,
+    )
+    html = brain_viewer.viewer_html(
+        _image(np.ones((4, 4, 4), dtype=np.float32)), None, title="network",
+        threshold=0, cmap=None, symmetric=False, connectome=network,
+    )
+    result = _run_in_chrome(tmp_path, html, _NETWORK_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert result["meshes"] == 1 and result["nodes"] == 3
+    assert result["renderTile"] is True
+    assert result["listed"] == 3 and "3 nodes, 3 edges" in result["count"]
+    assert result["first"] == "a — c: 0.4"

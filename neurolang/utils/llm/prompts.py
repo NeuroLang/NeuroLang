@@ -262,12 +262,15 @@ def format_examples(examples, language: str) -> str:
 def system_prompt(
     language: str, schema: str, examples, strategy: str,
     text_tools: bool = False, engine_description: str = "",
+    guidance: str = "",
 ) -> str:
     """
     Return the system prompt of the assistant.
 
     *strategy* is ``icl`` or ``react``; *text_tools* adds the text
     protocol of the tools, for providers without native tool calls.
+    *guidance* tells how to answer on the engine (its configuration's
+    ``assistant_guidance``).
     """
     name = LANGUAGE_NAMES[language]
     parts = [ROLE.format(language=name)]
@@ -278,6 +281,10 @@ def system_prompt(
     if examples:
         parts.append(
             f"# Examples\n{format_examples(examples, language)}"
+        )
+    if guidance:
+        parts.append(
+            f"# How to answer on this engine\n{' '.join(guidance.split())}"
         )
     if strategy == "icl":
         parts.append(ICL_INSTRUCTIONS.format(language=name, fence=language))

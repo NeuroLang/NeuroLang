@@ -633,3 +633,93 @@ def test_region_destroy_keeps_region_relation(frontend):
 
     regions = engine.execute_datalog_program("ans(l, r) :- region(l, r)")
     assert set(regions.to_unnamed()) == {("A", first), ("B", second)}
+
+
+def _expected_near(point, op, radius):
+    """The studies of PEAKS within *radius* of the constant *point*."""
+    return {
+        (peak[3],) for peak in PEAKS if op(_distance(peak[:3], point), radius)
+    }
+
+
+@pytest.mark.parametrize("frontend", [NeurolangPDL, NeurolangDL])
+@pytest.mark.parametrize(
+    "bound,op,radius",
+    [
+        ("euclidean(i1, j1, k1, 2, 2, 3) < 1.5", operator.lt, 1.5),
+        ("euclidean(2, 2, 3, i1, j1, k1) <= 1", operator.le, 1),
+        ("2.5 > euclidean(i1, j1, k1, 2.0, 2.0, 3.0)", operator.lt, 2.5),
+        ("EUCLIDEAN(i1, j1, k1, 2, 2, 3) <= 2.5", operator.le, 2.5),
+    ],
+)
+def test_constant_point_bound_is_precomputed(frontend, bound, op, radius):
+    """A point of numbers is ranged by a relation of its own, so the pairs
+    within the bound are precomputed rather than the distance computed
+    for every row, with a warning."""
+    nl = _engine(frontend)
+    result = _run(
+        nl, f"close(s) :- peak_reported(i1, j1, k1, s) & ({bound})",
+        head="close(s)",
+    )
+    assert result == _expected_near((2, 2, 3), op, radius)
+    body = str(_rule_body(nl))
+    assert "euclidean" not in body.lower() and "peak_reported" not in body
+
+
+def test_constant_point_with_a_distance_variable():
+    nl = _engine()
+    result = _run(
+        nl,
+        "close(s, d) :- peak_reported(i1, j1, k1, s) & "
+        "(d == euclidean(i1, j1, k1, 4, 3, 2)) & (d <= 2)",
+        head="close(s, d)",
+    )
+    assert result == {
+        (peak[3], _distance(peak[:3], (4, 3, 2))) for peak in PEAKS
+        if _distance(peak[:3], (4, 3, 2)) <= 2
+    }
+
+
+def test_two_constant_points():
+    nl = _engine()
+    result = _run(
+        nl,
+        "close(s) :- peak_reported(i1, j1, k1, s) & "
+        "(euclidean(i1, j1, k1, 2, 2, 2) < 1) & "
+        "(euclidean(i1, j1, k1, 4, 3, 2) < 3)",
+        head="close(s)",
+    )
+    assert result == {("s1",), ("s2",)}
+
+
+def test_constant_point_without_a_bound_is_a_plain_function():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0, 0, 0), (1, 2, 2)], name="a")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = nl.execute_datalog_program(
+            "dist(d) :- a(i, j, k) & (d == euclidean(i, j, k, 0, 0, 0))\n"
+            "ans(d) :- dist(d)"
+        )
+    assert set(result.to_unnamed()) == {(0.0,), (3.0,)}
+
+
+def test_constant_point_of_a_user_defined_euclidean():
+    nl = _engine()
+
+    @nl.add_symbol
+    def euclidean(
+        i1: int, j1: int, k1: int, i2: int, j2: int, k2: int
+    ) -> float:
+        return numpy.abs(i1 - i2) + numpy.abs(j1 - j2) + numpy.abs(k1 - k2)
+
+    result = _run(
+        nl,
+        "close(s) :- peak_reported(i1, j1, k1, s) & "
+        "(euclidean(i1, j1, k1, 2, 2, 3) < 2)",
+        head="close(s)",
+    )
+    assert result == {
+        (peak[3],) for peak in PEAKS
+        if sum(abs(a - b) for a, b in zip(peak[:3], (2, 2, 3))) < 2
+    }

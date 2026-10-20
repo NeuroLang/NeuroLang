@@ -147,9 +147,39 @@
       viewer.layers.push(summarise(data.overlays[l].name, volume));
     }
     background.colorbarVisible = false;
+    if (data.connectome) {
+      // The network shows through the 3D render, and on a slice only
+      // within a few millimetres of it.
+      nv.opts.meshXRay = NETWORK_XRAY;
+      nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
+      nv.loadConnectome(data.connectome);
+      listEdges(data.connectome);
+    }
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
+  }
+
+  // The strongest edges of the network, listed under the views, how
+  // much the network shows through the 3D render, and the thickness of
+  // the slab of a slice it is drawn in, in millimetres.
+  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6;
+
+  function listEdges(network) {
+    var edges = network.edges.slice().sort(function (a, b) {
+      return Math.abs(b.colorValue) - Math.abs(a.colorValue);
+    }).slice(0, LISTED_EDGES);
+    var list = $('edges');
+    $('network').style.display = '';
+    $('network-count').textContent = network.nodes.length + ' nodes, ' +
+      network.edges.length + ' edges shown' +
+      (network.edges.length > edges.length ? ', the strongest ' + edges.length : '');
+    edges.forEach(function (e) {
+      var item = document.createElement('li');
+      item.textContent = network.nodes[e.first].name + ' — ' +
+        network.nodes[e.second].name + ': ' + format(e.colorValue);
+      list.appendChild(item);
+    });
   }
 
   /* ---------------------------------------------------------------
@@ -535,7 +565,7 @@
   function reset() {
     viewer.state = JSON.parse(JSON.stringify(data.initial));
     viewer.state.order = viewer.layers.map(function (layer, l) { return l; });
-    viewer.state.display = Object.assign({}, DISPLAY);
+    viewer.state.display = Object.assign({}, DISPLAY, data.initial.display || {});
     drawInOrder();
     listLayers();
     syncControls();

@@ -26,10 +26,11 @@ from typing import Callable, Optional
 from neurolang.utils import engine_registry
 
 from . import prompts
+from .comments import comment_rules, commented_query
 from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
-from .providers import make_client
+from .providers import LLMError, make_client
 from .validation import check_query, run_preview
 
 MAX_OBSERVATION = 2000
@@ -95,6 +96,7 @@ class AgentResult:
     language: str = "squall"
     explanation: str = ""
     valid: bool = False
+    commented: str = ""
     error: str = ""
     steps: list = field(default_factory=list)
     usage: Counter = field(default_factory=Counter)
@@ -331,7 +333,8 @@ class Agent:
     The examples of the prompt are chosen among *examples*, a list of
     :class:`~.examples.Example`, by default the engine's bank, and the
     engine is described by *description*, by default the description
-    of its configuration.
+    of its configuration, and *guidance* tells how to answer on it, by
+    default its configuration's ``assistant_guidance``.
     """
 
     strategy = ""
@@ -341,6 +344,7 @@ class Agent:
         language: str, engine_name: str = "", client=None, loaded=None,
         on_step: Optional[Callable] = None, exclude_question: str = "",
         examples: Optional[list] = None, description: Optional[str] = None,
+        guidance: Optional[str] = None,
     ):
         self.nl = nl
         self.provider = provider
@@ -353,6 +357,7 @@ class Agent:
         self.exclude_question = exclude_question
         self.examples = examples
         self.description = description
+        self.guidance = guidance
 
     def system_prompt(self, question: str, text_tools: bool = False) -> str:
         """Return the system prompt for *question*."""
@@ -365,15 +370,20 @@ class Agent:
         )
         description = self.description
         if description is None:
-            description = ""
-            if self.engine_name in engine_registry.list_engine_names():
-                description = engine_registry.get_engine_config(
-                    self.engine_name
-                ).get("description", "")
+            description = self._engine_config().get("description", "")
+        guidance = self.guidance
+        if guidance is None:
+            guidance = self._engine_config().get("assistant_guidance", "")
         return prompts.system_prompt(
             self.language, self.context.schema_summary(), examples,
-            self.strategy, text_tools, description,
+            self.strategy, text_tools, description, guidance,
         )
+
+    def _engine_config(self) -> dict:
+        """Return the configuration of the engine, if it is registered."""
+        if self.engine_name in engine_registry.list_engine_names():
+            return engine_registry.get_engine_config(self.engine_name)
+        return {}
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):
@@ -392,8 +402,45 @@ class Agent:
         self.on_step(step)
 
     def run(self, question: str) -> AgentResult:
-        """Return the query answering *question*."""
+        """
+        Return the query answering *question*.
+
+        With the setting ``comment_rules``, the accepted query is also
+        written with a comment line explaining each rule, in
+        ``commented`` (see :meth:`_comment`).
+        """
+        result = self._run(question)
+        if result.valid and result.query and self.config.comment_rules:
+            self._comment(result, question)
+        return result
+
+    def _run(self, question: str) -> AgentResult:
+        """Return the query answering *question*, as the strategy finds it."""
         raise NotImplementedError
+
+    def _comment(self, result: AgentResult, question: str) -> None:
+        """
+        Ask the model for a comment line on each rule of the query of
+        *result* and write it commented in ``result.commented``.
+
+        The query itself is unchanged; a request that fails, or a reply
+        without a comment per rule, leaves ``commented`` empty and is
+        reported as a step.
+        """
+        try:
+            rules, notes = comment_rules(
+                lambda messages: self._complete(result, messages, None, 0.0),
+                question, result.query, result.language,
+            )
+        except (LLMError, ValueError) as exc:
+            self._step(result, AgentStep(
+                "", "comment_rules", {}, f"No comments: {exc}"
+            ))
+            return
+        result.commented = commented_query(rules, notes)
+        self._step(result, AgentStep(
+            "", "comment_rules", {}, result.commented
+        ))
 
 
 class IclAgent(Agent):
@@ -401,7 +448,7 @@ class IclAgent(Agent):
 
     strategy = "icl"
 
-    def run(self, question: str) -> AgentResult:
+    def _run(self, question: str) -> AgentResult:
         samples = max(1, self.config.samples)
         if samples == 1:
             return self._attempt(question, self.config.temperature)
@@ -486,7 +533,7 @@ class ReactAgent(Agent):
         """Whether the provider's native tool calls are used."""
         return self.provider.tool_calling == "native"
 
-    def run(self, question: str) -> AgentResult:
+    def _run(self, question: str) -> AgentResult:
         result = AgentResult(language=self.language)
         toolbox = Toolbox(
             self.context, self.language, self.config.preview_rows,

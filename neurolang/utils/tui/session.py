@@ -604,6 +604,24 @@ def cmd_rewritten(app, arg: str) -> None:
 
 
 @command(
+    ".scope",
+    "Keep the rules of a query local to it (on, the default), or in the "
+    "session (off)",
+    ".scope [on|off]",
+)
+def cmd_scope(app, arg: str) -> None:
+    """
+    Show, or set, whether the rules defined with a query are local to it.
+
+    On, a submission with a query (``ans`` in Datalog, ``obtain`` in
+    SQUALL) runs in a scope discarded after it: its rules do not stay in
+    the session, so that the next query can define rules of the same
+    names. A submission without a query keeps its rules in any case.
+    """
+    _switch(app, arg, "scope_queries", "Rules of a query local to it")
+
+
+@command(
     ".ra", "Print the relational algebra plans of the last query, or of "
     "every query instead of running it", ".ra [on|off]",
 )

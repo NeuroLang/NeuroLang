@@ -1,189 +1,227 @@
-# Questions on the neurosynth engine with their SQUALL and Datalog
-# queries: the few-shot examples of the LLM query assistant, the most
-# similar to the user's question being put in the prompt. Every query is
+# Questions on the neurosynth engine with their Datalog queries: the
+# few-shot examples of the LLM query assistant, the most similar to the
+# user's question being put in the prompt. Every query is
 # checked against the engine by the tests (NEUROLANG_TEST_DATA_DIR).
+#
+# As the engine's assistant_guidance asks, every question is answered
+# with probabilistic query answering over selected_study, the uniform
+# choice of a study: a study is chosen at random and the answer is the
+# probability of what the question asks, conditioned on the term it
+# names. A study activates a point when one of its peaks is within 3 mm:
+# peaks in MNI millimetres (peak_mni) for points given in MNI
+# coordinates, the Destrieux atlas for the classical anatomy of the
+# cortex (destrieux_activated), and the Schaefer networks of the cortex
+# and the Tian atlas of the subcortex for the functional anatomy
+# (schaefer_activated, tian_activated).
 examples:
   - question: Which studies mention pain?
-    squall: obtain every Study that mentions 'pain'.
-    datalog: ans(s) :- mentions(s, 'pain')
+    datalog: |-
+      pain_study(s) :- mentions(s, 'pain'), selected_study(s)
+      ans(p) :- PROB[pain_study(s)] = p
 
-  - question: List the terms of the vocabulary.
-    squall: obtain every Term.
-    datalog: ans(t) :- term(t)
-
-  - question: Which terms are mentioned by at least one study?
-    squall: obtain every Term that a Study mentions.
-    datalog: ans(t) :- mentions(s, t)
-
-  - question: Which voxels are reported by studies that mention pain?
-    squall: obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports.
-    datalog: ans(i, j, k) :- mentions(s, 'pain'), reports(s, i, j, k)
+  - question: Which terms are mentioned by the studies, and how often?
+    datalog: |-
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      ans(t, p) :- PROB[mentioned_term(t)] = p
 
   - question: Which studies mention either language or speech?
-    squall: obtain every Study that mentions 'language' or mentions 'speech'.
     datalog: |-
       language_or_speech(s) :- mentions(s, 'language')
       language_or_speech(s) :- mentions(s, 'speech')
-      ans(s) :- language_or_speech(s)
+      chosen(s) :- language_or_speech(s), selected_study(s)
+      ans(p) :- PROB[chosen(s)] = p
 
   - question: Which studies mention both pain and emotion?
     datalog: |-
-      ans(s) :- term_in_study_tfidf(s, 'pain', v), term_in_study_tfidf(s, 'emotion', w), (v > 0.03), (w > 0.03)
+      pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
+      ans(p) :- PROB[pain_and_emotion(s)] = p
 
   - question: Which studies do not mention pain?
-    datalog: ans(s) :- study(s), ~mentions(s, 'pain')
-
-  - question: Give the TF-IDF weight of the term reward in each study where it is above 0.1.
-    squall: obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'reward' and ?w is greater than 0.1.
-    datalog: ans(s, w) :- weighted_mention(s, 'reward', w), (w > 0.1)
-
-  - question: Which terms does the study 10022492 mention?
-    squall: obtain every Term that 10022492 mentions.
-    datalog: ans(t) :- mentions(10022492, t)
+    datalog: |-
+      no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
+      ans(p) :- PROB[no_pain(s)] = p
 
   - question: Which terms co-occur with fear in a study?
-    squall: obtain every Term that a Study that mentions 'fear' mentions.
-    datalog: ans(t) :- mentions(s, 'fear'), mentions(s, t)
-
-  - question: How many studies are there?
-    squall: obtain every Count of the Study.
     datalog: |-
-      study_count(n) :- AGGREGATE[](study(s) @ count(s)) = n
-      ans(n) :- study_count(n)
-
-  - question: How many studies mention each term?
-    squall: |-
-      define as Term_study_count for every Term ;
-          where every Count of the Study that mentions the Term.
-      obtain every Term_study_count.
-    datalog: |-
-      term_study_count(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n
-      ans(t, n) :- term_study_count(t, n)
-
-  - question: How many terms does each study mention?
-    datalog: |-
-      study_term_count(s, n) :- AGGREGATE[s](mentions(s, t) @ count(t)) = n
-      ans(s, n) :- study_term_count(s, n)
-
-  - question: What is the highest TF-IDF weight of the term attention?
-    datalog: |-
-      attention_max(m) :- AGGREGATE[](weighted_mention(s, 'attention', w) @ max(w)) = m
-      ans(m) :- attention_max(m)
-
-  - question: Define the studies about faces, then list the voxels they report.
-    squall: |-
-      define as Face_study every Study that mentions 'face'.
-      obtain every Voxel (?i; ?j; ?k) that a Face_study reports.
-    datalog: |-
-      face_study(s) :- mentions(s, 'face')
-      ans(i, j, k) :- face_study(s), reports(s, i, j, k)
-
-  - question: What is the probability that a voxel is reported, given that the study mentions auditory?
-    squall: |-
-      define as Activation every Peak_reported (?i; ?j; ?k; ?s) such that ?s is a Selected_study.
-      define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf) such that ?s is a Selected_study.
-      define as Activation_given_term with probability
-          every Activation (?i; ?j; ?k; _)
-          conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
-      obtain every Activation_given_term (?i; ?j; ?k; ?p).
-    datalog: |-
-      activation(i, j, k, s) :- peak_reported(i, j, k, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // term_association(s, 'auditory')] = p
+      ans(t, p) :- PROB[term_association(s, t) // term_association(s, 'fear')] = p
 
-  - question: What is the probability that a study mentions each term?
-    squall: |-
-      define as Mentioned_term every Term that a Selected_study mentions.
-      define as Term_probability with inferred probability every Mentioned_term.
-      obtain every Term_probability (?t; ?p).
+  - question: Which voxels are activated by studies that mention pain?
     datalog: |-
-      mentioned_term(t) :- selected_study(s), mentions(s, t)
-      ans(t, p) :- PROB[mentioned_term(t)] = p
-
-  # Euclidean distances: voxels are indices of the 1 mm MNI grid, the MNI
-  # point (x, y, z) being the voxel (x + 98, y + 134, z + 72), so that a
-  # distance between voxels is in mm. The left amygdala, MNI (-24, -4, -20),
-  # is the voxel (74, 130, 52).
-  - question: Which studies report an activation within 6 mm of the left amygdala, MNI (-24, -4, -20)?
-    squall: obtain every Study that reports a Voxel (?i; ?j; ?k) such that euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 6.
-    datalog: ans(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 6)
-
-  - question: Which terms are mentioned by more than 50 of the studies activating within 6 mm of the voxel (74, 130, 52), and by how many?
-    squall: |-
-      define as Roi_study every Study that reports a Voxel (?i; ?j; ?k) such that euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 6.
-      define as Roi_term_count for every Term ; where every Count of the Roi_study that mentions the Term.
-      obtain every Roi_term_count (?t; ?n) such that ?n is greater than 50.
-    datalog: |-
-      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 6)
-      roi_term(t, s) :- roi_study(s), mentions(s, t)
-      term_count(t, n) :- AGGREGATE[t](roi_term(t, s) @ count(s)) = n
-      ans(t, n) :- term_count(t, n), (n > 50)
-
-  - question: How many studies report each voxel within 5 mm of the MNI point (-24, -4, -20)?
-    datalog: |-
-      near_peak(i, j, k, s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 5)
-      voxel_count(i, j, k, n) :- AGGREGATE[i, j, k](near_peak(i, j, k, s) @ count(s)) = n
-      ans(i, j, k, n) :- voxel_count(i, j, k, n)
-
-  - question: What is the probability that a study activates within 10 mm of the left amygdala, voxel (74, 130, 52), given that it mentions fear?
-    datalog: |-
-      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
-      active_roi(s) :- roi_study(s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active_roi(s) // term_association(s, 'fear')] = p
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // term_association(s, 'pain')] = p
+
+  - question: Which studies report an activation within 3 mm of the left amygdala, MNI (-24, -4, -20)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      active(s) :- near(s), selected_study(s)
+      ans(p) :- PROB[active(s)] = p
+
+  - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      active(s) :- near(s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active(s) // term_association(s, 'fear')] = p
+
+  - question: Which gyri and sulci are activated by studies about language?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p
+
+  - question: Is the left superior temporal gyrus activated by studies on speech?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active('L G temp sup Lateral', s) // term_association(s, 'speech')] = p
+
+  - question: Which subcortical regions are activated by studies about fear?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'fear')] = p
+
+  - question: Which parcels of the functional networks are activated by studies about the default mode?
+    datalog: |-
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'default mode')] = p
+
+  - question: Which functional regions, cortical networks and subcortex, are activated by studies about reward?
+    datalog: |-
+      functional_region(l, s) :- schaefer_activated(l, s)
+      functional_region(l, s) :- tian_activated(l, s)
+      active(l, s) :- functional_region(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
 
   # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
   # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
-  # being over the uniform choice of a study, selected_study; a BF above
-  # sqrt(10), about 3.16, is substantial evidence.
-  - question: Decode the left amygdala with Bayes factors, which terms are associated with activations within 10 mm of the MNI point (-24, -4, -20), with a Bayes factor above 3.16?
-    squall: |-
-      define as Roi_study (?r; ?s) where Peak_reported (?i, ?j, ?k, ?s) and euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 10 and ?r is 'left amygdala'.
-      define as Active_region every Roi_study (?r; ?s) such that ?s is a Selected_study.
-      define as Region_probability with inferred probability every Active_region (?r; _).
-      define as Mentioned_term every Term that a Selected_study mentions.
-      define as Term_probability with inferred probability every Mentioned_term.
-      define as Cooccurrence (?r; ?t) where Roi_study (?r, ?s) and ?s is a Selected_study and ?s mentions ?t.
-      define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
-      define as Bayes_factor (?r; ?t; ?bf)
-          where Joint_probability (?r, ?t, ?p_rt)
-          and Region_probability (?r, ?p_r)
-          and Term_probability (?t, ?p_t)
-          and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
-      obtain every Bayes_factor (?r; ?t; ?bf) such that ?bf is greater than 3.16.
+  # being over selected_study; a BF above sqrt(10), about 3.16, is
+  # substantial evidence.
+  - question: Decode the left middle temporal gyrus, which terms have a Bayes factor above 3.16 for its activation?
     datalog: |-
-      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
-      active_roi(s) :- selected_study(s), roi_study(s)
-      mentioned_term(t) :- selected_study(s), mentions(s, t)
-      cooccurrence(t, s) :- selected_study(s), roi_study(s), mentions(s, t)
+      active_region(l) :- destrieux_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- destrieux_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(t, bf) :- bayes_factor('L G temporal middle', t, bf), (bf > 3.16)
+
+  - question: What is the Bayes factor of fear for the activation of the left amygdala?
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      active_roi(s) :- amygdala(s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(bf) :- bayes_factor('fear', bf)
+
+  - question: Which terms are associated with the MNI point (40, -60, 10), with a Bayes factor above 3.16?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -60.0, 10.0) <= 3)
+      active_roi(s) :- near(s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
       roi_probability(p_r) :- PROB[active_roi(s)] = p_r
       term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
       joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
       bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
       ans(t, bf) :- bayes_factor(t, bf), (bf > 3.16)
 
-  - question: What is the Bayes factor of the term fear for activations within 10 mm of the voxel (74, 130, 52)?
-    squall: |-
-      define as Roi_study (?r; ?s) where Peak_reported (?i, ?j, ?k, ?s) and euclidean(?i, ?j, ?k, 74, 130, 52) is lower than 10 and ?r is 'roi'.
-      define as Active_region every Roi_study (?r; ?s) such that ?s is a Selected_study.
-      define as Region_probability with inferred probability every Active_region (?r; _).
-      define as Mentioned_term every Term that a Selected_study mentions.
-      define as Term_probability with inferred probability every Mentioned_term.
-      define as Cooccurrence (?r; ?t) where Roi_study (?r, ?s) and ?s is a Selected_study and ?s mentions ?t.
-      define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
-      define as Bayes_factor (?r; ?t; ?bf)
-          where Joint_probability (?r, ?t, ?p_rt)
-          and Region_probability (?r, ?p_r)
-          and Term_probability (?t, ?p_t)
-          and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
-      obtain every Bayes_factor (?r; ?t; ?bf) such that ?t is 'fear'.
+  # Co-activation: regions or points activated by the same study. A pair
+  # of regions, l1 < l2 to give each pair once, is a network (.view draws
+  # it as one); a seed region or point conditions the activation of the
+  # others (meta-analytic connectivity, MACM); the lift of a pair compares
+  # its joint probability with that of independent activations.
+  - question: Which pairs of Schaefer regions are co-activated by studies about reading?
     datalog: |-
-      roi_study(s) :- reports(s, i, j, k), (euclidean(i, j, k, 74, 130, 52) < 10)
-      active_roi(s) :- selected_study(s), roi_study(s)
-      mentioned_term(t) :- selected_study(s), mentions(s, t)
-      cooccurrence(t, s) :- selected_study(s), roi_study(s), mentions(s, t)
-      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
-      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
-      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
-      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
-      ans(bf) :- bayes_factor('fear', bf)
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+
+  - question: What is the co-activation network of the subcortical regions in studies about fear?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'fear')] = p
+
+  - question: Which cortical regions are co-activated with the left amygdala?
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      seed(s) :- amygdala(s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which gyri and sulci are co-activated with the left superior temporal gyrus?
+    datalog: |-
+      seed(s) :- destrieux_activated('L G temp sup Lateral', s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which functional networks are co-activated with the MNI point (40, -60, 10)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -60.0, 10.0) <= 3)
+      seed(s) :- near(s), selected_study(s)
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which voxels are co-activated with the MNI point (-24, -4, -20)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      seed(s) :- near(s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // seed(s)] = p
+
+  - question: What is the probability that a study activating the MNI point (-24, -4, -20) also activates the MNI point (24, -4, -20)?
+    datalog: |-
+      near_seed(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      near_target(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 24.0, -4.0, -20.0) <= 3)
+      seed(s) :- near_seed(s), selected_study(s)
+      target(s) :- near_target(s), selected_study(s)
+      ans(p) :- PROB[target(s) // seed(s)] = p
+
+  - question: What is the co-activation network of the MNI points (-24, -4, -20), (24, -4, -20), (-42, 22, 8), (-50, -40, 10) and (40, -60, 10)?
+    datalog: |-
+      point(-24.0, -4.0, -20.0)
+      point(24.0, -4.0, -20.0)
+      point(-42.0, 22.0, 8.0)
+      point(-50.0, -40.0, 10.0)
+      point(40.0, -60.0, 10.0)
+      near(x, y, z, s) :- point(x, y, z), peak_mni(px, py, pz, s), (euclidean(px, py, pz, x, y, z) <= 3)
+      active(x, y, z, s) :- near(x, y, z, s), selected_study(s)
+      co_active(x1, y1, z1, x2, y2, z2, s) :- active(x1, y1, z1, s), active(x2, y2, z2, s)
+      ans(x1, y1, z1, x2, y2, z2, p) :- PROB[co_active(x1, y1, z1, x2, y2, z2, s)] = p
+
+  - question: Which pairs of subcortical regions are co-activated more than chance?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      region_probability(l, p) :- PROB[active(l, s)] = p
+      pair_probability(l1, l2, p) :- PROB[co_active(l1, l2, s)] = p
+      ans(l1, l2, lift) :- pair_probability(l1, l2, p12), region_probability(l1, p1), region_probability(l2, p2), (l1 < l2), (lift == p12 / (p1 * p2))
+
+  - question: Are the left and right amygdala co-activated more than chance?
+    datalog: |-
+      amygdala_left(s) :- tian_activated('lAMY lh', s)
+      amygdala_left(s) :- tian_activated('mAMY lh', s)
+      amygdala_right(s) :- tian_activated('lAMY rh', s)
+      amygdala_right(s) :- tian_activated('mAMY rh', s)
+      left(s) :- amygdala_left(s), selected_study(s)
+      right(s) :- amygdala_right(s), selected_study(s)
+      both(s) :- amygdala_left(s), amygdala_right(s), selected_study(s)
+      p_left(p) :- PROB[left(s)] = p
+      p_right(p) :- PROB[right(s)] = p
+      p_both(p) :- PROB[both(s)] = p
+      ans(lift) :- p_both(p12), p_left(p1), p_right(p2), (lift == p12 / (p1 * p2))

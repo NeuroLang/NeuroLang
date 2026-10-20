@@ -22,7 +22,9 @@ CONFIG = {
         "second": {"base_url": "http://llm.test/v1", "model": "m2",
                    "api": "anthropic", "tool_calling": "native"},
     },
-    "assistant": {"strategy": "icl", "max_repairs": 1},
+    "assistant": {
+        "strategy": "icl", "max_repairs": 1, "comment_rules": False,
+    },
 }
 PAIN = "obtain every Study that mentions 'pain'."
 
@@ -53,9 +55,13 @@ def script(app, *replies):
 
 
 @pytest.mark.parametrize("arg, expected", [
-    ("Which studies?", (None, None, "Which studies?")),
-    ("--squall --react what's there", ("squall", "react", "what's there")),
-    ("--datalog   --icl  q", ("datalog", "icl", "q")),
+    ("Which studies?", (None, None, "Which studies?", None)),
+    (
+        "--squall --react what's there",
+        ("squall", "react", "what's there", None),
+    ),
+    ("--datalog   --icl  q", ("datalog", "icl", "q", None)),
+    ("--steps 12 --react q", (None, "react", "q", 12)),
 ])
 def test_parse_ask(arg, expected):
     assert parse_ask(arg) == expected
@@ -199,6 +205,37 @@ def test_llm_one_word_question(app):
     script(app, *REACT_PAIN)
     app._run_line(".llm pain?")
     assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+
+
+def test_llm_steps_of_one_question(app):
+    """``.llm --steps 1`` stops the agent after one step: the query it ran
+    with rows is the answer."""
+    client = script(app, *REACT_PAIN)
+    app._run_line(".llm --steps 1 Which studies mention pain?")
+    assert len(client.requests) == 1
+    assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+    assert "after 1 steps" in output(app)
+
+
+def test_llm_steps_setting(app):
+    app._run_line(".llm steps 12")
+    assert app.assistant.steps == 12 and "steps: 12" in output(app)
+    for line in (".llm steps none", ".llm --steps 0 q", ".llm --steps"):
+        app.failed = False
+        app._run_line(line)
+        assert app.failed
+    assert app.assistant.steps == 12
+
+
+def test_llm_puts_the_commented_query_in_the_prompt(app):
+    app.assistant.config().assistant.comment_rules = True
+    script(app, *REACT_PAIN, '["The studies mentioning pain"]')
+    app._run_line(".llm Which studies mention pain?")
+    commented = "% The studies mentioning pain\nans(s) :- mentions(s, 'pain')"
+    assert app.pending_input == commented
+    assert "% The studies mentioning pain" in output(app)
+    app._run_line(app.pending_input)
+    assert not app.failed and len(app.results[-1].frame) == 1
 
 
 def test_llm_question_without_httpx(app, monkeypatch):

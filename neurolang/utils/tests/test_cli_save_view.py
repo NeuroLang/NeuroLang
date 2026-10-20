@@ -98,7 +98,7 @@ def test_save_and_view_with_ask(engine, viewer, tmp_path, monkeypatch):
     config.write_text(
         "default_provider: fake\nproviders:\n  fake: {api: openai, "
         "base_url: 'http://llm.test/v1', model: m, tool_calling: text}\n"
-        "assistant: {strategy: react, few_shot_k: 0}\n"
+        "assistant: {strategy: react, few_shot_k: 0, comment_rules: false}\n"
     )
     answer = (
         'Action: final_answer\nAction Input: {"query": '
@@ -156,3 +156,81 @@ def test_without_the_tui_extra(engine, tmp_path, monkeypatch, capsys):
     assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
 
 
+
+
+@pytest.fixture
+def atlas(engine):
+    """The engine with a Schaefer atlas of two regions on its grid."""
+    labels = np.zeros(SHAPE, dtype=np.int16)
+    labels[:2], labels[2:] = 1, 2
+    engine.grids["schaefer"] = nib.Nifti1Image(labels, AFFINE)
+    engine_registry._register_atlas_labels(
+        engine, "schaefer", {1: "A", 2: "B"}
+    )
+    engine.add_tuple_set(
+        [("A", "s1"), ("B", "s1"), ("A", "s2")], name="schaefer_activated"
+    )
+    return engine
+
+
+def test_view_the_regions_of_a_result(atlas, viewer, capsys):
+    cli.main([
+        "--engine", "neurosynth", "--view",
+        "ans(l, count(s)) :- schaefer_activated(l, s)",
+    ])
+    [(image, options)] = viewer
+    data = np.asanyarray(image.dataobj)
+    assert np.all(data[:2] == 2) and np.all(data[2:] == 1)
+    assert options["threshold"] == 0.0
+    assert "2 regions" in capsys.readouterr().err
+
+
+def test_view_a_network_of_regions(atlas, viewer, capsys):
+    cli.main([
+        "--engine", "neurosynth", "--view",
+        "co(a, b, s) :- schaefer_activated(a, s), schaefer_activated(b, s)\n"
+        "ans(a, b, count(s)) :- co(a, b, s), (a < b)",
+    ])
+    [(image, options)] = viewer
+    network = options["connectome"]
+    assert [n["name"] for n in network["nodes"]] == ["A", "B"]
+    assert [e["colorValue"] for e in network["edges"]] == [1.0]
+    assert "Network of 2 nodes and 1 edges" in capsys.readouterr().err
+
+
+def test_ask_prints_the_commented_query_and_takes_steps(
+    engine, tmp_path, monkeypatch, capsys
+):
+    """--ask prints the query with a comment line on each rule, and
+    --steps sets the most steps of the agent."""
+    from neurolang.utils.llm import agent as agent_module
+    from neurolang.utils.llm.tests.fakes import ScriptedClient
+
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: fake\nproviders:\n  fake: {api: openai, "
+        "base_url: 'http://llm.test/v1', model: m, tool_calling: text}\n"
+        "assistant: {strategy: react, few_shot_k: 0, max_steps: 1}\n"
+    )
+    answer = (
+        'Thought: look\nAction: list_predicates\nAction Input: {}',
+        'Action: final_answer\nAction Input: {"query": '
+        '"ans(s) :- study(s)", "explanation": "x"}',
+        '["Every study"]',
+    )
+    client = ScriptedClient(answer)
+    monkeypatch.setattr(
+        agent_module, "make_client", lambda *args, **kwargs: client
+    )
+    cli.main([
+        "--engine", "neurosynth", "--ask", "Which studies?", "--llm-config",
+        str(config), "--steps", "2",
+    ])
+    assert capsys.readouterr().out == "% Every study\nans(s) :- study(s)\n"
+    assert client.replies == []
+
+
+def test_steps_is_a_positive_integer(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["--engine", "neurosynth", "--ask", "q", "--steps", "0"])
+    assert "positive integer" in capsys.readouterr().err

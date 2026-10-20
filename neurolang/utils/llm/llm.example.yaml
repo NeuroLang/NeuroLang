@@ -74,3 +74,4 @@ assistant:
   temperature: 0.0
   timeout: 60          # seconds per LLM request
   preview_rows: 10     # rows of a result shown to the model
+  comment_rules: true  # one more request: a comment line on each rule

@@ -596,10 +596,50 @@ def test_facts_added_to_a_relation(app):
 
 
 def test_definition_with_a_query_shows_both(app):
+    app.settings.scope_queries = False
     out = _submit(app, "bar(x) :- plays(x)\nans(x) :- bar(x)")
     messages = _messages(out)
     assert messages[:2] == ["Running query...", "defined bar/1"]
     assert messages[-1].startswith("Query completed in")
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+
+
+@pytest.mark.parametrize("squall, program, again", [
+    (
+        False, "bar(x) :- plays(x)\nans(x) :- bar(x)",
+        "bar(x) :- person(x)\nans(x) :- bar(x)",
+    ),
+    (
+        True, "define as Bar every person that plays. obtain every Bar.",
+        "define as Bar every person. obtain every Bar.",
+    ),
+])
+def test_the_rules_of_a_query_are_local_to_it(app, squall, program, again):
+    """By default, the rules defined with a query do not stay in the
+    session: the next query defines its own, of the same names."""
+    app.settings.squall = squall
+    out = _submit(app, program)
+    assert "defined bar/1" in out and "local to it" in out
+    assert {r[0] for r in app.results[-1].frame.itertuples(index=False)} == {
+        "alice",
+    }
+    assert "not an IDB predicate" in _command(app, ".idb bar")
+    _submit(app, again)
+    assert len(app.results[-1].frame) == 2
+    assert "not an IDB predicate" in _command(app, ".idb bar")
+
+
+def test_rules_without_a_query_stay(app):
+    out = _submit(app, "bar(x) :- plays(x)")
+    assert "local" not in out
+    assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
+
+
+def test_scope_command(app):
+    assert _command(app, ".scope") == "Rules of a query local to it: on\n"
+    _command(app, ".scope off")
+    assert not app.settings.scope_queries
+    _submit(app, "bar(x) :- plays(x)\nans(x) :- bar(x)")
     assert _query(app, "ans(x) :- bar(x)") == {("alice",)}
 
 
@@ -684,6 +724,7 @@ def test_rewritten_has_the_rules_of_the_last_query_once(
     app, capsys, squall, program
 ):
     app.settings.squall = squall
+    app.settings.scope_queries = False
     app._execute_and_display(program)
     capsys.readouterr()
     out = _command(app, ".rewritten") + capsys.readouterr().out
@@ -718,8 +759,10 @@ def test_ra_without_a_query(app):
     assert not app.settings.show_ra
 
 
-def test_ra_of_a_query_with_its_rules(app, capsys):
+@pytest.mark.parametrize("scoped", [True, False])
+def test_ra_of_a_query_with_its_rules(app, capsys, scoped):
     app.settings.squall = True
+    app.settings.scope_queries = scoped
     app._execute_and_display(
         "define as Fan every person that plays. obtain every Fan."
     )
@@ -727,7 +770,7 @@ def test_ra_of_a_query_with_its_rules(app, capsys):
     out = _command(app, ".ra") + capsys.readouterr().out
     assert "fan" in out
     assert not app.failed
-    assert _command(app, ".idb fan").count("fan(") == 1
+    assert _command(app, ".idb fan").count("fan(") == (0 if scoped else 1)
 
 
 def test_clear_says_what_it_removed(two_rules, capsys):

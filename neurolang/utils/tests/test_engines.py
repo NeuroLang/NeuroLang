@@ -386,16 +386,33 @@ class TestNeurosynthEngineVocabulary:
         assert rows == {(10, "pain", 0.5)}
 
 
-def _fake_schaefer(nl, cfg, data_dir, name):
-    """Register a one-parcel ``schaefer`` atlas, as ``_phase_atlases``."""
-    from neurolang.regions import ExplicitVBR
+_FAKE_ATLASES = {
+    "schaefer": "17Networks LH DefaultA PCC 1",
+    "destrieux": "L G temporal middle",
+    "tian": "lAMY lh",
+}
 
-    region = ExplicitVBR(
-        np.array([[1, 1, 1], [1, 2, 1]]), np.eye(4), image_dim=(4, 4, 4)
-    )
-    nl.add_tuple_set(
-        [("17Networks LH DefaultA PCC 1", region)], name="schaefer"
-    )
+
+def _fake_schaefer(nl, cfg, data_dir, name):
+    """
+    Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
+    with the studies activating them, as ``_phase_atlases``.
+    """
+    import nibabel as nib
+
+    from neurolang.regions import ExplicitVBR
+    from neurolang.utils import engine_registry
+
+    voxels = np.array([[1, 1, 1], [1, 2, 1]])
+    data = np.zeros((4, 4, 4), dtype=np.int16)
+    data[tuple(voxels.T)] = 1
+    image = nib.Nifti1Image(data, np.eye(4))
+    for atlas, label in _FAKE_ATLASES.items():
+        region = ExplicitVBR(voxels, np.eye(4), image_dim=(4, 4, 4))
+        nl.add_tuple_set([(label, region)], name=atlas)
+        engine_registry._register_atlas_activation(
+            nl, {1: label}, image, {"radius_mm": 3}, atlas
+        )
 
 
 # The predicates of a free-text query: computed for the text a query gives
