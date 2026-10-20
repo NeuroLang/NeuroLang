@@ -5,7 +5,7 @@ CTAGS ?= ctags
 flake8:
 	@if command -v flake8 > /dev/null; then \
 		echo "Running flake8"; \
-		flake8 flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v /doc/`; \
+		flake8 --ignore N802,N806 `find . -name \*.py | grep -v setup.py | grep -v /doc/`; \
 	else \
 		echo "flake8 not found, please install it!"; \
 		exit 1; \
@@ -13,8 +13,8 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	$(PYTEST) --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing \
-	  -vv neurolang neurolang --junitxml=utest.xml
+	$(PYTEST) --cov=neurolang --cov-report=xml --cov-report=term-missing \
+	  -vv neurolang --junitxml=utest.xml
 
 ctags:
 	# make tags for symbol based navigation in emacs and vim

@@ -134,10 +134,8 @@ NeuroLang requires the following libraries (installed automatically):
 * `Lark <https://github.com/lark-parser/lark>`_ for the Datalog and SQUALL
   parsers
 * `rdflib <https://rdflib.readthedocs.io>`_ for ontologies
-* `siibra <https://siibra-python.readthedocs.io>`_ for atlases
-* `scikit-learn <https://scikit-learn.org>`_,
-  `matplotlib <https://matplotlib.org>`_ and
-  `seaborn <https://seaborn.pydata.org>`_
+* `scikit-learn <https://scikit-learn.org>`_ and
+  `matplotlib <https://matplotlib.org>`_
 * `PyYAML <https://pyyaml.org>`_ and ``typing_inspect``
 
 Optional extras
