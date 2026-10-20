@@ -2,6 +2,7 @@ import collections
 import typing
 
 import numpy as np
+from scipy.sparse.csgraph import connected_components
 
 from ..datalog.expression_processing import (
     dependency_matrix,
@@ -83,20 +84,31 @@ def stratify_program(query, program):
     grpd_symbs["deterministic"] = _get_program_deterministic_symbols(program)
     grpd_symbs["probabilistic"] = program.probabilistic_predicate_symbols
     grpd_idbs = collections.defaultdict(list)
+    # mutually recursive predicates are typed together, from all their rules
+    _, component_of = connected_components(dep_mat, connection="strong")
+    components = collections.defaultdict(list)
+    for rule in idb:
+        symb_ix = idb_symbs.index(rule.consequent.functor)
+        components[component_of[symb_ix]].append(rule)
+    idb = []
+    for rules in components.values():
+        # the rules starting the recursion first, as they are solved
+        symbs = {rule.consequent.functor for rule in rules}
+        idb.append(sorted(rules, key=lambda r: _depends_on(r, symbs)))
     count = len(idb)
     while idb:
-        rule = idb.pop(0)
-        idb_type = _get_rule_idb_type(rule, grpd_symbs, wlq_symbs)
+        rules = idb.pop(0)
+        idb_type = _get_component_idb_type(rules, grpd_symbs, wlq_symbs)
         if idb_type is None:
-            idb.append(rule)
+            idb.append(rules)
             count -= 1
             if count < 0:
                 raise ForbiddenRecursivityError(
                     "Unstratifiable recursive program"
                 )
         else:
-            grpd_symbs[idb_type].add(rule.consequent.functor)
-            grpd_idbs[idb_type].append(rule)
+            grpd_symbs[idb_type] |= {rule.consequent.functor for rule in rules}
+            grpd_idbs[idb_type] += rules
             count = len(idb)
     _check_for_query_based_probfact_dependency_on_prob_relation(
         grpd_idbs["probabilistic"], grpd_symbs
@@ -130,7 +142,34 @@ def _get_idb_type_already_classified(pred_symb, grpd_symbs):
     return None
 
 
-def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
+def _get_component_idb_type(rules, grpd_symbs, wlq_symbs):
+    """
+    Return the type of the mutually recursive predicates defined by
+    *rules*, those starting the recursion first: the most probabilistic
+    type of the rules, or None while a rule depends on an untyped
+    predicate, or if no rule starts the recursion.
+    """
+    symbs = {rule.consequent.functor for rule in rules}
+    if _depends_on(rules[0], symbs):
+        return None
+    idb_types = [
+        _get_rule_idb_type(rule, grpd_symbs, wlq_symbs, symbs)
+        for rule in rules
+    ]
+    if None in idb_types:
+        return None
+    return max(idb_types, key=(
+        "deterministic", "post_probabilistic", "probabilistic"
+    ).index)
+
+
+def _depends_on(rule, symbs):
+    return any(
+        atom.functor in symbs for atom in extract_logic_atoms(rule.antecedent)
+    )
+
+
+def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs, component_symbs=()):
     pred_symb = rule.consequent.functor
     idb_type = _get_idb_type_already_classified(pred_symb, grpd_symbs)
     if idb_type is not None:
@@ -139,7 +178,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         pred.functor
         for pred in extract_logic_atoms(rule.antecedent)
         if isinstance(pred.functor, Symbol)
-    )
+    ) - set(component_symbs)
     idb_type = None
     # handle the case of a WLQ with deterministic-only dependencies
     if pred_symb in wlq_symbs:
