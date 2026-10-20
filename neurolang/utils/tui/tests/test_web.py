@@ -164,6 +164,8 @@ class TestTables:
 # The LLM assistant, with the key of the page's visitor.
 SECRET = "sk-test-0123456789"
 ASK = "```datalog\nans(x) :- person(x, n)\n```\nEveryone."
+# The reply to the second request of .ask, for the comment of each rule.
+COMMENTS = '["Everyone who has a name"]'
 
 
 def test_the_providers_of_the_page_are_listed_for_its_form():
@@ -187,10 +189,10 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     from neurolang.utils.llm.tests.fakes import ScriptedClient
 
     repl.set_llm("anthropic", SECRET)
-    repl.app.assistant.client = ScriptedClient([ASK])
+    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS])
     reply = repl.submit(".ask --icl Who is there?")
     assert not reply.failed
-    assert reply.prompt == "ans(x) :- person(x, n)"
+    assert reply.prompt.splitlines()[-1] == "ans(x) :- person(x, n)"
     assert "Asking anthropic" in reply.html
     assert repl.submit("1").prompt == ""
 
@@ -202,8 +204,9 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
 
     def handler(request):
         seen.append(request)
+        text = ASK if len(seen) == 1 else COMMENTS
         return httpx.Response(200, json={
-            "content": [{"type": "text", "text": ASK}],
+            "content": [{"type": "text", "text": text}],
             "usage": {"input_tokens": 1, "output_tokens": 1},
         })
 
@@ -216,10 +219,16 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
     )
     repl.set_llm("anthropic", SECRET, model="claude-test")
     reply = repl.submit(".ask --icl Who is there?")
-    [request] = seen
-    assert request.headers["x-api-key"] == SECRET
-    assert request.headers["anthropic-dangerous-direct-browser-access"] == "true"
-    assert b"claude-test" in request.content
+    # The query, then the comments of its rules: both to the provider.
+    assert len(seen) == 2
+    for request in seen:
+        assert request.url.host == "api.anthropic.com"
+        assert request.headers["x-api-key"] == SECRET
+        assert (
+            request.headers["anthropic-dangerous-direct-browser-access"]
+            == "true"
+        )
+        assert b"claude-test" in request.content
     assert SECRET not in reply.html
     assert SECRET not in repl.submit(".llm").html
     assert SECRET not in repr(repl.app.assistant.config().provider())
