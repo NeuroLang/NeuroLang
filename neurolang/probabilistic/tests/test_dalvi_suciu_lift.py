@@ -1171,8 +1171,8 @@ def test_disjoint_separator_aligns_the_choice_atoms():
 
 def test_disjoint_separator_declines():
     """No separator: a disjunct without the choice, a choice of two
-    columns aligned on one only, a union with a negation, or a disjunct
-    without a free variable of the query."""
+    columns aligned on one only, or a disjunct without a free variable of
+    the query."""
     s, C, M, symbol_table = _choice_table()
     f, u, t = Symbol("f"), Symbol("u"), Symbol("t")
     C2 = Symbol("C2")
@@ -1194,12 +1194,6 @@ def test_disjoint_separator_declines():
             )))),
         )),
         Disjunction((
-            ExistentialPredicate(s, Conjunction((
-                C(s), Negation(M(s, Constant("a")))
-            ))),
-            ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("b"))))),
-        )),
-        Disjunction((
             ExistentialPredicate(s, Conjunction((C(s), M(s, t)))),
             ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("a"))))),
         )),
@@ -1210,21 +1204,31 @@ def test_disjoint_separator_declines():
         ) == (False, None), query
 
 
-def test_disjoint_separator_lifts_a_conjunctive_query_with_a_negation():
+def test_disjoint_separator_lifts_queries_with_a_negation():
     """
     The sum over the choice is sound whatever the sign of the other
-    literals; the plan does not take the support of the deterministic
-    part, whose negation would be a difference read as an independent
-    negation, but lifts the query as the disjoint projection did.
+    literals, and the plan of the deterministic rest has the negation as a
+    difference of sets: the choice atoms in it are replaced by their
+    support, so that every label is 0 or 1.
     """
     s, C, M, symbol_table = _choice_table()
-    query = ExistentialPredicate(s, Conjunction((
-        C(s), Negation(M(s, Constant("a")))
-    )))
-    applies, plan = dalvi_suciu_lift.disjoint_separator(query, symbol_table)
-    assert applies
-    assert isinstance(plan, DisjointProjection)
-    assert "Support" not in repr(plan)
+    f, t = Symbol("f"), Symbol("t")
+    for query in [
+        ExistentialPredicate(s, Conjunction((
+            C(s), Negation(M(s, Constant("a")))
+        ))),
+        Disjunction((
+            ExistentialPredicate(s, Conjunction((
+                C(s), M(s, t), Negation(M(s, Constant("a")))
+            ))),
+            ExistentialPredicate(f, Conjunction((C(f), M(f, t)))),
+        )),
+    ]:
+        applies, plan = dalvi_suciu_lift.disjoint_separator(
+            query, symbol_table
+        )
+        assert applies, query
+        assert isinstance(plan, DisjointProjection)
 
 
 def test_conjunctive_query_with_a_choice_and_a_negation():
@@ -1243,6 +1247,36 @@ def test_conjunctive_query_with_a_choice_and_a_negation():
         "ans(t, p) :- PROB[a(t)] = p."
     )
     assert dict(result) == pytest.approx({"b": 2 / 3, "c": 1 / 3})
+
+
+def test_union_with_a_choice_and_a_negation():
+    """
+    A union whose rule negates an atom of the study chosen: the negation
+    removes the tuples of the studies that have it, which a support that
+    kept the probability of the choice in it (a difference of
+    probabilities, not of sets) did not.
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = {
+        0: "deab", 1: "da", 2: "cab", 3: "e", 4: "dcab"
+    }
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(s, t) for s, terms in mentions.items() for t in terms],
+        name="mentions",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in mentions], name="selected_study"
+    )
+    result = nl.execute_datalog_program(
+        "a(t) :- mentions(s, t), selected_study(s), ~mentions(s, 'a').\n"
+        "a(t) :- mentions(s, t), selected_study(s), mentions(s, 'c').\n"
+        "ans(t, p) :- PROB[a(t)] = p."
+    )
+    assert dict(result) == pytest.approx(
+        {"a": 0.4, "b": 0.4, "c": 0.4, "d": 0.2, "e": 0.2}
+    )
 
 
 def test_union_with_a_self_join_of_the_choice_in_a_rule():

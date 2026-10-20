@@ -432,9 +432,9 @@ Disjoint separator
    lifted for every :math:`\bar a` by the other rules. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
-   them, every free variable of the query, and no negation unless there is
-   a single disjunct. It is tried after the separator variables, a
-   conjunctive query being the union of a single disjunct.
+   them, and every free variable of the query. It is tried after the
+   separator variables, a conjunctive query being the union of a single
+   disjunct.
 
 Inclusion–exclusion
    For a conjunction :math:`Q_1 \land \dots \land Q_n` in conjunctive normal
@@ -864,11 +864,16 @@ Disjoint separator
    with :math:`D(\bar a)` true or false in every world, so its probability
    is :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds and 0 elsewhere:
    the join of the choice with the support of :math:`D`. The choice atoms
-   are kept in :math:`D`, which is then range-restricted. With a negation
-   in the query the plan does not use the support: the translation of a
-   negation, a ``Difference``, would be read in the plan as an independent
-   negation. This is a constraint of the representation of plans, not of
-   the identity, which holds with negations (*Sign of the other literals*).
+   are kept in :math:`D`, which is then range-restricted, and replaced in
+   its plan by their support, so that every label in :math:`D` is 0 or 1.
+   :math:`D` may have negations: the difference of provenance sets gives
+   a tuple the label :math:`l\,(1 - r)`, :math:`l` and :math:`r` those of
+   the two sides, and keeps the tuple. With the probability :math:`q` of
+   the choice in both sides, a tuple that the negation removes would get
+   :math:`q(1 - q)`, not 0, as if the negation were independent of the
+   choice; with the support, :math:`1 \cdot (1 - 1) = 0`. A tuple of null
+   label is not in the support of a provenance set, which the plan of
+   :math:`D` ends with.
 
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
@@ -933,8 +938,7 @@ Disjoint separator
      the quantifiers of all the variables but those, the very query the
      old rule lifted, projected with ``DisjointProjection`` on the free
      variables as the old rule did. The plans are the same;
-   * when the other atoms are all deterministic and there is no negation,
-     the old rule lifted :math:`C(\bar a) \land D(\bar a)` by the
+   * when the other atoms are all deterministic, the old rule lifted :math:`C(\bar a) \land D(\bar a)` by the
      algorithm, whose plan gives :math:`P[C(\bar a)]` where :math:`D(\bar
      a)` holds, and the new plan is the join of the choice with the
      support of :math:`D`: the same probabilities (*Deterministic rest*),
@@ -959,9 +963,8 @@ Disjoint separator
 
    On unions, the old rule was a different one (:math:`P[A \lor B] = P[A]
    + P[B] - P[A \land B]` with its own conditions, removed). The identity
-   above holds for a union with negations too; the rule declines a union
-   of several disjuncts with a negation for the cost of lifting it, not
-   because the identity fails. ``disjoint_separator`` lifts the unions
+   above holds for a union with negations too, and the rule lifts it.
+   ``disjoint_separator`` lifts the unions
    whose every disjunct has the choice in a single projection, and the
    other unions are lifted by inclusion–exclusion, applied to the
    conjunctive queries that the rule lifts; that this covers all that the
@@ -982,8 +985,8 @@ Rewriting of the choices
 Declined unions
    Declining a query is sound: it is then solved by weighted model
    counting, exactly. The disjoint separator declines the unions with a
-   negation, with a disjunct without a free variable of the query, or with
-   a quantifier left in a disjunct.
+   disjunct without a free variable of the query, or with a quantifier
+   left in a disjunct.
 
 Projection on a choice or a separator variable
    *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the

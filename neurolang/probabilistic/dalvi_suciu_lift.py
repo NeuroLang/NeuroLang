@@ -1511,12 +1511,9 @@ def disjoint_separator(query, symbol_table):
     the other rules. A conjunctive query is the union of a single
     disjunct.
 
-    The rule declines a union of several disjuncts with a negation, whose
-    lifting did not end in reasonable time, and a union with a disjunct
-    without a free variable of the query, true for every value of it,
-    which a plan cannot give. A conjunctive query with a negation is
-    lifted, not through the support of its deterministic part. Its proof
-    is in ``doc/probabilistic_lifting.rst``.
+    The rule declines a union with a disjunct without a free variable of
+    the query, true for every value of it, which a plan cannot give. Its
+    proof is in ``doc/probabilistic_lifting.rst``.
 
     Returns whether the rule applies and its plan.
     """
@@ -1543,16 +1540,6 @@ def disjoint_separator(query, symbol_table):
         # A disjunct without a free variable is true for every value of
         # it, which a plan cannot give.
         return False, None
-    has_negation = any(
-        isinstance(formula, Negation)
-        for disjunct in disjuncts
-        for formula in extract_logic_predicates(disjunct)
-    )
-    if has_negation and len(disjuncts) > 1:
-        # The sum is sound with negations (see the documentation), but
-        # lifting the rest of a union with negations did not end in
-        # reasonable time.
-        return False, None
     separators, substitutions, choice_atoms = _choice_separators(
         disjuncts, quantified, symbol_table
     )
@@ -1572,27 +1559,32 @@ def disjoint_separator(query, symbol_table):
         for atom in extract_logic_atoms(disjunct)
         if atom not in choice_atoms
     ]
-    # The support of a negation would be a difference, which the plan reads
-    # as an independent negation: the rest is lifted instead.
-    if not has_negation and all(
+    if all(
         is_atom_a_deterministic_relation(atom, symbol_table)
         for atom in remainder_atoms
     ):
         # Every disjunct is the choice atoms conjoined with deterministic
         # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
-        # support.
+        # support. The choice atoms in D are replaced by their support, so
+        # that every label in D is 0 or 1, as a negation (a difference) needs.
         deterministic = add_existentials_except(
             RTO.walk(Disjunction(tuple(disjuncts))), kept
         )
+        choice_plans = {
+            atom: TranslateToNamedRA().walk(atom) for atom in choice_atoms
+        }
+        deterministic_plan = ReplaceExpressionWalker({
+            plan: rap.Support(plan) for plan in choice_plans.values()
+        }).walk(TranslateToNamedRA().walk(
+            MakeExistentialsImplicit().walk(deterministic)
+        ))
         support = rap.Support(rap.Projection(
-            TranslateToNamedRA().walk(
-                MakeExistentialsImplicit().walk(deterministic)
-            ),
+            deterministic_plan,
             tuple(str2columnstr_constant(v.name) for v in kept),
         ))
         plan = reduce(
             rap.NaturalJoin,
-            (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            choice_plans.values(),
             support,
         )
         return True, rap.DisjointProjection(plan, attributes)
