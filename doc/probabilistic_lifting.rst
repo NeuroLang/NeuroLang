@@ -189,14 +189,6 @@ Equalities within disjuncts
    disjunct keeps its equalities if unifying them would replace a variable
    of the query's head, which every disjunct shares.
 
-Unions mixing free and bound choice variables
-   When a probabilistic choice has a free variable of the query in a
-   disjunct and a bound variable in another, as in :math:`(C(s) \land
-   A(s)) \lor \exists f\, (C(f) \land B(f))`, the query is declined and
-   solved by weighted model counting: it has no disjoint separator, and
-   the conversion to conjunctive normal form kept creating disjunctions of
-   its choice atoms, the planning not ending in reasonable time.
-
 Shattering constants
    An atom with a constant, such as :math:`R(x, a)`, is replaced by an atom
    of a new relation holding the tuples of :math:`R` selected on that
@@ -872,10 +864,9 @@ Disjoint separator
    with :math:`D(\bar a)` true or false in every world, so its probability
    is :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds and 0 elsewhere:
    the join of the choice with the support of :math:`D`. The choice atoms
-   are kept in a disjunct of :math:`D` when they bind a variable its other
-   atoms do not (``_without_unneeded_atoms``), so that :math:`D` is
-   range-restricted. A negation is excluded: its translation, a
-   ``Difference``, would be read in the plan as an independent negation.
+   are kept in :math:`D`, which is then range-restricted. A negation is
+   excluded: its translation, a ``Difference``, would be read in the plan
+   as an independent negation.
 
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
@@ -894,13 +885,13 @@ Rewriting of the choices
    arguments of atoms conjoined with each other
    (``lift_optimization_for_choice_predicates``). For the same reason, the
    unification of the variables of equalities is done in each disjunct
-   apart (``_unify_variable_equalities``), and leaves a rule whose body has
-   a disjunction as it is (``UnifyVariableEqualitiesMixin``).
+   apart (``_unify_variable_equalities``).
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model
-   counting, exactly. The unions mixing free and bound choice variables
-   are declined before lifting (``_mixes_free_and_bound_choice_variables``).
+   counting, exactly. The disjoint separator declines the unions with a
+   negation, with a disjunct without a free variable of the query, or with
+   a quantifier left in a disjunct.
 
 Projection on a choice or a separator variable
    *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the

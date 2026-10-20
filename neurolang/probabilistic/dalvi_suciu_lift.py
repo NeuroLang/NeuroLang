@@ -497,8 +497,6 @@ def _lift_with_dependent_negations(rule, symbol_table, check):
             _verify_that_the_query_has_one_quantifier(rule)
             _verify_that_the_query_is_unate(rule, symbol_table)
         ucq_rule = MNTA.walk(MQU.walk(convert_rule_to_ucq(rule)))
-        if _mixes_free_and_bound_choice_variables(ucq_rule, symbol_table):
-            return NonLiftable(antecedent)
         plan = dalvi_suciu_lift(ucq_rule, symbol_table)
         if not is_pure_lifted_plan(plan):
             shattered_plan = existential_shattering_plan(
@@ -1579,14 +1577,9 @@ def disjoint_separator(query, symbol_table):
     ):
         # Every disjunct is the choice atoms conjoined with deterministic
         # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
-        # support. A disjunct keeps the choice atoms only if they bind some
-        # of its variables that its positive atoms do not.
+        # support.
         deterministic = add_existentials_except(
-            RTO.walk(Disjunction(tuple(
-                _without_unneeded_atoms(disjunct, choice_atoms, kept)
-                for disjunct in disjuncts
-            ))),
-            kept,
+            RTO.walk(Disjunction(tuple(disjuncts))), kept
         )
         support = rap.Support(rap.Projection(
             TranslateToNamedRA().walk(
@@ -1607,34 +1600,6 @@ def disjoint_separator(query, symbol_table):
     return True, rap.DisjointProjection(plan, attributes)
 
 
-def _mixes_free_and_bound_choice_variables(ucq, symbol_table):
-    """
-    Whether a probabilistic choice of the union *ucq* has a free variable
-    of it in a disjunct and a bound variable in another, as in
-    :math:`(C(s) \\land A(s)) \\lor \\exists f\\, (C(f) \\land B(f))`.
-
-    The choice has no separator (:func:`disjoint_separator`), and the
-    conversion to conjunctive normal form keeps creating disjunctions of
-    its atoms: the planning did not end in reasonable time on such
-    queries. They are declined, and solved by weighted model counting.
-    """
-    free = extract_logic_free_variables(ucq)
-    body = ucq
-    while isinstance(body, ExistentialPredicate):
-        body = body.body
-    if not isinstance(body, Disjunction):
-        return False
-    kinds = {}
-    for disjunct in body.formulas:
-        for atom in extract_logic_atoms(disjunct):
-            if not is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-                continue
-            for arg in atom.args:
-                if isinstance(arg, Symbol):
-                    kinds.setdefault(atom.functor, set()).add(arg in free)
-    return any(len(found) == 2 for found in kinds.values())
-
-
 def _has_quantifier(formula):
     """Whether the logic *formula* has a quantifier in it."""
     stack = [formula]
@@ -1647,26 +1612,6 @@ def _has_quantifier(formula):
         elif isinstance(formula, Negation):
             stack.append(formula.formula)
     return False
-
-
-def _without_unneeded_atoms(disjunct, atoms, variables):
-    """
-    The conjunctive *disjunct* without the *atoms*, unless they bind one of
-    its *variables* that its other atoms do not.
-    """
-    others = [
-        formula for formula in _conjuncts(disjunct) if formula not in atoms
-    ]
-    bound = set()
-    for formula in others:
-        if isinstance(formula, FunctionApplication) and not (
-            is_comparison(formula)
-        ):
-            bound |= extract_logic_free_variables(formula)
-    needed = extract_logic_free_variables(disjunct) & variables
-    if not others or not needed <= bound:
-        return disjunct
-    return Conjunction(tuple(others)) if len(others) > 1 else others[0]
 
 
 def _choice_separators(disjuncts, quantified, symbol_table):

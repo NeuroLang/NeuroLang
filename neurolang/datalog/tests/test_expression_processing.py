@@ -619,28 +619,3 @@ def test_is_to_be_sorted_equality_with_unknown_type():
 
     # Should return False without raising ValueError
     assert not is_to_be_sorted_equality(formula)
-
-
-def test_unify_variable_equalities_leaves_a_disjunction():
-    """An equality within a disjunct holds there only: the unification,
-    which rebuilds the body as a conjunction, leaves a body with a
-    disjunction as it is."""
-    from ...logic import Disjunction
-    from ..expression_processing import UnifyVariableEqualities
-
-    P, Q, R = Symbol("P"), Symbol("Q"), Symbol("R")
-    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
-    equals = Constant(eq)
-    rule = Implication(
-        R(x),
-        Disjunction((
-            Conjunction((P(x, y), Q(z), equals(y, z))),
-            Conjunction((P(x, x),)),
-        )),
-    )
-    assert UnifyVariableEqualities().walk(rule) == rule
-    conjunctive = Implication(
-        R(x), Conjunction((P(x, y), Q(z), equals(y, z)))
-    )
-    unified = UnifyVariableEqualities().walk(conjunctive)
-    assert len(unified.antecedent.formulas) == 2

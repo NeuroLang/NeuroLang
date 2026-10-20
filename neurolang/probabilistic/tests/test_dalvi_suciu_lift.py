@@ -1065,39 +1065,6 @@ def test_union_with_a_choice_on_a_free_and_on_a_bound_variable():
     )
     assert dict(result) == pytest.approx({1: 0.5, 2: 0.25, 3: 0.5, 4: 0.25})
 
-def test_unions_mixing_free_and_bound_choice_variables_are_declined():
-    """A choice on a free variable in a disjunct and on a bound one in
-    another is declined before lifting; on the same variable kind in
-    every disjunct, it is lifted."""
-    s, f, x = Symbol("s"), Symbol("f"), Symbol("x")
-    M, C = Symbol("M"), Symbol("C")
-    symbol_table = {
-        C: ProbabilisticChoiceSet(
-            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-                columns=("p", "v"), iterable=[(0.5, 1), (0.5, 2)]
-            )),
-            Constant(ColumnStr("p")),
-        ),
-        M: Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-            columns=("v", "w"), iterable=[(1, "a"), (2, "b")]
-        )),
-    }
-    mixed = Disjunction((
-        Conjunction((C(s), M(s, Constant("a")))),
-        ExistentialPredicate(f, Conjunction((C(f), M(f, Constant("b"))))),
-    ))
-    assert dalvi_suciu_lift._mixes_free_and_bound_choice_variables(
-        mixed, symbol_table
-    )
-    bound = Disjunction((
-        ExistentialPredicate(s, Conjunction((C(s), M(s, x)))),
-        ExistentialPredicate(f, Conjunction((C(f), M(f, x)))),
-    ))
-    assert not dalvi_suciu_lift._mixes_free_and_bound_choice_variables(
-        bound, symbol_table
-    )
-
-
 def _choice_union_engine():
     from ...frontend import NeurolangPDL
 
