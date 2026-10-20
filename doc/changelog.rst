@@ -30,6 +30,13 @@ Unreleased
   functional anatomy; the neurosynth example bank is rewritten so, with
   examples of the co-activation of regions and of points.
 
+* The LLM assistant writes the query it accepted with a comment line
+  explaining each rule, from one more request to the model (``%`` lines
+  in Datalog, which runs as it is; ``comment_rules: false`` turns it
+  off).  ``.llm --steps N``, ``.ask --steps N``, ``.llm steps N`` and
+  ``--steps N`` on the command line set the most steps of the ReAct
+  agent.
+
 * ``.view`` and ``.save`` (and ``--view``, ``--save``) paint a result on
   the regions of an atlas, ``ans(l, p)``, region by region: a sort of
   region labels names its atlas with ``atlas`` in ``engines.yaml``.

@@ -4,17 +4,19 @@ The LLM query assistant in the REPL: ``.ask`` and ``.llm``.
 ``.ask <question>`` turns the question into a query of the session's
 language with an LLM (see :mod:`neurolang.utils.llm`), printing the
 steps of the agent as they run. The query is not run: it is put in the
-next prompt, to be read, edited and run with Enter. ``.llm <question>``
+next prompt, to be read, edited and run with Enter, each rule under a
+comment line explaining it (``comment_rules``). ``.llm <question>``
 does the same with the ReAct agent writing Datalog, whatever the mode
-and the configured strategy. ``.llm`` alone, ``.llm provider NAME``,
-``.llm strategy icl|react`` and ``.llm reload`` show and change the
-provider and the strategy of the assistant.
+and the configured strategy. ``--steps N`` sets the most steps of the
+ReAct agent for one question. ``.llm`` alone, ``.llm provider NAME``,
+``.llm strategy icl|react``, ``.llm steps N`` and ``.llm reload`` show
+and change the provider, the strategy and the steps of the assistant.
 
 The assistant needs the ``llm`` extra; the REPL works without it.
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, replace
+from typing import NamedTuple, Optional
 
 from rich.markup import escape
 from rich.panel import Panel
@@ -28,11 +30,18 @@ from .interrupt import call_interruptibly
 LLM_DEPENDENCIES = ("httpx",)
 LANGUAGE_FLAGS = {"--squall": "squall", "--datalog": "datalog"}
 STRATEGY_FLAGS = {"--icl": "icl", "--react": "react"}
-ASK_USAGE = ".ask [--squall|--datalog] [--icl|--react] QUESTION"
-LLM_SETTINGS_USAGE = ".llm [provider NAME|strategy icl|react|reload]"
-LLM_USAGE = ".llm [QUESTION|provider NAME|strategy icl|react|reload]"
+ASK_USAGE = (
+    ".ask [--squall|--datalog] [--icl|--react] [--steps N] QUESTION"
+)
+LLM_SETTINGS_USAGE = (
+    ".llm [provider NAME|strategy icl|react|steps N|reload]"
+)
+LLM_USAGE = (
+    ".llm [--steps N] QUESTION | .llm [provider NAME|strategy icl|react|"
+    "steps N|reload]"
+)
 # The first words of .llm that change the settings rather than ask.
-LLM_SETTINGS = ("provider", "strategy", "reload")
+LLM_SETTINGS = ("provider", "strategy", "steps", "reload")
 
 
 @dataclass
@@ -41,14 +50,16 @@ class AssistantState:
     The assistant of a REPL session.
 
     *config_path* and *provider* are those requested on the command line
-    (``--llm-config``, ``--llm-provider``); *strategy* overrides the
-    configuration's. *client* replaces the provider's chat client (in
-    tests). The configuration is read when first needed.
+    (``--llm-config``, ``--llm-provider``); *strategy* and *steps* (the
+    most steps of the ReAct agent) override the configuration's.
+    *client* replaces the provider's chat client (in tests). The
+    configuration is read when first needed.
     """
 
     config_path: Optional[str] = None
     provider: Optional[str] = None
     strategy: Optional[str] = None
+    steps: Optional[int] = None
     client: object = None
     _config: object = None
 
@@ -80,14 +91,36 @@ def _llm_available(app) -> bool:
     return True
 
 
-def parse_ask(arg: str):
+class AskRequest(NamedTuple):
     """
-    Return the language, the strategy and the question of ``.ask`` *arg*.
+    The options and the question of ``.ask`` or ``.llm``: the language,
+    the strategy and the most steps of the agent, None when not given.
+    """
 
-    The flags come first; the language and the strategy are None when
-    not given. The question is the rest of the line, as typed.
+    language: Optional[str]
+    strategy: Optional[str]
+    question: str
+    steps: Optional[int] = None
+
+
+def parse_steps(text: str) -> int:
+    """Return the number of steps *text*, a positive integer."""
+    if not text.isdigit() or int(text) < 1:
+        raise ValueError(
+            f"The number of steps is a positive integer, not {text!r}."
+        )
+    return int(text)
+
+
+def parse_ask(arg: str, usage: str = ASK_USAGE) -> AskRequest:
     """
-    language = strategy = None
+    Return the request of ``.ask`` *arg*: its options and its question.
+
+    The options come first: ``--squall``/``--datalog``,
+    ``--icl``/``--react`` and ``--steps N``. The question is the rest of
+    the line, as typed.
+    """
+    language = strategy = steps = None
     rest = arg.strip()
     while rest.startswith("--"):
         flag, _, remainder = rest.partition(" ")
@@ -95,10 +128,13 @@ def parse_ask(arg: str):
             language = LANGUAGE_FLAGS[flag]
         elif flag in STRATEGY_FLAGS:
             strategy = STRATEGY_FLAGS[flag]
+        elif flag == "--steps":
+            value, _, remainder = remainder.strip().partition(" ")
+            steps = parse_steps(value)
         else:
-            raise ValueError(f"Unknown option {flag}. Usage: {ASK_USAGE}")
+            raise ValueError(f"Unknown option {flag}. Usage: {usage}")
         rest = remainder.strip()
-    return language, strategy, rest
+    return AskRequest(language, strategy, rest, steps)
 
 
 def _target_language(app, flag: Optional[str], config) -> str:
@@ -113,6 +149,7 @@ def _target_language(app, flag: Optional[str], config) -> str:
 # The rich styles of the kinds of fragments of a query, as the prompt
 # highlights them (``editing.STYLE``).
 QUERY_STYLES = {
+    "comment": "dim italic",
     "keyword": "bold magenta",
     "operator": "bold blue",
     "predicate": "blue",
@@ -180,11 +217,24 @@ def _switch_language(app, language: str) -> None:
         )
 
 
+def runnable_query(result) -> str:
+    """
+    Return the query of the agent's *result* to run: with its comment
+    lines in Datalog, which ignores them, without them in SQUALL.
+    """
+    if result.commented and result.language == "datalog":
+        return result.commented
+    return result.query
+
+
 def _show_result(app, result) -> None:
-    """Print the query of the agent's *result* and put it in the prompt."""
+    """
+    Print the query of the agent's *result*, each rule under a comment
+    line explaining it if the model wrote them, and put it in the prompt.
+    """
     if result.valid:
         app.console.print(Panel(
-            query_text(result.query, result.language),
+            query_text(result.commented or result.query, result.language),
             title=f"{result.language.upper()} query", border_style="green",
         ))
         if result.explanation:
@@ -206,7 +256,7 @@ def _show_result(app, result) -> None:
     app.err_console.print(f"[dim]{usage}[/dim]")
     if result.query:
         _switch_language(app, result.language)
-        app.pending_input = result.query
+        app.pending_input = runnable_query(result)
         app.console.print(
             "[dim]The query is in the prompt: edit it or press Enter to "
             "run it.[/dim]"
@@ -217,29 +267,33 @@ def _show_result(app, result) -> None:
 def cmd_ask(app, arg: str) -> None:
     """Ask the LLM assistant for a query answering the question *arg*."""
     try:
-        language, strategy, question = parse_ask(arg)
+        request = parse_ask(arg)
     except ValueError as exc:
         app.failed = True
         app.console.print(f"[yellow]{escape(str(exc))}[/yellow]")
         return
-    if not question:
+    if not request.question:
         app.failed = True
         app.console.print(f"[yellow]Usage: {escape(ASK_USAGE)}[/yellow]")
         return
     if not _llm_available(app):
         return
-    _run_assistant(app, question, language, strategy)
+    _run_assistant(
+        app, request.question, request.language, request.strategy,
+        request.steps,
+    )
 
 
 def _run_assistant(
     app, question: str, language: Optional[str] = None,
-    strategy: Optional[str] = None,
+    strategy: Optional[str] = None, steps: Optional[int] = None,
 ) -> None:
     """
     Write a query answering *question* and put it in the next prompt.
 
-    *language* and *strategy* override those of the session and of the
-    configuration when given.
+    *language*, *strategy* and *steps* (the most steps of the ReAct
+    agent) override those of the session and of the configuration when
+    given.
     """
     from neurolang.utils.llm import (
         LLMConfigError,
@@ -251,8 +305,12 @@ def _run_assistant(
         config = state.config()
         provider = config.provider(state.provider)
         language = _target_language(app, language, config)
+        assistant = config.assistant
+        steps = steps or state.steps
+        if steps:
+            assistant = replace(assistant, max_steps=steps)
         agent = make_agent(
-            app._nl, provider, config.assistant, language,
+            app._nl, provider, assistant, language,
             strategy or state.strategy,
             engine_name=app.settings.engine_name,
             loaded=app.loaded_relations, client=state.client,
@@ -282,12 +340,14 @@ def _llm_status(app) -> None:
     config = state.config()
     provider = config.provider(state.provider)
     strategy = state.strategy or config.assistant.strategy
+    steps = state.steps or config.assistant.max_steps
     details = provider.base_url or " ".join(provider.command[:1])
     app.console.print(
         f"Provider: [bold]{provider.name}[/bold] — {provider.api} "
         f"{escape(details)}, model {escape(provider.model or '-')}, "
         f"tool calling {provider.tool_calling}\n"
-        f"Strategy: {strategy} · language: {config.assistant.language}\n"
+        f"Strategy: {strategy} · steps: {steps} · language: "
+        f"{config.assistant.language}\n"
         f"Providers: {', '.join(sorted(config.providers))}\n"
         f"[dim]Configuration: {config.path}[/dim]"
     )
@@ -311,7 +371,19 @@ def cmd_llm(app, arg: str) -> None:
         return
     action, _, value = arg.strip().partition(" ")
     if action and action not in LLM_SETTINGS:
-        _run_assistant(app, arg.strip(), "datalog", "react")
+        try:
+            request = parse_ask(arg, LLM_USAGE)
+        except ValueError as exc:
+            app.failed = True
+            app.console.print(f"[yellow]{escape(str(exc))}[/yellow]")
+            return
+        if request.language or request.strategy or not request.question:
+            app.failed = True
+            app.console.print(f"[yellow]Usage: {escape(LLM_USAGE)}[/yellow]")
+            return
+        _run_assistant(
+            app, request.question, "datalog", "react", request.steps
+        )
         return
     from neurolang.utils.llm import LLMConfigError
     value = value.strip()
@@ -322,6 +394,8 @@ def cmd_llm(app, arg: str) -> None:
             state.provider = value
         elif action == "strategy" and value in STRATEGY_FLAGS.values():
             state.strategy = value
+        elif action == "steps" and value:
+            state.steps = parse_steps(value)
         elif action == "reload":
             state.reload()
         elif action:
@@ -332,6 +406,6 @@ def cmd_llm(app, arg: str) -> None:
             )
             return
         _llm_status(app)
-    except LLMConfigError as exc:
+    except (LLMConfigError, ValueError) as exc:
         app.failed = True
         app.console.print(f"[red]{escape(str(exc))}[/red]")

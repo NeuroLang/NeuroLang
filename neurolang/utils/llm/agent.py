@@ -26,10 +26,11 @@ from typing import Callable, Optional
 from neurolang.utils import engine_registry
 
 from . import prompts
+from .comments import comment_rules, commented_query
 from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
-from .providers import make_client
+from .providers import LLMError, make_client
 from .validation import check_query, run_preview
 
 MAX_OBSERVATION = 2000
@@ -95,6 +96,7 @@ class AgentResult:
     language: str = "squall"
     explanation: str = ""
     valid: bool = False
+    commented: str = ""
     error: str = ""
     steps: list = field(default_factory=list)
     usage: Counter = field(default_factory=Counter)
@@ -400,8 +402,45 @@ class Agent:
         self.on_step(step)
 
     def run(self, question: str) -> AgentResult:
-        """Return the query answering *question*."""
+        """
+        Return the query answering *question*.
+
+        With the setting ``comment_rules``, the accepted query is also
+        written with a comment line explaining each rule, in
+        ``commented`` (see :meth:`_comment`).
+        """
+        result = self._run(question)
+        if result.valid and result.query and self.config.comment_rules:
+            self._comment(result, question)
+        return result
+
+    def _run(self, question: str) -> AgentResult:
+        """Return the query answering *question*, as the strategy finds it."""
         raise NotImplementedError
+
+    def _comment(self, result: AgentResult, question: str) -> None:
+        """
+        Ask the model for a comment line on each rule of the query of
+        *result* and write it commented in ``result.commented``.
+
+        The query itself is unchanged; a request that fails, or a reply
+        without a comment per rule, leaves ``commented`` empty and is
+        reported as a step.
+        """
+        try:
+            rules, notes = comment_rules(
+                lambda messages: self._complete(result, messages, None, 0.0),
+                question, result.query, result.language,
+            )
+        except (LLMError, ValueError) as exc:
+            self._step(result, AgentStep(
+                "", "comment_rules", {}, f"No comments: {exc}"
+            ))
+            return
+        result.commented = commented_query(rules, notes)
+        self._step(result, AgentStep(
+            "", "comment_rules", {}, result.commented
+        ))
 
 
 class IclAgent(Agent):
@@ -409,7 +448,7 @@ class IclAgent(Agent):
 
     strategy = "icl"
 
-    def run(self, question: str) -> AgentResult:
+    def _run(self, question: str) -> AgentResult:
         samples = max(1, self.config.samples)
         if samples == 1:
             return self._attempt(question, self.config.temperature)
@@ -494,7 +533,7 @@ class ReactAgent(Agent):
         """Whether the provider's native tool calls are used."""
         return self.provider.tool_calling == "native"
 
-    def run(self, question: str) -> AgentResult:
+    def _run(self, question: str) -> AgentResult:
         result = AgentResult(language=self.language)
         toolbox = Toolbox(
             self.context, self.language, self.config.preview_rows,
