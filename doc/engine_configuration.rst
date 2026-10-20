@@ -31,7 +31,18 @@ may specify the following keys, all of them optional:
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
-  ``difumo``) as region predicates
+  ``tian``, ``difumo``) as region predicates ``name(label, region)``.  A
+  deterministic atlas with ``activated: {predicate_name, radius_mm,
+  peaks}`` also registers ``predicate_name(label, study)``: the studies
+  with a peak within ``radius_mm`` (3 by default) of a voxel of the
+  region, the peaks being the millimetre coordinates of the relation
+  ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
+  are measured in millimetres through the atlas's affine, so its grid need
+  not be the template's, and the pairs are computed once, when the engine
+  is built.  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
+  for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
+  downloaded from the authors' repository
 - ``datalog_init`` — inline Datalog rules that are loaded at engine startup
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
@@ -53,6 +64,13 @@ may specify the following keys, all of them optional:
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
+- ``assistant_guidance`` — how the LLM query assistant (``.ask``,
+  ``neurolang-query --ask``) is to answer questions on the engine: added
+  to its system prompt.  The coordinate meta-analysis engines ask for
+  probabilistic answers over ``selected_study``, activation as a peak
+  within 3 mm of a point in MNI millimetres, the Destrieux atlas for the
+  classical anatomy of the cortex and the Schaefer and Tian atlases for
+  the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests

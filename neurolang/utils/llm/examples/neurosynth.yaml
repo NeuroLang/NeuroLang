@@ -1,6 +1,6 @@
-# Questions on the neurosynth engine with their Datalog and SQUALL
-# queries: the few-shot examples of the LLM query assistant, the most
-# similar to the user's question being put in the prompt. Every query is
+# Questions on the neurosynth engine with their Datalog queries: the
+# few-shot examples of the LLM query assistant, the most similar to the
+# user's question being put in the prompt. Every query is
 # checked against the engine by the tests (NEUROLANG_TEST_DATA_DIR).
 #
 # As the engine's assistant_guidance asks, every question is answered
@@ -20,10 +20,6 @@ examples:
       ans(p) :- PROB[pain_study(s)] = p
 
   - question: Which terms are mentioned by the studies, and how often?
-    squall: |-
-      define as Mentioned_term every Term that a Selected_study mentions.
-      define as Term_probability with inferred probability every Mentioned_term.
-      obtain every Term_probability (?t; ?p).
     datalog: |-
       mentioned_term(t) :- mentions(s, t), selected_study(s)
       ans(t, p) :- PROB[mentioned_term(t)] = p
@@ -46,12 +42,6 @@ examples:
       ans(p) :- PROB[no_pain(s)] = p
 
   - question: Which terms co-occur with fear in a study?
-    squall: |-
-      define as Term_association every Mentions (?s; ?t) such that ?s is a Selected_study.
-      define as Term_given_fear with probability
-          every Term_association (_; ?t)
-          conditioned to every Term_association (?s; ?f) such that ?f is 'fear'.
-      obtain every Term_given_fear (?t; ?p).
     datalog: |-
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(t, p) :- PROB[term_association(s, t) // term_association(s, 'fear')] = p
@@ -76,13 +66,6 @@ examples:
       ans(p) :- PROB[active(s) // term_association(s, 'fear')] = p
 
   - question: Which gyri and sulci are activated by studies about language?
-    squall: |-
-      define as Active_region every Destrieux_activated (?l; ?s) such that ?s is a Selected_study.
-      define as Term_association every Mentions (?s; ?t) such that ?s is a Selected_study.
-      define as Region_given_language with probability
-          every Active_region (?l; _)
-          conditioned to every Term_association (?s; ?t) such that ?t is 'language'.
-      obtain every Region_given_language (?l; ?p).
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
@@ -95,13 +78,6 @@ examples:
       ans(p) :- PROB[active('L G temp sup Lateral', s) // term_association(s, 'speech')] = p
 
   - question: Which subcortical regions are activated by studies about fear?
-    squall: |-
-      define as Active_region every Tian_activated (?l; ?s) such that ?s is a Selected_study.
-      define as Term_association every Mentions (?s; ?t) such that ?s is a Selected_study.
-      define as Region_given_fear with probability
-          every Active_region (?l; _)
-          conditioned to every Term_association (?s; ?t) such that ?t is 'fear'.
-      obtain every Region_given_fear (?l; ?p).
     datalog: |-
       active(l, s) :- tian_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
@@ -126,19 +102,6 @@ examples:
   # being over selected_study; a BF above sqrt(10), about 3.16, is
   # substantial evidence.
   - question: Decode the left middle temporal gyrus, which terms have a Bayes factor above 3.16 for its activation?
-    squall: |-
-      define as Active_region every Destrieux_activated (?r; ?s) such that ?s is a Selected_study.
-      define as Region_probability with inferred probability every Active_region (?r; _).
-      define as Mentioned_term every Term that a Selected_study mentions.
-      define as Term_probability with inferred probability every Mentioned_term.
-      define as Cooccurrence (?r; ?t) where Destrieux_activated (?r, ?s) and ?s is a Selected_study and ?s mentions ?t.
-      define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
-      define as Bayes_factor (?r; ?t; ?bf)
-          where Joint_probability (?r, ?t, ?p_rt)
-          and Region_probability (?r, ?p_r)
-          and Term_probability (?t, ?p_t)
-          and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
-      obtain every Bayes_factor (?r; ?t; ?bf) such that ?r is 'L G temporal middle' and ?bf is greater than 3.16.
     datalog: |-
       active_region(l) :- destrieux_activated(l, s), selected_study(s)
       mentioned_term(t) :- mentions(s, t), selected_study(s)

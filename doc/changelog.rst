@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* The coordinate meta-analysis engines (``neurosynth``, ``neurostore``)
+  have the peaks in MNI millimetres, ``peak_mni(x, y, z, study)``, the
+  Destrieux atlas of the cortex and the Tian atlas of the subcortex beside
+  Schaefer, and for each atlas ``{atlas}_activated(label, study)``: the
+  studies with a peak within 3 mm of a voxel of a region.  The LLM
+  assistant answers their questions with probabilistic query answering
+  (an engine's ``assistant_guidance`` goes into its prompt), with
+  Destrieux for the classical anatomy and Schaefer and Tian for the
+  functional anatomy; the neurosynth example bank is rewritten so.
+
 * The page of the REPL in the browser has the logo, a header with links to
   the documentation, the tutorial and the source, the command it runs to
   copy, and a status that shows when it is busy; the choice of the
