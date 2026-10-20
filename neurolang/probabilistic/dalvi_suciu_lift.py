@@ -81,6 +81,7 @@ from .containment import is_contained
 from .deterministic_subqueries import replace_deterministic_negations
 from .expression_processing import (
     STRICT_COMPARISONS,
+    get_probchoice_variable_equalities,
     is_builtin,
     is_comparison,
     lift_optimization_for_choice_predicates
@@ -1526,17 +1527,72 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-    conjunctive_query = (
+    projected = (
         RemoveExistentialOnVariables(nonkey_variables)
         .walk(conjunctive_query)
     )
-    plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
+    projected = unify_choice_atoms(projected, free_variables, symbol_table)
+    if projected == conjunctive_query:
+        # Nothing was projected nor unified: lifting the same query again
+        # would never end.
+        return False, None
+    plan = dalvi_suciu_lift(projected, symbol_table)
     attributes = tuple(
         str2columnstr_constant(v.name)
         for v in free_variables
     )
     plan = rap.DisjointProjection(plan, attributes)
     return True, plan
+
+
+def unify_choice_atoms(query, kept_variables, symbol_table):
+    r"""
+    Make equal the arguments of the atoms of a same probabilistic choice in
+    *query*, keeping the variables *kept_variables*.
+
+    Exactly one tuple of a choice is true, so two of its atoms are true
+    together only if they are the same tuple: :math:`C(\bar x) \land
+    C(\bar y) \equiv C(\bar x) \land \bar x = \bar y`. The atoms
+    considered are those whose arguments are free in *query*, so that a
+    replaced variable is not captured by a quantifier of *query*; a
+    variable is replaced by a variable of *kept_variables* or a constant
+    it is equal to, else by another variable, and two variables of
+    *kept_variables*, or two constants, are left as they are. The atoms of
+    a choice inside an existential conjunct are made equal when it is
+    projected (:func:`disjoint_project_conjunctive_query`), the choice
+    variables becoming free.
+    """
+    free = extract_logic_free_variables(query)
+    choice_atoms = OrderedSet(
+        atom for atom in extract_logic_atoms(query)
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        and all(
+            isinstance(arg, Constant) or arg in free for arg in atom.args
+        )
+    )
+    choices = {atom.functor for atom in choice_atoms}
+    kept = set(kept_variables)
+    representative = {}
+
+    def find(term):
+        while term in representative:
+            term = representative[term]
+        return term
+
+    for x, y in get_probchoice_variable_equalities(choice_atoms, choices):
+        x, y = find(x), find(y)
+        if x == y:
+            continue
+        if isinstance(x, Constant) or x in kept:
+            x, y = y, x
+        if isinstance(x, Constant) or x in kept:
+            continue
+        representative[x] = y
+    if not representative:
+        return query
+    return ReplaceExpressionWalker(
+        {variable: find(variable) for variable in representative}
+    ).walk(query)
 
 
 def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
@@ -1589,21 +1645,25 @@ def _apply_disjoint_project_ucq_rule(
     head_plan = dalvi_suciu_lift(head, symbol_table)
     if not is_pure_lifted_plan(head_plan):
         return False, None
-    tail = set(disjunctive_query.formulas) - {disjunct}
+    # The tail is the disjunction of the other disjuncts, and the head and
+    # the tail are conjoined each within its own existentials.
     tail = add_existentials_except(
-        Conjunction(tuple(tail)),
+        Disjunction(tuple(
+            formula for formula in disjunctive_query.formulas
+            if formula != disjunct
+        )),
         free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if not is_pure_lifted_plan(tail_plan):
         return False, None
-    head_and_tail = add_existentials_except(
-        Conjunction(disjunctive_query.formulas), free_vars
-    )
+    head_and_tail = Conjunction((head, tail))
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
     if not is_pure_lifted_plan(head_and_tail_plan):
         return False, None
-    return True, rap.WeightedNaturalJoin(
+    # The tuples of the head or the tail without the conjunction have a
+    # probability 0 for it, which its plan leaves out: an outer sum.
+    return True, rap.WeightedOuterNaturalJoin(
         (head_plan, tail_plan, head_and_tail_plan),
         (Constant(1), Constant(1), Constant(-1)),
     )

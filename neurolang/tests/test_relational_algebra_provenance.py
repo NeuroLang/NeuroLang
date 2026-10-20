@@ -32,6 +32,7 @@ from ..relational_algebra_provenance import (
     Union,
     WeightedNaturalJoin,
     WeightedNaturalJoinSolverMixin,
+    WeightedOuterNaturalJoin,
 )
 from ..utils import (
     NamedRelationalAlgebraFrozenSet,
@@ -642,6 +643,49 @@ def test_weightednaturaljoin_provenance_name():
     )
 
     assert sol.relation.value == expected
+
+def test_weighted_outer_natural_join_counts_a_missing_tuple_as_0():
+    """
+    P[A or B] = P[A] + P[B] - P[A and B] keeps the tuples of A or B that
+    are not those of A and B, whose plan leaves out the tuples of
+    probability 0.
+    """
+    class Solver(
+        WeightedNaturalJoinSolverMixin,
+        RelationalAlgebraProvenanceCountingSolver,
+    ):
+        pass
+
+    def pset(column, rows):
+        return testing.build_ra_provenance_set_from_named_ra_set(
+            NamedRelationalAlgebraFrozenSet(
+                columns=(column, "x"), iterable=rows
+            ),
+            ColumnStr(column),
+        )
+
+    a = pset("_p1_", [(0.5, "u"), (0.25, "v")])
+    b = pset("_p2_", [(0.25, "v"), (0.5, "w")])
+    a_and_b = pset("_p3_", [(0.125, "v")])
+    weights = (Constant(1), Constant(1), Constant(-1))
+    outer = Solver().walk(
+        WeightedOuterNaturalJoin((a, b, a_and_b), weights)
+    )
+    result = {
+        x: p for p, x in outer.relation.value.projection(
+            outer.provenance_column.value, "x"
+        )
+    }
+    assert result == pytest.approx({"u": 0.5, "v": 0.375, "w": 0.5})
+    inner = Solver().walk(WeightedNaturalJoin((a, b, a_and_b), weights))
+    assert [x for x in inner.relation.value.projection("x")] == [("v",)]
+
+    empty = pset("_p3_", [])
+    nothing_shared = Solver().walk(
+        WeightedOuterNaturalJoin((a, b, empty), weights)
+    )
+    assert len(nothing_shared.relation.value) == 3
+
 
 def test_independentdisjointprojections_provenance_name():
     RA1 = NamedRelationalAlgebraFrozenSet(

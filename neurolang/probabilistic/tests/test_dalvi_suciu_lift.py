@@ -963,3 +963,70 @@ def test_choice_with_a_repeated_variable(answer):
         expected = testing.make_prov_set([(0.5,)], ("_p_",))
     result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("rules, expected", [
+    # Disjuncts sharing studies, and disjoint: P[A and B] is 0, left out
+    # of the plan of the conjunction.
+    ((("language",), ("speech",)), 0.5),
+    ((("language",), ("pain",)), 0.75),
+    # Three disjuncts: the tail is the disjunction of the two others.
+    ((("language",), ("speech",), ("pain",)), 0.75),
+    ((("pain",), ("speech",), ("memory",)), 0.75),
+    # A conjunctive disjunct.
+    ((("language", "speech"), ("pain",)), 0.5),
+])
+def test_union_of_rules_joining_a_choice(rules, expected):
+    """
+    A union of rules each joining the probabilistic choice, under PROB:
+    its disjoint projection made the variables of the choice of the
+    disjuncts free, two atoms of the choice whose variables were equal
+    only through the choice, and lifted them again without end.
+    """
+    from ...frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,), (4,)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [(1, "language"), (2, "speech"), (2, "language"), (3, "pain"),
+         (4, "memory")],
+        name="mentions",
+    )
+    program = "\n".join(
+        "a(s) :- " + ", ".join(f"mentions(s, '{t}')" for t in terms)
+        + ", selected_study(s)"
+        for terms in rules
+    ) + "\nans(p) :- PROB[a(s)] = p"
+    result = nl.execute_datalog_program(program)
+    assert [p for p, in result] == [pytest.approx(expected)]
+
+
+def test_unify_choice_atoms():
+    """Atoms of a choice are the same tuple: their variables are equal,
+    those of the query kept, and a variable bound in the query is not
+    replaced."""
+    s, f, t, x = (Symbol(n) for n in "sftx")
+    M = Symbol("M")
+    C = Symbol("C")
+    symbol_table = {
+        C: ProbabilisticChoiceSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                columns=("p", "v"), iterable=[(0.5, 1), (0.5, 2)]
+            )),
+            Constant(ColumnStr("p")),
+        ),
+        M: Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("v", "w"), iterable=[(1, "a")]
+        )),
+    }
+    query = Conjunction((M(s, t), C(s), M(f, x), C(f)))
+    unified = dalvi_suciu_lift.unify_choice_atoms(query, {f}, symbol_table)
+    assert unified == Conjunction((M(f, t), C(f), M(f, x), C(f)))
+    bound = Conjunction((C(s), ExistentialPredicate(f, Conjunction((
+        C(f), M(f, x)
+    )))))
+    assert dalvi_suciu_lift.unify_choice_atoms(
+        bound, set(), symbol_table
+    ) == bound

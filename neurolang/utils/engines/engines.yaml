@@ -47,9 +47,7 @@ engines:
       PROB[activation // term] = p, or a ratio of probabilities (lift,
       Bayes factor) when it asks for an association; a question asking
       for a list (which studies, which regions) gets the probability of
-      each.  Join selected_study once, after the unions: define a union
-      over the stored relations first (two rules), then join it with
-      selected_study.  A study activates a point when one of its peaks is within
+      each.  A study activates a point when one of its peaks is within
       3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
       <= 3), with the coordinates of the question as MNI millimetres,
       written as they are.  For the classical anatomy of the cortex
