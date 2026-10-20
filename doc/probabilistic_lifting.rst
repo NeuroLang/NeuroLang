@@ -411,7 +411,12 @@ Disjoint projection
    sum is taken over the tuples of :math:`A` or :math:`B`, a tuple missing
    from a plan having the probability 0 there
    (``WeightedOuterNaturalJoin``): no tuple of :math:`A \land B` is a
-   tuple of :math:`A` alone, say, when no study is in both.
+   tuple of :math:`A` alone, say, when no study is in both. The rule
+   applies only when :math:`A` and :math:`B` have all the free variables
+   of the union: a disjunct without one, e.g. once a deterministic
+   :math:`\exists s_2\, M(s_2, t)` common to all the disjuncts has been
+   factored out of them, is true for every value of it, which a plan
+   cannot give.
 
    The variables projected become free in the conjunctive query lifted
    below the projection. Two atoms of the same choice in it, such as
@@ -652,7 +657,11 @@ Disjoint projection of a union
    leaves out those of probability 0 (the probabilistic model above), so
    the sum, for a :math:`\theta` of the support of :math:`A` or :math:`B`,
    takes as 0 the probability of a plan that does not have it
-   (``WeightedOuterNaturalJoin``). The recursion lifts :math:`A`, with one
+   (``WeightedOuterNaturalJoin``). This needs every plan to give values to
+   all the free variables of the union: the rule checks that :math:`A`
+   and :math:`B` have them all (``_apply_disjoint_project_ucq_rule``), so
+   that :math:`A \land B` has them too, and a :math:`\theta` missing from
+   a plan is one of probability 0 for it. The recursion lifts :math:`A`, with one
    disjunct, :math:`B` and :math:`A \land B`, whose disjunctive normal
    form :math:`\bigvee_i (A \land B_i)` has one disjunct less than the
    union: the number of disjuncts decreases.

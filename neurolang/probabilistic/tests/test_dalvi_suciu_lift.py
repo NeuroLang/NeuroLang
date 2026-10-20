@@ -1030,3 +1030,70 @@ def test_unify_choice_atoms():
     assert dalvi_suciu_lift.unify_choice_atoms(
         bound, set(), symbol_table
     ) == bound
+
+
+def test_union_by_term_with_a_variable_of_a_rule_alone():
+    """
+    A union whose rules have a variable that their head has not
+    (``s2``): the deterministic ``mentions(s2, t)`` is factored out of the
+    union, whose disjuncts then do not all have ``t``. The probability of
+    a disjunct without ``t`` holds for every ``t``, which the sum of the
+    plans cannot give, so the disjoint projection of the union declines
+    it; the query is computed exactly, by weighted model counting, whose
+    union of the rules projects out ``s2``.
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = [
+        (0, "a"), (0, "c"), (1, "a"), (1, "d"), (1, "e"), (2, "a"),
+        (2, "c"), (2, "e"), (3, "a"), (3, "c"), (3, "d"), (4, "b"),
+        (5, "b"), (5, "c"), (5, "d"),
+    ]
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected_study"
+    )
+    nl.add_tuple_set(mentions, name="mentions")
+    result = nl.execute_datalog_program(
+        "a(t, s) :- mentions(s, t), selected_study(s)\n"
+        "a(t, s) :- mentions(s, 'a'), mentions(s, 'c'), mentions(s2, t), "
+        "selected_study(s)\n"
+        "a(t, s) :- mentions(s, 'd'), mentions(s2, t), selected_study(s)\n"
+        "ans(t, p) :- PROB[a(t, s)] = p"
+    )
+    m = set(mentions)
+    expected = {
+        t: sum(
+            (s, t) in m or ((s, "a") in m and (s, "c") in m)
+            or (s, "d") in m
+            for s in range(6)
+        ) / 6
+        for t in "abcde"
+    }
+    assert dict(result) == pytest.approx(expected)
+
+
+def test_disjoint_project_of_a_union_needs_its_free_variables():
+    """The disjoint projection of a union declines a disjunct without a
+    free variable of the union."""
+    t, s, f = Symbol("t"), Symbol("s"), Symbol("f")
+    M, C = Symbol("M"), Symbol("C")
+    symbol_table = {
+        C: ProbabilisticChoiceSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                columns=("p", "v"), iterable=[(0.5, 1), (0.5, 2)]
+            )),
+            Constant(ColumnStr("p")),
+        ),
+        M: Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("v", "w"), iterable=[(1, "a"), (2, "b")]
+        )),
+    }
+    with_t = ExistentialPredicate(s, Conjunction((M(s, t), C(s))))
+    without_t = ExistentialPredicate(
+        f, Conjunction((M(f, Constant("a")), C(f)))
+    )
+    union = Disjunction((with_t, without_t))
+    assert dalvi_suciu_lift._apply_disjoint_project_ucq_rule(
+        union, without_t, symbol_table
+    ) == (False, None)

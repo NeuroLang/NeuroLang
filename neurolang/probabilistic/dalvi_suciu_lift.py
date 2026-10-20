@@ -1642,18 +1642,24 @@ def _apply_disjoint_project_ucq_rule(
 ):
     free_vars = extract_logic_free_variables(disjunctive_query)
     head = add_existentials_except(disjunct, free_vars)
+    others = tuple(
+        formula for formula in disjunctive_query.formulas
+        if formula != disjunct
+    )
+    # The sum takes as 0 the probability of a tuple missing from a plan,
+    # which is right only if every plan has all the free variables: a
+    # disjunct without one is true for every value of it.
+    if any(
+        extract_logic_free_variables(formula) != free_vars
+        for formula in (disjunct, Disjunction(others))
+    ):
+        return False, None
     head_plan = dalvi_suciu_lift(head, symbol_table)
     if not is_pure_lifted_plan(head_plan):
         return False, None
     # The tail is the disjunction of the other disjuncts, and the head and
     # the tail are conjoined each within its own existentials.
-    tail = add_existentials_except(
-        Disjunction(tuple(
-            formula for formula in disjunctive_query.formulas
-            if formula != disjunct
-        )),
-        free_vars,
-    )
+    tail = add_existentials_except(Disjunction(others), free_vars)
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if not is_pure_lifted_plan(tail_plan):
         return False, None
