@@ -316,27 +316,6 @@ def _non_repeating_query_plan(
     return plan, symbol_table, unified_query
 
 
-def _unify_variable_equalities(query):
-    """
-    Unify the variables of the equalities of *query*, in each disjunct of
-    its body apart: an equality holds in its disjunct only. A disjunct
-    whose unification would replace a variable of the head keeps its
-    equalities, the head being that of every disjunct.
-    """
-    if not isinstance(query.antecedent, Disjunction):
-        return UnifyVariableEqualities().walk(query)
-    disjuncts = []
-    for disjunct in query.antecedent.formulas:
-        unified = UnifyVariableEqualities().walk(
-            Implication(query.consequent, disjunct)
-        )
-        disjuncts.append(
-            unified.antecedent if unified.consequent == query.consequent
-            else disjunct
-        )
-    return Implication(query.consequent, Disjunction(tuple(disjuncts)))
-
-
 def _prepare_and_optimise_query(
     flat_query, cpl_program, deterministic_relations=None
 ):
@@ -346,7 +325,7 @@ def _prepare_and_optimise_query(
         for f in flat_query_body.formulas
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
-    unified_query = _unify_variable_equalities(flat_query)
+    unified_query = UnifyVariableEqualities().walk(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )

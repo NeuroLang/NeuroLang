@@ -998,7 +998,7 @@ Rewriting of the choices
    arguments of atoms conjoined with each other
    (``lift_optimization_for_choice_predicates``). For the same reason, the
    unification of the variables of equalities is done in each disjunct
-   apart (``_unify_variable_equalities``).
+   apart (``UnifyVariableEqualitiesMixin``).
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model

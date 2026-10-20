@@ -12,13 +12,14 @@ from ...datalog.basic_representation import DatalogProgram
 from ...exceptions import ForbiddenExpressionError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Disjunction, Implication, Union
 from ...type_system import Unknown
 from ...utils.testing.logic import logic_exp_commutative_equal
 from ..expression_processing import (
     CollapseConjunctiveAntecedents,
     RemoveDuplicatedAntecedentPredicates,
     TranslateToLogic,
+    UnifyVariableEqualities,
     UnifyVariableEqualitiesMixin,
 )
 
@@ -245,3 +246,29 @@ def test_unify_vareq_builtin():
     )
     result = program.intensional_database()[P]
     assert logic_exp_commutative_equal(result, expected)
+
+
+def test_equalities_are_unified_in_each_disjunct():
+    """
+    An equality holds in its disjunct only: the body of a union is not
+    rebuilt as the conjunction of its predicates.
+    """
+    first = Conjunction((P(x, y), EQ(y, a)))
+    rule = Implication(R(x), Disjunction((first, Q(x))))
+    result = UnifyVariableEqualities().walk(rule)
+    expected_first = UnifyVariableEqualities().walk(
+        Implication(R(x), first)
+    ).antecedent
+    assert result == Implication(
+        R(x), Disjunction((expected_first, Q(x)))
+    )
+    assert expected_first == P(x, a)
+
+
+def test_disjunct_whose_unification_changes_the_head_keeps_its_equality():
+    """The head is that of every disjunct: a disjunct whose unification
+    would replace a variable of it is left as it is."""
+    first = Conjunction((P(x, y), EQ(x, y)))
+    rule = Implication(R(x), Disjunction((first, Q(x))))
+    result = UnifyVariableEqualities().walk(rule)
+    assert result == rule

@@ -987,6 +987,33 @@ class RemoveDuplicatedAntecedentPredicates(PatternWalker):
 
 class UnifyVariableEqualitiesMixin(PatternWalker):
     @add_match(
+        Implication(FunctionApplication(Symbol, ...), Disjunction),
+        lambda implication: any(
+            is_var_equality_to_var_or_const(formula)
+            for formula in extract_logic_predicates(implication.antecedent)
+        ),
+    )
+    def unify_var_eqs_in_each_disjunct(self, implication):
+        """
+        An equality holds in its disjunct only: the variables it makes the
+        same are unified in each disjunct of a union apart, rebuilding the
+        body as a conjunction of the predicates would turn the union into
+        a conjunction. A disjunct whose unification would change the head,
+        which every disjunct shares, keeps its equalities.
+        """
+        disjuncts = []
+        for disjunct in implication.antecedent.formulas:
+            unified = self.walk(Implication(implication.consequent, disjunct))
+            disjuncts.append(
+                unified.antecedent
+                if unified.consequent == implication.consequent
+                else disjunct
+            )
+        return Implication(
+            implication.consequent, Disjunction(tuple(disjuncts))
+        )
+
+    @add_match(
         Implication(FunctionApplication(Symbol, ...), ...),
         lambda implication: all(
             isinstance(arg, (Symbol, Constant))

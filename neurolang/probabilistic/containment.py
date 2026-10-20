@@ -55,10 +55,51 @@ def freeze_atom(atom):
     return atom.functor(*args)
 
 
+class NegatedSymbol(Symbol):
+    """
+    The relation of the negated atoms ¬R(x) of the relation symbol
+    *expression* R, a relation of its own, that no atom R(x) matches.
+    """
+    def __init__(self, expression):
+        self.expression = expression
+        self.is_fresh = False
+
+    @property
+    def name(self):
+        return self.expression.name
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, NegatedSymbol)
+            and self.expression == other.expression
+        )
+
+    def __hash__(self):
+        return hash((NegatedSymbol, self.expression))
+
+    def __str__(self):
+        return f"¬{self.expression.name}"
+
+    __repr__ = __str__
+
+
+def negation_as_atom(formula):
+    """
+    The atom ¬R(x) of a negated atom is the atom R̄(x) of the relation
+    `NegatedSymbol(R)`; any other formula is as it is.
+    """
+    if isinstance(formula, Negation) and isinstance(
+        formula.formula.functor, Symbol
+    ):
+        atom = formula.formula
+        return NegatedSymbol(atom.functor)(*atom.args)
+    return formula
+
+
 def negations_as_atoms(rule):
     '''
     The *rule* with each negated atom ¬R(x) of its body replaced by the
-    atom R̄(x), R̄ being a relation symbol of R and no other.
+    atom R̄(x) of the relation `NegatedSymbol(R)`.
 
     Containment is tested by the frozen body of a query, whose atoms are
     facts, and by the evaluation of the other query on them. A negated
@@ -68,21 +109,13 @@ def negations_as_atoms(rule):
     containment of positive queries do: the test stays sound (a
     containment found holds), and is not complete.
     '''
-    def positive(formula):
-        if isinstance(formula, Negation) and isinstance(
-            formula.formula.functor, Symbol
-        ):
-            atom = formula.formula
-            return Symbol(f"__not__{atom.functor.name}")(*atom.args)
-        return formula
-
     antecedent = rule.antecedent
     if isinstance(antecedent, Conjunction):
         antecedent = Conjunction(tuple(
-            positive(formula) for formula in antecedent.formulas
+            negation_as_atom(formula) for formula in antecedent.formulas
         ))
     else:
-        antecedent = positive(antecedent)
+        antecedent = negation_as_atom(antecedent)
     return Implication(rule.consequent, antecedent)
 
 

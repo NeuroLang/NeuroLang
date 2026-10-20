@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from ..datalog.expression_processing import (
-    UnifyVariableEqualities,
+    UnifyExistentialVariableEqualities,
     extract_logic_predicates,
     flatten_query
 )
@@ -808,31 +808,22 @@ def _project_disjuncts(flat_query, variables_to_project):
 
 
 def _project_disjunction(formula, kept):
-    """*formula*, if a disjunction with the equalities of each disjunct
-    unified, and quantified on its free variables but those *kept*."""
+    """
+    *formula*, if a disjunction with each disjunct quantified on its free
+    variables but those *kept*, and the equalities between the variables
+    quantified unified: the equalities that the rewriting of the choices
+    leaves between the choice atoms of a rule would be translated to a
+    projection overwriting a column of the joined atoms, which a
+    provenance set does not allow.
+    """
     if not isinstance(formula, Disjunction):
         return formula
     return Disjunction(tuple(
-        add_existentials_except(
-            _unify_variable_equalities(disjunct, kept), kept
+        UnifyExistentialVariableEqualities().walk(
+            add_existentials_except(disjunct, kept)
         )
         for disjunct in formula.formulas
     ))
-
-
-def _unify_variable_equalities(disjunct, kept):
-    """
-    *disjunct* with the variables of its equalities unified, or as it is
-    if that would replace one of the variables *kept*. The equalities
-    between the choice atoms of a rule that the rewriting of the choices
-    leaves would be translated to a projection overwriting a column of the
-    joined atoms, which a provenance set does not allow.
-    """
-    head = Symbol.fresh()(*sorted(
-        extract_logic_free_variables(disjunct) & kept, key=lambda s: s.name
-    ))
-    unified = UnifyVariableEqualities().walk(Implication(head, disjunct))
-    return unified.antecedent if unified.consequent == head else disjunct
 
 
 def sdd_solver_global_model(solver, set_probabilities):
