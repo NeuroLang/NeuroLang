@@ -529,6 +529,9 @@ class Sort(NamedTuple):
     ``""`` otherwise. The *grid* of a sort of voxels is the grid it
     indexes: that of the engine's template (see :func:`build_engine`)
     when ``""`` or ``template``, else that of the atlas of this name.
+    The *atlas* of a sort of region labels is the atlas they name the
+    regions of, one the engine loads: ``.view`` paints the regions of a
+    result on its grid (see :func:`atlas_label_values`).
     """
 
     name: str
@@ -537,6 +540,7 @@ class Sort(NamedTuple):
     description: str = ""
     space: str = ""
     grid: str = ""
+    atlas: str = ""
 
 
 SORT_SPACES = ("voxel", "mm")
@@ -575,13 +579,36 @@ def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
     return grid
 
 
+def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> str:
+    """
+    Return the atlas whose regions the sort *name* declared by *info*
+    labels, or "".
+
+    Only a sort of one column and no space labels the regions of an
+    atlas, one of *atlases*.
+    """
+    atlas = str(info.get("atlas", ""))
+    if atlas and (info.get("space") or len(info.get("columns", ())) != 1):
+        raise ValueError(
+            f"sort {name!r} names the atlas {atlas!r}; only a sort of one "
+            "column and no space labels the regions of an atlas"
+        )
+    if atlas and atlas not in atlases:
+        raise ValueError(
+            f"sort {name!r} names the atlas {atlas!r}; the atlases of the "
+            f"engine are {', '.join(atlases) or 'none'}"
+        )
+    return atlas
+
+
 def _declared_sort(
     name: str, info: Dict[str, Any], grids=(TEMPLATE_GRID,)
 ) -> Sort:
     """
     Return the sort *name* declared by *info*, checking its space.
 
-    Its grid, if any, is one of *grids*.
+    Its grid, if any, is one of *grids*, and its atlas one of them but
+    the template's.
     """
     space = str(info.get("space", ""))
     if space and space not in SORT_SPACES:
@@ -593,6 +620,9 @@ def _declared_sort(
         name, tuple(info["columns"]), str(info.get("type", "")),
         str(info.get("description", "")).strip(), space,
         _sort_grid(name, info, grids),
+        _sort_atlas(
+            name, info, tuple(g for g in grids if g != TEMPLATE_GRID)
+        ),
     )
 
 
@@ -1001,6 +1031,30 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
+def _register_atlas_labels(nl, name: str, labels: dict) -> None:
+    """
+    Register the values of the image of the atlas *name* labelling each
+    of its regions, *labels* mapping each value to the region's name.
+    """
+    if getattr(nl, "atlas_labels", None) is None:
+        nl.atlas_labels = {}
+    values = {}
+    for value, label in labels.items():
+        values.setdefault(label, []).append(int(value))
+    nl.atlas_labels[name] = values
+
+
+def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
+    """
+    Return the values labelling each region of the atlas *name* of *nl*
+    in the image of its grid (``nl.grids[name]``), by region name.
+
+    The names are those of the atlas's relation, ``{}`` for an atlas the
+    engine did not load.
+    """
+    return (getattr(nl, "atlas_labels", None) or {}).get(name, {})
+
+
 def atlas_activation(
     img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
     radius_mm: float = 3.0, chunk: int = 4096,
@@ -1039,7 +1093,9 @@ def atlas_activation(
         values = data[tuple(candidates[near].T)]
         owner = np.broadcast_to(owners[:, None], near.shape)[near]
         labelled = values > 0
-        pairs.update(zip(values[labelled].tolist(), owner[labelled].tolist()))
+        pairs.update(zip(
+            values[labelled].tolist(), owner[labelled].tolist()
+        ))
     return sorted(
         (label_names[value], study) for value, study in pairs
         if value in label_names
@@ -1106,12 +1162,13 @@ def _load_deterministic_atlas(
     # medial walls of Destrieux): it is no region.
     labels = [(k, v) for k, v in labels if hasattr(regions[k], "voxels")]
     rows = [(_label_name(v), regions[k]) for k, v in labels]
+    names = {k: _label_name(v) for k, v in labels}
 
     nl.add_tuple_set(rows, name=pred_name)
+    _register_atlas_labels(nl, atlas_name, names)
     if params.get("activated"):
         _register_atlas_activation(
-            nl, {k: _label_name(v) for k, v in labels}, img,
-            params["activated"], pred_name,
+            nl, names, img, params["activated"], pred_name,
         )
 
 
@@ -1553,6 +1610,7 @@ def build_engine(
 
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
+    nl.atlas_labels = {}
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)

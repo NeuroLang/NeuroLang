@@ -156,3 +156,43 @@ def test_without_the_tui_extra(engine, tmp_path, monkeypatch, capsys):
     assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
 
 
+
+
+@pytest.fixture
+def atlas(engine):
+    """The engine with a Schaefer atlas of two regions on its grid."""
+    labels = np.zeros(SHAPE, dtype=np.int16)
+    labels[:2], labels[2:] = 1, 2
+    engine.grids["schaefer"] = nib.Nifti1Image(labels, AFFINE)
+    engine_registry._register_atlas_labels(
+        engine, "schaefer", {1: "A", 2: "B"}
+    )
+    engine.add_tuple_set(
+        [("A", "s1"), ("B", "s1"), ("A", "s2")], name="schaefer_activated"
+    )
+    return engine
+
+
+def test_view_the_regions_of_a_result(atlas, viewer, capsys):
+    cli.main([
+        "--engine", "neurosynth", "--view",
+        "ans(l, count(s)) :- schaefer_activated(l, s)",
+    ])
+    [(image, options)] = viewer
+    data = np.asanyarray(image.dataobj)
+    assert np.all(data[:2] == 2) and np.all(data[2:] == 1)
+    assert options["threshold"] == 0.0
+    assert "2 regions" in capsys.readouterr().err
+
+
+def test_view_a_network_of_regions(atlas, viewer, capsys):
+    cli.main([
+        "--engine", "neurosynth", "--view",
+        "co(a, b, s) :- schaefer_activated(a, s), schaefer_activated(b, s)\n"
+        "ans(a, b, count(s)) :- co(a, b, s), (a < b)",
+    ])
+    [(image, options)] = viewer
+    network = options["connectome"]
+    assert [n["name"] for n in network["nodes"]] == ["A", "B"]
+    assert [e["colorValue"] for e in network["edges"]] == [1.0]
+    assert "Network of 2 nodes and 1 edges" in capsys.readouterr().err

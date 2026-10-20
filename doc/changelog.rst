@@ -27,7 +27,15 @@ Unreleased
   assistant answers their questions with probabilistic query answering
   (an engine's ``assistant_guidance`` goes into its prompt), with
   Destrieux for the classical anatomy and Schaefer and Tian for the
-  functional anatomy; the neurosynth example bank is rewritten so.
+  functional anatomy; the neurosynth example bank is rewritten so, with
+  examples of the co-activation of regions and of points.
+
+* ``.view`` and ``.save`` (and ``--view``, ``--save``) paint a result on
+  the regions of an atlas, ``ans(l, p)``, region by region: a sort of
+  region labels names its atlas with ``atlas`` in ``engines.yaml``.
+  ``.view`` shows a result of pairs of regions or points with a value,
+  such as their co-activation, as a network drawn by NiiVue's connectome
+  view, over the brain.
 
 * The page of the REPL in the browser has the logo, a header with links to
   the documentation, the tutorial and the source, the command it runs to
@@ -248,6 +256,13 @@ Unreleased
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
 **Bug fixes:**
+
+* A Euclidean distance bound to a point given by numbers,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, was
+  computed for every row (14 s on the peaks of neurosynth), and the
+  reserved ``EUCLIDEAN`` raised an error: the point is now ranged by a
+  stored relation of its own, so the points within the distance are
+  precomputed as for two relations (well under a second).
 
 * A probabilistic query with a variable occurring only in deterministic
   relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the

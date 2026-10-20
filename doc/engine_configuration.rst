@@ -197,6 +197,25 @@ A column of unknown sort, such as one of a relation loaded with
 ``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
 X Y Z`` give the columns, on the template's grid (see ``.help save``).
 
+A sort of region labels may name, with ``atlas``, the atlas whose
+regions it labels, by its key under ``atlases``; it has one column and
+no ``space``::
+
+    destrieux_label:
+      columns: [label]
+      type: str
+      atlas: destrieux
+
+A result with a column of such a sort is then a result on the regions of
+the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
+atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),
+and ``.view`` shows a result with two such columns, pairs of regions and
+a value, as a network over the brain, a node at the centre of each
+region and an edge per pair (see ``.help view``).  The engine keeps the
+values labelling each region in the image of the atlas, by name, in
+``nl.atlas_labels`` (see
+:func:`~neurolang.utils.engine_registry.atlas_label_values`).
+
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
 offers the nouns, capitalised; after ``every Study that`` the verbs whose
 first entity is a study (``mentions``, ``reports``); after ``every Term

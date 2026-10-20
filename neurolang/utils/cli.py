@@ -1176,6 +1176,8 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
     """
     if not (args.save or args.view):
         return
+    # The result on stdout comes before the messages on stderr.
+    sys.stdout.flush()
     try:
         from neurolang.utils.tui import nifti
     except ImportError as exc:
