@@ -14,7 +14,7 @@ import pytest
 
 from ...exceptions import UnsupportedSolverError
 from ...frontend import NeurolangPDL
-from .. import dalvi_suciu_lift
+from ...probabilistic import dalvi_suciu_lift
 
 MENTIONS = {
     ("s1", "pain"): 0.4, ("s2", "pain"): 0.7, ("s1", "memory"): 0.2,

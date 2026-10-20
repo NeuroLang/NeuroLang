@@ -80,7 +80,7 @@ from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
-from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.logic import ExistentialPredicate

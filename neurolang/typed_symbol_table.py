@@ -1,8 +1,8 @@
 import collections
 from itertools import chain
 
-from . import expressions
 from .exceptions import NeuroLangException
+from .type_system import Unknown, is_leq_informative
 
 
 __all__ = ['TypedSymbolTable']
@@ -76,8 +76,8 @@ class TypedSymbolTable(collections.abc.MutableMapping):
             if (
                 t is type_ or (
                     include_subtypes and
-                    t is not expressions.Unknown and
-                    expressions.is_leq_informative(t, type_)
+                    t is not Unknown and
+                    is_leq_informative(t, type_)
                 )
             ):
                 ret.update(self._symbols_by_type[t])
@@ -90,3 +90,7 @@ class TypedSymbolTable(collections.abc.MutableMapping):
 
     def set_readonly(self, readonly):
         self.readonly = readonly
+
+
+# Imported last: ``expressions`` imports ``TypedSymbolTable`` from this module.
+from . import expressions  # noqa: E402

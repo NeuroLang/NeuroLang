@@ -288,7 +288,7 @@ def _renderer():
     same names for the fresh variables of all of them.
     """
     # Imported here: the printer depends on the whole Datalog layer.
-    from ..frontend.datalog.pretty_printer import DatalogPrettyPrinter
+    from .pretty_printer import DatalogPrettyPrinter
 
     printer = DatalogPrettyPrinter()
 

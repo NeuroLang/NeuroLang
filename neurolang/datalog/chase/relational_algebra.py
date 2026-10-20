@@ -17,7 +17,7 @@ from ...relational_algebra import (ColumnInt, Product, Projection,
                                    PushInSelections,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import Unknown, is_leq_informative
-from ...utils import NamedRelationalAlgebraFrozenSet
+from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
 from ..expressions import Conjunction, Implication
 from ..instance import MapInstance

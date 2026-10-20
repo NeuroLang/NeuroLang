@@ -38,7 +38,7 @@ from ....datalog.aggregation import AggregationApplication as AggApp
 from ....datalog.negation import is_conjunctive_negation
 from ....expressions import ExpressionBlock, Query
 from ....logic.expression_processing import extract_logic_atoms
-from ....logic.horn_clauses import fol_query_to_datalog_program
+from ....datalog.horn_clauses import fol_query_to_datalog_program
 from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import PROB, ProbabilisticQuery
 from ..anaphora_resolution import AnaphoraPredicate

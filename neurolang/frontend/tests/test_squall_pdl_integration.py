@@ -214,7 +214,7 @@ def test_execute_squall_tilde_inversion_in_relative_vp():
 
 def test_execute_squall_marg_query_walks_without_error():
     """Smoke test: MARG syntax parses and IR is accepted by the solver walk."""
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
     engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
@@ -244,7 +244,7 @@ def test_execute_squall_arbitrary_aggregation():
     relation, verifies the rule walks without error.
     """
     from neurolang.expressions import Symbol, Constant
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
     engine.add_tuple_set(
@@ -285,7 +285,7 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
     transformer methods are wired up end-to-end.
     """
     from neurolang.exceptions import UnboundVariablesError
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
     engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
@@ -316,7 +316,7 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
 def test_execute_squall_body_function_call():
     """Function call in rel_b position produces a valid body atom."""
     from neurolang.exceptions import UnboundVariablesError
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
     engine.add_tuple_set([("a",), ("b",)], name="item_val")
@@ -344,7 +344,7 @@ def test_execute_squall_body_function_call():
 
 def test_execute_squall_variable_probability_fact():
     """'activates with probability ?p' accepts a label as the probability argument."""
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
     from neurolang.expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
     engine = NeurolangPDL()
@@ -799,7 +799,7 @@ def test_execute_squall_compound_probabilistic_rule_smoke():
     Fol2DatalogTranslationException, consistent with existing MARG smoke tests.
     """
     from neurolang.frontend import NeurolangPDL
-    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.datalog.horn_clauses import Fol2DatalogTranslationException
 
     nl = NeurolangPDL()
     nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")

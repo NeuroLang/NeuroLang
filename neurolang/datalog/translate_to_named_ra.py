@@ -33,7 +33,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
-from ..utils import NamedRelationalAlgebraFrozenSet
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .range_restriction import unbound_variables_error
 
 EQ = Constant(eq)

@@ -28,7 +28,7 @@ from ..logic import (
 )
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import Projection, RelationalAlgebraSolver
-from ..utils import OrderedSet
+from ..utils.orderedset import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
 

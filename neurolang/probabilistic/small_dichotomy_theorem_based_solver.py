@@ -49,7 +49,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
-from ..utils import log_performance
+from ..utils.various import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates

@@ -21,7 +21,7 @@ from ....expression_walker import (
 )
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
-from ....utils import log_performance
+from ....utils.various import log_performance
 from ...frontend_extensions import NumpyFunctionsMixin
 from ....utils.euclidean_join import euclidean_distance, euclidean_join
 from ....type_system import is_leq_informative

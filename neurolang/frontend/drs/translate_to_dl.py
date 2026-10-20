@@ -10,7 +10,7 @@ from ...logic import (
     Conjunction,
     UniversalPredicate,
 )
-from ...logic.horn_clauses import fol_query_to_datalog_program
+from ...datalog.horn_clauses import fol_query_to_datalog_program
 from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
 from .english_grammar import EnglishGrammar, EnglishBaseLexicon

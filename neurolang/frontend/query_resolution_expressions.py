@@ -29,7 +29,7 @@ from ..expression_walker import (
     add_match
 )
 from ..type_system import is_leq_informative, Unknown
-from ..utils import RelationalAlgebraFrozenSet
+from ..utils.relational_algebra_set import RelationalAlgebraFrozenSet
 
 
 class Expression(object):

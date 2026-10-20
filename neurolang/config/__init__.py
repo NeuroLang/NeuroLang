@@ -44,6 +44,10 @@ def check_query_backend(backend):
 
 
 class NeurolangConfigParser(configparser.ConfigParser):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._backend_dependent_modules = []
+
     def set_query_backend(self, backend):
         """
         Convenience method to set the backend used by Neurolang.
@@ -58,20 +62,25 @@ class NeurolangConfigParser(configparser.ConfigParser):
             self["CHASE"]["sort_join_predicates"] = "False"
         self.switch_backend()
 
+    def reload_on_backend_switch(self, module_name):
+        """
+        Register the module ``module_name`` to be reloaded when the backend
+        changes, since it chooses the classes of the backend when imported.
+        Modules are reloaded in the order they registered.
+        """
+        if module_name not in self._backend_dependent_modules:
+            self._backend_dependent_modules.append(module_name)
+
     def switch_backend(self):
         """
         Changing the backend value in the config object is not enough to
         switch the backends since this config value is evaluated at import
         time in some modules to figure out which classes to import.
-        So we need to reimport these modules after changing the backend value
+        So we need to reimport these modules, which registered with
+        :meth:`reload_on_backend_switch`, after changing the backend value
         in the config.
         """
-        modules = [
-            "neurolang.utils.relational_algebra_set",
-            "neurolang.utils",
-            "neurolang.probabilistic.weighted_model_counting",
-        ]
-        for module in modules:
+        for module in list(self._backend_dependent_modules):
             module = sys.modules.get(module)
             if module is not None:
                 reload(module)

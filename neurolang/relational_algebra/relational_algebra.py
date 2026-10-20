@@ -21,13 +21,11 @@ from ..expressions import (
     Unknown,
     sure_is_not_pattern
 )
-from ..utils import (
-    NamedRelationalAlgebraFrozenSet,
-    OrderedSet,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet
-)
+from ..utils.orderedset import OrderedSet
 from ..utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet,
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
     RelationalAlgebraStringExpression

@@ -9,6 +9,7 @@ from typing import AbstractSet
 import numpy as np
 import pandas as pd
 
+from ..config import config
 from ..datalog.expression_processing import (
     UnifyExistentialVariableEqualities,
     extract_logic_predicates,
@@ -48,7 +49,7 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver
 )
-from ..utils import log_performance
+from ..utils.various import log_performance
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .expression_processing import lift_optimization_for_choice_predicates
 from .transforms import add_existentials_except
@@ -59,6 +60,9 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .query_resolution import lift_solve_marg_query as _solve_marg_query
+
+# Reloaded on a backend switch, for the class of the backend's sets.
+config.reload_on_backend_switch(__name__)
 
 try:
     from pysdd import sdd

@@ -3,7 +3,7 @@ from ...datalog.negation import is_conjunctive_negation
 from ...expression_walker import PatternWalker, add_match
 from ...expressions import ExpressionBlock, NeuroLangException, Symbol
 from ...logic import Implication, ExistentialPredicate
-from ...logic.horn_clauses import (
+from ...datalog.horn_clauses import (
     Fol2DatalogTranslationException,
     fol_query_to_datalog_program
 )

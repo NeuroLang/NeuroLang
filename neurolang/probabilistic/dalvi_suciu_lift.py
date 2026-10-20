@@ -72,7 +72,8 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
-from ..utils import OrderedSet, log_performance
+from ..utils.orderedset import OrderedSet
+from ..utils.various import log_performance
 from .containment import is_contained
 from .deterministic_subqueries import replace_deterministic_negations
 from .expression_processing import (

@@ -5,7 +5,10 @@ import operator
 import re
 
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from ..utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
 from .relational_algebra import OPERATOR_STRING
 from .relational_algebra import (
     ColumnInt,
