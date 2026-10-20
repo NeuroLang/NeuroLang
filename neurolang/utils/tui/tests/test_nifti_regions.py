@@ -23,7 +23,8 @@ from neurolang.utils.tui import brain_viewer, nifti  # noqa: E402
 
 
 def _output(app):
-    return app.console.file.getvalue()
+    """The output of *app*, its lines wrapped by rich joined back."""
+    return " ".join(app.console.file.getvalue().split())
 
 
 # The template of the engine, 1 mm voxels, and two atlases on grids of
