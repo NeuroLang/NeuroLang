@@ -40,8 +40,8 @@ class NeuroLangLexer(Lexer):
     are highlighted; in SQUALL, the keywords of its grammar
     (:func:`~neurolang.utils.squall_completion.squall_keywords`), which its completion
     offers. Strings and numbers are highlighted in both. The fragments
-    are styled with the classes ``keyword``, ``operator``, ``predicate``,
-    ``string`` and ``number`` of :data:`STYLE`.
+    are styled with the classes ``comment``, ``keyword``, ``operator``,
+    ``predicate``, ``string`` and ``number`` of :data:`STYLE`.
     """
 
     def __init__(self, is_squall: Optional[Callable[[], bool]] = None):
@@ -67,8 +67,10 @@ class NeuroLangLexer(Lexer):
             yield (f"class:{kind}" if kind else ""), text
 
 
-# Readable on light and dark terminals: ANSI colours, no hex.
+# Readable on light and dark terminals: ANSI colours, no hex; comments
+# in ANSI's light grey.
 STYLE = Style.from_dict({
+    "comment": "italic ansigray",
     "keyword": "bold ansimagenta",
     "operator": "bold ansiblue",
     "predicate": "ansiblue",

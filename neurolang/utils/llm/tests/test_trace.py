@@ -74,7 +74,7 @@ def ask(nl, tmp_path, monkeypatch):
         "providers:\n"
         "  fake: {api: openai, base_url: 'http://llm.test/v1', "
         "model: m, tool_calling: text}\n"
-        "assistant: {strategy: react, few_shot_k: 0}\n"
+        "assistant: {strategy: react, few_shot_k: 0, comment_rules: false}\n"
     )
     monkeypatch.setattr(
         engine_registry, "build_engine", lambda *args, **kwargs: nl

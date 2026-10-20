@@ -17,12 +17,56 @@ engines:
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, lcase]
+    # Each atlas with ``activated`` also registers which studies activate
+    # its regions: ``{atlas}_activated(label, study)`` when a peak of the
+    # study (``peak_mni``, in millimetres) is within ``radius_mm`` of a
+    # voxel of the region.  Destrieux is the classical (gyral and sulcal)
+    # anatomy of the cortex; Schaefer (cortical networks) and Tian
+    # (subcortex) the functional anatomy.
     atlases:
       schaefer:
         predicate_name: schaefer
         n_rois: 100
         resolution_mm: 2
         yeo_networks: 17
+        activated: {predicate_name: schaefer_activated, radius_mm: 3}
+      destrieux:
+        predicate_name: destrieux
+        activated: {predicate_name: destrieux_activated, radius_mm: 3}
+      tian:
+        predicate_name: tian
+        scale: 2
+        activated: {predicate_name: tian_activated, radius_mm: 3}
+    # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
+    # questions on these engines: added to its system prompt.
+    assistant_guidance: >
+      Answer every question with probabilistic query answering over
+      selected_study, the uniform choice of a study: give the probability
+      of what the question asks, PROB[...] = p, and for a question about
+      a term and the brain the conditional probability given the term,
+      PROB[activation // term] = p, or a ratio of probabilities (lift,
+      Bayes factor) when it asks for an association; a question asking
+      for a list (which studies, which regions) gets the probability of
+      each.  A study activates a point when one of its peaks is within
+      3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
+      <= 3), with the coordinates of the question as MNI millimetres,
+      written as they are.  For the classical anatomy of the cortex
+      (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated;
+      for the functional anatomy, the Schaefer networks of the cortex,
+      schaefer_activated, and the Tian atlas of the subcortex,
+      tian_activated, which also holds the subcortical structures of
+      classical anatomy (hippocampus, amygdala, thalamus, nucleus
+      accumbens, globus pallidus, putamen, caudate).  Find region names
+      with search_values: Destrieux names start with the hemisphere (L,
+      R) and use G for gyrus and S for sulcus (L G temporal middle),
+      Schaefer names the network and hemisphere (17Networks LH DefaultA
+      PFCm 1), Tian names end with the hemisphere (lAMY rh, aHIP lh).
+      Co-activation is the activation of regions or points by the same
+      study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
+      s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
+      term if the question names one; for the regions or points
+      co-activated with a seed, PROB[active(l, s) // seed(s)] = p; for
+      "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
@@ -131,7 +175,18 @@ engines:
       label:
         columns: [label]
         type: str
+        atlas: schaefer
         description: "a Schaefer 2018 parcel label"
+      destrieux_label:
+        columns: [label]
+        type: str
+        atlas: destrieux
+        description: "a region of the Destrieux 2009 cortical atlas"
+      tian_label:
+        columns: [label]
+        type: str
+        atlas: tian
+        description: "a region of the Tian 2020 subcortical atlas"
       region:
         columns: [region]
         type: ExplicitVBR
@@ -266,7 +321,7 @@ engines:
       activated:
         description: >-
           Studies activating a voxel of the brain mask: one of their peaks is
-          within 3 voxels (6 mm)
+          within 3 voxels (3 mm at the default 1 mm resolution)
         arguments:
           - voxel
           - study
@@ -383,6 +438,47 @@ engines:
         description: "Every Schaefer 2018 parcel label"
         arguments:
           - label
+      schaefer_activated:
+        description: >-
+          Studies activating a Schaefer parcel (cortical networks): one of
+          their peaks is within 3 mm of a voxel of the parcel
+        arguments:
+          - label
+          - study
+      destrieux:
+        description: >-
+          Destrieux 2009 cortical atlas (gyri and sulci): region name and
+          region; names start with the hemisphere, L or R
+        arguments:
+          - destrieux_label
+          - region
+      destrieux_activated:
+        description: >-
+          Studies activating a Destrieux region: one of their peaks is within
+          3 mm of a voxel of the region
+        arguments:
+          - destrieux_label
+          - study
+      tian:
+        description: >-
+          Tian 2020 subcortical atlas, scale 2 (32 regions): region name and
+          region; names end with the hemisphere, lh or rh
+        arguments:
+          - tian_label
+          - region
+      tian_activated:
+        description: >-
+          Studies activating a Tian subcortical region: one of their peaks is
+          within 3 mm of a voxel of the region
+        arguments:
+          - tian_label
+          - study
+      peak_mni:
+        description: >-
+          Reported activation peaks in MNI coordinates, in millimetres
+        arguments:
+          - mni
+          - study
       schaefer_voxels:
         description: >-
           Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
@@ -489,6 +585,7 @@ engines:
       label:
         columns: [name]
         type: str
+        atlas: destrieux
         description: "a Destrieux region name"
       region:
         columns: [region]

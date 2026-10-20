@@ -44,6 +44,8 @@
   #message { color: #e66; }
   #colorbars canvas { display: block; }
   .colorbar-name { color: #bbb; margin-top: 4px; }
+  #network { margin: 8px 0; color: #ccc; }
+  #edges { margin: 4px 0; padding-left: 28px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -124,6 +126,10 @@
   &middot; value <b id="value"></b>
 </div>
 <div id="colorbars"><canvas id="colorbar" width="480" height="44"></canvas></div>
+<div id="network" style="display: none">
+  Network: <span id="network-count"></span>
+  <ol id="edges"></ol>
+</div>
 <p id="message"></p>
 <script id="viewer-data" type="application/json">__DATA__</script>
 <script>

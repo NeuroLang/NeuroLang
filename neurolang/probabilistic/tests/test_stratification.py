@@ -7,6 +7,7 @@ from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
 from ..expressions import PROB, ProbabilisticFact, ProbabilisticQuery
 from ..query_resolution import QueryBasedProbFactToDetRule
+from .. import stratification
 from ..stratification import stratify_program
 
 P = Symbol("P")
@@ -225,6 +226,92 @@ def test_stratification_multiple_post_probabilistic_rules():
     assert set(idbs["deterministic"].formulas) == set(det_idb)
     assert set(idbs["probabilistic"].formulas) == set(prob_idb)
     assert set(idbs["post_probabilistic"].formulas) == set(post_prob_idb)
+
+
+def _stratify_with_rules_in_order(query, program, rules, monkeypatch):
+    """Stratify *program* with its reachable rules in the order *rules*."""
+    monkeypatch.setattr(
+        stratification, "reachable_code_from_query",
+        lambda query, program: Union(tuple(rules)),
+    )
+    return stratify_program(query, program)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_predicate_with_a_deterministic_and_a_probabilistic_rule(
+    reverse, monkeypatch
+):
+    """
+    A predicate with a deterministic rule and a probabilistic one is
+    probabilistic, whatever the order of its rules. Typed from its first
+    rule, it was deterministic when the deterministic rule came first,
+    and its probabilistic rule was solved as a deterministic one.
+    """
+    pfacts = [Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE)]
+    rules = [
+        Implication(Z(x), Conjunction((Q(x), R(x)))),
+        Implication(Z(x), Conjunction((Q(x), S(x)))),
+    ]
+    program = CPLogicProgram()
+    program.walk(Union(tuple([Fact(Q(a)), Fact(R(b))] + pfacts + rules)))
+    if reverse:
+        rules = rules[::-1]
+    idbs = _stratify_with_rules_in_order(
+        Implication(Query(x), Z(x)), program, rules, monkeypatch
+    )
+    assert set(idbs["probabilistic"].formulas) == set(rules)
+    assert "deterministic" not in idbs
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_predicate_with_a_deterministic_and_a_post_probabilistic_rule(
+    reverse, monkeypatch
+):
+    """
+    A predicate with a deterministic rule and one using the result of a
+    probabilistic query is post-probabilistic, whatever their order.
+    """
+    pfacts = [Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE)]
+    wlq = Implication(WLQ(x, ProbabilisticQuery(PROB, (x,))), S(x))
+    rules = [
+        Implication(Z(x, y), Conjunction((Q(x), R(y)))),
+        Implication(Z(x, p), WLQ(x, p)),
+    ]
+    program = CPLogicProgram()
+    program.walk(
+        Union(tuple([Fact(Q(a)), Fact(R(b))] + pfacts + [wlq] + rules))
+    )
+    if reverse:
+        rules = rules[::-1]
+    idbs = _stratify_with_rules_in_order(
+        Implication(Query(x, y), Z(x, y)), program, rules + [wlq], monkeypatch
+    )
+    assert set(idbs["post_probabilistic"].formulas) == set(rules)
+    assert set(idbs["probabilistic"].formulas) == {wlq}
+    assert "deterministic" not in idbs
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_mutually_recursive_predicates_share_their_type(reverse, monkeypatch):
+    """
+    Mutually recursive predicates are typed together, from all their
+    rules: a probabilistic rule of one makes both probabilistic.
+    """
+    pfacts = [Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE)]
+    rules = [
+        Implication(A(x), C(x)),
+        Implication(B(x), Conjunction((A(x), C(x)))),
+        Implication(A(x), Conjunction((B(x), S(x)))),
+    ]
+    program = CPLogicProgram()
+    program.walk(Union(tuple([Fact(C(a)), Fact(C(b))] + pfacts + rules)))
+    if reverse:
+        rules = rules[::-1]
+    idbs = _stratify_with_rules_in_order(
+        Implication(Query(x), B(x)), program, rules, monkeypatch
+    )
+    assert set(idbs["probabilistic"].formulas) == set(rules)
+    assert "deterministic" not in idbs
 
 
 class CPLogicWithQueryBasedProbFactProgram(

@@ -2,8 +2,9 @@
 Syntax highlighting of Datalog and SQUALL queries.
 
 :func:`tokens` splits a line of a query into fragments of the kinds
-``keyword``, ``operator``, ``predicate``, ``string`` and ``number`` (or
-``""`` for the rest). In Datalog, the grammar's keywords (``PROB``,
+``comment``, ``keyword``, ``operator``, ``predicate``, ``string`` and
+``number`` (or ``""`` for the rest): a ``%`` outside a string starts a
+comment, to the end of the line. In Datalog, the grammar's keywords (``PROB``,
 ``AGGREGATE``…), its operators (``:-``, ``~``, ``//``, comparisons…) and
 the predicates applied to arguments are highlighted; in SQUALL, the
 keywords of its grammar. Strings and numbers are highlighted in both.
@@ -18,6 +19,7 @@ import re
 
 _TOKEN = re.compile(
     r"""(?P<string>"[^"]*"?|'[^']*'?)"""
+    r"|(?P<comment>%.*)"
     r"|(?P<number>\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
     r"|(?P<word>[A-Za-z_][A-Za-z0-9_]*)(?P<call>\s*\()?"
     r"|(?P<operator>:~:|:-|::|:=|-:|//|==|<=|>=|!=|\*\*|[^\w\s])"
@@ -39,6 +41,7 @@ DATALOG_OPERATORS = frozenset({
 # The ANSI colours of the kinds of fragments, readable on light and dark
 # terminals, as the REPL shows them.
 ANSI = {
+    "comment": "3;37",
     "keyword": "1;35",
     "operator": "1;34",
     "predicate": "34",

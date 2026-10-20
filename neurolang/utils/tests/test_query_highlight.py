@@ -19,6 +19,15 @@ def test_datalog_tokens():
     ]
 
 
+def test_comments():
+    assert kinds("% the studies (all) of 'pain'") == [
+        ("comment", "% the studies (all) of 'pain'"),
+    ]
+    assert kinds("a(s, '50%') % note") == [
+        ("predicate", "a"), ("string", "'50%'"), ("comment", "% note"),
+    ]
+
+
 def test_squall_tokens():
     assert kinds("obtain every Study that mentions 'pain'.", True) == [
         ("keyword", "obtain"), ("keyword", "every"), ("keyword", "that"),

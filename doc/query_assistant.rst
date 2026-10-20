@@ -103,6 +103,34 @@ and text-to-SPARQL systems.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
+When you run the query put in the prompt, its rules are local to it as
+well: in the REPL, the rules of a submission with a query (``ans`` or
+``obtain``) are discarded after it, so that the next query can define
+rules of the same names (``active``, ``seed``…) without adding to
+these. ``.scope off`` keeps them in the session; rules submitted
+without a query are kept in any case.
+
+Once a query is accepted, one more request asks the model for a line
+explaining each of its rules, which is written above the rule as a
+comment. The query itself is the one that was checked: the model only
+writes the comments, and a reply without one line per rule leaves the
+query without them. In Datalog the comments are ``%`` lines, which the
+parser ignores, so the commented query is the one put in the prompt or
+printed, and it runs as it is; SQUALL has no comments, so its rules are
+shown with their comments and the query is kept without them.
+``comment_rules: false`` in the configuration leaves out this request:
+
+.. code-block:: text
+
+    $ neurolang-query --engine neurosynth --steps 12 --ask "Which pairs of Schaefer regions are co-activated by studies about reading?"
+    % Identifies Schaefer regions activated in selected studies.
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    % Finds pairs of regions activated within the same study.
+    co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+    % Links selected studies to the term 'reading'.
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    % Calculates the probability that co-activated regions are linked to reading.
+    ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
 
 Configuration
 -------------
@@ -154,6 +182,7 @@ order:
       temperature: 0.0
       timeout: 60
       preview_rows: 10
+      comment_rules: true    # a comment line on each rule of the query
 
 The ``api`` of a provider is one of:
 
@@ -170,22 +199,26 @@ The ``api`` of a provider is one of:
 API keys are only read from the environment variable that
 ``api_key_env`` names: the file rejects an inline key.
 
-In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME`` and
-``.llm strategy icl|react`` switch the provider and the strategy, and
+In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME``,
+``.llm strategy icl|react`` and ``.llm steps N`` switch the provider, the
+strategy and the most steps of the ReAct agent (``max_steps``), and
 ``.llm reload`` reads the file again. ``.ask --squall``, ``--datalog``,
-``--icl`` and ``--react`` choose the language and the strategy for one
-question.
+``--icl``, ``--react`` and ``--steps N`` choose the language, the
+strategy and the most steps for one question, as ``--steps N`` does on
+the command line. Out of steps, the agent answers with the most detailed
+query it ran that gave rows.
 
 ``.llm QUESTION`` is the shortcut for ``.ask --react --datalog QUESTION``:
 it always writes Datalog with the ReAct agent, whatever ``.mode``, ``.llm
 strategy`` and the ``strategy`` and ``language`` of the configuration, and
-puts the query in the next prompt, switching the session to Datalog. A
-question cannot start with ``provider``, ``strategy`` or ``reload``, which
+puts the query in the next prompt, switching the session to Datalog.
+``.llm --steps N QUESTION`` gives it at most N steps. A question cannot
+start with ``provider``, ``strategy``, ``steps`` or ``reload``, which
 change the settings:
 
 .. code-block:: text
 
-    nl(neurosynth:DL)> .llm Which studies report an activation within 6 mm of the left amygdala?
+    nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
 
 .. note::
 

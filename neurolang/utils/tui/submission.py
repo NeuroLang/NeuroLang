@@ -6,7 +6,9 @@ rules, facts and possibly a query, or a SQUALL program of one or more
 sentences. It runs in a scope of its own (:class:`Submission`), whose
 symbols are committed to the session's scope only if the whole
 submission succeeds, and then tells what it defined, one line per
-predicate (:meth:`Submission.definitions`).
+predicate (:meth:`Submission.definitions`). The symbols of a submission
+that is not to be kept, such as the rules of a query, local to it, are
+discarded even when it succeeds.
 """
 
 from neurolang.datalog import Fact, Union as DatalogUnion
@@ -120,15 +122,18 @@ class Submission:
     failure left a scope of the engine open.
     """
 
-    def __init__(self, nl, facts=()):
+    def __init__(self, nl, facts=(), keep: bool = True):
         """
         Prepare a submission to the program of the engine *nl*.
 
         *facts* are the symbols of the predicates the submission adds
-        facts to (see :func:`submission_outline`).
+        facts to (see :func:`submission_outline`). Unless *keep*, what
+        the submission defines is discarded when it ends, even if it
+        succeeds.
         """
         self._program_ir = nl.program_ir
         self._facts = facts
+        self.keep = keep
         self.session = None
         self.scope = None
         self.previous = None
@@ -144,8 +149,13 @@ class Submission:
     def __exit__(self, exc_type, exc, traceback_) -> bool:
         """Commit the scope if the block succeeded, discard it otherwise."""
         self._program_ir.symbol_table = self.session
-        if exc_type is None:
+        if exc_type is None and self.keep:
             self.previous = _commit(self.scope, self.session)
+        elif exc_type is None:
+            self.previous = {
+                symbol: self.session.get(symbol)
+                for symbol in self.scope._symbols
+            }
         return False
 
     def _copy_relations(self) -> None:
@@ -165,7 +175,10 @@ class Submission:
 
     @property
     def committed(self) -> bool:
-        """Return whether the submission succeeded and was committed."""
+        """
+        Return whether the submission succeeded: what it defined is then
+        in the session's scope if it was to be kept.
+        """
         return self.previous is not None
 
     @property

@@ -65,7 +65,14 @@ neither a voxel column nor an entity's (a column of a sort that is not
 of type float, such as study_id); otherwise the image is a mask, 1 at
 each voxel of the result. Rows of the same voxel keep their maximum.
 A mask is written as uint8, integers as int32 and other values as
-float32; rows outside the grid are skipped. A path may hold spaces."""
+float32; rows outside the grid are skipped. A path may hold spaces.
+
+A result on the regions of an atlas, a column of a sort naming its
+atlas (atlas: destrieux), such as ans(l, p) :- PROB[...], paints each
+region with the value of its rows, on the atlas's grid; labels are
+looked up in the other atlases of the engine too, and regions of several
+atlases are written on the template's grid. A result of pairs of regions
+or points is a network, which .view shows; .save writes it as CSV."""
 
 
 HELP_TOPICS["save"] = SAVE_HELP
@@ -75,13 +82,19 @@ class SaveError(ValueError):
     """Raised when a result cannot be saved as asked."""
 
 
+# The space of the columns of region labels of an atlas.
+LABEL_SPACE = "label"
+
+
 class PointColumns(NamedTuple):
     """
     The columns of a result locating its voxels, their space and grid.
 
     The *space* is ``voxel`` for the indices of the *grid*, the name of a
     grid of the engine (the template's by default), ``mm`` for
-    millimetres in the template's space, written on its grid.
+    millimetres in the template's space, written on its grid, and
+    :data:`LABEL_SPACE` for the labels of the regions of the atlas of the
+    *grid*, whose voxels are those of each region.
     """
 
     columns: Tuple[str, ...]
@@ -110,7 +123,9 @@ class SavedImage(NamedTuple):
 
     *value* is the column of the voxel values, None for a mask; *voxels*
     the number of voxels written and *outside* the number of rows outside
-    the *grid*, skipped.
+    the *grid*, skipped. For a result on the regions of an atlas,
+    *regions* is the number of regions painted and *outside* that of the
+    labels of no region, skipped; None otherwise.
     """
 
     image: nib.Nifti1Image
@@ -118,6 +133,7 @@ class SavedImage(NamedTuple):
     voxels: int
     outside: int
     grid: str = engine_registry.TEMPLATE_GRID
+    regions: Optional[int] = None
 
 
 # The options of .save and the number of columns each takes.
@@ -220,6 +236,8 @@ def _column(df: pd.DataFrame, name: str):
 
 def _sort_points(sort, columns: tuple) -> PointColumns:
     """Return the *columns* holding the points of *sort*, on its grid."""
+    if sort.atlas:
+        return PointColumns(tuple(columns), LABEL_SPACE, sort.atlas)
     return PointColumns(
         tuple(columns), sort.space,
         sort.grid or engine_registry.TEMPLATE_GRID,
@@ -227,11 +245,100 @@ def _sort_points(sort, columns: tuple) -> PointColumns:
 
 
 def _spatial_sorts(sorts: dict) -> list:
-    """Return the *sorts* declaring a space, those of voxels first."""
+    """
+    Return the *sorts* declaring a space, those of voxels first, then
+    those labelling the regions of an atlas.
+    """
     return [
         sort for space in engine_registry.SORT_SPACES
         for sort in sorts.values() if sort.space == space
+    ] + [sort for sort in sorts.values() if sort.atlas]
+
+
+def node_columns(
+    df: pd.DataFrame, sorts: dict, provenance: Optional[tuple]
+) -> list:
+    """
+    Return every group of columns of *df* locating points or regions.
+
+    A group is the columns of a sort of the *sorts* declaring a space,
+    or labelling the regions of an atlas, in the *provenance* of *df*:
+    ``ans(l1, l2, p)`` of two columns of region labels has two groups,
+    and two mm points ``(x, y, z, x2, y2, z2)`` two. Columns of unknown
+    sort named as those of a sort declaring a space, with a suffix of
+    their own, are a group too: ``x1, y1, z1`` and ``x2, y2, z2``. The
+    groups are in the order of their first column.
+    """
+    if provenance is None or len(provenance) != len(df.columns):
+        provenance = (None,) * len(df.columns)
+    groups = _named_groups(df, sorts, provenance)
+    for sort in _spatial_sorts(sorts):
+        positions = [
+            [
+                (n, column) for n, (column, column_sort) in enumerate(
+                    zip(df.columns, provenance)
+                )
+                if column_sort is not None
+                and tuple(column_sort) == (sort.name, position)
+            ]
+            for position in range(len(sort.columns))
+        ]
+        for group in zip(*positions):
+            groups.append((
+                group[0][0],
+                _sort_points(sort, tuple(column for _, column in group)),
+            ))
+    unique = {}
+    for n, points in groups:
+        unique.setdefault(points.columns, (n, points))
+    return [
+        points for _, points in sorted(unique.values(), key=lambda g: g[0])
     ]
+
+
+def _named_groups(df: pd.DataFrame, sorts: dict, provenance) -> list:
+    """
+    Return the groups of the columns of *df* of unknown sort named as
+    those of a sort of the *sorts* declaring a space, with a suffix,
+    as (index of the first column, :class:`PointColumns`).
+    """
+    names = {
+        str(c): (n, c) for n, (c, p) in enumerate(zip(df.columns, provenance))
+        if p is None
+    }
+    groups = []
+    for sort in _spatial_sorts(sorts):
+        if not sort.space:
+            continue
+        first = sort.columns[0]
+        for name, (n, _) in names.items():
+            suffix = name[len(first):]
+            group = [names.get(c + suffix) for c in sort.columns]
+            if name.startswith(first) and None not in group:
+                groups.append((n, _sort_points(
+                    sort, tuple(column for _, column in group)
+                )))
+    return groups
+
+
+def network_nodes(
+    df: pd.DataFrame, sorts: dict, provenance: Optional[tuple]
+) -> Optional[list]:
+    """
+    Return the two groups of columns of the nodes of a network, or None.
+
+    *df* is a network when it has two groups of columns of region labels
+    (:func:`node_columns`), pairs of regions, or two of points of the
+    same sort, pairs of points: an edge per row between its two nodes.
+    """
+    groups = node_columns(df, sorts, provenance)
+    regions = [g for g in groups if g.space == LABEL_SPACE]
+    if len(regions) == 2:
+        return regions
+    points = [g for g in groups if g.space != LABEL_SPACE]
+    if len(points) == 2 and points[0][1:] == points[1][1:]:
+        return points
+    return None
 
 
 def _provenance_points(columns, provenance, sorts: dict):
@@ -275,7 +382,7 @@ def point_columns(
         return points
     names = {c for c, p in zip(df.columns, provenance) if p is None}
     for sort in _spatial_sorts(sorts):
-        if set(sort.columns) <= names:
+        if sort.space and set(sort.columns) <= names:
             return _sort_points(sort, sort.columns)
     raise SaveError(_no_points_message(df, sorts))
 
@@ -286,14 +393,19 @@ def _no_points_message(df: pd.DataFrame, sorts: dict) -> str:
         f"{sort.name} ({', '.join(sort.columns)}, {_space_text(sort)})"
         for sort in sorts.values() if sort.space
     ]
+    atlases = [sort.name for sort in sorts.values() if sort.atlas]
     columns = ", ".join(str(c) for c in df.columns)
     hint = (
         f"name them as those of {' or '.join(known)}, or "
         if known else "the engine declares no sort of voxels; "
     )
+    regions = (
+        f" A column of region labels is one of the sort "
+        f"{' or '.join(atlases)} in the query." if atlases else ""
+    )
     return (
         f"The result has no voxel columns (its columns are {columns}): "
-        f"{hint}give them with --voxel I J K or --mm X Y Z."
+        f"{hint}give them with --voxel I J K or --mm X Y Z.{regions}"
     )
 
 
@@ -479,6 +591,303 @@ def result_to_nifti(
     )
 
 
+def _region_atlases(nl, sorts: dict, atlas: str) -> list:
+    """
+    Return the atlases of *nl* to look the labels of a column up in.
+
+    They are the *atlas* of the column's sort, then the others the
+    *sorts* label the regions of: a rule may join the regions of several
+    atlases, ``region(l) :- schaefer(l, r)`` and ``region(l) :- tian(l,
+    r)``, whose column is of the sort of the first.
+    """
+    atlases = [atlas] + [
+        sort.atlas for sort in sorts.values()
+        if sort.atlas and sort.atlas != atlas
+    ]
+    return [
+        name for n, name in enumerate(atlases)
+        if name not in atlases[:n]
+        and name in (getattr(nl, "grids", None) or {})
+    ]
+
+
+def region_lookup(nl, atlases: list) -> dict:
+    """
+    Return the atlas and the values labelling each region, by name.
+
+    The regions are those of the *atlases* of *nl*, in the image of the
+    grid of each (see
+    :func:`~neurolang.utils.engine_registry.atlas_label_values`); a name
+    of several atlases is that of the first.
+    """
+    lookup = {}
+    for atlas in atlases:
+        for label, values in engine_registry.atlas_label_values(
+            nl, atlas
+        ).items():
+            lookup.setdefault(label, (atlas, values))
+    return lookup
+
+
+def _label_volume(nl, atlas: str, target=None) -> np.ndarray:
+    """
+    Return the labels of the image of the grid of the *atlas* of *nl*.
+
+    On the grid of the image *target* if given, each voxel taking the
+    label of the atlas's voxel nearest to it.
+    """
+    image = engine_grid(nl, atlas)
+    data = np.asanyarray(image.dataobj).astype(np.int64)
+    data = data.reshape(data.shape[:3] + (-1,))[..., 0]
+    if target is None:
+        return data
+    from scipy import ndimage
+
+    mapping = np.linalg.inv(image.affine) @ target.affine
+    return ndimage.affine_transform(
+        data, mapping[:3, :3], mapping[:3, 3],
+        output_shape=tuple(target.shape[:3]), order=0, mode="constant",
+        cval=0,
+    )
+
+
+def _region_values(
+    df: pd.DataFrame, column, value
+) -> pd.Series:
+    """Return the maximum *value* of each label of *column* of *df*."""
+    values = (
+        df[value] if value is not None
+        else pd.Series(np.ones(len(df), dtype=np.uint8), index=df.index)
+    )
+    frame = pd.DataFrame({"label": df[column].astype(str), "value": values})
+    return frame.groupby("label")["value"].max()
+
+
+def regions_to_nifti(
+    nl, df: pd.DataFrame, sorts: dict, request: SaveRequest,
+    provenance: Optional[tuple] = None,
+) -> SavedImage:
+    """
+    Convert the result *df* on regions into a NIfTI image of *nl*.
+
+    The column of the region labels is that of the *request*'s points,
+    of :data:`LABEL_SPACE`, and the value of each region that of its
+    rows, the maximum of them (:func:`value_column`), 1 for a mask. A
+    label is looked up in the atlas of the column's sort, then in the
+    other atlases of the engine (:func:`region_lookup`); the image is on
+    the grid of the atlas the labels are of, else, of several, on the
+    template's. Labels of no region are skipped.
+    """
+    points = request.points
+    column = _column(df, points.columns[0])
+    value = value_column(df, points, sorts, request.value, provenance)
+    per_label = _region_values(df, column, value)
+    lookup = region_lookup(nl, _region_atlases(nl, sorts, points.grid))
+    found = [label for label in per_label.index if label in lookup]
+    atlases = sorted({lookup[label][0] for label in found}) or [points.grid]
+    if len(atlases) == 1:
+        grid, target = atlases[0], None
+        template = engine_grid(nl, grid)
+    else:
+        grid = engine_registry.TEMPLATE_GRID
+        target = template = engine_template(nl)
+    values = per_label[found].to_numpy()
+    dtype = _image_dtype(values)
+    fill = request.fill if value is not None else 0
+    if dtype != np.float32 and float(fill) != int(fill):
+        dtype = np.float32
+    data = np.full(template.shape[:3], fill, dtype=dtype)
+    painted = np.zeros(template.shape[:3], dtype=bool)
+    for atlas in atlases:
+        labels = _label_volume(nl, atlas, target)
+        lut = np.full(max(int(labels.max()), 0) + 1, -1, dtype=np.int64)
+        for n, label in enumerate(found):
+            if lookup[label][0] == atlas:
+                lut[[v for v in lookup[label][1] if v < len(lut)]] = n
+        index = lut[np.clip(labels, 0, None)]
+        index[labels <= 0] = -1
+        inside = index >= 0
+        data[inside] = values[index[inside]]
+        painted |= inside
+    if data.dtype.kind == "f":
+        data[np.isnan(data)] = fill
+    return SavedImage(
+        nib.Nifti1Image(data, template.affine), value, int(painted.sum()),
+        len(per_label) - len(found), grid, len(found),
+    )
+
+
+def region_centroids(nl, atlas: str) -> dict:
+    """
+    Return the centre of each region of the *atlas* of *nl*, by name.
+
+    The centre is the mean of the millimetre coordinates of the centres
+    of the region's voxels, on the grid of the atlas.
+    """
+    image = engine_grid(nl, atlas)
+    labels = _label_volume(nl, atlas).ravel()
+    inside = labels > 0
+    indices = np.stack(np.unravel_index(
+        np.flatnonzero(inside), image.shape[:3]
+    ), -1)
+    labels = labels[inside]
+    counts = np.bincount(labels)
+    sums = np.stack([
+        np.bincount(labels, weights=indices[:, axis], minlength=len(counts))
+        for axis in range(3)
+    ], -1)
+    centroids = {}
+    for label, values in engine_registry.atlas_label_values(
+        nl, atlas
+    ).items():
+        values = [v for v in values if v < len(counts) and counts[v]]
+        if values:
+            voxel = sums[values].sum(axis=0) / counts[values].sum()
+            centroids[label] = nib.affines.apply_affine(image.affine, voxel)
+    return centroids
+
+
+class Network(NamedTuple):
+    """
+    A result of pairs of regions or points as a network, to view.
+
+    Its nodes have *names* and the millimetre *coordinates* of their
+    centre; each edge ``(first, second, value)`` joins two nodes, by
+    index, with the *value* column's value of the pair, 1 without. A
+    pair given both ways (*merged* of them), as a conditional probability
+    is, keeps the largest value; rows whose node is unknown, *skipped*,
+    and those joining a node to itself are left out. *strength* is the
+    image of the sum of the values of the edges of each node.
+    """
+
+    names: list
+    coordinates: np.ndarray
+    edges: list
+    value: Optional[str]
+    merged: int
+    skipped: int
+    strength: SavedImage
+
+
+def _point_names(df: pd.DataFrame, group: PointColumns, nl) -> tuple:
+    """
+    Return the name and the millimetre coordinates of the point of each
+    row of *df* in the columns *group*, on the grid of *nl* it names.
+    """
+    coordinates = df[list(group.columns)].to_numpy(dtype=float)
+    if group.space == "voxel":
+        coordinates = nib.affines.apply_affine(
+            engine_grid(nl, group.grid).affine, coordinates
+        )
+    names = [
+        "(" + ", ".join(f"{v:g}" for v in row) + ")" for row in coordinates
+    ]
+    return names, coordinates
+
+
+def _network_nodes(nl, df, groups: list, sorts: dict) -> tuple:
+    """
+    Return the node names of each row of *df*, of each of the two
+    *groups* of columns, and the coordinates of each node, by name.
+    """
+    if groups[0].space != LABEL_SPACE:
+        ends, centres = [], {}
+        for group in groups:
+            names, coordinates = _point_names(df, group, nl)
+            ends.append(names)
+            centres.update(zip(names, coordinates))
+        return ends, centres
+    atlases = _region_atlases(nl, sorts, groups[0].grid)
+    atlases += [
+        a for a in _region_atlases(nl, sorts, groups[1].grid)
+        if a not in atlases
+    ]
+    lookup = region_lookup(nl, atlases)
+    ends = [df[group.columns[0]].astype(str).tolist() for group in groups]
+    used = {lookup[n][0] for names in ends for n in names if n in lookup}
+    centres = {}
+    for atlas in atlases:
+        if atlas in used:
+            centroids = region_centroids(nl, atlas)
+            centres.update({
+                name: centre for name, centre in centroids.items()
+                if lookup.get(name, (None,))[0] == atlas
+            })
+    return ends, centres
+
+
+def result_network(
+    nl, df: pd.DataFrame, sorts: dict, groups: list,
+    request: SaveRequest = SaveRequest(Path()),
+    provenance: Optional[tuple] = None,
+) -> Network:
+    """
+    Return the result *df* of pairs as a :class:`Network` on *nl*.
+
+    The two *groups* of columns locate the two ends of each edge (see
+    :func:`network_nodes`): region labels, whose node is at the centre
+    of the region (:func:`region_centroids`), or points. The value of an
+    edge is that of the *request*'s ``--value``, else of the one value
+    column (:func:`value_column`).
+    """
+    columns = groups[0].columns + groups[1].columns
+    value = value_column(
+        df, groups[0]._replace(columns=columns), sorts, request.value,
+        provenance,
+    )
+    ends, centres = _network_nodes(nl, df, groups, sorts)
+    values = (
+        df[value].to_numpy(dtype=float) if value is not None
+        else np.ones(len(df))
+    )
+    names, index, pairs, seen = [], {}, {}, set()
+    skipped = merged = 0
+    for first, second, weight in zip(*ends, values):
+        if first not in centres or second not in centres:
+            skipped += 1
+            continue
+        if first == second or np.isnan(weight):
+            continue
+        for name in (first, second):
+            if name not in index:
+                index[name] = len(names)
+                names.append(name)
+        key = tuple(sorted((index[first], index[second])))
+        direction = (index[first], index[second])
+        if key in pairs and direction not in seen:
+            merged += 1
+        seen.add(direction)
+        pairs[key] = max(pairs.get(key, -np.inf), weight)
+    edges = [(a, b, float(w)) for (a, b), w in sorted(pairs.items())]
+    strength = np.zeros(len(names))
+    for a, b, weight in edges:
+        strength[a] += weight
+        strength[b] += weight
+    coordinates = np.array(
+        [centres[name] for name in names], dtype=float
+    ).reshape(-1, 3)
+    return Network(
+        names, coordinates, edges, value, merged, skipped,
+        _strength_image(nl, names, coordinates, strength, groups, sorts),
+    )
+
+
+def _strength_image(nl, names, coordinates, strength, groups, sorts):
+    """Return the image of the *strength* of each node of a network."""
+    if groups[0].space == LABEL_SPACE:
+        frame = pd.DataFrame({"label": names, "strength": strength})
+        return regions_to_nifti(nl, frame, sorts, SaveRequest(
+            Path(), "strength", PointColumns(
+                ("label",), LABEL_SPACE, groups[0].grid
+            ),
+        ))
+    frame = pd.DataFrame(coordinates, columns=["x", "y", "z"])
+    frame["strength"] = strength
+    return result_to_nifti(frame, engine_template(nl), sorts, SaveRequest(
+        Path(), "strength", PointColumns(("x", "y", "z"), "mm"),
+    ))
+
+
 def engine_template(nl):
     """
     Return the template of the engine *nl*, or raise a SaveError.
@@ -528,6 +937,18 @@ def result_image(app, block, request: SaveRequest) -> SavedImage:
     points = request.points or point_columns(
         block.frame, sorts, block.sorts
     )
+    if request.points is None and network_nodes(
+        block.frame, sorts, block.sorts
+    ):
+        raise SaveError(
+            "The result holds pairs of regions or points, a network: "
+            ".view shows it, and .save writes it as CSV."
+        )
+    if points.space == LABEL_SPACE:
+        return regions_to_nifti(
+            app._nl, block.frame, sorts, request._replace(points=points),
+            block.sorts,
+        )
     return result_to_nifti(
         block.frame, engine_grid(app._nl, points.grid), sorts,
         request._replace(points=points), block.sorts,
@@ -563,15 +984,25 @@ def _engine_sorts(engine_name: str) -> dict:
 def saved_image_message(path: Path, saved: SavedImage) -> str:
     """Return the message telling what :func:`result_to_nifti` wrote."""
     shape = "×".join(str(n) for n in saved.image.shape[:3])
+    unit = "voxel" if saved.regions is None else "region"
     value = (
-        "1 at each voxel (mask)" if saved.value is None
-        else f"the max of {str(saved.value)!r} per voxel"
+        f"1 at each {unit} (mask)" if saved.value is None
+        else f"the max of {str(saved.value)!r} per {unit}"
+    )
+    regions = (
+        "" if saved.regions is None else
+        f"{saved.regions} region{'s' * (saved.regions != 1)}, "
     )
     message = (
-        f"Saved NIfTI image to: {path} ({saved.voxels} voxels of the "
-        f"{shape} {saved.grid} grid, value: {value})"
+        f"Saved NIfTI image to: {path} ({regions}{saved.voxels} voxels of "
+        f"the {shape} {saved.grid} grid, value: {value})"
     )
-    if saved.outside:
+    if saved.outside and saved.regions is not None:
+        labels = (
+            "1 label" if saved.outside == 1 else f"{saved.outside} labels"
+        )
+        message += f"; {labels} of no region of the atlas skipped"
+    elif saved.outside:
         rows = "1 row" if saved.outside == 1 else f"{saved.outside} rows"
         message += f"; {rows} outside the {saved.grid} grid skipped"
     return message
@@ -660,7 +1091,19 @@ start each overlay with:
   --one-sided           a colormap from the threshold to the maximum
 Without either, the colormap of an overlay is symmetric when it has
 negative values. The page also sets the opacity of each overlay; an
-infinite value is drawn as the largest finite one."""
+infinite value is drawn as the largest finite one.
+
+A result on the regions of an atlas shows every region of the result,
+painted with its value, unless --threshold is given. A result of pairs,
+two columns of region labels, or two points (x1, y1, z1, x2, y2, z2),
+and a value, such as the co-activation of two regions,
+  ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // ...] = p
+is a network: a node at the centre of each region or at each point, an
+edge per pair, drawn in the 3D render and on the slices near them, and
+an overlay of the strength of each node, the sum of its edges. The
+edges shown are those of |value| at least --threshold, by default the
+top 5% (20 at least); a pair given both ways keeps its largest value,
+and the strongest edges are listed under the views."""
 
 
 HELP_TOPICS["view"] = VIEW_HELP
@@ -679,6 +1122,8 @@ class ViewRequest(NamedTuple):
 
     *save* tells how to convert the last result, as ``.save`` would;
     *symmetric* is None when the image decides (see :func:`symmetry`).
+    *threshold_given* tells whether ``--threshold`` gave the *threshold*:
+    the regions of a result on an atlas are all shown otherwise.
     """
 
     path: Optional[Path]
@@ -686,6 +1131,7 @@ class ViewRequest(NamedTuple):
     threshold: object = VIEW_THRESHOLD
     cmap: Optional[str] = None
     symmetric: Optional[bool] = None
+    threshold_given: bool = False
 
 
 def parse_view_args(arg: str) -> ViewRequest:
@@ -717,6 +1163,7 @@ def parse_view_args(arg: str) -> ViewRequest:
         Path(paths[0]).expanduser() if paths else None, save,
         view_threshold(options.get("--threshold", [None])[0]),
         options.get("--cmap", [None])[0], _symmetry_option(options),
+        "--threshold" in options,
     )
 
 
@@ -800,7 +1247,9 @@ def _check_cmap(name: Optional[str]) -> None:
         raise SaveError(f"Unknown colormap {name!r}.")
 
 
-def _viewer_page(app, layers: list, request: ViewRequest, title: str) -> str:
+def _viewer_page(
+    app, layers: list, request: ViewRequest, title: str, connectome=None
+) -> str:
     """
     Return the viewer page, entitled *title*, of the images *layers*.
 
@@ -808,7 +1257,8 @@ def _viewer_page(app, layers: list, request: ViewRequest, title: str) -> str:
     shown without its name. The page starts as *request* asks. The images
     are drawn over the MNI152 T1 template of nilearn, whatever the
     engine's template, a mask, is; nilearn's warnings are kept off the
-    prompt.
+    prompt. A *connectome*, of :func:`~.brain_viewer.connectome_state`,
+    is drawn over them, in the 3D render.
     """
     _check_cmap(request.cmap)
     images = [(name, read_nifti(path)) for name, path in layers]
@@ -821,24 +1271,30 @@ def _viewer_page(app, layers: list, request: ViewRequest, title: str) -> str:
     ]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        extra = {} if connectome is None else {"connectome": connectome}
         return brain_viewer.viewer_html(
             images if several else images[0][1],
             brain_viewer.mni_background(), title=title,
             threshold=request.threshold, cmap=request.cmap,
-            symmetric=symmetric if several else symmetric[0],
+            symmetric=symmetric if several else symmetric[0], **extra,
         )
 
 
-def _view_nifti(app, layers: list, request: ViewRequest, title: str) -> None:
+def _view_nifti(
+    app, layers: list, request: ViewRequest, title: str, connectome=None
+) -> None:
     """
     Show the NIfTI images *layers* in the brain viewer, as *request* asks.
 
-    *layers* are (name, path) pairs, an overlay each. The viewer page,
-    entitled *title*, is saved as an HTML file whose path is printed,
-    and opened in a browser when the REPL runs on a terminal.
+    *layers* are (name, path) pairs, an overlay each, and *connectome* a
+    network drawn over them, if any. The viewer page, entitled *title*,
+    is saved as an HTML file whose path is printed, and opened in a
+    browser when the REPL runs on a terminal.
     """
     try:
-        html = _html_file(_viewer_page(app, layers, request, title))
+        html = _html_file(
+            _viewer_page(app, layers, request, title, connectome)
+        )
     except Exception as exc:
         app.console.print(
             f"Visualisation failed: {exc}", style="red", markup=False
@@ -1002,19 +1458,91 @@ def last_result_images(app, request: SaveRequest) -> Optional[list]:
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
-    layers = []
-    for image in saved:
-        fd, name = tempfile.mkstemp(
-            suffix=".nii.gz", prefix="neurolang_view_"
+    return [
+        (str(image.value or "mask"), _view_image_file(app, image))
+        for image in saved
+    ]
+
+
+def _view_image_file(app, image: SavedImage) -> Path:
+    """Write *image* to a temporary file for the viewer, its path."""
+    fd, name = tempfile.mkstemp(suffix=".nii.gz", prefix="neurolang_view_")
+    os.close(fd)
+    write_nifti(image.image, name)
+    app.console.print(
+        saved_image_message(Path(name), image), style="green", markup=False,
+    )
+    return Path(name)
+
+
+def _last_result_kind(app, request: SaveRequest) -> str:
+    """
+    Return what the last result of *app* holds: ``network`` for pairs of
+    regions or points, ``regions`` for regions of an atlas, else
+    ``voxels``.
+    """
+    if not app.results:
+        return "voxels"
+    block = app.results[-1]
+    sorts = _engine_sorts(app.settings.engine_name)
+    if request.points is not None:
+        return "voxels"
+    if network_nodes(block.frame, sorts, block.sorts):
+        return "network"
+    try:
+        points = point_columns(block.frame, sorts, block.sorts)
+    except SaveError:
+        return "voxels"
+    return "regions" if points.space == LABEL_SPACE else "voxels"
+
+
+def last_result_network(app, request: ViewRequest):
+    """
+    Return the last result of *app*, of pairs, as a network to view.
+
+    Return the layer of the strength of its nodes, (name, path) of a
+    temporary NIfTI file, and the network as the viewer draws it
+    (:func:`~.brain_viewer.connectome_state`), or None, telling why, if
+    it cannot be built.
+    """
+    block = app.results[-1]
+    sorts = _engine_sorts(app.settings.engine_name)
+    try:
+        network = result_network(
+            app._nl, block.frame, sorts,
+            network_nodes(block.frame, sorts, block.sorts), request.save,
+            block.sorts,
         )
-        os.close(fd)
-        write_nifti(image.image, name)
-        app.console.print(
-            saved_image_message(Path(name), image), style="green",
-            markup=False,
+        if not network.edges:
+            raise SaveError(
+                "The result has no pair of two known regions or points."
+            )
+        threshold = (
+            request.threshold if request.threshold_given else VIEW_THRESHOLD
         )
-        layers.append((str(image.value or "mask"), Path(name)))
-    return layers
+        connectome = brain_viewer.connectome_state(
+            network.names, network.coordinates, network.edges, threshold
+        )
+    except Exception as exc:
+        app.console.print(f"View failed: {exc}", style="red", markup=False)
+        return None
+    shown = len(connectome["edges"])
+    value = repr(str(network.value)) if network.value else "1 (pairs)"
+    message = (
+        f"Network of {len(network.names)} nodes and {len(network.edges)} "
+        f"edges, value: {value}; {shown} shown, those of values from "
+        f"{connectome['edgeMin']:g} (--threshold)"
+    )
+    if network.merged:
+        message += (
+            f"; {network.merged} pairs given both ways keep their largest "
+            "value"
+        )
+    if network.skipped:
+        message += f"; {network.skipped} rows of unknown nodes skipped"
+    app.console.print(message, style="green", markup=False)
+    path = _view_image_file(app, network.strength)
+    return [("node strength", path)], connectome
 
 
 @command(
@@ -1034,10 +1562,20 @@ def cmd_view(app, arg: str) -> None:
     except SaveError as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return
+    connectome = None
     if request.path is None:
-        layers = last_result_images(app, request.save)
+        kind = _last_result_kind(app, request.save)
+        if kind == "network":
+            network = last_result_network(app, request)
+            if network is None:
+                return
+            layers, connectome = network
+        else:
+            layers = last_result_images(app, request.save)
         if layers is None:
             return
+        if kind != "voxels" and not request.threshold_given:
+            request = request._replace(threshold=0.0)
     elif not request.path.is_file():
         app.console.print(
             f"File not found: {request.path}", style="red", markup=False
@@ -1046,7 +1584,8 @@ def cmd_view(app, arg: str) -> None:
     else:
         layers = [(request.path.name, request.path)]
     _view_nifti(
-        app, layers, request, _view_title(app, request, layers[0][1])
+        app, layers, request, _view_title(app, request, layers[0][1]),
+        connectome,
     )
 
 

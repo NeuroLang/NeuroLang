@@ -5,6 +5,8 @@ import typing
 import warnings
 from typing import AbstractSet
 
+import pandas
+
 from ....datalog.expression_processing import (
     UnifyVariableEqualitiesMixin,
 )
@@ -14,6 +16,7 @@ from . import delegate_to_next_match
 from ....expression_walker import (
     IdentityWalker,
     PatternWalker,
+    ReplaceExpressionWalker,
     ReplaceSymbolWalker,
 )
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
@@ -135,6 +138,90 @@ def euclidean_application(expression):
     ):
         return None
     return expression
+
+
+def constant_point_application(expression):
+    """
+    Return *expression* if it applies a Euclidean distance to a point of
+    numbers and a point of distinct variables.
+
+    Parameters
+    ----------
+    expression : Expression
+        Candidate application, such as ``euclidean(x, y, z, -24, -4, -20)``.
+
+    Returns
+    -------
+    FunctionApplication or None
+        *expression* when one of its points is numbers and the other one
+        distinct variables, in either order, None otherwise.
+    """
+    if not (
+        isinstance(expression, FunctionApplication)
+        and _is_euclidean_functor(expression.functor)
+        and expression.args and len(expression.args) % 2 == 0
+    ):
+        return None
+    half = len(expression.args) // 2
+    points = expression.args[:half], expression.args[half:]
+    for constants, variables in (points, points[::-1]):
+        if (
+            all(_is_number(arg) for arg in constants)
+            and all(isinstance(arg, Symbol) for arg in variables)
+            and len(set(variables)) == half
+        ):
+            return expression
+    return None
+
+
+def _with_variable_point(application):
+    """
+    Return *application* of :func:`constant_point_application` with its
+    numbers replaced by fresh variables.
+    """
+    return application.functor(*(
+        Symbol.fresh() if _is_number(arg) else arg
+        for arg in application.args
+    ))
+
+
+def _constant_point_applications(implication):
+    """
+    Return the applications of :func:`constant_point_application` that
+    the conjuncts of the antecedent of *implication* compare, when the
+    rule bounds one of their distances, else ``[]``.
+
+    The rule bounds the distance when, with the numbers of the points
+    replaced by variables, :class:`DetectEuclideanDistanceBoundMatrix`
+    finds the bound.
+
+    Parameters
+    ----------
+    implication : Implication
+        Rule whose antecedent is a conjunction.
+
+    Returns
+    -------
+    list of FunctionApplication
+        The applications, in the order of the conjuncts.
+    """
+    applications = [
+        arg for formula in implication.antecedent.formulas
+        if _comparison(formula, _COMPARISONS + (operator.eq,)) is not None
+        for arg in formula.args
+        if constant_point_application(arg) is not None
+    ]
+    if not applications:
+        return []
+    candidate = ReplaceExpressionWalker({
+        application: _with_variable_point(application)
+        for application in applications
+    }).walk(implication)
+    try:
+        bounded = DetectEuclideanDistanceBoundMatrix().walk(candidate)
+    except UnsupportedProgramError:
+        bounded = False
+    return applications if bounded else []
 
 
 def _comparison(formula, operators):
@@ -527,6 +614,49 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     the program defines it. A program defining its own ``euclidean``
     function keeps it: its rules are not rewritten.
     """
+
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        _constant_point_applications,
+    )
+    def euclidean_constant_point(self, implication):
+        """
+        Range the point of numbers of a Euclidean distance by a relation.
+
+        ``near(s) :- peak(x, y, z, s), euclidean(x, y, z, -24, -4, -20)
+        <= 3`` becomes ``near(s) :- peak(x, y, z, s), fresh(c1, c2, c3),
+        euclidean(x, y, z, c1, c2, c3) <= 3``, ``fresh`` a stored
+        relation of the one point ``(-24, -4, -20)``: the bound is then
+        precomputed (see :meth:`euclidean_spatial_bound`), instead of the
+        distance being computed for every row of ``peak``.
+        """
+        applications = _constant_point_applications(implication)
+        if self._euclidean_is_user_defined(applications[0].functor):
+            return delegate_to_next_match(
+                self, implication, type(self).euclidean_constant_point
+            )
+        replacements, atoms = {}, []
+        for application in applications:
+            if application in replacements:
+                continue
+            replaced = _with_variable_point(application)
+            point = [
+                (fresh, arg.value)
+                for fresh, arg in zip(replaced.args, application.args)
+                if _is_number(arg)
+            ]
+            frame = pandas.DataFrame([[value for _, value in point]])
+            atoms.append(self._add_pairs_relation(frame)(
+                *(fresh for fresh, _ in point)
+            ))
+            replacements[application] = replaced
+        antecedent = ReplaceExpressionWalker(replacements).walk(
+            implication.antecedent
+        )
+        return self.walk(Implication(
+            implication.consequent,
+            Conjunction(tuple(atoms) + antecedent.formulas),
+        ))
 
     @add_match(
         Implication(FunctionApplication, Conjunction),

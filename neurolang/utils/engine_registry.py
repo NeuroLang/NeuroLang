@@ -529,6 +529,9 @@ class Sort(NamedTuple):
     ``""`` otherwise. The *grid* of a sort of voxels is the grid it
     indexes: that of the engine's template (see :func:`build_engine`)
     when ``""`` or ``template``, else that of the atlas of this name.
+    The *atlas* of a sort of region labels is the atlas they name the
+    regions of, one the engine loads: ``.view`` paints the regions of a
+    result on its grid (see :func:`atlas_label_values`).
     """
 
     name: str
@@ -537,6 +540,7 @@ class Sort(NamedTuple):
     description: str = ""
     space: str = ""
     grid: str = ""
+    atlas: str = ""
 
 
 SORT_SPACES = ("voxel", "mm")
@@ -575,13 +579,36 @@ def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
     return grid
 
 
+def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> str:
+    """
+    Return the atlas whose regions the sort *name* declared by *info*
+    labels, or "".
+
+    Only a sort of one column and no space labels the regions of an
+    atlas, one of *atlases*.
+    """
+    atlas = str(info.get("atlas", ""))
+    if atlas and (info.get("space") or len(info.get("columns", ())) != 1):
+        raise ValueError(
+            f"sort {name!r} names the atlas {atlas!r}; only a sort of one "
+            "column and no space labels the regions of an atlas"
+        )
+    if atlas and atlas not in atlases:
+        raise ValueError(
+            f"sort {name!r} names the atlas {atlas!r}; the atlases of the "
+            f"engine are {', '.join(atlases) or 'none'}"
+        )
+    return atlas
+
+
 def _declared_sort(
     name: str, info: Dict[str, Any], grids=(TEMPLATE_GRID,)
 ) -> Sort:
     """
     Return the sort *name* declared by *info*, checking its space.
 
-    Its grid, if any, is one of *grids*.
+    Its grid, if any, is one of *grids*, and its atlas one of them but
+    the template's.
     """
     space = str(info.get("space", ""))
     if space and space not in SORT_SPACES:
@@ -593,6 +620,9 @@ def _declared_sort(
         name, tuple(info["columns"]), str(info.get("type", "")),
         str(info.get("description", "")).strip(), space,
         _sort_grid(name, info, grids),
+        _sort_atlas(
+            name, info, tuple(g for g in grids if g != TEMPLATE_GRID)
+        ),
     )
 
 
@@ -915,6 +945,35 @@ def _fetch_atlas_difumo(**kwargs):
     return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
+TIAN_URL = (
+    "https://raw.githubusercontent.com/yetianmed/subcortex/master/"
+    "Group-Parcellation/3T/Subcortex-Only/"
+)
+
+
+def _fetch_atlas_tian(scale: int = 2, data_dir: str = "", **kwargs):
+    """
+    Fetch the Melbourne subcortex atlas (Tian et al., 2020, Nat Neurosci,
+    doi:10.1038/s41593-020-00711-6), 3T, at *scale* 1 to 4 (16, 32, 50 or
+    54 regions), on the 2 mm grid of the MNI152 2009c asymmetric template,
+    from the authors' repository. Its label file names the region of value
+    *n* on its line *n*; region names end with the hemisphere (``-lh``,
+    ``-rh``).
+    """
+    base = f"Tian_Subcortex_S{int(scale)}_3T"
+    image, labels = _fetch_files(
+        str(Path(data_dir) / "tian"),
+        [
+            (f"{base}_2009cAsym.nii.gz",
+             f"{TIAN_URL}{base}_2009cAsym.nii.gz", {}),
+            (f"{base}_label.txt", f"{TIAN_URL}{base}_label.txt", {}),
+        ],
+        verbose=0,
+    )
+    names = Path(labels).read_text().split()
+    return {"maps": image, "labels": ["Background", *names]}
+
+
 _ATLAS_REGISTRY = {
     "destrieux": {
         "fetch": _fetch_atlas_destrieux,
@@ -922,6 +981,10 @@ _ATLAS_REGISTRY = {
     },
     "schaefer": {
         "fetch": _fetch_atlas_schaefer,
+        "probabilistic": False,
+    },
+    "tian": {
+        "fetch": _fetch_atlas_tian,
         "probabilistic": False,
     },
     "difumo": {
@@ -968,12 +1031,121 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
+def _register_atlas_labels(nl, name: str, labels: dict) -> None:
+    """
+    Register the values of the image of the atlas *name* labelling each
+    of its regions, *labels* mapping each value to the region's name.
+    """
+    if getattr(nl, "atlas_labels", None) is None:
+        nl.atlas_labels = {}
+    values = {}
+    for value, label in labels.items():
+        values.setdefault(label, []).append(int(value))
+    nl.atlas_labels[name] = values
+
+
+def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
+    """
+    Return the values labelling each region of the atlas *name* of *nl*
+    in the image of its grid (``nl.grids[name]``), by region name.
+
+    The names are those of the atlas's relation, ``{}`` for an atlas the
+    engine did not load.
+    """
+    return (getattr(nl, "atlas_labels", None) or {}).get(name, {})
+
+
+def atlas_activation(
+    img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
+    radius_mm: float = 3.0, chunk: int = 4096,
+) -> List[Tuple[str, Any]]:
+    """
+    Return the ``(label, study)`` pairs of the studies activating the
+    regions of the atlas image *img*: one of their peaks is within
+    *radius_mm* of the centre of a voxel of the region.
+
+    *peaks_mm* are the peaks' MNI coordinates in millimetres, of the
+    *studies*, and *label_names* names the values of the image. Distances
+    are measured in millimetres through the affine of the image, so the
+    atlas's grid need not be that of the peaks.
+    """
+    data = np.asanyarray(img.dataobj).astype(np.int64)
+    shape = np.array(data.shape[:3])
+    affine = img.affine
+    inverse = np.linalg.inv(affine)
+    spacing = np.linalg.norm(affine[:3, :3], axis=0)
+    reach = np.ceil(radius_mm / spacing).astype(int) + 1
+    offsets = np.stack(np.meshgrid(
+        *(np.arange(-r, r + 1) for r in reach), indexing="ij"
+    ), -1).reshape(-1, 3)
+    pairs = set()
+    for start in range(0, len(peaks_mm), chunk):
+        peaks = np.asarray(peaks_mm[start:start + chunk], dtype=float)
+        owners = np.asarray(studies[start:start + chunk])
+        centres = np.round(nib.affines.apply_affine(inverse, peaks))
+        candidates = centres.astype(int)[:, None, :] + offsets[None]
+        inside = np.all((candidates >= 0) & (candidates < shape), axis=-1)
+        distances = np.linalg.norm(
+            nib.affines.apply_affine(affine, candidates) - peaks[:, None],
+            axis=-1,
+        )
+        near = inside & (distances <= radius_mm)
+        values = data[tuple(candidates[near].T)]
+        owner = np.broadcast_to(owners[:, None], near.shape)[near]
+        labelled = values > 0
+        pairs.update(zip(
+            values[labelled].tolist(), owner[labelled].tolist()
+        ))
+    return sorted(
+        (label_names[value], study) for value, study in pairs
+        if value in label_names
+    )
+
+
+def _relation_frame(nl, name: str):
+    """Return the rows of the stored relation *name* of *nl*, as a frame."""
+    import pandas as pd
+
+    relation = nl.symbol_table[name].value
+    relation = relation.unwrap() if hasattr(relation, "unwrap") else relation
+    if hasattr(relation, "as_pandas_dataframe"):
+        return relation.as_pandas_dataframe()
+    return pd.DataFrame(list(relation))
+
+
+def _register_atlas_activation(
+    nl, labels: dict, img, settings: dict, pred_name: str
+) -> None:
+    """
+    Register ``{predicate_name}(label, study)``, the studies activating
+    each region of the atlas (see :func:`atlas_activation`), from the
+    peaks in millimetres of the relation ``peaks`` (``x, y, z, study``),
+    ``peak_mni`` by default, within ``radius_mm`` (3 by default).
+    """
+    peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
+    pairs = atlas_activation(
+        img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
+        peaks.iloc[:, 3].to_numpy(), float(settings.get("radius_mm", 3)),
+    )
+    name = settings.get("predicate_name", f"{pred_name}_activated")
+    nl.add_tuple_set(pairs, name=name)
+    nl.symbol_table[name].value.might_have_duplicates = False
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path
 ) -> None:
-    """Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine predicates."""
+    """
+    Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
+    predicates: ``{predicate_name}(label, region)``, and with ``activated``
+    the studies activating each region (see
+    :func:`_register_atlas_activation`).
+    """
     info = _ATLAS_REGISTRY[atlas_name]
-    fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
+    fetch_kw = {
+        k: v for k, v in params.items()
+        if k not in ("predicate_name", "activated")
+    }
     fetch_kw["data_dir"] = str(data_dir)
     atl_data = info["fetch"](**fetch_kw)
 
@@ -986,9 +1158,18 @@ def _load_deterministic_atlas(
     regions = ExplicitVBR.from_spatial_image_labels(
         img, [k for k, _ in labels]
     )
+    # A label of the look-up table may have no voxel in the image (the
+    # medial walls of Destrieux): it is no region.
+    labels = [(k, v) for k, v in labels if hasattr(regions[k], "voxels")]
     rows = [(_label_name(v), regions[k]) for k, v in labels]
+    names = {k: _label_name(v) for k, v in labels}
 
     nl.add_tuple_set(rows, name=pred_name)
+    _register_atlas_labels(nl, atlas_name, names)
+    if params.get("activated"):
+        _register_atlas_activation(
+            nl, names, img, params["activated"], pred_name,
+        )
 
 
 def _load_probabilistic_atlas(
@@ -1429,6 +1610,7 @@ def build_engine(
 
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
+    nl.atlas_labels = {}
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)

@@ -42,7 +42,11 @@ def provider(tool_calling="text", api="openai"):
 
 
 def assistant_config(**options):
-    """Return assistant settings for the tests."""
-    return AssistantConfig(
-        **{"max_steps": 4, "max_repairs": 2, "few_shot_k": 2, **options}
-    )
+    """
+    Return assistant settings for the tests: without the request for the
+    comments of the rules, unless *options* ask for it.
+    """
+    return AssistantConfig(**{
+        "max_steps": 4, "max_repairs": 2, "few_shot_k": 2,
+        "comment_rules": False, **options,
+    })

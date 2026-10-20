@@ -31,7 +31,18 @@ may specify the following keys, all of them optional:
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
-  ``difumo``) as region predicates
+  ``tian``, ``difumo``) as region predicates ``name(label, region)``.  A
+  deterministic atlas with ``activated: {predicate_name, radius_mm,
+  peaks}`` also registers ``predicate_name(label, study)``: the studies
+  with a peak within ``radius_mm`` (3 by default) of a voxel of the
+  region, the peaks being the millimetre coordinates of the relation
+  ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
+  are measured in millimetres through the atlas's affine, so its grid need
+  not be the template's, and the pairs are computed once, when the engine
+  is built.  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
+  for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
+  downloaded from the authors' repository
 - ``datalog_init`` — inline Datalog rules that are loaded at engine startup
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
@@ -53,6 +64,13 @@ may specify the following keys, all of them optional:
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
+- ``assistant_guidance`` — how the LLM query assistant (``.ask``,
+  ``neurolang-query --ask``) is to answer questions on the engine: added
+  to its system prompt.  The coordinate meta-analysis engines ask for
+  probabilistic answers over ``selected_study``, activation as a peak
+  within 3 mm of a point in MNI millimetres, the Destrieux atlas for the
+  classical anatomy of the cortex and the Schaefer and Tian atlases for
+  the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
@@ -178,6 +196,25 @@ those of an ``mm`` sort converted to the nearest voxel of the template.
 A column of unknown sort, such as one of a relation loaded with
 ``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
 X Y Z`` give the columns, on the template's grid (see ``.help save``).
+
+A sort of region labels may name, with ``atlas``, the atlas whose
+regions it labels, by its key under ``atlases``; it has one column and
+no ``space``::
+
+    destrieux_label:
+      columns: [label]
+      type: str
+      atlas: destrieux
+
+A result with a column of such a sort is then a result on the regions of
+the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
+atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),
+and ``.view`` shows a result with two such columns, pairs of regions and
+a value, as a network over the brain, a node at the centre of each
+region and an edge per pair (see ``.help view``).  The engine keeps the
+values labelling each region in the image of the atlas, by name, in
+``nl.atlas_labels`` (see
+:func:`~neurolang.utils.engine_registry.atlas_label_values`).
 
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
 offers the nouns, capitalised; after ``every Study that`` the verbs whose

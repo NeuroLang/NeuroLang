@@ -89,7 +89,8 @@ class TuiSettings:
     directory and the command line describe the session in its
     transcript. *llm_config* and *llm_provider* are the configuration
     file and the provider of the LLM assistant (``.ask``), by default
-    those the configuration gives.
+    those the configuration gives. With *scope_queries* (``.scope``),
+    the rules defined with a query are local to it.
     """
 
     engine_name: str = ""
@@ -107,6 +108,7 @@ class TuiSettings:
     command_line: str = ""
     llm_config: Optional[str] = None
     llm_provider: Optional[str] = None
+    scope_queries: bool = True
 
 
 class InteractiveTuiApp:
@@ -330,7 +332,7 @@ class InteractiveTuiApp:
         """
         with submission:
             result = self._execute_noting_warnings(program)
-            if self.settings.squall:
+            if self.settings.squall and submission.keep:
                 record_squall_rules(self, program)
         return result
 
@@ -350,13 +352,18 @@ class InteractiveTuiApp:
         rules added by a *query*'s submission are kept, to run it again
         as it ran (see :func:`~.session.last_query_scope`).
         """
-        if query:
+        if query and submission.keep:
             self.last_added_rules = submission.added_rules()
         lines = submission.definitions()
         if not (lines or query):
             lines = ["(nothing defined)"]
         for line in lines:
             self.console.print(line, style="green", markup=False)
+        if lines and not submission.keep:
+            self.err_console.print(
+                "[dim]The rules of the query are local to it: .scope off "
+                "keeps them in the session.[/dim]"
+            )
 
     def _run_submission(self, program: str, query: bool, facts) -> bool:
         """
@@ -365,7 +372,9 @@ class InteractiveTuiApp:
         *facts* are the predicates it adds facts to. Return whether it
         succeeded.
         """
-        submission = Submission(self._nl, facts)
+        submission = Submission(
+            self._nl, facts, keep=not (query and self.settings.scope_queries)
+        )
         try:
             result = self._submit(program, submission)
             self._print_definitions(submission, query)

@@ -91,7 +91,9 @@ class AssistantConfig:
     keep the one most of them agree on (self-consistency).
     *query_timeout* and *query_memory_mb* stop a query the agent runs
     after that many seconds, or when it uses that much memory: it runs in
-    a child process.
+    a child process. With *comment_rules*, the accepted query is shown
+    with a comment line explaining each rule (see
+    :mod:`~neurolang.utils.llm.comments`).
     """
 
     strategy: str = "react"
@@ -105,6 +107,7 @@ class AssistantConfig:
     preview_rows: int = 10
     query_timeout: float = 30.0
     query_memory_mb: float = 4096.0
+    comment_rules: bool = True
 
 
 @dataclass

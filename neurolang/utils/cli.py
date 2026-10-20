@@ -57,6 +57,7 @@ Usage
 """
 
 import argparse
+import dataclasses
 import difflib
 import json
 import os
@@ -626,6 +627,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "then validation and repair). Default: the configuration's.",
     )
     parser.add_argument(
+        "--steps",
+        metavar="N",
+        type=_positive_int,
+        default=None,
+        help="With --ask, the most steps the ReAct agent takes, tool "
+        "calls until its final answer (default: the configuration's "
+        "max_steps, 8).",
+    )
+    parser.add_argument(
         "--llm-config",
         metavar="PATH",
         default=None,
@@ -1176,6 +1186,8 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
     """
     if not (args.save or args.view):
         return
+    # The result on stdout comes before the messages on stderr.
+    sys.stdout.flush()
     try:
         from neurolang.utils.tui import nifti
     except ImportError as exc:
@@ -1420,6 +1432,19 @@ def _ask_reporting(args, provider, config, language):
     return None, _print_step
 
 
+def _positive_int(text: str) -> int:
+    """Return the integer *text*, at least 1, for argparse."""
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            f"expected a positive integer, not {text!r}"
+        )
+    return value
+
+
 def _run_ask(args) -> None:
     """
     Write the query answering ``--ask`` with an LLM and print it.
@@ -1453,8 +1478,11 @@ def _run_ask(args) -> None:
         args.engine, Path(args.data_dir), args.resolution
     )
     client, on_step = _ask_reporting(args, provider, config, language)
+    assistant = config.assistant
+    if args.steps:
+        assistant = dataclasses.replace(assistant, max_steps=args.steps)
     agent = make_agent(
-        nl, provider, config.assistant, language, args.strategy,
+        nl, provider, assistant, language, args.strategy,
         engine_name=args.engine, client=client, on_step=on_step,
     )
     try:
@@ -1470,7 +1498,16 @@ def _run_ask(args) -> None:
             )
             print(f"Last attempt:\n{query}", file=sys.stderr)
         sys.exit(1)
-    print(query_highlight.highlight(result.query, language, sys.stdout))
+    commented = result.commented and language == "datalog"
+    print(query_highlight.highlight(
+        result.commented if commented else result.query, language,
+        sys.stdout,
+    ))
+    if result.commented and not commented:
+        # SQUALL has no comments: its rules explained go to stderr.
+        print(query_highlight.highlight(
+            result.commented, language, sys.stderr
+        ), file=sys.stderr)
     if result.explanation:
         print(f"-- {result.explanation}", file=sys.stderr)
     if args.run or args.save or args.view:

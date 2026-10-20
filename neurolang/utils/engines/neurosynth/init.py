@@ -5,6 +5,8 @@ Registers the following predicates:
 
 * ``peak_reported(i, j, k, study_id)`` — reported activation peaks
   converted to voxel coordinates.
+* ``peak_mni(x, y, z, study_id)`` — the same peaks in MNI coordinates, in
+  millimetres.
 * ``study(study_id)`` — all study identifiers.
 * ``term_in_study_tfidf(study_id, term, tfidf)`` — term frequency–inverse
   document frequency values.
@@ -111,6 +113,7 @@ def register_tables(
     study_ids = peak_data[["study_id"]].drop_duplicates()
 
     nl.add_tuple_set(peak_data, name="peak_reported")
+    nl.add_tuple_set(peak_mni(peak_data, mask), name="peak_mni")
     nl.add_tuple_set(study_ids, name="study")
     nl.add_tuple_set(term_data, name="term_in_study_tfidf")
     # The vocabulary, stored once rather than derived from the 1M-row
@@ -146,6 +149,20 @@ def register_tables(
     )
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
     return study_ids
+
+
+def peak_mni(peak_data: pd.DataFrame, mask: nib.Nifti1Image) -> pd.DataFrame:
+    """The peaks of *peak_data* (``i, j, k, study_id`` on the grid of the
+    *mask*) as MNI coordinates in millimetres: ``x, y, z, study_id``, the
+    centres of their voxels (the reported coordinates at the default 1 mm
+    resolution)."""
+    xyz = nib.affines.apply_affine(
+        mask.affine, peak_data[["i", "j", "k"]].to_numpy(dtype=float)
+    )
+    return pd.DataFrame({
+        "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2],
+        "study_id": peak_data["study_id"].to_numpy(),
+    })
 
 
 def fetch_cortical_atlas(data_dir: Path) -> nib.Nifti1Image:
