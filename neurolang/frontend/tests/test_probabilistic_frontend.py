@@ -2286,3 +2286,78 @@ def test_small_dichotomy_declines_existential_of_deterministic_relation(
     )
     with pytest.raises(UnsupportedSolverError):
         _query_with_deterministic_existential(nl)
+
+
+def test_predicate_with_a_deterministic_and_a_choice_rule():
+    """
+    A predicate with a rule joining a probabilistic choice and a
+    deterministic rule is probabilistic. It was typed from whichever of
+    its rules came first, which depended on the hash seed: typed
+    deterministic, ``b``, true only of the choice of study 1, was lost.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(0, "a"), (0, "d"), (0, "e"), (1, "b"), (1, "d"), (2, "d")],
+        name="mentions",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="selected_study"
+    )
+    res = nl.execute_datalog_program(
+        """
+        a(t) :- mentions(s, t), selected_study(s).
+        a(t) :- mentions(s, t), mentions(s, 'a').
+        ans(t, p) :- PROB[a(t)] = p.
+        """
+    )
+    assert {
+        (t, round(p, 6)) for t, p in res.as_pandas_dataframe().values
+    } == {("a", 1.0), ("b", round(1 / 3, 6)), ("d", 1.0), ("e", 1.0)}
+
+
+def test_predicate_with_a_deterministic_and_a_post_probabilistic_rule():
+    """
+    A predicate with a deterministic rule and a rule using the result of
+    a probabilistic query is solved after the query, whatever the order
+    of its rules: solved before it, it missed the query's results.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0, "a"), (1, "b"), (2, "b")], name="mentions")
+    nl.add_tuple_set([("z", 0.5)], name="prior")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="selected_study"
+    )
+    res = nl.execute_datalog_program(
+        """
+        q(t, p) :- PROB[mentions(s, t), selected_study(s)] = p.
+        c(t, p) :- prior(t, p).
+        c(t, p) :- q(t, p).
+        ans(t, p) :- c(t, p).
+        """
+    )
+    assert {
+        (t, round(p, 6)) for t, p in res.as_pandas_dataframe().values
+    } == {("a", round(1 / 3, 6)), ("b", round(2 / 3, 6)), ("z", 0.5)}
+
+
+def test_predicate_with_a_choice_rule_and_a_post_probabilistic_rule():
+    """
+    A predicate with a rule using the result of a probabilistic query and
+    a rule joining a probabilistic choice is typed probabilistic: a
+    probabilistic query on it depends on the other query, which is
+    rejected.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0, "a"), (1, "b"), (2, "b")], name="mentions")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="selected_study"
+    )
+    with pytest.raises(UnsupportedProgramError):
+        nl.execute_datalog_program(
+            """
+            q(t, p) :- PROB[mentions(s, t), selected_study(s)] = p.
+            c(t) :- q(t, p).
+            c(t) :- mentions(s, t), selected_study(s).
+            ans(t, p) :- PROB[c(t)] = p.
+            """
+        )
