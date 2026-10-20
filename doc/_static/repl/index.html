@@ -12,61 +12,49 @@
 <link rel="icon" href="../logo/favicon/favicon.ico" sizes="48x48">
 <link rel="apple-touch-icon" href="../logo/favicon/apple-touch-icon.png">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0b1220; --panel: #0d1117; --raised: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --blue: #5aa3f6; --cyan: #4cc3de; --green: #7ee787;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
+  :root { color-scheme: dark; --bg: #0b1220; --panel: #0d1117; --raised: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #5aa3f6; --ok: #3fb950; --bad: #f85149;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: radial-gradient(60rem 28rem at 50% -8rem, #14233f 0%, var(--bg) 70%) no-repeat, var(--bg); color: var(--text); font: 14px/1.5 var(--mono); }
-  a { color: var(--blue); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1rem; }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 1rem 0; font-family: var(--sans); }
-  .brand img { display: block; height: 2.4rem; width: auto; }
-  .top nav { display: flex; gap: 1.25rem; font-size: .95rem; }
-  .top nav a { color: var(--muted); }
-  .top nav a:hover { color: var(--text); text-decoration: none; }
-  .hero { padding: 1.5rem 0 1.25rem; font-family: var(--sans); }
-  .eyebrow { margin: 0 0 .5rem; color: var(--cyan); font-size: .8rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
-  h1 { margin: 0 0 .75rem; font-size: clamp(1.5rem, 4vw, 2.1rem); line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
-  .lead { margin: 0 0 1.25rem; max-width: 42rem; color: #b6c2d1; font-size: 1.05rem; }
-  .command { display: flex; align-items: center; gap: .75rem; max-width: 100%; margin: 0 0 1rem; padding: .6rem .75rem .6rem 1rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); box-shadow: 0 0 0 1px #0b1220, 0 8px 24px #0006; }
-  .command .prompt { color: var(--muted); user-select: none; }
-  .command code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; color: var(--green); font: inherit; }
-  @media (max-width: 600px) { .command code { white-space: normal; overflow-wrap: anywhere; } }
-  .facts { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; padding: 0; list-style: none; }
-  .facts li { padding: .15rem .65rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .8rem; background: #0d1117aa; }
-  details { margin-top: 1rem; color: var(--muted); font-family: var(--sans); }
-  summary { cursor: pointer; width: fit-content; }
-  summary:hover { color: var(--text); }
-  details > :not(summary) { margin-top: .6rem; }
-  .good-to-know { margin: .6rem 0 0 1.1rem; padding: 0; max-width: 46rem; }
-  .good-to-know li { margin-bottom: .3rem; }
-  #version { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-  #version input { background: var(--raised); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem; font: 13px var(--mono); }
-  #version input[name=repo] { width: 14rem; }
-  #version input[name=ref] { width: 12rem; }
-  #llm { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .6rem .9rem; max-width: 46rem; }
-  #llm label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
-  #llm label.check { flex-direction: row; align-items: center; gap: .5rem; align-self: end; }
-  #llm input:not([type=checkbox]), #llm select { background: var(--raised); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; font: 13px var(--mono); }
-  #llm .row { display: flex; gap: .5rem; flex-wrap: wrap; grid-column: 1 / -1; }
-  #llm .note { grid-column: 1 / -1; margin: 0; max-width: 42rem; font-size: .85rem; }
-  #llm-error { color: #f85149; }
-  #status { display: flex; align-items: center; gap: .6rem; padding: .5rem .85rem; margin: 0 0 1rem; border: 1px solid var(--border); border-radius: 999px; width: fit-content; max-width: 100%; background: var(--panel); font-family: var(--sans); font-size: .9rem; }
-  #status::before { content: ""; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: #3fb950; }
-  #status.busy::before { width: .8rem; height: .8rem; background: none; border: 2px solid var(--border); border-top-color: var(--blue); animation: spin .8s linear infinite; }
-  #status.error { border-color: #f85149; color: #f85149; }
-  #status.error::before { background: #f85149; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
+  a { color: var(--accent); text-decoration: none; }
+  main { max-width: 60rem; margin: 0 auto; padding: 1rem; display: grid; gap: .75rem; }
+  header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  header img { height: 2rem; display: block; }
+  header nav { margin-left: auto; display: flex; gap: 1rem; }
+  #status { display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .85rem; }
+  #status::before { content: ""; width: .6rem; height: .6rem; border-radius: 50%; background: var(--ok); }
+  #status.busy::before { background: none; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  #status.error { color: var(--bad); }
+  #status.error::before { background: var(--bad); }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #status.busy::before { animation: none; } }
-  #log { display: flex; flex-direction: column; gap: .75rem; }
-  .entry-input { color: var(--green); white-space: pre-wrap; margin: 0; }
-  .entry-output { overflow-x: auto; }
-  .entry-output pre { margin: 0; }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  input, select, textarea { background: var(--raised); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .4rem .6rem; font: 13px var(--mono); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea { width: 100%; min-height: 7rem; resize: vertical; }
+  #question { flex: 1; min-width: 12rem; font-family: var(--sans); font-size: 14px; }
+  button { background: var(--ok); color: #04120a; border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: var(--raised); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
+  button:disabled, textarea:disabled, input:disabled { opacity: .5; cursor: default; }
+  details { color: var(--muted); }
+  summary { cursor: pointer; width: fit-content; }
+  details > :not(summary) { margin-top: .5rem; }
+  #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  #llm label { display: flex; gap: .4rem; align-items: center; }
+  #llm-error { color: var(--bad); margin: 0; }
+  .note { margin: 0; font-size: .85rem; max-width: 46rem; }
+  #out { overflow-x: auto; }
+  #out pre { margin: 0; font-size: 13px; }
+  #results { display: none; }
+  #results.has { display: block; }
+  #tabs { display: flex; gap: .25rem; margin-bottom: .5rem; }
+  #tabs button { background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-weight: 400; }
+  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain { color: var(--text); border-bottom-color: var(--accent); }
+  #results[data-tab=table] #brain, #results[data-tab=brain] #table { display: none; }
+  #table { display: grid; gap: .75rem; }
+  iframe { width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: 6px; background: #000; }
+  kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; font: .8em var(--mono); }
+  #version input { width: 12rem; }
   .rt { border: 1px solid #30363d; border-radius: 6px; background: #0d1117; }
   .rt-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; padding: .4rem .6rem; border-bottom: 1px solid #30363d; font-family: system-ui, sans-serif; }
   .rt-count, .rt-range { color: #8b949e; }
@@ -84,143 +72,68 @@
   .rt-table tbody tr:hover { background: #1c2430; }
   .rt-num { text-align: right; }
   .rt-number { color: #6e7681; text-align: right; user-select: none; width: 1%; }
-  #search { display: none; gap: .5rem; align-items: center; margin-top: .5rem; padding: .35rem .5rem; border: 1px solid #58a6ff; border-radius: 6px; font-family: system-ui, sans-serif; color: #8b949e; }
-  #search.open { display: flex; }
-  #search input { flex: 1; background: #161b22; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: .25rem .5rem; font: 13px ui-monospace, Menlo, monospace; }
-  #search.failing input { border-color: #f85149; }
-  kbd { border: 1px solid #30363d; border-radius: 4px; padding: 0 .3rem; font: .8em ui-monospace, Menlo, monospace; }
-  iframe { width: 100%; height: 34rem; border: 1px solid #30363d; border-radius: 6px; background: #000; }
-  #form { margin-top: 1rem; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 6rem; background: #161b22; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: .5rem; font: inherit; resize: vertical; }
-  textarea:disabled { opacity: .5; }
-  .buttons { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; flex-wrap: wrap; }
-  button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; cursor: pointer; }
-  button.secondary { background: #21262d; border: 1px solid #30363d; }
-  button:disabled { opacity: .5; cursor: default; }
-  #version { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; font-family: system-ui, sans-serif; color: #8b949e; }
-  #version input { background: #161b22; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: .3rem .5rem; font: 13px ui-monospace, Menlo, monospace; }
-  #version input[name=repo] { width: 14rem; }
-  #version input[name=ref] { width: 12rem; }
-  .examples { margin-top: 1rem; font-family: system-ui, sans-serif; color: #8b949e; }
-  .examples button { margin: .15rem .25rem .15rem 0; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
-  footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font: .85rem/1.6 var(--sans); }
-  footer code { color: var(--text); font: .9em var(--mono); }
-  .hint { margin: .5rem 0 0; color: var(--muted); font: .8rem var(--sans); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="https://neurolang.github.io/" aria-label="NeuroLang documentation"><img src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang" height="40"></a>
-    <nav aria-label="NeuroLang">
-      <a href="https://neurolang.github.io/">Documentation</a>
-      <a href="https://neurolang.github.io/tutorial_neurosynth_tests.html">Tutorial</a>
-      <a href="https://github.com/NeuroLang/NeuroLang">GitHub</a>
-    </nav>
+<main>
+  <header>
+    <a href="https://neurolang.github.io/" aria-label="NeuroLang"><img src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"></a>
+    <span id="status" class="busy" role="status">Starting…</span>
+    <nav><a href="https://neurolang.github.io/">Docs</a><a href="https://github.com/NeuroLang/NeuroLang">GitHub</a></nav>
   </header>
 
-  <section class="hero">
-    <p class="eyebrow">Interactive query REPL</p>
-    <h1>Ask the Neurosynth database questions in logic, from your browser.</h1>
-    <p class="lead">
-      Datalog with probabilities, over the studies, terms and activation peaks of
-      Neurosynth. It runs here, on your machine: nothing to install, nothing sent to a server.
-    </p>
-    <div class="command">
-      <span class="prompt" aria-hidden="true">$</span>
-      <code id="command">neurolang-query -i --engine neurosynth --resolution 2</code>
-      <button id="copy-command" type="button" class="secondary" title="Copy the command to run it in a terminal">Copy</button>
-    </div>
-    <ul class="facts">
-      <li>Python on <a href="https://pyodide.org">Pyodide</a></li>
-      <li>Neurosynth v7 · MNI 2&nbsp;mm</li>
-      <li>about 100&nbsp;MB the first time, then cached</li>
-    </ul>
-    <details>
-      <summary>Good to know</summary>
-      <ul class="good-to-know">
-        <li>Type <code>.help</code> for the commands; results come as tables you can sort, filter and download, and <code>.view</code> opens the brain viewer below.</li>
-        <li>Queries that need gigabytes of memory, such as the whole of the
-          <a href="https://neurolang.github.io/tutorial_neurosynth_tests.html">uniformity-test tutorial</a>,
-          may not fit in a browser tab. A query cannot be interrupted: <em>Restart session</em> starts again.</li>
-        <li>The same command runs in a terminal after <code>pip install "neurolang[tui]"</code>.</li>
-      </ul>
-    </details>
-    <details id="version-details">
-      <summary>NeuroLang version: <span id="version-summary">the build of this page</span></summary>
-      <form id="version">
-        NeuroLang from
-        <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">
-        at
-        <input name="ref" placeholder="branch, tag or commit" aria-label="Branch, tag or commit" spellcheck="false">
-        <button class="secondary">Run this version</button>
-        <span>(empty: the version built with this page)</span>
-      </form>
-    </details>
-    <details id="llm-details">
-      <summary>AI assistant: <span id="llm-summary">bring your own API key</span></summary>
-      <form id="llm">
-        <label>Provider
-          <select name="provider" aria-label="Provider" disabled></select>
-        </label>
-        <label>Model
-          <input name="model" spellcheck="false" autocomplete="off" aria-label="Model">
-        </label>
-        <label id="llm-base" hidden>API address
-          <input name="baseUrl" placeholder="https://…/v1" spellcheck="false" autocomplete="off" aria-label="Address of the API">
-        </label>
-        <label>API key
-          <input name="key" type="password" autocomplete="off" spellcheck="false" required aria-label="API key">
-        </label>
-        <label class="check"><input type="checkbox" name="remember"> Remember it on this device</label>
-        <div class="row">
-          <button class="secondary" disabled>Use this key</button>
-          <button id="llm-forget" type="button" class="secondary">Forget the key</button>
-        </div>
-        <p id="llm-error" class="note" role="alert" hidden></p>
-        <p class="note">
-          Then <code>.ask which studies mention pain?</code> writes a query and puts it in the input,
-          for you to read and run; <code>.llm …</code> asks the ReAct agent for a Datalog query.
-          Your key goes from this page to the provider you choose, and nowhere else: not to NeuroLang,
-          not in the address. It is kept for this tab only unless you ask to remember it on this device.
-          Prefer a key with a spending limit. The provider must accept calls from web pages
-          (Anthropic, OpenAI and OpenRouter do; a local server needs its CORS enabled).
-        </p>
-      </form>
-    </details>
-  </section>
+  <form id="ask" class="row">
+    <input id="question" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" disabled>
+    <button id="ask-run" disabled>Ask</button>
+    <button id="key" type="button" class="ghost" title="Your API key">API key</button>
+  </form>
+  <details id="llm-details">
+    <summary id="llm-summary">bring your own API key</summary>
+    <form id="llm">
+      <select name="provider" aria-label="Provider" disabled></select>
+      <input name="model" placeholder="model" spellcheck="false" autocomplete="off" aria-label="Model">
+      <input name="baseUrl" id="llm-base" placeholder="https://…/v1" spellcheck="false" autocomplete="off" aria-label="Address of the API" hidden>
+      <input name="key" type="password" placeholder="API key" autocomplete="off" spellcheck="false" required aria-label="API key">
+      <label><input type="checkbox" name="remember"> remember on this device</label>
+      <button class="ghost" disabled>Use</button>
+      <button id="llm-forget" type="button" class="ghost">Forget</button>
+      <p id="llm-error" role="alert" hidden></p>
+      <p class="note">The key stays in this tab (or on this device, if you ask) and goes only to the provider, with your question, the engine's relations and previews of query rows. <code>.ask</code> puts the query it writes in the box below.</p>
+    </form>
+  </details>
 
-  <div id="status" class="busy" role="status">Starting…</div>
-  <div id="log" aria-live="polite"></div>
-  <form id="form">
-    <textarea id="input" spellcheck="false" disabled
-      placeholder="Datalog, as in the REPL: a rule, or ans(...) :- ... for a query"></textarea>
-    <div class="buttons">
-      <button id="run" disabled>Run</button>
-      <button id="history" type="button" class="secondary" title="Search the history (Ctrl+R)">Search history</button>
-      <button id="restart" type="button" class="secondary">Restart session</button>
+  <form id="code">
+    <div class="row">
+      <select id="mode" aria-label="Language"><option value="datalog">Datalog</option><option value="squall">SQUALL</option></select>
+      <select id="history" aria-label="History"><option value="">History</option></select>
     </div>
-    <p class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> (<kbd>⌘</kbd>+<kbd>Enter</kbd>) runs · <kbd>Ctrl</kbd>+<kbd>R</kbd> searches the history · <kbd>↑</kbd> <kbd>↓</kbd> browse it</p>
-    <div id="search" role="search">
-      <span>reverse search</span>
-      <input id="search-input" spellcheck="false" aria-label="Search the history">
-      <span><kbd>Ctrl+R</kbd> older · <kbd>Ctrl+S</kbd> newer · <kbd>Enter</kbd> accept · <kbd>Esc</kbd> cancel</span>
+    <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" style="margin-top:.5rem"></textarea>
+    <div class="row" style="margin-top:.5rem">
+      <button id="run" disabled>Run</button>
+      <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>
+      <button id="restart" type="button" class="ghost">Restart</button>
+      <span class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
     </div>
   </form>
-  <div class="examples">Try:
-    <button type="button" class="secondary example">ans(s) :- mentions(s, "pain")</button>
-    <button type="button" class="secondary example">ans(name, description) :- cognitive_task(_, name, description)</button>
-    <button type="button" class="secondary example">ans(t, count(s)) :- mentions(s, t)</button>
-    <button type="button" class="secondary example">.ask which studies mention pain?</button> (with your key)
-  </div>
 
-  <footer>
-    NeuroLang enables the analysis of neuroimaging data through probabilistic logic programming.
-    <a href="https://neurolang.github.io/">Documentation</a> ·
-    <a href="https://github.com/NeuroLang/NeuroLang">Source</a> ·
-    <a href="https://neurolang.github.io/changelog.html">Changelog</a>
-  </footer>
-</div>
+  <div id="out" aria-live="polite"></div>
+  <section id="results" data-tab="table">
+    <div id="tabs"><button id="tab-table" type="button">Table</button><button id="tab-brain" type="button">Brain</button></div>
+    <div id="table"></div>
+    <div id="brain"></div>
+  </section>
+
+  <details>
+    <summary>Engine and version</summary>
+    <div id="banner"></div>
+    <form id="version" class="row">
+      NeuroLang from <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">
+      at <input name="ref" placeholder="branch, tag or commit" aria-label="Branch, tag or commit" spellcheck="false">
+      <button class="ghost">Run this version</button>
+      <span id="version-summary" class="note"></span>
+    </form>
+  </details>
+</main>
 <script type="module" src="repl.js"></script>
 </body>
 </html>
