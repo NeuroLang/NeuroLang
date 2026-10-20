@@ -155,6 +155,32 @@ class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
         return res
 
 
+class SupportOfNamedProjections(ExpressionWalker):
+    """
+    The plan with each projection on named columns wrapped in a support.
+
+    The projection of a provenance set sums the provenances of the tuples
+    it merges. In the plan of a deterministic relation, whose provenances
+    are 0 or 1, the sum would give a tuple a provenance above 1, which the
+    union of provenances (the independent projection) does not support.
+    """
+    @add_match(rap.Support(rap.Projection))
+    def projection_with_support(self, support):
+        return support
+
+    @add_match(
+        rap.Projection,
+        lambda projection: all(
+            isinstance(attribute, Constant[ColumnStr])
+            for attribute in projection.attributes
+        )
+    )
+    def support_of_projection(self, projection):
+        return rap.Support(rap.Projection(
+            self.walk(projection.relation), projection.attributes
+        ))
+
+
 def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
@@ -1567,16 +1593,24 @@ def disjoint_separator(query, symbol_table):
         # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
         # support. The choice atoms in D are replaced by their support, so
         # that every label in D is 0 or 1, as a negation (a difference) needs.
-        deterministic = add_existentials_except(
-            RTO.walk(Disjunction(tuple(disjuncts))), kept
-        )
+        deterministic = RTO.walk(Disjunction(tuple(disjuncts)))
+        if isinstance(deterministic, Disjunction):
+            # The variables a disjunct alone has are projected in the
+            # disjunct, so that the branches of the union have the same
+            # columns.
+            deterministic = Disjunction(tuple(
+                add_existentials_except(disjunct, kept)
+                for disjunct in deterministic.formulas
+            ))
+        else:
+            deterministic = add_existentials_except(deterministic, kept)
         choice_plans = {
             atom: TranslateToNamedRA().walk(atom) for atom in choice_atoms
         }
         deterministic_plan = ReplaceExpressionWalker({
             plan: rap.Support(plan) for plan in choice_plans.values()
-        }).walk(TranslateToNamedRA().walk(
-            MakeExistentialsImplicit().walk(deterministic)
+        }).walk(SupportOfNamedProjections().walk(
+            TranslateToNamedRA().walk(deterministic)
         ))
         support = rap.Support(rap.Projection(
             deterministic_plan,

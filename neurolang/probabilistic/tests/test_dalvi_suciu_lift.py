@@ -1279,6 +1279,37 @@ def test_union_with_a_choice_and_a_negation():
     )
 
 
+def test_union_with_a_rule_local_variable_and_a_negation():
+    """
+    A rule with a variable its head has not (``s`` of ``mentions(s, t)``,
+    the choice being on ``f``) in a union with a negation. The variables a
+    disjunct alone has are projected in the disjunct, so that the branches
+    of the union of the deterministic part have the same columns, and the
+    projection is a support: it would sum the labels of the tuples it
+    merges, and a label above 1 is not one of a set (the union of the
+    labels is ``1 - prod(1 - l)``).
+    """
+    from ...frontend import NeurolangPDL
+
+    mentions = {0: "ab", 1: "bc", 2: "cd"}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(s, t) for s, terms in mentions.items() for t in terms],
+        name="mentions",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in mentions], name="selected_study"
+    )
+    result = nl.execute_datalog_program(
+        "a(t) :- mentions(s, t), selected_study(s), ~mentions(s, 'a').\n"
+        "a(t) :- mentions(s, t), selected_study(f), mentions(f, 'c').\n"
+        "ans(t, p) :- PROB[a(t)] = p."
+    )
+    assert dict(result) == pytest.approx(
+        {"a": 2 / 3, "b": 2 / 3, "c": 2 / 3, "d": 2 / 3}
+    )
+
+
 def test_union_with_a_self_join_of_the_choice_in_a_rule():
     """
     A rule of a union joins the choice twice: the equality that makes the
