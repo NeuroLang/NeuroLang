@@ -3,7 +3,7 @@ import logging
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
 from ..expressions import Constant, Symbol
-from ..logic import Disjunction, Implication, Union
+from ..logic import Conjunction, Disjunction, Implication, Negation, Union
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
@@ -55,12 +55,78 @@ def freeze_atom(atom):
     return atom.functor(*args)
 
 
+class NegatedSymbol(Symbol):
+    """
+    The relation of the negated atoms ¬R(x) of the relation symbol
+    *expression* R, a relation of its own, that no atom R(x) matches.
+    """
+    def __init__(self, expression):
+        self.expression = expression
+        self.is_fresh = False
+
+    @property
+    def name(self):
+        return self.expression.name
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, NegatedSymbol)
+            and self.expression == other.expression
+        )
+
+    def __hash__(self):
+        return hash((NegatedSymbol, self.expression))
+
+    def __str__(self):
+        return f"¬{self.expression.name}"
+
+    __repr__ = __str__
+
+
+def negation_as_atom(formula):
+    """
+    The atom ¬R(x) of a negated atom is the atom R̄(x) of the relation
+    `NegatedSymbol(R)`; any other formula is as it is.
+    """
+    if isinstance(formula, Negation) and isinstance(
+        formula.formula.functor, Symbol
+    ):
+        atom = formula.formula
+        return NegatedSymbol(atom.functor)(*atom.args)
+    return formula
+
+
+def negations_as_atoms(rule):
+    '''
+    The *rule* with each negated atom ¬R(x) of its body replaced by the
+    atom R̄(x) of the relation `NegatedSymbol(R)`.
+
+    Containment is tested by the frozen body of a query, whose atoms are
+    facts, and by the evaluation of the other query on them. A negated
+    atom is not a fact, and not being in the facts is not the negation
+    holding. With R̄ a relation of its own, a negated atom of a query is
+    matched by a negated atom of the other, as the homomorphisms of the
+    containment of positive queries do: the test stays sound (a
+    containment found holds), and is not complete.
+    '''
+    antecedent = rule.antecedent
+    if isinstance(antecedent, Conjunction):
+        antecedent = Conjunction(tuple(
+            negation_as_atom(formula) for formula in antecedent.formulas
+        ))
+    else:
+        antecedent = negation_as_atom(antecedent)
+    return Implication(rule.consequent, antecedent)
+
+
 def is_contained_rule(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
     for 2 Datalog rules without constants, computes whether
-    q1←q2.
+    q1←q2. A negated atom is matched by the same negated atom
+    (see :func:`negations_as_atoms`).
     '''
+    q1, q2 = negations_as_atoms(q1), negations_as_atoms(q2)
     s = Symbol.fresh()
     q1 = Implication(
         s(*q1.consequent.args), q1.antecedent

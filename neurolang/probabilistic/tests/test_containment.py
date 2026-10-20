@@ -1,10 +1,12 @@
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import (
     Conjunction,
     Disjunction,
-    ExistentialPredicate
+    ExistentialPredicate,
+    Implication,
+    Negation
 )
-from ..containment import is_contained
+from ..containment import is_contained, is_contained_rule
 
 
 def test_containment_conjunctive_query():
@@ -192,3 +194,30 @@ def test_containment_of_closed_queries():
     assert is_contained(q1, q2)
     assert is_contained(q2, q1)
     assert not is_contained(ExistentialPredicate(x_, T_(x_)), q1)
+
+
+def test_containment_of_rules_with_negations():
+    """
+    A negated atom is matched by the same negated atom of the other
+    rule, not frozen as a fact (``M(s, a)`` was one of ``not M(s, a)``)
+    nor tested by its absence from the facts.
+    """
+    M, C, Q, s = Symbol('M'), Symbol('C'), Symbol('Q'), Symbol('s')
+    a = Constant('a')
+
+    def rule(body):
+        return Implication(Q(s), body)
+
+    not_m = Negation(M(s, a))
+    both = Conjunction((C(s), not_m))
+    # (q1, q2, whether q2 implies q1)
+    cases = [
+        (rule(M(s, a)), rule(not_m), False),
+        (rule(not_m), rule(M(s, a)), False),
+        (rule(not_m), rule(both), True),
+        (rule(C(s)), rule(both), True),
+        (rule(both), rule(C(s)), False),
+        (rule(both), rule(both), True),
+    ]
+    for q1, q2, expected in cases:
+        assert is_contained_rule(q1, q2) == expected, (q1, q2)

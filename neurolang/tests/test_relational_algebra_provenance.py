@@ -29,6 +29,7 @@ from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     Projection,
     RelationalAlgebraProvenanceCountingSolver,
+    Support,
     Union,
     WeightedNaturalJoin,
     WeightedNaturalJoinSolverMixin,
@@ -453,6 +454,32 @@ def test_extended_projection():
     res = RelationalAlgebraProvenanceCountingSolver().walk(res)
     expected = RelationalAlgebraProvenanceCountingSolver().walk(expected)
     assert res == expected
+
+
+def test_support_has_the_tuples_of_non_null_provenance():
+    """
+    The support of a provenance set has the tuples whose provenance is not
+    null, all with provenance 1: a tuple that a difference gave a null
+    provenance is not in it.
+    """
+    relation = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[("a", 0.5), ("b", 0.0), ("c", 1.0)],
+            columns=["x", "__provenance__"],
+        ),
+        ColumnStr("__provenance__"),
+    )
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[("a", 1.0), ("c", 1.0)],
+            columns=["x", "__provenance__"],
+        ),
+        ColumnStr("__provenance__"),
+    )
+    res = RelationalAlgebraProvenanceCountingSolver().walk(
+        Support(relation)
+    )
+    assert res == RelationalAlgebraProvenanceCountingSolver().walk(expected)
 
 
 def test_provenance_projection():

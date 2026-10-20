@@ -873,11 +873,19 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     @add_match(Support(ProvenanceAlgebraSet))
     def support(self, support):
         relation = support.relation
+        # A tuple with a null provenance, as that of a difference, is not
+        # in the support.
+        non_null = Selection(
+            relation.relation,
+            FunctionApplication(
+                Constant(operator.gt),
+                (relation.provenance_column, Constant[float](0.))
+            )
+        )
         return self.walk(ProvenanceAlgebraSet(
             ConcatenateConstantColumn(
                 Projection(
-                    relation.relation,
-                    tuple(relation.non_provenance_columns)
+                    non_null, tuple(relation.non_provenance_columns)
                 ),
                 relation.provenance_column,
                 ONE
