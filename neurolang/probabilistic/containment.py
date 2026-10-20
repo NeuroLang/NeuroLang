@@ -3,7 +3,7 @@ import logging
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
 from ..expressions import Constant, Symbol
-from ..logic import Disjunction, Implication, Union
+from ..logic import Conjunction, Disjunction, Implication, Negation, Union
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
@@ -55,12 +55,45 @@ def freeze_atom(atom):
     return atom.functor(*args)
 
 
+def negations_as_atoms(rule):
+    '''
+    The *rule* with each negated atom ¬R(x) of its body replaced by the
+    atom R̄(x), R̄ being a relation symbol of R and no other.
+
+    Containment is tested by the frozen body of a query, whose atoms are
+    facts, and by the evaluation of the other query on them. A negated
+    atom is not a fact, and not being in the facts is not the negation
+    holding. With R̄ a relation of its own, a negated atom of a query is
+    matched by a negated atom of the other, as the homomorphisms of the
+    containment of positive queries do: the test stays sound (a
+    containment found holds), and is not complete.
+    '''
+    def positive(formula):
+        if isinstance(formula, Negation) and isinstance(
+            formula.formula.functor, Symbol
+        ):
+            atom = formula.formula
+            return Symbol(f"__not__{atom.functor.name}")(*atom.args)
+        return formula
+
+    antecedent = rule.antecedent
+    if isinstance(antecedent, Conjunction):
+        antecedent = Conjunction(tuple(
+            positive(formula) for formula in antecedent.formulas
+        ))
+    else:
+        antecedent = positive(antecedent)
+    return Implication(rule.consequent, antecedent)
+
+
 def is_contained_rule(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
     for 2 Datalog rules without constants, computes whether
-    q1←q2.
+    q1←q2. A negated atom is matched by the same negated atom
+    (see :func:`negations_as_atoms`).
     '''
+    q1, q2 = negations_as_atoms(q1), negations_as_atoms(q2)
     s = Symbol.fresh()
     q1 = Implication(
         s(*q1.consequent.args), q1.antecedent
