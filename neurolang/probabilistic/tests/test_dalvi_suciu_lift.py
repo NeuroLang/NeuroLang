@@ -1098,6 +1098,37 @@ def _plan_of(program):
     return plans[-1]
 
 
+def test_union_of_a_self_join_and_a_choice_unrelated_to_the_head():
+    """
+    The separator declines a union with a rule whose choice is on a
+    variable unrelated to the head (the deterministic atom binding the
+    head is factored out of the union, leaving a disjunct without it),
+    and weighted model counting solves it. The equality that the
+    rewriting of the choices leaves between the two choice atoms of the
+    self-join was translated to a projection overwriting the column of
+    an atom, which the provenance sets reject.
+    """
+    from ...frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(0, "b"), (0, "c"), (1, "a"), (1, "d")], name="mentions"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,)], name="selected_study"
+    )
+    result = nl.execute_datalog_program(
+        "a(t) :- mentions(s, t), selected_study(s).\n"
+        "a(t) :- mentions(s, t), selected_study(s), selected_study(f), "
+        "mentions(f, 'e').\n"
+        "a(t) :- mentions(s, t), selected_study(f), mentions(f, 'e').\n"
+        "ans(t, p) :- PROB[a(t)] = p."
+    )
+    assert dict(result) == pytest.approx(
+        {"a": 0.5, "b": 0.5, "c": 0.5, "d": 0.5}
+    )
+
+
 def test_disjoint_separator_plans_a_union_in_one_projection():
     """The union over the choice is one disjoint projection on the study,
     of the choice joined with the support of the deterministic union."""
