@@ -853,7 +853,10 @@ Disjoint separator
    name does not occur in the disjunct (no capture) and the renamings of
    the disjunct for different choices agree (``_renamings_are_safe``); at
    positions with a free variable or a constant, the atoms must already
-   be equal (``_align_choice_atoms``).
+   be equal (``_align_choice_atoms``). The renaming relies on the prenex
+   form, all the quantifiers of the union before its disjunction: the rule
+   declines a disjunct that still has a quantifier (``_has_quantifier``),
+   which could capture a renamed variable.
 
    *Exclusivity.* Every disjunct has :math:`C(\bar z)`, a conjunct of it
    (``_choice_separators`` takes the atoms of a disjunct's conjunction,

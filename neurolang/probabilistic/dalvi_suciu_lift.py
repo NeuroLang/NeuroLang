@@ -1532,6 +1532,12 @@ def disjoint_separator(query, symbol_table):
     else:
         disjuncts = [matrix]
     if any(
+        _has_quantifier(disjunct) for disjunct in disjuncts
+    ):
+        # The renaming of a disjunct's variables assumes the prenex form:
+        # no quantifier in a disjunct could capture a renamed variable.
+        return False, None
+    if any(
         not free_variables <= extract_logic_free_variables(disjunct)
         for disjunct in disjuncts
     ):
@@ -1627,6 +1633,20 @@ def _mixes_free_and_bound_choice_variables(ucq, symbol_table):
                 if isinstance(arg, Symbol):
                     kinds.setdefault(atom.functor, set()).add(arg in free)
     return any(len(found) == 2 for found in kinds.values())
+
+
+def _has_quantifier(formula):
+    """Whether the logic *formula* has a quantifier in it."""
+    stack = [formula]
+    while stack:
+        formula = stack.pop()
+        if isinstance(formula, Quantifier):
+            return True
+        if isinstance(formula, NaryLogicOperator):
+            stack += formula.formulas
+        elif isinstance(formula, Negation):
+            stack.append(formula.formula)
+    return False
 
 
 def _without_unneeded_atoms(disjunct, atoms, variables):
