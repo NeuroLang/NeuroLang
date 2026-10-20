@@ -2338,3 +2338,26 @@ def test_predicate_with_a_deterministic_and_a_post_probabilistic_rule():
     assert {
         (t, round(p, 6)) for t, p in res.as_pandas_dataframe().values
     } == {("a", round(1 / 3, 6)), ("b", round(2 / 3, 6)), ("z", 0.5)}
+
+
+def test_predicate_with_a_choice_rule_and_a_post_probabilistic_rule():
+    """
+    A predicate with a rule using the result of a probabilistic query and
+    a rule joining a probabilistic choice is typed probabilistic: a
+    probabilistic query on it depends on the other query, which is
+    rejected.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0, "a"), (1, "b"), (2, "b")], name="mentions")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="selected_study"
+    )
+    with pytest.raises(UnsupportedProgramError):
+        nl.execute_datalog_program(
+            """
+            q(t, p) :- PROB[mentions(s, t), selected_study(s)] = p.
+            c(t) :- q(t, p).
+            c(t) :- mentions(s, t), selected_study(s).
+            ans(t, p) :- PROB[c(t)] = p.
+            """
+        )
