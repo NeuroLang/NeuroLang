@@ -1058,7 +1058,7 @@ Ranking
      would leave the tuples of incomparable values in no ranked relation.
 
 The tests of the rules of `Negations and comparisons sharing relations`_
-(``neurolang/probabilistic/tests/test_lifted_negation.py``) also compare
+(``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare
 their plans with an enumeration of the possible worlds of small
 databases.
 

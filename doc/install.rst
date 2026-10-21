@@ -5,12 +5,31 @@ NeuroLang requires **Python ≥ 3.12**. The recommended way to install it is
 with `uv <https://github.com/astral-sh/uv>`_ — a fast Python package manager —
 or with standard ``pip``.
 
+NeuroLang is four packages, each built on the ones before it:
+
+``nl-expr``
+   the expression engine: typed expressions, pattern-matching walkers and
+   first-order logic;
+``nl-core``
+   relational algebra, Datalog and probabilistic Datalog;
+``neurolang``
+   the Datalog and SQUALL languages, the frontends
+   (:class:`~neurolang.NeurolangDL`, :class:`~neurolang.NeurolangPDL`) and
+   brain regions;
+``neurolang-apps``
+   the ``neurolang-query`` command line, its interactive mode, the query
+   assistant and the engines of predefined data.
+
+``neurolang[apps]`` installs them all; ``neurolang`` alone installs the
+library without the applications.
+
 .. note::
 
    ``pip install neurolang`` installs the latest release published on PyPI
-   (``0.1a21``, October 2026). The commands below install the current
-   ``master`` branch from GitHub instead, with the changes listed as
-   *Unreleased* in the :doc:`changelog`.
+   (``0.1a21``, October 2026), from before the split: one package, with the
+   applications. The commands below install the current ``master`` branch
+   from GitHub instead, with the changes listed as *Unreleased* in the
+   :doc:`changelog`.
 
 .. tab-set::
 
@@ -34,7 +53,7 @@ or with standard ``pip``.
 
       .. code-block:: text
 
-         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
+         uv pip install "neurolang[apps] @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/neurolang"
 
       **3. Verify**
 
@@ -56,7 +75,7 @@ or with standard ``pip``.
 
       .. code-block:: bash
 
-         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
+         uv pip install "neurolang[apps] @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/neurolang"
 
       **3. Verify**
 
@@ -76,7 +95,7 @@ or with standard ``pip``.
 
       .. code-block:: bash
 
-         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
+         uv pip install "neurolang[apps] @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/neurolang"
 
       **3. Verify**
 
@@ -86,21 +105,25 @@ or with standard ``pip``.
 
    .. tab-item:: From source
 
-      Clone the repository and install in editable mode with all dev and doc
-      dependencies:
+      Clone the repository and install its four packages in editable mode,
+      in the environment ``.venv`` of the clone, with all extras and the
+      development and documentation tools:
 
       .. code-block:: bash
 
          git clone https://github.com/NeuroLang/NeuroLang.git
          cd NeuroLang
-         uv pip install -e ".[dev,doc]"
+         uv sync --all-packages --all-extras --no-extra embeddings
 
       To update your local copy:
 
       .. code-block:: bash
 
          git pull
-         uv pip install -e ".[dev,doc]"
+         uv sync --all-packages --all-extras --no-extra embeddings
+
+      Run Python in that environment with ``uv run`` or by activating it
+      (``source .venv/bin/activate``).
 
       Verify:
 
@@ -112,11 +135,16 @@ or with standard ``pip``.
 Using pip without uv
 ---------------------
 
-If you prefer plain pip:
+If you prefer plain pip, which does not know that the packages come from
+the same repository, name the four of them:
 
 .. code-block:: bash
 
-   pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
+   pip install \
+     "nl-expr @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/nl_expr" \
+     "nl-core @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/nl_core" \
+     "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/neurolang" \
+     "neurolang-apps @ git+https://github.com/NeuroLang/NeuroLang.git#subdirectory=packages/neurolang_apps"
 
 
 Dependencies
@@ -133,9 +161,9 @@ NeuroLang requires the following libraries (installed automatically):
 * `Lark <https://github.com/lark-parser/lark>`_ for the Datalog and SQUALL
   parsers
 * `rdflib <https://rdflib.readthedocs.io>`_ for ontologies
-* `scikit-learn <https://scikit-learn.org>`_ and
-  `matplotlib <https://matplotlib.org>`_
-* `PyYAML <https://pyyaml.org>`_ and ``typing_inspect``
+* ``typing_inspect``
+* for the applications, `scikit-learn <https://scikit-learn.org>`_,
+  `matplotlib <https://matplotlib.org>`_ and `PyYAML <https://pyyaml.org>`_
 
 Optional extras
 ---------------
@@ -146,21 +174,24 @@ Optional extras
    * - Extra
      - Installs
      - Use it to
+   * - ``apps``
+     - ``neurolang-apps``
+     - use the ``neurolang-query`` command line and the engines
+   * - ``tui``
+     - ``prompt-toolkit``, ``rich``
+     - use the interactive mode of ``neurolang-query``
    * - ``ras-polars``
      - ``polars``, ``pyarrow``
      - use the Polars relational-algebra backend (see :doc:`performance`)
    * - ``dev``
-     - ``pytest``, ``pytest-cov``, ``pytest-benchmark``, ``problog``
+     - ``pytest``, ``problog``
      - run the test suite
-   * - ``doc``
-     - ``sphinx`` and extensions
-     - build this documentation
 
 For instance, from a clone of the repository:
 
 .. code-block:: bash
 
-   uv pip install -e ".[ras-polars]"
+   uv sync --all-packages --extra ras-polars
 
 
 Alternative backend
@@ -178,7 +209,7 @@ The former ``dask`` (dask-sql) backend has been removed; selecting it raises
 a ``ValueError`` that lists the available backends.
 
 To select a backend, either edit the ``[RAS] backend`` entry of
-``neurolang/config/config.ini``, or call
+``packages/nl_expr/nl_expr/config/config.ini``, or call
 
 .. code-block:: python
 
