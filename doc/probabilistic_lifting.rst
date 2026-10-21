@@ -380,6 +380,24 @@ Probabilistic choices
    made equal to those within its disjunctions, since :math:`C(s) \lor
    C(f)` does not need both to be true.
 
+   An atom :math:`C(\bar v)` within a negated existential of a
+   conjunction which asserts :math:`C(\bar u)` is made :math:`C(\bar u)`,
+   when the variables of :math:`\bar v` that are not those of
+   :math:`\bar u` are quantified by the existential, which loses them:
+
+   .. math::
+
+      C(\bar u) \land \lnot\exists W\, (C(\bar v) \land \psi) \equiv
+      C(\bar u) \land \lnot\exists W'\, (C(\bar u) \land \psi)
+      [\bar u/\bar v],
+
+   and the absorption in negations then removes :math:`C(\bar u)` from the
+   negation. For instance, :math:`R(x) \land \lnot\exists t\, (R(t) \land
+   S(x, t))` becomes :math:`R(x) \land \lnot S(x, x)`. A negation in which
+   the substitution makes a strict comparison of a term with itself, as
+   :math:`s_2 \neq s` becoming :math:`s \neq s`, is true, and is removed
+   (:class:`~neurolang.probabilistic.expression_processing.UnifyChoicesInNegations`).
+
 Equalities within disjuncts
    The variables an equality makes the same are unified, in each disjunct
    of a union apart, as the equality holds in its disjunct only. A
@@ -577,8 +595,9 @@ and to existential conjuncts with comparisons such as :math:`t \neq x`.
 Such conjunctions fall outside unions of conjunctive queries, so the
 completeness result above does not apply to them.
 The rules below are tried in turn when the relations shared are
-tuple-independent; a conjunction sharing a probabilistic choice is
-declined. Every rule checks each query it lifts, and the lifted plans are
+tuple-independent; a conjunction sharing a probabilistic choice, which
+the rewriting of the choices in negations (see `Preparing the query`_)
+leaves, is declined. Every rule checks each query it lifts, and the lifted plans are
 sound (see `Correctness of the plans`_), but the rules are not known to be
 complete: some liftable conjunctions of this kind may still be declined
 and left to weighted model counting.
@@ -1109,6 +1128,25 @@ Rewriting of the choices
    (``lift_optimization_for_choice_predicates``). For the same reason, the
    unification of the variables of equalities is done in each disjunct
    apart (``UnifyVariableEqualitiesMixin``).
+
+   Within a negation, in every world and for every answer where
+   :math:`C(\bar u)` holds, :math:`C(\bar v)` holds exactly when
+   :math:`\bar v = \bar u`, a single tuple of :math:`C` being true. So
+   :math:`\exists W\, (C(\bar v) \land \psi) \equiv \exists W\, (\bar v =
+   \bar u \land C(\bar u) \land \psi)`, and as the variables of
+   :math:`\bar v` set to those of :math:`\bar u` are in :math:`W`, each
+   variable at most once, the equalities are eliminated by substitution,
+   :math:`\exists v\, (v = u \land \varphi) \equiv \varphi[u/v]`, the
+   query being standardised apart so that no variable is captured
+   (``UnifyChoicesInNegations``). Where :math:`C(\bar u)` does not hold,
+   both sides of the rewriting are false. A strict comparison of a term
+   with itself is false, :math:`t \neq t \equiv \bot`
+   (``StrictComparisonOfATermWithItselfMixin``), and the truth values are
+   simplified by :math:`\bot \land \varphi \equiv \bot`,
+   :math:`\top \land \varphi \equiv \varphi`, :math:`\lnot\bot \equiv
+   \top` and :math:`\exists x\, \bot \equiv \bot`
+   (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
+   every step of the rewriting is an equivalence.
 
 Answer variables as constants
    For an answer, :math:`x` and :math:`y` have values :math:`a` and
