@@ -1,3 +1,5 @@
+import json
+import os
 import sys
 import urllib.parse
 
@@ -437,6 +439,140 @@ def test_neurosynth_yaml_declares_similarity_function():
     )
 
 
+def test_engine_yaml_albert_encoder(engine_yaml, tmp_path, monkeypatch):
+    monkeypatch.setattr(te, "AlbertQwenEncoder", FakeEncoder)
+    monkeypatch.setenv(te.ENCODER_ENV, "albert-qwen")
+    nl = engine_registry.build_engine(
+        "mini", tmp_path / "data", yaml_path=engine_yaml
+    )
+    index = nl.text_embedding_indexes["docs"]
+    # Its own cache, next to the SPECTER2 one.
+    assert index.cache_path == (
+        tmp_path / "data/mini/embeddings/docs.albert-qwen.npz"
+    )
+    res = nl.execute_datalog_program(
+        "ans(s) :- study(s) & (x == query_similarity('motor hand', s)) "
+        "& (x > 0.5)"
+    )
+    assert set(res) == {(2,), (4,)}
+
+
+# ---------------------------------------------------------------------------
+# Albert encoder (HTTP calls replaced by a fake server)
+# ---------------------------------------------------------------------------
+
+
+class FakeResponse:
+
+    def __init__(self, payload):
+        self.payload = json.dumps(payload).encode()
+
+    def read(self):
+        return self.payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+@pytest.fixture
+def albert_server(monkeypatch):
+    """Record the request bodies; answer with one vector per input."""
+    requests = []
+
+    def urlopen(request, timeout=None):
+        body = json.loads(request.data)
+        requests.append((request, body))
+        n = len(body["input"]) if "input" in body else 1
+        # Out of order, as the API may answer.
+        data = [{"index": i, "embedding": [float(i), 1.0]} for i in range(n)]
+        return FakeResponse({"data": data[::-1]})
+
+    monkeypatch.setattr(te.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv(te.ALBERT_KEY_ENV, "sk-test")
+    return requests
+
+
+def test_albert_documents_are_batched_raw_inputs(albert_server):
+    encoder = te.AlbertQwenEncoder(batch_size=2)
+    out = encoder.encode_documents(["A", "B", "C"], ["a", "", "c"])
+    assert out.tolist() == [[0, 1], [1, 1], [0, 1]]
+    bodies = [body for _, body in albert_server]
+    assert [b["input"] for b in bodies] == [["A\n\na", "B"], ["C\n\nc"]]
+    assert all(b["model"] == "qwen3-vl-embedding-8b" for b in bodies)
+    request = albert_server[0][0]
+    assert request.full_url == te.ALBERT_URL + "/embeddings"
+    assert request.get_header("Authorization") == "Bearer sk-test"
+
+
+def test_albert_query_has_the_instruction(albert_server):
+    encoder = te.AlbertQwenEncoder(query_instruction="Find studies.")
+    assert encoder.encode_query("reading").tolist() == [0, 1]
+    body = albert_server[0][1]
+    assert "input" not in body and body["continue_final_message"]
+    system, user, assistant = body["messages"]
+    assert system == {"role": "system", "content": "Find studies."}
+    assert user["content"] == [{"type": "text", "text": "reading"}]
+    assert assistant == {"role": "assistant", "content": ""}
+
+
+def test_albert_retries_rate_limits(albert_server, monkeypatch):
+    calls = []
+    answer = te.urllib.request.urlopen
+
+    def urlopen(request, timeout=None):
+        calls.append(1)
+        if len(calls) == 1:
+            raise te.urllib.error.HTTPError(
+                request.full_url, 429, "Too Many Requests",
+                {"Retry-After": "3"}, None,
+            )
+        return answer(request, timeout)
+
+    sleeps = []
+    monkeypatch.setattr(te.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(te.time, "sleep", sleeps.append)
+    te.AlbertQwenEncoder().encode_query("reading")
+    assert len(calls) == 2 and sleeps == [3.0]
+
+
+def test_albert_other_errors_are_raised(albert_server, monkeypatch):
+    def urlopen(request, timeout=None):
+        raise te.urllib.error.HTTPError(
+            request.full_url, 401, "Unauthorized", {}, None
+        )
+
+    monkeypatch.setattr(te.urllib.request, "urlopen", urlopen)
+    with pytest.raises(te.urllib.error.HTTPError):
+        te.AlbertQwenEncoder().encode_query("reading")
+
+
+def test_albert_needs_a_key(monkeypatch):
+    monkeypatch.delenv(te.ALBERT_KEY_ENV, raising=False)
+    with pytest.raises(RuntimeError, match=te.ALBERT_KEY_ENV):
+        te.AlbertQwenEncoder().download()
+
+
+def test_make_encoder(monkeypatch, tmp_path):
+    monkeypatch.delenv(te.ENCODER_ENV, raising=False)
+    config = {"model": "allenai/specter2_base", "albert": {"batch_size": 8}}
+    specter = te.make_encoder(config, tmp_path)
+    assert isinstance(specter, te.Specter2Encoder)
+    assert specter.model_dir == tmp_path
+    albert = te.make_encoder({**config, "encoder": "albert-qwen"})
+    # The SPECTER2 model name does not reach the Albert encoder.
+    assert albert.model_name == "qwen3-vl-embedding-8b"
+    assert albert.batch_size == 8
+    assert specter.cache_key != albert.cache_key
+    monkeypatch.setenv(te.ENCODER_ENV, "albert-qwen")
+    assert isinstance(te.make_encoder(config), te.AlbertQwenEncoder)
+    monkeypatch.setenv(te.ENCODER_ENV, "word2vec")
+    with pytest.raises(ValueError, match="Unknown text encoder"):
+        te.make_encoder(config)
+
+
 # ---------------------------------------------------------------------------
 # Real model (downloads SPECTER2; run with --runslow)
 # ---------------------------------------------------------------------------
@@ -460,6 +596,29 @@ def test_specter2_ranks_reading_paper_first():
         },
         encoder,
     )
+    similarities = index.similarities("reading")
+    assert similarities["reading"] > similarities["motor"]
+
+
+@pytest.mark.slow
+def test_albert_ranks_reading_paper_first():
+    if not os.environ.get(te.ALBERT_KEY_ENV):
+        pytest.skip(f"needs {te.ALBERT_KEY_ENV}")
+    index = te.EmbeddingIndex(
+        ["reading", "motor"],
+        lambda keys: {
+            "reading": (
+                "Neural correlates of reading words",
+                "fMRI of the visual word form area during reading.",
+            ),
+            "motor": (
+                "Finger tapping",
+                "Primary motor cortex activation during finger movements.",
+            ),
+        },
+        te.AlbertQwenEncoder(),
+    )
+    # A single word: the instruction is what makes it a good query.
     similarities = index.similarities("reading")
     assert similarities["reading"] > similarities["motor"]
 
