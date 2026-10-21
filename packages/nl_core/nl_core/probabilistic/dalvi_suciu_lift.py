@@ -81,6 +81,7 @@ from .containment import is_contained
 from .deterministic_subqueries import replace_deterministic_negations
 from .expression_processing import (
     STRICT_COMPARISONS,
+    UnifyChoicesInNegations,
     is_builtin,
     is_comparison,
     lift_optimization_for_choice_predicates
@@ -235,7 +236,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         # standardising apart makes unambiguous.
         flat_query_body, deterministic_relations = \
             replace_deterministic_negations(
-                AACN.walk(standardise_apart(flat_query_body)), cpl_program
+                AACN.walk(UnifyChoicesInNegations(
+                    cpl_program.pchoice_pred_symbs
+                ).walk(standardise_apart(flat_query_body))), cpl_program
             )
         flat_query = Implication(query.consequent, flat_query_body)
         non_repeating = _non_repeating_query_plan(
