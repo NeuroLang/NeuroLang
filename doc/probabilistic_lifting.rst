@@ -535,12 +535,14 @@ Disjoint separator
    them, and every free variable of the query. A free variable or a
    constant :math:`u` of a choice atom, at a position where another
    disjunct has a quantified variable, is made one,
-   :math:`C(u) \equiv \exists f\, (C(f) \land f = u)`, :math:`f` being the
-   variable of another atom of the choice in the disjunct, as :math:`C(f)
-   \land C(u) \equiv C(f) \land f = u`, or a fresh one
-   (``_choice_terms_as_equalities``). The equalities, as comparisons, are
-   the same in every world and belong to the deterministic rest; a union
-   with them and a rest which is not deterministic is declined. It is
+   :math:`C(u) \equiv \exists f\, (C(f) \land f = u)`, :math:`f` being
+   fresh; with another atom :math:`C(a)` of the choice in the disjunct,
+   :math:`C(a) \land C(f) \equiv C(a) \land a = f` and
+   :math:`\exists f\, (f = a \land \varphi) \equiv \varphi[a/f]` then give
+   :math:`C(a) \land a = u` (``ChoiceTermsAsEqualities``, one rule per
+   equivalence). The equalities, as comparisons, are the same in every
+   world and belong to the deterministic rest; a union with them and a
+   rest which is not deterministic is declined. It is
    tried after the separator variables, a conjunctive query being the
    union of a single disjunct.
 
