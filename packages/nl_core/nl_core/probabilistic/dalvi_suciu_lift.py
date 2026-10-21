@@ -21,6 +21,7 @@ from nl_expr.exceptions import (
 )
 from nl_expr.expression_walker import (
     ExpressionWalker,
+    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -39,13 +40,17 @@ from nl_expr.logic import (
     UniversalPredicate,
 )
 from nl_expr.logic.expression_processing import (
+    ExtractConjunctAtoms,
+    ExtractExistentialPrefix,
     extract_logic_atoms,
     extract_logic_free_variables,
     extract_logic_predicates,
 )
 from nl_expr.logic.transformations import (
     AbsorbAssertedConjuncts,
+    CollapseConjunctions,
     ExtractConjunctiveQueryWithNegation,
+    FactorQuantifiersMixin,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
@@ -691,27 +696,18 @@ def _projected_plan(
     )
 
 
+class FactorConjunctQuantifiers(FactorQuantifiersMixin, IdentityWalker):
+    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ), for the conjuncts of a formula, the
+    variables of X being renamed apart from those of A."""
+
+
 def _existential_variables_and_body(formula):
-    """The variables quantified by `formula`, or by its conjuncts, and the
-    conjunction of their bodies: as the query is standardised apart,
-    A ∧ ∃X ψ ≡ ∃X (A ∧ ψ)."""
-    formula = RTO.walk(formula)
-    conjuncts = (
-        formula.formulas if isinstance(formula, Conjunction) else (formula,)
+    """The variables quantified by `formula`, or by its conjuncts
+    (`FactorConjunctQuantifiers`), and the conjunction of their bodies."""
+    variables, body = ExtractExistentialPrefix().walk(
+        FactorConjunctQuantifiers().walk(RTO.walk(formula))
     )
-    variables = set()
-    body = []
-    for conjunct in conjuncts:
-        while isinstance(conjunct, ExistentialPredicate):
-            variables.add(conjunct.head)
-            conjunct = conjunct.body
-        if isinstance(conjunct, Conjunction):
-            body.extend(conjunct.formulas)
-        else:
-            body.append(conjunct)
-    if len(body) == 1:
-        return variables, body[0]
-    return variables, Conjunction(tuple(body))
+    return set(variables), CollapseConjunctions().walk(body)
 
 
 def _split_choice_projection(antecedent, symbol_table):
@@ -721,19 +717,14 @@ def _split_choice_projection(antecedent, symbol_table):
     None.
     """
     variables, body = _existential_variables_and_body(antecedent)
-    if not isinstance(body, Conjunction) or len(variables) == 0:
-        return None
     functors = [atom.functor for atom in extract_logic_atoms(body)]
-    for conjunct in body.formulas:
+    for atom in ExtractConjunctAtoms().walk(body):
+        projected = variables & set(atom.args)
         if (
-            isinstance(conjunct, FunctionApplication) and
-            isinstance(conjunct.functor, Symbol) and
-            is_atom_a_probabilistic_choice_relation(conjunct, symbol_table)
-            and functors.count(conjunct.functor) == 1
+            projected and functors.count(atom.functor) == 1 and
+            is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         ):
-            projected = variables & set(conjunct.args)
-            if projected:
-                return projected, variables - projected, body.formulas
+            return projected, variables - projected, _conjuncts(body)
     return None
 
 
@@ -745,9 +736,7 @@ def _split_separator_projection(antecedent, symbol_table):
     variables, body = _existential_variables_and_body(antecedent)
     if len(variables) == 0:
         return None
-    conjuncts = (
-        body.formulas if isinstance(body, Conjunction) else (body,)
-    )
+    conjuncts = _conjuncts(body)
     inside = tuple(
         f for f in conjuncts
         if not extract_logic_free_variables(f).isdisjoint(variables)
@@ -776,31 +765,70 @@ def _split_exclusive_projection(antecedent, symbol_table):
     variable of `X` is `v`, and `¬∃w (R(ū[w/v]) ∧ w ≠ v)`, or None.
     """
     variables, body = _existential_variables_and_body(antecedent)
-    if not isinstance(body, Conjunction):
-        return None
-    for atom in body.formulas:
-        if not isinstance(atom, FunctionApplication):
-            continue
-        projected = variables & set(atom.args)
-        if len(projected) == 1 and any(
-            isinstance(negation, Negation) and
-            _excludes_others(atom, *projected, negation.formula)
-            for negation in body.formulas
-        ):
-            return projected, variables - projected, body.formulas
+    conjuncts = _conjuncts(body)
+    for atom, variable in ExcludingNegations().walk(body):
+        if atom in conjuncts and variables & set(atom.args) == {variable}:
+            return {variable}, variables - {variable}, conjuncts
     return None
 
 
-def _excludes_others(atom, variable, formula):
-    """Whether `formula` is `∃w (R(ū[w/v]) ∧ w ≠ v)`, `atom` being `R(ū)`
-    and `variable` being `v`."""
-    if not isinstance(formula, ExistentialPredicate):
-        return False
-    other = formula.head
-    other_atom = ReplaceExpressionWalker({variable: other}).walk(atom)
-    return set(_conjuncts(_existential_body(formula))) in (
-        {other_atom, NE(other, variable)}, {other_atom, NE(variable, other)}
+class ExcludingNegations(PatternWalker):
+    """The atoms `R(ū[v/w])` and the variables `v` of the negated conjuncts
+    `¬∃w (R(ū) ∧ w ≠ v)` of a conjunction: where such a conjunct holds,
+    `R(ū[a/v])` holds for no value `a` other than that of `v`."""
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return OrderedSet(chain.from_iterable(
+            self.walk(formula) for formula in conjunction.formulas
+        ))
+
+    @add_match(
+        Negation(ExistentialPredicate(Symbol, Conjunction((
+            FunctionApplication(Symbol, ...),
+            FunctionApplication(NE, (Symbol, Symbol))
+        )))),
+        lambda negation: _excludes(
+            negation.formula.head, *negation.formula.body.formulas
+        )
     )
+    def atom_and_inequality(self, negation):
+        return _excluded(
+            negation.formula.head, *negation.formula.body.formulas
+        )
+
+    @add_match(
+        Negation(ExistentialPredicate(Symbol, Conjunction((
+            FunctionApplication(NE, (Symbol, Symbol)),
+            FunctionApplication(Symbol, ...)
+        )))),
+        lambda negation: _excludes(
+            negation.formula.head, *reversed(negation.formula.body.formulas)
+        )
+    )
+    def inequality_and_atom(self, negation):
+        return _excluded(
+            negation.formula.head, *reversed(negation.formula.body.formulas)
+        )
+
+    @add_match(...)
+    def other(self, expression):
+        return OrderedSet()
+
+
+def _excludes(other, atom, inequality):
+    return (
+        other in atom.args and other in inequality.args and
+        len(set(inequality.args)) == 2
+    )
+
+
+def _excluded(other, atom, inequality):
+    """`R(ū[v/w])` and `v`, for `R(ū)` and `w ≠ v`, `w` being *other*."""
+    variable, = set(inequality.args) - {other}
+    return OrderedSet([
+        (ReplaceExpressionWalker({other: variable}).walk(atom), variable)
+    ])
 
 
 def _separates(variable, formula, symbol_table):

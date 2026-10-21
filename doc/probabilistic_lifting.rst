@@ -624,8 +624,9 @@ Projection on a variable
    this page, on variables of :math:`X` made free
    (:func:`~neurolang.probabilistic.dalvi_suciu_lift.projection_plan`).
    The quantifiers of the conjuncts of the query are first gathered,
-   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`, which
-   holds as the query is standardised apart: a closed conjunct, such as an
+   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`
+   (``FactorQuantifiersMixin`` of :mod:`neurolang.logic.transformations`),
+   which holds as the query is standardised apart: a closed conjunct, such as an
    atom added by magic sets, does not prevent the projection. The
    projection is
 
@@ -1115,8 +1116,8 @@ Projection on a variable
    (``_split_exclusive_projection``), :math:`E_a` implies
    :math:`R(\bar u[a/v])`. :math:`E_b` implies the conjunct
    :math:`\lnot\exists w\, (R(\bar u[w/v]) \land w \neq b)`
-   (``_excludes_others``), hence, for :math:`w = a \neq b`,
-   :math:`\lnot R(\bar u[a/v])`. No world satisfies :math:`E_a` and
+   (``ExcludingNegations``, the patterns of such a negated conjunct),
+   hence, for :math:`w = a \neq b`, :math:`\lnot R(\bar u[a/v])`. No world satisfies :math:`E_a` and
    :math:`E_b`: the events are mutually exclusive, their union is
    :math:`\exists X\, \varphi`, and its probability is the sum of theirs,
    which ``DisjointProjection`` computes. The proof does not depend on the
