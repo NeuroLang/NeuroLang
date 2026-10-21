@@ -4,7 +4,8 @@ from ...expressions import Constant, Symbol
 from .. import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..expression_processing import (
     ExtractConjunctAtoms,
-    ExtractExistentialPrefix
+    ExtractExistentialPrefix,
+    ExtractRelationalAtoms
 )
 
 P = Symbol("P")
@@ -23,6 +24,15 @@ def test_extract_conjunct_atoms():
     ))
     assert list(ExtractConjunctAtoms().walk(formula)) == [P(X), R(X, Y)]
     assert list(ExtractConjunctAtoms().walk(P(X))) == [P(X)]
+
+
+def test_extract_relational_atoms():
+    formula = Conjunction((
+        P(X), NE(X, Y), Negation(Q(X)), ExistentialPredicate(Z, R(X, Z))
+    ))
+    assert list(ExtractRelationalAtoms().walk(formula)) == [
+        P(X), Q(X), R(X, Z)
+    ]
 
 
 def test_extract_existential_prefix():

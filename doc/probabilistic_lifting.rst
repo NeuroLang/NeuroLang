@@ -390,7 +390,8 @@ Equalities within disjuncts
 Checks
    The query must have no built-in function, except comparisons within
    existential conjuncts (see `Negations and comparisons sharing
-   relations`_). Unless the ``check_unate`` option of
+   relations`_) and comparisons of the answer variables, conjuncts of the
+   query (see `Extensions of the Dalvi–Suciu algorithm`_). Unless the ``check_unate`` option of
    ``[PROBABILISTIC_SOLVER]`` is turned off (see :doc:`performance`), it
    must also use a single kind of quantifier and be *unate*, each relation
    occurring only positively or only negatively.
@@ -535,6 +536,35 @@ Clauses of the conjunctive normal form
    disjoint separator among them, apply to the union as it is, and a union
    none of them lifts is declined, which is sound. A negation alone as a
    clause is not a disjunction, and is the difference of a conjunction.
+
+Answer variables as constants
+   Dalvi and Suciu lift a query for each answer, its free variables being
+   constants [Dalvi2012]_. Two atoms of a tuple-independent relation with
+   free variables :math:`x` and :math:`y` at the same position, such as
+   :math:`\exists s\, A(x, s) \land A(y, s)`, are then different tuples
+   when :math:`x \neq y`, and the same when :math:`x = y`, which the
+   algorithm, keeping the variables, cannot tell
+   (``different_free_variables_plan``). When the other rules decline the
+   query :math:`Q`, its answers are split into those with :math:`x \neq
+   y`, for which the atoms of the relation :math:`R` with :math:`y` at
+   that position are renamed into those of an alias :math:`R'` of
+   :math:`R`, and those with :math:`x = y`:
+
+   .. math::
+
+      \sigma_{x \neq y}\, \mathrm{lift}(Q[R'/R]) \;\cup\;
+      \pi_{y := x}\, \mathrm{lift}(Q[x/y]).
+
+   The rule applies when, for :math:`x \neq y`, every renamed atom is a
+   different tuple from the other atoms of :math:`R`, having :math:`y`
+   where they have :math:`x`. Three atoms with three free variables at the
+   same position, :math:`A(x, s) \land A(y, s) \land A(z, s)`, are not
+   lifted.
+
+Comparisons of answer variables
+   A comparison of free variables, a conjunct of the query such as
+   :math:`l_1 < l_2`, is a selection of the answers of the rest of the
+   query, which is lifted without it.
 
 
 Negations and comparisons sharing relations
@@ -1079,6 +1109,34 @@ Rewriting of the choices
    (``lift_optimization_for_choice_predicates``). For the same reason, the
    unification of the variables of equalities is done in each disjunct
    apart (``UnifyVariableEqualitiesMixin``).
+
+Answer variables as constants
+   For an answer, :math:`x` and :math:`y` have values :math:`a` and
+   :math:`b`. If :math:`a \neq b`, every renamed atom :math:`R(\bar u)`
+   has :math:`b` at a position :math:`i` where every other atom
+   :math:`R(\bar v)` of :math:`Q` has :math:`a`
+   (``_are_different_tuples_when_different``), so their tuples differ, for
+   all values of the quantified variables. :math:`R'` naming the relation
+   :math:`R`, :math:`Q[R'/R] \equiv Q`; the renamed and the other atoms
+   of :math:`R` have no tuple in common, and :math:`Q[R'/R]`, with
+   :math:`R'` a relation with the tuples and probabilities of :math:`R`,
+   has the probability of :math:`Q` for this answer: in every world the
+   atoms have the values they have in :math:`Q`, and the tuples of
+   :math:`R'` are independent of those of :math:`R` that :math:`Q` uses,
+   as Lemma 1 needs. If :math:`a = b`, :math:`Q` and :math:`Q[x/y]` are
+   the same query for the answer, and the projection copies :math:`x` into
+   :math:`y`. The answers of the two plans are different, so their
+   independent union, :math:`1 - (1 - p)(1 - 0)`, gives each its
+   probability. The relation is tuple-independent: the tuples of a choice
+   are exclusive, and an alias would make them independent. The rule
+   terminates: :math:`Q[x/y]` has one free variable less, and
+   :math:`Q[R'/R]` the same free variables and fewer pairs of atoms of a
+   relation with different free variables at a position.
+
+Comparisons of answer variables
+   A comparison :math:`C` of free variables is true or false for an
+   answer, in every world: :math:`P[(Q \land C)\theta] = P[Q\theta]` if
+   :math:`C\theta` holds and 0 otherwise, which the selection computes.
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model

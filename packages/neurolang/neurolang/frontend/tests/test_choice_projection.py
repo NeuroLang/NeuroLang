@@ -217,3 +217,44 @@ def test_negation_with_another_condition_is_not_exclusive():
     with pytest.raises(UnsupportedSolverError):
         _solve(_engine(True, {}), program)
     _assert_close(_solve(_engine(False, {}), program), expected)
+
+
+@pytest.mark.parametrize("comparison, holds", [
+    ("", lambda t1, t2: True),
+    (", (t1 < t2)", lambda t1, t2: t1 < t2),
+    (", (t1 != 'pain')", lambda t1, t2: t1 != "pain"),
+])
+def test_terms_mentioned_together_by_the_selected_study(comparison, holds):
+    """mentions(s, t1) ∧ mentions(s, t2): different tuples when t1 ≠ t2,
+    the same when t1 = t2, as Dalvi and Suciu take the answer variables
+    for constants; a comparison of t1 and t2 selects the answers."""
+    choices = {"selected_study": STUDIES}
+    program = (
+        "q(t1, t2, PROB) :- mentions(s, t1), mentions(s, t2), "
+        f"selected_study(s){comparison}"
+    )
+    expected = _enumerated(
+        choices,
+        lambda w, c, a: (
+            (c["selected_study"], a[0]) in w and
+            (c["selected_study"], a[1]) in w and
+            holds(*a)
+        ),
+        answers=tuple(itertools.product(TERMS, TERMS))
+    )
+    _assert_close(_solve(_engine(True, choices), program), expected)
+
+
+def test_comparison_within_a_union_is_not_lifted():
+    """A comparison of a rule of a union is not a conjunct of the query,
+    and is left to the next solvers."""
+    choices = {"selected_study": STUDIES}
+    program = (
+        "co(t1, t2, s) :- mentions(s, t1), mentions(s, t2), "
+        "selected_study(s), (t1 < t2)\n"
+        "co(t1, t2, s) :- mentions(s, t1), mentions(s, 'pain'), "
+        "mentions(s, t2)\n"
+        "q(t1, t2, PROB) :- co(t1, t2, s)"
+    )
+    with pytest.raises(UnsupportedSolverError):
+        _solve(_engine(True, choices), program)
