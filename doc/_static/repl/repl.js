@@ -144,17 +144,22 @@ function run(text, { remember = false } = {}) {
 // The theme: light, dark or the computer's, which the page's head applied.
 const THEME = "neurolang-repl-theme";
 const system = matchMedia("(prefers-color-scheme: light)");
-const applyTheme = () => {
-  const choice = $("theme").value;
+const themeButtons = [...document.querySelectorAll("#theme button")];
+function applyTheme(choice) {
   const light = choice === "light" || (choice === "system" && system.matches);
   document.documentElement.dataset.theme = light ? "light" : "dark";
-};
-$("theme").value = store("localStorage")?.getItem(THEME) || "system";
-$("theme").addEventListener("change", () => {
-  store("localStorage")?.setItem(THEME, $("theme").value);
-  applyTheme();
-});
-system.addEventListener("change", applyTheme);
+  document.documentElement.dataset.themeChoice = choice;
+  themeButtons.forEach((button) => button.setAttribute("aria-pressed", button.dataset.theme === choice));
+}
+const chosen = () => store("localStorage")?.getItem(THEME) || "system";
+for (const button of themeButtons) {
+  button.addEventListener("click", () => {
+    store("localStorage")?.setItem(THEME, button.dataset.theme);
+    applyTheme(button.dataset.theme);
+  });
+}
+system.addEventListener("change", () => applyTheme(chosen()));
+applyTheme(chosen());
 
 const version = $("version");
 $("code").addEventListener("submit", (event) => {
