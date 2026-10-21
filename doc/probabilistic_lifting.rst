@@ -1116,7 +1116,8 @@ Answer variables as constants
    has :math:`b` at a position :math:`i` where every other atom
    :math:`R(\bar v)` of :math:`Q` has :math:`a`
    (``_are_different_tuples_when_different``), so their tuples differ, for
-   all values of the quantified variables. The renamed and the other atoms
+   all values of the quantified variables. :math:`R'` naming the relation
+   :math:`R`, :math:`Q[R'/R] \equiv Q`; the renamed and the other atoms
    of :math:`R` have no tuple in common, and :math:`Q[R'/R]`, with
    :math:`R'` a relation with the tuples and probabilities of :math:`R`,
    has the probability of :math:`Q` for this answer: in every world the
