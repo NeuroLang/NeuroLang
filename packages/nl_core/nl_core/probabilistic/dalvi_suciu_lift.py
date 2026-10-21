@@ -1847,54 +1847,94 @@ def disjoint_separator(query, symbol_table):
 
 
 def _choice_terms_as_equalities(disjuncts, quantified, symbol_table):
-    """
-    The *disjuncts* with the free variables and constants `u` of their
-    choice atoms, at positions where a disjunct has a *quantified*
-    variable, replaced by variables `f` and the equalities `f = u`, so that
-    the atoms can be made the same: `C(u) ≡ ∃f (C(f) ∧ f = u)`. `f` is the
-    variable of another atom of the choice in the disjunct, as
-    `C(f) ∧ C(u) ≡ C(f) ∧ f = u` (Lemma 2), else a fresh one; with the
-    fresh variables.
-    """
+    """The *disjuncts* rewritten by `ChoiceTermsAsEqualities`, at the
+    positions of the choice atoms where a disjunct has a *quantified*
+    variable, and the fresh variables of the equalities."""
     atoms = [
-        atom for disjunct in disjuncts for atom in _conjuncts(disjunct)
-        if isinstance(atom, FunctionApplication) and
-        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        atom for disjunct in disjuncts
+        for atom in ExtractConjunctAtoms().walk(disjunct)
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
     ]
-    positions = {
-        (atom.functor, i) for atom in atoms
-        for i, arg in enumerate(atom.args) if arg in quantified
-    }
-    fresh = set()
-    new_disjuncts = []
-    for disjunct in disjuncts:
-        conjuncts = list(_conjuncts(disjunct))
-        for atom in [a for a in conjuncts if a in atoms]:
-            to_replace = [
-                i for i, arg in enumerate(atom.args)
-                if (atom.functor, i) in positions and arg not in quantified
-            ]
-            if not to_replace:
-                continue
-            other = next((
-                a for a in conjuncts if a in atoms and
-                a.functor == atom.functor and
-                all(a.args[i] in quantified for i in to_replace)
-            ), None)
-            args = list(atom.args)
-            for i in to_replace:
-                args[i] = other.args[i] if other else Symbol.fresh()
-                fresh |= {args[i]} - quantified
-                conjuncts.append(EQ(args[i], atom.args[i]))
-            conjuncts[conjuncts.index(atom)] = atom.apply(
-                atom.functor, tuple(args)
-            )
-        new_disjuncts.append(
-            RTO.walk(Conjunction(tuple(conjuncts)))
-            if conjuncts != list(_conjuncts(disjunct)) else disjunct
-        )
-    return new_disjuncts, fresh
+    rewriter = ChoiceTermsAsEqualities(
+        {atom.functor for atom in atoms},
+        {
+            (atom.functor, i) for atom in atoms
+            for i, arg in enumerate(atom.args) if arg in quantified
+        },
+        quantified
+    )
+    return [rewriter.walk(disjunct) for disjunct in disjuncts], rewriter.fresh
 
+
+class ChoiceTermsAsEqualities(PatternWalker):
+    """
+    Rewrite the terms `u`, not *quantified*, of the atoms of the choices
+    `functors` at the `positions` by the equivalences
+
+    * `C(u) ≡ ∃f (C(f) ∧ f = u)`, `f` being fresh, quantified in front of
+      the formula, and recorded in `fresh`;
+    * for the atoms of a conjunction, `C(a) ∧ C(f) ≡ C(a) ∧ a = f`, a
+      single tuple of `C` being true (Lemma 2), and then
+      `∃f (f = a ∧ φ) ≡ φ[a/f]`, `f` being fresh.
+    """
+
+    def __init__(self, functors, positions, quantified):
+        self.functors = functors
+        self.positions = positions
+        self.quantified = quantified
+        self.fresh = set()
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        conjunction = CollapseConjunctions().walk(Conjunction(tuple(
+            self.walk(formula) for formula in conjunction.formulas
+        )))
+        for atom, fresh_atom in combinations(
+            ExtractConjunctAtoms().walk(conjunction), 2
+        ):
+            substitution = self._same_tuple(atom, fresh_atom)
+            if substitution:
+                self.fresh -= set(substitution)
+                return RTO.walk(
+                    ReplaceExpressionWalker(substitution).walk(conjunction)
+                )
+        return conjunction
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def atom(self, atom):
+        if atom.functor not in self.functors:
+            return atom
+        args = tuple(
+            Symbol.fresh() if (
+                (atom.functor, i) in self.positions and
+                arg not in self.quantified
+            ) else arg
+            for i, arg in enumerate(atom.args)
+        )
+        if args == atom.args:
+            return atom
+        self.fresh |= set(args) - set(atom.args)
+        return Conjunction((atom.apply(atom.functor, args),) + tuple(
+            EQ(new, old) for new, old in zip(args, atom.args) if new != old
+        ))
+
+    @add_match(...)
+    def other(self, expression):
+        return expression
+
+    def _same_tuple(self, atom, fresh_atom):
+        """The substitution of the fresh variables of one of the atoms of
+        a choice by the terms of the other, at the positions where they
+        differ, or None."""
+        if atom.functor != fresh_atom.functor:
+            return None
+        for a, b in ((atom, fresh_atom), (fresh_atom, atom)):
+            differences = {
+                y: x for x, y in zip(a.args, b.args) if x != y
+            }
+            if differences and set(differences) <= self.fresh:
+                return differences
+        return None
 
 def _has_quantifier(formula):
     """Whether the logic *formula* has a quantifier in it."""

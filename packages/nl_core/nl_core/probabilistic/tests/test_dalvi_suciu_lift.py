@@ -1081,3 +1081,17 @@ def test_clauses_are_range_restricted():
     assert dalvi_suciu_lift._clauses_are_range_restricted(negation_alone)
 
 
+def test_choice_terms_as_equalities():
+    """C(s) ≡ ∃f' (C(f') ∧ f' = s) at a position where another disjunct
+    has a quantified variable, and C(f) ∧ C(f') ≡ C(f) ∧ f = f', whose
+    fresh f' is then substituted."""
+    C, M = Symbol("C"), Symbol("M")
+    s, f = Symbol("s"), Symbol("f")
+    rewriter = dalvi_suciu_lift.ChoiceTermsAsEqualities({C}, {(C, 0)}, {f})
+    rewritten = rewriter.walk(Conjunction((C(s), M(s))))
+    fresh, = rewriter.fresh
+    assert set(rewritten.formulas) == {C(fresh), M(s), EQ(fresh, s)}
+    rewriter = dalvi_suciu_lift.ChoiceTermsAsEqualities({C}, {(C, 0)}, {f})
+    rewritten = rewriter.walk(Conjunction((C(f), M(f), C(s))))
+    assert rewriter.fresh == set()
+    assert set(rewritten.formulas) == {C(f), M(f), EQ(f, s)}
