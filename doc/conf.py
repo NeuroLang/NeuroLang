@@ -10,7 +10,8 @@ from datetime import datetime
 
 # -- Path setup ---------------------------------------------------------------
 currentdir = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, os.path.abspath("../"))
+for package in ("nl_expr", "nl_core", "neurolang", "neurolang_apps"):
+    sys.path.insert(0, os.path.abspath(f"../packages/{package}"))
 sys.path.append(os.path.join(currentdir, "tools"))
 sys.path.append(os.path.abspath("sphinxext"))
 

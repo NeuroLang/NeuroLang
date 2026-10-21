@@ -76,7 +76,7 @@ and text-to-SPARQL systems.
     description in the engine configuration and their size (schema
     linking). The examples are those closest to the question, chosen by
     BM25 from a bank of checked examples
-    (``neurolang/utils/llm/examples/<engine>.yaml``).
+    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
 
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
@@ -141,7 +141,7 @@ order:
 1. the path given by ``--llm-config``;
 2. ``$NEUROLANG_LLM_CONFIG``;
 3. ``~/.config/neurolang/llm.yaml``;
-4. the example shipped in ``neurolang/utils/llm/llm.example.yaml``.
+4. the example shipped in ``packages/neurolang_apps/neurolang_apps/utils/llm/llm.example.yaml``.
 
 .. code-block:: yaml
 

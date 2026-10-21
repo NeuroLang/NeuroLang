@@ -4,7 +4,7 @@ Engine Configuration (engines.yaml)
 ===================================
 
 Engines are declaratively configured in
-``neurolang/utils/engines/engines.yaml`` and built by
+``packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml`` and built by
 :func:`~neurolang.utils.engine_registry.build_engine`.  Each engine entry
 may specify the following keys, all of them optional:
 

@@ -13,10 +13,11 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	$(PYTEST) --cov=neurolang --cov-report=xml --cov-report=term-missing \
-	  -vv neurolang --junitxml=utest.xml
+	$(PYTEST) --cov=nl_expr --cov=nl_core --cov=neurolang \
+	  --cov=neurolang_apps --cov-report=xml --cov-report=term-missing \
+	  -vv packages --junitxml=utest.xml
 
 ctags:
 	# make tags for symbol based navigation in emacs and vim
 	# Install with: sudo apt-get install exuberant-ctags
-	$(CTAGS) --python-kinds=-i -R neurolang
+	$(CTAGS) --python-kinds=-i -R packages
