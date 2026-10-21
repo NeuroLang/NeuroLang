@@ -135,7 +135,8 @@ engines:
         description: >-
           query_similarity(query, study) returns the cosine similarity
           between a free-text query and the study's title and abstract
-          (PubMed), embedded with SPECTER2.
+          (PubMed), embedded with SPECTER2 or, with
+          NEUROLANG_TEXT_ENCODER=albert-qwen, Qwen3-VL-Embedding (Albert API).
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -390,9 +391,11 @@ engines:
       study_similarity:
         description: >-
           Cosine similarity of the title and abstract of a study to a
-          free-text query (the studies with a text), embedded with SPECTER2;
-          the first query embeds the abstracts, which takes a while and
-          needs ``pip install "neurolang[embeddings]"``
+          free-text query (the studies with a text), embedded with SPECTER2
+          (``pip install "neurolang[embeddings]"``) or, with
+          NEUROLANG_TEXT_ENCODER=albert-qwen, Qwen3-VL-Embedding through the
+          Albert API; the first query embeds the abstracts, which takes a
+          while
         arguments:
           - query
           - study
@@ -563,7 +566,8 @@ engines:
         description: >-
           query_similarity(query, study) returns the cosine similarity
           between a free-text query and the study's title and abstract,
-          embedded with SPECTER2.
+          embedded with SPECTER2 or, with NEUROLANG_TEXT_ENCODER=albert-qwen,
+          Qwen3-VL-Embedding (Albert API).
     sorts:
       study:
         type: str

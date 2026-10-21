@@ -271,7 +271,25 @@ database, without any download::
           title_predicate: study_title      # optional
 
 ``model``, ``document_adapter`` and ``query_adapter`` default to the values
-above.  The engine build only reads the ids.  Texts are fetched and
+above.
+
+``encoder: albert-qwen`` embeds with Qwen3-VL-Embedding-8B through the
+`Albert API <https://albert.api.etalab.gouv.fr>`_ instead, without any
+local model; it needs an API key in ``ALBERT_API_KEY``.  Its settings, all
+optional, go in an ``albert`` mapping, and the SPECTER2 keys are then
+ignored::
+
+        encoder: albert-qwen
+        albert:
+          model: qwen3-vl-embedding-8b
+          query_instruction: "Given a description of a cognitive process,
+            task or topic, retrieve abstracts of neuroimaging studies about it."
+
+The ``NEUROLANG_TEXT_ENCODER`` environment variable (``specter2`` or
+``albert-qwen``) overrides ``encoder`` in every engine, e.g. to use Albert
+with the built-in ``neurosynth`` and ``neurostore`` engines.  Each encoder
+has its own cache, ``{name}.npz`` for SPECTER2 and ``{name}.albert-qwen.npz``
+for Albert.  The engine build only reads the ids.  Texts are fetched and
 embedded on the first query that uses the function, and cached under
 ``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine

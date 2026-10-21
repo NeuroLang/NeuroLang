@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* Text embeddings can come from the Albert API (the French state's LLM API)
+  instead of a local SPECTER2: ``encoder: albert-qwen`` in an engine's
+  ``text_embeddings`` entry, or ``NEUROLANG_TEXT_ENCODER=albert-qwen`` for
+  every engine, with an ``ALBERT_API_KEY``.  Documents are embedded with
+  Qwen3-VL-Embedding-8B as raw text, queries with a retrieval instruction.
+  Nothing is installed or downloaded.
+
 * The query assistant searches the studies by a description or a
   Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
   share a bank of examples (``coordinate_meta_analysis.yaml``, which banks

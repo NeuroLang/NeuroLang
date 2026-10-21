@@ -17,6 +17,12 @@ Nothing in this module is specific to a dataset.  Texts come from PubMed
 are only imported when the first document or query is embedded; install
 them with ``pip install "neurolang[embeddings]"``.
 
+Instead of SPECTER2, :class:`AlbertQwenEncoder` embeds both with
+Qwen3-VL-Embedding-8B through the Albert API, without any local model:
+set ``encoder: albert-qwen`` in an engine's ``text_embeddings`` entry, or
+``NEUROLANG_TEXT_ENCODER=albert-qwen`` for every engine, and the
+``ALBERT_API_KEY``.
+
 Engines declared in ``engines.yaml`` can opt in through a
 ``text_embeddings`` section.  Embeddings are computed on the first query
 that needs them, or ahead of time with::
@@ -466,6 +472,184 @@ def _default_device(torch):
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
+
+
+ALBERT_URL = "https://albert.api.etalab.gouv.fr/v1"
+ALBERT_KEY_ENV = "ALBERT_API_KEY"
+ALBERT_QUERY_INSTRUCTION = (
+    "Given a description of a cognitive process, task or topic, retrieve "
+    "abstracts of neuroimaging studies about it."
+)
+
+
+class AlbertQwenEncoder:
+
+    """
+    Embed documents and queries with Qwen3-VL-Embedding-8B, through Albert.
+
+    Albert is the French state's LLM API (https://albert.api.etalab.gouv.fr).
+    Documents (title, a blank line, abstract) are sent through its
+    OpenAI-compatible ``/embeddings`` endpoint, 64 per request, which embeds
+    the raw text.  A query is sent alone in a chat-style ``messages`` body
+    whose system turn is *query_instruction*, so that the model sees it with
+    the chat template and the instruction of its model card: through the
+    plain endpoint short queries, such as a single term, embed poorly.
+    Mapping Cognitive Atlas definitions and other descriptions onto
+    Neurosynth abstracts, this pairing selected studies whose maps
+    identify the right term more often than SPECTER2 did.
+
+    Nothing is installed or downloaded; it needs an Albert API key.
+
+    Parameters
+    ----------
+    model : str, optional
+        Albert embedding model.
+    base_url : str, optional
+        API root.
+    query_instruction : str, optional
+        Task description given to the model with each query.
+    api_key : str, optional
+        Albert API key, by default the ``ALBERT_API_KEY`` environment
+        variable.
+    batch_size : int, optional
+        Documents per request (at most 64 on Albert).
+
+    """
+
+    def __init__(
+        self,
+        model="qwen3-vl-embedding-8b",
+        base_url=ALBERT_URL,
+        query_instruction=ALBERT_QUERY_INSTRUCTION,
+        api_key=None,
+        batch_size=64,
+    ):
+        """Store the configuration; the key is read on first use."""
+        self.model_name = model
+        self.base_url = base_url.rstrip("/")
+        self.query_instruction = query_instruction
+        self.api_key = api_key
+        self.batch_size = batch_size
+
+    @property
+    def cache_key(self):
+        """Identify the document embeddings this encoder produces."""
+        return json.dumps([self.base_url, self.model_name, "input"])
+
+    def download(self):
+        """Check that an API key is set; there is nothing to download."""
+        self._key()
+        return ()
+
+    def _key(self):
+        key = self.api_key or os.environ.get(ALBERT_KEY_ENV)
+        if not key:
+            raise RuntimeError(
+                f"The Albert encoder needs an API key: set {ALBERT_KEY_ENV}"
+            )
+        return key
+
+    def encode_documents(self, titles, texts):
+        """
+        Embed documents given their titles and body texts.
+
+        Returns
+        -------
+        numpy.ndarray
+            One row per document.
+
+        """
+        docs = [
+            (t + "\n\n" + (a or "")).strip() for t, a in zip(titles, texts)
+        ]
+        out = []
+        for start in range(0, len(docs), self.batch_size):
+            batch = docs[start:start + self.batch_size]
+            out.append(self._embed({"input": batch}))
+            if len(docs) > self.batch_size:
+                LOG.info("Embedded %d/%d", start + len(batch), len(docs))
+        return np.concatenate(out)
+
+    def encode_query(self, text):
+        """Embed a free-text query, with the instruction, as a vector."""
+        return self._embed({
+            "messages": [
+                {"role": "system", "content": self.query_instruction},
+                {"role": "user", "content": [{"type": "text", "text": text}]},
+                {"role": "assistant", "content": ""},
+            ],
+            "continue_final_message": True,
+            "add_special_tokens": True,
+        })[0]
+
+    def _embed(self, body, retries=6):
+        body = {"model": self.model_name, "encoding_format": "float", **body}
+        request = urllib.request.Request(
+            self.base_url + "/embeddings",
+            data=json.dumps(body).encode(),
+            headers={
+                "Authorization": "Bearer " + self._key(),
+                "Content-Type": "application/json",
+            },
+        )
+        for attempt in range(retries):
+            try:
+                with urllib.request.urlopen(request, timeout=300) as res:
+                    data = json.load(res)["data"]
+                break
+            except urllib.error.HTTPError as e:
+                # Rate limits (429) and server errors are retried.
+                if (e.code != 429 and e.code < 500) or attempt == retries - 1:
+                    raise
+                wait = (e.headers or {}).get("Retry-After") or 2 ** attempt
+                time.sleep(float(wait))
+            except (urllib.error.URLError, TimeoutError):
+                if attempt == retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+        data = sorted(data, key=lambda d: d["index"])
+        return np.array([d["embedding"] for d in data], dtype=np.float32)
+
+
+ENCODER_ENV = "NEUROLANG_TEXT_ENCODER"
+ENCODERS = ("specter2", "albert-qwen")
+
+
+def encoder_kind(config):
+    """
+    Name of the encoder of a ``text_embeddings`` entry.
+
+    The ``NEUROLANG_TEXT_ENCODER`` environment variable, when set, overrides
+    the ``encoder`` key of every entry, which defaults to ``specter2``.
+    """
+    kind = os.environ.get(ENCODER_ENV) or config.get("encoder", "specter2")
+    if kind not in ENCODERS:
+        raise ValueError(
+            f"Unknown text encoder {kind!r}: use one of {', '.join(ENCODERS)}"
+        )
+    return kind
+
+
+def make_encoder(config, model_dir=None):
+    """
+    Build the encoder of a ``text_embeddings`` entry.
+
+    ``specter2`` reads ``model``, ``document_adapter`` and ``query_adapter``
+    and keeps its weights in *model_dir*.  ``albert-qwen`` reads its own
+    settings (``model``, ``base_url``, ``query_instruction``) from an
+    ``albert`` mapping, so that the SPECTER2 keys an engine declares do not
+    reach it.
+    """
+    if encoder_kind(config) == "albert-qwen":
+        return AlbertQwenEncoder(**config.get("albert", {}))
+    return Specter2Encoder(
+        model_dir=model_dir,
+        **{
+            key: config[key]
+            for key in ("model", "document_adapter", "query_adapter")
+            if key in config
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

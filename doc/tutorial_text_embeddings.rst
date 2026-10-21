@@ -45,6 +45,40 @@ requests per second, through the environment::
 The engine configuration is described in :ref:`text-embeddings-section`.
 
 
+Embedding through the Albert API
+--------------------------------
+
+Instead of SPECTER2, the studies and queries can be embedded with
+Qwen3-VL-Embedding-8B through Albert, the French state's LLM API, which
+needs no local model, no ``torch`` and no GPU, only an API key::
+
+    export ALBERT_API_KEY=sk-...
+    export NEUROLANG_TEXT_ENCODER=albert-qwen
+    python -m neurolang.utils.cli -e neurosynth --sort sim:desc \
+        "ans(s, sim) :- study(s) & \
+            (sim == query_similarity('visual word form reading', s)) \
+            & (sim > 0.6)"
+
+Its similarities are on another scale than SPECTER2's: here 168 studies
+pass 0.6, led by studies of the visual word form area (top similarity
+0.73), and 973 pass 0.5.  A rank or a percentile is safer than a fixed
+threshold when switching encoders.
+
+The abstracts go through Albert's ``/embeddings`` endpoint, 64 per request,
+as raw text.  Each query goes alone with an instruction, *Given a
+description of a cognitive process, task or topic, retrieve abstracts of
+neuroimaging studies about it.*, as the model card prescribes; without it a
+single term is a poor query.  Embedding the 14,371 NeuroSynth abstracts
+takes about 225 requests, under ten minutes, cached in
+``study_abstracts.albert-qwen.npz``; each new query text is one request.
+
+Selecting the NeuroSynth studies closest to a Cognitive Atlas definition,
+with the term removed, the uniformity map of the selection identified the
+right term among 104 more often with this encoder than with SPECTER2
+(16.5% against 12.7% top-1 with the map common to all studies removed,
+chance 1%), and for free-text paraphrases 45% against 37% among 36 terms.
+
+
 Similarity of every study to a query
 ------------------------------------
 

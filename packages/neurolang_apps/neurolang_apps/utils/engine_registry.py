@@ -42,7 +42,8 @@ define:
   is inherited (see :func:`resolve_engine_config`); engines marked
   ``abstract: true`` only serve as bases and cannot be built or listed;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
-  abstracts) with SPECTER2, registered as a function
+  abstracts) with SPECTER2 or, through the Albert API, Qwen3-VL-Embedding,
+  registered as a function
   ``f(query, doc) -> similarity``; see
   :mod:`neurolang.utils.text_embeddings`::
 
@@ -51,6 +52,7 @@ define:
           ids_from: study
           source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
+          encoder: specter2       # or albert-qwen (Albert API)
 
 Usage
 -----
@@ -1489,14 +1491,10 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
     emb_dir = data_dir / engine_name / "embeddings"
     nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
     for emb_name, emb_cfg in entries.items():
-        encoder = text_embeddings.Specter2Encoder(
-            model_dir=emb_dir / "models",
-            **{
-                key: emb_cfg[key]
-                for key in ("model", "document_adapter", "query_adapter")
-                if key in emb_cfg
-            },
-        )
+        encoder = text_embeddings.make_encoder(emb_cfg, emb_dir / "models")
+        # One cache per encoder, so that switching encoders keeps both.
+        kind = text_embeddings.encoder_kind(emb_cfg)
+        suffix = "" if kind == "specter2" else f".{kind}"
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(
@@ -1504,7 +1502,7 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
                 engine_name, data_dir, rel_base_dir,
             ),
             encoder=encoder,
-            cache_path=emb_dir / f"{emb_name}.npz",
+            cache_path=emb_dir / f"{emb_name}{suffix}.npz",
         )
         nl.text_embedding_indexes[emb_name] = index
         nl.add_symbol(
