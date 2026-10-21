@@ -10,11 +10,20 @@ from ...datalog.wrapped_collections import (
 )
 from nl_expr.exceptions import UnexpectedExpressionError
 from nl_expr.expressions import Constant, Symbol
-from nl_expr.logic import TRUE, Conjunction, Disjunction, Implication, Union
+from nl_expr.logic import (
+    TRUE,
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation,
+    Union
+)
 from ...utils.relational_algebra_set import pandas as pandas_ras
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import DistributionDoesNotSumToOneError
 from ..expression_processing import (
+    UnifyChoicesInNegations,
     add_to_union,
     check_probabilistic_choice_set_probabilities_sum_to_one,
     get_probchoice_variable_equalities,
@@ -238,3 +247,26 @@ def test_choice_atoms_are_unified_within_a_conjunction_only():
         if isinstance(formula.functor, Constant)
     ]
     assert equalities == [{s, f}]
+
+
+def test_unify_choices_in_negations():
+    """C(x) ∧ M(x, y) ∧ ¬∃z (C(z) ∧ M(z, y) ∧ z ≠ x): where C(x) holds,
+    C(z) holds for z = x only, which makes the negated conjunction
+    false, and the negation true."""
+    import operator
+    C, M = Symbol("C"), Symbol("M")
+    ne = Constant(operator.ne)
+    formula = Conjunction((
+        C(x), M(x, y), Negation(ExistentialPredicate(
+            z, Conjunction((C(z), M(z, y), ne(z, x)))
+        ))
+    ))
+    assert UnifyChoicesInNegations({C}).walk(formula) == Conjunction((
+        C(x), M(x, y)
+    ))
+    formula = Conjunction((
+        C(x), Negation(ExistentialPredicate(z, Conjunction((C(z), M(x, z)))))
+    ))
+    assert UnifyChoicesInNegations({C}).walk(formula) == Conjunction((
+        C(x), Negation(Conjunction((C(x), M(x, x))))
+    ))

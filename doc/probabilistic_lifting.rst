@@ -1140,8 +1140,13 @@ Rewriting of the choices
    query being standardised apart so that no variable is captured
    (``UnifyChoicesInNegations``). Where :math:`C(\bar u)` does not hold,
    both sides of the rewriting are false. A strict comparison of a term
-   with itself is false, so a conjunction with it is false and its
-   negation true.
+   with itself is false, :math:`t \neq t \equiv \bot`
+   (``StrictComparisonOfATermWithItselfMixin``), and the truth values are
+   simplified by :math:`\bot \land \varphi \equiv \bot`,
+   :math:`\top \land \varphi \equiv \varphi`, :math:`\lnot\bot \equiv
+   \top` and :math:`\exists x\, \bot \equiv \bot`
+   (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
+   every step of the rewriting is an equivalence.
 
 Answer variables as constants
    For an answer, :math:`x` and :math:`y` have values :math:`a` and

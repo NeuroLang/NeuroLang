@@ -15,6 +15,8 @@ from ..logic.expression_processing import (
 )
 from ..utils.orderedset import OrderedSet
 from . import (
+    FALSE,
+    TRUE,
     Conjunction,
     Constant,
     Disjunction,
@@ -108,6 +110,42 @@ class RemoveTrivialOperationsMixin(PatternWalker):
     @add_match(Negation(Negation(...)))
     def remove_double_negation(self, expression):
         return self.walk(expression.formula.formula)
+
+
+class SimplifyTruthValuesMixin(PatternWalker):
+    """
+    Simplify the truth values of a formula by the equivalences
+    ⊥ ∧ φ ≡ ⊥, ⊤ ∧ φ ≡ φ, ¬⊥ ≡ ⊤, ¬⊤ ≡ ⊥ and ∃x ⊥ ≡ ⊥.
+    """
+
+    @add_match(Conjunction, lambda conjunction: FALSE in conjunction.formulas)
+    def false_conjunct(self, conjunction):
+        return FALSE
+
+    @add_match(Conjunction, lambda conjunction: TRUE in conjunction.formulas)
+    def true_conjunct(self, conjunction):
+        formulas = tuple(f for f in conjunction.formulas if f != TRUE)
+        if len(formulas) == 0:
+            return TRUE
+        return self.walk(Conjunction(formulas))
+
+    @add_match(Negation(FALSE))
+    def negation_of_false(self, negation):
+        return TRUE
+
+    @add_match(Negation(TRUE))
+    def negation_of_true(self, negation):
+        return FALSE
+
+    @add_match(ExistentialPredicate)
+    def existential(self, existential):
+        """∃x ⊥ ≡ ⊥: a quantifier of a constant is not built."""
+        body = self.walk(existential.body)
+        if body == FALSE:
+            return FALSE
+        if body is existential.body:
+            return existential
+        return self.walk(existential.apply(existential.head, body))
 
 
 def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
