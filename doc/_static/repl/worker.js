@@ -120,7 +120,7 @@ async function start({ repo, ref, full }) {
   status("Loading numpy, scipy, pandas and scikit-learn…");
   await pyodide.loadPackage(PYODIDE_PACKAGES);
 
-  const bundle = await (await fetch("bundle.json")).json();
+  const bundle = await (await fetch("bundle.json", { cache: "no-store" })).json();
   const micropip = pyodide.pyimport("micropip");
   status("Installing the packages NeuroLang needs…");
   for (const name of PYPI_PACKAGES) await micropip.install(name);
