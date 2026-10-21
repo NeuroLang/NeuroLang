@@ -17,6 +17,12 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+Nothing yet.
+
+
+v0.1a21 (2026-10-21)
+--------------------
+
 **New features:**
 
 * The page of the REPL in the browser is a small interface: a box to ask

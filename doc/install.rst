@@ -5,13 +5,12 @@ NeuroLang requires **Python ≥ 3.12**. The recommended way to install it is
 with `uv <https://github.com/astral-sh/uv>`_ — a fast Python package manager —
 or with standard ``pip``.
 
-.. important::
+.. note::
 
-   The latest release published on PyPI (``0.1a19``, October 2023) predates
-   the SQUALL controlled natural language, the ``neurolang-query`` command
-   line tool and the engine registry used throughout these tutorials.
-   Until a new release is published, install NeuroLang **from GitHub**
-   as shown below.
+   ``pip install neurolang`` installs the latest release published on PyPI
+   (``0.1a21``, October 2026). The commands below install the current
+   ``master`` branch from GitHub instead, with the changes listed as
+   *Unreleased* in the :doc:`changelog`.
 
 .. tab-set::
 
