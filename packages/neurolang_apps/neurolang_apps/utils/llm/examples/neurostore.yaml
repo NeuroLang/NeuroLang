@@ -2,10 +2,11 @@
 # coordinate_meta_analysis, which it shares with neurosynth. NeuroStore
 # comes with the titles and abstracts of its studies (study_title,
 # study_abstract) and with cognitive concepts and domains extracted from
-# their tasks by an LLM (study_concept, study_domain): the concepts are
-# in lower case ('working memory'), the domains capitalised ('Executive
-# cognitive control'). Every query is checked against the engine by the
-# tests (NEUROLANG_TEST_DATA_DIR).
+# their tasks by an LLM (study_concept, study_domain). The concepts come
+# in either case ('working memory', 'Working memory'), the domains are
+# capitalised ('Executive cognitive control'): search_values shows how a
+# value is stored. Every query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
 examples:
   - question: Which NeuroStore studies were annotated with the concept working memory? Give their titles.
     datalog: |-
@@ -29,3 +30,11 @@ examples:
       activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
       control(s) :- study_domain(s, 'Executive cognitive control'), selected_study(s)
       ans(i, j, k, p) :- PROB[activation(i, j, k, s) // control(s)] = p
+
+  - question: Which cognitive concepts were extracted from the studies about holding information in mind over a delay?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      concept(s, c) :- study_concept(s, c), selected_study(s)
+      p_concept_given_close(q, c, PROB) :- concept(s, c) // close(q, s)
+      ans(c, p) :- p_concept_given_close('holding information in mind over a delay', c, p)
+

@@ -60,7 +60,12 @@ engines:
       with search_values: Destrieux names start with the hemisphere (L,
       R) and use G for gyrus and S for sulcus (L G temporal middle),
       Schaefer names the network and hemisphere (17Networks LH DefaultA
-      PFCm 1), Tian names end with the hemisphere (lAMY rh, aHIP lh).
+      PFCm 1), with the networks abbreviated: VisCent and VisPeri (visual),
+      SomMot (somatomotor), DorsAttn (dorsal attention), SalVentAttn
+      (salience, ventral attention), Limbic, Cont (frontoparietal
+      control), Default (default mode), TempPar (temporoparietal); match
+      them with startswith('17Networks LH DorsAttn', l) on schaefer(l, r).
+      Tian names end with the hemisphere (lAMY rh, aHIP lh).
       Co-activation is the activation of regions or points by the same
       study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
       s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
