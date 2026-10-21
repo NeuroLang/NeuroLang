@@ -24,7 +24,16 @@ const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
 
-const setStatus = (message, state = "") => Object.assign(statusBox, { textContent: message, className: state });
+// A long step shows how long it has lasted, so that a slow one does not look stuck.
+const step = { message: "", since: 0 };
+const setStatus = (message, state = "") => {
+  Object.assign(step, { message, since: Date.now() });
+  Object.assign(statusBox, { textContent: message, className: state });
+};
+setInterval(() => {
+  const seconds = Math.round((Date.now() - step.since) / 1000);
+  if (statusBox.className === "busy" && seconds >= 5) statusBox.textContent = `${step.message} (${seconds} s)`;
+}, 1000);
 const html = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }); // rich escapes its text
 const setBusy = (busy) => {
   busyControls.forEach((control) => (control.disabled = busy));
@@ -93,6 +102,8 @@ function start() {
   setBusy(true);
   worker = new Worker("worker.js", { type: "module" });
   worker.postMessage({ type: "start", repo, ref });
+  worker.onerror = (event) =>
+    setStatus(`The REPL stopped: ${event.message || "the browser ended its worker, perhaps out of memory"}. Restart it.`, "error");
   worker.onmessage = ({ data }) => {
     if (data.type === "status") {
       setStatus(data.message, "busy");
@@ -129,6 +140,21 @@ function run(text, { remember = false } = {}) {
   setStatus("Running…", "busy");
   worker.postMessage({ text });
 }
+
+// The theme: light, dark or the computer's, which the page's head applied.
+const THEME = "neurolang-repl-theme";
+const system = matchMedia("(prefers-color-scheme: light)");
+const applyTheme = () => {
+  const choice = $("theme").value;
+  const light = choice === "light" || (choice === "system" && system.matches);
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+};
+$("theme").value = store("localStorage")?.getItem(THEME) || "system";
+$("theme").addEventListener("change", () => {
+  store("localStorage")?.setItem(THEME, $("theme").value);
+  applyTheme();
+});
+system.addEventListener("change", applyTheme);
 
 const version = $("version");
 $("code").addEventListener("submit", (event) => {
