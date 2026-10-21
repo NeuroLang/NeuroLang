@@ -108,7 +108,7 @@ from .ranking import (
     rank_query,
     verify_that_the_query_is_ranked
 )
-from .shattering import NE, shatter_constants
+from .shattering import EQ, NE, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -1267,10 +1267,13 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule_cnf, ignore_symbols=deterministic_symbols
     )
     if cnf_is_usable and len(connected_components) > 1:
-        return components_plan(
+        plan = components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
+        # Otherwise the rules below are tried on the query as it is.
+        if is_pure_lifted_plan(plan):
+            return plan
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(
@@ -1771,6 +1774,10 @@ def disjoint_separator(query, symbol_table):
         # A disjunct without a free variable is true for every value of
         # it, which a plan cannot give.
         return False, None
+    disjuncts, equalities = _choice_terms_as_equalities(
+        disjuncts, quantified, symbol_table
+    )
+    quantified |= equalities
     separators, substitutions, choice_atoms = _choice_separators(
         disjuncts, quantified, symbol_table
     )
@@ -1791,13 +1798,15 @@ def disjoint_separator(query, symbol_table):
         if atom not in choice_atoms
     ]
     if all(
+        isinstance(atom.functor, Constant) or
         is_atom_a_deterministic_relation(atom, symbol_table)
         for atom in remainder_atoms
     ):
         # Every disjunct is the choice atoms conjoined with deterministic
-        # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
-        # support. The choice atoms in D are replaced by their support, so
-        # that every label in D is 0 or 1, as a negation (a difference) needs.
+        # atoms or builtins, the same in every world: P[C(a) and D(a)] =
+        # P[C(a)] [D(a)], D(a) being given by its support. The choice atoms
+        # in D are replaced by their support, so that every label in D is
+        # 0 or 1, as a negation (a difference) needs.
         deterministic = RTO.walk(Disjunction(tuple(disjuncts)))
         if isinstance(deterministic, Disjunction):
             # The variables a disjunct alone has are projected in the
@@ -1827,12 +1836,105 @@ def disjoint_separator(query, symbol_table):
             support,
         )
         return True, rap.DisjointProjection(plan, attributes)
+    if equalities:
+        # The equalities are only translated in a deterministic rest.
+        return False, None
     body = add_existentials_except(
         RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
     plan = dalvi_suciu_lift(body, symbol_table)
     return True, rap.DisjointProjection(plan, attributes)
 
+
+def _choice_terms_as_equalities(disjuncts, quantified, symbol_table):
+    """The *disjuncts* rewritten by `ChoiceTermsAsEqualities`, at the
+    positions of the choice atoms where a disjunct has a *quantified*
+    variable, and the fresh variables of the equalities."""
+    atoms = [
+        atom for disjunct in disjuncts
+        for atom in ExtractConjunctAtoms().walk(disjunct)
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+    ]
+    rewriter = ChoiceTermsAsEqualities(
+        {atom.functor for atom in atoms},
+        {
+            (atom.functor, i) for atom in atoms
+            for i, arg in enumerate(atom.args) if arg in quantified
+        },
+        quantified
+    )
+    return [rewriter.walk(disjunct) for disjunct in disjuncts], rewriter.fresh
+
+
+class ChoiceTermsAsEqualities(PatternWalker):
+    """
+    Rewrite the terms `u`, not *quantified*, of the atoms of the choices
+    `functors` at the `positions` by the equivalences
+
+    * `C(u) ≡ ∃f (C(f) ∧ f = u)`, `f` being fresh, quantified in front of
+      the formula, and recorded in `fresh`;
+    * for the atoms of a conjunction, `C(a) ∧ C(f) ≡ C(a) ∧ a = f`, a
+      single tuple of `C` being true (Lemma 2), and then
+      `∃f (f = a ∧ φ) ≡ φ[a/f]`, `f` being fresh.
+    """
+
+    def __init__(self, functors, positions, quantified):
+        self.functors = functors
+        self.positions = positions
+        self.quantified = quantified
+        self.fresh = set()
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        conjunction = CollapseConjunctions().walk(Conjunction(tuple(
+            self.walk(formula) for formula in conjunction.formulas
+        )))
+        for atom, fresh_atom in combinations(
+            ExtractConjunctAtoms().walk(conjunction), 2
+        ):
+            substitution = self._same_tuple(atom, fresh_atom)
+            if substitution:
+                self.fresh -= set(substitution)
+                return RTO.walk(
+                    ReplaceExpressionWalker(substitution).walk(conjunction)
+                )
+        return conjunction
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def atom(self, atom):
+        if atom.functor not in self.functors:
+            return atom
+        args = tuple(
+            Symbol.fresh() if (
+                (atom.functor, i) in self.positions and
+                arg not in self.quantified
+            ) else arg
+            for i, arg in enumerate(atom.args)
+        )
+        if args == atom.args:
+            return atom
+        self.fresh |= set(args) - set(atom.args)
+        return Conjunction((atom.apply(atom.functor, args),) + tuple(
+            EQ(new, old) for new, old in zip(args, atom.args) if new != old
+        ))
+
+    @add_match(...)
+    def other(self, expression):
+        return expression
+
+    def _same_tuple(self, atom, fresh_atom):
+        """The substitution of the fresh variables of one of the atoms of
+        a choice by the terms of the other, at the positions where they
+        differ, or None."""
+        if atom.functor != fresh_atom.functor:
+            return None
+        for a, b in ((atom, fresh_atom), (fresh_atom, atom)):
+            differences = {
+                y: x for x, y in zip(a.args, b.args) if x != y
+            }
+            if differences and set(differences) <= self.fresh:
+                return differences
+        return None
 
 def _has_quantifier(formula):
     """Whether the logic *formula* has a quantifier in it."""
