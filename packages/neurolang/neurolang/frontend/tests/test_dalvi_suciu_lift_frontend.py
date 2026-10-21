@@ -44,15 +44,20 @@ def test_union_of_rules_joining_a_choice(rules, expected):
     assert [p for p, in result] == [pytest.approx(expected)]
 
 
-def test_union_by_term_with_a_variable_of_a_rule_alone():
+LIFTED_ONLY = dict(
+    probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+    probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+)
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_union_by_term_with_a_variable_of_a_rule_alone(solvers):
     """
     A union whose rules have a variable that their head has not
     (``s2``): the deterministic ``mentions(s2, t)`` is factored out of the
-    union, whose disjuncts then do not all have ``t``. The probability of
-    a disjunct without ``t`` holds for every ``t``, which the sum of the
-    plans cannot give, so the disjoint projection of the union declines
-    it; the query is computed exactly, by weighted model counting, whose
-    union of the rules projects out ``s2``.
+    conjunctive normal form, whose clauses then do not all have ``t``,
+    and whose components are not lifted; the disjoint projection lifts
+    the union as it is.
     """
     from .. import NeurolangPDL
 
@@ -61,7 +66,7 @@ def test_union_by_term_with_a_variable_of_a_rule_alone():
         (2, "c"), (2, "e"), (3, "a"), (3, "c"), (3, "d"), (4, "b"),
         (5, "b"), (5, "c"), (5, "d"),
     ]
-    nl = NeurolangPDL()
+    nl = NeurolangPDL(**solvers)
     nl.add_uniform_probabilistic_choice_over_set(
         [(s,) for s in range(6)], name="selected_study"
     )
@@ -85,16 +90,18 @@ def test_union_by_term_with_a_variable_of_a_rule_alone():
     assert dict(result) == pytest.approx(expected)
 
 
-def test_union_with_a_choice_on_a_free_and_on_a_bound_variable():
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_union_with_a_choice_on_a_free_and_on_a_bound_variable(solvers):
     """
     The choice is on the free variable s in one rule and on a variable of
     its own, f, in the other: the choice optimisation unified C(s) and
     C(f) across the disjuncts, as if they were a conjunction, and the
-    first solver gave no answer; the disjuncts are now optimised apart.
+    first solver gave no answer; the disjuncts are now optimised apart,
+    and C(s) is C(f') ∧ f' = s for the disjoint projection.
     """
     from .. import NeurolangPDL
 
-    nl = NeurolangPDL()
+    nl = NeurolangPDL(**solvers)
     nl.add_uniform_probabilistic_choice_over_set(
         [(1,), (2,), (3,), (4,)], name="selected_study"
     )

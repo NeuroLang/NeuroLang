@@ -547,9 +547,17 @@ Disjoint separator
    lifted for every :math:`\bar a` by the other rules. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
-   them, and every free variable of the query. It is tried after the
-   separator variables, a conjunctive query being the union of a single
-   disjunct.
+   them, and every free variable of the query. A free variable or a
+   constant :math:`u` of a choice atom, at a position where another
+   disjunct has a quantified variable, is made one,
+   :math:`C(u) \equiv \exists f\, (C(f) \land f = u)`, :math:`f` being the
+   variable of another atom of the choice in the disjunct, as :math:`C(f)
+   \land C(u) \equiv C(f) \land f = u`, or a fresh one
+   (``_choice_terms_as_equalities``). The equalities, as comparisons, are
+   the same in every world and belong to the deterministic rest; a union
+   with them and a rest which is not deterministic is declined. It is
+   tried after the separator variables, a conjunctive query being the
+   union of a single disjunct.
 
 
 Clauses of the conjunctive normal form
@@ -567,8 +575,10 @@ Clauses of the conjunctive normal form
    C(f) \land M(f, c))`. The normal form is then not used
    (``_clauses_are_range_restricted``): the rules that follow, the
    disjoint separator among them, apply to the union as it is, and a union
-   none of them lifts is declined, which is sound. A negation alone as a
-   clause is not a disjunction, and is the difference of a conjunction.
+   none of them lifts is declined, which is sound. They also apply when
+   the components of the normal form are not all lifted. A negation alone
+   as a clause is not a disjunction, and is the difference of a
+   conjunction.
 
 Answer variables as constants
    Dalvi and Suciu lift a query for each answer, its free variables being
@@ -1049,6 +1059,15 @@ Disjoint separator
    query: a disjunct without one, true for every value of it, could not be
    given by a plan, whose rows are a finite set of values.
 
+   *Equalities.* In every world, :math:`C(u) \equiv \exists f\, (C(f)
+   \land f = u)`, and, a single tuple of :math:`C` being true,
+   :math:`C(f) \land C(u) \equiv C(f) \land f = u` (Lemma 2): the
+   rewritten disjuncts are equivalent to the given ones, and their choice
+   atoms have quantified variables where the others have, so that the
+   renaming above applies. An equality, as any comparison, is true or
+   false for given values in every world, and is thus part of the
+   deterministic rest :math:`D`, whose plan selects on it.
+
    *Termination.* The rule lifts the union with the variables of the
    choice free, one quantifier less, or lifts nothing (deterministic rest).
 
@@ -1202,8 +1221,9 @@ Comparisons of answer variables
 Declined unions
    Declining a query is sound: it is then solved by weighted model
    counting, exactly. The disjoint separator declines the unions with a
-   disjunct without a free variable of the query, or with a quantifier
-   left in a disjunct.
+   disjunct without a free variable of the query, with a quantifier left
+   in a disjunct, or with the equalities of a free variable or a constant
+   of a choice atom and a rest that is not deterministic.
 
 Projection on a variable
    *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the
