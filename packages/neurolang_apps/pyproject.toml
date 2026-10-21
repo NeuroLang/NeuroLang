@@ -32,6 +32,8 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "pyyaml>=6.0",
+    # The neurostore engine reads the parquet files of its releases.
+    "pyarrow",
 ]
 
 [project.scripts]

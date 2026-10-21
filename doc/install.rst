@@ -163,7 +163,9 @@ NeuroLang requires the following libraries (installed automatically):
 * `rdflib <https://rdflib.readthedocs.io>`_ for ontologies
 * ``typing_inspect``
 * for the applications, `scikit-learn <https://scikit-learn.org>`_,
-  `matplotlib <https://matplotlib.org>`_ and `PyYAML <https://pyyaml.org>`_
+  `matplotlib <https://matplotlib.org>`_, `PyYAML <https://pyyaml.org>`_
+  and `pyarrow <https://arrow.apache.org/docs/python/>`_ (for the parquet
+  files of the ``neurostore`` engine)
 
 Optional extras
 ---------------
