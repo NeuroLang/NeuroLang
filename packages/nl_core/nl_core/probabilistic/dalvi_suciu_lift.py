@@ -1,4 +1,5 @@
 import logging
+import operator
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -240,13 +241,15 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             shattered_query, symbol_table = _prepare_and_optimise_query(
                 flat_query, cpl_program, deterministic_relations
             )
-            # The checks skipped for a projection on a choice are applied
-            # to each query lifted.
+            # The checks that a projection skipped are applied to each
+            # query lifted.
             ra_query = lift_with_dependent_negations(
                 shattered_query, symbol_table,
-                check=_split_choice_projection(
+                check=_projection_applies(
                     shattered_query.antecedent, symbol_table
-                ) is not None
+                ) and _fails_the_checks(
+                    flat_query, shattered_query, symbol_table
+                )
             )
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -349,9 +352,7 @@ def _prepare_and_optimise_query(
         _split_dependent_conjunct(
             RTO.walk(shattered_query.antecedent), Negation, symbol_table
         ) is None and
-        _split_choice_projection(
-            shattered_query.antecedent, symbol_table
-        ) is None
+        not _projection_applies(shattered_query.antecedent, symbol_table)
     ):
         # Otherwise the checks are applied by
         # `lift_with_dependent_negations` to each query it lifts.
@@ -363,6 +364,16 @@ def _prepare_and_optimise_query(
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
     return shattered_query, symbol_table
+
+
+def _fails_the_checks(flat_query, shattered_query, symbol_table):
+    """Whether the query uses two kinds of quantifiers or is not unate."""
+    try:
+        _verify_that_the_query_has_one_quantifier(flat_query)
+        _verify_that_the_query_is_unate(shattered_query, symbol_table)
+    except NotUnateException:
+        return True
+    return False
 
 
 def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
@@ -574,7 +585,11 @@ def projection_plan(rule, symbol_table):
       sharing no probabilistic relation with `A`, and `v` a separator
       variable of `∃(X - {v}) ψ`: the events of different values of `v`
       have different tuples, and the plan is
-      `lift(A) ⋈ ind-π(lift(∃(X - {v}) ψ))`.
+      `lift(A) ⋈ ind-π(lift(∃(X - {v}) ψ))`;
+    * `R(ū) ∧ ¬∃w (R(ū[w/v]) ∧ w ≠ v) ∧ φ'`, `v` being the only variable
+      of `X` in `R(ū)`: the event of a value `a` of `v` has `R(ū[a/v])`
+      and that of `b ≠ a` has not, so the events are mutually exclusive,
+      and the plan is the disjoint projection of `lift(∃(X - {v}) φ)`.
 
     Parameters
     ----------
@@ -588,14 +603,30 @@ def projection_plan(rule, symbol_table):
     Optional[RelationalAlgebraOperation]
         the plan, or None if no projection applies.
     """
-    plan = _choice_projection_plan(rule, symbol_table)
+    plan = _disjoint_projection_plan(rule, symbol_table)
     if plan is None:
         plan = _separator_projection_plan(rule, symbol_table)
     return plan
 
 
-def _choice_projection_plan(rule, symbol_table):
-    split = _split_choice_projection(rule.antecedent, symbol_table)
+def _projection_applies(antecedent, symbol_table):
+    """Whether `antecedent` is `∃X φ` with variables of `X` on which
+    `projection_plan` projects: the checks of a single kind of quantifier
+    and of unateness are then applied to each query it lifts."""
+    return any(
+        split(antecedent, symbol_table) is not None
+        for split in (
+            _split_choice_projection, _split_separator_projection,
+            _split_exclusive_projection,
+        )
+    )
+
+
+def _disjoint_projection_plan(rule, symbol_table):
+    split = (
+        _split_choice_projection(rule.antecedent, symbol_table) or
+        _split_exclusive_projection(rule.antecedent, symbol_table)
+    )
     if split is None:
         return None
     projected, other_variables, conjuncts = split
@@ -738,6 +769,46 @@ def _split_separator_projection(antecedent, symbol_table):
         if _separates(variable, quantified, symbol_table):
             return variable, others, inside, outside
     return None
+
+
+def _split_exclusive_projection(antecedent, symbol_table):
+    """The variable `v` of `∃X φ`, the other variables of `X` and the
+    conjuncts of `φ`, if `φ` has the conjuncts `R(ū)`, whose only
+    variable of `X` is `v`, and `¬∃w (R(ū[w/v]) ∧ w ≠ v)`, or None.
+    """
+    variables, body = _existential_variables_and_body(antecedent)
+    if not isinstance(body, Conjunction):
+        return None
+    for atom in body.formulas:
+        if not isinstance(atom, FunctionApplication):
+            continue
+        projected = variables & set(atom.args)
+        if len(projected) == 1 and any(
+            isinstance(negation, Negation) and
+            _excludes_others(atom, *projected, negation.formula)
+            for negation in body.formulas
+        ):
+            return projected, variables - projected, body.formulas
+    return None
+
+
+def _excludes_others(atom, variable, formula):
+    """Whether `formula` is `∃w (R(ū[w/v]) ∧ w ≠ v)`, `atom` being `R(ū)`
+    and `variable` being `v`."""
+    if not isinstance(formula, ExistentialPredicate):
+        return False
+    other = formula.head
+    body = RTO.walk(formula.body)
+    return (
+        isinstance(body, Conjunction) and len(body.formulas) == 2 and
+        ReplaceExpressionWalker({variable: other}).walk(atom)
+        in body.formulas and
+        any(
+            is_comparison(f) and f.functor.value is operator.ne and
+            set(f.args) == {other, variable}
+            for f in body.formulas
+        )
+    )
 
 
 def _separates(variable, formula, symbol_table):
