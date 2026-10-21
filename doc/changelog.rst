@@ -17,6 +17,19 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**Performance:**
+
+* A probability over the choice of a study with a peak within a radius of
+  each voxel, ``PROB[brain_mask(i, j, k), (euclidean(i, j, k, i1, j1, k1) <
+  3), peak_reported(i1, j1, k1, s), selected_study(s)]``, takes 13 s and half
+  the memory, instead of 47 s and close to 10 GB, and now runs in a browser
+  tab. The natural join with a relation unique on the only common column, as
+  the probabilities of a choice are, is a look-up rather than a pandas merge;
+  Python's ``sum``, ``max``, ``min`` and ``len`` in an aggregation run as
+  pandas reductions on columns of numbers without missing values; groups are
+  not sorted; and the Euclidean join keeps no distances it is not asked for,
+  numbers its pairs of rows with 32-bit integers and does not copy its result.
+
 **New features:**
 
 * NeuroLang is split into four packages, in a `uv workspace

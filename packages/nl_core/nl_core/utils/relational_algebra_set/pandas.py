@@ -26,6 +26,10 @@ class RelationalAlgebraStringExpression(str):
 # tracks both regimes.
 _ANTI_JOIN_MIN_ROWS = 20
 
+# Python's reductions, which pandas runs per group in Python, and the
+# pandas reductions computing the same on columns of numbers.
+_BUILTIN_REDUCTIONS = {sum: "sum", max: "max", min: "min"}
+
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
@@ -720,6 +724,9 @@ class NamedRelationalAlgebraFrozenSet(
 
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
+        joined = self._lookup_join(other, on, new_columns)
+        if joined is not None:
+            return joined
         col_types = self._extract_unified_column_types(other)
         new_container = (
             self._container
@@ -728,6 +735,46 @@ class NamedRelationalAlgebraFrozenSet(
         )
         return self._light_init_same_structure(
             new_container,
+            might_have_duplicates=(
+                self._might_have_duplicates | other._might_have_duplicates
+            ),
+            columns=new_columns,
+        )
+
+    def _lookup_join(self, other, on, new_columns):
+        """
+        Return the natural join with *other* as a look-up, or None.
+
+        When the smaller of the two relations has no two rows with the
+        same value of their only common column, as the probabilities of a
+        choice have, each row of the larger one matches at most one of its
+        rows: the join keeps the rows of the larger one that match, and
+        takes the other columns of the row each one matches. Unlike a merge,
+        it copies only the columns it takes, and the rows it keeps when
+        some do not match. None is returned in the other cases.
+        """
+        if len(on) != 1 or self.is_empty() or other.is_empty():
+            return None
+        key = on[0]
+        small, large = sorted((other, self), key=len)
+        small_key = small._container[key]
+        large_key = large._container[key]
+        if small_key.dtype != large_key.dtype or not small_key.is_unique:
+            return None
+        position = pd.Index(small_key).get_indexer(large_key)
+        rows = large._container
+        found = position >= 0
+        if not found.all():
+            rows, position = rows[found], position[found]
+        columns = {
+            name: rows[name] if name in large.columns
+            else pd.Series(
+                small._container[name].array.take(position), index=rows.index
+            )
+            for name in new_columns
+        }
+        return self._light_init_same_structure(
+            pd.DataFrame(columns, copy=False).reset_index(drop=True),
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
@@ -957,7 +1004,10 @@ class NamedRelationalAlgebraFrozenSet(
             )
         self._drop_duplicates_if_needed()
         if len(group_columns) > 0:
-            groups = self._container.groupby(group_columns, dropna=False)
+            # A set has no order: sorting the groups would only cost memory.
+            groups = self._container.groupby(
+                group_columns, dropna=False, sort=False
+            )
         else:
             groups = self._container.groupby(lambda x: 0, dropna=False)
 
@@ -1074,13 +1124,31 @@ class NamedRelationalAlgebraFrozenSet(
                     f"Destination column {dst} can't be part of the grouping"
                 )
             if src in self.columns:
-                aggs[dst] = pd.NamedAgg(src, fun)
+                aggs[dst] = pd.NamedAgg(src, self._reduction(src, fun))
             elif src is None or all(s in self.columns for s in src):
                 aggs_multi_columns[dst] = fun
             else:
                 raise ValueError(f"Source column {src} not in columns")
 
         return aggs, aggs_multi_columns
+
+    def _reduction(self, column, fun):
+        """
+        Return the pandas reduction computing *fun* on *column*, or *fun*.
+
+        Python's ``sum``, ``max`` and ``min`` are pandas' on a column of
+        numbers without missing values (Python's give NaN, or an order
+        dependent result, on one with them), and ``len`` is the size of
+        each group.
+        """
+        if fun is len:
+            return "size"
+        if fun not in _BUILTIN_REDUCTIONS:
+            return fun
+        values = self._container[column]
+        if values.dtype.kind in "iuf" and not values.hasnans:
+            return _BUILTIN_REDUCTIONS[fun]
+        return fun
 
     def extended_projection(self, eval_expressions):
         proj_columns = list(eval_expressions.keys())
