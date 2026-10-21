@@ -17,13 +17,13 @@ import operator
 from functools import reduce
 from typing import Callable
 
-from ..datalog.expressions import Fact
-from ..datalog.negation import is_conjunctive_negation
+from .expressions import Fact
+from .negation import is_conjunctive_negation
 from ..exceptions import NeuroLangException
 from ..expression_walker import ChainedWalker, PatternWalker, add_match
 from ..expressions import ExpressionBlock
 from ..type_system import Unknown, is_leq_informative
-from . import (
+from ..logic import (
     FALSE,
     TRUE,
     Conjunction,
@@ -38,8 +38,8 @@ from . import (
     Symbol,
     Union
 )
-from .expression_processing import extract_logic_free_variables
-from .transformations import (
+from ..logic.expression_processing import extract_logic_free_variables
+from ..logic.transformations import (
     DesambiguateQuantifiedVariables,
     EliminateImplications,
     LogicExpressionWalker,

@@ -1,6 +1,8 @@
 from neurolang.config import check_query_backend, config
 from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
 
+config.reload_on_backend_switch(__name__)
+
 _backend = config["RAS"].get("backend") if "RAS" in config else None
 if _backend is not None:
     try:

@@ -46,8 +46,11 @@ from ..datalog.expressions import (
 )
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
-from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
-from .datalog.pretty_printer import DatalogPrettyPrinter
+from ..utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
+from ..datalog.pretty_printer import DatalogPrettyPrinter
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -59,7 +62,7 @@ from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
-from ..logic.horn_clauses import Fol2DatalogTranslationException
+from ..datalog.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
 from .show_ra import (
     generated_query_symbol,

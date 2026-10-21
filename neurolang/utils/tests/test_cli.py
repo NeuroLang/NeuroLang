@@ -6,7 +6,7 @@ import pytest
 
 from neurolang.exceptions import NeuroLangException, SymbolNotFoundError
 from neurolang.expressions import Constant, Symbol
-from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
 from neurolang.logic import Conjunction, ExistentialPredicate
 from neurolang.frontend.show_ra import ShowRAOptions

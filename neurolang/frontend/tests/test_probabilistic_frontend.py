@@ -17,7 +17,7 @@ from ...exceptions import (
 )
 from ...expressions import Symbol
 from ...logic import Union
-from ...logic.horn_clauses import Fol2DatalogTranslationException
+from ...datalog.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver

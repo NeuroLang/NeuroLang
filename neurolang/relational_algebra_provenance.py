@@ -40,7 +40,7 @@ from .relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
-from .utils import OrderedSet
+from .utils.orderedset import OrderedSet
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)

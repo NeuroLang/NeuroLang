@@ -12,7 +12,8 @@ from ...logic.unification import (apply_substitution,
                                   compose_substitutions)
 from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
-from ...utils import OrderedSet, log_performance
+from ...utils.orderedset import OrderedSet
+from ...utils.various import log_performance
 from ...config import config
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule,

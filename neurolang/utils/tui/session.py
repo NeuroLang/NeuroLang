@@ -31,7 +31,7 @@ from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
 from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Query, Symbol
-from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,

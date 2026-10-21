@@ -4,7 +4,7 @@ from typing import Any
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..utils import OrderedSet
+from ..utils.orderedset import OrderedSet
 from . import (
     FALSE,
     TRUE,

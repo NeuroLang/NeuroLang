@@ -5,7 +5,7 @@ from ...expressions import Constant
 from ...logic.unification import (apply_substitution_arguments,
                                   compose_substitutions,
                                   most_general_unifier_arguments)
-from ...utils import OrderedSet
+from ...utils.orderedset import OrderedSet
 from .. import Negation
 from ..expression_processing import extract_logic_predicates
 from . import (ChaseGeneral, ChaseMGUMixin,

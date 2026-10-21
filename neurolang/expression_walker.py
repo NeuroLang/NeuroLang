@@ -23,7 +23,7 @@ from .expressions import (
     is_leq_informative,
     unify_types,
 )
-from .utils import OrderedSet
+from .utils.orderedset import OrderedSet
 
 
 LOG = logging.getLogger(__name__)

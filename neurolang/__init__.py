@@ -1,4 +1,5 @@
-from .neurolang import *
+# ``__getattr__`` imports the frontends when first used.
+from .neurolang import __all__, __getattr__, config, exceptions  # noqa: F401
 
 from importlib.metadata import version, PackageNotFoundError
 try:

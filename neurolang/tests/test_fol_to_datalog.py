@@ -31,7 +31,7 @@ from ..logic.transformations import (
     convert_to_pnf_with_cnf_matrix,
     convert_to_pnf_with_dnf_matrix,
 )
-from ..logic.horn_clauses import (
+from ..datalog.horn_clauses import (
     MoveNegationsToAtomsOrExistentialQuantifiers,
     HornClause,
     HornFact,

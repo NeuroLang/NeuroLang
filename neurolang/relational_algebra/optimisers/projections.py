@@ -4,7 +4,7 @@ from itertools import permutations
 
 from ... import expression_walker as ew
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...utils import OrderedSet
+from ...utils.orderedset import OrderedSet
 from ..relational_algebra import (
     COUNT,
     Column,

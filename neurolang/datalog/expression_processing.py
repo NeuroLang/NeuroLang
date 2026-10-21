@@ -48,7 +48,7 @@ from ..logic.transformations import (
     RemoveTrivialOperations,
 )
 from ..logic.unification import most_general_unifier
-from ..utils import OrderedSet
+from ..utils.orderedset import OrderedSet
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 

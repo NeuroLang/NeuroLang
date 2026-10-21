@@ -279,6 +279,24 @@ Unreleased
   ``use_base_symbols`` and the ``atlases:`` section.  The
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
+* NeuroLang is layered as the packages it is to be split into: the
+  expression engine (expressions, walkers, types, logic, config), the core
+  (relational algebra and its sets, Datalog, probabilistic), the language
+  (parsers, frontends, regions) and the applications (command line,
+  terminal interface, engines).  Each layer imports only those below it,
+  which ``.importlinter`` checks in CI: ``import neurolang.expressions``
+  needs neither pandas nor the relational algebra sets, and the core
+  needs neither the frontends nor lark, nibabel or nilearn.
+  ``import neurolang`` imports the frontends when one is first used.
+  The FOL to Datalog translation moved from ``neurolang.logic.horn_clauses``
+  to :mod:`neurolang.datalog.horn_clauses`, and the Datalog pretty-printer
+  to :mod:`neurolang.datalog.pretty_printer`
+  (``neurolang.frontend.datalog.pretty_printer`` still imports it).
+  Modules that choose the classes of the relational algebra backend when
+  imported register with ``config.reload_on_backend_switch``, rather than
+  being listed in the configuration.  The tests of the core that ran
+  queries through a frontend moved to :file:`neurolang/frontend/tests`.
+
 **Bug fixes:**
 
 * The badges of the README: the coverage badge, deployed to ``gh-pages``,

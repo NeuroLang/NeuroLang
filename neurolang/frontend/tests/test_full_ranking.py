@@ -11,7 +11,7 @@ import pytest
 
 from ...exceptions import NotRankedException, UnsupportedSolverError
 from ...frontend import NeurolangPDL
-from .. import dalvi_suciu_lift
+from ...probabilistic import dalvi_suciu_lift
 
 R_FACTS = {
     ("a", "b"): 0.5, ("b", "a"): 0.4, ("a", "a"): 0.3,

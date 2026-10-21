@@ -60,7 +60,7 @@ from ..relational_algebra.pretty_printer import (
     pretty_repr,
     subscript,
 )
-from .datalog.pretty_printer import DatalogPrettyPrinter
+from ..datalog.pretty_printer import DatalogPrettyPrinter
 from .stratum_solver import StratumSolver, with_empty_relations
 
 __all__ = [
