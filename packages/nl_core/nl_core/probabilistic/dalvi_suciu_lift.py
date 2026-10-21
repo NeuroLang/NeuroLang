@@ -108,7 +108,7 @@ from .ranking import (
     rank_query,
     verify_that_the_query_is_ranked
 )
-from .shattering import NE, shatter_constants
+from .shattering import EQ, NE, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -1267,10 +1267,13 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule_cnf, ignore_symbols=deterministic_symbols
     )
     if cnf_is_usable and len(connected_components) > 1:
-        return components_plan(
+        plan = components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
+        # Otherwise the rules below are tried on the query as it is.
+        if is_pure_lifted_plan(plan):
+            return plan
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(
@@ -1771,6 +1774,10 @@ def disjoint_separator(query, symbol_table):
         # A disjunct without a free variable is true for every value of
         # it, which a plan cannot give.
         return False, None
+    disjuncts, equalities = _choice_terms_as_equalities(
+        disjuncts, quantified, symbol_table
+    )
+    quantified |= equalities
     separators, substitutions, choice_atoms = _choice_separators(
         disjuncts, quantified, symbol_table
     )
@@ -1791,13 +1798,15 @@ def disjoint_separator(query, symbol_table):
         if atom not in choice_atoms
     ]
     if all(
+        isinstance(atom.functor, Constant) or
         is_atom_a_deterministic_relation(atom, symbol_table)
         for atom in remainder_atoms
     ):
         # Every disjunct is the choice atoms conjoined with deterministic
-        # atoms: P[C(a) and D(a)] = P[C(a)] [D(a)], D(a) being given by its
-        # support. The choice atoms in D are replaced by their support, so
-        # that every label in D is 0 or 1, as a negation (a difference) needs.
+        # atoms or builtins, the same in every world: P[C(a) and D(a)] =
+        # P[C(a)] [D(a)], D(a) being given by its support. The choice atoms
+        # in D are replaced by their support, so that every label in D is
+        # 0 or 1, as a negation (a difference) needs.
         deterministic = RTO.walk(Disjunction(tuple(disjuncts)))
         if isinstance(deterministic, Disjunction):
             # The variables a disjunct alone has are projected in the
@@ -1827,11 +1836,64 @@ def disjoint_separator(query, symbol_table):
             support,
         )
         return True, rap.DisjointProjection(plan, attributes)
+    if equalities:
+        # The equalities are only translated in a deterministic rest.
+        return False, None
     body = add_existentials_except(
         RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
     plan = dalvi_suciu_lift(body, symbol_table)
     return True, rap.DisjointProjection(plan, attributes)
+
+
+def _choice_terms_as_equalities(disjuncts, quantified, symbol_table):
+    """
+    The *disjuncts* with the free variables and constants `u` of their
+    choice atoms, at positions where a disjunct has a *quantified*
+    variable, replaced by variables `f` and the equalities `f = u`, so that
+    the atoms can be made the same: `C(u) ≡ ∃f (C(f) ∧ f = u)`. `f` is the
+    variable of another atom of the choice in the disjunct, as
+    `C(f) ∧ C(u) ≡ C(f) ∧ f = u` (Lemma 2), else a fresh one; with the
+    fresh variables.
+    """
+    atoms = [
+        atom for disjunct in disjuncts for atom in _conjuncts(disjunct)
+        if isinstance(atom, FunctionApplication) and
+        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+    ]
+    positions = {
+        (atom.functor, i) for atom in atoms
+        for i, arg in enumerate(atom.args) if arg in quantified
+    }
+    fresh = set()
+    new_disjuncts = []
+    for disjunct in disjuncts:
+        conjuncts = list(_conjuncts(disjunct))
+        for atom in [a for a in conjuncts if a in atoms]:
+            to_replace = [
+                i for i, arg in enumerate(atom.args)
+                if (atom.functor, i) in positions and arg not in quantified
+            ]
+            if not to_replace:
+                continue
+            other = next((
+                a for a in conjuncts if a in atoms and
+                a.functor == atom.functor and
+                all(a.args[i] in quantified for i in to_replace)
+            ), None)
+            args = list(atom.args)
+            for i in to_replace:
+                args[i] = other.args[i] if other else Symbol.fresh()
+                fresh |= {args[i]} - quantified
+                conjuncts.append(EQ(args[i], atom.args[i]))
+            conjuncts[conjuncts.index(atom)] = atom.apply(
+                atom.functor, tuple(args)
+            )
+        new_disjuncts.append(
+            RTO.walk(Conjunction(tuple(conjuncts)))
+            if conjuncts != list(_conjuncts(disjunct)) else disjunct
+        )
+    return new_disjuncts, fresh
 
 
 def _has_quantifier(formula):
