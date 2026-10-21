@@ -67,6 +67,17 @@ engines:
       term if the question names one; for the regions or points
       co-activated with a seed, PROB[active(l, s) // seed(s)] = p; for
       "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
+      A question about a topic given as a description, or about a
+      Cognitive Atlas concept, uses the similarity of the study texts to
+      it: similar_study(q, s), the studies closest to the text q, with
+      their titles from study_title; p_a_given_similar, lift_llm and
+      uniformity_llm for the brain.  A Cognitive Atlas definition reaches
+      them from the queried rule itself, cogat_definition('working
+      memory', d) joined with similar_study(d, s) or uniformity_llm(d, i,
+      j, k, u), or with a rule of yours taking the text as its first
+      argument, close(q, s) :- similar_study(q, s), selected_study(s);
+      inside another rule the text is not known and the query fails.
+      Rank by similarity rather than with a fixed threshold.
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
@@ -98,6 +109,7 @@ engines:
       cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
       cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
+      cogat_definition(t, d) :- cogat_term(x, t), skos:definition(x, d)
       cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
     # The Cognitive Atlas ontology, for open-world queries over concepts,
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
@@ -195,10 +207,14 @@ engines:
         columns: [query]
         type: str
         description: "a free-text query"
+      text:
+        columns: [text]
+        type: str
+        description: "the title or abstract of a study"
       similarity:
         columns: [similarity]
         type: float
-        description: "a cosine similarity between SPECTER2 embeddings"
+        description: "a cosine similarity between text embeddings"
       lift:
         columns: [lift]
         type: float
@@ -245,6 +261,9 @@ engines:
         arguments:
           - voxel
           - study
+      study_title:
+        description: "Title of a study"
+        arguments: [study, text]
       study:
         description: "All study identifiers"
         arguments:
@@ -366,9 +385,9 @@ engines:
       study_similarity:
         description: >-
           Cosine similarity of the title and abstract of a study to a
-          free-text query, with SPECTER2 (the studies with a text); the first
-          query embeds the abstracts, which takes a while and needs
-          ``pip install "neurolang[embeddings]"``
+          free-text query (the studies with a text), embedded with SPECTER2;
+          the first query embeds the abstracts, which takes a while and
+          needs ``pip install "neurolang[embeddings]"``
         arguments:
           - query
           - study
@@ -395,7 +414,7 @@ engines:
       uniformity_llm:
         description: >-
           uniformity of a free-text query: the uniformity ratio of the 5% of
-          the studies closest to the text with SPECTER2, as for the studies
+          the studies closest to the text (similar_study), as for the studies
           of a term
         arguments:
           - query
@@ -423,6 +442,14 @@ engines:
         arguments:
           - cogat_class
           - cogat_term
+      cogat_definition:
+        description: >-
+          Definition of a Cognitive Atlas concept, by its lower-case label: a
+          free-text query for similar_study, uniformity_llm and the other
+          free-text predicates
+        arguments:
+          - cogat_term
+          - query
       cogat_measures:
         description: >-
           Cognitive Atlas contrasts (and tasks) measuring a concept, by IRI
@@ -536,10 +563,6 @@ engines:
       study:
         type: str
         description: "a study of the NeuroStore database"
-      text:
-        columns: [text]
-        type: str
-        description: "the title or abstract of a study"
       concept:
         columns: [concept]
         type: str
@@ -549,9 +572,6 @@ engines:
         type: str
         description: "a cognitive domain extracted from the tasks of a study"
     predicates:
-      study_title:
-        description: "Title of a study"
-        arguments: [study, text]
       study_abstract:
         description: "Abstract of a study"
         arguments: [study, text]

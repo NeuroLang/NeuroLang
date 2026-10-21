@@ -1,9 +1,12 @@
-# Questions on the neurosynth engine with their Datalog queries: the
-# few-shot examples of the LLM query assistant, the most similar to the
-# user's question being put in the prompt. Every query is
-# checked against the engine by the tests (NEUROLANG_TEST_DATA_DIR).
+# Questions on the coordinate-based meta-analysis engines (neurosynth,
+# neurostore) with their Datalog queries: the few-shot examples of the
+# LLM query assistant, the most similar to the user's question being put
+# in the prompt. Both engines extend coordinate_meta_analysis and share
+# this bank; examples/<engine>.yaml adds those of one engine. Every
+# query is checked against the engines by the tests
+# (NEUROLANG_TEST_DATA_DIR).
 #
-# As the engine's assistant_guidance asks, every question is answered
+# As the engines' assistant_guidance asks, every question is answered
 # with probabilistic query answering over selected_study, the uniform
 # choice of a study: a study is chosen at random and the answer is the
 # probability of what the question asks, conditioned on the term it
@@ -13,6 +16,12 @@
 # cortex (destrieux_activated), and the Schaefer networks of the cortex
 # and the Tian atlas of the subcortex for the functional anatomy
 # (schaefer_activated, tian_activated).
+#
+# A topic given as a description, or a Cognitive Atlas concept, is
+# matched to the studies by the similarity of their title and abstract
+# (similar_study: the 5% closest), with whichever text encoder the
+# engine uses; a Cognitive Atlas definition comes from cogat_definition
+# and is joined in the queried rule itself.
 examples:
   - question: Which studies mention pain?
     datalog: |-
@@ -225,3 +234,35 @@ examples:
       p_right(p) :- PROB[right(s)] = p
       p_both(p) :- PROB[both(s)] = p
       ans(lift) :- p_both(p12), p_left(p1), p_right(p2), (lift == p12 / (p1 * p2))
+
+  - question: Which studies are about the visual word form area? Give their titles.
+    datalog: |-
+      ans(s, title, v) :- similar_study('visual word form area', s), study_similarity('visual word form area', s, v), study_title(s, title)
+
+  - question: Which studies are about the Cognitive Atlas concept response inhibition, with their titles?
+    datalog: |-
+      ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+
+  - question: Which voxels do the studies about holding information in mind over a delay activate?
+    datalog: |-
+      ans(i, j, k, p) :- p_a_given_similar('holding information in mind over a delay', i, j, k, p)
+
+  - question: Where in the brain is working memory, by its definition in the Cognitive Atlas?
+    datalog: |-
+      ans(i, j, k, u) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, u)
+
+  - question: How likely is a study about fear, by its Cognitive Atlas definition, to report an amygdala activation?
+    datalog: |-
+      amygdala_label(l) :- tian_activated(l, s), startswith('lAMY', l)
+      amygdala_label(l) :- tian_activated(l, s), startswith('mAMY', l)
+      amygdala(s) :- amygdala_label(l), tian_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_amygdala_given_close(q, PROB) :- amygdala(s) // close(q, s)
+      ans(p) :- cogat_definition('fear', d), p_amygdala_given_close(d, p)
+
+  - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s), ~mentions(s, 'fear')
+      p_close(q, PROB) :- close(q, s)
+      ans(p) :- cogat_definition('fear', d), p_close(d, p)
+

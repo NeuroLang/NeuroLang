@@ -2,7 +2,8 @@
 The example questions of the engines, for in-context learning.
 
 Each engine can have a bank of questions with their SQUALL and Datalog
-queries, ``examples/<engine>.yaml`` next to this module. The examples
+queries, ``examples/<engine>.yaml`` next to this module, and inherits
+the banks of the engines it extends. The examples
 put in the prompt are those whose question is the most similar to the
 user's (:func:`select_examples`), ranked by BM25 over their words: no
 embedding model is needed. Engines without a bank fall back on the
@@ -86,12 +87,22 @@ def _configuration_examples(engine_name: str) -> list:
 
 
 def load_examples(engine_name: str) -> list:
-    """Return the examples of *engine_name*, from its bank or its config."""
+    """
+    Return the examples of *engine_name*, from its banks or its config.
+
+    The banks of the engines it ``extends`` come first, then its own:
+    the ``neurosynth`` and ``neurostore`` engines share the bank of
+    ``coordinate_meta_analysis``.
+    """
     if not engine_name:
         return []
-    path = bank_path(engine_name)
-    if path.exists():
-        return list(_load_bank(path))
+    banks = [
+        bank_path(name)
+        for name in engine_registry.engine_bases(engine_name) + [engine_name]
+    ]
+    banks = [path for path in banks if path.exists()]
+    if banks:
+        return [example for path in banks for example in _load_bank(path)]
     if engine_name in engine_registry.list_engine_names():
         try:
             return _configuration_examples(engine_name)

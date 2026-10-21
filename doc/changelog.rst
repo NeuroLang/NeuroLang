@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* The query assistant searches the studies by a description or a
+  Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
+  share a bank of examples (``coordinate_meta_analysis.yaml``, which banks
+  now inherit through ``extends``) with questions answered with
+  ``similar_study``, ``p_a_given_similar``, ``uniformity_llm`` and the
+  new ``cogat_definition(term, definition)``; ``neurostore.yaml`` adds
+  questions on its LLM-extracted concepts and domains.  ``neurosynth``
+  gets ``study_title(study, title)``, from its metadata, as ``neurostore``
+  had.
+
 * NeuroLang is split into four packages, in a `uv workspace
   <https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ under
   :file:`packages/`: ``nl-expr`` (the expression engine, imported as

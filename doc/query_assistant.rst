@@ -77,6 +77,10 @@ and text-to-SPARQL systems.
     linking). The examples are those closest to the question, chosen by
     BM25 from a bank of checked examples
     (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
+    An engine inherits the banks of the engines it ``extends``: the
+    ``neurosynth`` and ``neurostore`` engines share that of
+    ``coordinate_meta_analysis``, and ``neurostore.yaml`` adds questions
+    on its concepts, domains and abstracts.
 
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
@@ -131,6 +135,37 @@ shown with their comments and the query is kept without them.
     term_association(s, t) :- mentions(s, t), selected_study(s)
     % Calculates the probability that co-activated regions are linked to reading.
     ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+
+Questions given as a description or a Cognitive Atlas concept
+-------------------------------------------------------------
+
+On the ``neurosynth`` and ``neurostore`` engines, a topic the vocabulary
+has no term for, or a concept of the Cognitive Atlas, is matched to the
+studies by the similarity of their title and abstract to its text
+(:doc:`tutorial_text_embeddings`). ``similar_study(q, s)`` holds for the
+5% of the studies closest to the text ``q``, ``study_title(s, t)`` gives
+their titles, and ``cogat_definition(t, d)`` the definition ``d`` of a
+Cognitive Atlas concept by its lower-case label ``t``.  Both strategies
+know them from the engines' examples and guidance:
+
+.. code-block:: text
+
+    $ neurolang-query --engine neurosynth --ask "Which studies are about the Cognitive Atlas concept response inhibition, with their titles?"
+    ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+
+The label must be the Cognitive Atlas one: ICL writes it from the
+question, and finds nothing for a concept the atlas does not have (it has
+*Emotional regulation task*, a task, but no *emotion regulation*), while
+the ReAct agent can look it up with ``search_values`` over ``cogat_term``.
+
+The definition is joined in the queried rule itself, as here, or passed
+to a rule taking the text as its first argument (``close(q, s) :-
+similar_study(q, s), selected_study(s)``): a text joined inside another
+rule is not passed on, and the query fails with an
+:class:`~neurolang.exceptions.UnboundVariablesError`.  The similarities
+come from the engine's text encoder, SPECTER2 by default; ``similar_study``
+keeps a share of the studies rather than a threshold, so the queries do
+not depend on it.
 
 Configuration
 -------------

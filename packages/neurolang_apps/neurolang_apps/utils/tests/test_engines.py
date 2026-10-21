@@ -10,6 +10,22 @@ from unittest.mock import MagicMock, patch
 
 from neurolang.frontend.neurosynth_utils import StudyID
 
+NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
+
+# The NeuroSynth metadata of the mock studies, for study_title: the tests
+# never download the real one.
+FAKE_METADATA = pd.DataFrame({
+    "id": [1, 2, 3, 1001, 1002],
+    "title": ["Study one", "Study two", "Study three", "Memory", "Language"],
+})
+
+
+@pytest.fixture(autouse=True)
+def _fake_study_metadata():
+    """Serve FAKE_METADATA to the tests that call init_engine themselves."""
+    with patch(f"{NS_INIT}.fetch_study_metadata", return_value=FAKE_METADATA):
+        yield
+
 
 class TestNeurosynthEngineStudyIdConsistency:
     """
@@ -470,6 +486,8 @@ def _build_small_neurosynth(free_text=True):
                   return_value=nib.Nifti1Image(cortex, np.eye(4))), \
             patch(f"{init}.fetch_cognitive_atlas_tasks",
                   return_value=_COGNITIVE_ATLAS_TASKS), \
+            patch(f"{init}.fetch_study_metadata",
+                  return_value=FAKE_METADATA), \
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
