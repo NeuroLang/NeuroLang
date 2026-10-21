@@ -19,6 +19,7 @@ from ..relational_algebra import (
     Product,
     Projection,
     RenameColumn,
+    ReplaceColumns,
     ReplaceNull,
     Selection,
     eq_,
@@ -536,7 +537,7 @@ class PushInSelections(ew.PatternWalker):
         )
     )
     def push_selection_in_extended_projection(self, expression):
-        rew = ew.ReplaceExpressionWalker({
+        rew = ReplaceColumns({
             projection.dst_column: projection.fun_exp
             for projection in expression.relation.projection_list
             if isinstance(projection.fun_exp, Constant[Column])
@@ -606,7 +607,7 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
     )
     def standardize_projected_column(self, expression):
-        rew = ew.ReplaceExpressionWalker(
+        rew = ReplaceColumns(
             {
                 max(expression.relation.formula.args, key=lambda x: x.value):
                 min(expression.relation.formula.args, key=lambda x: x.value)
@@ -634,7 +635,7 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
     )
     def invert_selection_order(self, expression):
-        rew = ew.ReplaceExpressionWalker(
+        rew = ReplaceColumns(
             {
                 max(expression.formula.args, key=lambda x: x.value):
                 min(expression.formula.args, key=lambda x: x.value)
@@ -664,7 +665,7 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
     def push_selection_above_projection(self, expression):
         # Column i of the relation is column attributes.index(i) of the
         # projection.
-        rew = ew.ReplaceExpressionWalker({
+        rew = ReplaceColumns({
             column: int2columnint_constant(
                 expression.attributes.index(column)
             )
@@ -687,7 +688,7 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
     )
     def push_selection_above_name_columns(self, expression):
-        rew = ew.ReplaceExpressionWalker({
+        rew = ReplaceColumns({
             int2columnint_constant(i): name
             for i, name in enumerate(expression.column_names)
         })
