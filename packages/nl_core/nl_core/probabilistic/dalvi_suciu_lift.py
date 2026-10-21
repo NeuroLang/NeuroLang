@@ -42,6 +42,7 @@ from nl_expr.logic import (
 from nl_expr.logic.expression_processing import (
     ExtractConjunctAtoms,
     ExtractExistentialPrefix,
+    ExtractRelationalAtoms,
     extract_logic_atoms,
     extract_logic_free_variables,
     extract_logic_predicates,
@@ -502,7 +503,7 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
 def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
-    comparisons = tuple(f for f in _conjuncts(antecedent) if is_comparison(f))
+    comparisons = ConjunctComparisons().walk(antecedent)
     if comparisons:
         # Comparisons of free variables select the answers of the rest.
         plan = lift_with_dependent_negations(
@@ -1300,6 +1301,24 @@ def dalvi_suciu_lift(rule, symbol_table):
     return NonLiftable(rule)
 
 
+class ConjunctComparisons(PatternWalker):
+    """The comparisons which are conjuncts of a conjunction."""
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return tuple(chain.from_iterable(
+            self.walk(formula) for formula in conjunction.formulas
+        ))
+
+    @add_match(FunctionApplication(Constant, ...), is_comparison)
+    def comparison(self, comparison):
+        return (comparison,)
+
+    @add_match(...)
+    def other(self, expression):
+        return ()
+
+
 def different_free_variables_plan(rule, symbol_table):
     """Plan for a query with atoms of a tuple-independent relation `R`
     with free variables `x` and `y` at the same position, which Dalvi and
@@ -1313,8 +1332,8 @@ def different_free_variables_plan(rule, symbol_table):
     """
     free_variables = extract_logic_free_variables(rule)
     atoms = [
-        atom for atom in extract_logic_atoms(rule)
-        if isinstance(atom.functor, Symbol) and not (
+        atom for atom in ExtractRelationalAtoms().walk(rule)
+        if not (
             is_atom_a_deterministic_relation(atom, symbol_table) or
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         )
@@ -1336,7 +1355,7 @@ def different_free_variables_plan(rule, symbol_table):
             alias = Symbol.fresh()
             symbol_table[alias] = symbol_table[atom_x.functor]
             different = dalvi_suciu_lift(ReplaceExpressionWalker({
-                a: alias(*a.args) for a in renamed
+                a: a.apply(alias, a.args) for a in renamed
             }).walk(rule), symbol_table)
             query = Implication(Symbol.fresh()(*free_variables), rule)
             same = ReplaceExpressionWalker({y: x}).walk(query)

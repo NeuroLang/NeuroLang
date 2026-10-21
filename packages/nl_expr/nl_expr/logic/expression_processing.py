@@ -342,14 +342,18 @@ def extract_logic_atoms(expression):
     return edp.walk(expression)
 
 
-class ExtractConjunctAtoms(ExtractLogicAtoms):
-    """The atoms of relational symbols which are conjuncts of a
-    conjunction, or the formula itself if it is one, not those within its
-    negations, quantifiers or disjunctions, nor builtins."""
+class ExtractRelationalAtoms(ExtractLogicAtoms):
+    """The atoms of relational symbols, not those of builtins."""
 
     @add_match(FunctionApplication(Constant, ...))
     def builtin(self, expression):
         return OrderedSet()
+
+
+class ExtractConjunctAtoms(ExtractRelationalAtoms):
+    """The atoms of relational symbols which are conjuncts of a
+    conjunction, or the formula itself if it is one, not those within its
+    negations, quantifiers or disjunctions."""
 
     @add_match(Negation)
     def negation(self, expression):
