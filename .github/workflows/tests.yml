@@ -58,11 +58,13 @@ jobs:
         genbadge coverage -o badges/coverage.svg -i coverage.xml
       if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
 
-    - name: Publish badge to gh-pages
+    # The badge has its branch: the benchmarks' dashboard, deployed to
+    # gh-pages with keep_files false, deleted it, and it the dashboard.
+    - name: Publish badge to the badges branch
       uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: badges
         publish_dir: ./badges
-        destination_dir: ./
         keep_files: false
       if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
