@@ -1,5 +1,7 @@
 from ...expressions import Symbol
 from .. import (
+    FALSE,
+    TRUE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
@@ -9,8 +11,10 @@ from .. import (
 from ..transformations import (
     AbsorbAssertedConjuncts,
     AbsorbAssertedConjunctsInNegations,
+    LogicExpressionWalker,
     PushExistentialsDown,
     PushUniversalsDown,
+    SimplifyTruthValuesMixin,
     standardise_apart
 )
 
@@ -321,3 +325,20 @@ def test_standardise_apart():
     assert outer.body.formulas[0] == Q(outer.head)
     assert inner.body == R(inner.head)
     assert universal.body == P(universal.head)
+
+
+class SimplifyTruthValues(SimplifyTruthValuesMixin, LogicExpressionWalker):
+    pass
+
+
+def test_simplify_truth_values():
+    stv = SimplifyTruthValues()
+    assert stv.walk(
+        Conjunction((P(X), Negation(Conjunction((Q(X), FALSE)))))
+    ) == Conjunction((P(X),))
+    assert stv.walk(Negation(TRUE)) == FALSE
+    assert stv.walk(
+        ExistentialPredicate(Y, Conjunction((Q(Y), FALSE)))
+    ) == FALSE
+    assert stv.walk(Conjunction((TRUE, TRUE))) == TRUE
+    assert stv.walk(Conjunction((P(X), Q(Y)))) == Conjunction((P(X), Q(Y)))
