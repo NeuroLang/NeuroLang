@@ -66,6 +66,7 @@ from nl_expr.logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    ExtendedProjection,
     Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
@@ -382,7 +383,9 @@ def _fails_the_checks(flat_query, shattered_query, symbol_table):
 
 def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
     """Builtins are only allowed as comparisons within existential
-    conjuncts, possibly negated, see `comparison_conjunct_plan`.
+    conjuncts, possibly negated, see `comparison_conjunct_plan`, or as
+    conjuncts, whose variables are free, see
+    `_lift_with_dependent_negations`.
     """
     antecedent = RTO.walk(shattered_query.antecedent)
     if isinstance(antecedent, Conjunction):
@@ -391,7 +394,9 @@ def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
         formulas = (antecedent,)
     if any(
         is_builtin(atom, known_builtins=cpl_program.builtins()) and not (
-            is_comparison(atom) and _is_existential_conjunct(formula)
+            is_comparison(atom) and (
+                _is_existential_conjunct(formula) or formula == atom
+            )
         )
         for formula in formulas
         for atom in extract_logic_atoms(formula)
@@ -497,6 +502,19 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
 def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
+    comparisons = tuple(f for f in _conjuncts(antecedent) if is_comparison(f))
+    if comparisons:
+        # Comparisons of free variables select the answers of the rest.
+        plan = lift_with_dependent_negations(
+            Implication(consequent, RTO.walk(Conjunction(tuple(
+                f for f in _conjuncts(antecedent) if f not in comparisons
+            )))),
+            symbol_table, check
+        )
+        return reduce(
+            lambda plan, c: rap.Selection(plan, columns_comparison(c)),
+            comparisons, plan
+        )
     if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
         split = _split_comparison_conjunct(antecedent)
         if split is not None:
@@ -1275,7 +1293,63 @@ def dalvi_suciu_lift(rule, symbol_table):
     ):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
+    plan = different_free_variables_plan(rule, symbol_table)
+    if plan is not None:
+        return plan
+
     return NonLiftable(rule)
+
+
+def different_free_variables_plan(rule, symbol_table):
+    """Plan for a query with atoms of a tuple-independent relation `R`
+    with free variables `x` and `y` at the same position, which Dalvi and
+    Suciu, who replace the free variables by constants, lift as different
+    relations when `x ≠ y`. The atoms of `R` with `y` there are renamed
+    into an alias `R'` of `R` if, when `x ≠ y`, they are different tuples
+    from the other atoms of `R`; when `x = y`, `y` is replaced by `x`. The
+    answers of the two cases are different, and the plan is
+
+        σ_{x ≠ y} lift(Q[R'/R]) ∪ π_{y := x} lift(Q[x/y])
+    """
+    free_variables = extract_logic_free_variables(rule)
+    atoms = [
+        atom for atom in extract_logic_atoms(rule)
+        if isinstance(atom.functor, Symbol) and not (
+            is_atom_a_deterministic_relation(atom, symbol_table) or
+            is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        )
+    ]
+    for atom_x, atom_y in combinations(atoms, 2):
+        if atom_x.functor != atom_y.functor:
+            continue
+        for i, (x, y) in enumerate(zip(atom_x.args, atom_y.args)):
+            if x == y or not {x, y} <= free_variables:
+                continue
+            relation = [a for a in atoms if a.functor == atom_x.functor]
+            renamed = [a for a in relation if a.args[i] == y]
+            if not _are_different_tuples_when_different(
+                Conjunction(tuple(renamed)), y,
+                Conjunction(tuple(a for a in relation if a not in renamed)),
+                {x}, symbol_table
+            ):
+                continue
+            alias = Symbol.fresh()
+            symbol_table[alias] = symbol_table[atom_x.functor]
+            different = dalvi_suciu_lift(ReplaceExpressionWalker({
+                a: alias(*a.args) for a in renamed
+            }).walk(rule), symbol_table)
+            query = Implication(Symbol.fresh()(*free_variables), rule)
+            same = ReplaceExpressionWalker({y: x}).walk(query)
+            return rap.Union(
+                rap.Selection(different, columns_comparison(NE(x, y))),
+                ExtendedProjection(
+                    dalvi_suciu_lift(same.antecedent, symbol_table),
+                    compute_projections_needed_to_reintroduce_head_terms(
+                        None, query, same
+                    )
+                )
+            )
+    return None
 
 
 def _clauses_are_range_restricted(cnf):
