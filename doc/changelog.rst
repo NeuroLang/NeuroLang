@@ -17,7 +17,37 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**New features:**
+
+* Text embeddings can come from the Albert API (the French state's LLM API)
+  instead of a local SPECTER2: ``encoder: albert-qwen`` in an engine's
+  ``text_embeddings`` entry, or ``NEUROLANG_TEXT_ENCODER=albert-qwen`` for
+  every engine, with an ``ALBERT_API_KEY``.  Documents are embedded with
+  Qwen3-VL-Embedding-8B as raw text, queries with a retrieval instruction.
+  Nothing is installed or downloaded.
+
+* NeuroLang is split into four packages, in a `uv workspace
+  <https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ under
+  :file:`packages/`: ``nl-expr`` (the expression engine, imported as
+  ``nl_expr``), ``nl-core`` (relational algebra, Datalog and probabilistic
+  Datalog, ``nl_core``), ``neurolang`` (the languages, frontends and brain
+  regions) and ``neurolang-apps`` (the ``neurolang-query`` command line, its
+  interactive mode, the query assistant and the engines,
+  ``neurolang_apps``). ``neurolang[apps]`` installs them all; ``neurolang``
+  alone is the library without the applications. The modules keep their
+  names under ``neurolang``, which are the same modules:
+  ``neurolang.datalog`` is ``nl_core.datalog`` and ``python -m
+  neurolang.utils.cli`` still runs the command line. The tests of a package
+  use only that package and those before it, and CI runs the tests of the
+  packages a pull request changes, on every Python version, and those of the
+  packages built on them, on Python 3.12: a change to the terminal interface
+  no longer runs the tests of the engine. A clone installs with ``uv sync
+  --all-packages --all-extras --no-extra embeddings``, or ``uv pip install
+  -e ".[apps,dev,doc]"``; see :doc:`contributing`.
+
+* ``neurolang-apps`` depends on ``pyarrow``, which the ``neurostore``
+  engine needs to read the parquet files of its releases and which
+  NeuroLang never declared.
 
 
 v0.1a21 (2026-10-21)

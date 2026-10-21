@@ -1,10 +1,10 @@
 """
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
-- NeuroLang's wheel,
+- the wheels of NeuroLang's packages,
 - the data the ``neurosynth`` engine needs, as a zip in the layout of its
   data directory, and
-- ``bundle.json``, which names both for ``doc/_static/repl/worker.js``.
+- ``bundle.json``, which names them for ``doc/_static/repl/worker.js``.
 
 The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
@@ -47,16 +47,23 @@ SYSTEM_CERTIFICATES = (
 )
 
 
-def build_wheel(output: Path) -> str:
-    """Build NeuroLang's wheel in *output* and return its file name."""
+# The packages of NeuroLang, each depending on those before it: the order
+# in which the REPL installs their wheels.
+PACKAGES = ("nl_expr", "nl_core", "neurolang", "neurolang_apps")
+
+
+def build_wheels(output: Path) -> list:
+    """Build the wheels of NeuroLang's packages in *output* and return their
+    file names, in the order of ``PACKAGES``."""
     uv = shutil.which("uv")
     subprocess.check_call(
-        [uv, "build", "--wheel", "--out-dir", str(output), str(REPOSITORY)]
+        [uv, "build", "--all-packages", "--wheel", "--out-dir", str(output),
+         str(REPOSITORY)]
     )
     # uv ignores everything in the directory it builds in, and the
     # documentation is deployed by committing it: the page would be lost.
     (output / ".gitignore").unlink(missing_ok=True)
-    return next(output.glob("neurolang-*.whl")).name
+    return [next(output.glob(f"{name}-*.whl")).name for name in PACKAGES]
 
 
 def build_engine(data_dir: Path) -> None:
@@ -98,7 +105,7 @@ def zip_directory(directory: Path, archive: Path) -> None:
 
 def main(output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
-    wheel = build_wheel(output)
+    wheels = build_wheels(output)
     with tempfile.TemporaryDirectory() as tmp:
         data_dir = Path(tmp)
         build_engine(data_dir)
@@ -106,9 +113,10 @@ def main(output: Path) -> None:
         build_engine(data_dir)  # it must not need what was emptied
         zip_directory(data_dir, output / DATA_ZIP)
     (output / "bundle.json").write_text(
-        json.dumps({"wheel": wheel, "data": DATA_ZIP}) + "\n"
+        json.dumps({"wheels": wheels, "data": DATA_ZIP}) + "\n"
     )
-    print(f"Wrote {wheel}, {DATA_ZIP} and bundle.json in {output}")
+    print(f"Wrote {', '.join(wheels)}, {DATA_ZIP} and bundle.json in "
+          f"{output}")
 
 
 if __name__ == "__main__":
