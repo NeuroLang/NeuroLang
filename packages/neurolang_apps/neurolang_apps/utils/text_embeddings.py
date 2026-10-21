@@ -29,10 +29,12 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import weakref
 import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
@@ -276,6 +278,7 @@ class Specter2Encoder:
         self.device = device
         self.model_dir = None if model_dir is None else Path(model_dir)
         self._model = None
+        _ENCODERS.add(self)
 
     @property
     def cache_key(self):
@@ -325,6 +328,29 @@ class Specter2Encoder:
         self._model = model.to(self.device).eval()
         LOG.info("Loaded %s on %s", self.model_name, self.device)
 
+    def _has_local_copies(self):
+        """Whether the model and adapters are complete in ``model_dir``."""
+        repos = (self.model_name, self.document_adapter, self.query_adapter)
+        return self.model_dir is not None and all(
+            (self.model_dir / repo.replace("/", "--") / COMPLETE_MARKER).exists()
+            for repo in repos
+        )
+
+    def _fork_safe(self):
+        """
+        Load the model, on the CPU, ahead of a fork.
+
+        On macOS a forked child, as the query assistant checks queries in,
+        is aborted when it loads a model with transformers or uses MPS;
+        it can run a model its parent loaded on the CPU.
+        """
+        if self._model is None and not self._has_local_copies():
+            return      # loading would download: leave it to the child
+        self._load()
+        if self.device == "mps":
+            self._model = self._model.to("cpu")
+            self.device = "cpu"
+
     def encode_documents(self, titles, texts):
         """
         Embed documents given their titles and body texts.
@@ -369,6 +395,43 @@ class Specter2Encoder:
         ).to(self.device)
         hidden = self._model(**inputs).last_hidden_state
         return hidden[:, 0, :].float().cpu().numpy()
+
+
+# The SPECTER2 encoders of the process (see prepare_for_fork).
+_ENCODERS = weakref.WeakSet()
+
+
+def prepare_for_fork():
+    """
+    Make the encoders usable in a child process forked next.
+
+    On macOS a forked child cannot load a model nor use MPS: load them,
+    on the CPU, beforehand (see ``Specter2Encoder._fork_safe``). Called
+    by the query assistant before it forks to check a query; elsewhere
+    the child loads the model itself.
+    """
+    if sys.platform != "darwin":
+        return
+    for encoder in list(_ENCODERS):
+        try:
+            encoder._fork_safe()
+        except Exception:  # noqa: BLE001 -- a fork must not fail for it
+            LOG.debug("Encoder not prepared for fork", exc_info=True)
+
+
+def _after_fork_in_child():
+    """
+    Run torch on one thread in a forked child: the OpenMP pool of its
+    intra-op parallelism does not survive a fork, and a child using it
+    hangs.
+    """
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        torch.set_num_threads(1)
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_after_fork_in_child)
 
 
 def local_model(repo_id, model_dir):

@@ -324,6 +324,10 @@ class QueryTooLarge(Exception):
     """Raised for a query using more memory than its limit."""
 
 
+class QueryCrashed(Exception):
+    """Raised for a query whose process died of a signal, e.g. SIGSEGV."""
+
+
 def _memory_mb(pid: int) -> float:
     """Return the resident memory of the process *pid*, in MB."""
     try:
@@ -350,6 +354,10 @@ def _in_child(function, timeout, memory_mb):
     """
     if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
+    embeddings = sys.modules.get("neurolang_apps.utils.text_embeddings")
+    if embeddings is not None:
+        # Load the text encoders here: a child process may not (macOS).
+        embeddings.prepare_for_fork()
     read, write = os.pipe()
     try:
         with warnings.catch_warnings():
@@ -399,10 +407,13 @@ def _in_child(function, timeout, memory_mb):
             os.kill(pid, signal.SIGKILL)
             reader.join()
             break
-    os.waitpid(pid, 0)
+    _, status = os.waitpid(pid, 0)
     if stop is not None:
         raise stop()
     if not received.get("data"):
+        # Killed by the system (out of memory), or crashed: say which.
+        if os.WIFSIGNALED(status) and os.WTERMSIG(status) != signal.SIGKILL:
+            raise QueryCrashed(signal.Signals(os.WTERMSIG(status)).name)
         raise QueryTooLarge()
     kind, value = pickle.loads(received["data"])
     if kind == "error":
@@ -440,6 +451,13 @@ def run_preview(
             "The query was stopped: it used too much memory, e.g. joining "
             "large relations without a shared variable. Restrict it, e.g. "
             "with the class of its entities, before running it again.",
+        )
+    except QueryCrashed as exc:
+        return Preview(
+            False,
+            f"The process running the query crashed ({exc}), not because of "
+            "the query: it is valid as far as it ran. Give it as the final "
+            "answer if it is the right one.",
         )
 
 
