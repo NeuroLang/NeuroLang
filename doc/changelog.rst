@@ -281,6 +281,13 @@ Unreleased
 
 **Bug fixes:**
 
+* The badges of the README: the coverage badge, deployed to ``gh-pages``,
+  was deleted by each deployment of the benchmarks' dashboard there (and
+  deleted it in turn): it has its own branch, ``badges``. The Python badge
+  reads the versions from ``pyproject.toml``, as the release on PyPI
+  declares none, and the static "code style: flake8" badge, which nothing
+  checked, gives way to those of the documentation and spelling workflows.
+
 * A Euclidean distance bound to a point given by numbers,
   ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, was
   computed for every row (14 s on the peaks of neurosynth), and the
