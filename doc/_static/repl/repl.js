@@ -101,7 +101,7 @@ function start() {
   setStatus("Starting…", "busy");
   setBusy(true);
   worker = new Worker("worker.js", { type: "module" });
-  worker.postMessage({ type: "start", repo, ref });
+  worker.postMessage({ type: "start", repo, ref, full: params.get("engine") === "full" });
   worker.onerror = (event) =>
     setStatus(`The REPL stopped: ${event.message || "the browser ended its worker, perhaps out of memory"}. Restart it.`, "error");
   worker.onmessage = ({ data }) => {
