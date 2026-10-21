@@ -171,8 +171,7 @@ def test_studies_segregating_a_term_are_exclusive(different):
     events of different studies are mutually exclusive, and their
     probabilities are added."""
     program = (
-        "seg(t, s) :- mentions(s, t), "
-        f"~exists(s2; mentions(s2, t), {different})"
+        SEGREGATION.replace("(s2 != s)", different) +
         "\nq(t, PROB) :- seg(t, s)"
     )
     expected = _enumerated(

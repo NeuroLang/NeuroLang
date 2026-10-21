@@ -1,5 +1,4 @@
 import logging
-import operator
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -798,16 +797,9 @@ def _excludes_others(atom, variable, formula):
     if not isinstance(formula, ExistentialPredicate):
         return False
     other = formula.head
-    body = RTO.walk(formula.body)
-    return (
-        isinstance(body, Conjunction) and len(body.formulas) == 2 and
-        ReplaceExpressionWalker({variable: other}).walk(atom)
-        in body.formulas and
-        any(
-            is_comparison(f) and f.functor.value is operator.ne and
-            set(f.args) == {other, variable}
-            for f in body.formulas
-        )
+    other_atom = ReplaceExpressionWalker({variable: other}).walk(atom)
+    return set(_conjuncts(_existential_body(formula))) in (
+        {other_atom, NE(other, variable)}, {other_atom, NE(variable, other)}
     )
 
 
