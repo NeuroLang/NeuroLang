@@ -87,7 +87,12 @@ def solve(probabilistic_facts, deterministic_facts, rules, query):
         cpl.add_extensional_predicate_from_tuples(symbol, rows)
     if rules:
         cpl.walk(Union(tuple(rules)))
-    result = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    return answer_probabilities(
+        dalvi_suciu_lift.solve_succ_query(query, cpl), query
+    )
+
+
+def answer_probabilities(result, query):
     columns = tuple(arg.name for arg in query.consequent.args)
     provenance_column = result.provenance_column.value
     return {
@@ -273,10 +278,10 @@ def test_negation_sharing_a_symbol_through_free_variables():
     )
 
 
-def test_negation_sharing_a_choice_relation_not_liftable():
-    """R(x) ∧ ¬∃t (R(t) ∧ S(x, t)) with R a probabilistic choice: R(t)
-    and R(x) are mutually exclusive, not independent, when t ≠ x, and
-    negations sharing a choice relation are not supported."""
+def test_negation_sharing_a_choice_relation():
+    """R(x) ∧ ¬∃t (R(t) ∧ S(x, t)) with R a probabilistic choice: where
+    R(x) holds, R(t) holds only for t = x, and the query is
+    R(x) ∧ ¬S(x, x)."""
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         R, {(0.3, "a"), (0.6, "b"), (0.1, "c")}
@@ -284,8 +289,16 @@ def test_negation_sharing_a_choice_relation_not_liftable():
     cpl.add_probabilistic_facts_from_tuples(S, SL)
     cpl.walk(Implication(N(x), Conjunction((R(t), S(x, t)))))
     query = Implication(ans(x), Conjunction((R(x), Negation(N(x)))))
-    with pytest.raises(NonLiftableException):
-        dalvi_suciu_lift.solve_succ_query(query, cpl)
+    assert_probabilities_equal(
+        answer_probabilities(
+            dalvi_suciu_lift.solve_succ_query(query, cpl), query
+        ),
+        {
+            ("a",): 0.3 * (1 - 0.5),
+            ("b",): 0.6,
+            ("c",): 0.1 * (1 - 0.4),
+        }
+    )
 
 
 def test_negation_sharing_a_symbol_through_an_existential_not_liftable():

@@ -150,17 +150,21 @@ def test_two_choices_are_projected_in_turn():
     _assert_close(_solve(nl, program), expected)
 
 
-def test_choice_also_within_a_negation_is_not_projected():
-    """The choice occurs in the negation too: its events are not
-    independent of the rest, and the query is left to the next
-    solvers."""
+def test_choice_also_within_a_negation_is_unified():
+    """The choice occurs in the negation too: where selected_study(s)
+    holds, selected_study(s2) holds only for s2 = s, which contradicts
+    s2 ≠ s, and the negation is true."""
     choices = {"selected_study": STUDIES}
     program = (
         "q(t, PROB) :- mentions(s, t), selected_study(s), "
         "~exists(s2; mentions(s2, t), selected_study(s2), (s2 != s))"
     )
-    with pytest.raises(UnsupportedSolverError):
-        _solve(_engine(True, choices), program)
+    expected = _enumerated(
+        choices,
+        lambda w, c, a: (c["selected_study"], a[0]) in w,
+        answers=tuple((t,) for t in TERMS)
+    )
+    _assert_close(_solve(_engine(True, choices), program), expected)
 
 
 @pytest.mark.parametrize("different", ["(s2 != s)", "(s != s2)"])

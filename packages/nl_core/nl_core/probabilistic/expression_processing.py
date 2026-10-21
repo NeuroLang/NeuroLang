@@ -20,6 +20,7 @@ from nl_expr.exceptions import (
     NeuroLangFrontendException,
     UnexpectedExpressionError,
 )
+from nl_expr.expression_walker import ReplaceExpressionWalker, add_match
 from nl_expr.expressions import (
     Constant,
     Expression,
@@ -30,11 +31,17 @@ from nl_expr.logic import (
     TRUE,
     Conjunction,
     Disjunction,
+    ExistentialPredicate,
     Implication,
     Negation,
     Union,
 )
-from nl_expr.logic.transformations import GuaranteeConjunction
+from nl_expr.logic.transformations import (
+    GuaranteeConjunction,
+    LogicExpressionWalker,
+    RemoveExistentialOnVariables,
+    _rewrite_given_asserted
+)
 from ..relational_algebra import Projection, RelationalAlgebraSolver
 from nl_expr.utils.orderedset import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
@@ -466,6 +473,76 @@ def lift_optimization_for_choice_predicates(query, program):
             new_formulas |= OrderedSet(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
+
+
+class UnifyChoicesInNegations(LogicExpressionWalker):
+    """
+    Rewrite C(ū) ∧ ¬∃W (C(v̄) ∧ ψ), with C a probabilistic choice and the
+    variables of v̄ which are not those of ū in W, as
+    C(ū) ∧ ¬∃W' (C(ū) ∧ ψ)[ū/v̄], W' being W without them: a single tuple
+    of C is true, so where C(ū) holds C(v̄) holds if and only if v̄ = ū.
+    The absorption of the asserted conjuncts in negations then removes
+    C(ū) from the negation. A negation which the substitution makes have
+    a strict comparison of a term with itself, as `s ≠ s`, is true, and
+    is removed.
+    """
+
+    def __init__(self, choice_symbols):
+        self.choice_symbols = choice_symbols
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return Conjunction(tuple(
+            self.walk(formula) for formula in _rewrite_given_asserted(
+                conjunction, Negation, self._unify_choice
+            ) if formula != TRUE
+        ))
+
+    def _unify_choice(self, negation, asserted):
+        bound, conjuncts = _bound_and_conjuncts(negation.formula)
+        for atom in conjuncts:
+            for other in asserted:
+                if not (
+                    isinstance(atom, FunctionApplication) and
+                    atom.functor in self.choice_symbols and
+                    isinstance(other, FunctionApplication) and
+                    other.functor == atom.functor
+                ):
+                    continue
+                pairs = [
+                    (v, u) for v, u in zip(atom.args, other.args) if v != u
+                ]
+                substitution = dict(pairs)
+                if (
+                    len(substitution) == len(pairs) and
+                    set(substitution) <= bound
+                ):
+                    formula = ReplaceExpressionWalker(substitution).walk(
+                        RemoveExistentialOnVariables(set(substitution)).walk(
+                            negation.formula
+                        )
+                    )
+                    if any(
+                        is_comparison(f) and
+                        f.functor.value in STRICT_COMPARISONS and
+                        f.args[0] == f.args[1]
+                        for f in _bound_and_conjuncts(formula)[1]
+                    ):
+                        return TRUE
+                    return Negation(formula)
+        return negation
+
+
+def _bound_and_conjuncts(formula):
+    """The variables quantified by the existentials of *formula* and the
+    conjuncts of their body."""
+    bound = set()
+    while isinstance(formula, ExistentialPredicate):
+        bound.add(formula.head)
+        formula = formula.body
+    if isinstance(formula, Conjunction):
+        return bound, formula.formulas
+    return bound, (formula,)
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
