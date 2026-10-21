@@ -363,6 +363,19 @@ Unreleased
   rule ``p``, which are solved after the magic predicates:
   ``both(i, a, b) :- p('math', i, a) & p('lang', i, b)`` failed.
 
+**Removed:**
+
+* The legacy web application, ``neurolang/utils/server`` (2.3 MB, with
+  ``papaya.js``), and the hatch build hook that built its frontend with
+  npm, ``hatch_build.py``; the wheel no longer ships it.
+* ``siibra`` and ``seaborn`` are no longer dependencies: NeuroLang never
+  imports them.  The example
+  :ref:`sphx_glr_auto_examples_plot_squall_bayes_factor_decoding.py` needs
+  ``pip install siibra``.
+* Unreferenced files: ``unused/neurosynth/cogat.v2.owl`` (1.4 MB), the
+  pictures of an old Datalog grammar in
+  ``neurolang/frontend/datalog/doc/`` (0.7 MB) and ``MANIFEST.in``.
+
 
 v0.0.1 (Alpha)
 --------------

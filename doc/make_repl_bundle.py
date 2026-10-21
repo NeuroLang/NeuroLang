@@ -1,8 +1,7 @@
 """
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
-- NeuroLang's wheel, without the legacy web frontend that the build hook
-  would build when npm is installed,
+- NeuroLang's wheel,
 - the data the ``neurosynth`` engine needs, as a zip in the layout of its
   data directory, and
 - ``bundle.json``, which names both for ``doc/_static/repl/worker.js``.
@@ -51,14 +50,8 @@ SYSTEM_CERTIFICATES = (
 def build_wheel(output: Path) -> str:
     """Build NeuroLang's wheel in *output* and return its file name."""
     uv = shutil.which("uv")
-    # The build hook builds the legacy frontend if it finds npm.
-    path = os.pathsep.join(
-        directory for directory in os.environ["PATH"].split(os.pathsep)
-        if not (Path(directory) / "npm").exists()
-    )
     subprocess.check_call(
-        [uv, "build", "--wheel", "--out-dir", str(output), str(REPOSITORY)],
-        env={**os.environ, "PATH": path},
+        [uv, "build", "--wheel", "--out-dir", str(output), str(REPOSITORY)]
     )
     # uv ignores everything in the directory it builds in, and the
     # documentation is deployed by committing it: the page would be lost.

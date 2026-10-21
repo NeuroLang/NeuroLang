@@ -27,7 +27,7 @@ def test_the_wheel_leaves_no_gitignore_that_would_hide_the_bundle(
     documentation is deployed by committing that directory: the page and its
     bundle would not be committed.
     """
-    def uv_build(command, env):
+    def uv_build(command):
         out = Path(command[command.index("--out-dir") + 1])
         (out / "neurolang-1-py3-none-any.whl").write_bytes(b"wheel")
         (out / ".gitignore").write_text("*")

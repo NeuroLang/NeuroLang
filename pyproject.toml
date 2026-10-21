@@ -42,10 +42,8 @@ dependencies = [
     "lark>=1.1.2",
     "scikit-learn",
     "matplotlib",
-    "seaborn",
     "typing_inspect",
     "rdflib>=6.0.0",
-    "siibra>=1.0.1a15",
     "pyyaml>=6.0",
 ]
 
@@ -90,12 +88,6 @@ doc = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["neurolang"]
-artifacts = [
-    "neurolang/utils/server/neurolang-web/dist/**",
-]
-
-[tool.hatch.build.hooks.custom]
-path = "hatch_build.py"
 
 [tool.hatch.version]
 source = "vcs"
