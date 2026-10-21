@@ -1,19 +1,46 @@
-# The layers NeuroLang is to be split into, from the top: each layer
-# imports only the layers below it. Within a layer, modules may import each
-# other. Tests are checked as part of the layer of their package.
-#   1. applications: command line, terminal interface, engines, assistant
-#   2. language: parsers, frontends, regions and neuroimaging
-#   3. core: relational algebra and its sets, Datalog, probabilistic
-#   4. expression engine: expressions, walkers, types, logic, config
+# The packages of NeuroLang, from the top: each imports only the packages
+# below it. Tests are checked as part of their package.
+#   neurolang_apps  the command line, terminal interface, engines, assistant
+#   neurolang       the language: parsers, frontends, regions, neuroimaging
+#   nl_core         relational algebra and its sets, Datalog, probabilistic
+#   nl_expr         the expression engine: expressions, walkers, types, logic
+
 [importlinter]
-root_package = neurolang
+root_packages =
+    nl_expr
+    nl_core
+    neurolang
+    neurolang_apps
 include_external_packages = True
 
 [importlinter:contract:layers]
-name = NeuroLang layers: apps > language > core > expression engine
+name = NeuroLang packages: apps > language > core > expression engine
 type = layers
 layers =
-    neurolang.utils.cli : neurolang.utils.tui : neurolang.utils.llm : neurolang.utils.engine_registry : neurolang.utils.engines : neurolang.utils.text_embeddings : neurolang.utils.sort_hints : neurolang.utils.predicate_catalog : neurolang.utils.query_highlight : neurolang.utils.squall_completion : neurolang.utils.squall_sorts
-    neurolang.neurolang : neurolang.frontend : neurolang.commands : neurolang.regions : neurolang.region_solver : neurolang.CD_relations : neurolang.interval_algebra : neurolang.aabb_tree : neurolang.perior_tree : neurolang.utils.euclidean_join : neurolang.utils.nilearn_compat : neurolang.utils.interactive_parsing : neurolang.utils.data_manipulation
-    neurolang.datalog : neurolang.datalog_chase : neurolang.probabilistic : neurolang.relational_algebra : neurolang.relational_algebra_provenance : neurolang.utils.relational_algebra_set
-    neurolang.expressions : neurolang.expression_walker : neurolang.expression_pattern_matching : neurolang.type_system : neurolang.typed_symbol_table : neurolang.exceptions : neurolang.logic : neurolang.config : neurolang.solver : neurolang.neurolang_compiler : neurolang.utils.orderedset : neurolang.utils.various : neurolang.utils.testing
+    neurolang_apps
+    neurolang
+    nl_core
+    nl_expr
+
+[importlinter:contract:engine-dependencies]
+name = The expression engine needs neither pandas nor the neuroimaging libraries
+type = forbidden
+source_modules =
+    nl_expr
+forbidden_modules =
+    pandas
+    polars
+    lark
+    nibabel
+    nilearn
+    rdflib
+
+[importlinter:contract:core-dependencies]
+name = The core needs neither the parsers nor the neuroimaging libraries
+type = forbidden
+source_modules =
+    nl_core
+forbidden_modules =
+    lark
+    nibabel
+    nilearn
