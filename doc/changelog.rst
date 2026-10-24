@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The engine of the REPL in the browser leaves out the precomputed analyses
+  (``lift``, ``relative_risk``, ``uniformity``, ``ratios``): building them took
+  almost 4 GB, which Safari does not give a tab, and made the page loop on
+  "Building the engine". The page builds them with ``?engine=full``.
+* The page of the REPL in the browser has a computer, light or dark theme
+  switch, says when the browser stops its worker, shows how long a slow step
+  lasts, and reads ``bundle.json`` afresh, so that a new deploy is not met by
+  the name of the old wheel.
 * NeuroLang is split into four packages, in a `uv workspace
   <https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ under
   :file:`packages/`: ``nl-expr`` (the expression engine, imported as
