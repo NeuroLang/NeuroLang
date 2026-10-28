@@ -17,7 +17,7 @@ following locations is used:
 #. ``<sys.prefix>/config/config.ini`` — e.g. inside your virtual
    environment, which lets you keep per-environment settings;
 #. the default file shipped with the package,
-   :file:`neurolang/config/config.ini`.
+   :file:`packages/nl_expr/nl_expr/config/config.ini`.
 
 The settings are available at runtime through the ``config`` object::
 

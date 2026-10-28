@@ -76,7 +76,11 @@ and text-to-SPARQL systems.
     description in the engine configuration and their size (schema
     linking). The examples are those closest to the question, chosen by
     BM25 from a bank of checked examples
-    (``neurolang/utils/llm/examples/<engine>.yaml``).
+    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
+    An engine inherits the banks of the engines it ``extends``: the
+    ``neurosynth`` and ``neurostore`` engines share that of
+    ``coordinate_meta_analysis``, and ``neurostore.yaml`` adds questions
+    on its concepts, domains and abstracts.
 
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
@@ -105,7 +109,8 @@ and text-to-SPARQL systems.
     of its own, which does not show the question, the model says in
     English what the query returns, from the predicates, the query and
     the first rows of its answer. In another request, it judges whether
-    that answers the question. A ``no`` rejects the final answer: the
+    that answers the question, as the engine's ``assistant_guidance``
+    asks it to be answered. A ``no`` rejects the final answer: the
     agent gets the English reading and the reason as the observation of
     its ``final_answer``, and corrects its query. ``verify_rounds`` (1 by
     default, 0 to turn the check off) is the number of answers the check
@@ -114,6 +119,65 @@ and text-to-SPARQL systems.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
+When you run the query put in the prompt, its rules are local to it as
+well: in the REPL, the rules of a submission with a query (``ans`` or
+``obtain``) are discarded after it, so that the next query can define
+rules of the same names (``active``, ``seed``…) without adding to
+these. ``.scope off`` keeps them in the session; rules submitted
+without a query are kept in any case.
+
+Once a query is accepted, one more request asks the model for a line
+explaining each of its rules, which is written above the rule as a
+comment. The query itself is the one that was checked: the model only
+writes the comments, and a reply without one line per rule leaves the
+query without them. In Datalog the comments are ``%`` lines, which the
+parser ignores, so the commented query is the one put in the prompt or
+printed, and it runs as it is; SQUALL has no comments, so its rules are
+shown with their comments and the query is kept without them.
+``comment_rules: false`` in the configuration leaves out this request:
+
+.. code-block:: text
+
+    $ neurolang-query --engine neurosynth --steps 12 --ask "Which pairs of Schaefer regions are co-activated by studies about reading?"
+    % Identifies Schaefer regions activated in selected studies.
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    % Finds pairs of regions activated within the same study.
+    co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+    % Links selected studies to the term 'reading'.
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    % Calculates the probability that co-activated regions are linked to reading.
+    ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+
+Questions given as a description or a Cognitive Atlas concept
+-------------------------------------------------------------
+
+On the ``neurosynth`` and ``neurostore`` engines, a topic the vocabulary
+has no term for, or a concept of the Cognitive Atlas, is matched to the
+studies by the similarity of their title and abstract to its text
+(:doc:`tutorial_text_embeddings`). ``similar_study(q, s)`` holds for the
+5% of the studies closest to the text ``q``, ``study_title(s, t)`` gives
+their titles, and ``cogat_definition(t, d)`` the definition ``d`` of a
+Cognitive Atlas concept by its lower-case label ``t``.  Both strategies
+know them from the engines' examples and guidance:
+
+.. code-block:: text
+
+    $ neurolang-query --engine neurosynth --ask "Which studies are about the Cognitive Atlas concept response inhibition, with their titles?"
+    ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+
+The label must be the Cognitive Atlas one: ICL writes it from the
+question, and finds nothing for a concept the atlas does not have (it has
+*Emotional regulation task*, a task, but no *emotion regulation*), while
+the ReAct agent can look it up with ``search_values`` over ``cogat_term``.
+
+The definition is joined in the queried rule itself, as here, or passed
+to a rule taking the text as its first argument (``close(q, s) :-
+similar_study(q, s), selected_study(s)``): a text joined inside another
+rule is not passed on, and the query fails with an
+:class:`~neurolang.exceptions.UnboundVariablesError`.  The similarities
+come from the engine's text encoder, SPECTER2 by default; ``similar_study``
+keeps a share of the studies rather than a threshold, so the queries do
+not depend on it.
 
 Configuration
 -------------
@@ -124,7 +188,7 @@ order:
 1. the path given by ``--llm-config``;
 2. ``$NEUROLANG_LLM_CONFIG``;
 3. ``~/.config/neurolang/llm.yaml``;
-4. the example shipped in ``neurolang/utils/llm/llm.example.yaml``.
+4. the example shipped in ``packages/neurolang_apps/neurolang_apps/utils/llm/llm.example.yaml``.
 
 .. code-block:: yaml
 
@@ -166,6 +230,7 @@ order:
       timeout: 60
       preview_rows: 10
       verify_rounds: 1       # ReAct: answers back-translation may reject
+      comment_rules: true    # a comment line on each rule of the query
 
 The ``api`` of a provider is one of:
 
@@ -182,28 +247,136 @@ The ``api`` of a provider is one of:
 API keys are only read from the environment variable that
 ``api_key_env`` names: the file rejects an inline key.
 
-In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME`` and
-``.llm strategy icl|react`` switch the provider and the strategy, and
+In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME``,
+``.llm strategy icl|react`` and ``.llm steps N`` switch the provider, the
+strategy and the most steps of the ReAct agent (``max_steps``), and
 ``.llm reload`` reads the file again. ``.ask --squall``, ``--datalog``,
-``--icl`` and ``--react`` choose the language and the strategy for one
-question.
+``--icl``, ``--react`` and ``--steps N`` choose the language, the
+strategy and the most steps for one question, as ``--steps N`` does on
+the command line. Out of steps, the agent answers with the most detailed
+query it ran that gave rows.
 
 ``.llm QUESTION`` is the shortcut for ``.ask --react --datalog QUESTION``:
 it always writes Datalog with the ReAct agent, whatever ``.mode``, ``.llm
 strategy`` and the ``strategy`` and ``language`` of the configuration, and
-puts the query in the next prompt, switching the session to Datalog. A
-question cannot start with ``provider``, ``strategy`` or ``reload``, which
+puts the query in the next prompt, switching the session to Datalog.
+``.llm --steps N QUESTION`` gives it at most N steps. A question cannot
+start with ``provider``, ``strategy``, ``steps`` or ``reload``, which
 change the settings:
 
 .. code-block:: text
 
-    nl(neurosynth:DL)> .llm Which studies report an activation within 6 mm of the left amygdala?
+    nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
 
 .. note::
 
    The question, the description of the engine's predicates, some of
    their rows and the results of the queries the agent runs are sent to
    the provider.
+
+In the browser
+--------------
+
+The `REPL in the browser <_static/repl/index.html>`_ runs the assistant with
+your own API key, which you give in the page: Anthropic, OpenAI, OpenRouter
+or any server speaking the OpenAI API at the address you give (it must
+accept calls from web pages). The key stays in the tab, or on the device if
+you ask, and is sent to the provider and nowhere else. ``.ask`` and ``.llm``
+work as in a terminal; the query they write is put in the input of the page.
+
+.. _assistant-feedback:
+
+Rating and correcting the answers
+---------------------------------
+
+The assistant can share its questions and answers with a feedback server,
+where people mark them correct, incorrect or unsure and correct their query.
+The answers, their ratings and the corrected queries are exported to train
+or distil models and to grow the banks of examples.
+
+Sharing is off by default. Turn it on in ``llm.yaml``:
+
+.. code-block:: yaml
+
+    feedback:
+      enabled: true
+      url: https://feedback.example.org   # a neurolang-feedback-server
+      user: Ada                           # optional: your name on the ratings
+
+or by setting ``NEUROLANG_LLM_FEEDBACK_URL`` to the address of the server.
+The first answer of a session says that the answers are shared, and with
+whom. If the server cannot be reached, a warning is printed once and the
+assistant works as before.
+
+**What is sent.** For each answer of ``.ask``, ``.llm`` or
+``neurolang-query --ask``: the question; the query, its explanation, and
+whether it is valid or why not; the steps of the agent (thought, tool,
+arguments, and the first 1000 characters of what the tool returned); the
+rows the agent saw when it ran the final query; the engine's name; the
+provider's name and model; the strategy; the time, the number of LLM calls
+and the tokens; the version of NeuroLang; and the optional ``user``. API
+keys, the provider's address and headers, and the paths of the
+configuration and the data are never sent, and the home directory is
+written ``~``. The rows come from the engine, so do not share answers on
+private data.
+
+**In the REPL.** After a shared answer, its id is printed. Then:
+
+``.rate good|bad|unsure [COMMENT]``
+    Rate the last answer: correct, incorrect or unsure.
+``.rate ID good|bad|unsure [COMMENT]``
+    Rate the answer ID.
+``.refine``
+    Put the last answer's query in the prompt. Correct it and run it with
+    Enter.
+``.refine submit [COMMENT]``
+    Check the query you last ran on the engine, preview its rows, and share
+    it as the corrected query of the last answer. It is rated incorrect.
+    A query that fails the check is not shared.
+
+``.help feedback`` recalls these commands. In the browser, the REPL does not
+share its answers.
+
+**Running a server.** ``neurolang-feedback-server`` comes with
+``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and
+SQLite.
+
+.. code-block:: console
+
+    $ export NEUROLANG_FEEDBACK_ADMIN_TOKEN=$(openssl rand -hex 16)
+    $ neurolang-feedback-server --db feedback.sqlite --host 0.0.0.0 --port 8765
+
+Its page at ``/`` lists the answers, filtered by status (``unrated`` or the
+majority verdict) and engine. On the page you can rate an answer and correct
+its query. A query corrected on the page is marked unchecked, because it was
+not run on the engine. The API is:
+
+* ``POST /api/answers``: post an answer;
+* ``POST /api/answers/ID/feedback``: post a rating;
+* ``GET /api/answers?status=&engine=&limit=&offset=``: list the answers;
+* ``GET /api/export.jsonl``: export everything. It needs the header
+  ``Authorization: Bearer TOKEN``, and is disabled when no token is set.
+
+Anyone who can reach the server can post answers and ratings: there is no
+login. Requests are limited in size (``--max-bytes``, 1 MB) and in rate per
+address (``--rate``, 60 posts a minute). ``--cors-origin`` restricts the web
+pages that may post. Put the server behind a reverse proxy with HTTPS to
+publish it.
+
+**Exporting.** Read the database directly:
+
+.. code-block:: console
+
+    $ neurolang-feedback-server export --db feedback.sqlite > answers.jsonl
+    $ neurolang-feedback-server export --db feedback.sqlite --format examples \
+          --engine neurosynth -o neurosynth_feedback.yaml
+
+The JSON lines hold each answer with its steps and ratings, plus a
+``training`` pair. That pair is the question with its best query: the latest
+corrected query that was checked on the engine, or else the answer's own query
+when most ratings say it is correct. ``--format examples`` writes these pairs
+as a bank of examples (``examples/*.yaml``), one per question, ready to be
+reviewed and added to an engine's bank.
 
 Evaluation
 ----------

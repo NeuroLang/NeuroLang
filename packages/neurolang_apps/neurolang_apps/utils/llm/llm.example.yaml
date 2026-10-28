@@ -1,0 +1,87 @@
+# Configuration of the NeuroLang LLM query assistant (.ask in the REPL,
+# neurolang-query --ask). Copy it to ~/.config/neurolang/llm.yaml, or
+# point NEUROLANG_LLM_CONFIG or --llm-config to your copy.
+#
+# Each provider is reached in one of three ways:
+#   api: openai     the OpenAI chat completions API, which OpenRouter,
+#                   Albert, vLLM, Ollama and most open services offer
+#   api: anthropic  the Anthropic messages API
+#   api: command    a local command reading the conversation on its
+#                   standard input and writing the reply on its output;
+#                   {system} in its arguments is the system prompt
+# base_url is the URL the API paths (chat/completions, messages) are
+# appended to. API keys are never written here: api_key_env names the
+# environment variable holding the key (local servers need none).
+#
+# tool_calling selects how the ReAct agent calls its tools:
+#   native  the provider's tool calls (reliable on models trained for it)
+#   text    a Thought / Action / Observation protocol that any chat
+#           model can follow
+
+default_provider: albert
+
+providers:
+  openrouter:
+    api: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: anthropic/claude-sonnet-5.5
+    tool_calling: native
+    headers:
+      X-Title: NeuroLang
+
+  # Albert, the LLM service of the French State (DINUM / Etalab), with
+  # Gemma 4 31B: the default. List the models available to your key with
+  # GET /v1/models.
+  albert:
+    api: openai
+    base_url: https://albert.api.etalab.gouv.fr/v1
+    api_key_env: ALBERT_API_KEY
+    model: gemma-4-31b-it
+    tool_calling: text
+    requests_per_minute: 24     # Albert keys allow 25 a minute
+
+  anthropic:
+    api: anthropic
+    base_url: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-5-5
+    tool_calling: native
+
+  # Claude Code in print mode, using its own login: no API key here.
+  claude-code:
+    api: command
+    command: [claude, -p, --model, sonnet, --tools, "",
+              --no-session-persistence, --setting-sources, "",
+              --system-prompt, "{system}"]
+    model: sonnet
+    tool_calling: text
+
+  # Any server with an OpenAI-compatible API, here Ollama.
+  local:
+    api: openai
+    base_url: http://localhost:11434/v1
+    model: qwen3
+    tool_calling: text
+
+assistant:
+  strategy: react      # react: agent exploring the engine; icl: few-shot
+  language: auto       # auto (the REPL's .mode), squall or datalog
+  max_steps: 8         # ReAct: maximum number of tool calls
+  max_repairs: 3       # ICL: rounds of reprompting with the query error
+  few_shot_k: 6        # number of example questions in the prompt
+  samples: 1           # ICL: candidates voted on (self-consistency)
+  temperature: 0.0
+  timeout: 60          # seconds per LLM request
+  preview_rows: 10     # rows of a result shown to the model
+  comment_rules: true  # one more request: a comment line on each rule
+  verify_rounds: 1     # ReAct: final answers its back-translation check
+                       # may reject (0: no check)
+
+# Sharing the questions and the answers with a feedback server, where
+# they are rated and corrected to improve the assistant: off by default
+# (also turned on by the environment variable NEUROLANG_LLM_FEEDBACK_URL).
+feedback:
+  enabled: false
+  url: https://feedback.example.org   # a neurolang-feedback-server
+  user: ""                            # optional: your name on the ratings

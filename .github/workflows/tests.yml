@@ -6,25 +6,69 @@ on:
   pull_request:
     branches: [master]
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
+# A pull request runs the tests of the packages it changes, on every Python
+# version, and those of the packages depending on them, on the oldest one:
+# a change to the applications does not run the tests of the engine. A push
+# to master runs all of them, with the coverage.
 
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      any: ${{ steps.plan.outputs.any }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    - name: Find the changed packages
+      id: changes
+      uses: dorny/paths-filter@v3
       with:
-        python-version: ${{ matrix.python-version }}
-        allow-prereleases: true
+        filters: |
+          nl_expr:
+            - 'packages/nl_expr/**'
+          nl_core:
+            - 'packages/nl_core/**'
+          neurolang:
+            - 'packages/neurolang/**'
+          neurolang_apps:
+            - 'packages/neurolang_apps/**'
+            # The REPL's page and bundle are tested with the applications.
+            - 'doc/_static/repl/**'
+            - 'doc/make_repl_bundle.py'
+          shared:
+            - 'pyproject.toml'
+            - 'conftest.py'
+            - '.github/workflows/tests.yml'
+
+    - name: Plan the test jobs
+      id: plan
+      env:
+        CHANGES: ${{ steps.changes.outputs.changes }}
+        EVENT: ${{ github.event_name }}
+      run: python .github/plan_tests.py
+
+  test:
+    needs: plan
+    if: needs.plan.outputs.any == 'true'
+    name: test ${{ matrix.package }} (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up uv and Python ${{ matrix.python }}
+      uses: astral-sh/setup-uv@v6
+      with:
+        python-version: ${{ matrix.python }}
+        enable-cache: true
 
     - name: Cache downloaded atlases and datasets
       uses: actions/cache@v4
@@ -34,35 +78,75 @@ jobs:
           ~/nilearn_data
         key: datasets-${{ runner.os }}-v1
 
-    - name: Install dependencies
+    - name: Install ${{ matrix.dist }} and the packages it depends on
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install pytest pytest-cov pytest-timeout
-        python -m pip install -e ".[dev,ras-polars,tui,llm]"
+        uv sync --package ${{ matrix.dist }} ${{ matrix.extras }}
+        uv pip install pytest-timeout
 
-    - name: Run tests with pytest
-      run: |
-        python -m pytest neurolang -v --tb=short --timeout=600
+    - name: Run the tests of ${{ matrix.package }}
+      run: uv run --no-sync python -m pytest packages/${{ matrix.package }} -v --tb=short --timeout=600
       timeout-minutes: 30
 
-    - name: Run tests with coverage
+  coverage:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up uv and Python
+      uses: astral-sh/setup-uv@v6
+      with:
+        python-version: "3.12"
+        enable-cache: true
+
+    - name: Cache downloaded atlases and datasets
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/neurolang_data
+          ~/nilearn_data
+        key: datasets-${{ runner.os }}-v1
+
+    - name: Install all the packages
       run: |
-        python -m pytest neurolang --cov=neurolang --cov-report=xml --cov-report=term --timeout=600
-      timeout-minutes: 30
-      if: matrix.python-version == '3.12'
+        uv sync --all-packages --extra dev --extra ras-polars --extra tui --extra llm
+        uv pip install pytest-timeout pytest-cov "genbadge[coverage]"
+
+    - name: Run all the tests with coverage
+      run: >-
+        uv run --no-sync python -m pytest packages --timeout=600
+        --cov=nl_expr --cov=nl_core --cov=neurolang --cov=neurolang_apps
+        --cov-report=xml --cov-report=term
+      timeout-minutes: 45
 
     - name: Generate coverage badge
       run: |
-        pip install genbadge[coverage]
         mkdir -p badges
-        genbadge coverage -o badges/coverage.svg -i coverage.xml
-      if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
+        uv run --no-sync genbadge coverage -o badges/coverage.svg -i coverage.xml
 
-    - name: Publish badge to gh-pages
+    # The badge has its branch: the benchmarks' dashboard is deployed to
+    # gh-pages with keep_files false.
+    - name: Publish badge to the badges branch
       uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: badges
         publish_dir: ./badges
-        destination_dir: ./
         keep_files: false
-      if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
+
+  # The one check to require: it passes when every planned test job passed.
+  tests:
+    needs: [plan, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check the test jobs
+      run: |
+        test "${{ needs.plan.result }}" = success
+        test "${{ needs.test.result }}" = success -o "${{ needs.test.result }}" = skipped
