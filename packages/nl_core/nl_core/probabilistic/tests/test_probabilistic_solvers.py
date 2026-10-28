@@ -1029,10 +1029,7 @@ def test_program_with_segregation_first_existential(solver):
     cpl_program.walk(code)
     query = Implication(ans(y), Z(x, y))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -1041,7 +1038,7 @@ def test_program_with_segregation_first_existential(solver):
         result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [
-                (0.5, "b"),
+                (0.5, "b"), (0.5, "c"), (0.2, "d"),
             ],
             ("_p_", "y"),
         )
@@ -1071,10 +1068,7 @@ def test_program_with_segregation_second_existential(solver):
     cpl_program.walk(code)
     query = Implication(ans(x), Z(x, y))
 
-    if (
-        solver is small_dichotomy_theorem_based_solver or
-        solver is dalvi_suciu_lift
-    ):
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
@@ -1083,7 +1077,7 @@ def test_program_with_segregation_second_existential(solver):
         result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [
-                (0.5, "a"),
+                (0.5, "a"), (1 - 0.5 * 0.8, "b"),
             ],
             ("_p_", "x"),
         )
