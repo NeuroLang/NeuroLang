@@ -27,7 +27,7 @@ from nl_core.probabilistic.exceptions import (
     RepeatedTuplesInProbabilisticRelationError,
     UnsupportedSolverError,
 )
-from ...regions import SphericalVolume
+from ...regions import ExplicitVBR, SphericalVolume
 from nl_core.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -2363,6 +2363,45 @@ def test_predicate_with_a_choice_rule_and_a_post_probabilistic_rule():
         )
 
 
+@pytest.mark.parametrize("probability", [
+    "PROB[active(l, s) // motor(s)] = p",
+    "PROB[active(l, s)] = p",
+])
+def test_join_of_a_probability_with_its_maximum(probability):
+    """
+    The relation of a probabilistic query joined with the maximum of its
+    probabilities has every row: the post-probabilistic rules over the
+    aggregation, two rules away from it, were left unsolved.
+    """
+    studies = {0: "a", 1: "a", 2: "b", 3: "ab"}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(s, l) for s, ls in studies.items() for l in ls], name="act"
+    )
+    nl.add_tuple_set([(0,), (1,), (3,)], name="mentions_motor")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    res = nl.execute_datalog_program(
+        "active(l, s) :- act(s, l), selected_study(s)\n"
+        "motor(s) :- mentions_motor(s), selected_study(s)\n"
+        f"rp(l, p) :- {probability}\n"
+        "best(m) :- AGGREGATE[](rp(l, p) @ max(p)) = m\n"
+        "ans(l, p, m) :- rp(l, p), best(m)"
+    )
+    given = {0, 1, 3} if "motor" in probability else set(studies)
+    expected = {
+        l: sum(l in studies[s] for s in given) / len(given) for l in "ab"
+    }
+    assert {
+        (l, round(p, 6), round(m, 6))
+        for l, p, m in res.as_pandas_dataframe().values
+    } == {
+        (l, round(p, 6), round(max(expected.values()), 6))
+        for l, p in expected.items()
+    }
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_probability_of_a_study_activating_each_voxel_is_its_share(seed):
     """
@@ -2405,3 +2444,65 @@ def test_probability_of_a_study_activating_each_voxel_is_its_share(seed):
     assert got.keys() == expected.keys()
     for voxel, p in expected.items():
         assert got[voxel] == pytest.approx(p)
+
+
+def test_builtin_on_region_relation_in_probabilistic_rule_is_lifted():
+    """
+    A builtin filtering the labels of a relation of regions, in the body
+    of a probabilistic rule, is lifted: the filtered relation is a
+    deterministic one. The query is solved without weighted model
+    counting, as when the labels are filtered by a deterministic rule.
+    """
+    nl = NeurolangPDL(
+        probabilistic_solvers=(
+            small_dichotomy_theorem_based_solver.solve_succ_query,
+            dalvi_suciu_lift.solve_succ_query,
+        ),
+        probabilistic_marg_solvers=(
+            small_dichotomy_theorem_based_solver.solve_marg_query,
+            dalvi_suciu_lift.solve_marg_query,
+        ),
+    )
+    nl.add_symbol(
+        lambda prefix, s: s.startswith(prefix), name="startswith",
+        type_=Callable[[str, str], bool],
+    )
+    rng = np.random.default_rng(0)
+    labels = [f"net{'AB'[i % 2]} {i}" for i in range(8)]
+    nl.add_tuple_set(
+        [
+            (label, ExplicitVBR(rng.integers(0, 5, (3, 3)), np.eye(4)))
+            for label in labels
+        ],
+        name="atlas",
+    )
+    nl.add_tuple_set(
+        [
+            (label, s) for label in labels for s in range(6)
+            if rng.random() < .5
+        ],
+        name="activated",
+    )
+    nl.add_tuple_set([(s,) for s in range(0, 6, 2)], name="mentions")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected"
+    )
+    common = (
+        "m(s) :- mentions(s), selected(s)\n"
+        "ans(l, p) :- PROB[active(l, s) // m(s)] = p\n"
+    )
+    with nl.scope:
+        inline = nl.execute_datalog_program(
+            "active(l, s) :- atlas(l, r), startswith('netA', l), "
+            "activated(l, s), selected(s)\n" + common
+        ).as_pandas_dataframe()
+    with nl.scope:
+        deterministic = nl.execute_datalog_program(
+            "label(l) :- atlas(l, r), startswith('netA', l)\n"
+            "active(l, s) :- label(l), activated(l, s), selected(s)\n"
+            + common
+        ).as_pandas_dataframe()
+    assert len(inline) > 0
+    assert inline.sort_values("l").reset_index(drop=True).equals(
+        deterministic.sort_values("l").reset_index(drop=True)
+    )

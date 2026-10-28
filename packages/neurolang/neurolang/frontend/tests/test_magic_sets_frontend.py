@@ -1,5 +1,6 @@
 """Magic sets rewriting through the frontends: the rewriting's tests are in
 ``neurolang/datalog/tests/test_magic_sets.py``."""
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -222,3 +223,46 @@ def test_frontend_edb_atom_with_a_constant_binding_an_aggregate(frontend):
         "ans(n) :- e(1, n) & c(n)"
     )
     assert set(res.as_pandas_dataframe().n) == {2}
+
+
+def _rank_similarity(text: str, study: int) -> float:
+    return (study + 1) / 6
+
+
+@pytest.mark.parametrize("program", [
+    "close(s) :- similar_study('a text', s), selected_study(s)\n"
+    "both(s) :- act(s, 'a'), close(s)\n"
+    "ans(p) :- PROB[both(s) // close(s)] = p",
+    "close(q, s) :- similar_study(q, s), selected_study(s)\n"
+    "both(q, s) :- act(s, 'a'), close(q, s)\n"
+    "ans(p) :- definition('x', q), PROB[both(q, s) // close(q, s)] = p",
+])
+def test_frontend_bound_rule_on_an_aggregate_of_a_shared_relation(program):
+    """
+    Magic sets make the relation of similarities and the magic predicate
+    of its percentile depend on each other: they are solved together,
+    before the percentile, which once failed with
+    NoValidChaseClassForStratumException.
+    """
+    nl = NeurolangPDL()
+    studies = range(6)
+    nl.add_tuple_set([(s,) for s in studies], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    nl.add_tuple_set([(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act")
+    nl.add_tuple_set([("x", "a text")], name="definition")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    nl.execute_datalog_program(
+        "sim(q, s, v) :- study(s) & (v == similarity(q, s))\n"
+        "cutoff(q, percentile(v, 50)) :- sim(q, s, v)\n"
+        "similar_study(q, s) :- sim(q, s, v) & cutoff(q, c) & (v >= c)"
+    )
+    res = nl.execute_datalog_program(program)
+    similarities = [_rank_similarity("a text", s) for s in studies]
+    similar = {
+        s for s, v in zip(studies, similarities)
+        if v >= np.percentile(similarities, 50)
+    }
+    expected = len(similar & {0, 1, 3}) / len(similar)
+    assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])

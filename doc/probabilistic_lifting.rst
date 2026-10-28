@@ -370,7 +370,22 @@ Deterministic negations
    it is a subexpression of the plan, computed as a set when the plan is
    evaluated.
 
-Probabilistic choices
+Deterministic builtins
+   The lifting rules plan comparisons but no other builtin, such as
+   ``startswith``. The conjunction :math:`B(\bar y)` of the builtins of a
+   conjunction whose variables are among those of one of its deterministic
+   atoms :math:`R(\bar x)` is replaced with :math:`R` by a fresh
+   deterministic relation, defined as for the deterministic negations,
+
+   .. math::
+
+      D(\bar x) := R(\bar x) \land B(\bar y), \qquad
+      R \land B \equiv D,
+
+   so that ``schaefer(l, r), startswith('17Networks LH Vis', l)`` in a
+   probabilistic rule is lifted as when a deterministic rule selects the
+   labels, instead of being solved by weighted model counting.
+
    Two atoms of the same probabilistic choice relation are true together
    only if they are the same tuple, as exactly one tuple of the choice is
    true. Their arguments are therefore made equal
@@ -798,6 +813,14 @@ Deterministic negations
    :math:`G`, by absorption. :math:`D` is computed when the plan is, as
    one of its subexpressions, in time polynomial in the deterministic
    relations.
+
+Deterministic builtins
+   :math:`R` is a deterministic relation and a builtin is a function of
+   its arguments, so the relation of :math:`D = R \land B` is the same in
+   every world, and :math:`R(\bar x) \land B(\bar y) \equiv D(\bar x)`
+   in every world by definition. As :math:`\bar y \subseteq \bar x`,
+   :math:`D` is a selection of :math:`R`, which is finite. The replaced
+   builtins are not comparisons, which the lifting rules plan.
 
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic

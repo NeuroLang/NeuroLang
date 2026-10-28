@@ -275,6 +275,42 @@ def test_stratification_after_mutual_recursion():
         list(code.formulas[3:]),
     ]
 
+
+def test_stratification_defers_rules_on_deferred_heads():
+    """
+    A rule whose body predicate has a rule left for a later stratum is
+    left for it too: here S, whose body P has the rule P(x) :- C(x)
+    waiting for C(x) :- S(x), is solved with P and C, before U.
+    """
+    E = S_('E')  # noqa: N806
+    C = S_('C')  # noqa: N806
+    P = S_('P')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    U = S_('U')  # noqa: N806
+    x = S_('x')
+
+    code = DT.walk(B_([
+        Imp_(P(x), E(x)),
+        Imp_(C(x), E(x)),
+        Imp_(P(x), C(x)),
+        Imp_(C(x), S(x)),
+        Imp_(S(x), P(x)),
+        Imp_(U(x), S(x)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+    datalog.add_extensional_predicate_from_tuples(E, {(1,)})
+
+    strata, _ = stratify(code, datalog)
+
+    assert [set(stratum) for stratum in strata] == [
+        set(code.formulas[:2]),
+        set(code.formulas[2:5]),
+        {code.formulas[5]},
+    ]
+
+
 def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')

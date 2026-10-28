@@ -76,6 +76,7 @@ engines:
       (lAMY rh, aHIP lh, NAc core rh): HIP hippocampus, AMY amygdala, THA
       thalamus, NAc nucleus accumbens, GP globus pallidus, PUT putamen,
       CAU caudate.
+      Tian names end with the hemisphere (lAMY rh, aHIP lh).
       Co-activation is the activation of regions or points by the same
       study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
       s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
