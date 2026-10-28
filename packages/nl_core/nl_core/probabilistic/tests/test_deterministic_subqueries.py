@@ -1,4 +1,5 @@
 import operator
+from typing import Callable
 
 from ...datalog import Fact
 from nl_expr.expressions import Constant, Symbol
@@ -8,6 +9,9 @@ from ..cplogic.program import CPLogicProgram
 from ..deterministic_subqueries import replace_deterministic_negations
 
 NE = Constant(operator.ne)
+STARTSWITH = Constant[Callable[[str, str], bool]](
+    lambda prefix, string: string.startswith(prefix)
+)
 
 Mentions = Symbol("Mentions")
 Selected = Symbol("Selected")
@@ -63,6 +67,38 @@ def test_probabilistic_negation_is_not_replaced():
         Negation(ExistentialPredicate(
             t1, Conjunction((Selected(s), Mentions(s, t1), NE(t1, t)))
         )),
+    ))
+
+    new_formula, relations = replace_deterministic_negations(formula, cpl)
+
+    assert new_formula == formula
+    assert relations == {}
+
+
+def test_builtin_on_deterministic_atom_replaced_by_relation():
+    """R(x̄) ∧ B(x̄) ≡ D(x̄): the builtin, which the lifted solvers do not
+    plan, filters the deterministic relation instead."""
+    cpl = _program()
+    formula = Conjunction((
+        Selected(s), Mentions(s, t), STARTSWITH(Constant("j"), t)
+    ))
+
+    new_formula, relations = replace_deterministic_negations(formula, cpl)
+
+    assert len(relations) == 1
+    symbol, relation = next(iter(relations.items()))
+    assert new_formula == Conjunction((Selected(s), symbol(s, t)))
+    result = RelationalAlgebraSolver().walk(relation).value
+    assert set(result) == {(1, "joy")}
+
+
+def test_builtin_on_probabilistic_atom_or_comparison_is_not_replaced():
+    """A builtin of a probabilistic atom's variables, or a comparison,
+    which the lifting rules plan, is left unchanged."""
+    cpl = _program()
+    formula = Conjunction((
+        Selected(s), STARTSWITH(Constant("1"), s),
+        Mentions(Constant(1), t), NE(t, Constant("joy")),
     ))
 
     new_formula, relations = replace_deterministic_negations(formula, cpl)

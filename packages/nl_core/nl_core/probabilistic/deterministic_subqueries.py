@@ -11,7 +11,7 @@ it is computed as a set when the plan is evaluated.
 from ..datalog.expression_processing import extract_logic_atoms
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from nl_expr.expression_walker import ReplaceSymbolWalker, add_match
-from nl_expr.expressions import Constant, Symbol
+from nl_expr.expressions import Constant, FunctionApplication, Symbol
 from nl_expr.logic import Conjunction, ExistentialPredicate, Negation
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_expr.logic.transformations import LogicExpressionWalker
@@ -22,6 +22,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
+from .expression_processing import is_comparison
 
 
 class ReplaceDeterministicNegations(LogicExpressionWalker):
@@ -43,6 +44,11 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
     with `Materialise`, whose columns are numbered in the order of x̄
     sorted by name.
 
+    Likewise, the builtins of a conjunction, other than comparisons,
+    whose variables are all those of a deterministic atom R(x̄) of it,
+    are replaced with R(x̄) by D(x̄) := R(x̄) ∧ B(x̄), B being the
+    conjunction of these builtins, as R(x̄) ∧ B(x̄) ≡ D(x̄).
+
     Parameters
     ----------
     program : DatalogProgram
@@ -53,6 +59,38 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
     def __init__(self, program):
         self.program = program
         self.relations = {}
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(map(_is_filter, conjunction.formulas))
+    )
+    def conjunction_with_builtins(self, conjunction):
+        """Replace R(x̄) ∧ B(x̄), R deterministic, by D(x̄)."""
+        formulas = self.conjunction_with_negations(conjunction).formulas
+        atoms = tuple(
+            formula for formula in formulas
+            if isinstance(formula, FunctionApplication) and
+            isinstance(formula.functor, Symbol) and
+            self._is_deterministic(formula)
+        )
+        for atom in atoms:
+            builtins = tuple(
+                formula for formula in formulas
+                if _is_filter(formula) and
+                extract_logic_free_variables(formula) <= set(atom.args)
+            )
+            if builtins:
+                replacement = self._new_relation(
+                    Conjunction((atom,) + builtins),
+                    tuple(dict.fromkeys(
+                        arg for arg in atom.args if isinstance(arg, Symbol)
+                    ))
+                )
+                formulas = tuple(
+                    replacement if formula == atom else formula
+                    for formula in formulas if formula not in builtins
+                )
+        return Conjunction(formulas)
 
     @add_match(
         Conjunction,
@@ -82,10 +120,13 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         )
         if not self._can_replace(negation, guard, free_variables):
             return negation
-        columns = tuple(sorted(free_variables, key=lambda v: v.name))
-        symbol = Symbol.fresh()
-        self.relations[symbol] = self._relation(guard, negation, columns)
-        return symbol(*columns)
+        negated = Negation(_conjoin_within_existentials(
+            guard, negation.formula
+        ))
+        return self._new_relation(
+            Conjunction(guard + (negated,)),
+            tuple(sorted(free_variables, key=lambda v: v.name))
+        )
 
     def _can_replace(self, negation, guard, free_variables):
         return (
@@ -107,27 +148,34 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
             for atom in extract_logic_atoms(formula)
         )
 
-    def _relation(self, guard, negation, columns):
+    def _new_relation(self, formula, columns):
         """
-        The relational algebra expression of G ∧ ¬N, with numbered
-        columns, optimised, and marked to be materialised when the plan
-        is evaluated. Its relations are the sets of the extensional database,
-        rather than their symbols, which the lifted solver maps to
-        probabilistic sets.
+        Return the atom `D(columns)` of a fresh relation `D := formula`.
+
+        The relational algebra expression of `D` has numbered columns, is
+        optimised, and is marked to be materialised when the plan is
+        evaluated. Its relations are the sets of the extensional
+        database, rather than their symbols, which the lifted solver maps
+        to probabilistic sets.
         """
-        negated = Negation(_conjoin_within_existentials(
-            guard, negation.formula
-        ))
         column_names = tuple(str2columnstr_constant(v.name) for v in columns)
-        plan = Projection(
-            TranslateToNamedRA().walk(Conjunction(guard + (negated,))),
-            column_names
-        )
+        plan = Projection(TranslateToNamedRA().walk(formula), column_names)
         plan = ReplaceSymbolWalker(
             self.program.extensional_database()
         ).walk(plan)
         plan = RelationalAlgebraOptimiser().walk(plan)
-        return Materialise(NumberColumns(plan, column_names))
+        symbol = Symbol.fresh()
+        self.relations[symbol] = Materialise(NumberColumns(plan, column_names))
+        return symbol(*columns)
+
+
+def _is_filter(formula):
+    """Return whether `formula` is a builtin other than a comparison."""
+    return (
+        isinstance(formula, FunctionApplication) and
+        isinstance(formula.functor, Constant) and
+        not is_comparison(formula)
+    )
 
 
 def _conjoin_within_existentials(formulas, formula):
