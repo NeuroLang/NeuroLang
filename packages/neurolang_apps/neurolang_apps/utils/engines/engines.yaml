@@ -40,7 +40,11 @@ engines:
     # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
     # questions on these engines: added to its system prompt.
     assistant_guidance: >
-      Answer every question with probabilistic query answering over
+      A question asking how many (combien) gets a count, not a
+      probability: AGGREGATE[](mentions(s, 'pain') @ count(s)) = n over
+      the stored relations, AGGREGATE[x] for each x, or over the rows of
+      a PROB rule when it counts those with a given probability.  Answer
+      every other question with probabilistic query answering over
       selected_study, the uniform choice of a study: give the probability
       of what the question asks, PROB[...] = p, over rules of yours
       joining selected_study(s), as active(l, s) :-

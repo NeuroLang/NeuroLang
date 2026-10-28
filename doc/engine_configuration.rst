@@ -67,10 +67,10 @@ may specify the following keys, all of them optional:
 - ``assistant_guidance`` — how the LLM query assistant (``.ask``,
   ``neurolang-query --ask``) is to answer questions on the engine: added
   to its system prompt.  The coordinate meta-analysis engines ask for
-  probabilistic answers over ``selected_study``, activation as a peak
-  within 3 mm of a point in MNI millimetres, the Destrieux atlas for the
-  classical anatomy of the cortex and the Schaefer and Tian atlases for
-  the functional anatomy
+  probabilistic answers over ``selected_study`` (counts for "how
+  many"), activation as a peak within 3 mm of a point in MNI
+  millimetres, the Destrieux atlas for the classical anatomy of the
+  cortex and the Schaefer and Tian atlases for the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
