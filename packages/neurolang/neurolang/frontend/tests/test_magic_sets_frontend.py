@@ -298,6 +298,9 @@ def test_frontend_aggregate_of_a_rule_with_a_constant(frontend):
         "ans(t, v) :- sim(s, v) & top(v) & title(s, t)"
     )
     assert res.as_pandas_dataframe().values.tolist() == [["t5", 1.0]]
+
+
+@pytest.mark.parametrize("program", [
     "close(s) :- similar_study('a text', s), selected_study(s)\n"
     "both(s) :- act(s, 'a'), close(s)\n"
     "ans(p) :- PROB[both(s) // close(s)] = p",
