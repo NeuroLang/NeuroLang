@@ -24,7 +24,10 @@ def test_example_configuration_is_valid():
     config = load_config(EXAMPLE_CONFIG)
     assert config.default_provider == "albert"
     assert config.provider().model == "gemma-4-31b-it"
-    assert {"openrouter", "albert", "anthropic", "claude-code"} <= set(
+    assert {
+        "openrouter", "albert", "anthropic", "claude-code", "albert-deepseek",
+        "openrouter-gemma", "openrouter-deepseek",
+    } <= set(
         config.providers
     )
     assert config.providers["albert"].base_url == (

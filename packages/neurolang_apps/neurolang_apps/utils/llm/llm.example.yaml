@@ -41,6 +41,36 @@ providers:
     tool_calling: text
     requests_per_minute: 24     # Albert keys allow 25 a minute
 
+  # DeepSeek V4 Flash on Albert. Its replies are longer: 4096 tokens.
+  albert-deepseek:
+    api: openai
+    base_url: https://albert.api.etalab.gouv.fr/v1
+    api_key_env: ALBERT_API_KEY
+    model: deepseek-v4-flash-0731
+    tool_calling: text
+    max_tokens: 4096
+    requests_per_minute: 10
+
+  # The same models on OpenRouter, without Albert's daily quotas.
+  openrouter-gemma:
+    api: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: google/gemma-4-31b-it
+    tool_calling: text
+    headers:
+      X-Title: NeuroLang
+
+  openrouter-deepseek:
+    api: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: deepseek/deepseek-v4-flash-0731
+    tool_calling: text
+    max_tokens: 4096
+    headers:
+      X-Title: NeuroLang
+
   anthropic:
     api: anthropic
     base_url: https://api.anthropic.com/v1

@@ -247,6 +247,12 @@ The ``api`` of a provider is one of:
 API keys are only read from the environment variable that
 ``api_key_env`` names: the file rejects an inline key.
 
+The example configuration also has ``albert-deepseek`` (DeepSeek V4
+Flash on Albert), and ``openrouter-gemma`` and ``openrouter-deepseek``
+(Gemma 4 31B and DeepSeek V4 Flash on OpenRouter, without Albert's daily
+quotas). DeepSeek writes longer replies: its entries set
+``max_tokens: 4096``.
+
 In the REPL, ``.llm`` shows the configuration. ``.llm provider NAME``,
 ``.llm strategy icl|react`` and ``.llm steps N`` switch the provider, the
 strategy and the most steps of the ReAct agent (``max_steps``), and
