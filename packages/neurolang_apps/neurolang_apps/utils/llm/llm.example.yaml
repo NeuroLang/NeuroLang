@@ -75,6 +75,18 @@ assistant:
   timeout: 60          # seconds per LLM request
   preview_rows: 10     # rows of a result shown to the model
   comment_rules: true  # one more request: a comment line on each rule
+  # The example questions of the prompt are those closest to the user's,
+  # by BM25 (bm25) or, with hybrid, by BM25 fused with the similarity of
+  # the questions' embeddings (any language: a French question finds the
+  # English examples). hybrid needs the embeddings provider below, an
+  # OpenAI-compatible /embeddings API; without it, or when it fails (no
+  # key, offline), the examples are chosen by BM25 after a warning.
+  example_retrieval: hybrid
+  embeddings:
+    base_url: https://albert.api.etalab.gouv.fr/v1
+    api_key_env: ALBERT_API_KEY
+    model: bge-m3
+    requests_per_minute: 24
 
 # Sharing the questions and the answers with a feedback server, where
 # they are rated and corrected to improve the assistant: off by default

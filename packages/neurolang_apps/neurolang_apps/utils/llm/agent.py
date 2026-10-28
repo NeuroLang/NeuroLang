@@ -370,6 +370,8 @@ class Agent:
         examples = select_examples(
             bank, question, self.language, self.config.few_shot_k,
             exclude=self.exclude_question,
+            embeddings=self.config.example_retrieval == "hybrid"
+            and self.config.embeddings,
         )
         description = self.description
         if description is None:

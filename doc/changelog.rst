@@ -29,6 +29,13 @@ Unreleased
   them as JSON lines or as a bank of examples. See
   :ref:`assistant-feedback`.
 
+* The query assistant chooses its example questions by BM25 fused with the
+  similarity of their embeddings (``example_retrieval: hybrid`` and an
+  ``embeddings`` provider in ``llm.yaml``: bge-m3 on Albert in the example
+  configuration), so that a question in French finds the English examples.
+  The embeddings of the bank are cached on disk; without them the examples
+  are chosen by BM25, as before.
+
 * The query assistant searches the studies by a description or a
   Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
   share a bank of examples (``coordinate_meta_analysis.yaml``, which banks

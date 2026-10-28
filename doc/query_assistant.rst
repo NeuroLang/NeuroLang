@@ -74,9 +74,17 @@ and text-to-SPARQL systems.
     predicates of the engine and a few example questions with their
     queries. The predicates are given with their columns, their
     description in the engine configuration and their size (schema
-    linking). The examples are those closest to the question, chosen by
-    BM25 from a bank of checked examples
-    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
+    linking). The examples are those closest to the question, chosen
+    from a bank of checked examples
+    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``)
+    by BM25 over their words or, with ``example_retrieval: hybrid`` and an
+    ``embeddings`` provider, by the reciprocal rank fusion of BM25 and of
+    the cosine similarity of the questions' embeddings (bge-m3 on Albert
+    in the example configuration), which finds the English examples of a
+    question in French. The embeddings of a bank are cached in
+    ``$XDG_CACHE_HOME/neurolang/llm`` (``~/.cache`` by default); when they
+    cannot be had (no key, no network) the examples are chosen by BM25,
+    after a warning; in the browser, by BM25.
     An engine inherits the banks of the engines it ``extends``: the
     ``neurosynth`` and ``neurostore`` engines share that of
     ``coordinate_meta_analysis``, and ``neurostore.yaml`` adds questions
@@ -218,6 +226,11 @@ order:
       timeout: 60
       preview_rows: 10
       comment_rules: true    # a comment line on each rule of the query
+      example_retrieval: hybrid   # or bm25
+      embeddings:            # an OpenAI-compatible /embeddings API
+        base_url: https://albert.api.etalab.gouv.fr/v1
+        api_key_env: ALBERT_API_KEY
+        model: bge-m3
 
 The ``api`` of a provider is one of:
 

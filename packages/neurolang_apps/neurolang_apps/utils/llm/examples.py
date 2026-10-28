@@ -5,18 +5,24 @@ Each engine can have a bank of questions with their SQUALL and Datalog
 queries, ``examples/<engine>.yaml`` next to this module, and inherits
 the banks of the engines it extends. The examples
 put in the prompt are those whose question is the most similar to the
-user's (:func:`select_examples`), ranked by BM25 over their words: no
-embedding model is needed. Engines without a bank fall back on the
-example queries of their configuration.
+user's (:func:`select_examples`), ranked by BM25 over their words and,
+given an embeddings provider, by the cosine similarity of the questions'
+embeddings too, the two rankings fused. Engines without a bank fall back
+on the example queries of their configuration.
 """
 
+import hashlib
+import json
 import math
+import os
 import re
+import warnings
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple, Optional
 
+import numpy as np
 import yaml
 
 from neurolang_apps.utils import engine_registry
@@ -136,13 +142,82 @@ def bm25_scores(query: str, documents: list, k1=1.5, b=0.75) -> list:
     return scores
 
 
+RRF_K = 60
+_VECTORS = {}
+_FAILED = set()
+
+
+def _cache_dir() -> Path:
+    """Return the directory of the embeddings of the banks."""
+    root = os.environ.get("XDG_CACHE_HOME") or "~/.cache"
+    return Path(root).expanduser() / "neurolang" / "llm"
+
+
+def embed(provider, texts: tuple, disk: bool = False) -> np.ndarray:
+    """
+    Return the unit embeddings of *texts* by *provider*, kept in memory
+    and, with *disk*, in the cache directory.
+    """
+    key = hashlib.sha256(
+        json.dumps([provider.base_url, provider.model, texts]).encode()
+    ).hexdigest()[:24]
+    path = _cache_dir() / f"embeddings-{key}.npy"
+    if key not in _VECTORS and disk and path.exists():
+        _VECTORS[key] = np.load(path)
+    if key not in _VECTORS:
+        from .providers import make_client
+        client = make_client(provider)
+        try:
+            vectors = np.array(client.embed(list(texts)), dtype=float)
+        finally:
+            client.close()
+        vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+        _VECTORS[key] = vectors
+        if disk:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                np.save(path, vectors)
+            except OSError:
+                pass
+    return _VECTORS[key]
+
+
+def similarities(provider, question: str, bank: list) -> Optional[dict]:
+    """
+    Return the cosine similarity of *question* to each question of
+    *bank*, or None, with a warning the first time, if *provider* fails.
+    """
+    bank = tuple(dict.fromkeys(q for q in bank if q))
+    if not bank or (provider.base_url, provider.model) in _FAILED:
+        return None
+    try:
+        vectors = embed(provider, bank, disk=True)
+        cosines = vectors @ embed(provider, (question,))[0]
+    except Exception as exc:
+        _FAILED.add((provider.base_url, provider.model))
+        warnings.warn(
+            f"The examples are chosen by BM25 only: the embeddings of "
+            f"{provider.model!r} are not available ({exc})."
+        )
+        return None
+    return dict(zip(bank, cosines))
+
+
+def _ranks(scores: list) -> list:
+    """Return the rank of each score, tied scores sharing theirs."""
+    return [sum(other > score for other in scores) for score in scores]
+
+
 def select_examples(
     examples: list, question: str, language: str, k: int,
-    exclude: str = "",
+    exclude: str = "", embeddings=None,
 ) -> list:
     """
     Return the *k* examples in *language* most similar to *question*.
 
+    They are ranked by BM25 or, given an *embeddings* provider, by the
+    reciprocal rank fusion of BM25 and of the cosine similarity of the
+    questions' embeddings (BM25 alone if those are not available).
     Ties keep the order of the bank, so that its first, simplest
     examples come first. The example whose question is *exclude* is
     left out (to evaluate the assistant on its own bank).
@@ -152,6 +227,17 @@ def select_examples(
         if example.query(language) and example.question != exclude
     ]
     scores = bm25_scores(question, [e.question for e in candidates])
+    cosines = embeddings and similarities(
+        embeddings, question, [e.question for e in examples]
+    )
+    if cosines:
+        lexical = _ranks(scores)
+        semantic = _ranks([cosines.get(e.question, -1.0) for e in candidates])
+        scores = [
+            (1 / (RRF_K + lexical[i] + 1) if scores[i] > 0 else 0.0)
+            + 1 / (RRF_K + semantic[i] + 1)
+            for i in range(len(candidates))
+        ]
     ranked = sorted(
         range(len(candidates)), key=lambda i: (-scores[i], i)
     )
