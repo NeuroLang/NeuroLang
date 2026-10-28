@@ -32,6 +32,9 @@ def test_example_configuration_is_valid():
     )
     assert config.providers["claude-code"].api == "command"
     assert config.assistant.strategy == "react"
+    assert config.assistant.example_retrieval == "hybrid"
+    assert config.assistant.embeddings.model == "bge-m3"
+    assert config.assistant.embeddings.api_key_env == "ALBERT_API_KEY"
 
 
 def test_lookup_order(tmp_path, monkeypatch):
@@ -96,6 +99,23 @@ def test_invalid_assistant_settings():
         parse_config({**PROVIDERS, "assistant": {"strategy": "guess"}})
     with pytest.raises(LLMConfigError, match="Unknown assistant settings"):
         parse_config({**PROVIDERS, "assistant": {"steps": 3}})
+    with pytest.raises(LLMConfigError, match="Invalid example_retrieval"):
+        parse_config({**PROVIDERS, "assistant": {"example_retrieval": "x"}})
+    with pytest.raises(LLMConfigError, match="'embeddings' lacks model"):
+        parse_config({**PROVIDERS, "assistant": {
+            "embeddings": {"base_url": "https://llm.test/v1"}
+        }})
+
+
+def test_retrieval_settings():
+    assert parse_config(PROVIDERS).assistant.embeddings is None
+    assistant = parse_config({**PROVIDERS, "assistant": {
+        "example_retrieval": "bm25",
+        "embeddings": {"base_url": "https://llm.test/v1", "model": "e"},
+    }}).assistant
+    assert assistant.example_retrieval == "bm25"
+    assert assistant.embeddings.model == "e"
+    assert assistant.embeddings.api == "openai"
 
 
 def test_unreadable_and_invalid_files(tmp_path):

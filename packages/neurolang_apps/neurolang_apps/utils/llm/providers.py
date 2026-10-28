@@ -67,6 +67,7 @@ def _parse_arguments(arguments) -> dict:
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 HTTP_ATTEMPTS = 6
 MAX_RETRY_SECONDS = 60.0
+EMBEDDING_BATCH = 64
 
 
 def _retry_delay(response, attempt: int) -> float:
@@ -119,12 +120,16 @@ class ChatClient:
         temperature: float = 0.0,
     ) -> Reply:
         """Return the model's reply to the conversation *messages*."""
-        name = self.provider.name
         payload = self._payload(messages, tools, temperature)
+        return self._post(self.path, payload, self._reply)
+
+    def _post(self, path: str, payload: dict, parse):
+        """Post *payload* to *path*, retrying, and *parse* the reply."""
+        name = self.provider.name
         for attempt in range(HTTP_ATTEMPTS):
             self._pace()
             try:
-                response = self._http.post(self.path, json=payload)
+                response = self._http.post(path, json=payload)
             except httpx.TimeoutException as exc:
                 raise LLMError(f"{name}: the request timed out.") from exc
             except httpx.HTTPError as exc:
@@ -143,7 +148,7 @@ class ChatClient:
                 f"{response.text.strip()[:300]}"
             )
         try:
-            return self._reply(response.json())
+            return parse(response.json())
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError(
                 f"{name}: unexpected reply: {response.text.strip()[:300]}"
@@ -229,6 +234,21 @@ class OpenAIChatClient(ChatClient):
                 "output": usage.get("completion_tokens", 0),
             },
         )
+
+    def embed(self, texts: list) -> list:
+        """Return the embeddings of *texts*, by batches of the API's size."""
+        vectors = []
+        for start in range(0, len(texts), EMBEDDING_BATCH):
+            vectors += self._post(
+                "embeddings",
+                {"model": self.provider.model,
+                 "input": texts[start:start + EMBEDDING_BATCH]},
+                lambda data: [
+                    item["embedding"]
+                    for item in sorted(data["data"], key=lambda d: d["index"])
+                ],
+            )
+        return vectors
 
 
 class AnthropicChatClient(ChatClient):

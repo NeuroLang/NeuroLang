@@ -1,6 +1,7 @@
 """Tests of the LLM query assistant in the REPL: ``.ask`` and ``.llm``."""
 
 import io
+import json
 
 import pytest
 
@@ -33,8 +34,9 @@ PAIN = "obtain every Study that mentions 'pain'."
 
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     """A REPL on a small engine whose assistant answers with a script."""
+    monkeypatch.delenv("NEUROLANG_LLM_FEEDBACK_URL", raising=False)
     from neurolang.frontend import NeurolangPDL
 
     nl = NeurolangPDL()
@@ -292,3 +294,138 @@ def test_query_text_styles_the_query():
     styles = {text.plain[span.start:span.end]: span.style
               for span in text.spans}
     assert styles[":-"] == "bold blue" and styles["study"] == "blue"
+
+
+ASKED = "```datalog\nans(s) :- mentions(s, 'pain')\n```\nPain."
+
+
+@pytest.fixture
+def shared(app):
+    """The app sharing its answers with a mocked feedback server."""
+    import httpx
+
+    from neurolang_apps.utils.llm.feedback import FeedbackClient
+
+    posts = []
+
+    def handle(request):
+        posts.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(201, json={"id": f"{len(posts):032x}"})
+    app.assistant._feedback = FeedbackClient(
+        "http://fb.test", "ann", lambda text: app.console.print(text),
+        httpx.MockTransport(handle),
+    )
+    return posts
+
+
+def test_answers_are_shared_when_on(app, shared):
+    script(app, ASKED, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line(".ask Which studies mention pain again?")
+    assert [path for path, _ in shared] == ["/api/answers"] * 2
+    assert shared[0][1]["question"] == "Which studies mention pain?"
+    assert shared[0][1]["query"] == "ans(s) :- mentions(s, 'pain')"
+    text = output(app)
+    assert text.count("are shared with http://fb.test") == 1
+    assert f"Shared as {2:032x}" in text and "unsure [comment]" in text
+
+
+def test_rating_needs_sharing_on(app):
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line(".rate good")
+    assert app.failed and "NEUROLANG_LLM_FEEDBACK_URL" in output(app)
+    assert app.assistant.last_answer is None
+    assert ".rate" in help_text() and ".refine" in help_text()
+    app._run_line(".help feedback")
+    assert "[COMMENT]" in output(app) and ".rate ID" in output(app)
+
+
+def test_rate_the_last_answer_or_an_id(app, shared):
+    app._run_line(".rate good")
+    assert app.failed and "No answer to rate" in output(app)
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app.failed = False
+    app._run_line(".rate bad it misses chronic pain")
+    app._run_line(f".rate {'f' * 32} unsure")
+    assert not app.failed
+    app._run_line(".rate great")
+    assert app.failed and "Usage: .rate" in output(app)
+    assert shared[1:] == [
+        (f"/api/answers/{1:032x}/feedback",
+         {"verdict": "incorrect", "user": "ann",
+          "comment": "it misses chronic pain"}),
+        (f"/api/answers/{'f' * 32}/feedback",
+         {"verdict": "unsure", "user": "ann", "comment": ""}),
+    ]
+
+
+def test_refine_shares_the_checked_query(app, shared):
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line(".refine")
+    assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+    app._run_line(".refine submit")
+    assert app.failed and "Run the corrected query first" in output(app)
+    app._run_line("ans(s) :- mentions(s, 'fear')")
+    app.failed = False
+    app._run_line(".refine submit pain was wrong")
+    assert not app.failed
+    path, rating = shared[-1]
+    assert path == f"/api/answers/{1:032x}/feedback"
+    assert rating["corrected_query"] == "ans(s) :- mentions(s, 'fear')"
+    assert rating["corrected_query_checked"] is True
+    assert rating["comment"] == "pain was wrong"
+    assert "2" in rating["corrected_rows"]
+
+
+def test_refine_does_not_share_a_failing_query(app, shared):
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line("ans(s) :- mentions(s)")
+    app._run_line(".refine submit")
+    assert app.failed and "not shared" in output(app)
+    assert len(shared) == 1
+
+
+def test_feedback_end_to_end(app, tmp_path, monkeypatch):
+    """.ask, .rate and .refine against a feedback server, then export."""
+    import threading
+    import urllib.request
+
+    import yaml
+
+    from neurolang_apps.utils.llm.feedback_server import (
+        FeedbackStore,
+        examples_yaml,
+        make_server,
+    )
+
+    server = make_server(tmp_path / "fb.sqlite", port=0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    monkeypatch.setenv("NEUROLANG_LLM_FEEDBACK_URL", url)
+    try:
+        script(app, ASKED)
+        app._run_line(".ask Which studies mention pain?")
+        app._run_line(".rate bad")
+        app._run_line(".refine")
+        app._run_line("ans(s) :- mentions(s, 'fear')")
+        app._run_line(".refine submit fear, not pain")
+        assert not app.failed
+        with urllib.request.urlopen(f"{url}/api/answers") as response:
+            (record,) = json.load(response)["answers"]
+        with urllib.request.urlopen(url) as response:
+            assert b"Assistant answers" in response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert record["question"] == "Which studies mention pain?"
+    assert [r["verdict"] for r in record["feedback"]] == ["incorrect"] * 2
+    store = FeedbackStore(tmp_path / "fb.sqlite")
+    bank = yaml.safe_load(examples_yaml(store))
+    assert bank["examples"] == [{
+        "question": "Which studies mention pain?",
+        "datalog": "ans(s) :- mentions(s, 'fear')",
+    }]

@@ -287,6 +287,22 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
     assert not preview.ok and "too much memory" in preview.text
 
 
+def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
+    """A child killed by a signal (e.g. a library that cannot run after
+    fork) is reported as a crash, not as a query using too much memory."""
+    import os
+
+    from .. import validation
+
+    monkeypatch.setattr(validation, "_execute", lambda *a, **k: os.abort())
+    preview = run_preview(
+        nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=4096
+    )
+    assert not preview.ok
+    assert "crashed (SIGABRT)" in preview.text
+    assert "too much memory" not in preview.text
+
+
 def test_previews_without_fork_run_in_a_thread(nl, monkeypatch):
     """A system refusing to fork (ENOMEM) must not fail the preview."""
     import errno

@@ -1459,6 +1459,7 @@ def _run_ask(args) -> None:
             load_config,
             make_agent,
         )
+        from neurolang_apps.utils.llm.feedback import feedback_client
     except ImportError as exc:
         if (exc.name or "").split(".")[0] != "httpx":
             raise
@@ -1490,6 +1491,15 @@ def _run_ask(args) -> None:
     except LLMError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
+    feedback = feedback_client(
+        config, lambda text: print(text, file=sys.stderr)
+    )
+    answer = feedback and feedback.share(
+        args.ask, result, provider, agent.strategy, args.engine
+    )
+    if answer:
+        print(f"Shared as {answer}: rate it at {feedback.url}",
+              file=sys.stderr)
     if not result.valid:
         print(f"Error: no valid query: {result.error}", file=sys.stderr)
         if result.query:

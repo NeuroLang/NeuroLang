@@ -19,6 +19,7 @@ literature:
 
 import json
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -89,7 +90,8 @@ class AgentResult:
     The outcome of an agent: its query, if *valid*, or its *error*.
 
     *usage* counts the tokens sent (``input``) and received
-    (``output``), and *calls* the requests to the model.
+    (``output``), *calls* the requests to the model and *seconds* the
+    time it took.
     """
 
     query: str = ""
@@ -101,6 +103,7 @@ class AgentResult:
     steps: list = field(default_factory=list)
     usage: Counter = field(default_factory=Counter)
     calls: int = 0
+    seconds: float = 0.0
 
 
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
@@ -367,6 +370,8 @@ class Agent:
         examples = select_examples(
             bank, question, self.language, self.config.few_shot_k,
             exclude=self.exclude_question,
+            embeddings=self.config.example_retrieval == "hybrid"
+            and self.config.embeddings,
         )
         description = self.description
         if description is None:
@@ -409,9 +414,11 @@ class Agent:
         written with a comment line explaining each rule, in
         ``commented`` (see :meth:`_comment`).
         """
+        start = time.perf_counter()
         result = self._run(question)
         if result.valid and result.query and self.config.comment_rules:
             self._comment(result, question)
+        result.seconds = time.perf_counter() - start
         return result
 
     def _run(self, question: str) -> AgentResult:

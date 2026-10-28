@@ -67,7 +67,7 @@ class TestNeuroLangReplCompleter:
         assert set(_texts(completer, ".")) == set(COMMANDS)
 
     def test_session_commands_use_dot_prefix(self, completer):
-        assert _texts(completer, ".re") == [".rewritten"]
+        assert _texts(completer, ".rew") == [".rewritten"]
         assert _texts(completer, ".da") == [".datalog"]
         assert _texts(completer, "/") == []
 

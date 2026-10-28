@@ -31,6 +31,7 @@ APIS = ("openai", "anthropic", "command")
 TOOL_CALLING = ("text", "native")
 STRATEGIES = ("react", "icl")
 LANGUAGES = ("auto", "squall", "datalog")
+RETRIEVALS = ("hybrid", "bm25")
 
 
 class LLMConfigError(ValueError):
@@ -94,6 +95,10 @@ class AssistantConfig:
     a child process. With *comment_rules*, the accepted query is shown
     with a comment line explaining each rule (see
     :mod:`~neurolang.utils.llm.comments`).
+    The examples of the prompt are chosen by BM25 (*example_retrieval*
+    ``bm25``) or, with ``hybrid`` and an *embeddings* provider (an
+    OpenAI-compatible ``/embeddings`` API), by BM25 fused with the cosine
+    similarity of the questions' embeddings.
     """
 
     strategy: str = "react"
@@ -108,6 +113,21 @@ class AssistantConfig:
     query_timeout: float = 30.0
     query_memory_mb: float = 4096.0
     comment_rules: bool = True
+    example_retrieval: str = "hybrid"
+    embeddings: Optional[ProviderConfig] = None
+
+
+@dataclass(frozen=True)
+class FeedbackConfig:
+    """
+    Sharing of the questions and answers with a feedback server
+    (:mod:`.feedback`): off unless *enabled*, to the server at *url*,
+    signed with *user*, if given.
+    """
+
+    enabled: bool = False
+    url: str = ""
+    user: str = ""
 
 
 @dataclass
@@ -118,6 +138,7 @@ class LLMConfig:
     default_provider: str
     assistant: AssistantConfig = field(default_factory=AssistantConfig)
     path: Optional[Path] = None
+    feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
 
     def provider(self, name: Optional[str] = None) -> ProviderConfig:
         """Return the provider *name*, by default the default provider."""
@@ -201,9 +222,15 @@ def _assistant(entry) -> AssistantConfig:
         raise LLMConfigError(
             f"Unknown assistant settings: {', '.join(unknown)}."
         )
+    if entry.get("embeddings") is not None:
+        embeddings = _provider("embeddings", entry["embeddings"])
+        entry = {**entry, "embeddings": embeddings}
     assistant = AssistantConfig(**entry)
     _check_choice(assistant.strategy, STRATEGIES, "strategy")
     _check_choice(assistant.language, LANGUAGES, "language")
+    _check_choice(
+        assistant.example_retrieval, RETRIEVALS, "example_retrieval"
+    )
     return assistant
 
 
@@ -218,8 +245,12 @@ def parse_config(data: dict, path: Optional[Path] = None) -> LLMConfig:
     if not providers:
         raise LLMConfigError("The LLM configuration declares no provider.")
     default = data.get("default_provider") or next(iter(providers))
+    try:
+        feedback = FeedbackConfig(**(data.get("feedback") or {}))
+    except TypeError as exc:
+        raise LLMConfigError(f"Invalid feedback settings: {exc}.") from exc
     config = LLMConfig(
-        providers, default, _assistant(data.get("assistant")), path
+        providers, default, _assistant(data.get("assistant")), path, feedback
     )
     config.provider()
     return config

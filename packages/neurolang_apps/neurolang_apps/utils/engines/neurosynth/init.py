@@ -23,6 +23,8 @@ Registers the following predicates:
   probability, 25% threshold, 2 mm).
 * ``cognitive_task(task_id, name, description)`` — the tasks of the
   Cognitive Atlas, with their descriptions.
+* ``study_title(study_id, title)`` — the titles of the studies, from the
+  NeuroSynth metadata.
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
 ``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
@@ -42,6 +44,7 @@ from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import (
     StudyID,
     fetch_neurosynth_peak_data,
+    fetch_study_metadata,
     get_ns_term_study_associations,
 )
 from neurolang.utils.nilearn_compat import (
@@ -76,7 +79,21 @@ def init_engine(
     )
     term_data = term_data.rename(columns={"id": "study_id"})
     term_data["study_id"] = term_data["study_id"].astype(StudyID)
-    register_tables(nl, mask, data_dir, peak_data, term_data)
+    study_ids = register_tables(nl, mask, data_dir, peak_data, term_data)
+    nl.add_tuple_set(
+        study_titles(fetch_study_metadata(data_dir, verbose=0), study_ids),
+        name="study_title",
+    )
+
+
+def study_titles(
+    metadata: pd.DataFrame, study_ids: pd.DataFrame
+) -> pd.DataFrame:
+    """Return the ``study_id, title`` rows of the studies with a title."""
+    titles = metadata[["id", "title"]].rename(columns={"id": "study_id"})
+    titles = titles.astype({"study_id": StudyID}).dropna()
+    titles = titles[titles["title"].str.strip() != ""]
+    return titles[titles["study_id"].isin(study_ids["study_id"])]
 
 
 def register_tables(

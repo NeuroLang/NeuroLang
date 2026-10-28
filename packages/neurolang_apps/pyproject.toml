@@ -38,6 +38,7 @@ dependencies = [
 
 [project.scripts]
 neurolang-query = "neurolang_apps.utils.cli:main"
+neurolang-feedback-server = "neurolang_apps.utils.llm.feedback_server:main"
 
 [project.optional-dependencies]
 tui = [
