@@ -50,6 +50,9 @@ def order_conjunction_constant_atoms_first(
     """
     Order a rule body so constant-bearing atoms are adorned first.
 
+    Builtins, such as ``x > 0``, are not constant-bearing atoms: they
+    bind nothing.
+
     Magic sets adorns rule bodies left to right; a constant-bearing atom
     only seeds the magic set (``magic_P(c) :- ()``) while its shared
     variables are still free, i.e. when no atom sharing them precedes it.
@@ -69,7 +72,8 @@ def order_conjunction_constant_atoms_first(
         return formulas
     constant_atoms = [
         f for f in formulas
-        if any(isinstance(arg, Constant) for arg in f.args)
+        if isinstance(f.functor, Symbol)
+        and any(isinstance(arg, Constant) for arg in f.args)
     ]
     if not constant_atoms:
         return formulas
@@ -81,10 +85,7 @@ def order_conjunction_constant_atoms_first(
         prior_vars |= f_vars
     else:
         return formulas
-    free_atoms = [
-        f for f in formulas
-        if not any(isinstance(arg, Constant) for arg in f.args)
-    ]
+    free_atoms = [f for f in formulas if f not in constant_atoms]
     return tuple(constant_atoms) + order_conjunction_by_shared_variables(
         tuple(free_atoms)
     )
