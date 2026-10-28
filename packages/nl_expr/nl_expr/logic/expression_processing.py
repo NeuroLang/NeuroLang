@@ -342,6 +342,42 @@ def extract_logic_atoms(expression):
     return edp.walk(expression)
 
 
+class ExtractConjunctAtoms(ExtractLogicAtoms):
+    """The atoms of relational symbols which are conjuncts of a
+    conjunction, or the formula itself if it is one, not those within its
+    negations, quantifiers or disjunctions, nor builtins."""
+
+    @add_match(FunctionApplication(Constant, ...))
+    def builtin(self, expression):
+        return OrderedSet()
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return OrderedSet()
+
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return OrderedSet()
+
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        return OrderedSet()
+
+
+class ExtractExistentialPrefix(PatternWalker):
+    """The variables of the existential quantifiers a formula starts
+    with, and their body."""
+
+    @add_match(ExistentialPredicate)
+    def existential(self, expression):
+        variables, body = self.walk(expression.body)
+        return OrderedSet([expression.head]) | variables, body
+
+    @add_match(...)
+    def body(self, expression):
+        return OrderedSet(), expression
+
+
 def has_existential_quantifiers(query):
     """Check if the logic expression has
     existentially-quantified variables
