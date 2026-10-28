@@ -8,8 +8,8 @@ class ScriptedClient:
     """
     A chat client replaying canned replies, recording the requests.
 
-    Each reply is a string (text) or a list of ``(name, arguments)``
-    tool calls.
+    Each reply is a string (text), a :class:`Reply` or a list of
+    ``(name, arguments)`` tool calls.
     """
 
     def __init__(self, replies):
@@ -24,6 +24,8 @@ class ScriptedClient:
         if not self.replies:
             raise AssertionError("the model was asked more than scripted")
         reply = self.replies.pop(0)
+        if isinstance(reply, Reply):
+            return reply
         if isinstance(reply, str):
             return Reply(reply, usage={"input": 10, "output": 5})
         calls = [
