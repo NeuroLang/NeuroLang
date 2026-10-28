@@ -237,3 +237,30 @@ def test_bank_queries_are_valid_on_the_engine(engine):
                     f"{example.question} [{language}]: {result.message}"
                 )
     assert not failures, "\n".join(failures)
+
+
+
+def test_corrupt_bank_cache_is_computed_again(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setattr(examples_module, "_VECTORS", {})
+    calls = []
+
+    class Client:
+        def embed(self, texts):
+            calls.append(list(texts))
+            return [[1.0, 0.0] for _ in texts]
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        providers, "make_client", lambda provider, timeout: Client()
+    )
+    provider = ProviderConfig(name="e", api="openai", model="m", base_url="u")
+    first = examples_module.embed(provider, ("a", "b"), disk=True)
+    examples_module._VECTORS.clear()
+    for path in (tmp_path / "neurolang" / "llm").glob("*.npy"):
+        path.write_bytes(b"not an array")
+    second = examples_module.embed(provider, ("a", "b"), disk=True)
+    assert len(calls) == 2
+    assert first.tolist() == second.tolist()

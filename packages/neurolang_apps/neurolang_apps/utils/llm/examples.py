@@ -147,6 +147,10 @@ _VECTORS = {}
 _FAILED = set()
 
 
+# Seconds an embeddings request may take before BM25 is used instead.
+EMBEDDING_TIMEOUT = 10.0
+
+
 def _cache_dir() -> Path:
     """Return the directory of the embeddings of the banks."""
     root = os.environ.get("XDG_CACHE_HOME") or "~/.cache"
@@ -163,10 +167,14 @@ def embed(provider, texts: tuple, disk: bool = False) -> np.ndarray:
     ).hexdigest()[:24]
     path = _cache_dir() / f"embeddings-{key}.npy"
     if key not in _VECTORS and disk and path.exists():
-        _VECTORS[key] = np.load(path)
+        try:
+            _VECTORS[key] = np.load(path)
+        except (OSError, ValueError):
+            pass  # a corrupt cache file is computed again
     if key not in _VECTORS:
         from .providers import make_client
-        client = make_client(provider)
+        # A short request: a hung endpoint must not stall the question.
+        client = make_client(provider, timeout=EMBEDDING_TIMEOUT)
         try:
             vectors = np.array(client.embed(list(texts)), dtype=float)
         finally:
