@@ -270,9 +270,8 @@ def _verify_fact_and_choice_e_quantification(symbol_table, shattered_query):
         )
     }
     if any(
-        (e_vars & atom.args) and
         is_atom_a_probabilistic_fact_relation(atom, symbol_table) and
-        (e_vars & atom.args) > e_vars_choice
+        not (e_vars & atom.args) <= e_vars_choice
         for atom in extract_logic_atoms(shattered_query.antecedent)
     ):
         raise UnsupportedSolverError(

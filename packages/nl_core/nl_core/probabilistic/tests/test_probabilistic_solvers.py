@@ -1684,6 +1684,22 @@ def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
         solver.solve_succ_query(query, cpl_program)
 
 
+def test_small_dichotomy_fails_on_fact_variable_in_no_choice():
+    """∃x∃y Q(y) ∧ P(x): x is in no choice, as y is in no fact."""
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.5, 1), (0.5, 2)}
+    )
+    cpl_program.add_probabilistic_choice_from_tuples(
+        Q, {(0.6, 1), (0.4, 2)}
+    )
+    query = Implication(ans(), Conjunction((Q(y), P(x))))
+    with pytest.raises(UnsupportedSolverError):
+        small_dichotomy_theorem_based_solver.solve_succ_query(
+            query, cpl_program
+        )
+
+
 def test_dalvi_suciu_fails_builtin():
     solver = dalvi_suciu_lift
     pfact_as_sets = {
