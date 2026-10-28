@@ -10,6 +10,9 @@ written as the engine stores it.
 """
 
 import difflib
+import re
+from collections import Counter
+from numbers import Number
 from typing import Optional
 
 from pandas.api.types import is_object_dtype, is_string_dtype
@@ -31,6 +34,8 @@ MAX_CACHED_FRAMES = 512
 KIND_ORDER = ("stored", "rule", "probabilistic", "loaded")
 RULE_KINDS = frozenset({"derived", "session"})
 MAX_VALUES_SCANNED = 200_000
+# A column with at most this many values lists them all when none matches.
+MAX_VALUES_LISTED = 200
 
 
 def declared_predicates(engine_name: str) -> dict:
@@ -122,7 +127,7 @@ class EngineContext:
             info = info._replace(
                 columns=tuple(f"c{i}" for i in range(info.arity))
             )
-        line = info.signature()
+        line = info._replace(arguments=None).signature()
         description = _description(self.declared.get(info.name, {}))
         if description:
             line += f" — {description}"
@@ -154,10 +159,18 @@ class EngineContext:
         for kind in KIND_ORDER:
             for name in sorted(catalog, key=str.lower):
                 info = catalog[name]
-                if info.kind == kind:
+                if info.kind == kind and not _is_iri(name):
                     lines.append(
                         "- " + self.predicate_line(info, self._size(name))
                     )
+        namespaces = Counter(
+            re.sub(r"[^#/]*$", "", name) for name in catalog if _is_iri(name)
+        )
+        for namespace, count in sorted(namespaces.items()):
+            lines.append(
+                f"- {count} classes named by IRI in <{namespace}>, not "
+                "listed: search_values finds their IRIs by label"
+            )
         functions = sorted(
             name for name, info in catalog.items() if info.kind == "function"
         )
@@ -213,7 +226,7 @@ class EngineContext:
         frame.columns = columns
         return frame
 
-    def describe(self, name: str, rows: int = 5) -> str:
+    def describe(self, name: str, rows: int = 3) -> str:
         """Return the description of the predicate *name* and a few rows."""
         catalog = self.catalog()
         info = catalog.get(name)
@@ -349,6 +362,11 @@ class EngineContext:
             str(v) for c in columns
             for v in frame[c].drop_duplicates().head(MAX_VALUES_SCANNED)
         })
+        if len(strings) <= MAX_VALUES_LISTED:
+            return (
+                f"No value of {name} contains {pattern!r}; its values are: "
+                f"{', '.join(repr(v) for v in strings)}"
+            )
         close = difflib.get_close_matches(pattern, strings, n=limit,
                                           cutoff=0.6)
         if close:
@@ -380,8 +398,14 @@ def _string_columns(frame) -> list:
     """Return the columns of *frame* holding strings."""
     return [
         c for c in frame.columns
-        if is_object_dtype(frame[c]) or is_string_dtype(frame[c])
+        if (is_object_dtype(frame[c]) or is_string_dtype(frame[c]))
+        and isinstance(next(iter(frame[c].dropna()), ""), str)
     ]
+
+
+def _is_iri(name: str) -> bool:
+    """Whether the predicate *name* is an IRI (an ontology's class)."""
+    return name.startswith(("http://", "https://"))
 
 
 def _term(value) -> str:
@@ -390,7 +414,9 @@ def _term(value) -> str:
         if value.startswith(("http://", "https://", "_:")):
             return f"<{value}>"
         return repr(value)
-    return str(value)
+    if isinstance(value, Number):
+        return str(value)
+    return f"{type(value).__name__}(…)"
 
 
 def _fact(name: str, values) -> str:
