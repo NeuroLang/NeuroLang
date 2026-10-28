@@ -2363,6 +2363,45 @@ def test_predicate_with_a_choice_rule_and_a_post_probabilistic_rule():
         )
 
 
+@pytest.mark.parametrize("probability", [
+    "PROB[active(l, s) // motor(s)] = p",
+    "PROB[active(l, s)] = p",
+])
+def test_join_of_a_probability_with_its_maximum(probability):
+    """
+    The relation of a probabilistic query joined with the maximum of its
+    probabilities has every row: the post-probabilistic rules over the
+    aggregation, two rules away from it, were left unsolved.
+    """
+    studies = {0: "a", 1: "a", 2: "b", 3: "ab"}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(s, l) for s, ls in studies.items() for l in ls], name="act"
+    )
+    nl.add_tuple_set([(0,), (1,), (3,)], name="mentions_motor")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    res = nl.execute_datalog_program(
+        "active(l, s) :- act(s, l), selected_study(s)\n"
+        "motor(s) :- mentions_motor(s), selected_study(s)\n"
+        f"rp(l, p) :- {probability}\n"
+        "best(m) :- AGGREGATE[](rp(l, p) @ max(p)) = m\n"
+        "ans(l, p, m) :- rp(l, p), best(m)"
+    )
+    given = {0, 1, 3} if "motor" in probability else set(studies)
+    expected = {
+        l: sum(l in studies[s] for s in given) / len(given) for l in "ab"
+    }
+    assert {
+        (l, round(p, 6), round(m, 6))
+        for l, p, m in res.as_pandas_dataframe().values
+    } == {
+        (l, round(p, 6), round(max(expected.values()), 6))
+        for l, p in expected.items()
+    }
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_probability_of_a_study_activating_each_voxel_is_its_share(seed):
     """
