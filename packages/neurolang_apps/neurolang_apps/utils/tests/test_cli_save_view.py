@@ -98,7 +98,8 @@ def test_save_and_view_with_ask(engine, viewer, tmp_path, monkeypatch):
     config.write_text(
         "default_provider: fake\nproviders:\n  fake: {api: openai, "
         "base_url: 'http://llm.test/v1', model: m, tool_calling: text}\n"
-        "assistant: {strategy: react, few_shot_k: 0, comment_rules: false}\n"
+        "assistant: {strategy: react, few_shot_k: 0, comment_rules: false,"
+        " verify_rounds: 0}\n"
     )
     answer = (
         'Action: final_answer\nAction Input: {"query": '
@@ -210,7 +211,8 @@ def test_ask_prints_the_commented_query_and_takes_steps(
     config.write_text(
         "default_provider: fake\nproviders:\n  fake: {api: openai, "
         "base_url: 'http://llm.test/v1', model: m, tool_calling: text}\n"
-        "assistant: {strategy: react, few_shot_k: 0, max_steps: 1}\n"
+        "assistant: {strategy: react, few_shot_k: 0, max_steps: 1,"
+        " verify_rounds: 0}\n"
     )
     answer = (
         'Thought: look\nAction: list_predicates\nAction Input: {}',

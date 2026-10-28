@@ -1520,6 +1520,13 @@ def _run_ask(args) -> None:
         ), file=sys.stderr)
     if result.explanation:
         print(f"-- {result.explanation}", file=sys.stderr)
+    if result.back_translation:
+        print(f"-- reads back as: {result.back_translation}", file=sys.stderr)
+    if result.verified is False:
+        print(
+            "Warning: the check found that the query may not answer the "
+            f"question: {result.verification}", file=sys.stderr,
+        )
     if args.run or args.save or args.view:
         args.squall = language == "squall"
         execute = _execute_squall_program if args.squall else _execute_program

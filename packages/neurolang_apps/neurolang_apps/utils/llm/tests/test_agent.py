@@ -6,8 +6,9 @@ from ..agent import (
     extract_query,
     make_agent,
     parse_text_action,
+    parse_verdict,
 )
-from ..providers import Reply
+from ..providers import LLMError, Reply
 from .fakes import ScriptedClient, assistant_config, provider
 
 PAIN_SQUALL = "obtain every Study that mentions 'pain'."
@@ -372,3 +373,146 @@ def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):
         client=ScriptedClient([]), guidance="",
     )
     assert "How to answer" not in given.system_prompt("Which studies?")
+
+
+def answer(query, explanation="x"):
+    """Return a text protocol reply giving *query* as the final answer."""
+    return (
+        'Action: final_answer\nAction Input: {"query": "'
+        + query.replace("'", "\\'").replace('"', '\\"')
+        + f'", "explanation": "{explanation}"}}'
+    ).replace("\\'", "'")
+
+
+ALL_STUDIES = "ans(s) :- study(s)"
+
+
+@pytest.mark.parametrize("text, verdict, reason", [
+    ("VERDICT: yes\nIt lists the studies.", True, "It lists the studies."),
+    ("**VERDICT: No** — it lists every study.", False,
+     "it lists every study."),
+    ("No. The query ignores pain.", False, "The query ignores pain."),
+    ("I am not sure.", None, "I am not sure."),
+    ("The studies are those mentioning pain. VERDICT: no? No, the region "
+     "is right.\nVERDICT: yes", True,
+     "The studies are those mentioning pain. VERDICT: no? No, the region "
+     "is right."),
+])
+def test_parse_verdict(text, verdict, reason):
+    assert parse_verdict(text) == (verdict, reason)
+
+
+def test_react_verifies_the_final_answer(nl):
+    react, steps = agent(nl, ReactAgent, [
+        answer(PAIN_DATALOG),
+        "The studies that mention the term pain.",
+        "VERDICT: yes\nThey are the studies about pain.",
+    ], language="datalog", verify_rounds=1)
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.verified is True
+    assert result.back_translation == "The studies that mention the term pain."
+    assert result.calls == 3
+    assert steps[-1].action == "verify"
+    assert "Reads back as: The studies" in steps[-1].observation
+    assert "Answers the question: yes" in steps[-1].observation
+    translation, judgement = react.client.requests[1:]
+    # The query is translated back without the question.
+    assert "Which studies mention pain?" not in str(translation["messages"])
+    assert PAIN_DATALOG in translation["messages"][1]["content"]
+    assert "1 rows" in translation["messages"][1]["content"]
+    judged = judgement["messages"][1]["content"]
+    assert "Which studies mention pain?" in judged
+    assert "The engine's definitions are the" in (
+        judgement["messages"][0]["content"]
+    )
+    assert "# Predicates\n- mentions(" in judged
+    assert "The studies that mention the term pain." in judged
+
+
+def test_react_corrects_a_rejected_answer(nl):
+    react, steps = agent(nl, ReactAgent, [
+        answer(ALL_STUDIES),
+        "Every study of the database.",
+        "VERDICT: no\nIt does not restrict the studies to pain.",
+        answer(PAIN_DATALOG),
+        "The studies that mention pain.",
+        "VERDICT: yes",
+    ], language="datalog", verify_rounds=1)
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.verified is True
+    rejection = react.client.requests[3]["messages"][-1]["content"]
+    assert rejection.startswith("Observation: The answer is rejected")
+    assert "Every study of the database." in rejection
+    assert "does not restrict the studies to pain" in rejection
+    assert [s.action for s in steps] == [
+        "final_answer", "verify", "final_answer", "verify"
+    ]
+
+
+def test_react_accepts_once_the_rejections_are_spent(nl):
+    react, _ = agent(nl, ReactAgent, [
+        answer(ALL_STUDIES),
+        "Every study.", "VERDICT: no\nNot about pain.",
+        answer(ALL_STUDIES),
+        "Every study.", "VERDICT: no\nStill not about pain.",
+    ], language="datalog", verify_rounds=1)
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == ALL_STUDIES
+    assert result.verified is False
+    assert result.back_translation == "Every study."
+
+
+def test_react_verification_off_or_failing(nl):
+    react, steps = agent(nl, ReactAgent, [answer(PAIN_DATALOG)],
+                         language="datalog", verify_rounds=0)
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.verified is None and result.calls == 1
+
+    class Unreachable(ScriptedClient):
+        """Gives the final answer, then fails as a provider does."""
+
+        def complete(self, messages, tools=None, temperature=0.0):
+            if self.replies:
+                return super().complete(messages, tools, temperature)
+            raise LLMError("fake: HTTP 503")
+
+    steps = []
+    react = ReactAgent(
+        nl, provider(), assistant_config(verify_rounds=1), "datalog",
+        client=Unreachable([answer(PAIN_DATALOG)]), on_step=steps.append,
+    )
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.verified is None
+    assert "verification failed: fake: HTTP 503" in steps[-1].observation
+
+
+def test_react_unclear_verdict_accepts(nl):
+    react, _ = agent(nl, ReactAgent, [
+        answer(PAIN_DATALOG), "Studies about pain.", "Hard to say.",
+    ], language="datalog", verify_rounds=1)
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.verified is None
+    assert result.back_translation == "Studies about pain."
+
+
+def test_verification_reads_the_engine_description_and_guidance(nl):
+    steps = []
+    react = ReactAgent(
+        nl, provider(), assistant_config(verify_rounds=1), "datalog",
+        client=ScriptedClient([
+            answer(PAIN_DATALOG), "Studies about pain.", "VERDICT: yes",
+        ]),
+        on_step=steps.append, description="Terms are lower case.",
+        guidance="Answer with probabilities.",
+    )
+    react.run("Which studies mention Pain?")
+    translation, judgement = react.client.requests[1:]
+    for request in (translation, judgement):
+        assert "# The engine\nTerms are lower case." in (
+            request["messages"][1]["content"]
+        )
+    guidance = "# How to answer on this engine\nAnswer with probabilities."
+    assert guidance in judgement["messages"][1]["content"]
+    assert guidance not in translation["messages"][1]["content"]

@@ -75,6 +75,8 @@ assistant:
   timeout: 60          # seconds per LLM request
   preview_rows: 10     # rows of a result shown to the model
   comment_rules: true  # one more request: a comment line on each rule
+  verify_rounds: 1     # ReAct: final answers its back-translation check
+                       # may reject (0: no check)
 
 # Sharing the questions and the answers with a feedback server, where
 # they are rated and corrected to improve the assistant: off by default

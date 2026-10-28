@@ -51,6 +51,7 @@ _THOUGHT = re.compile(
 )
 _FINAL = re.compile(r"^\s*Final\s+Answer\s*:", re.MULTILINE | re.IGNORECASE)
 _OBSERVATION = re.compile(r"^\s*Observation\s*:", re.MULTILINE)
+_VERDICT = re.compile(r"VERDICT\s*:\s*\**\s*(yes|no)\b", re.IGNORECASE)
 # A keyword line as models write it, emphasis included: **Action:** x
 _KEYWORD_LINE = re.compile(
     r"^[\s*_`#>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
@@ -94,7 +95,10 @@ class AgentResult:
 
     *usage* counts the tokens sent (``input``) and received
     (``output``), *calls* the requests to the model and *seconds* the
-    time it took.
+    time it took. The ReAct agent translates its query back into English
+    (*back_translation*) and sets *verified* to whether the model judged
+    that to answer the question (None when unchecked), with the reason
+    of its judgement (*verification*).
     """
 
     query: str = ""
@@ -107,6 +111,9 @@ class AgentResult:
     usage: Counter = field(default_factory=Counter)
     calls: int = 0
     seconds: float = 0.0
+    back_translation: str = ""
+    verified: Optional[bool] = None
+    verification: str = ""
 
 
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
@@ -246,6 +253,8 @@ class Toolbox:
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
         self.queries_with_rows = []
+        # The first rows of the answer final_answer accepted last.
+        self.answer_rows = ""
 
     def call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
@@ -324,6 +333,7 @@ class Toolbox:
                     + self.queries_with_rows[-1]
                 )
             return message, None
+        self.answer_rows = preview.text
         return "Accepted.", (query.strip(), explanation.strip())
 
 
@@ -374,16 +384,18 @@ class Agent:
             bank, question, self.language, self.config.few_shot_k,
             exclude=self.exclude_question,
         )
-        description = self.description
-        if description is None:
-            description = self._engine_config().get("description", "")
-        guidance = self.guidance
-        if guidance is None:
-            guidance = self._engine_config().get("assistant_guidance", "")
         return prompts.system_prompt(
             self.language, self.context.schema_summary(), examples,
-            self.strategy, text_tools, description, guidance,
+            self.strategy, text_tools,
+            self._engine_text(self.description, "description"),
+            self._engine_text(self.guidance, "assistant_guidance"),
         )
+
+    def _engine_text(self, given: Optional[str], key: str) -> str:
+        """Return *given*, or else the engine configuration's *key*."""
+        if given is not None:
+            return given
+        return self._engine_config().get(key, "")
 
     def _engine_config(self) -> dict:
         """Return the configuration of the engine, if it is registered."""
@@ -531,8 +543,38 @@ class IclAgent(Agent):
         return chosen
 
 
+def parse_verdict(text: str):
+    """
+    Return the verdict of a verification reply, True or False, and its
+    reason; the verdict is None when the reply gives none.
+
+    The last ``VERDICT:`` counts. The reason is the text after it, or
+    else the reasoning before it.
+    """
+    matches = list(_VERDICT.finditer(text))
+    match = matches[-1] if matches else None
+    if match is None:
+        first = text.strip().split(None, 1)
+        word = first[0].strip(".,:*").lower() if first else ""
+        if word not in ("yes", "no"):
+            return None, text.strip()
+        return word == "yes", (first[1] if len(first) > 1 else "").strip()
+    reason = text[match.end():].lstrip("*.,:-— \n").strip()
+    if not reason:
+        reason = " ".join(text[:match.start()].split()).strip("* ")
+    return match.group(1).lower() == "yes", truncate(reason, 600)
+
+
 class ReactAgent(Agent):
-    """ReAct: reasoning and tool calls until a checked final answer."""
+    """
+    ReAct: reasoning and tool calls until a checked final answer.
+
+    A final answer is then verified, as long as *verify_rounds* of the
+    configuration allow it to be rejected: the model translates the query
+    back into English without seeing the question, then judges whether
+    that answers the question. A rejection goes back to the agent as the
+    observation of its final answer, with the reason.
+    """
 
     strategy = "react"
 
@@ -554,12 +596,28 @@ class ReactAgent(Agent):
             {"role": "user", "content": question},
         ]
         turn = self._native_turn if self.native else self._text_turn
+        rejections = 0
         for _ in range(self.config.max_steps):
             final = turn(result, messages, toolbox)
-            if final is not None:
+            if final is None:
+                continue
+            rejection = None
+            if self.config.verify_rounds > 0:
+                rejection = self._verify(
+                    result, question, final[0], toolbox.answer_rows
+                )
+            if rejection is None or rejections >= self.config.verify_rounds:
                 result.query, result.explanation = final
                 result.valid = True
                 return result
+            rejections += 1
+            messages.append(
+                {"role": "user", "content": prompts.observation(rejection)}
+            )
+        # Out of steps: the verdict of a rejected answer is not that of
+        # the answer given instead.
+        result.verified, result.back_translation = None, ""
+        result.verification = ""
         ran = max(
             (
                 s for s in reversed(result.steps)
@@ -586,6 +644,48 @@ class ReactAgent(Agent):
             f"No valid query after {self.config.max_steps} steps."
         )
         return result
+
+    def _verify(self, result, question: str, query: str, rows: str):
+        """
+        Translate *query* back into English and judge whether it answers
+        *question*. Record the step and return the observation rejecting
+        the answer, or None when it is judged to answer the question, or
+        cannot be judged (an error of the model).
+        """
+        from .providers import LLMError
+
+        try:
+            description = self._engine_text(self.description, "description")
+            guidance = self._engine_text(self.guidance, "assistant_guidance")
+            schema = self.context.schema_summary()
+            english = self._complete(
+                result, prompts.back_translation_request(
+                    query, self.language, schema, rows, description,
+                ),
+            ).text.strip()
+            verdict, reason = parse_verdict(self._complete(
+                result, prompts.verification_request(
+                    question, english, rows, schema, description, guidance,
+                ),
+            ).text)
+        except LLMError as exc:
+            self._step(result, AgentStep(
+                "", "verify", {"query": query},
+                f"The verification failed: {exc}",
+            ))
+            return None
+        result.back_translation = english
+        result.verified = verdict
+        result.verification = reason
+        answers = {True: "yes", False: "no", None: "unclear"}[verdict]
+        self._step(result, AgentStep(
+            "", "verify", {"query": query},
+            f"Reads back as: {english}\nAnswers the question: {answers}"
+            + (f" — {reason}" if reason else ""),
+        ))
+        if verdict is False:
+            return prompts.verification_rejection(english, reason)
+        return None
 
     def _call(self, result, toolbox, thought, name, arguments):
         """Call a tool, record the step and return (observation, final)."""
