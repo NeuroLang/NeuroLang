@@ -21,6 +21,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraStringExpression,
     RenameColumns,
+    ReplaceColumns,
     ReplaceNull,
     Selection,
     eq_,
@@ -148,7 +149,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_constant(self, expression):
-        rew = ew.ReplaceExpressionWalker({
+        rew = ReplaceColumns({
             p.dst_column: p.fun_exp
             for p in expression.relation.projection_list
         })
@@ -261,7 +262,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             else:
                 new_inner_projections.append(proj)
 
-        rew = ew.ReplaceExpressionWalker(replacements)
+        rew = ReplaceColumns(replacements)
         new_external_projections = tuple(
             FunctionApplicationListMember(rew.walk(p.fun_exp), p.dst_column)
             for p in expression.projection_list
@@ -324,7 +325,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                         )
 
                 projections_to_push_up.append(FunctionApplicationListMember(
-                    ew.ReplaceExpressionWalker(new_columns).walk(proj.fun_exp),
+                    ReplaceColumns(new_columns).walk(proj.fun_exp),
                     proj.dst_column
                 ))
                 projections_to_keep += [
