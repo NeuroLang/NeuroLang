@@ -826,6 +826,16 @@ class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
         raise NeuroLangPatternMatchingNoMatch()
 
 
+class ReplaceColumns(ew.ReplaceExpressionWalker):
+    """Replace the columns of an expression, mapping columns to
+    expressions: a constant equal to a column, as the integer `1` in
+    `σ_{0 = 1}` to the column 1, is not replaced."""
+
+    @ew.add_match(Constant, lambda c: not isinstance(c, Constant[Column]))
+    def constant(self, constant):
+        return constant
+
+
 class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
