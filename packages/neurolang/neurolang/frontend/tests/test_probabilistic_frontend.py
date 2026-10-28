@@ -2400,3 +2400,47 @@ def test_join_of_a_probability_with_its_maximum(probability):
         (l, round(p, 6), round(max(expected.values()), 6))
         for l, p in expected.items()
     }
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_probability_of_a_study_activating_each_voxel_is_its_share(seed):
+    """
+    PROB over the uniform choice of a study with a peak within a radius
+    of each voxel is the share of the studies with such a peak, computed
+    here by brute force: the plan joins the pairs of voxels and studies
+    with the probabilities of the choice and sums them per voxel.
+    """
+    rng = np.random.default_rng(seed)
+    voxels = {tuple(v) for v in rng.integers(0, 6, size=(60, 3))}
+    peaks = {
+        (*p, s) for p, s in zip(
+            rng.integers(0, 6, size=(40, 3)), rng.integers(0, 12, 40)
+        )
+    }
+    studies = sorted({s for *_, s in peaks} | {100, 101})
+    nl = NeurolangPDL()
+    nl.add_tuple_set(voxels, name="voxel")
+    nl.add_tuple_set(peaks, name="peak")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    result = nl.execute_datalog_program(
+        "ans(i, j, k, p) :- PROB[voxel(i, j, k), "
+        "(euclidean(i, j, k, i1, j1, k1) < 2), peak(i1, j1, k1, s), "
+        "selected_study(s)] = p"
+    ).as_pandas_dataframe()
+    got = {
+        (int(i), int(j), int(k)): p
+        for i, j, k, p in result.itertuples(index=False, name=None)
+    }
+    expected = {}
+    for v in voxels:
+        near = {
+            s for *q, s in peaks
+            if sum((a - b) ** 2 for a, b in zip(v, q)) < 4
+        }
+        if near:
+            expected[tuple(int(x) for x in v)] = len(near) / len(studies)
+    assert got.keys() == expected.keys()
+    for voxel, p in expected.items():
+        assert got[voxel] == pytest.approx(p)
