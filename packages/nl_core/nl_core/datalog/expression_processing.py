@@ -374,16 +374,19 @@ def stratify_obtain_new_stratum(to_process, seen):
             new_to_process.append(r)
 
     # 2. remove all the rules which have body predicates that will be updated
-    # by rules in later strata.
+    # by rules in later strata, those removed included.
     will_see_later = {r.consequent.functor for r in new_to_process}
-    stratum = []
-    new_seen = set()
-    for r in temp_stratum:
-        if any_body_preds_in_set(r, will_see_later):
-            new_to_process.insert(0, r)
-        else:
-            stratum.append(r)
-            new_seen.add(r.consequent.functor)
+    stratum, later = temp_stratum, True
+    while later:
+        later = [
+            r for r in stratum if any_body_preds_in_set(r, will_see_later)
+        ]
+        stratum = [
+            r for r in stratum if not any_body_preds_in_set(r, will_see_later)
+        ]
+        new_to_process = later[::-1] + new_to_process
+        will_see_later |= {r.consequent.functor for r in later}
+    new_seen = {r.consequent.functor for r in stratum}
 
     return new_seen, new_to_process, stratum
 
