@@ -264,8 +264,9 @@ def test_frontend_conditional_probability_bound_through_a_rule_compared():
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
 def test_frontend_aggregate_of_a_rule_with_a_constant(frontend):
     """
-    The aggregate of the query is free in magic sets: the constant text
-    of the rule it aggregates binds the similarity.
+    Magic sets leave aggregates free, in the query or through a rule
+    using one: the constant text of the rule they aggregate binds the
+    similarity.
     """
     nl = frontend()
     nl.add_tuple_set([(s,) for s in range(6)], name="study")
@@ -284,3 +285,8 @@ def test_frontend_aggregate_of_a_rule_with_a_constant(frontend):
         "ans(m) :- AGGREGATE[](sim(s, v) @ max(v)) = m"
     )
     assert res.as_pandas_dataframe().m.tolist() == [1.0]
+    # v, bound by sim, is not passed on to the aggregate of top
+    res = nl.execute_datalog_program(
+        "ans(t, v) :- sim(s, v) & top(v) & title(s, t)"
+    )
+    assert res.as_pandas_dataframe().values.tolist() == [["t5", 1.0]]

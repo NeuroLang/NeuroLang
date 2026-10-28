@@ -162,6 +162,7 @@ class SIPS(ABC):
         self.prob_symbols = probabilistic_symbols(datalog)
         self.seed_from_edb = seed_from_edb
         self.seeding_edb_atoms = set()
+        self.aggregate_positions = aggregate_positions(datalog)
 
     def _check_for_bound_aggregates(self, rule, adornment):
         """
@@ -240,8 +241,13 @@ class SIPS(ABC):
     ):
         adornment = ""
         has_b = False
-        for arg in predicate.args:
-            if isinstance(arg, Constant) or arg in bound_variables:
+        free = self.aggregate_positions.get(
+            unadorned_predicate_symbol(predicate.functor), ()
+        )
+        for i, arg in enumerate(predicate.args):
+            if isinstance(arg, Constant) or (
+                arg in bound_variables and i not in free
+            ):
                 adornment += "b"
                 has_b = True
             else:
@@ -375,6 +381,38 @@ class LeftToRightSIPS(SIPS):
             predicate.functor not in self.prob_symbols and
             any(isinstance(arg, Constant) for arg in predicate.args)
         )
+
+
+def aggregate_positions(datalog):
+    """
+    Return the positions of the arguments of each predicate of *datalog*
+    computed by an aggregation or a probabilistic query, in its rules or
+    in those of the predicates they use: a variable there is not bound
+    by magic sets, which would bind the aggregate.
+    """
+    rules = get_list_of_intensional_rules(datalog)
+    positions = {}
+    changed = True
+    while changed:
+        changed = False
+        for rule in rules:
+            aggregated = {
+                atom.args[i]
+                for atom in extract_logic_predicates(rule.antecedent)
+                if hasattr(atom, "functor")
+                for i in positions.get(atom.functor, ())
+            }
+            new = {
+                i for i, arg in enumerate(rule.consequent.args)
+                if arg in aggregated or isinstance(
+                    arg, (AggregationApplication, ProbabilisticQuery)
+                )
+            }
+            known = positions.setdefault(rule.consequent.functor, set())
+            if not new <= known:
+                known |= new
+                changed = True
+    return positions
 
 
 def _bind_shared_variables(predicate, tail, bound_variables):
