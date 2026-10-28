@@ -313,7 +313,8 @@ def _ranked_variables_and_positions(atoms):
                 if arg in variables:
                     positions[atom.functor].add(i)
         ranked_args = {
-            atom.args[i] for atom in atoms for i in positions[atom.functor]
+            atom.args[i] for atom in atoms
+            for i in positions.get(atom.functor, ())
         }
         if any(not isinstance(arg, Symbol) for arg in ranked_args):
             raise NotRankedException(

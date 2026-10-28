@@ -125,7 +125,7 @@ def test_schema_summary_uses_the_engine_configuration(nl, monkeypatch):
     )
     context = EngineContext(nl, "neurosynth")
     assert (
-        "- mentions(study(study_id), term) — Studies and terms "
+        "- mentions(study_id, term) — Studies and terms "
         "[stored, 4 rows]" in context.schema_summary()
     )
     assert "mentions(1, 'pain')" in context.search_values(
@@ -145,15 +145,58 @@ def test_describe_and_search(nl):
     )
     assert context.search_values("pain", "mentions", 1).splitlines()[1:] \
         == ["mentions(1, 'pain')", "mentions(2, 'chronic pain')"]
-    assert "closest are: 'memory'" in context.search_values(
-        "memroy", "mentions", "c1"
+    assert context.search_values("memroy", "mentions", "c1") == (
+        "No value of mentions contains 'memroy'; its values are: "
+        "'chronic pain', 'fear', 'memory', 'pain'"
     )
     assert "no column 'term'" in context.search_values(
         "x", "mentions", "term"
     )
-    assert "matches" in context.search_values("zzzzzz", "mentions", "c1")
     assert "Unknown predicate 'nothing'" in context.search_values(
         "x", "nothing"
+    )
+
+
+def test_search_shows_the_closest_of_many_values(nl, monkeypatch):
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.MAX_VALUES_LISTED", 2
+    )
+    context = EngineContext(nl)
+    assert "closest are: 'memory'" in context.search_values(
+        "memroy", "mentions", "c1"
+    )
+    assert "matches" in context.search_values("zzzzzz", "mentions", "c1")
+
+
+def test_schema_summary_counts_the_classes_named_by_iri(nl):
+    for i in range(3):
+        nl.add_tuple_set([(1,)], name=f"http://x.org/onto#C{i}")
+    summary = EngineContext(nl).schema_summary()
+    assert "http://x.org/onto#C0" not in summary
+    assert (
+        "- 3 classes named by IRI in <http://x.org/onto#>, not listed: "
+        "search_values finds their IRIs by label"
+    ) in summary.splitlines()
+
+
+def test_describe_shows_the_columns_as_written_in_a_query(nl, monkeypatch):
+    declared = {"region": {"columns": ["label", "region"]}}
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.declared_predicates",
+        lambda name: declared,
+    )
+    nl.add_tuple_set(
+        [(f"r{i}", frozenset({i})) for i in range(5)], name="region"
+    )
+    context = EngineContext(nl, "neurosynth")
+    description = context.describe("region")
+    lines = description.splitlines()
+    assert lines[0] == "region(label, region) [stored, 5 rows]"
+    assert lines[2:] == [
+        f"region('r{i}', frozenset(…))" for i in range(3)
+    ]
+    assert context.search_values("r1", "region") == (
+        "Facts with values containing 'r1':\nregion('r1', frozenset(…))"
     )
 
 
@@ -285,6 +328,22 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=200
     )
     assert not preview.ok and "too much memory" in preview.text
+
+
+def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
+    """A child killed by a signal (e.g. a library that cannot run after
+    fork) is reported as a crash, not as a query using too much memory."""
+    import os
+
+    from .. import validation
+
+    monkeypatch.setattr(validation, "_execute", lambda *a, **k: os.abort())
+    preview = run_preview(
+        nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=4096
+    )
+    assert not preview.ok
+    assert "crashed (SIGABRT)" in preview.text
+    assert "too much memory" not in preview.text
 
 
 def test_previews_without_fork_run_in_a_thread(nl, monkeypatch):

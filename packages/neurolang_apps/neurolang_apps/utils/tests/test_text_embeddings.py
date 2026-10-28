@@ -206,6 +206,41 @@ def test_encoder_import_error(monkeypatch):
         te.Specter2Encoder().encode_query("reading")
 
 
+def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
+    """On macOS a forked child, as the assistant checks queries in, cannot
+    load a model nor use MPS: before the assistant forks, the encoders with
+    local copies are loaded and moved to the CPU; the others are left
+    alone, and nothing is done on other systems."""
+    loads = []
+
+    class Model:
+        def to(self, device):
+            loads.append(device)
+            return self
+
+    def fake_load(self):
+        if self._model is None:
+            self._model = Model()
+            loads.append(("load", self.device))
+
+    monkeypatch.setattr(te.Specter2Encoder, "_load", fake_load)
+    local = te.Specter2Encoder(model_dir=tmp_path, device="mps")
+    for repo in (local.model_name, local.document_adapter, local.query_adapter):
+        copy = tmp_path / repo.replace("/", "--")
+        copy.mkdir()
+        (copy / te.COMPLETE_MARKER).touch()
+    remote = te.Specter2Encoder(device="mps")       # would download
+    monkeypatch.setattr(te.sys, "platform", "darwin")
+    te.prepare_for_fork()
+    assert loads == [("load", "mps"), "cpu"]
+    assert local.device == "cpu" and isinstance(local._model, Model)
+    assert remote._model is None and remote.device == "mps"
+    monkeypatch.setattr(te.sys, "platform", "linux")
+    other = te.Specter2Encoder(model_dir=tmp_path, device="mps")
+    te.prepare_for_fork()
+    assert other._model is None
+
+
 # ---------------------------------------------------------------------------
 # NeuroLang integration
 # ---------------------------------------------------------------------------
@@ -358,6 +393,20 @@ def test_similarity_function_is_lazy(tmp_path):
     nl.execute_datalog_program(BOUND_BY_QUERY.splitlines()[1])
     assert index.encoder.query_calls == 0
     assert not index.cache_path.exists()
+
+
+def test_torch_runs_on_one_thread_in_forked_children(monkeypatch):
+    """The OpenMP pool of torch does not survive a fork: a child using it
+    hangs, as the assistant's query checks did."""
+    calls = []
+    torch = type(sys)("torch")
+    torch.set_num_threads = calls.append
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    te._after_fork_in_child()
+    assert calls == [1]
+    monkeypatch.delitem(sys.modules, "torch")
+    te._after_fork_in_child()                   # without torch: nothing
+    assert calls == [1]
 
 
 # ---------------------------------------------------------------------------

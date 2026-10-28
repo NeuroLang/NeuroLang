@@ -123,11 +123,8 @@ def reference(language: str) -> str:
     return SQUALL_REFERENCE
 
 SCHEMA_NOTE = """\
-Each predicate is listed with its columns, in order. An entity spanning
-several columns is written sort(columns): reports(study(study_id),
-voxel(i, j, k)) has the four columns study_id, i, j, k, used as
-reports(s, i, j, k) in Datalog and as the verb `reports` between a Study
-and a Voxel in SQUALL."""
+Each predicate is listed with its columns, in order: write a variable or
+a constant for each column, e.g. reports(s, i, j, k), mentions(s, 'pain')."""
 
 ROLE = """\
 You translate questions on neuroimaging data into queries of NeuroLang,

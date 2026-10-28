@@ -30,6 +30,8 @@ def engine():
             patch(f"{NS_INIT}.fetch_cortical_atlas", return_value=nib.Nifti1Image(
                 np.ones((4, 4, 4), dtype=np.int16), np.eye(4))), \
             patch(f"{NS_INIT}.fetch_cognitive_atlas_tasks", return_value=tasks), \
+            patch(f"{NS_INIT}.fetch_study_metadata", return_value=pd.DataFrame(
+                {"id": [1, 2], "title": ["Study one", "Study two"]})), \
             patch.object(engine_registry, "_resolve_mask", return_value=mask), \
             patch.object(engine_registry, "_phase_atlases",
                          lambda *a, **k: None):
