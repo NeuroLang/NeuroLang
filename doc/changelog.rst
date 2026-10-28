@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* The query assistant can share its questions and answers with a feedback
+  server, where people rate them correct, incorrect or unsure and correct
+  their query, to train models and grow the banks of examples. It is off
+  by default: ``feedback`` in ``llm.yaml`` or
+  ``NEUROLANG_LLM_FEEDBACK_URL`` turns it on. In the REPL, ``.rate`` and
+  ``.refine`` rate and correct the last answer. ``neurolang-feedback-server``
+  (standard library only) collects them, shows a review page and exports
+  them as JSON lines or as a bank of examples. See
+  :ref:`assistant-feedback`.
+
 * The query assistant searches the studies by a description or a
   Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
   share a bank of examples (``coordinate_meta_analysis.yaml``, which banks
