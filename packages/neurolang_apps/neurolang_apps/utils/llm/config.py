@@ -110,6 +110,19 @@ class AssistantConfig:
     comment_rules: bool = True
 
 
+@dataclass(frozen=True)
+class FeedbackConfig:
+    """
+    Sharing of the questions and answers with a feedback server
+    (:mod:`.feedback`): off unless *enabled*, to the server at *url*,
+    signed with *user*, if given.
+    """
+
+    enabled: bool = False
+    url: str = ""
+    user: str = ""
+
+
 @dataclass
 class LLMConfig:
     """The providers and the assistant settings of a configuration file."""
@@ -118,6 +131,7 @@ class LLMConfig:
     default_provider: str
     assistant: AssistantConfig = field(default_factory=AssistantConfig)
     path: Optional[Path] = None
+    feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
 
     def provider(self, name: Optional[str] = None) -> ProviderConfig:
         """Return the provider *name*, by default the default provider."""
@@ -218,8 +232,12 @@ def parse_config(data: dict, path: Optional[Path] = None) -> LLMConfig:
     if not providers:
         raise LLMConfigError("The LLM configuration declares no provider.")
     default = data.get("default_provider") or next(iter(providers))
+    try:
+        feedback = FeedbackConfig(**(data.get("feedback") or {}))
+    except TypeError as exc:
+        raise LLMConfigError(f"Invalid feedback settings: {exc}.") from exc
     config = LLMConfig(
-        providers, default, _assistant(data.get("assistant")), path
+        providers, default, _assistant(data.get("assistant")), path, feedback
     )
     config.provider()
     return config
