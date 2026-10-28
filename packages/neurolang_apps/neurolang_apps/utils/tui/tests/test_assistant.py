@@ -385,3 +385,45 @@ def test_refine_does_not_share_a_failing_query(app, shared):
     app._run_line(".refine submit")
     assert app.failed and "not shared" in output(app)
     assert len(shared) == 1
+
+
+def test_feedback_end_to_end(app, tmp_path, monkeypatch):
+    """.ask, .rate and .refine against a feedback server, then export."""
+    import threading
+    import urllib.request
+
+    import yaml
+
+    from neurolang_apps.utils.llm.feedback_server import (
+        FeedbackStore,
+        examples_yaml,
+        make_server,
+    )
+
+    server = make_server(tmp_path / "fb.sqlite", port=0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    monkeypatch.setenv("NEUROLANG_LLM_FEEDBACK_URL", url)
+    try:
+        script(app, ASKED)
+        app._run_line(".ask Which studies mention pain?")
+        app._run_line(".rate bad")
+        app._run_line(".refine")
+        app._run_line("ans(s) :- mentions(s, 'fear')")
+        app._run_line(".refine submit fear, not pain")
+        assert not app.failed
+        with urllib.request.urlopen(f"{url}/api/answers") as response:
+            (record,) = json.load(response)["answers"]
+        with urllib.request.urlopen(url) as response:
+            assert b"Assistant answers" in response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert record["question"] == "Which studies mention pain?"
+    assert [r["verdict"] for r in record["feedback"]] == ["incorrect"] * 2
+    store = FeedbackStore(tmp_path / "fb.sqlite")
+    bank = yaml.safe_load(examples_yaml(store))
+    assert bank["examples"] == [{
+        "question": "Which studies mention pain?",
+        "datalog": "ans(s) :- mentions(s, 'fear')",
+    }]

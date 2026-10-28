@@ -565,3 +565,7 @@ $("next").onclick = () => { offset += size; load(); };
 load();
 </script></body></html>
 """
+
+
+if __name__ == "__main__":
+    main()
