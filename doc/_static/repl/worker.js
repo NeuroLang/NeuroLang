@@ -113,14 +113,14 @@ async function installSource(pyodide, repo, ref) {
   return commit.sha;
 }
 
-async function start({ repo, ref }) {
+async function start({ repo, ref, full }) {
   status("Loading Python…");
   const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
 
   status("Loading numpy, scipy, pandas and scikit-learn…");
   await pyodide.loadPackage(PYODIDE_PACKAGES);
 
-  const bundle = await (await fetch("bundle.json")).json();
+  const bundle = await (await fetch("bundle.json", { cache: "no-store" })).json();
   const micropip = pyodide.pyimport("micropip");
   status("Installing the packages NeuroLang needs…");
   for (const name of PYPI_PACKAGES) await micropip.install(name);
@@ -148,7 +148,18 @@ from pathlib import Path
 from neurolang.utils import engine_registry
 from neurolang.utils.tui.web import WebRepl
 
-nl = engine_registry.build_engine("${ENGINE}", Path("/data"), ${RESOLUTION}.0)
+# The precomputed analyses (lift, ratios...) fill gigabytes, more than
+# a tab is given: they are left out unless the page asks for them.
+yaml_path = None
+if not ${full ? "True" : "False"}:
+    try:
+        from neurolang.utils.tui.web import lightweight_engines_yaml
+        yaml_path = lightweight_engines_yaml("/tmp")
+    except ImportError:  # a version that predates it
+        pass
+nl = engine_registry.build_engine(
+    "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path
+)
 repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
 
 def submit(text):

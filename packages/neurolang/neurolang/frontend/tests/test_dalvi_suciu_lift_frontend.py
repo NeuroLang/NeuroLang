@@ -319,3 +319,26 @@ def test_disjoint_separator_plans_a_union_in_one_projection():
     )
     assert isinstance(plan, DisjointProjection)
     assert "Σ" not in repr(plan)
+
+
+def test_integer_constant_of_a_deterministic_atom():
+    """mentions(1, t) selects the rows of study 1: its integer constant,
+    equal as a constant to the column 1, was renamed into that column by
+    the optimisers, and the selection kept every row."""
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,), (4,)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [(1, "x"), (2, "y"), (3, "x"), (4, "z"), (1, "y")], name="mentions"
+    )
+    result = nl.execute_datalog_program(
+        "a(t) :- selected_study(f), mentions(f, t), mentions(1, t)\n"
+        "ans(t, p) :- PROB[a(t)] = p"
+    )
+    assert dict(result) == pytest.approx({"x": 0.5, "y": 0.5})
