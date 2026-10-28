@@ -11,6 +11,9 @@ and the configured strategy. ``--steps N`` sets the most steps of the
 ReAct agent for one question. ``.llm`` alone, ``.llm provider NAME``,
 ``.llm strategy icl|react``, ``.llm steps N`` and ``.llm reload`` show
 and change the provider, the strategy and the steps of the assistant.
+When sharing is on (see :mod:`neurolang_apps.utils.llm.feedback`), each
+answer is posted to a feedback server, and ``.rate`` and ``.refine``
+rate and correct the last one there.
 
 The assistant needs the ``llm`` extra; the REPL works without it.
 """
@@ -24,7 +27,7 @@ from rich.text import Text
 
 from neurolang_apps.utils import query_highlight
 
-from .commands import command
+from .commands import HELP_TOPICS, command
 from .interrupt import call_interruptibly
 
 LLM_DEPENDENCIES = ("httpx",)
@@ -62,6 +65,10 @@ class AssistantState:
     steps: Optional[int] = None
     client: object = None
     _config: object = None
+    _feedback: object = None
+    # The last answer, for .rate and .refine: its id on the feedback
+    # server, its query and the REPL's last query when it was asked.
+    last_answer: Optional[dict] = None
 
     def config(self):
         """Return the configuration, reading it the first time."""
@@ -70,9 +77,19 @@ class AssistantState:
             self._config = load_config(self.config_path)
         return self._config
 
+    def feedback(self, say):
+        """
+        Return the client of the feedback server, None if sharing is
+        off (see :mod:`neurolang_apps.utils.llm.feedback`).
+        """
+        if self._feedback is None:
+            from neurolang_apps.utils.llm.feedback import feedback_client
+            self._feedback = feedback_client(self.config(), say)
+        return self._feedback
+
     def reload(self):
         """Read the configuration again and return it."""
-        self._config = None
+        self._config = self._feedback = None
         return self.config()
 
 
@@ -328,6 +345,27 @@ def _run_assistant(
         app.console.print(f"[red]{escape(str(exc))}[/red]")
         return
     _show_result(app, result)
+    feedback = state.feedback(_say(app))
+    if feedback:
+        answer = feedback.share(
+            question, result, provider, agent.strategy,
+            app.settings.engine_name,
+        )
+        state.last_answer = {
+            "id": answer, "query": result.query, "ran": app.last_query,
+        }
+        if answer:
+            app.err_console.print(
+                f"[dim]Shared as {answer}: rate it with .rate good|bad|"
+                "unsure [comment], correct it with .refine.[/dim]"
+            )
+
+
+def _say(app):
+    """Return the function printing a message of the feedback client."""
+    return lambda text: app.err_console.print(
+        text, style="yellow", markup=False
+    )
 
 
 def _llm_status(app) -> None:
@@ -405,3 +443,158 @@ def cmd_llm(app, arg: str) -> None:
     except (LLMConfigError, ValueError) as exc:
         app.failed = True
         app.console.print(f"[red]{escape(str(exc))}[/red]")
+
+
+FEEDBACK_HELP = """[bold cyan]Rating the assistant's answers[/bold cyan]
+
+When sharing is on, each answer of .ask and .llm is posted to a feedback
+server, where people rate and correct the answers to improve the
+assistant. Turn it on in the LLM configuration (llm.yaml):
+
+  feedback:
+    enabled: true
+    url: https://feedback.example.org
+    user: your name                   (optional)
+
+or with the environment variable NEUROLANG_LLM_FEEDBACK_URL.
+
+  .rate good|bad|unsure [COMMENT]     rate the last answer
+  .rate ID good|bad|unsure [COMMENT]  rate the answer ID
+  .refine                             put the last answer's query in the
+                                      prompt: edit it and run it
+  .refine submit [COMMENT]            check the query you last ran and
+                                      share it as the correct query
+"""
+HELP_TOPICS["feedback"] = FEEDBACK_HELP
+VERDICTS = {
+    "good": "correct", "bad": "incorrect", "unsure": "unsure",
+    "correct": "correct", "incorrect": "incorrect",
+}
+RATE_USAGE = ".rate [ID] good|bad|unsure [COMMENT]"
+REFINE_USAGE = ".refine [submit [COMMENT]]"
+
+
+def _feedback_or_explain(app):
+    """Return the feedback client, or say how to turn sharing on."""
+    from neurolang_apps.utils.llm import LLMConfigError
+    try:
+        feedback = app.assistant.feedback(_say(app))
+    except LLMConfigError as exc:
+        feedback, message = None, str(exc)
+    else:
+        message = (
+            "Sharing the answers is off: turn it on with feedback in the "
+            "LLM configuration or NEUROLANG_LLM_FEEDBACK_URL (.help "
+            "feedback)."
+        )
+    if feedback is None:
+        app.failed = True
+        app.console.print(message, style="yellow", markup=False)
+    return feedback
+
+
+def _last_answer_id(app):
+    """Return the id of the last shared answer, or say there is none."""
+    answer = app.assistant.last_answer
+    if answer and answer["id"]:
+        return answer["id"]
+    app.failed = True
+    app.console.print(
+        "The last answer was not shared." if answer else
+        "No answer to rate: ask a question with .ask or .llm first.",
+        style="yellow", markup=False,
+    )
+    return None
+
+
+def _post_rating(app, feedback, answer_id, verdict, comment, *corrected):
+    """Post a rating and say it, or the error."""
+    from neurolang_apps.utils.llm.feedback import FeedbackError
+    try:
+        feedback.rate(answer_id, verdict, comment, *corrected)
+    except FeedbackError as exc:
+        app.failed = True
+        app.console.print(f"[red]{escape(str(exc))}[/red]")
+        return
+    app.console.print(f"Thank you: answer {answer_id} rated {verdict}.")
+
+
+@command(".rate", "Rate the last answer of the assistant", RATE_USAGE)
+def cmd_rate(app, arg: str) -> None:
+    """Rate the last answer, or the answer ID, on the feedback server."""
+    if not _llm_available(app):
+        return
+    words = arg.split(None, 1)
+    answer_id = None
+    if words and words[0].lower() not in VERDICTS:
+        answer_id, words = words[0], words[1:] and words[1].split(None, 1)
+    if not words or words[0].lower() not in VERDICTS:
+        app.failed = True
+        app.console.print(f"[yellow]Usage: {escape(RATE_USAGE)}[/yellow]")
+        return
+    feedback = _feedback_or_explain(app)
+    answer_id = feedback and (answer_id or _last_answer_id(app))
+    if answer_id:
+        comment = words[1] if len(words) > 1 else ""
+        _post_rating(
+            app, feedback, answer_id, VERDICTS[words[0].lower()], comment
+        )
+
+
+@command(
+    ".refine", "Correct the query of the last answer of the assistant",
+    REFINE_USAGE,
+)
+def cmd_refine(app, arg: str) -> None:
+    """
+    Put the last answer's query in the prompt or, with ``submit``,
+    check the query last run and share it as the correct query.
+    """
+    if not _llm_available(app):
+        return
+    action, _, comment = arg.strip().partition(" ")
+    if action not in ("", "submit"):
+        app.failed = True
+        app.console.print(f"[yellow]Usage: {escape(REFINE_USAGE)}[/yellow]")
+        return
+    feedback = _feedback_or_explain(app)
+    answer_id = feedback and _last_answer_id(app)
+    if not answer_id:
+        return
+    answer = app.assistant.last_answer
+    if not action:
+        app.pending_input = answer["query"]
+        app.console.print(
+            "The query is in the prompt: correct it, run it with Enter, "
+            "then share it with .refine submit [comment].", markup=False,
+        )
+        return
+    if app.last_query is answer["ran"] or (
+        app.last_query[0].split() == answer["query"].split()
+    ):
+        app.failed = True
+        app.console.print(
+            "Run the corrected query first: .refine puts the answer's "
+            "query in the prompt.", style="yellow", markup=False,
+        )
+        return
+    from neurolang_apps.utils.llm.validation import check_query, run_preview
+    program, squall = app.last_query
+    language = "squall" if squall else "datalog"
+    check = check_query(app._nl, program, language)
+    if not check.ok:
+        app.failed = True
+        app.console.print(
+            f"[red]The query fails, it is not shared:[/red] "
+            f"{escape(check.message)}"
+        )
+        return
+    preview = run_preview(
+        app._nl, program, language,
+        app.assistant.config().assistant.preview_rows,
+        app.settings.engine_name,
+    )
+    _post_rating(
+        app, feedback, answer_id, "incorrect", comment.strip(), program,
+        preview.text,
+    )

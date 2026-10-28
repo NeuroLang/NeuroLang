@@ -341,7 +341,9 @@ class Handler(BaseHTTPRequestHandler):
             given = self.headers.get("Authorization", "")
             if not token:
                 return self._error(403, "export is disabled: no admin token")
-            if not hmac.compare_digest(given, f"Bearer {token}"):
+            if not hmac.compare_digest(
+                given.encode(), f"Bearer {token}".encode()
+            ):
                 return self._error(401, "admin token required")
             self._send(200, "".join(
                 json.dumps(record) + "\n"
@@ -357,7 +359,7 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
             return self._error(411, "Content-Length required")
-        if length > self.server.max_bytes:
+        if not 0 <= length <= self.server.max_bytes:
             self.close_connection = True
             return self._error(413, "request too large")
         try:
