@@ -40,9 +40,16 @@ engines:
     # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
     # questions on these engines: added to its system prompt.
     assistant_guidance: >
-      Answer every question with probabilistic query answering over
+      A question asking how many (combien) gets a count, not a
+      probability: AGGREGATE[](mentions(s, 'pain') @ count(s)) = n over
+      the stored relations, AGGREGATE[x] for each x, or over the rows of
+      a PROB rule when it counts those with a given probability.  Answer
+      every other question with probabilistic query answering over
       selected_study, the uniform choice of a study: give the probability
-      of what the question asks, PROB[...] = p, and for a question about
+      of what the question asks, PROB[...] = p, over rules of yours
+      joining selected_study(s), as active(l, s) :-
+      destrieux_activated(l, s), selected_study(s), never over stored
+      relations directly; and for a question about
       a term and the brain the conditional probability given the term,
       PROB[activation // term] = p, or a ratio of probabilities (lift,
       Bayes factor) when it asks for an association; a question asking
@@ -65,6 +72,10 @@ engines:
       (salience, ventral attention), Limbic, Cont (frontoparietal
       control), Default (default mode), TempPar (temporoparietal); match
       them with startswith('17Networks LH DorsAttn', l) on schaefer(l, r).
+      Tian names abbreviate the structure and end with the hemisphere
+      (lAMY rh, aHIP lh, NAc core rh): HIP hippocampus, AMY amygdala, THA
+      thalamus, NAc nucleus accumbens, GP globus pallidus, PUT putamen,
+      CAU caudate.
       Tian names end with the hemisphere (lAMY rh, aHIP lh).
       Co-activation is the activation of regions or points by the same
       study: for a network of pairs, co_active(l1, l2, s) :- active(l1,

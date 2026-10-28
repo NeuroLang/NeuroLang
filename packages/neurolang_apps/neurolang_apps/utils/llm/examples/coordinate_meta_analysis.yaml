@@ -6,11 +6,12 @@
 # query is checked against the engines by the tests
 # (NEUROLANG_TEST_DATA_DIR).
 #
-# As the engines' assistant_guidance asks, every question is answered
-# with probabilistic query answering over selected_study, the uniform
-# choice of a study: a study is chosen at random and the answer is the
-# probability of what the question asks, conditioned on the term it
-# names. A study activates a point when one of its peaks is within 3 mm:
+# As the engines' assistant_guidance asks, every question but a count
+# (how many) is answered with probabilistic query answering over
+# selected_study, the uniform choice of a study: a study is chosen at
+# random and the answer is the probability of what the question asks,
+# conditioned on the term it names. A study activates a point when one
+# of its peaks is within 3 mm:
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
 # cortex (destrieux_activated), and the Schaefer networks of the cortex

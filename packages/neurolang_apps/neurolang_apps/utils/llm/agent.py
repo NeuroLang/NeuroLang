@@ -35,6 +35,9 @@ from .providers import LLMError, make_client
 from .validation import check_query, run_preview
 
 MAX_OBSERVATION = 2000
+EXAMPLE_QUERIES = {
+    "squall": "obtain every Study.", "datalog": "ans(s) :- study(s)",
+}
 _FENCE = re.compile(r"```[ \t]*([A-Za-z]*)[ \t]*\n(.*?)```", re.DOTALL)
 _ACTION = re.compile(
     r"^\s*Action\s*:\s*([A-Za-z_]+)", re.MULTILINE | re.IGNORECASE
@@ -135,7 +138,7 @@ def _json_object(text: str):
     start = text.find("{")
     if start < 0:
         raise ValueError("no JSON object")
-    value, _ = json.JSONDecoder().raw_decode(text[start:])
+    value, _ = json.JSONDecoder(strict=False).raw_decode(text[start:])
     if not isinstance(value, dict):
         raise ValueError("not a JSON object")
     return value
@@ -205,8 +208,8 @@ def parse_text_action(text: str, language: str) -> TextAction:
     except ValueError:
         return TextAction(
             thought, name,
-            error="The Action Input is not a JSON object. Write it on one "
-            'line, e.g. Action Input: {"query": "obtain every Study."}',
+            error="The Action Input is not a JSON object, e.g. Action Input: "
+            + json.dumps({"query": EXAMPLE_QUERIES[language]}),
         )
     return TextAction(thought, name, arguments)
 
@@ -634,11 +637,18 @@ class ReactAgent(Agent):
         action = parse_text_action(reply.text, self.language)
         observed = _OBSERVATION.search(reply.text)
         content = reply.text[:observed.start()] if observed else reply.text
+        error = action.error
+        if error and reply.usage.get("output", 0) >= self.provider.max_tokens:
+            # A reply cut at the token limit, often a loop the model
+            # would copy: keep only its thought in the conversation.
+            content = action.thought
+            error = (f"Your reply was cut at {self.provider.max_tokens} "
+                     f"tokens: write a shorter one. {error}")
         messages.append({"role": "assistant", "content": content.strip()})
-        if action.error:
-            self._step(result, AgentStep(action.thought, "", {}, action.error))
+        if error:
+            self._step(result, AgentStep(action.thought, "", {}, error))
             messages.append(
-                {"role": "user", "content": prompts.observation(action.error)}
+                {"role": "user", "content": prompts.observation(error)}
             )
             return None
         observation, final = self._call(

@@ -7,6 +7,7 @@ from ..agent import (
     make_agent,
     parse_text_action,
 )
+from ..providers import Reply
 from .fakes import ScriptedClient, assistant_config, provider
 
 PAIN_SQUALL = "obtain every Study that mentions 'pain'."
@@ -61,6 +62,10 @@ def test_extract_query():
         'Action: check_query\nAction Input: {"query": "a\\nb"}',
         "check_query", {"query": "a\nb"},
     ),
+    (
+        'Action: check_query\nAction Input: {\n  "query": "a\nb"\n}',
+        "check_query", {"query": "a\nb"},
+    ),
 ])
 def test_parse_text_action(text, name, arguments):
     action = parse_text_action(text, "squall")
@@ -74,6 +79,26 @@ def test_parse_text_action_errors():
         "Action: check_query\nAction Input: query=x", "squall"
     )
     assert "not a JSON object" in action.error
+    action = parse_text_action(
+        'Action: check_query\nAction Input: {"query": "ans(s', "datalog"
+    )
+    assert 'Action Input: {"query": "ans(s) :- study(s)"}' in action.error
+
+
+def test_react_reply_cut_at_token_limit(nl):
+    loop = "Thought: write it\nAction: final_answer\nAction Input: " + (
+        '{"query": "ans(s) :- mentions(s, \'pain\')' + ", (s == s)" * 50
+    )
+    replies = [
+        Reply(loop, usage={"input": 10, "output": 2048}),
+        f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert "cut at 2048 tokens" in steps[0].observation
+    messages = react.client.requests[1]["messages"]
+    assert messages[-2] == {"role": "assistant", "content": "write it"}
 
 
 def test_icl_first_answer(nl):
