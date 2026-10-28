@@ -254,3 +254,26 @@ def test_an_unknown_provider_is_refused(repl):
         repl.set_llm("nonesuch", SECRET)
     with pytest.raises(ValueError, match="address"):
         repl.set_llm("custom", SECRET, model="m")
+
+
+# The engine of a browser's tab: the analyses that fill gigabytes left out.
+def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
+    tmp_path,
+):
+    from neurolang.utils import engine_registry
+    from neurolang.utils.tui.web import lightweight_engines_yaml
+
+    path = lightweight_engines_yaml(tmp_path)
+    full = engine_registry.get_engine_config("neurosynth")
+    light = engine_registry.get_engine_config("neurosynth", path)
+    for heavy in ("activated", "lift", "ratios", "lift_llm", "p_a_given_t"):
+        assert f"\n{heavy}(" not in "\n" + light["datalog_init"]
+        assert f"\n{heavy}(" in "\n" + full["datalog_init"]
+    for light_rule in ("mentions", "reports", "p_term", "bayes"):
+        if f"\n{light_rule}(" in "\n" + full["datalog_init"]:
+            assert f"\n{light_rule}(" in "\n" + light["datalog_init"]
+    assert not {"activated", "lift", "ratios"} & set(light["predicates"])
+    assert "mentions" in light["predicates"]
+    assert engine_registry.list_engine_names(
+        path
+    ) == engine_registry.list_engine_names()

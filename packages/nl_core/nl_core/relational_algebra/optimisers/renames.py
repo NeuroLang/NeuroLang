@@ -18,6 +18,7 @@ from ..relational_algebra import (
     RelationalAlgebraOperation,
     RenameColumn,
     RenameColumns,
+    ReplaceColumns,
     ReplaceNull,
     Selection,
     get_expression_columns
@@ -177,7 +178,7 @@ class RenameOptimizations(ew.PatternWalker):
     def push_rename_past_selection(self, expression):
         selection = expression.relation
         renames = {src: dst for src, dst in expression.renames}
-        rsw = ew.ReplaceExpressionWalker(renames)
+        rsw = ReplaceColumns(renames)
         new_formula = rsw.walk(selection.formula)
         return self.walk(
             Selection(
@@ -305,7 +306,7 @@ class RenameOptimizations(ew.PatternWalker):
             )
         }
         new_formula = (
-            ew.ReplaceExpressionWalker(replacements)
+            ReplaceColumns(replacements)
             .walk(expression.formula)
         )
         new_relation = NumberColumns(
