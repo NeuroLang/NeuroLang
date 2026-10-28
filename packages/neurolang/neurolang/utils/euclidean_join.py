@@ -167,7 +167,9 @@ def euclidean_join(
         LOG, "euclidean join of %s x %s rows within %s",
         (len(small[0]), len(large[0]), radius),
     ):
-        indices = _row_pairs(small, large, radius, compare)
+        indices = _row_pairs(
+            small, large, radius, compare, distance in columns
+        )
         if not set(small[1]).union(large[1]) <= set(columns):
             indices = _distinct_pairs(
                 small, large, indices, columns, distance
@@ -201,7 +203,7 @@ def _restrict(frame, point, columns):
     return frame, list(point)
 
 
-def _row_pairs(small, large, radius, compare):
+def _row_pairs(small, large, radius, compare, with_distances=True):
     """
     Return the pairs of rows of two tables whose points are within *radius*.
 
@@ -214,21 +216,28 @@ def _row_pairs(small, large, radius, compare):
         Distance bound.
     compare : callable
         ``operator.lt`` or ``operator.le``.
+    with_distances : bool, optional
+        Whether the distances are returned, rather than None.
 
     Returns
     -------
-    tuple of numpy.ndarray
+    tuple
         The row in *small* of each pair, its row in *large* and the
-        distance between their points.
+        distance between their points, as numpy arrays.
     """
     points, groups = _distinct_points(*large)
     small_rows, large_points, distances = _pairs(
         _as_points(small[0][small[1]]), points, radius, compare
     )
+    if not with_distances:
+        distances = None
     if groups is None:
         return small_rows, large_points, distances
     repeat, large_rows = _expand(large_points, groups)
-    return small_rows[repeat], large_rows, distances[repeat]
+    small_rows = small_rows[repeat]
+    if distances is not None:
+        distances = distances[repeat]
+    return small_rows, large_rows, distances
 
 
 def _distinct_points(frame, point):
@@ -278,11 +287,19 @@ def _expand(point_index, groups):
     """
     order, starts, counts = groups
     sizes = counts[point_index]
-    repeat = numpy.repeat(numpy.arange(len(point_index)), sizes)
-    position = numpy.arange(len(repeat)) - numpy.repeat(
-        numpy.cumsum(sizes) - sizes, sizes
-    )
-    return repeat, order[numpy.repeat(starts[point_index], sizes) + position]
+    total = int(sizes.sum())
+    index = _index_type(max(total, len(order)))
+    repeat = numpy.repeat(numpy.arange(len(point_index), dtype=index), sizes)
+    # The rows of each point follow from its start in *order*.
+    rows = numpy.arange(total, dtype=index)
+    rows += numpy.repeat((starts[point_index] - numpy.cumsum(sizes) + sizes)
+                         .astype(index), sizes)
+    return repeat, order.astype(index, copy=False)[rows]
+
+
+def _index_type(size):
+    """Return the smallest integer type numbering *size* elements."""
+    return numpy.int32 if size < 2 ** 31 else numpy.int64
 
 
 def _distinct_pairs(small, large, indices, columns, distance):
@@ -395,7 +412,10 @@ def _join_columns(small, large, indices, columns, distance):
             name: frame[name].to_numpy()[rows]
             for name in frame.columns if name in columns
         })
-    return pandas.DataFrame({name: values[name] for name in columns})
+    # The columns are new arrays: the frame holds them without a copy.
+    return pandas.DataFrame(
+        {name: values[name] for name in columns}, copy=False
+    )
 
 
 def _as_points(points):

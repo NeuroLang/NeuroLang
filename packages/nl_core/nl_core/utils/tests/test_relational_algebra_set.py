@@ -1318,3 +1318,122 @@ def test_no_duplicates_flag_kept_by_copies_and_full_projections(backend):
     assert not named.projection("y", "x").might_have_duplicates
     assert named.projection("x").might_have_duplicates
     assert set(named.projection("y", "x")) == {(1, 0), (2, 1)}
+
+
+def _rows(ras):
+    return set(ras.as_pandas_dataframe().itertuples(index=False, name=None))
+
+
+@pytest.mark.parametrize("all_match", [True, False])
+def test_naturaljoin_with_a_relation_unique_on_the_key(ra_module, all_match):
+    import random
+
+    rng = random.Random(0)
+    keys = list(range(0, 40, 2))
+    left = {(rng.randrange(10), rng.choice(keys + ([] if all_match else [1, 3])))
+            for _ in range(200)}
+    right = {(k, k / 7) for k in keys}
+    joined = ra_module.NamedRelationalAlgebraFrozenSet(("i", "s"), left) \
+        .naturaljoin(ra_module.NamedRelationalAlgebraFrozenSet(("s", "p"), right))
+    expected = {(i, s, p) for i, s in left for t, p in right if s == t}
+    assert joined.columns == ("i", "s", "p")
+    assert _rows(joined) == expected
+
+
+def test_naturaljoin_with_the_unique_relation_on_the_left(ra_module):
+    left = {(k, k * 10) for k in range(5)}
+    right = {(i, k) for i in range(4) for k in range(7)}
+    joined = ra_module.NamedRelationalAlgebraFrozenSet(("s", "p"), left) \
+        .naturaljoin(ra_module.NamedRelationalAlgebraFrozenSet(("i", "s"), right))
+    assert joined.columns == ("s", "p", "i")
+    assert _rows(joined) == {
+        (s, p, i) for s, p in left for i, t in right if s == t
+    }
+
+
+def test_naturaljoin_on_a_unique_key_keeps_the_column_types(ra_module):
+    left = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("i", "s"), [(1, 10), (2, 20), (3, 10)]
+    )
+    right = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("s", "p", "name"), [(10, 0.5, "a"), (20, 0.25, "b")]
+    )
+    frame = left.naturaljoin(right).as_pandas_dataframe()
+    assert frame["i"].dtype.kind == "i" and frame["s"].dtype.kind == "i"
+    assert frame["p"].dtype.kind == "f" and frame["name"].iloc[0] in "ab"
+
+
+def test_naturaljoin_on_a_unique_key_takes_little_memory():
+    """
+    Joining a relation with one unique on the common column, e.g. pairs
+    with the probabilities of a choice, is a look-up: it holds little more
+    than the column it adds, not copies of the larger relation.
+    """
+    import tracemalloc
+
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    frame = pd.DataFrame({
+        "i": rng.integers(0, 99, 1_000_000),
+        "j": rng.integers(0, 99, 1_000_000),
+        "s": rng.integers(0, 1000, 1_000_000),
+    }).drop_duplicates()
+    left = pandas.NamedRelationalAlgebraFrozenSet(("i", "j", "s"), frame)
+    right = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "p"), pd.DataFrame({"s": np.arange(1000), "p": 1e-3})
+    )
+    len(left), len(right)
+    tracemalloc.start()
+    try:
+        joined = left.naturaljoin(right)
+        assert len(joined) == len(frame)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 1.5 * frame.memory_usage(index=False).sum()
+
+
+def test_aggregate_sum_of_floats_is_python_sum(ra_module):
+    import math
+
+    rows = [(g, 0.1 * k) for g in range(3) for k in range(1, 50)]
+    rows.append((3, float("nan")))
+    rows.append((3, 1.0))
+    result = ra_module.NamedRelationalAlgebraFrozenSet(("g", "v"), rows) \
+        .aggregate(["g"], {"v": sum}).as_pandas_dataframe()
+    sums = dict(zip(result["g"], result["v"]))
+    for g in range(3):
+        assert math.isclose(sums[g], sum(v for h, v in rows if h == g))
+    assert math.isnan(sums[3])
+
+
+@pytest.mark.parametrize("function", [max, min, len])
+def test_aggregate_builtins_on_numbers(ra_module, function):
+    rows = [(g, v) for g in range(4) for v in range(g, g + 6)]
+    result = ra_module.NamedRelationalAlgebraFrozenSet(("g", "v"), rows) \
+        .aggregate(["g"], {"v": function}).as_pandas_dataframe()
+    assert dict(zip(result["g"], result["v"])) == {
+        g: function([v for h, v in rows if h == g]) for g in range(4)
+    }
+
+
+def test_aggregate_builtins_run_as_pandas_reductions(monkeypatch):
+    """Python's sum, max, min and len run per group in Python: pandas'
+    own reductions compute the same, much faster, on numbers."""
+    from pandas.core.groupby import DataFrameGroupBy
+
+    used = []
+    agg = DataFrameGroupBy.agg
+
+    def recording(self, *args, **kwargs):
+        used.extend(named.aggfunc for named in kwargs.values())
+        return agg(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataFrameGroupBy, "agg", recording)
+    rows = [(g, v / 3) for g in range(3) for v in range(5)]
+    initial = pandas.NamedRelationalAlgebraFrozenSet(("g", "v"), rows)
+    for function in (sum, max, min, len):
+        initial.aggregate(["g"], {"v": function})
+    assert all(isinstance(function, str) for function in used), used

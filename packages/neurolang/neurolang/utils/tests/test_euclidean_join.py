@@ -229,3 +229,34 @@ def test_integer_join_does_not_build_kd_trees(monkeypatch):
     _check_join(
         (GRID, POINT), (PEAKS, PEAK_POINT), 2, True, ["i", "j", "k", "s"]
     )
+
+
+def test_join_holds_little_more_than_its_result():
+    """
+    Joining a grid with the peaks of studies, as an activation within a
+    radius does, holds little more memory than the rows it returns: the
+    result is not copied, the distances are not kept when not asked for,
+    and the pairs of rows are numbered with the smallest integers.
+    """
+    import tracemalloc
+
+    rng = numpy.random.default_rng(0)
+    axis = numpy.arange(40)
+    grid = pandas.DataFrame(
+        numpy.stack(numpy.meshgrid(axis, axis, axis), -1).reshape(-1, 3),
+        columns=["i", "j", "k"],
+    )
+    peaks = pandas.DataFrame(
+        rng.integers(0, 40, size=(20_000, 3)), columns=["i1", "j1", "k1"]
+    ).assign(s=rng.integers(0, 2_000, 20_000)).drop_duplicates()
+    tracemalloc.start()
+    try:
+        result = euclidean_join(
+            (grid, ["i", "j", "k"]), (peaks, ["i1", "j1", "k1"]), 3, True,
+            ["i", "j", "k", "s"], "d",
+        )
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert len(result) > 1_000_000
+    assert peak < 1.8 * result.memory_usage(index=False).sum()

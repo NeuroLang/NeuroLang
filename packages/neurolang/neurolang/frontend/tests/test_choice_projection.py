@@ -163,14 +163,55 @@ def test_choice_also_within_a_negation_is_not_projected():
         _solve(_engine(True, choices), program)
 
 
-def test_variable_which_is_not_a_separator_is_not_projected():
+@pytest.mark.parametrize("different", ["(s2 != s)", "(s != s2)"])
+def test_studies_segregating_a_term_are_exclusive(different):
     """In ∃s seg(t, s), the atoms mentions(s2, t) of the negation do not
-    have s: the events of different studies share tuples, and the query
-    is left to the next solvers, which answer it."""
-    program = SEGREGATION + "\nq(t, PROB) :- seg(t, s)"
+    have s, which is not a separator variable; but a study s segregating
+    t mentions t, and another study s' ≠ s segregating it does not: the
+    events of different studies are mutually exclusive, and their
+    probabilities are added."""
+    program = (
+        SEGREGATION.replace("(s2 != s)", different) +
+        "\nq(t, PROB) :- seg(t, s)"
+    )
     expected = _enumerated(
         {},
         lambda w, c, a: any(_segregated(w, s, a[0]) for s in STUDIES),
+        answers=tuple((t,) for t in TERMS)
+    )
+    _assert_close(_solve(_engine(True, {}), program), expected)
+
+
+def test_terms_segregated_by_a_study_are_independent():
+    """In ∃t seg(t, s), t is a separator variable: the events of
+    different terms have different tuples of mentions."""
+    program = SEGREGATION + "\nq(s, PROB) :- seg(t, s)"
+    expected = _enumerated(
+        {},
+        lambda w, c, a: any(_segregated(w, a[0], t) for t in TERMS),
+        answers=tuple((s,) for s in STUDIES)
+    )
+    _assert_close(_solve(_engine(True, {}), program), expected)
+
+
+def test_negation_with_another_condition_is_not_exclusive():
+    """Two studies may both mention t while no other study mentioning
+    t mentions pain: the events of different studies are not
+    exclusive, and are not added."""
+    program = (
+        "seg(t, s) :- mentions(s, t), "
+        "~exists(s2; mentions(s2, t), mentions(s2, 'pain'), (s2 != s))"
+        "\nq(t, PROB) :- seg(t, s)"
+    )
+    expected = _enumerated(
+        {},
+        lambda w, c, a: any(
+            (s, a[0]) in w and not any(
+                (s2, a[0]) in w and (s2, "pain") in w
+                for s2 in STUDIES if s2 != s
+            )
+            for s in STUDIES
+        ),
         answers=tuple((t,) for t in TERMS)
     )
     with pytest.raises(UnsupportedSolverError):
