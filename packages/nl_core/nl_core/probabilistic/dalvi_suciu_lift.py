@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -88,11 +89,13 @@ from .expression_processing import (
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
+    GetProbabilisticSetAtom,
     NonLiftable,
     classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
-    is_atom_a_probabilistic_choice_relation
+    is_atom_a_probabilistic_choice_relation,
+    is_atom_a_probabilistic_fact_relation
 )
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
@@ -2142,6 +2145,11 @@ def find_separator_variables(query, symbol_table):
 
 def extract_probabilistic_root_variables(formulas, symbol_table):
     candidates = None
+    # Variables are determined for a fact's atom only when its relation
+    # is in one formula: a tuple then belongs to the subquery of one value.
+    formulas_of = Counter(chain.from_iterable(
+        _functors(formula) for formula in formulas
+    ))
     for formula in formulas:
         probabilistic_atoms = OrderedSet(
             atom
@@ -2151,9 +2159,14 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
         if len(probabilistic_atoms) == 0:
             continue
         root_variables = reduce(
-            lambda y, x: set(x.args) & y,
-            probabilistic_atoms[1:],
-            set(probabilistic_atoms[0].args)
+            lambda y, x: x & y,
+            (
+                _determined_variables(atom.args, formula, symbol_table)
+                if formulas_of[atom.functor] == 1 and
+                is_atom_a_probabilistic_fact_relation(atom, symbol_table)
+                else set(atom.args)
+                for atom in probabilistic_atoms
+            )
         )
         pchoice_atoms = OrderedSet(
             atom
@@ -2174,6 +2187,47 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
     if candidates is None:
         candidates = set()
     return candidates
+
+
+def _determined_variables(variables, formula, symbol_table):
+    """`variables` and the variables that the deterministic atoms of the
+    conjunction `formula` determine from them: those of a column on
+    which the columns of the variables already determined are a key."""
+    variables = set(variables)
+    if any(
+        isinstance(e, Disjunction) for _, e in expression_iterator(formula)
+    ):
+        return variables
+    atoms = [
+        atom for atom in extract_logic_predicates(formula)
+        if not isinstance(atom, Negation) and
+        is_atom_a_deterministic_relation(atom, symbol_table)
+    ]
+    determined = None
+    while determined != variables:
+        determined = set(variables)
+        for atom in atoms:
+            variables |= _functions_of(atom, determined, symbol_table)
+    return variables
+
+
+def _functions_of(atom, variables, symbol_table):
+    relation = GetProbabilisticSetAtom(symbol_table).walk(
+        atom.functor
+    ).relation
+    if isinstance(relation, Symbol):
+        relation = symbol_table[relation]
+    relation = relation.value
+    key = tuple(
+        relation.columns[i]
+        for i, arg in enumerate(atom.args) if arg in variables
+    )
+    return {
+        arg for i, arg in enumerate(atom.args)
+        if key and isinstance(arg, Symbol) and arg not in variables and
+        len(relation.projection(*key)) ==
+        len(relation.projection(*key, relation.columns[i]))
+    }
 
 
 class IsPureLiftedPlan(PatternWalker):

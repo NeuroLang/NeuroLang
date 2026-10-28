@@ -349,3 +349,34 @@ def test_integer_constant_of_a_deterministic_atom():
         "ans(t, p) :- PROB[a(t)] = p"
     )
     assert dict(result) == pytest.approx({"x": 0.5, "y": 0.5})
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_peaks_of_the_studies_of_a_term(solvers):
+    """
+    Each peak is reported by one study: the study of a peak is a function
+    of the peak, and the study separates the query, which joins the
+    reliable peaks of the region to the terms of their studies.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.4, 2), (0.3, 3)], name="reliable_peak"
+    )
+    nl.add_tuple_set([(1, "s1"), (2, "s1"), (3, "s2")], name="peak_study")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "pain", "s1"), (0.7, "pain", "s2"), (0.2, "memory", "s2")],
+        name="term_in_study",
+    )
+    nl.execute_datalog_program(
+        "q(t, PROB) :- reliable_peak(p), peak_study(p, s), "
+        "term_in_study(t, s)"
+    )
+    result = dict(
+        nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
+    )
+    assert result.keys() == {"pain", "memory"}
+    pain = 1 - (1 - 0.6 * (1 - 0.5 * 0.6)) * (1 - 0.7 * 0.3)
+    assert result["pain"] == pytest.approx(pain)
+    assert result["memory"] == pytest.approx(0.2 * 0.3)

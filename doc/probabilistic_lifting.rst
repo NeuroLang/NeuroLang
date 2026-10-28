@@ -611,6 +611,30 @@ Comparisons of answer variables
    :math:`l_1 < l_2`, is a selection of the answers of the rest of the
    query, which is lifted without it.
 
+Separator determined by a functional dependency
+   A deterministic atom :math:`F(x, y)` whose relation is a function of
+   :math:`x`, :math:`y` being the same for all the tuples with the same
+   :math:`x`, determines :math:`y` from :math:`x`: in a conjunctive query,
+   an atom :math:`R(x)` of a tuple-independent relation is then counted as
+   having :math:`y` when looking for a separator variable
+   (``_determined_variables``). In
+
+   .. math::
+
+      \exists p\, \exists s\, \mathit{reliable\_peak}(p) \land
+      \mathit{peak\_study}(p, s) \land \mathit{term\_in\_study}(t, s),
+
+   each peak being reported by one study, :math:`s` separates the query,
+   which is otherwise the #P-hard query :math:`H_0` with a deterministic
+   middle relation. Olteanu, Huang and Koch lift such queries, without
+   self-joins, under functional dependencies [Olteanu2009b]_. The
+   dependency is checked on the data of the relation; it is followed
+   through several deterministic atoms, and from several columns. An atom
+   of a choice keeps its variables, its tuples being exclusive for all the
+   values of :math:`y`, as does an atom of a relation in several disjuncts
+   of a union, and the variables are determined in conjunctions only, by
+   atoms which are not negated.
+
 
 Negations and comparisons sharing relations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1220,6 +1244,25 @@ Comparisons of answer variables
    answer, in every world: :math:`P[(Q \land C)\theta] = P[Q\theta]` if
    :math:`C\theta` holds and 0 otherwise, which the selection computes.
 
+Separator determined by a functional dependency
+   Let :math:`Q = \exists y\, \varphi(y)` be a conjunctive query in which
+   every atom of a tuple-independent relation has :math:`y`, or variables
+   :math:`\bar x` from which positive deterministic atoms of
+   :math:`\varphi` determine :math:`y`: :math:`y = f(\bar x)` in every
+   world satisfying them, :math:`f` being the same in every world. A tuple
+   :math:`R(\bar a)` of such an atom is then a tuple of
+   :math:`\varphi(b)` only for :math:`b = f(\bar a)`, the relation of
+   :math:`R` being in no other atom (the separator variable rule declines
+   a relation in two atoms without :math:`y` at the same position, and a
+   relation in two disjuncts keeps its variables). The events
+   :math:`\varphi(b)` for different :math:`b` thus have no tuple in common
+   and are independent, which is what the separator variable rule needs:
+   :math:`P[Q] = 1 - \prod_b (1 - P[\varphi(b)])`. The tuples of a choice
+   are not independent of each other, so its atoms are not extended. The
+   dependency is checked on the relation, by comparing the numbers of
+   distinct values of :math:`\bar x` and of :math:`(\bar x, y)`, in
+   polynomial time.
+
 Declined unions
    Declining a query is sound: it is then solved by weighted model
    counting, exactly. The disjoint separator declines the unions with a
@@ -1329,6 +1372,11 @@ References
    computation for conjunctive queries with inequalities*. In Proceedings
    of the 2009 ACM SIGMOD International Conference on Management of Data,
    389–402, 2009.
+
+.. [Olteanu2009b] D. Olteanu, J. Huang and C. Koch. *SPROUT: Lazy vs.
+   eager query plans for tuple-independent probabilistic databases*. In
+   Proceedings of the 25th IEEE International Conference on Data
+   Engineering (ICDE), 640–651, 2009.
 
 .. [Suciu2011] D. Suciu, D. Olteanu, C. Ré and C. Koch. *Probabilistic
    Databases*. Synthesis Lectures on Data Management. Morgan & Claypool,

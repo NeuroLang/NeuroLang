@@ -4,6 +4,7 @@ from typing import AbstractSet
 import pytest
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
+from nl_expr.exceptions import NonLiftableException
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import (
     Conjunction,
@@ -781,6 +782,7 @@ def test_mixed_probabilistic_deterministic_safe():
 
 
 def test_mixed_probabilistic_deterministic_unsafe():
+    """S is a function neither of x nor of y."""
     R = Symbol("R")
     S = Symbol("S")
     T = Symbol("T")
@@ -789,9 +791,9 @@ def test_mixed_probabilistic_deterministic_unsafe():
     R_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
     )
-    S_relation = Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
-    )
+    S_relation = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+        iterable=[(1, 1), (1, 2), (2, 1)], columns=("x", "y")
+    ))
     T_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
     )
@@ -1095,3 +1097,63 @@ def test_choice_terms_as_equalities():
     rewritten = rewriter.walk(Conjunction((C(f), M(f), C(s))))
     assert rewriter.fresh == set()
     assert set(rewritten.formulas) == {C(f), M(f), EQ(f, s)}
+
+
+@pytest.mark.parametrize("function", (True, False))
+def test_separator_determined_by_a_functional_dependency(function):
+    """∃x∃y R(x) ∧ F(x, y) ∧ T(y), with F deterministic: y separates the
+    query when F is a function of x, each tuple of R then being in the
+    subquery of one y only; the query is #P-hard otherwise."""
+    R, F, T, Z, ans = (Symbol(n) for n in ("R", "F", "T", "Z", "ans"))
+    x, y = Symbol("x"), Symbol("y")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, 1), (0.4, 2), (0.3, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a"), (0.7, "b")]
+    )
+    cpl_program.add_extensional_predicate_from_tuples(
+        F, [(1, "a"), (2, "a"), (3, "b")] + ([] if function else [(3, "a")])
+    )
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), F(x, y), T(y)))),
+    )))
+    query = Implication(ans(), Z())
+    if not function:
+        with pytest.raises(NonLiftableException):
+            dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+        return
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = 1 - (1 - 0.6 * (1 - 0.5 * 0.6)) * (1 - 0.7 * 0.3)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_functional_dependency_in_one_disjunct_only():
+    """A tuple of R in the subqueries of f(x) and of g(x): y is not a
+    separator of ∃y (∃x R(x) ∧ F(x, y) ∧ T(y)) ∨ (∃x R(x) ∧ G(x, y))."""
+    R, F, G, T = (Symbol(n) for n in ("R", "F", "G", "T"))
+    x, y = Symbol("x"), Symbol("y")
+    symbol_table = {
+        R: ProbabilisticFactSet(Symbol("r"), Constant(0)),
+        T: ProbabilisticFactSet(Symbol("t"), Constant(0)),
+        F: DeterministicFactSet(Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(("a", "b"), [(1, 1), (2, 2)])
+        )),
+        G: DeterministicFactSet(Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(("a", "b"), [(1, 2), (2, 1)])
+        )),
+    }
+    conjunction = Conjunction((R(x), F(x, y), T(y)))
+    query = ExistentialPredicate(y, ExistentialPredicate(x, Disjunction((
+        conjunction, Conjunction((R(x), G(x, y)))
+    ))))
+    assert dalvi_suciu_lift.find_separator_variables(
+        query, symbol_table
+    )[0] == set()
+    assert y in dalvi_suciu_lift.find_separator_variables(
+        ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
+        symbol_table
+    )[0]
