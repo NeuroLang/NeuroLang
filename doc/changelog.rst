@@ -32,6 +32,10 @@ Unreleased
 
 **New features:**
 
+* The example LLM configuration has the providers ``albert-deepseek``,
+  ``openrouter-gemma`` and ``openrouter-deepseek``: DeepSeek V4 Flash and
+  Gemma 4 31B on Albert and on OpenRouter.
+
 * The query assistant can share its questions and answers with a feedback
   server, where people rate them correct, incorrect or unsure and correct
   their query, to train models and grow the banks of examples. It is off
