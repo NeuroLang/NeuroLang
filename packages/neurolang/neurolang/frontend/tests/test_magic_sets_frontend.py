@@ -259,3 +259,28 @@ def test_frontend_conditional_probability_bound_through_a_rule_compared():
     assert dict(res.as_pandas_dataframe().values) == pytest.approx(
         {"a": 1 / 3, "b": 1 / 3}
     )
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_aggregate_of_a_rule_with_a_constant(frontend):
+    """
+    The aggregate of the query is free in magic sets: the constant text
+    of the rule it aggregates binds the similarity.
+    """
+    nl = frontend()
+    nl.add_tuple_set([(s,) for s in range(6)], name="study")
+    nl.add_tuple_set([(s, f"t{s}") for s in range(6)], name="title")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    nl.execute_datalog_program(
+        "ssim(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > 0)"
+    )
+    res = nl.execute_datalog_program(
+        "sim(s, v) :- ssim('a text', s, v)\n"
+        "top(m) :- AGGREGATE[](sim(s, v) @ max(v)) = m\n"
+        "ans(t) :- sim(s, m) & top(m) & title(s, t)"
+    )
+    assert set(res.as_pandas_dataframe().t) == {"t5"}
+    res = nl.execute_datalog_program(
+        "ans(m) :- AGGREGATE[](sim(s, v) @ max(v)) = m"
+    )
+    assert res.as_pandas_dataframe().m.tolist() == [1.0]

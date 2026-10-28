@@ -703,12 +703,9 @@ def adorn_code(
         adorned code where the query rule is the first expression
         in the block.
     """
-    adornment = ''
-    for a in query.args:
-        if isinstance(a, Symbol) or isinstance(a, ProbabilisticQuery):
-            adornment += 'f'
-        else:
-            adornment += 'b'
+    adornment = ''.join(
+        'b' if isinstance(a, Constant) else 'f' for a in query.args
+    )
 
     query = AdornedSymbol(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]
