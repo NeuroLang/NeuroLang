@@ -15,7 +15,9 @@ from nl_expr.logic import (
     Negation,
 )
 from nl_expr.logic.expression_processing import extract_logic_atoms
+from ...relational_algebra import int2columnint_constant
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
+from ..probabilistic_ra_utils import ProbabilisticChoiceSet
 from ..ranking import (
     partially_rank_query,
     rank_query,
@@ -185,3 +187,18 @@ def test_rank_query_needs_a_total_order(tuples):
     ))
     with pytest.raises(NotRankedException):
         rank_query(query, {Q: _pairs(*tuples)})
+
+
+def test_rank_query_with_a_choice_not_to_rank():
+    """Only the relations with variables to rank are split: a
+    probabilistic choice elsewhere in the query does not prevent it."""
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y, ExistentialPredicate(z, Conjunction((Q(x, y), Q(y, x), P(z))))
+    ))
+    symbol_table = {
+        Q: _pairs((1, 2), (2, 1), (1, 1)),
+        P: ProbabilisticChoiceSet(R, int2columnint_constant(0)),
+    }
+    res = rank_query(query, symbol_table)
+    assert verify_that_the_query_is_ranked(res)
+    assert P in {atom.functor for atom in extract_logic_atoms(res)}
