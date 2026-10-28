@@ -50,6 +50,9 @@ def order_conjunction_constant_atoms_first(
     """
     Order a rule body so constant-bearing atoms are adorned first.
 
+    Builtins, such as ``x > 0``, are not constant-bearing atoms: they
+    bind nothing.
+
     Magic sets adorns rule bodies left to right; a constant-bearing atom
     only seeds the magic set (``magic_P(c) :- ()``) while its shared
     variables are still free, i.e. when no atom sharing them precedes it.
@@ -69,7 +72,8 @@ def order_conjunction_constant_atoms_first(
         return formulas
     constant_atoms = [
         f for f in formulas
-        if any(isinstance(arg, Constant) for arg in f.args)
+        if isinstance(f.functor, Symbol)
+        and any(isinstance(arg, Constant) for arg in f.args)
     ]
     if not constant_atoms:
         return formulas
@@ -81,10 +85,7 @@ def order_conjunction_constant_atoms_first(
         prior_vars |= f_vars
     else:
         return formulas
-    free_atoms = [
-        f for f in formulas
-        if not any(isinstance(arg, Constant) for arg in f.args)
-    ]
+    free_atoms = [f for f in formulas if f not in constant_atoms]
     return tuple(constant_atoms) + order_conjunction_by_shared_variables(
         tuple(free_atoms)
     )
@@ -161,6 +162,7 @@ class SIPS(ABC):
         self.prob_symbols = probabilistic_symbols(datalog)
         self.seed_from_edb = seed_from_edb
         self.seeding_edb_atoms = set()
+        self.aggregate_positions = aggregate_positions(datalog)
 
     def _check_for_bound_aggregates(self, rule, adornment):
         """
@@ -239,8 +241,13 @@ class SIPS(ABC):
     ):
         adornment = ""
         has_b = False
-        for arg in predicate.args:
-            if isinstance(arg, Constant) or arg in bound_variables:
+        free = self.aggregate_positions.get(
+            unadorned_predicate_symbol(predicate.functor), ()
+        )
+        for i, arg in enumerate(predicate.args):
+            if isinstance(arg, Constant) or (
+                arg in bound_variables and i not in free
+            ):
                 adornment += "b"
                 has_b = True
             else:
@@ -332,7 +339,9 @@ class LeftToRightSIPS(SIPS):
             unadorned_predicate_symbol(pred.functor) not in self.prob_symbols
             and not is_neg
         ):
-            _bind_shared_variables(p, tail, bound_variables)
+            bound_variables.update(
+                arg for arg in p.args if isinstance(arg, Symbol)
+            )
             tail_predicates.append(p)
 
         if is_neg:
@@ -376,13 +385,36 @@ class LeftToRightSIPS(SIPS):
         )
 
 
-def _bind_shared_variables(predicate, tail, bound_variables):
-    """Bind the variables of *predicate* which are in the *tail*."""
-    tail_variables = {arg for t in tail for arg in t.args}
-    bound_variables.update(
-        arg for arg in predicate.args
-        if isinstance(arg, Symbol) and arg in tail_variables
-    )
+def aggregate_positions(datalog):
+    """
+    Return the positions of the arguments of each predicate of *datalog*
+    computed by an aggregation or a probabilistic query, in its rules or
+    in those of the predicates they use: a variable there is not bound
+    by magic sets, which would bind the aggregate.
+    """
+    rules = get_list_of_intensional_rules(datalog)
+    positions = {}
+    changed = True
+    while changed:
+        changed = False
+        for rule in rules:
+            aggregated = {
+                atom.args[i]
+                for atom in extract_logic_predicates(rule.antecedent)
+                if hasattr(atom, "functor")
+                for i in positions.get(atom.functor, ())
+            }
+            new = {
+                i for i, arg in enumerate(rule.consequent.args)
+                if arg in aggregated or isinstance(
+                    arg, (AggregationApplication, ProbabilisticQuery)
+                )
+            }
+            known = positions.setdefault(rule.consequent.functor, set())
+            if not new <= known:
+                known |= new
+                changed = True
+    return positions
 
 
 def _unwrap_negation(predicate):
@@ -702,12 +734,9 @@ def adorn_code(
         adorned code where the query rule is the first expression
         in the block.
     """
-    adornment = ''
-    for a in query.args:
-        if isinstance(a, Symbol) or isinstance(a, ProbabilisticQuery):
-            adornment += 'f'
-        else:
-            adornment += 'b'
+    adornment = ''.join(
+        'b' if isinstance(a, Constant) else 'f' for a in query.args
+    )
 
     query = AdornedSymbol(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]

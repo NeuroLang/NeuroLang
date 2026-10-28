@@ -196,7 +196,14 @@ def _similarity(text: str, study: int) -> float:
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
-def test_frontend_variable_bound_by_an_edb_atom_with_a_constant(frontend):
+@pytest.mark.parametrize("query, expected", [
+    ('ans(s) :- task(_, "motor task", d) & close(d, s, v)', {1, 2}),
+    # a comparison with a constant binds nothing: it stays after close
+    ('ans(s) :- task(_, "motor task", d) & close(d, s, v) & (s > 1)', {2}),
+])
+def test_frontend_variable_bound_by_an_edb_atom_with_a_constant(
+    frontend, query, expected
+):
     nl = frontend()
     nl.add_tuple_set([(1,), (2,), (3,)], name="study")
     nl.add_tuple_set(
@@ -205,10 +212,10 @@ def test_frontend_variable_bound_by_an_edb_atom_with_a_constant(frontend):
     )
     nl.add_symbol(_similarity, name="similarity")
     res = nl.execute_datalog_program(
-        "close(q, s) :- study(s) & (v == similarity(q, s)) & (v > .5)\n"
-        'ans(s) :- task(_, "motor task", d) & close(d, s)'
+        "close(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > .5)\n"
+        + query
     )
-    assert set(res.as_pandas_dataframe().s) == {1, 2}
+    assert set(res.as_pandas_dataframe().s) == expected
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
@@ -227,6 +234,70 @@ def test_frontend_edb_atom_with_a_constant_binding_an_aggregate(frontend):
 
 def _rank_similarity(text: str, study: int) -> float:
     return (study + 1) / 6
+
+
+@pytest.mark.parametrize("program", [
+    "p(q, l, PROB) :- active(l, s) // close(q, s)\n"
+    "ans(l, r) :- definition('x', d) & p(d, l, r) & (r > 0)",
+    # d is bound by the rule defn, whatever the head of matching
+    "matching(s) :- defn('x', d) & close(d, s)\n"
+    "ans(l, r) :- PROB[active(l, s) // matching(s)] = r",
+])
+def test_frontend_conditional_probability_bound_through_a_rule(program):
+    """
+    The text of the similarity is bound by magic sets through the
+    conditional probability, also when the query compares it (the
+    comparison once came before ``p`` and left its magic set unseeded),
+    and by a rule left of the similarity, whose variables are all bound.
+    """
+    nl = NeurolangPDL()
+    studies = [(s,) for s in range(6)]
+    nl.add_tuple_set(studies, name="study")
+    nl.add_uniform_probabilistic_choice_over_set(studies, name="selected")
+    nl.add_tuple_set([(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act")
+    nl.add_tuple_set([("x", "a text")], name="definition")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    res = nl.execute_datalog_program(
+        "sim(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > 0)\n"
+        "close(q, s) :- sim(q, s, v) & (v > .5) & selected(s)\n"
+        "active(l, s) :- act(s, l) & selected(s)\n"
+        "defn(t, d) :- definition(t, d)\n" + program
+    )
+    # close('a text', s) for s in {3, 4, 5}: a in 3, b in 4
+    assert dict(res.as_pandas_dataframe().values) == pytest.approx(
+        {"a": 1 / 3, "b": 1 / 3}
+    )
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_aggregate_of_a_rule_with_a_constant(frontend):
+    """
+    Magic sets leave aggregates free, in the query or through a rule
+    using one: the constant text of the rule they aggregate binds the
+    similarity.
+    """
+    nl = frontend()
+    nl.add_tuple_set([(s,) for s in range(6)], name="study")
+    nl.add_tuple_set([(s, f"t{s}") for s in range(6)], name="title")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    nl.execute_datalog_program(
+        "ssim(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > 0)"
+    )
+    res = nl.execute_datalog_program(
+        "sim(s, v) :- ssim('a text', s, v)\n"
+        "top(m) :- AGGREGATE[](sim(s, v) @ max(v)) = m\n"
+        "ans(t) :- sim(s, m) & top(m) & title(s, t)"
+    )
+    assert set(res.as_pandas_dataframe().t) == {"t5"}
+    res = nl.execute_datalog_program(
+        "ans(m) :- AGGREGATE[](sim(s, v) @ max(v)) = m"
+    )
+    assert res.as_pandas_dataframe().m.tolist() == [1.0]
+    # v, bound by sim, is not passed on to the aggregate of top
+    res = nl.execute_datalog_program(
+        "ans(t, v) :- sim(s, v) & top(v) & title(s, t)"
+    )
+    assert res.as_pandas_dataframe().values.tolist() == [["t5", 1.0]]
 
 
 @pytest.mark.parametrize("program", [
