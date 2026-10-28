@@ -46,6 +46,46 @@ HTML_FORMAT = (
     "<code>{code}</code></pre>"
 )
 
+# The precomputed analyses of the meta-analysis engines: ``activated``
+# materialises every voxel within 3 mm of a reported peak, which takes
+# gigabytes, more than a browser tab is given, and what is defined from it.
+HEAVY_PREDICATES = frozenset({
+    "activated", "p_a", "p_a_given_t", "p_any_voxel_given_t", "lift",
+    "relative_risk", "uniformity", "ratios", "p_a_given_similar",
+    "p_any_voxel_given_similar", "lift_llm", "relative_risk_llm",
+    "uniformity_llm", "ratios_llm",
+})
+
+
+def lightweight_engines_yaml(directory) -> Path:
+    """
+    Write in *directory* the engines' YAML without the heavy analyses.
+
+    The rules defining :data:`HEAVY_PREDICATES` and their declarations
+    are left out of the shared configuration of the meta-analysis
+    engines; the file is the one to give ``build_engine`` as
+    ``yaml_path`` to fit a browser tab. Return its path.
+    """
+    import yaml
+
+    from neurolang.utils import engine_registry
+
+    with open(Path(engine_registry.__file__).with_name("engines")
+              / "engines.yaml") as stream:
+        config = yaml.safe_load(stream)
+    for engine in config["engines"].values():
+        if "datalog_init" in engine:
+            engine["datalog_init"] = "\n".join(
+                rule for rule in engine["datalog_init"].split("\n")
+                if rule.split("(")[0].strip() not in HEAVY_PREDICATES
+            )
+        for name in HEAVY_PREDICATES & set(engine.get("predicates") or {}):
+            del engine["predicates"][name]
+    path = Path(directory) / "engines.yaml"
+    path.write_text(yaml.safe_dump(config))
+    return path
+
+
 class _PrintedOn(io.TextIOBase):
     """A file whose text is printed on a console, to be recorded with it."""
 

@@ -35,6 +35,7 @@ from ..relational_algebra import (
     NameColumns,
     NaryNaturalJoin,
     NaturalJoin,
+    NumberColumns,
     Product,
     Projection,
     RelationalAlgebraSolver,
@@ -1648,3 +1649,30 @@ def test_push_selection_above_a_reordering_projection():
     assert _PushUnnamedSelectionsUp().walk(expression) == Selection(
         Projection(relation, (c1, c0)), C_(operator.lt)(c0, c1)
     )
+
+
+@pytest.mark.parametrize("optimiser, expression", [
+    (RenameOptimizations, lambda relation, a, b, formula: Selection(
+        NumberColumns(NameColumns(relation, (a, b)), (a, b)), formula
+    )),
+    (PushUnnamedSelectionsUp, lambda relation, a, b, formula: NameColumns(
+        Selection(relation, formula), (a, b)
+    )),
+])
+def test_integer_constant_equal_to_a_column_is_kept(
+    optimiser, expression, str_columns
+):
+    """In σ_{0 = 1}, the integer 1 is equal, as a constant, to the column
+    1: renaming the columns of the formula must keep it."""
+    class Opt(optimiser, ExpressionWalker):
+        pass
+
+    a, b = str_columns[:2]
+    relation = C_[AbstractSet[Tuple[int, str]]](
+        WrappedRelationalAlgebraSet([(1, "x"), (2, "y"), (1, "y")])
+    )
+    formula = eq_(int2columnint_constant(0), C_[int](1))
+    result = RelationalAlgebraSolver().walk(
+        Opt().walk(expression(relation, a, b, formula))
+    )
+    assert {tuple(row) for row in result.value} == {(1, "x"), (1, "y")}
