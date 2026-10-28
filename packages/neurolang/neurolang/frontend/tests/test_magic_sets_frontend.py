@@ -235,11 +235,19 @@ def _rank_similarity(text: str, study: int) -> float:
     return (study + 1) / 6
 
 
-def test_frontend_conditional_probability_bound_through_a_rule_compared():
+@pytest.mark.parametrize("program", [
+    "p(q, l, PROB) :- active(l, s) // close(q, s)\n"
+    "ans(l, r) :- definition('x', d) & p(d, l, r) & (r > 0)",
+    # d is bound by the rule defn, whatever the head of matching
+    "matching(s) :- defn('x', d) & close(d, s)\n"
+    "ans(l, r) :- PROB[active(l, s) // matching(s)] = r",
+])
+def test_frontend_conditional_probability_bound_through_a_rule(program):
     """
     The text of the similarity is bound by magic sets through the
-    conditional probability, also when the query compares it: the
-    comparison once came before ``p`` and left its magic set unseeded.
+    conditional probability, also when the query compares it (the
+    comparison once came before ``p`` and left its magic set unseeded),
+    and by a rule left of the similarity, whose variables are all bound.
     """
     nl = NeurolangPDL()
     studies = [(s,) for s in range(6)]
@@ -252,8 +260,7 @@ def test_frontend_conditional_probability_bound_through_a_rule_compared():
         "sim(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > 0)\n"
         "close(q, s) :- sim(q, s, v) & (v > .5) & selected(s)\n"
         "active(l, s) :- act(s, l) & selected(s)\n"
-        "p(q, l, PROB) :- active(l, s) // close(q, s)\n"
-        "ans(l, r) :- definition('x', d) & p(d, l, r) & (r > 0)"
+        "defn(t, d) :- definition(t, d)\n" + program
     )
     # close('a text', s) for s in {3, 4, 5}: a in 3, b in 4
     assert dict(res.as_pandas_dataframe().values) == pytest.approx(

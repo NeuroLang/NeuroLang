@@ -339,7 +339,9 @@ class LeftToRightSIPS(SIPS):
             unadorned_predicate_symbol(pred.functor) not in self.prob_symbols
             and not is_neg
         ):
-            _bind_shared_variables(p, tail, bound_variables)
+            bound_variables.update(
+                arg for arg in p.args if isinstance(arg, Symbol)
+            )
             tail_predicates.append(p)
 
         if is_neg:
@@ -413,15 +415,6 @@ def aggregate_positions(datalog):
                 known |= new
                 changed = True
     return positions
-
-
-def _bind_shared_variables(predicate, tail, bound_variables):
-    """Bind the variables of *predicate* which are in the *tail*."""
-    tail_variables = {arg for t in tail for arg in t.args}
-    bound_variables.update(
-        arg for arg in predicate.args
-        if isinstance(arg, Symbol) and arg in tail_variables
-    )
 
 
 def _unwrap_negation(predicate):
