@@ -25,7 +25,7 @@ Unreleased
   by default: ``feedback`` in ``llm.yaml`` or
   ``NEUROLANG_LLM_FEEDBACK_URL`` turns it on. In the REPL, ``.rate`` and
   ``.refine`` rate and correct the last answer. ``neurolang-feedback-server``
-  (standard library only) collects them, shows a review page and exports
+  (no new dependency) collects them, shows a review page and exports
   them as JSON lines or as a bank of examples. See
   :ref:`assistant-feedback`.
 

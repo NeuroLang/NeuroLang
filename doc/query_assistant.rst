@@ -324,8 +324,9 @@ private data.
 ``.help feedback`` recalls these commands. In the browser, the REPL does not
 share its answers.
 
-**Running a server.** ``neurolang-feedback-server`` needs only the standard
-library (``http.server`` and SQLite):
+**Running a server.** ``neurolang-feedback-server`` comes with
+``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and
+SQLite.
 
 .. code-block:: console
 

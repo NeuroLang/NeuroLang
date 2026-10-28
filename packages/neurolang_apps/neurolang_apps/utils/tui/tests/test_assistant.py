@@ -34,8 +34,9 @@ PAIN = "obtain every Study that mentions 'pain'."
 
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     """A REPL on a small engine whose assistant answers with a script."""
+    monkeypatch.delenv("NEUROLANG_LLM_FEEDBACK_URL", raising=False)
     from neurolang.frontend import NeurolangPDL
 
     nl = NeurolangPDL()
@@ -329,14 +330,15 @@ def test_answers_are_shared_when_on(app, shared):
     assert f"Shared as {2:032x}" in text and "unsure [comment]" in text
 
 
-def test_rating_needs_sharing_on(app, monkeypatch):
-    monkeypatch.delenv("NEUROLANG_LLM_FEEDBACK_URL", raising=False)
+def test_rating_needs_sharing_on(app):
     script(app, ASKED)
     app._run_line(".ask Which studies mention pain?")
     app._run_line(".rate good")
     assert app.failed and "NEUROLANG_LLM_FEEDBACK_URL" in output(app)
     assert app.assistant.last_answer is None
     assert ".rate" in help_text() and ".refine" in help_text()
+    app._run_line(".help feedback")
+    assert "[COMMENT]" in output(app) and ".rate ID" in output(app)
 
 
 def test_rate_the_last_answer_or_an_id(app, shared):
