@@ -357,7 +357,7 @@ def _run_assistant(
         if answer:
             app.err_console.print(
                 f"[dim]Shared as {answer}: rate it with .rate good|bad|"
-                "unsure [comment], correct it with .refine.[/dim]"
+                "unsure \\[comment], correct it with .refine.[/dim]"
             )
 
 

@@ -326,7 +326,7 @@ def test_answers_are_shared_when_on(app, shared):
     assert shared[0][1]["query"] == "ans(s) :- mentions(s, 'pain')"
     text = output(app)
     assert text.count("are shared with http://fb.test") == 1
-    assert f"Shared as {2:032x}" in text
+    assert f"Shared as {2:032x}" in text and "unsure [comment]" in text
 
 
 def test_rating_needs_sharing_on(app, monkeypatch):

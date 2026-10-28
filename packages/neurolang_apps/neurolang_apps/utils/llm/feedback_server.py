@@ -452,7 +452,10 @@ def main(argv=None) -> None:
         args.db, args.host, args.port, args.cors_origin,
         os.environ.get(args.admin_token_env), args.max_bytes, args.rate,
     )
-    print(f"Feedback server on http://{args.host}:{server.server_port}/")
+    print(
+        f"Feedback server on http://{args.host}:{server.server_port}/",
+        flush=True,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
