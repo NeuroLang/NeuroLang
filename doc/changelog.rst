@@ -32,6 +32,26 @@ Unreleased
 
 **New features:**
 
+* The query assistant can share its questions and answers with a feedback
+  server, where people rate them correct, incorrect or unsure and correct
+  their query, to train models and grow the banks of examples. It is off
+  by default: ``feedback`` in ``llm.yaml`` or
+  ``NEUROLANG_LLM_FEEDBACK_URL`` turns it on. In the REPL, ``.rate`` and
+  ``.refine`` rate and correct the last answer. ``neurolang-feedback-server``
+  (no new dependency) collects them, shows a review page and exports
+  them as JSON lines or as a bank of examples. See
+  :ref:`assistant-feedback`.
+
+* The query assistant searches the studies by a description or a
+  Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
+  share a bank of examples (``coordinate_meta_analysis.yaml``, which banks
+  now inherit through ``extends``) with questions answered with
+  ``similar_study``, ``p_a_given_similar``, ``uniformity_llm`` and the
+  new ``cogat_definition(term, definition)``; ``neurostore.yaml`` adds
+  questions on its LLM-extracted concepts and domains.  ``neurosynth``
+  gets ``study_title(study, title)``, from its metadata, as ``neurostore``
+  had.
+
 * The engine of the REPL in the browser leaves out the precomputed analyses
   (``lift``, ``relative_risk``, ``uniformity``, ``ratios``): building them took
   almost 4 GB, which Safari does not give a tab, and made the page loop on

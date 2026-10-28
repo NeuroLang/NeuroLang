@@ -3,6 +3,7 @@ import textwrap
 import pytest
 
 from neurolang_apps.utils.engine_registry import (
+    engine_bases,
     get_engine_config,
     list_engine_names,
     resolve_engine_config,
@@ -79,6 +80,20 @@ def test_abstract_engines_hidden_and_unbuildable(yaml_path):
     assert list_engine_names(yaml_path) == ["child", "multi"]
     with pytest.raises(ValueError, match="abstract"):
         get_engine_config("base", yaml_path)
+
+
+def test_engine_bases(yaml_path, tmp_path):
+    assert engine_bases("child", yaml_path) == ["base"]
+    assert engine_bases("multi", yaml_path) == ["base", "other"]
+    assert engine_bases("base", yaml_path) == []
+    assert engine_bases("nope", yaml_path) == []
+    cycle = _write(tmp_path, """
+        engines:
+          a: {extends: b}
+          b: {extends: a}
+        """)
+    assert engine_bases("a", cycle) == ["b"]
+    assert engine_bases("neurostore") == ["coordinate_meta_analysis"]
 
 
 def test_unknown_base_and_cycle():

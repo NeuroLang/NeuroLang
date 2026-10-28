@@ -368,6 +368,28 @@ def _is_abstract(engines: Dict[str, Dict[str, Any]], name: str) -> bool:
     return bool((engines[name] or {}).get("abstract", False))
 
 
+def engine_bases(name: str, yaml_path: Optional[Path] = None) -> List[str]:
+    """
+    Return the engines *name* extends, directly or not, bases first.
+
+    Unknown engines have no bases.
+    """
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+    bases: List[str] = []
+    seen = {name}
+
+    def visit(engine: str) -> None:
+        parents = (engines.get(engine) or {}).get("extends", [])
+        for parent in [parents] if isinstance(parents, str) else parents:
+            if parent not in seen:
+                seen.add(parent)
+                visit(parent)
+                bases.append(parent)
+
+    visit(name)
+    return bases
+
+
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
     """
     Return the names of all registered, non-abstract engines.

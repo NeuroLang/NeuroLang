@@ -12,7 +12,7 @@ from ..examples import (
 )
 from ..validation import check_query
 
-BANK_ENGINES = ("neurosynth",)
+BANK_ENGINES = ("neurosynth", "neurostore")
 
 
 def test_words_drop_stop_words():
@@ -54,6 +54,16 @@ def test_banks_load(engine):
     for example in examples:
         assert example.question and example.queries
         assert set(example.queries) <= {"squall", "datalog"}
+
+
+def test_banks_are_inherited():
+    # Both engines extend coordinate_meta_analysis and share its bank;
+    # neurostore adds examples of its own after it.
+    shared = load_examples("coordinate_meta_analysis")
+    assert load_examples("neurosynth") == shared
+    neurostore = load_examples("neurostore")
+    assert neurostore[:len(shared)] == shared
+    assert len(neurostore) > len(shared)
 
 
 def test_engines_without_bank():
