@@ -332,12 +332,21 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
 
 def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
     """A child killed by a signal (e.g. a library that cannot run after
-    fork) is reported as a crash, not as a query using too much memory."""
+    fork) is reported as a crash, not as a query using too much memory.
+
+    The child writes no core dump: in the large process of a whole test
+    run it would take longer than the timeout.
+    """
     import os
+    import resource
 
     from .. import validation
 
-    monkeypatch.setattr(validation, "_execute", lambda *a, **k: os.abort())
+    def crash(*args, **kwargs):
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        os.abort()
+
+    monkeypatch.setattr(validation, "_execute", crash)
     preview = run_preview(
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=4096
     )
