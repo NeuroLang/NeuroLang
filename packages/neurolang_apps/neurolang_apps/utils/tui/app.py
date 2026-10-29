@@ -5,7 +5,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.filters import HasSearch
@@ -111,6 +111,18 @@ class TuiSettings:
     scope_queries: bool = True
 
 
+class AgentRun(NamedTuple):
+    """
+    A query the assistant ran and its *frames*, ``(title, frame)`` for each
+    relation of its result, in the *squall* mode or not: what Enter on the
+    query of the prompt shows, if it is not edited, without running it again.
+    """
+
+    program: str
+    squall: bool
+    frames: list
+
+
 class InteractiveTuiApp:
     """Interactive NeuroLang REPL rendering query results as tables."""
 
@@ -146,6 +158,9 @@ class InteractiveTuiApp:
         # Where the events of the assistant are sent as they happen (a
         # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
         self.agent_events = None
+        # The query the assistant ran last, with its result, until any other
+        # input (an AgentRun, see show_agent_run).
+        self.agent_run = None
         self.assistant = AssistantState(
             self.settings.llm_config, self.settings.llm_provider
         )
@@ -229,12 +244,57 @@ class InteractiveTuiApp:
         *sorts* are the sorts of its columns, kept with the block when
         they are as many as its columns.
         """
-        df = result_to_dataframe(result, column_names)
+        return self._block_of_frame(
+            result_to_dataframe(result, column_names), title, sorts
+        )
+
+    def _block_of_frame(self, df, title: str, sorts=None) -> ResultBlock:
+        """Return the rows *df* of a result, sorted, as a block."""
         if not df.empty:
             df = sort_dataframe(df, self.settings.sort_by)
         if sorts is not None and len(sorts) != len(df.columns):
             sorts = None
         return ResultBlock(df, title, sorts=sorts)
+
+    def show_frames(self, frames: list, program: str) -> None:
+        """
+        Print the *frames* of the result of the query *program*, as
+        :meth:`_show_result` prints a result, keeping its blocks for the
+        commands.
+        """
+        sorts = self._column_sorts(program)
+        if len(frames) == 1 and not frames[0][0]:
+            blocks = [self._block_of_frame(
+                frames[0][1], "", next(iter(sorts.values()), None)
+            )]
+        else:
+            blocks = [
+                self._block_of_frame(frame, key, sorts.get(key))
+                for key, frame in frames
+            ]
+        self.results = blocks
+        for block in blocks:
+            self.print_block(block)
+
+    def show_agent_run(self, program: str, frames: list) -> None:
+        """
+        Show the result of the query *program* that the assistant ran, as
+        if the REPL had, and keep it for Enter on the same query.
+
+        Nothing is shown when the rules of a query are not local to it
+        (``.scope off``) or ``.ra`` prints plans instead of results: the
+        query is then run as usual.
+        """
+        if not self.settings.scope_queries or self.settings.show_ra:
+            return
+        try:
+            self.show_frames(frames, program)
+        except Exception:  # the query is run again, as without this
+            self.agent_run = None
+            return
+        self.agent_run = AgentRun(program, self.settings.squall, frames)
+        self.last_query = (program, self.settings.squall)
+        self.last_added_rules = {}
 
     def print_block(self, block: ResultBlock) -> None:
         """
@@ -407,6 +467,18 @@ class InteractiveTuiApp:
         query, facts = submission_outline(
             self._nl, program, self.settings.squall
         )
+        run = self.agent_run
+        if query and run and run.squall == self.settings.squall and (
+            program.strip() == run.program.strip()
+        ):
+            self.last_query = (program, self.settings.squall)
+            self.last_added_rules = {}
+            self.show_frames(run.frames, program)
+            self.err_console.print(
+                "[dim]The assistant ran this query: its result, not run "
+                "again.[/dim]"
+            )
+            return
         if query:
             self.last_query = (program, self.settings.squall)
             self.last_added_rules = {}
@@ -500,6 +572,8 @@ class InteractiveTuiApp:
             for part in parts:
                 self._run_line(part)
             return
+        if self.agent_run and text != self.agent_run.program.strip():
+            self.agent_run = None  # the session may change: run the next query
         if is_transcript_command(text):
             self._handle_dot_command(text)
         elif text.startswith("."):

@@ -343,7 +343,14 @@ def _show_result(app, result) -> None:
     if result.query:
         _switch_language(app, result.language)
         app.pending_input = runnable_query(result)
+        shown = False
+        if result.valid and result.frames is not None:
+            # The agent ran the query to accept it: its result, not a new run.
+            app.show_agent_run(app.pending_input, result.frames)
+            shown = app.agent_run is not None
         app.console.print(
+            "[dim]The query is in the prompt: edit it to run it again, "
+            "or press Enter to see its result again.[/dim]" if shown else
             "[dim]The query is in the prompt: edit it or press Enter to "
             "run it.[/dim]"
         )

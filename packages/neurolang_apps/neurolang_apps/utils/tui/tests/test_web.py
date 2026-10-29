@@ -352,6 +352,33 @@ def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     assert sent == []
 
 
+def test_react_gives_the_result_in_the_reply_and_enter_does_not_run_it_again(
+    repl, monkeypatch
+):
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    query = "ans(x) :- person(x, n)"
+    repl.app.assistant.client = ScriptedClient([
+        [("final_answer", {"query": query, "explanation": "Everyone."})],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    reply = repl.submit(".ask --react Who is there?")
+    [table] = reply.tables
+    assert sorted(row[0] for row in table["rows"]) == ["alice", "bob"]
+    assert reply.prompt.splitlines()[-1] == query
+    runs = []
+    execute = repl.app._nl.execute_datalog_program
+    monkeypatch.setattr(
+        repl.app._nl, "execute_datalog_program",
+        lambda *args, **kwargs: runs.append(args) or execute(*args, **kwargs),
+    )
+    again = repl.submit(reply.prompt)
+    assert runs == [] and "not run again" in again.html
+    assert again.tables[0]["rows"] == table["rows"]
+    assert again.tables[0]["block"] == 0
+
+
 def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
     import httpx
 

@@ -31,8 +31,19 @@ in the prompt, where it can be read, edited and run:
     │ making' reports.                                                       │
     ╰────────────────────────────────────────────────────────────────────────╯
     4 LLM calls
-    The query is in the prompt: edit it or press Enter to run it.
+    ... the 14926 rows of the result, as a query prints them ...
+    The query is in the prompt: edit it to run it again, or press Enter to see its result again.
     nl(neurosynth:SQ)> obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'decision making' reports.
+    The assistant ran this query: its result, not run again.
+
+The ReAct agent runs its final query to accept it (``run_query`` is how it
+tries one, ``final_answer`` runs the one it gives), and keeps the whole result:
+it is printed right after the query, in the terminal and in the page, and
+Enter on the query as it is shows it again, without running the query a
+second time. Any edit, or any other input first, runs the query as usual, and
+so does a result larger than 5 million cells, or ``.scope off``, which
+keeps a query's rules in the session. The ICL strategy does not run its query:
+Enter runs it.
 
 From the command line, ``--ask`` prints the query, and ``--run`` also
 runs it. ``--save PATH`` and ``--view`` run it too, and save its result
