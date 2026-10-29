@@ -1157,3 +1157,13 @@ def test_functional_dependency_in_one_disjunct_only():
         ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
         symbol_table
     )[0]
+
+
+def test_set_partitions():
+    partitions = list(dalvi_suciu_lift._set_partitions([1, 2, 3]))
+    assert sorted(sorted(map(sorted, p)) for p in partitions) == [
+        [[1], [2], [3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3]],
+        [[1, 3], [2]],
+    ]
+    assert [len(list(dalvi_suciu_lift._set_partitions(list(range(k)))))
+            for k in range(5)] == [1, 1, 2, 5, 15]

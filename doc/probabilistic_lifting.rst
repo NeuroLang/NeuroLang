@@ -633,21 +633,39 @@ Answer variables as constants
    when :math:`x \neq y`, and the same when :math:`x = y`, which the
    algorithm, keeping the variables, cannot tell
    (``different_free_variables_plan``). When the other rules decline the
-   query :math:`Q`, its answers are split into those with :math:`x \neq
-   y`, for which the atoms of the relation :math:`R` with :math:`y` at
-   that position are renamed into those of an alias :math:`R'` of
-   :math:`R`, and those with :math:`x = y`:
+   query :math:`Q`, its answers are split on the equalities among the free
+   variables :math:`x_1, \dots, x_k` at that position of the atoms of the
+   relation :math:`R`: one branch per partition :math:`\Pi` of them into
+   blocks (``_set_partitions``). In a branch, each variable is replaced by
+   the first variable of its block, its representative,
+   :math:`Q[\Pi]`, and the atoms of :math:`R` with a representative there,
+   but the first, are renamed into those of an alias of :math:`R` for each
+   representative, :math:`\rho`. For two variables, the partitions are
+   :math:`\{x\}, \{y\}` and :math:`\{x, y\}`, and the plan is
 
    .. math::
 
       \sigma_{x \neq y}\, \mathrm{lift}(Q[R'/R]) \;\cup\;
-      \pi_{y := x}\, \mathrm{lift}(Q[x/y]).
+      \pi_{y := x}\, \mathrm{lift}(Q[x/y]);
 
-   The rule applies when, for :math:`x \neq y`, every renamed atom is a
-   different tuple from the other atoms of :math:`R`, having :math:`y`
-   where they have :math:`x`. Three atoms with three free variables at the
-   same position, :math:`A(x, s) \land A(y, s) \land A(z, s)`, are not
-   lifted.
+   in general, with :math:`r_1, \dots, r_m` the representatives of
+   :math:`\Pi`, and the projection copying each into the variables of its
+   block,
+
+   .. math::
+
+      \bigcup_{\Pi}\, \pi_{\Pi}\, \sigma_{\bigwedge_{j < l} r_j \neq
+      r_l}\, \mathrm{lift}(Q[\Pi][\rho]).
+
+   The rule applies when, in every branch, every renamed atom is a
+   different tuple from the other atoms of :math:`R`, having its
+   representative where they have another
+   (``_are_different_tuples_when_different``). A variable at that position
+   in an atom of :math:`R` that is not free, as :math:`z` in :math:`A(x, s)
+   \land A(y, s) \land A(z, s)`, prevents it. The number of branches is the
+   Bell number of :math:`k`, 2, 5 and 15 for 2, 3 and 4 variables, and
+   more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 4, variables at a
+   position are declined.
 
 Comparisons of answer variables
    A comparison of free variables, a conjunct of the query such as
@@ -1260,27 +1278,36 @@ Rewriting of the choices
    every step of the rewriting is an equivalence.
 
 Answer variables as constants
-   For an answer, :math:`x` and :math:`y` have values :math:`a` and
-   :math:`b`. If :math:`a \neq b`, every renamed atom :math:`R(\bar u)`
-   has :math:`b` at a position :math:`i` where every other atom
-   :math:`R(\bar v)` of :math:`Q` has :math:`a`
-   (``_are_different_tuples_when_different``), so their tuples differ, for
-   all values of the quantified variables. :math:`R'` naming the relation
-   :math:`R`, :math:`Q[R'/R] \equiv Q`; the renamed and the other atoms
-   of :math:`R` have no tuple in common, and :math:`Q[R'/R]`, with
-   :math:`R'` a relation with the tuples and probabilities of :math:`R`,
-   has the probability of :math:`Q` for this answer: in every world the
-   atoms have the values they have in :math:`Q`, and the tuples of
-   :math:`R'` are independent of those of :math:`R` that :math:`Q` uses,
-   as Lemma 1 needs. If :math:`a = b`, :math:`Q` and :math:`Q[x/y]` are
-   the same query for the answer, and the projection copies :math:`x` into
-   :math:`y`. The answers of the two plans are different, so their
-   independent union, :math:`1 - (1 - p)(1 - 0)`, gives each its
-   probability. The relation is tuple-independent: the tuples of a choice
-   are exclusive, and an alias would make them independent. The rule
-   terminates: :math:`Q[x/y]` has one free variable less, and
-   :math:`Q[R'/R]` the same free variables and fewer pairs of atoms of a
-   relation with different free variables at a position.
+   For an answer, the free variables have values, and their equalities
+   are those of exactly one partition :math:`\Pi` of :math:`x_1, \dots,
+   x_k`: the branches select different answers, and their independent
+   union, :math:`1 - (1 - p)(1 - 0)`, gives each its probability. In the
+   branch of :math:`\Pi`, :math:`Q` and :math:`Q[\Pi]` are the same query
+   for the answer, and the projection copies each representative into the
+   variables of its block. The representatives have pairwise different
+   values :math:`a_1, \dots, a_m`, which the selection keeps. Every atom
+   :math:`R(\bar u)` renamed for :math:`r_j` has :math:`a_j` at a position
+   :math:`i` where every other atom :math:`R(\bar v)` of :math:`Q[\Pi]`,
+   renamed for another representative or not, has another :math:`a_l`
+   (``_are_different_tuples_when_different``, given the other
+   representatives), so their tuples differ, for all values of the
+   quantified variables. An alias naming the relation :math:`R`,
+   :math:`Q[\Pi][\rho] \equiv Q[\Pi]`; the atoms of different aliases,
+   and of :math:`R`, have no tuple in common, and :math:`Q[\Pi][\rho]`,
+   with each alias a relation with the tuples and probabilities of
+   :math:`R`, has the probability of :math:`Q[\Pi]` for this answer: in
+   every world the atoms have the values they have in :math:`Q[\Pi]`, and
+   the tuples of the aliases are independent of each other and of those of
+   :math:`R` that :math:`Q` uses, as Lemma 1 needs. Splitting on a pair
+   :math:`x = y` or :math:`x \neq y` and renaming would not do: the
+   alias would hide, from the next split, the pairs of the renamed
+   variable with the others, whose atoms can then be the same tuple. The
+   relation is tuple-independent: the tuples of a choice are exclusive,
+   and an alias would make them independent. The rule terminates: a branch
+   that merges variables has fewer free variables, and the branch of the
+   partition into singletons the same free variables and fewer pairs of
+   atoms of a relation with different free variables at a position, the
+   renaming separating some and joining none.
 
 Comparisons of answer variables
    A comparison :math:`C` of free variables is true or false for an

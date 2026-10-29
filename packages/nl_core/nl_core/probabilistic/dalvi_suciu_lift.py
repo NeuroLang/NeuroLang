@@ -107,7 +107,6 @@ from .query_resolution import (
     lift_solve_marg_query
 )
 from .non_repeating_lift import (
-    columns_comparison,
     non_repeating_plan,
     select_comparisons
 )
@@ -128,6 +127,10 @@ from .transforms import (
 )
 
 LOG = logging.getLogger(__name__)
+
+# The answers are split on the Bell(k) partitions of k answer variables:
+# 2, 5 and 15 for 2, 3 and 4.
+MAX_ANSWER_VARIABLES_AT_A_POSITION = 4
 
 
 __all__ = [
@@ -1304,14 +1307,16 @@ def dalvi_suciu_lift(rule, symbol_table):
 
 def different_free_variables_plan(rule, symbol_table):
     """Plan for a query with atoms of a tuple-independent relation `R`
-    with free variables `x` and `y` at the same position, which Dalvi and
-    Suciu, who replace the free variables by constants, lift as different
-    relations when `x ≠ y`. The atoms of `R` with `y` there are renamed
-    into an alias `R'` of `R` if, when `x ≠ y`, they are different tuples
-    from the other atoms of `R`; when `x = y`, `y` is replaced by `x`. The
-    answers of the two cases are different, and the plan is
+    with free variables at the same position, which Dalvi and Suciu, who
+    replace the free variables by constants, lift as different tuples when
+    the variables are different. The answers are split on the partitions
+    `Π` of these variables: the variables of a block are replaced by its
+    first one, the representative, `Q[Π]`, and the atoms of `R` with a
+    representative `r_j` there, but the first, renamed into an alias of
+    `R`, `ρ`, if they are different tuples from the other atoms of `R` when
+    the representatives are different. The plan is
 
-        σ_{x ≠ y} lift(Q[R'/R]) ∪ π_{y := x} lift(Q[x/y])
+        ∪_Π π_Π σ_{r_j ≠ r_l} lift(Q[Π][ρ])
     """
     free_variables = extract_logic_free_variables(rule)
     atoms = [
@@ -1321,37 +1326,74 @@ def different_free_variables_plan(rule, symbol_table):
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         )
     ]
-    for atom_x, atom_y in combinations(atoms, 2):
-        if atom_x.functor != atom_y.functor:
+    query = Implication(Symbol.fresh()(*free_variables), rule)
+    for functor, i in OrderedSet(
+        (atom.functor, i) for atom in atoms for i in range(len(atom.args))
+    ):
+        variables = list(OrderedSet(
+            atom.args[i] for atom in atoms
+            if atom.functor == functor and atom.args[i] in free_variables
+        ))
+        if not 2 <= len(variables) <= MAX_ANSWER_VARIABLES_AT_A_POSITION:
             continue
-        for i, (x, y) in enumerate(zip(atom_x.args, atom_y.args)):
-            if x == y or not {x, y} <= free_variables:
-                continue
-            relation = [a for a in atoms if a.functor == atom_x.functor]
-            renamed = [a for a in relation if a.args[i] == y]
-            if not _are_different_tuples_when_different(
-                Conjunction(tuple(renamed)), y,
-                Conjunction(tuple(a for a in relation if a not in renamed)),
-                {x}, symbol_table
-            ):
-                continue
-            alias = Symbol.fresh()
-            symbol_table[alias] = symbol_table[atom_x.functor]
-            different = dalvi_suciu_lift(ReplaceExpressionWalker({
-                a: a.apply(alias, a.args) for a in renamed
-            }).walk(rule), symbol_table)
-            query = Implication(Symbol.fresh()(*free_variables), rule)
-            same = ReplaceExpressionWalker({y: x}).walk(query)
-            return rap.Union(
-                rap.Selection(different, columns_comparison(NE(x, y))),
-                ExtendedProjection(
-                    dalvi_suciu_lift(same.antecedent, symbol_table),
-                    compute_projections_needed_to_reintroduce_head_terms(
-                        None, query, same
-                    )
-                )
-            )
+        plans = []
+        for blocks in _set_partitions(variables):
+            plan = _partition_plan(query, functor, i, blocks, symbol_table)
+            if plan is None:
+                break
+            plans.append(plan)
+        else:
+            return reduce(rap.Union, plans)
     return None
+
+
+def _set_partitions(items):
+    """The partitions of the list `items` into lists."""
+    if not items:
+        yield []
+        return
+    for blocks in _set_partitions(items[1:]):
+        yield [[items[0]]] + blocks
+        for j, block in enumerate(blocks):
+            yield blocks[:j] + [[items[0]] + block] + blocks[j + 1:]
+
+
+def _partition_plan(query, functor, i, blocks, symbol_table):
+    """The answers of `query` whose free variables of the partition
+    `blocks` are equal in a block and different across blocks."""
+    representatives = [block[0] for block in blocks]
+    same = ReplaceExpressionWalker({
+        v: block[0] for block in blocks for v in block[1:]
+    }).walk(query)
+    relation = [
+        atom for atom in ExtractRelationalAtoms().walk(same.antecedent)
+        if atom.functor == functor
+    ]
+    renaming = {}
+    for x in representatives[1:]:
+        renamed = [atom for atom in relation if atom.args[i] == x]
+        if not _are_different_tuples_when_different(
+            Conjunction(tuple(renamed)), x,
+            Conjunction(tuple(a for a in relation if a not in renamed)),
+            set(representatives) - {x}, symbol_table
+        ):
+            return None
+        alias = Symbol.fresh()
+        symbol_table[alias] = symbol_table[functor]
+        renaming.update({a: a.apply(alias, a.args) for a in renamed})
+    plan = select_comparisons(
+        dalvi_suciu_lift(
+            ReplaceExpressionWalker(renaming).walk(same.antecedent),
+            symbol_table
+        ),
+        [NE(x, y) for x, y in combinations(representatives, 2)]
+    )
+    projections = compute_projections_needed_to_reintroduce_head_terms(
+        None, query, same
+    )
+    if projections:
+        plan = ExtendedProjection(plan, projections)
+    return plan
 
 
 def _clauses_are_range_restricted(cnf):
