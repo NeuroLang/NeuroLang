@@ -507,8 +507,9 @@ Deterministic builtins
       A \land y = f(\bar x) \equiv A \land F(\bar x, y).
 
    :math:`F` is a function of :math:`\bar x`, so that in :math:`R(x)
-   \land T(y) \land y = x + 1`, :math:`y` separates the query (see
-   `Separator determined by a functional dependency`_).
+   \land T(y) \land y = x + 1`, :math:`y` separates the query (see the
+   separator determined by a functional dependency, in `Extensions of the
+   Dalvi–Suciu algorithm`_).
 
    Two atoms of the same probabilistic choice relation are true together
    only if they are the same tuple, as exactly one tuple of the choice is
