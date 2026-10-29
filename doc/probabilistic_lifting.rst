@@ -39,6 +39,23 @@ uses the first one which accepts the query:
    weighted model count [Chavira2008]_. It answers every query of the
    language but can be exponential in the size of the data.
 
+.. figure:: _static/lifting_pipeline.svg
+   :alt: The three solvers in order. The first sums a conjunctive query on
+         its probabilistic choices. The second prepares the query, plans
+         non-repeating queries with negation, normalises and checks the
+         query, lifts negations and comparisons sharing relations, and
+         applies the rules of the Dalvi–Suciu algorithm in order. A query
+         that neither lifted solver plans is solved by weighted model
+         counting.
+   :width: 100%
+
+   The lifting process. Each lifted solver either gives a plan, evaluated
+   on the provenance semiring of probabilities, or declines the query,
+   which is passed to the next solver. The steps of the second solver are
+   described in `Preparing the query`_, `Planning non-repeating queries`_,
+   `Negations and comparisons sharing relations`_ and `The Dalvi–Suciu
+   algorithm`_.
+
 A lifted solver declines a query by raising an
 ``UnsupportedSolverError``, such as ``NonLiftableException``, and the next
 one is then tried. The Dalvi–Suciu solver turns the failures of the
