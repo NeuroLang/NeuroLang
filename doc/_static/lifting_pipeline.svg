@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1340" width="960" height="1340" role="img" aria-labelledby="title desc">
+  <title id="title">Lifted probabilistic inference in NeuroLang</title>
+  <desc id="desc">The three solvers tried in order: the conjunctive queries summed on choices, the lifted solver with the Dalvi–Suciu algorithm and NeuroLang's additions, and weighted model counting. A lifted plan is evaluated on the provenance semiring of probabilities.</desc>
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .card { fill: #ffffff; stroke: #c3ccd8; stroke-width: 1.2; }
+      .solver { fill: #f3f6fa; stroke: #9fb0c5; stroke-width: 1.4; }
+      .inner { fill: #ffffff; stroke: #c3ccd8; stroke-width: 1.2; }
+      .ask { fill: #eef4ff; stroke: #7d9bd6; stroke-width: 1.2; }
+      .wmc { fill: #f8f5ef; stroke: #b9aa8c; stroke-width: 1.4; }
+      .out { fill: #edf7f1; stroke: #6fae88; stroke-width: 1.4; }
+      .rowa { fill: #f6f8fb; }
+      text { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; fill: #1f2933; font-size: 13px; }
+      .h1 { font-size: 16px; font-weight: 600; }
+      .h2 { font-size: 14px; font-weight: 600; }
+      .num { font-size: 15px; font-weight: 700; fill: #3b5b8c; }
+      .mut { fill: #52606d; }
+      .code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 11.5px; fill: #3b5b8c; }
+      .op { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; fill: #1f2933; }
+      .lab { font-size: 12px; font-style: italic; }
+      .plan { stroke: #2563eb; stroke-width: 1.8; fill: none; }
+      .planlab { fill: #2563eb; }
+      .decl { stroke: #b45309; stroke-width: 1.8; fill: none; stroke-dasharray: 6 4; }
+      .decllab { fill: #b45309; }
+      .flow { stroke: #52606d; stroke-width: 1.5; fill: none; }
+    </style>
+    <marker id="a-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52606d"/>
+    </marker>
+    <marker id="a-plan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="a-decl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="960" height="1340" rx="10"/>
+
+  <!-- Legend -->
+  <g transform="translate(680,24)">
+    <line class="plan" x1="0" y1="8" x2="34" y2="8" marker-end="url(#a-plan)"/>
+    <text x="44" y="12">lifted plan</text>
+    <line class="decl" x1="0" y1="30" x2="34" y2="30" marker-end="url(#a-decl)"/>
+    <text x="44" y="34">query declined</text>
+    <line class="flow" x1="0" y1="52" x2="34" y2="52" marker-end="url(#a-flow)"/>
+    <text x="44" y="56">next step</text>
+  </g>
+
+  <!-- Query -->
+  <rect class="card" x="40" y="20" width="600" height="58" rx="8"/>
+  <text class="h1" x="58" y="44">Query  ans(x̄) ← body  on a CP-Logic program</text>
+  <text class="mut" x="58" y="66">NeurolangPDL tries its solvers in order, and uses the first that accepts the query</text>
+  <line class="flow" x1="340" y1="78" x2="340" y2="104" marker-end="url(#a-flow)"/>
+
+  <!-- Solver 1 -->
+  <rect class="solver" x="40" y="106" width="600" height="128" rx="8"/>
+  <text class="num" x="58" y="132">1</text>
+  <text class="h2" x="78" y="132">Conjunctive queries summed on probabilistic choices</text>
+  <text class="code" x="78" y="150">small_dichotomy_theorem_based_solver</text>
+  <text x="78" y="172">flatten · make the atoms of each choice one · unify equalities · shatter</text>
+  <text x="78" y="191">accepts a conjunction without negation whose ∃-variables are in choice</text>
+  <text x="78" y="208">atoms, the probabilistic atoms being hierarchical without self-joins</text>
+  <text x="78" y="224" class="mut">plan: join of the atoms, then Σ on the head (disjoint projection)</text>
+
+  <!-- Solver 1 exits -->
+  <path class="plan" d="M640,170 H680"/>
+  <path class="decl" d="M340,234 V282" marker-end="url(#a-decl)"/>
+  <text class="lab decllab" x="350" y="262">declined (UnsupportedSolverError)</text>
+
+  <!-- Solver 2 container -->
+  <rect class="solver" x="40" y="284" width="600" height="876" rx="8"/>
+  <text class="num" x="58" y="310">2</text>
+  <text class="h2" x="78" y="310">Lifted inference: Dalvi–Suciu and NeuroLang's additions</text>
+  <text class="code" x="78" y="328">dalvi_suciu_lift.solve_succ_query</text>
+
+  <!-- 2a Preparing -->
+  <rect class="inner" x="64" y="342" width="552" height="96" rx="6"/>
+  <text class="h2" x="80" y="364">Preparing the query</text>
+  <text x="80" y="384">flatten the rules into the body · standardise the variables apart</text>
+  <text x="80" y="404">choices in negations unified · absorption · contradicting disjuncts</text>
+  <text x="80" y="424">deterministic negations, builtins, y = f(x̄) → fresh deterministic relations</text>
+  <line class="flow" x1="340" y1="438" x2="340" y2="456" marker-end="url(#a-flow)"/>
+
+  <!-- 2b Non-repeating -->
+  <rect class="ask" x="64" y="458" width="552" height="60" rx="6"/>
+  <text class="h2" x="80" y="481">Non-repeating, with a negation?</text>
+  <text class="code" x="330" y="481">non_repeating_plan</text>
+  <text x="80" y="504">independent operations; independent or disjoint projection</text>
+  <path class="plan" d="M616,488 H680"/>
+  <text class="lab planlab" x="686" y="492">planned</text>
+  <line class="flow" x1="340" y1="518" x2="340" y2="540" marker-end="url(#a-flow)"/>
+  <text class="lab mut" x="350" y="534">otherwise</text>
+
+  <!-- 2c Normal form and checks -->
+  <rect class="inner" x="64" y="542" width="552" height="96" rx="6"/>
+  <text class="h2" x="80" y="564">Normal form and checks</text>
+  <text x="80" y="584">DNF · atoms of each choice made one · equalities unified</text>
+  <text x="80" y="604">shatter constants and comparisons with a constant · rank</text>
+  <text x="80" y="624">checks: builtins; one kind of quantifier and unate (check_unate)</text>
+  <line class="flow" x1="340" y1="638" x2="340" y2="656" marker-end="url(#a-flow)"/>
+
+  <!-- 2d Dependent negations -->
+  <rect class="inner" x="64" y="658" width="552" height="132" rx="6"/>
+  <text class="h2" x="80" y="680">Negations and comparisons sharing relations</text>
+  <text class="code" x="80" y="697">lift_with_dependent_negations</text>
+  <text x="80" y="718">comparisons of answer variables → selection</text>
+  <text x="80" y="737">existential conjunct with comparisons → comparison rule</text>
+  <text x="80" y="756">shared negation → free-variable shattering, else subtraction</text>
+  <text x="80" y="775">otherwise → dalvi_suciu_lift; if impure → projection on a variable</text>
+  <line class="flow" x1="340" y1="790" x2="340" y2="808" marker-end="url(#a-flow)"/>
+
+  <!-- 2e Dalvi–Suciu rule cascade -->
+  <rect class="inner" x="64" y="810" width="552" height="262" rx="6"/>
+  <text class="h2" x="80" y="832">dalvi_suciu_lift: rules tried in order, recursively</text>
+  <text class="lab mut" x="80" y="850">each rule lifts the subqueries it builds with the same rules</text>
+  <g>
+    <rect class="rowa" x="72" y="858" width="536" height="22" rx="3"/>
+    <text x="84" y="874">base cases: an atom, a deterministic subquery</text>
+    <text class="op" x="476" y="874">RA, Support</text>
+    <text x="84" y="896">minimisation of redundant atoms and disjuncts</text>
+    <text class="op" x="476" y="896">containment</text>
+    <rect class="rowa" x="72" y="902" width="536" height="22" rx="3"/>
+    <text x="84" y="918">independent conjunction (CNF components)</text>
+    <text class="op" x="476" y="918">⋈, Difference</text>
+    <text x="84" y="940">independent disjunction (DNF components)</text>
+    <text class="op" x="476" y="940">∪</text>
+    <rect class="rowa" x="72" y="946" width="536" height="22" rx="3"/>
+    <text x="84" y="962">separator variable</text>
+    <text class="op" x="476" y="962">ind-∃-π</text>
+    <text x="84" y="984">disjoint separator on a probabilistic choice</text>
+    <text class="op" x="476" y="984">disj-π</text>
+    <rect class="rowa" x="72" y="990" width="536" height="22" rx="3"/>
+    <text x="84" y="1006">inclusion–exclusion on the CNF clauses</text>
+    <text class="op" x="476" y="1006">Σ w·p</text>
+    <text x="84" y="1028">answer variables as constants (x = y, x ≠ y)</text>
+    <text class="op" x="476" y="1028">σ, ∪</text>
+    <rect class="rowa" x="72" y="1034" width="536" height="22" rx="3"/>
+    <text x="84" y="1050">no rule applies</text>
+    <text class="op" x="476" y="1050">NonLiftable</text>
+  </g>
+  <line class="flow" x1="340" y1="1072" x2="340" y2="1090" marker-end="url(#a-flow)"/>
+
+  <!-- 2f Pure plan? -->
+  <rect class="ask" x="64" y="1092" width="552" height="48" rx="6"/>
+  <text class="h2" x="80" y="1121">Is the plan free of NonLiftable?</text>
+  <text class="code" x="330" y="1121">is_pure_lifted_plan</text>
+  <path class="plan" d="M616,1116 H680"/>
+  <text class="lab planlab" x="686" y="1120">yes</text>
+
+
+  <!-- 2c and the conversions to normal forms can decline -->
+  <path class="decl" d="M64,600 H52 V1150 H336" marker-end="url(#a-decl)"/>
+  <text class="lab decllab" x="70" y="652">checks fail, or no normal form</text>
+
+  <!-- Solver 2 exit -->
+  <path class="decl" d="M340,1140 V1188" marker-end="url(#a-decl)"/>
+  <text class="lab decllab" x="350" y="1172">declined (UnsupportedSolverError)</text>
+
+  <!-- Solver 3 -->
+  <rect class="wmc" x="40" y="1190" width="600" height="96" rx="8"/>
+  <text class="num" x="58" y="1216">3</text>
+  <text class="h2" x="78" y="1216">Weighted model counting, not lifted</text>
+  <text class="code" x="78" y="1234">weighted_model_counting</text>
+  <text x="78" y="1256">provenance of the query → SDD (pysdd) → weighted model count</text>
+  <text class="mut" x="78" y="1276">answers every query; can be exponential in the size of the data</text>
+
+  <!-- Plan bus -->
+  <path class="plan" d="M680,170 V1116"/>
+  <path class="plan" d="M680,600 H710" marker-end="url(#a-plan)"/>
+
+  <!-- Evaluation -->
+  <rect class="card" x="712" y="530" width="230" height="140" rx="8"/>
+  <text class="h2" x="728" y="556">Evaluate the plan</text>
+  <text x="728" y="578">on the provenance semiring</text>
+  <text x="728" y="596">of probabilities:</text>
+  <text x="728" y="616">each operation computes p</text>
+  <text x="728" y="634">from its inputs</text>
+  <text class="code" x="728" y="656">relational_algebra_provenance</text>
+  <line class="flow" x1="827" y1="670" x2="827" y2="1206" marker-end="url(#a-flow)"/>
+
+  <!-- Result -->
+  <rect class="out" x="712" y="1208" width="230" height="60" rx="8"/>
+  <text class="h2" x="728" y="1233">Probability of each answer</text>
+  <text class="mut" x="728" y="1254">P[ans(ā)], exactly</text>
+  <line class="flow" x1="640" y1="1238" x2="710" y2="1238" marker-end="url(#a-flow)"/>
+
+  <!-- Footnote -->
+  <text class="mut" x="40" y="1318">Conditional queries (//, given) are answered as the ratio of the joint and the condition, each solved as above.</text>
+</svg>

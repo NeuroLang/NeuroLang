@@ -51,13 +51,17 @@ The main sections are:
 ``[PROBABILISTIC_SOLVER]``
     ``check_unate``
         When ``True`` (default), the lifted probabilistic solver verifies that
-        the query satisfies the conditions it needs (a single type of
+        the query satisfies the conditions its rules need (a single type of
         quantifier, and unateness) and declines it otherwise, so that the more
         general, slower, knowledge-compilation solver is used.  Turning it
-        off skips these checks, and can then give wrong probabilities: the
-        separator variable rule takes the existential projection whenever
-        the query has an existential (``separator_variable_plan``).  Only
-        do so if you know your queries are safe for lifted inference.
+        off disables these soundness checks: the lifted rules are then
+        applied to queries for which they are not proved, and can return
+        wrong probabilities instead of falling back to weighted model
+        counting.  For instance, the separator variable rule takes the
+        existential projection whenever the query has an existential
+        quantifier anywhere (``separator_variable_plan``), which is wrong
+        for a universally quantified separator variable.  Only do so if you
+        know your queries are safe for lifted inference.
 
 ``[DEFAULT]`` and ``[ONTOLOGIES]`` hold debugging, pretty-printing,
 spatial-relation and ontology namespace options.
