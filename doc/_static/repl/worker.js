@@ -190,6 +190,10 @@ try:
 except ImportError:
     providers_for_form = list
 
+def download(block, kind, value):
+    file = repl.download(block, kind, value)
+    return file.name, file.mime, file.data
+
 def llm_providers():
     return json.dumps(providers_for_form())
 `);
@@ -197,12 +201,14 @@ def llm_providers():
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   postMessage({ type: "ready", banner, source, providers });
   repl = pyodide.globals.get("repl");
+  makeFile = pyodide.globals.get("download");
   return pyodide.globals.get("submit");
 }
 
 // The page starts the worker with the version to run, then submits.
 let submit = null;
 let repl = null;
+let makeFile = null; // the file of a result, for a download
 
 // The visitor's key is given to the REPL, in this worker's memory: from
 // here it goes to the provider, and to no one else.
@@ -232,6 +238,16 @@ onmessage = async ({ data }) => {
       // A ValueError of Python says what is wrong with the choices.
       const message = String(error.message ?? error).trim().split("\n").at(-1);
       postMessage({ type: "llm", ok: false, message: message.replace(/^\w+Error: /, "") });
+    }
+    return;
+  }
+  if (data.type === "download") {
+    try {
+      const [name, mime, bytes] = makeFile(data.block, data.kind, data.value ?? "").toJs();
+      postMessage({ type: "file", name, mime, bytes }, [bytes.buffer]);
+    } catch (error) {
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "file", error: message.replace(/^[\w.]+Error: /, "") });
     }
     return;
   }

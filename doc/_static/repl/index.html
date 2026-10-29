@@ -117,6 +117,16 @@
   .rt-filter { flex: 1 1 14rem; min-width: 10rem; background: var(--raised); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .25rem .5rem; font: 13px ui-monospace, Menlo, monospace; }
   .rt-bar select, .rt-bar button { background: var(--hover); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .2rem .6rem; font: inherit; cursor: pointer; }
   .rt-bar button:disabled { opacity: .4; cursor: default; }
+  .rt-menu { position: relative; color: var(--text); }
+  .rt-menu summary { list-style: none; background: var(--hover); border: 1px solid var(--border); border-radius: 6px; padding: .2rem .6rem; }
+  .rt-menu summary::-webkit-details-marker { display: none; }
+  .rt-menu summary::after { content: " ▾"; }
+  .rt-menu-items { position: absolute; right: 0; z-index: 5; display: grid; min-width: 15rem; margin-top: .25rem; padding: .25rem; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+  .rt-menu-items button { background: none; color: var(--text); border: 0; border-radius: 4px; padding: .3rem .6rem; text-align: left; font-weight: 400; }
+  .rt-menu-items button:hover:not(:disabled) { background: var(--hover); }
+  .rt-menu-items button:disabled { opacity: .5; cursor: help; }
+  body[data-busy] .rt-menu summary, body[data-busy] .brain-bar button { pointer-events: none; opacity: .4; }
+  .brain-bar { margin-bottom: .5rem; }
   .rt-scroll { max-height: 32rem; overflow: auto; }
   .rt-table { border-collapse: collapse; width: 100%; font: 13px ui-monospace, Menlo, monospace; }
   .rt-table th { position: sticky; top: 0; background: var(--raised); text-align: left; padding: 0; border-bottom: 1px solid var(--border); white-space: nowrap; }

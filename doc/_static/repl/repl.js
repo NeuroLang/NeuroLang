@@ -3,7 +3,7 @@
 // worker.js answers.
 import { History } from "./history.js";
 import { LlmSettings } from "./llm_settings.js";
-import { renderTable } from "./table_view.js";
+import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { Editor } from "./editor.js";
 import { highlightNodes, loadWords } from "./highlight.js";
@@ -61,9 +61,29 @@ setInterval(() => {
 }, 1000);
 const html = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }); // rich escapes its text
 const setBusy = (busy) => {
+  document.body.toggleAttribute("data-busy", busy);
   busyControls.forEach((control) => (control.disabled = busy));
   if (!busy) input.focus();
 };
+
+// The tables of the last result, for the downloads of the brain tab, which
+// shows a result that .view may have taken from an earlier reply.
+let lastTables = [];
+
+// The file of a result: the worker makes it, the page offers it to be saved.
+function requestDownload(block, kind, value = "") {
+  setBusy(true);
+  setStatus("Preparing the file…", "busy");
+  worker.postMessage({ type: "download", block, kind, value });
+}
+
+function saveFile({ name, mime, bytes }) {
+  const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([bytes], { type: mime })), download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
 
 function showHistory() {
   history_.replaceChildren(new Option("History", ""), ...[...history.entries].reverse().map((e) => new Option(e.replace(/\s+/g, " ").slice(0, 90), e)));
@@ -141,6 +161,14 @@ function start() {
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
       setBusy(false);
+    } else if (data.type === "file") {
+      setBusy(false);
+      if (data.error) {
+        setStatus(`The file could not be made: ${data.error}`, "error");
+      } else {
+        saveFile(data);
+        setStatus("Ready.");
+      }
     } else if (data.type === "agent") {
       agentLog.apply(data);
       showAgent();
@@ -152,9 +180,13 @@ function start() {
       if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
       if (data.prompt) editor.value = data.prompt; // what the assistant wrote
       else editor.refresh();
-      if (data.tables?.length) show("table", ...data.tables.map(renderTable));
+      if (data.tables?.length) {
+        lastTables = data.tables;
+        show("table", ...data.tables.map((table) => renderTable(table, { download: requestDownload })));
+      }
       if (data.viewers?.length) {
-        show("brain", Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: data.viewers.at(-1), title: "NeuroLang brain viewer" }));
+        const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: data.viewers.at(-1), title: "NeuroLang brain viewer" });
+        show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
       }
       setBusy(false);
     }

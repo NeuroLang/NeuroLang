@@ -18,14 +18,17 @@ memory of the session, and the worker sends it to the provider and to
 no one else.
 """
 
+import csv
+import gzip
 import io
 import json
 import math
+import re
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, NamedTuple, Optional
 from unittest import mock
 
 import pandas as pd
@@ -118,6 +121,37 @@ class Reply:
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
     mode: str = "datalog"
+
+
+class Download(NamedTuple):
+    """A file the page offers to save: its *name*, *mime* type and *data*."""
+
+    name: str
+    mime: str
+    data: bytes
+
+
+# The files of a result: the separator of its text formats, the type of each.
+TEXT_FORMATS = {"csv": (",", "text/csv"), "tsv": ("\t", "text/tab-separated-values")}
+NIFTI_MIME = "application/gzip"
+
+
+def _file_stem(block: ResultBlock, index: int) -> str:
+    """Return the name of the files of the result *block*, the *index*-th."""
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", block.title).strip("-").lower()
+    return stem or f"result-{index + 1}"
+
+
+def _text(frame: pd.DataFrame, separator: str) -> str:
+    """Return all the rows of *frame* as delimited text, as the table's."""
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=separator, lineterminator="\n")
+    writer.writerow(frame.columns)
+    for row in frame.itertuples(index=False, name=None):
+        writer.writerow(
+            ["" if cell is None else cell for cell in map(_cell, row)]
+        )
+    return out.getvalue()
 
 
 # What the events of the assistant carry that the page does not show.
@@ -300,6 +334,7 @@ class WebRepl:
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
         table = table_payload(block.frame, block.title, self.max_rows)
+        table.update(self._downloads_of(block))
         self._tables.append(table)
         block.shown = len(block.frame)
         count = f"{table['total']} row{'s' * (table['total'] != 1)}"
@@ -307,6 +342,50 @@ class WebRepl:
             count += f" · the first {len(table['rows'])} are in the table"
         self.console.print(
             count, style="dim", markup=False, highlight=False
+        )
+
+    def _downloads_of(self, block: ResultBlock) -> dict:
+        """
+        Return what the page may download of *block*: its ``block`` number
+        for :meth:`download`, and the value columns of its NIfTI image,
+        ``nifti`` (``None`` in the list is a mask), or else why it has
+        none, ``nifti_reason``.
+        """
+        index = next(
+            (i for i, b in enumerate(self.app.results) if b is block), 0
+        )
+        try:
+            columns = nifti.image_columns(self.app, block)
+            return {"block": index, "nifti": columns, "nifti_reason": ""}
+        except Exception as error:  # nothing that fails here may hide a result
+            reason = str(error) or "no NIfTI image can be made of this result"
+            return {"block": index, "nifti": None, "nifti_reason": reason}
+
+    def download(self, block: int, kind: str, value: str = "") -> Download:
+        """
+        Return the file of kind *kind* of the result *block*, the number the
+        table gave: ``csv`` or ``tsv`` with all its rows (the table holds
+        at most ``max_rows``), or a ``nifti`` image of the column *value*
+        (the default one when empty), gzipped. A
+        :class:`~.nifti.SaveError` tells why a result has no image.
+        """
+        try:
+            result = self.app.results[block]
+        except IndexError:
+            raise ValueError("There is no such result: run a query first.")
+        stem = _file_stem(result, block)
+        if kind in TEXT_FORMATS:
+            separator, mime = TEXT_FORMATS[kind]
+            text = _text(result.frame, separator)
+            return Download(f"{stem}.{kind}", mime, text.encode("utf-8"))
+        if kind != "nifti":
+            raise ValueError(f"Unknown kind of file {kind!r}.")
+        request = nifti.SaveRequest(Path(f"{stem}.nii.gz"), value or None)
+        saved = nifti.result_image(self.app, result, request)
+        suffix = f"-{saved.value}" if saved.value is not None else ""
+        return Download(
+            f"{stem}{suffix}.nii.gz", NIFTI_MIME,
+            gzip.compress(saved.image.to_bytes()),
         )
 
     def _output(self) -> str:

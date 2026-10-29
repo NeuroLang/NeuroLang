@@ -7,9 +7,12 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
+import numpy as np  # noqa: E402
+
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui import nifti  # noqa: E402
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
+from neurolang_apps.utils.tui.tests.test_nifti import tiny  # noqa: E402,F401
 
 
 @pytest.fixture
@@ -159,6 +162,91 @@ class TestTables:
     def test_no_rows_are_left_for_more(self, repl):
         repl.submit("ans(x, n) :- person(x, n)")
         assert repl.submit(".more").tables == []
+
+
+class TestDownloads:
+    """The files of a result the page offers to save."""
+
+    @pytest.fixture
+    def web(self, tiny):
+        return WebRepl(tiny._nl, engine_name="tiny")
+
+    def test_a_table_tells_the_columns_of_its_image(self, web):
+        [table] = web.submit("ans(i, j, k, w) :- weight(i, j, k, w)").tables
+        assert table["block"] == 0
+        assert table["nifti"] == ["w"] and table["nifti_reason"] == ""
+
+    def test_a_mask_is_an_image_without_a_value_column(self, web):
+        [table] = web.submit("ans(i, j, k) :- voxel(i, j, k)").tables
+        assert table["nifti"] == [None]
+
+    def test_a_result_without_voxels_has_no_image_and_says_why(self, web):
+        web.app._nl.add_tuple_set([(10, 1, 2, 3)], name="seen")
+        [table] = web.submit("ans(s, a, b, c) :- seen(s, a, b, c)").tables
+        assert table["nifti"] is None
+        assert "no voxel columns" in table["nifti_reason"]
+
+    def test_the_image_is_the_one_save_writes(self, web, tmp_path):
+        web.submit("ans(i, j, k, w) :- weight(i, j, k, w)")
+        name, mime, data = web.download(0, "nifti", "w")
+        assert name == "result-1-w.nii.gz" and mime == "application/gzip"
+        image = nifti.read_nifti(_written(data, tmp_path / name))
+        assert image.shape == (4, 4, 4)
+        assert np.asanyarray(image.dataobj)[1, 2, 3] == pytest.approx(0.75)
+        web.app._handle_dot_command(f".save {tmp_path / 'saved.nii.gz'} --value w")
+        saved = nifti.read_nifti(tmp_path / "saved.nii.gz")
+        assert np.array_equal(
+            np.asanyarray(image.dataobj), np.asanyarray(saved.dataobj)
+        )
+        assert np.array_equal(image.affine, saved.affine)
+
+    def test_a_mask_is_named_without_a_value(self, web, tmp_path):
+        web.submit("ans(i, j, k) :- voxel(i, j, k)")
+        name, _, data = web.download(0, "nifti")
+        assert name == "result-1.nii.gz"
+        image = nifti.read_nifti(_written(data, tmp_path / name))
+        assert np.count_nonzero(np.asanyarray(image.dataobj)) == 2
+
+    def test_all_the_rows_come_as_text(self, web):
+        web.submit("ans(i, j, k, w) :- weight(i, j, k, w)")
+        csv_file = web.download(0, "csv")
+        assert csv_file.name == "result-1.csv"
+        lines = csv_file.data.decode().splitlines()
+        assert lines[0] == "i,j,k,w"
+        assert sorted(lines[1:]) == ["0,0,0,0.5", "1,2,3,0.25", "1,2,3,0.75"]
+        assert web.download(0, "tsv").data.decode().splitlines()[0] == (
+            "i\tj\tk\tw"
+        )
+
+    def test_text_has_every_row_though_the_table_keeps_fewer(self, tiny):
+        web = WebRepl(tiny._nl, engine_name="tiny", max_rows=1)
+        [table] = web.submit("ans(i, j, k, w) :- weight(i, j, k, w)").tables
+        assert table["truncated"] and len(table["rows"]) == 1
+        assert len(web.download(0, "csv").data.decode().splitlines()) == 4
+
+    def test_a_block_of_a_program_with_several_is_named_by_its_title(self, web):
+        web.submit(".mode squall")
+        reply = web.submit(
+            "obtain every voxel as First. obtain every voxel as Second."
+        )
+        assert [t["block"] for t in reply.tables] == [0, 1]
+        assert web.download(1, "csv").name == "second.csv"
+
+    def test_what_cannot_be_downloaded_is_told(self, web):
+        web.app._nl.add_tuple_set([(10, 1, 2, 3)], name="seen")
+        web.submit("ans(s, a, b, c) :- seen(s, a, b, c)")
+        with pytest.raises(nifti.SaveError, match="no voxel columns"):
+            web.download(0, "nifti")
+        with pytest.raises(ValueError, match="Unknown kind"):
+            web.download(0, "pdf")
+        with pytest.raises(ValueError, match="no such result"):
+            web.download(3, "csv")
+
+
+def _written(data: bytes, path):
+    """Write the *data* of a file the page saved, and return its path."""
+    path.write_bytes(data)
+    return path
 
 
 # The LLM assistant, with the key of the page's visitor.
