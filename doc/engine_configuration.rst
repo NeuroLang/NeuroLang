@@ -38,8 +38,8 @@ may specify the following keys, all of them optional:
   region, the peaks being the millimetre coordinates of the relation
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
-  not be the template's, and the pairs are computed once, when the engine
-  is built.  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  not be the template's, and the pairs are kept in the data directory once
+  found (see :ref:`engine-cache`).  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
   downloaded from the authors' repository
@@ -280,6 +280,34 @@ embedded on the first query that uses the function, and cached under
 ``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
+
+.. _engine-cache:
+
+Starting an engine without finding its tables again
+---------------------------------------------------
+
+The studies activating the regions of the atlases take longer to find than
+the rest of the build of the ``neurosynth`` engine together: 48 s of 56 s
+natively, and 99 s of 112 s in a browser. They depend only on the atlas, its
+labels, the peaks, their studies and the radius, so
+:func:`~neurolang_apps.utils.engine_registry.build_engine` keeps them in
+``DATA_DIR/ENGINE/atlas_activation``, in a file named by those, and reads the
+file when it is there: the next build takes 9 s natively, 15 s in a browser.
+A change of any of them makes another file; a file that is missing, damaged
+or cannot be written means only that the pairs are found again.
+
+The files are numpy ``.npz`` arrays and text, nothing of Python or of a
+version of numpy or pandas, so the terminal REPL and the REPL in the browser
+read the same ones, whichever implementation of Python wrote them. The engine
+itself cannot be kept: its expressions cannot be pickled, and a snapshot of
+the memory of Pyodide is 780 MB (270 MB compressed).
+
+``python -m neurolang_apps.utils.engine_cache ENGINE -d DATA_DIR`` builds the
+engine so that the tables are kept, ``--list`` lists them and ``--clear``
+removes them; ``neurolang-query --no-engine-cache`` builds the engine without
+reading or writing them. The build of the browser's bundle
+(``doc/make_repl_bundle.py``, run by the documentation workflow) keeps them
+in the data zip, 1.6 MB for the three atlases, and stops if it kept none.
 
 Sharing configuration between engines
 -------------------------------------

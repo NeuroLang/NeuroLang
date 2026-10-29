@@ -1266,13 +1266,14 @@ def _register_atlas_activation(
 
 
 def _load_deterministic_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path
+    nl, atlas_name: str, params: dict, data_dir: Path, use_cache: bool = True
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
     predicates: ``{predicate_name}(label, region)``, and with ``activated``
     the studies activating each region (see
-    :func:`_register_atlas_activation`).
+    :func:`_register_atlas_activation`), kept in the data directory unless
+    *use_cache* is false.
     """
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
@@ -1302,7 +1303,7 @@ def _load_deterministic_atlas(
     if params.get("activated"):
         _register_atlas_activation(
             nl, names, img, params["activated"], pred_name,
-            data_dir / ACTIVATION_CACHE_DIR,
+            data_dir / ACTIVATION_CACHE_DIR if use_cache else None,
         )
 
 
@@ -1382,7 +1383,7 @@ def _load_probabilistic_atlas(
 
 
 def _load_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path
+    nl, atlas_name: str, params: dict, data_dir: Path, use_cache: bool = True
 ) -> None:
     """Download a brain atlas via nilearn and register it as a predicate."""
     info = _ATLAS_REGISTRY.get(atlas_name)
@@ -1394,7 +1395,7 @@ def _load_atlas(
     if info["probabilistic"]:
         _load_probabilistic_atlas(nl, atlas_name, params, data_dir)
     else:
-        _load_deterministic_atlas(nl, atlas_name, params, data_dir)
+        _load_deterministic_atlas(nl, atlas_name, params, data_dir, use_cache)
 
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
@@ -1465,9 +1466,11 @@ def _phase_templates(nl, cfg, data_dir, engine_name):
         _load_template(nl, tpl_name, tpl_params, data_dir / engine_name)
 
 
-def _phase_atlases(nl, cfg, data_dir, engine_name):
+def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
     for atl_name, atl_params in cfg.get("atlases", {}).items():
-        _load_atlas(nl, atl_name, atl_params, data_dir / engine_name)
+        _load_atlas(
+            nl, atl_name, atl_params, data_dir / engine_name, use_cache
+        )
 
 
 def _phase_datalog_init(nl, cfg):
@@ -1684,6 +1687,7 @@ def build_engine(
     data_dir: Path,
     resolution: Optional[float] = None,
     yaml_path: Optional[Path] = None,
+    use_cache: bool = True,
 ) -> "NeurolangPDL":
     """
     Create and populate a :class:`NeurolangPDL` engine from its
@@ -1700,6 +1704,11 @@ def build_engine(
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
+    use_cache :
+        Whether the tables the build takes long to find, the studies
+        activating the regions of the atlases, are read from the data
+        directory when they are there, and written there when they are
+        not (see :mod:`neurolang_apps.utils.engine_cache`).
 
     Returns
     -------
@@ -1757,7 +1766,7 @@ def build_engine(
     _phase_python_init(nl, cfg, mask, data_dir)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
-    _phase_atlases(nl, cfg, data_dir, name)
+    _phase_atlases(nl, cfg, data_dir, name, use_cache)
     # Before the rules, which may use the predicates of the ontologies.
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     _phase_datalog_init(nl, cfg)

@@ -73,6 +73,18 @@ Unreleased
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
   :doc:`tutorial_datalog`, section 10.6.
+* An engine is built from the tables it kept, instead of finding them again.
+  The studies activating the regions of its atlases took 48 s of the 56 s of
+  the ``neurosynth`` engine's build (99 s of 112 s in a browser); they are now
+  kept in the data directory, in 1.6 MB of ``.npz`` files that the terminal
+  REPL and the REPL in the browser both read, and the next build takes 9 s
+  (15 s in Pyodide). The page starts in about 30 s instead of 2 min: the
+  documentation workflow builds the engine for its bundle, so that the tables
+  are in its data zip, and stops if none was kept. ``python -m
+  neurolang_apps.utils.engine_cache ENGINE`` keeps them, lists them
+  (``--list``) and removes them (``--clear``), and ``neurolang-query
+  --no-engine-cache`` builds the engine without them.
+
 * The REPL in the browser shows the work of the AI assistant as it happens, in
   a section of the page you can open: the model's calls, the tool calls of
   the ReAct agent, its queries and what they gave back. The code box colours

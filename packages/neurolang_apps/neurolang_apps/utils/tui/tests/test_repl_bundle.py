@@ -97,3 +97,24 @@ def test_the_words_the_page_highlights_are_those_of_the_terminal(
     assert set(words["datalog_operators"]) == query_highlight.DATALOG_OPERATORS
     assert "PROB" in words["datalog_keywords"]
     assert "obtain" in words["squall_keywords"]
+
+
+def test_a_bundle_without_the_kept_tables_is_refused(
+    bundle, monkeypatch, tmp_path
+):
+    """The page would find them again, a minute and a half at its start."""
+    from neurolang_apps.utils import engine_cache
+
+    monkeypatch.setattr(engine_cache, "cached_files", lambda *args: [])
+    with pytest.raises(SystemExit, match="kept no tables"):
+        bundle.check_engine_cache(tmp_path)
+
+
+def test_the_kept_tables_are_told(bundle, monkeypatch, tmp_path, capsys):
+    from neurolang_apps.utils import engine_cache
+
+    table = tmp_path / "table.npz"
+    table.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(engine_cache, "cached_files", lambda *args: [table])
+    bundle.check_engine_cache(tmp_path)
+    assert "1 files" in capsys.readouterr().out

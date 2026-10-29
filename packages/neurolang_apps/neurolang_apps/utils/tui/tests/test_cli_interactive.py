@@ -25,7 +25,7 @@ def built(monkeypatch):
     nl = NeurolangPDL()
     nl.add_tuple_set([(1,), (2,)], name="P")
 
-    def fake_build_engine(name, data_dir, resolution=None):
+    def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
         calls.append(name)
         return nl
 
