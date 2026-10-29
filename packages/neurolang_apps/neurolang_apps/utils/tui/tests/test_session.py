@@ -186,9 +186,30 @@ def test_logic_shows_the_last_query(app):
     app._execute_and_display("ans(x) :- active(x), ~sings(x)")
     assert _command(app, ".logic").splitlines() == [
         "ans(x) ← active(x)",
-        "       ∧ ¬(sings(x))",
+        "       ∧ ¬sings(x)",
     ]
     assert not app.settings.logic_notation
+
+
+def test_datalog_folds_the_rules_of_a_probability(conditional):
+    conditional.settings.squall = False
+    conditional._execute_and_display(
+        "ans(t, p) :- PROB[mentions(s, t), selected_study(s) // "
+        "mentions(s, 'pain'), selected_study(s)] = p, (p > 0.6)"
+    )
+    assert _command(conditional, ".datalog").splitlines() == [
+        "── query ──",
+        "ans(t, p) :-",
+        "    PROB[mentions(s, t) ∧ selected_study(s) | mentions(s, 'pain') ∧ "
+        "selected_study(s)] = p,",
+        "    p > 0.6",
+        "",
+    ]
+    assert _command(conditional, ".logic").splitlines() == [
+        "ans(t, p) ← p = P[mentions(s, t) ∧ selected_study(s)",
+        "                 | mentions(s, 'pain') ∧ selected_study(s)]",
+        "          ∧ p > 0.6",
+    ]
 
 
 def test_idb_of_unknown_predicate(app):
@@ -239,10 +260,9 @@ def test_listings_colour_the_probabilistic_choices(conditional):
         conditional, ".datalog marg"
     ))
     assert output.splitlines() == [
-        "marg(s₀, P[term(s₀)",
-        "          ∧ ∃s₁. (selected_study(s₁) ∧ term(s₀) ∧ mentions(s₁, s₀))",
-        "          | selected_study(s₂)",
-        "          ∧ mentions(s₂, 'pain')])",
+        "marg(s₀, P[term(s₀) ∧ ∃s₁. (selected_study(s₁) ∧ term(s₀) ∧ "
+        "mentions(s₁, s₀))",
+        "          | selected_study(s₂) ∧ mentions(s₂, 'pain')])",
     ]
 
 

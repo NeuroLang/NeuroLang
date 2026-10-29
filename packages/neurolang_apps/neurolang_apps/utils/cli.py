@@ -83,6 +83,7 @@ from neurolang.frontend.datalog import (
 from nl_core.datalog.pretty_printer import (
     DatalogPrettyPrinter,
     LogicPrettyPrinter,
+    fold_probabilities,
 )
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
@@ -774,7 +775,12 @@ def _format_ir(expr, fresh_map=None, _counter=None):
 
 
 def logic_notation(program: str, squall: bool = False) -> str:
-    """Return the rules and queries of *program* in logic notation."""
+    """
+    Return the rules and queries of *program* in logic notation.
+
+    The helper rules of ``PROB[...] = p`` are folded back into their use
+    (:func:`~nl_core.datalog.pretty_printer.fold_probabilities`).
+    """
     from neurolang.frontend.datalog.squall_syntax_lark import (
         SquallProgram,
         parser as squall_parser,
@@ -787,7 +793,9 @@ def logic_notation(program: str, squall: bool = False) -> str:
     else:
         formulas = getattr(parsed, "formulas", (parsed,))
     printer = LogicPrettyPrinter()
-    return "\n".join(printer.walk(formula) for formula in formulas)
+    return "\n".join(
+        printer.walk(formula) for formula in fold_probabilities(formulas)
+    )
 
 
 def _show_squall_datalog(program_text: str) -> None:

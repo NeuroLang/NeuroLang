@@ -198,10 +198,8 @@ viewer in the browser rather than telling to::
 ``.logic on`` shows the rules in logic notation, the probabilities as
 ``P[A | B]``; ``.idb p_a_given_t`` then lists::
 
-    1  p_a_given_t(t, i, j, k, P[activation(i, j, k, s)
-                                ∧ selected_study(s)
-                                | term_in_study(s, t)
-                                ∧ selected_study(s)])
+    1  p_a_given_t(t, i, j, k, P[activation(i, j, k, s) ∧ selected_study(s)
+                                | term_in_study(s, t) ∧ selected_study(s)])
 
 The comments say what each line computes; some points need more words:
 

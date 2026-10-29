@@ -71,9 +71,13 @@ what runs. ``.logic on`` in the REPL, or ``--logic`` with ``--ask``, also
 shows each answer in logic notation: a rule reads ``head ← body``, its
 variables universally quantified, with the conjuncts of the body aligned
 one per line under the first; negation, disjunction and comparisons read
-``¬``, ``∨``, ``≠``, ``≤``, ``≥``. A rule computing a probability,
+``¬``, ``∨``, ``≠``, ``≤``, ``≥``, a disjunction too long for a line, or of
+conjunctions, one disjunct per line. A rule computing a probability,
 ``p(t, PROB) :- A // B``, reads ``p(t, P[A | B])``, and ``PROB`` without a
-condition ``P[A]``:
+condition ``P[A]``; a probability too long for a line has ``| B`` on the
+next one, under ``[``. ``PROB[A // B] = p`` (or ``MARG``) in a body, which
+NeuroLang compiles into a rule of a new predicate, reads ``p = P[A | B]``
+where it is used, and ``.datalog`` shows it as ``PROB[A | B] = p``:
 
 .. code-block:: text
 
@@ -84,9 +88,7 @@ condition ``P[A]``:
     ╭────────────────────── in logic notation ──────────────────────╮
     │ close(q, s) ← similar_study(q, s)                             │
     │             ∧ selected_study(s)                               │
-    │ p(t, P[close(q, s)                                            │
-    │      ∧ term(t, s)                                             │
-    │      | selected_study(s)])                                    │
+    │ p(t, P[close(q, s) ∧ term(t, s) | selected_study(s)])         │
     ╰───────────────────────────────────────────────────────────────╯
 
 ``--logic`` prints the logic notation on the standard error, the

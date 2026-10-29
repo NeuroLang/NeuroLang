@@ -34,8 +34,12 @@ Unreleased
 
 * Queries can be shown in logic notation: ``head ← body`` with the
   conjuncts aligned one per line, ``¬``, ``∨``, ``≠``, and the
-  probabilities ``PROB`` as ``P[A | B]`` or ``P[A]``
-  (``nl_core.datalog.pretty_printer.LogicPrettyPrinter``). In the REPL,
+  probabilities ``PROB`` as ``P[A | B]`` or ``P[A]``, ``| B`` under ``[``
+  when too long for a line
+  (``nl_core.datalog.pretty_printer.LogicPrettyPrinter``). The rules
+  NeuroLang compiles ``PROB[A // B] = p`` and ``MARG[...] = p`` into are
+  folded back into their use, ``p = P[A | B]``, there and in ``.datalog``
+  (``fold_probabilities``). In the REPL,
   ``.logic on`` shows the assistant's answers in it next to their Datalog
   and lists the rules of ``.idb`` and ``.datalog`` in it, and ``.logic``
   shows the last query so; ``neurolang-query --logic`` sets it, and
@@ -45,7 +49,8 @@ Unreleased
   in the assistant's answers and steps, and in ``.idb`` and ``.datalog``,
   which are now highlighted. The Datalog printer shows probabilistic
   facts and choices as ``head :: p`` and ``head ^ p`` rather than their
-  internal form.
+  internal form, and the negation of an atom as ``¬S(y)``, which the
+  Datalog parser reads, rather than ``¬(S(y))``.
 
 * The example LLM configuration has the providers ``albert-deepseek``,
   ``openrouter-gemma`` and ``openrouter-deepseek``: DeepSeek V4 Flash and

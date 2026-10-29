@@ -37,6 +37,7 @@ from nl_expr.expressions import Query, Symbol
 from nl_core.datalog.pretty_printer import (
     DatalogPrettyPrinter,
     LogicPrettyPrinter,
+    fold_probabilities,
 )
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
@@ -708,11 +709,16 @@ def _print_datalog_of(app, name: str) -> None:
 
 
 def _print_datalog_program(app, program: str) -> None:
-    """Print the rules and the query of the Datalog *program*."""
+    """
+    Print the rules and the query of the Datalog *program*.
+
+    The helper rules of ``PROB[...] = p`` are folded back into their use.
+    """
     printer = DatalogPrettyPrinter()
     kinds = query_kinds(app)
     parsed = app._nl.datalog_parser(program)
-    for formula in getattr(parsed, "formulas", (parsed,)):
+    formulas = getattr(parsed, "formulas", (parsed,))
+    for formula in fold_probabilities(formulas):
         label = "query" if isinstance(formula, Query) else "rule"
         app.console.print(
             f"── {label} ──\n",
