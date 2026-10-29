@@ -54,8 +54,10 @@ The main sections are:
         the query satisfies the conditions it needs (a single type of
         quantifier, and unateness) and declines it otherwise, so that the more
         general, slower, knowledge-compilation solver is used.  Turning it
-        off skips these checks; only do so if you know your queries are
-        safe for lifted inference.
+        off skips these checks, and can then give wrong probabilities: the
+        separator variable rule takes the existential projection whenever
+        the query has an existential (``separator_variable_plan``).  Only
+        do so if you know your queries are safe for lifted inference.
 
 ``[DEFAULT]`` and ``[ONTOLOGIES]`` hold debugging, pretty-printing,
 spatial-relation and ontology namespace options.

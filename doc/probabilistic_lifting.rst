@@ -39,7 +39,11 @@ uses the first one which accepts the query:
 
 A lifted solver declines a query by raising an
 ``UnsupportedSolverError``, such as ``NonLiftableException``, and the next
-one is then tried. Lifted plans are
+one is then tried. The Dalvi–Suciu solver turns the failures of the
+conversions to normal forms of a formula outside the fragment they support
+(``NotInFONegE``), and the splits into components it cannot plan, such as a
+union with a negated component, into ``NonLiftableException``, so that
+declining never depends on ``check_unate``. Lifted plans are
 computed on the provenance semiring of probabilities
 (:mod:`neurolang.relational_algebra_provenance`), whose operations are
 listed in `Operations of the lifted plans`_. Conditional queries (``//``,
