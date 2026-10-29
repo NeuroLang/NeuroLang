@@ -380,3 +380,25 @@ def test_peaks_of_the_studies_of_a_term(solvers):
     pain = 1 - (1 - 0.6 * (1 - 0.5 * 0.6)) * (1 - 0.7 * 0.3)
     assert result["pain"] == pytest.approx(pain)
     assert result["memory"] == pytest.approx(0.2 * 0.3)
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_union_of_a_deterministic_and_a_probabilistic_rule(solvers):
+    """
+    The probability of the deterministic rule is a count, an integer:
+    the union of the provenances must not truncate those of the other rule.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_tuple_set([(0, 1)], name="G")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.78, 0), (0.5, 2), (0.62, 3)], name="R"
+    )
+    nl.execute_datalog_program(
+        "h(x) :- G(x, 1)\nh(x) :- R(x)\nq(x, PROB) :- h(x)"
+    )
+    result = dict(
+        nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
+    )
+    assert result == pytest.approx({0: 1.0, 2: 0.5, 3: 0.62})
