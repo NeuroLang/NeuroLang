@@ -85,6 +85,9 @@ Usage
 
 from __future__ import annotations
 
+import functools
+import hashlib
+import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
@@ -1135,6 +1138,99 @@ def atlas_activation(
     )
 
 
+# The subdirectory of an engine's data directory where the studies activating
+# the regions of its atlases are kept (see cached_atlas_activation), and the
+# version of atlas_activation in their names: raise it when what it gives
+# changes.
+ACTIVATION_CACHE_DIR = "atlas_activation"
+ACTIVATION_CACHE_VERSION = 1
+
+
+def _activation_key(img, label_names, peaks_mm, studies, radius_mm) -> str:
+    """
+    Return what the pairs of :func:`atlas_activation` depend on, as a name.
+
+    It is made of values written out the same way on any platform: the
+    peaks to the micrometre, as numpy versions may differ in the last bit
+    of a coordinate, the integers and strings of the labels and studies.
+    """
+    digest = hashlib.sha256()
+    data = np.ascontiguousarray(np.asanyarray(img.dataobj))
+    digest.update(
+        f"{ACTIVATION_CACHE_VERSION} {float(radius_mm)!r} {data.dtype} "
+        f"{data.shape}".encode()
+    )
+    digest.update(data.tobytes())
+    digest.update(np.ascontiguousarray(img.affine, dtype="<f8").tobytes())
+    digest.update(repr(sorted(
+        (int(value), str(name)) for value, name in label_names.items()
+    )).encode())
+    digest.update(
+        np.round(np.asarray(peaks_mm, dtype=float) * 1000)
+        .astype("<i8").tobytes()
+    )
+    studies = np.asarray(studies)
+    if studies.dtype.kind in "iu":
+        digest.update(studies.astype("<i8").tobytes())
+    else:
+        digest.update(repr([str(study) for study in studies]).encode())
+    return digest.hexdigest()[:24]
+
+
+def _read_activation(path: Path) -> List[Tuple[str, Any]]:
+    """Return the pairs written by :func:`_write_activation` in *path*."""
+    with np.load(path, allow_pickle=False) as stored:
+        names = stored["names"][stored["codes"]].tolist()
+        return list(zip(names, stored["studies"].tolist()))
+
+
+def _write_activation(path: Path, pairs: List[Tuple[str, Any]]) -> None:
+    """Write the *pairs* in *path*, in one piece or not at all."""
+    names, codes = np.unique([name for name, _ in pairs], return_inverse=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(temporary, "wb") as file:
+            np.savez_compressed(
+                file, names=names.astype(str), codes=codes.astype(np.int32),
+                studies=np.array([study for _, study in pairs]),
+            )
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def cached_atlas_activation(
+    cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
+    studies: np.ndarray, radius_mm: float = 3.0,
+) -> List[Tuple[str, Any]]:
+    """
+    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*.
+
+    They take about 15 s per atlas to find and depend only on the atlas
+    image, its labels, the peaks, their studies and the radius, which
+    name the file they are kept in: a change of any of them finds another
+    file, or none and finds the pairs again. A directory that cannot be
+    written to, or a file that cannot be read, only means that the pairs
+    are found again.
+    """
+    path = Path(cache_dir) / (
+        f"{_activation_key(img, label_names, peaks_mm, studies, radius_mm)}"
+        ".npz"
+    )
+    if path.exists():
+        try:
+            return _read_activation(path)
+        except Exception:  # damaged, or written by another numpy
+            pass
+    pairs = atlas_activation(img, label_names, peaks_mm, studies, radius_mm)
+    try:
+        _write_activation(path, pairs)
+    except (OSError, ValueError, TypeError):
+        pass
+    return pairs
+
+
 def _relation_frame(nl, name: str):
     """Return the rows of the stored relation *name* of *nl*, as a frame."""
     import pandas as pd
@@ -1147,16 +1243,20 @@ def _relation_frame(nl, name: str):
 
 
 def _register_atlas_activation(
-    nl, labels: dict, img, settings: dict, pred_name: str
+    nl, labels: dict, img, settings: dict, pred_name: str, cache_dir=None
 ) -> None:
     """
     Register ``{predicate_name}(label, study)``, the studies activating
     each region of the atlas (see :func:`atlas_activation`), from the
     peaks in millimetres of the relation ``peaks`` (``x, y, z, study``),
-    ``peak_mni`` by default, within ``radius_mm`` (3 by default).
+    ``peak_mni`` by default, within ``radius_mm`` (3 by default). With a
+    *cache_dir* the pairs are kept there (:func:`cached_atlas_activation`).
     """
     peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
-    pairs = atlas_activation(
+    find = atlas_activation if cache_dir is None else functools.partial(
+        cached_atlas_activation, cache_dir
+    )
+    pairs = find(
         img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
         peaks.iloc[:, 3].to_numpy(), float(settings.get("radius_mm", 3)),
     )
@@ -1202,6 +1302,7 @@ def _load_deterministic_atlas(
     if params.get("activated"):
         _register_atlas_activation(
             nl, names, img, params["activated"], pred_name,
+            data_dir / ACTIVATION_CACHE_DIR,
         )
 
 
