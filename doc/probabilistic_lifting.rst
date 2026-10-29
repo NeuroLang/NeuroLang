@@ -411,6 +411,21 @@ Deterministic builtins
    probabilistic rule is lifted as when a deterministic rule selects the
    labels, instead of being solved by weighted model counting.
 
+   An equality :math:`y = f(\bar x)` of a variable with a function of
+   other variables, all of them in an atom :math:`A`, deterministic or
+   probabilistic, of the conjunction, is replaced by a fresh deterministic
+   relation of the values of the function on the tuples of :math:`A`, the
+   support of :math:`A` if it is probabilistic:
+
+   .. math::
+
+      F(\bar x, y) := \pi_{\bar x}(A) \land y = f(\bar x), \qquad
+      A \land y = f(\bar x) \equiv A \land F(\bar x, y).
+
+   :math:`F` is a function of :math:`\bar x`, so that in :math:`R(x)
+   \land T(y) \land y = x + 1`, :math:`y` separates the query (see
+   `Separator determined by a functional dependency`_).
+
    Two atoms of the same probabilistic choice relation are true together
    only if they are the same tuple, as exactly one tuple of the choice is
    true. Their arguments are therefore made equal
@@ -679,7 +694,8 @@ Separator determined by a functional dependency
    which is otherwise the #P-hard query :math:`H_0` with a deterministic
    middle relation. Olteanu, Huang and Koch lift such queries, without
    self-joins, under functional dependencies [Olteanu2009b]_. The
-   dependency is checked on the data of the relation; it is followed
+   dependency is checked on the data of the relation, a deterministic
+   subquery being computed for it; it is followed
    through several deterministic atoms, and from several columns. An atom
    of a choice keeps its variables, its tuples being exclusive for all the
    values of :math:`y`, as does an atom of a relation in several disjuncts
@@ -957,6 +973,11 @@ Deterministic builtins
    in every world by definition. As :math:`\bar y \subseteq \bar x`,
    :math:`D` is a selection of :math:`R`, which is finite. The replaced
    builtins are not comparisons, which the lifting rules plan.
+
+   For :math:`y = f(\bar x)`, :math:`A` is true only for tuples of its
+   support, so :math:`A \land y = f(\bar x)` implies :math:`F(\bar x,
+   y)`, and the converse holds by definition of :math:`F`. :math:`F` is
+   the same in every world, and finite.
 
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
