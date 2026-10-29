@@ -2,7 +2,7 @@
 Completion of SQUALL from the sorts of the engine's predicates.
 
 An engine declares the arguments of its predicates (see
-:func:`~neurolang.utils.engine_registry.get_signatures`): the entities
+:func:`~neurolang_apps.utils.engine_registry.get_signatures`): the entities
 they relate, each of a sort spanning one or more columns. A voxel
 ``(i, j, k)`` is one entity, so ``reports(study_id, i, j, k)`` relates a
 study and a voxel. The sorts tell which words fit where a SQUALL

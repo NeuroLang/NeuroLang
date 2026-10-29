@@ -44,7 +44,7 @@ define:
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
   ``f(query, doc) -> similarity``; see
-  :mod:`neurolang.utils.text_embeddings`::
+  :mod:`neurolang_apps.utils.text_embeddings`::
 
       text_embeddings:
         study_abstracts:
@@ -275,6 +275,12 @@ _MERGED_LIST_KEYS = frozenset(
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
 
+def _extends(raw: Optional[Dict[str, Any]]) -> List[str]:
+    """The engines that the engine configuration *raw* extends."""
+    bases = (raw or {}).get("extends", [])
+    return [bases] if isinstance(bases, str) else bases
+
+
 def _merge_mappings(parent: Dict[str, Any], child: Dict[str, Any]):
     """Deep-merge two mappings; ``None`` in *child* deletes the entry."""
     merged = dict(parent)
@@ -352,11 +358,8 @@ def resolve_engine_config(
             f"Unknown engine: {name!r}. Available engines: {available}"
         )
     raw = engines[name] or {}
-    bases = raw.get("extends", [])
-    if isinstance(bases, str):
-        bases = [bases]
     resolved: Dict[str, Any] = {}
-    for base in bases:
+    for base in _extends(raw):
         resolved = _merge_engine_configs(
             resolved, resolve_engine_config(engines, base, _stack + (name,))
         )
@@ -379,8 +382,7 @@ def engine_bases(name: str, yaml_path: Optional[Path] = None) -> List[str]:
     seen = {name}
 
     def visit(engine: str) -> None:
-        parents = (engines.get(engine) or {}).get("extends", [])
-        for parent in [parents] if isinstance(parents, str) else parents:
+        for parent in _extends(engines.get(engine)):
             if parent not in seen:
                 seen.add(parent)
                 visit(parent)

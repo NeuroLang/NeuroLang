@@ -262,7 +262,7 @@ class InteractiveTuiApp:
         A dict result, from a SQUALL program with several ``obtain``,
         gives a block per ``obtain``. *column_names* maps result keys to
         their column names, as
-        :func:`~neurolang.utils.cli.squall_column_names` returns them,
+        :func:`~neurolang_apps.utils.cli.squall_column_names` returns them,
         and *sorts* to the sorts of their columns, as
         :func:`~.provenance.column_sorts` returns them.
         """

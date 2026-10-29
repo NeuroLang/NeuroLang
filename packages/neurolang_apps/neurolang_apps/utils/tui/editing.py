@@ -114,7 +114,7 @@ def _engine_sorts(engine_name: str):
     Return the arguments of the engine's predicates and the hidden ones.
 
     The result is ``(signatures, hidden)`` (see
-    :func:`~neurolang.utils.engine_registry.get_signatures`), empty for
+    :func:`~neurolang_apps.utils.engine_registry.get_signatures`), empty for
     no engine.
     """
     if not engine_name:

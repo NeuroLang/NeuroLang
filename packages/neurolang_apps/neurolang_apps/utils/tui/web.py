@@ -68,11 +68,9 @@ def lightweight_engines_yaml(directory) -> Path:
     """
     import yaml
 
-    from neurolang.utils import engine_registry
+    from neurolang_apps.utils import engine_registry
 
-    with open(Path(engine_registry.__file__).with_name("engines")
-              / "engines.yaml") as stream:
-        config = yaml.safe_load(stream)
+    config = engine_registry._load_yaml_config()
     for engine in config["engines"].values():
         if "datalog_init" in engine:
             engine["datalog_init"] = "\n".join(
@@ -221,7 +219,7 @@ class WebRepl:
 
         The key is kept in memory, to be sent to the provider and to no
         one else. *model* and *base_url* default to the provider's (see
-        :data:`neurolang.utils.llm.browser.PROVIDERS`); a ValueError tells
+        :data:`neurolang_apps.utils.llm.browser.PROVIDERS`); a ValueError tells
         what is wrong with them.
         """
         from neurolang_apps.utils.llm.browser import browser_config

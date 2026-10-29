@@ -4,13 +4,13 @@ Saving and viewing of query results in the interactive REPL.
 ``.save PATH`` writes the last result as a table, or as a NIfTI image
 when PATH ends with ``.nii`` or ``.nii.gz``; ``.view PATH`` shows a NIfTI
 image, or the last result, in a browser: an HTML page of
-:mod:`~neurolang.utils.tui.brain_viewer`, whose controls change the
+:mod:`~neurolang_apps.utils.tui.brain_viewer`, whose controls change the
 threshold, the colormap and its symmetry live (see :data:`VIEW_HELP`).
 
 A NIfTI image is written on a grid of the engine, with its shape and
 affine: that of the engine's template, the MNI image its voxel indices
 refer to (the ``template`` of the engine
-:func:`~neurolang.utils.engine_registry.build_engine` returns), or that
+:func:`~neurolang_apps.utils.engine_registry.build_engine` returns), or that
 of an atlas whose voxel indices a sort names with ``grid`` (the engine's
 ``grids``). The sorts of the columns of the result, from the query that
 gave it (:mod:`~.provenance`), else their names, tell which columns are
@@ -369,7 +369,7 @@ def point_columns(
     Return the columns of *df* locating its voxels, from the *sorts*.
 
     They are the columns of a sort declaring a space (see
-    :class:`~neurolang.utils.engine_registry.Sort`), those of a sort of
+    :class:`~neurolang_apps.utils.engine_registry.Sort`), those of a sort of
     voxel indices first, then of millimetres: the columns of that sort
     in the *provenance* of *df*, the sort of each column as the query
     tells it, else the columns of unknown sort named as those of the
@@ -617,7 +617,7 @@ def region_lookup(nl, atlases: list) -> dict:
 
     The regions are those of the *atlases* of *nl*, in the image of the
     grid of each (see
-    :func:`~neurolang.utils.engine_registry.atlas_label_values`); a name
+    :func:`~neurolang_apps.utils.engine_registry.atlas_label_values`); a name
     of several atlases is that of the first.
     """
     lookup = {}

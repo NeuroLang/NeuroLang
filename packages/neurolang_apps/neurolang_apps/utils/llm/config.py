@@ -93,7 +93,7 @@ class AssistantConfig:
     after that many seconds, or when it uses that much memory: it runs in
     a child process. With *comment_rules*, the accepted query is shown
     with a comment line explaining each rule (see
-    :mod:`~neurolang.utils.llm.comments`). *verify_rounds* is the number
+    :mod:`~neurolang_apps.utils.llm.comments`). *verify_rounds* is the number
     of final answers of the ReAct agent that its verification may reject:
     each final answer is translated back into English, without the
     question, and the model judges whether that answers the question; 0

@@ -10,9 +10,9 @@ millimetres. ``.save`` and ``.view`` locate the voxels of a result
 from these sorts (see :func:`~.nifti.point_columns`).
 
 The sorts of the predicates follow from the engine's declarations (see
-:func:`~neurolang.utils.engine_registry.get_signatures`), then from the
+:func:`~neurolang_apps.utils.engine_registry.get_signatures`), then from the
 rules defining the others, as
-:func:`~neurolang.utils.cli.squall_column_names` follows their names.
+:func:`~neurolang_apps.utils.cli.squall_column_names` follows their names.
 """
 
 from typing import NamedTuple, Optional
@@ -134,7 +134,7 @@ def _squall_queries(program: str) -> tuple:
     Return the rules of the SQUALL *program* and its queries, by key.
 
     The key of a query is that of its result (see
-    :func:`~neurolang.utils.cli.squall_column_names`).
+    :func:`~neurolang_apps.utils.cli.squall_column_names`).
     """
     parsed = squall_parser(program)
     if not isinstance(parsed, SquallProgram):
