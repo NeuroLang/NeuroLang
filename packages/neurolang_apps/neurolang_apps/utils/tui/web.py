@@ -107,8 +107,9 @@ class Reply:
     *html* is its output, *viewers* the HTML pages of the brain viewer
     the submission made (``.view``), *tables* its results (see
     :func:`table_payload`), *failed* tells whether a statement of it
-    failed, and *prompt* is the query the assistant wrote, for the page
-    to put in its input.
+    failed, *prompt* is the query the assistant wrote, for the page
+    to put in its input, and *mode* the language of the REPL, ``datalog``
+    or ``squall``, which the assistant may have switched.
     """
 
     html: str
@@ -116,6 +117,7 @@ class Reply:
     failed: bool = False
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
+    mode: str = "datalog"
 
 
 # What the events of the assistant carry that the page does not show.
@@ -287,7 +289,8 @@ class WebRepl:
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
         return Reply(
-            self._output(), viewers, self.app.failed, self._tables, prompt
+            self._output(), viewers, self.app.failed, self._tables, prompt,
+            "squall" if self.app.settings.squall else "datalog",
         )
 
     def _print_block(self, block: ResultBlock) -> None:

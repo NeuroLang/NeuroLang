@@ -224,7 +224,7 @@ def _step_printer(app, language: str):
 
 
 # The events the assistant sends to ``app.agent_events`` while it works,
-# dicts with an ``event`` key: ``ask`` (question, provider, model,
+# dicts with an ``event`` key: ``ask`` (question, language, provider, model,
 # strategy), then for each request to the model ``request`` (call) and
 # ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
 # answered and its tool is about to run), and for each step of the agent
@@ -395,7 +395,7 @@ def _run_assistant(
         )
         if events:
             events({
-                "event": "ask", "question": question,
+                "event": "ask", "question": question, "language": language,
                 "provider": provider.name,
                 "model": provider.model or provider.api,
                 "strategy": agent.strategy,

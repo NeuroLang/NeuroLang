@@ -82,3 +82,18 @@ def test_without_system_certificates_the_error_is_raised(
     monkeypatch.setattr(engine_registry, "build_engine", build)
     with pytest.raises(requests.exceptions.SSLError):
         bundle.build_engine(tmp_path)
+
+
+def test_the_words_the_page_highlights_are_those_of_the_terminal(
+    bundle, tmp_path
+):
+    import json
+
+    from neurolang_apps.utils import query_highlight
+
+    bundle.write_highlight_words(tmp_path)
+    words = json.loads((tmp_path / "highlight.json").read_text())
+    assert set(words["datalog_keywords"]) == query_highlight.DATALOG_KEYWORDS
+    assert set(words["datalog_operators"]) == query_highlight.DATALOG_OPERATORS
+    assert "PROB" in words["datalog_keywords"]
+    assert "obtain" in words["squall_keywords"]

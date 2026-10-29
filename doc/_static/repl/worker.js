@@ -177,7 +177,7 @@ def submit(text):
     return json.dumps(
         {"html": reply.html, "viewers": reply.viewers,
          "failed": reply.failed, "tables": reply.tables,
-         "prompt": reply.prompt}
+         "prompt": reply.prompt, "mode": getattr(reply, "mode", "")}
     )
 
 # The providers of the AI assistant, for the page's form: none when this

@@ -44,6 +44,25 @@
   input, select, textarea { background: var(--raised); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .4rem .6rem; font: 13px var(--mono); }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   textarea { width: 100%; min-height: 7rem; resize: vertical; }
+  /* The code box: a transparent textarea over a <pre> with the same text, coloured. */
+  .editor { position: relative; margin-top: .5rem; }
+  .editor pre, .editor textarea { margin: 0; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; font: 13px/1.5 var(--mono); tab-size: 4;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0; scrollbar-gutter: stable; }
+  .editor pre { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: var(--raised); color: var(--text); }
+  .editor textarea { position: relative; display: block; resize: none; max-height: 24rem; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--text); }
+  .editor textarea::placeholder { -webkit-text-fill-color: var(--muted); color: var(--muted); }
+  .editor textarea:disabled { opacity: 1; }
+  .editor:has(textarea:disabled) { opacity: .5; }
+  :root { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
+  :root[data-theme=light] { --tk-comment: #59636e; --tk-keyword: #8250df; --tk-operator: #0550ae; --tk-predicate: #0969da; --tk-string: #116329; --tk-number: #0a7285; }
+  .tk-comment { color: var(--tk-comment); font-style: italic; }
+  .tk-keyword { color: var(--tk-keyword); font-weight: 700; }
+  .tk-operator { color: var(--tk-operator); font-weight: 700; }
+  .tk-predicate { color: var(--tk-predicate); }
+  .tk-string { color: var(--tk-string); }
+  .tk-number { color: var(--tk-number); }
+  /* On the terminal's dark background, whatever the theme. */
+  .agent-query { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
   #question { flex: 1; min-width: 12rem; font-family: var(--sans); font-size: 14px; }
   button { background: var(--ok); color: var(--on-ok); border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-weight: 600; cursor: pointer; }
   button.ghost { background: var(--raised); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
@@ -153,7 +172,10 @@
       <select id="mode" aria-label="Language"><option value="datalog">Datalog</option><option value="squall">SQUALL</option></select>
       <select id="history" aria-label="History"><option value="">History</option></select>
     </div>
-    <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" style="margin-top:.5rem"></textarea>
+    <div class="editor">
+      <pre id="mirror" aria-hidden="true"></pre>
+      <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" aria-label="Query"></textarea>
+    </div>
     <div class="row" style="margin-top:.5rem">
       <button id="run" disabled>Run</button>
       <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>

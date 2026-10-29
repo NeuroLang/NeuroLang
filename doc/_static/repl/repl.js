@@ -5,6 +5,8 @@ import { History } from "./history.js";
 import { LlmSettings } from "./llm_settings.js";
 import { renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
+import { Editor } from "./editor.js";
+import { highlightNodes, loadWords } from "./highlight.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -12,6 +14,9 @@ const llmForm = $("llm");
 const results = $("results");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view")];
+// The code box colours its text as the language of the mode select.
+const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
 
 const store = (kind) => {
   try {
@@ -33,7 +38,13 @@ function showAgent() {
   live.hidden = false;
   live.classList.toggle("running", agentLog.running);
   $("live-summary").textContent = agentLog.count ? `Assistant steps (${agentLog.count})` : "Assistant steps";
-  renderAgentLog(agentLog, liveLog);
+  const squall = agentLog.header?.language === "squall";
+  const renderQuery = (text) => {
+    const fragment = document.createDocumentFragment();
+    fragment.append(...highlightNodes(text, squall));
+    return fragment;
+  };
+  renderAgentLog(agentLog, liveLog, { renderQuery });
   if (agentLog.running) liveLog.scrollTop = liveLog.scrollHeight;
 }
 
@@ -138,7 +149,9 @@ function start() {
     } else if (data.type === "reply") {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
       out.replaceChildren(html(data.html));
-      if (data.prompt) input.value = data.prompt; // what the assistant wrote
+      if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
+      if (data.prompt) editor.value = data.prompt; // what the assistant wrote
+      else editor.refresh();
       if (data.tables?.length) show("table", ...data.tables.map(renderTable));
       if (data.viewers?.length) {
         show("brain", Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: data.viewers.at(-1), title: "NeuroLang brain viewer" }));
@@ -196,10 +209,13 @@ $("ask").addEventListener("submit", (event) => {
   if (question.value.trim()) run(`.ask ${question.value}`);
 });
 $("key").addEventListener("click", () => ($("llm-details").open = !$("llm-details").open));
-$("mode").addEventListener("change", (event) => run(`.mode ${event.target.value}`));
+$("mode").addEventListener("change", (event) => {
+  editor.refresh();
+  run(`.mode ${event.target.value}`);
+});
 $("view").addEventListener("click", () => run(".view"));
 history_.addEventListener("change", () => {
-  if (history_.value) input.value = history_.value;
+  if (history_.value) editor.value = history_.value;
   history_.value = "";
   input.focus();
 });

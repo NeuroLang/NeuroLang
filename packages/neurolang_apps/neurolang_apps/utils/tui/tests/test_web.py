@@ -187,6 +187,12 @@ def test_ask_without_a_key_tells_to_add_it_in_the_page(repl):
     assert "environment variable" not in reply.html
 
 
+def test_the_reply_tells_the_mode_of_the_repl(repl):
+    assert repl.submit("1").mode == "datalog"
+    assert repl.submit(".mode squall").mode == "squall"
+    assert repl.submit(".mode datalog").mode == "datalog"
+
+
 def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
 
@@ -220,6 +226,7 @@ def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     kinds = [event["event"] for event in sent]
     assert kinds[0] == "ask" and kinds[-1] == "done"
     assert sent[0]["strategy"] == "react"
+    assert sent[0]["language"] == "datalog"
     # The reply of the model comes before the step of its tool call.
     first = kinds.index("reply")
     assert kinds[first - 1] == "request"
