@@ -272,10 +272,9 @@ class ChaseAggregationMixin:
                 ", ".join(f't.{arg_}' for arg_ in arg_names) +
                 ")"
             )
-            gs = globals()
-            ls = locals()
-            gs['fun_'] = fun_
-            fun = eval(fun_str, gs, ls)
+            # Globals of their own, so that the lambdas of several
+            # aggregations of a head don't all call the last fun_.
+            fun = eval(fun_str, dict(globals(), fun_=fun_))
             if (
                 hasattr(fun_, "__annotations__")
                 and "return" in fun_.__annotations__

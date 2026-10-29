@@ -938,3 +938,41 @@ class TestEngineTemplate:
         grid = nl.grids["schaefer"]
         assert grid.shape == (3, 5, 2)
         assert np.array_equal(grid.affine, affine)
+
+
+def test_resamplings_of_a_choice(tmp_path):
+    """Check ``resamplings`` adds replicates of a choice, for RESAMPLE."""
+    from neurolang_apps.utils import engine_registry
+
+    (tmp_path / "study.tsv").write_text("study_id\n1\n2\n3\n4\n")
+    (tmp_path / "mentions.tsv").write_text(
+        "study_id\tterm\n1\tpain\n2\tpain\n"
+    )
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        """
+engines:
+  e:
+    relations:
+      study: study.tsv
+      mentions: mentions.tsv
+    probabilistic_choice:
+      selected_study: {source: study}
+    resamplings:
+      boot_studies:
+        choice: selected_study
+        n: 20
+        description: "Replicates of the studies"
+"""
+    )
+    nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+    res = nl.execute_datalog_program(
+        "p(PROB) :- mentions(s, 'pain') & selected_study(s)\n"
+        "rep(b, x) :- RESAMPLE[boot_studies](p(x)) = b\n"
+        "ans(count(b), percentile(x, 2.5), percentile(x, 97.5)) :- rep(b, x)"
+    )
+    (n, lo, hi), = res
+    assert n == 20
+    assert 0 < lo < .5 < hi < 1
+    predicates = engine_registry.get_predicates("e", path)
+    assert "boot_studies" in predicates

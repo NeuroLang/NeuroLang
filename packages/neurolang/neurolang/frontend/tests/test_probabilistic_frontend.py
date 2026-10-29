@@ -2516,6 +2516,21 @@ def test_builtin_on_region_relation_in_probabilistic_rule_is_lifted():
     )
 
 
+def test_query_aggregating_probabilities_in_its_head():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "r1"), ("s2", "r1"), ("s3", "r2")], name="activates"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected"
+    )
+    nl.execute_datalog_program("p(r, PROB) :- activates(s, r) & selected(s)")
+    res = nl.execute_datalog_program("ans(max(x), min(x)) :- p(r, x)")
+    assert res.columns == ("max", "min")
+    assert list(res) == [pytest.approx((2 / 3, 1 / 3))]
+    nl.execute_datalog_program("ans(max(x)) :- p(r, x)", dry_run=True)
+
+
 def test_query_the_lifted_solvers_decline_without_the_unate_check():
     """
     Without the unate check, the lifted solver raised a ValueError on a

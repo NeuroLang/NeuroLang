@@ -799,6 +799,19 @@ Separator determined by a functional dependency
    of a union, and the variables are determined in conjunctions only, by
    atoms which are not negated.
 
+Unions of plans with the same columns
+   A union of plans, of the disjuncts of a deterministic formula or of the
+   connected components of a disjunctive normal form, is only planned when
+   every disjunct has all the free variables of the union: the plans are
+   relations of their free variables, and :math:`A(s, r) \lor M(s)` holds
+   for every :math:`r` when :math:`M(s)` does, which a union of the
+   relations of :math:`(s, r)` and of :math:`(s)` cannot give. Such a
+   disjunction comes from the conjunctive normal form of a safe union of
+   rules, as :math:`(R(r) \land C(s) \land A(s, r)) \lor (R(r) \land C(s)
+   \land M(s))`, factoring :math:`R(r)` out of it
+   (``_union_has_the_same_columns``). It is declined, which is sound: the
+   other rules apply to the formula, or another solver does.
+
 
 Negations and comparisons sharing relations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

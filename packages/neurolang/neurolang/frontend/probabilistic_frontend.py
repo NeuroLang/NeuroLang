@@ -62,6 +62,11 @@ from nl_core.probabilistic import (
 )
 from nl_core.probabilistic.cplogic.program import CPLogicMixin
 from nl_core.probabilistic.expressions import PROB, Condition
+from .resampling import (
+    ResampledProgram,
+    resampling_relation,
+    rewrite_resample_markers,
+)
 from nl_core.probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -254,6 +259,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
+        self.resamplings = {}
+        self._resampled_versions = {}
 
     def load_ontology(
         self,
@@ -493,6 +500,12 @@ class NeurolangPDL(QueryBuilderDatalog):
                 return self._execute_query_through_rule(
                     head, predicate, show_rewritten, dry_run, show_ra
                 )
+            if not is_edb and self._depends_on_probabilistic_queries(
+                predicate
+            ):
+                return self._execute_query_computing_terms(
+                    head, predicate, show_rewritten, dry_run, show_ra
+                )
             return super()._execute_query(
                 head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
@@ -646,6 +659,32 @@ class NeurolangPDL(QueryBuilderDatalog):
                 show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
             )
+
+    def _execute_query_computing_terms(
+        self, head, predicate, show_rewritten, dry_run, show_ra
+    ):
+        """
+        Run a query whose head computes terms, such as the aggregate
+        ``max(p)``, over probabilistic queries: the deterministic chase of
+        the base implementation does not solve them, the rule
+        ``fresh(head) :- predicate`` is solved as any other.
+        """
+        with self.scope:
+            fresh = self.new_symbol()
+            self._declare_query(fresh(*head), predicate)
+            variables = tuple(self.new_symbol() for _ in head)
+            solution, _ = self._execute_query(
+                variables, fresh(*variables),
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+        if isinstance(solution, ir.Constant):
+            # Nothing was run (dry_run, show_ra).
+            return solution, None
+        names = self._parameter_names(h.expression for h in head)
+        return solution.rename_columns(
+            dict(zip(solution.columns, names))
+        ), None
 
     def _declare_fresh_rule(self, predicate):
         """Declare, in the current scope, the rule ``fresh(x, ...) :-
@@ -1135,6 +1174,95 @@ class NeurolangPDL(QueryBuilderDatalog):
         symbol = ir.Symbol[AbstractSet[type_]](name)
         solver_add_method(symbol, iterable)
         return fe.Symbol(self, name)
+
+    def add_resampling(
+        self,
+        name: str,
+        choice: str,
+        n: int = 1000,
+        scheme: str = "bayesian",
+        seed: int = 0,
+    ) -> fe.Symbol:
+        """
+        Add *n* replicates of the probabilistic choice *choice*, resampling
+        its outcomes, for confidence intervals on the probabilities over it
+        and on the measures derived from them.
+
+        The resampling is the relation ``name(b, c..., w)``: in replicate
+        ``b`` the outcome ``c`` has ``w`` times its probability in the
+        choice.  ``RESAMPLE[name](pred(x)) = b`` in a rule body is then
+        ``pred(x)`` computed on replicate ``b``; every query over the same
+        resampling sees the same replicates.
+
+        Parameters
+        ----------
+        name : str
+            name of the resampling relation.
+        choice : str
+            name of a probabilistic choice of the program.
+        n : int, optional
+            number of replicates, by default 1000.
+        scheme : str, optional
+            ``"bayesian"`` (Dirichlet weights, the Bayesian bootstrap),
+            ``"multinomial"`` (the classical bootstrap) or ``"poisson"``,
+            by default ``"bayesian"``.
+        seed : int, optional
+            seed of the random draws, by default 0.
+
+        Returns
+        -------
+        fe.Symbol
+            the resampling relation.
+
+        Examples
+        --------
+        >>> nl = NeurolangPDL()
+        >>> nl.add_tuple_set([('a', 'x'), ('b', 'x')], name="R")
+        >>> nl.add_uniform_probabilistic_choice_over_set(
+        ...     [('a',), ('b',)], name="C"
+        ... )
+        >>> nl.add_resampling("boot", "C", n=200)
+        >>> nl.execute_datalog_program('''
+        ... p(y, PROB) :- R(c, y) & C(c)
+        ... p_rep(b, y, p) :- RESAMPLE[boot](p(y, p)) = b
+        ... ans(y, percentile(p, 2.5), percentile(p, 97.5)) :- p_rep(b, y, p)
+        ... ''')
+        """
+        choice_symbol = ir.Symbol(choice)
+        choices = self.program_ir.probabilistic_choices()
+        if choice_symbol not in choices:
+            raise ValueError(f"{choice} is not a probabilistic choice")
+        rows = choices[choice_symbol].value.as_pandas_dataframe()
+        relation = resampling_relation(rows, n, scheme, seed)
+        symbol = self.add_tuple_set(relation, name=name)
+        self.resamplings[name] = choice_symbol
+        return symbol
+
+    def _expand_resamplings(self, rule):
+        """*rule* with its ``RESAMPLE`` atoms rewritten over the replicates,
+        adding the rewritten rules they depend on to the program."""
+        programs = {}
+
+        def resampled_predicate(name, functor):
+            if name.name not in self.resamplings:
+                raise ValueError(f"{name.name} is not a resampling")
+            if name not in programs:
+                choice = self.resamplings[name.name]
+                arity = len(
+                    self.program_ir.probabilistic_choices()[choice]
+                    .value.columns
+                ) - 1
+                programs[name] = ResampledProgram(
+                    self.program_ir.intensional_database(),
+                    name, choice, name, arity,
+                    self._resampled_versions.setdefault(name.name, {}),
+                )
+            return programs[name].predicate(functor)
+
+        rule = rewrite_resample_markers(rule, resampled_predicate)
+        for program in programs.values():
+            self.program_ir.walk(Union(program.rules))
+        return rule
 
     def add_uniform_probabilistic_choice_over_set(
         self,

@@ -49,6 +49,10 @@ may specify the following keys, all of them optional:
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
+- ``resamplings`` — replicates of a probabilistic choice for confidence
+  intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
+  seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
+  tutorial :doc:`tutorial_datalog`, section 10.6)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
