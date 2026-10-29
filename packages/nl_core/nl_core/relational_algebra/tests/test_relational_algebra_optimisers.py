@@ -518,6 +518,10 @@ def test_composite_extended_projection_join(r1, str_columns, join_op):
     )
 
     res = opt.walk(exp)
+    if join_op is FullOuterNaturalJoin:
+        # The constant of a side that may be null is not moved up.
+        assert res == exp
+        return
     exp = ExtendedProjection(
         join_op(
             ExtendedProjection(r1, (FunctionApplicationListMember(a, a),)),
@@ -554,6 +558,9 @@ def test_composite_extended_projection_join(r1, str_columns, join_op):
     )
 
     res = opt.walk(exp)
+    if join_op is LeftNaturalJoin:
+        assert res == exp
+        return
     exp = ExtendedProjection(
         join_op(
             r1,
@@ -573,10 +580,7 @@ def test_composite_extended_projection_join(r1, str_columns, join_op):
     assert res == exp
 
 
-@pytest.mark.parametrize(
-    "join_op",
-    [NaturalJoin, LeftNaturalJoin, FullOuterNaturalJoin]
-)
+@pytest.mark.parametrize("join_op", [NaturalJoin, LeftNaturalJoin])
 def test_composite_extended_projection_constant_join(r1, str_columns, join_op):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
@@ -1676,3 +1680,39 @@ def test_integer_constant_equal_to_a_column_is_kept(
         Opt().walk(expression(relation, a, b, formula))
     )
     assert {tuple(row) for row in result.value} == {(1, "x"), (1, "y")}
+
+
+@pytest.mark.parametrize("join_op, constant_on_the_right", [
+    (LeftNaturalJoin, True),
+    (FullOuterNaturalJoin, True),
+    (FullOuterNaturalJoin, False),
+])
+def test_constant_of_the_null_side_of_an_outer_join(
+    str_columns, join_op, constant_on_the_right
+):
+    """In R ⟕ π_{a, 1 → p}(S), a row of R without a match in S has no
+    value for p: moving the constant above the join would give it 1."""
+    a, b, p, _, _ = str_columns
+    r = NameColumns(C_[AbstractSet[Tuple[int, int]]](
+        WrappedRelationalAlgebraSet([(1, 2), (3, 4)])
+    ), (a, b))
+    s = ExtendedProjection(
+        NameColumns(C_[AbstractSet[Tuple[int]]](
+            WrappedRelationalAlgebraSet([(1,)])
+        ), (a,)),
+        (
+            FunctionApplicationListMember(a, a),
+            FunctionApplicationListMember(C_[float](1.), p),
+        )
+    )
+    join = join_op(r, s) if constant_on_the_right else join_op(s, r)
+    expression = ExtendedProjection(join, (
+        FunctionApplicationListMember(a, a),
+        FunctionApplicationListMember(p, p),
+    ))
+    class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
+        pass
+
+    expected = RelationalAlgebraSolver().walk(expression).value
+    result = RelationalAlgebraSolver().walk(Opt().walk(expression)).value
+    assert result == expected
