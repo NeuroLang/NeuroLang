@@ -334,24 +334,25 @@ def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
     """A child killed by a signal (e.g. a library that cannot run after
     fork) is reported as a crash, not as a query using too much memory.
 
-    The child writes no core dump: in the large process of a whole test
-    run it would take longer than the timeout.
+    The child is killed by SIGTERM: one that dumps core (SIGABRT, SIGSEGV)
+    stays alive while the system writes the core of the large process of a
+    whole test run, longer than the timeout, whatever RLIMIT_CORE says
+    when the dump is piped to a program (systemd-coredump).
     """
     import os
-    import resource
+    import signal
 
     from .. import validation
 
-    def crash(*args, **kwargs):
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        os.abort()
-
-    monkeypatch.setattr(validation, "_execute", crash)
+    monkeypatch.setattr(
+        validation, "_execute",
+        lambda *a, **k: os.kill(os.getpid(), signal.SIGTERM),
+    )
     preview = run_preview(
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=4096
     )
     assert not preview.ok
-    assert "crashed (SIGABRT)" in preview.text
+    assert "crashed (SIGTERM)" in preview.text
     assert "too much memory" not in preview.text
 
 
