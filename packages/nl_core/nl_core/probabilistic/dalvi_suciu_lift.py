@@ -73,6 +73,7 @@ from ..relational_algebra import (
     Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -340,7 +341,9 @@ def _non_repeating_query_plan(
 def _prepare_and_optimise_query(
     flat_query, cpl_program, deterministic_relations=None
 ):
-    flat_query_body = convert_to_dnf_existential_ucq(flat_query.antecedent)
+    flat_query_body = _normal_form(
+        convert_to_dnf_existential_ucq, flat_query.antecedent
+    )
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
         for f in flat_query_body.formulas
@@ -1265,7 +1268,11 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(
         rule_cnf, ignore_symbols=deterministic_symbols
     )
-    if cnf_is_usable and len(connected_components) > 1:
+    if (
+        cnf_is_usable
+        and len(connected_components) > 1
+        and not all(map(_is_negation, connected_components))
+    ):
         plan = components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
@@ -1279,6 +1286,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule_dnf, ignore_symbols=deterministic_symbols
     )
     if len(connected_components) > 1:
+        if any(map(_is_negation, connected_components)):
+            # The union of a negation is not planned.
+            return NonLiftable(rule)
         return components_plan(
             connected_components, rap.Union, symbol_table
         )
@@ -1519,14 +1529,14 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         .walk(rule)
     )
     if transformation == 'CNF':
-        fresh_symbols_expression = convert_to_cnf_existential_ucq(
-            fresh_symbols_expression
+        fresh_symbols_expression = _normal_form(
+            convert_to_cnf_existential_ucq, fresh_symbols_expression
         )
         minimize = minimize_ucq_in_cnf
         gcd = GuaranteeConjunction()
     elif transformation == 'DNF':
-        fresh_symbols_expression = convert_to_dnf_existential_ucq(
-            fresh_symbols_expression
+        fresh_symbols_expression = _normal_form(
+            convert_to_dnf_existential_ucq, fresh_symbols_expression
         )
         minimize = minimize_ucq_in_dnf
         gcd = GuaranteeDisjunction()
@@ -1543,6 +1553,19 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         pass
 
     return gcd.walk(final_expression)
+
+
+def _normal_form(convert, formula):
+    """`convert(formula)`, declining a formula outside FO∃¬, which the
+    conversions to normal forms do not support."""
+    try:
+        return convert(formula)
+    except NotInFONegE as error:
+        raise NonLiftableException(str(error), formula) from error
+
+
+def _is_negation(component):
+    return isinstance(RTO.walk(component), Negation)
 
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
@@ -2229,6 +2252,11 @@ def _functions_of(atom, variables, symbol_table):
         atom.functor
     ).relation
     if isinstance(relation, Symbol):
+        if not isinstance(symbol_table[relation], Constant):
+            # A deterministic subquery, which is computed once.
+            symbol_table[relation] = RelationalAlgebraSolver().walk(
+                symbol_table[relation]
+            )
         relation = symbol_table[relation]
     relation = relation.value
     key = tuple(

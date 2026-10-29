@@ -2514,3 +2514,52 @@ def test_builtin_on_region_relation_in_probabilistic_rule_is_lifted():
     assert inline.sort_values("l").reset_index(drop=True).equals(
         deterministic.sort_values("l").reset_index(drop=True)
     )
+
+
+def test_query_the_lifted_solvers_decline_without_the_unate_check():
+    """
+    Without the unate check, the lifted solver raised a ValueError on a
+    union with a negated component, instead of declining it; the query is
+    answered, as possible worlds give.
+    """
+    from nl_expr.config import config
+    from nl_core.probabilistic.tests.test_lifted_negation import (
+        possible_worlds_probabilities,
+    )
+
+    U, S, R = Symbol("U"), Symbol("S"), Symbol("R")
+    probabilistic_facts = {
+        U: [(0.3, "c"), (0.2, "a")],
+        S: [(0.4, "a", "c"), (0.5, "c", "b")],
+        R: [(0.3, "a", "c"), (0.7, "b", "c"), (0.4, "c", "a")],
+    }
+    check_unate = config.get_probabilistic_solver_check_unate()
+    config.disable_probabilistic_solver_check_unate()
+    try:
+        nl = NeurolangPDL()
+        for symbol, rows in probabilistic_facts.items():
+            nl.add_probabilistic_facts_from_tuples(rows, name=symbol.name)
+        nl.execute_datalog_program(
+            "h(x) :- U(x), S(x, y), R(x, z), ~U(y)\n" "q(x, PROB) :- h(x)"
+        )
+        result = dict(
+            nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
+        )
+    finally:
+        if check_unate:
+            config.enable_probabilistic_solver_check_unate()
+
+    expected = possible_worlds_probabilities(
+        probabilistic_facts,
+        {},
+        lambda database: {
+            a
+            for (a,) in database[U]
+            for (b, c) in database[S]
+            if a == b
+            and (c,) not in database[U]
+            and any(d == a for d, _ in database[R])
+        },
+    )
+    expected = {a: p for a, p in expected.items() if p > 1e-12}
+    assert result == pytest.approx(expected)

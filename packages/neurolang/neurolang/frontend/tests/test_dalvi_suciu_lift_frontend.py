@@ -475,3 +475,26 @@ def test_answer_variables_at_the_same_position(head, body):
         probabilistic_marg_solvers=(wmc_solve_marg_query,),
     )
     assert solve(**LIFTED_ONLY) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_function_of_a_variable_separates_the_query(solvers):
+    """
+    In R(x) ∧ T(y) ∧ y = x + 1, y is a function of x: it separates the
+    query, whose atoms R(x) and T(y) share no variable otherwise.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 0), (0.4, 1), (0.3, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, 1), (0.7, 2), (0.2, 3)], name="T"
+    )
+    nl.execute_datalog_program("q(PROB) :- R(x), T(y), (y == x + 1)")
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(
+        1 - (1 - 0.5 * 0.6) * (1 - 0.4 * 0.7)
+    )
