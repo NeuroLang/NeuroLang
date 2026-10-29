@@ -1437,3 +1437,18 @@ def test_aggregate_builtins_run_as_pandas_reductions(monkeypatch):
     for function in (sum, max, min, len):
         initial.aggregate(["g"], {"v": function})
     assert all(isinstance(function, str) for function in used), used
+
+
+def test_named_ra_union_of_integers_and_floats(ra_module):
+    """The union of an integer column and a float column is a float
+    column: the floats are not truncated, whatever the order of the
+    columns or of the operands."""
+    integers = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), [(0, 1)]
+    )
+    floats = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("p", "x"), [(0.5, 2), (0.62, 3)]
+    )
+    expected = {(0, 1.), (2, .5), (3, .62)}
+    assert set(integers | floats) == expected
+    assert {(x, p) for p, x in floats | integers} == expected
