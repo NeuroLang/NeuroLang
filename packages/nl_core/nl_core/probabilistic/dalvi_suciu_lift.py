@@ -509,7 +509,9 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
 def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
-    comparisons = ConjunctComparisons().walk(antecedent)
+    comparisons = tuple(
+        f for f in _conjuncts(antecedent) if is_comparison(f)
+    )
     if comparisons:
         # Comparisons of free variables select the answers of the rest.
         plan = lift_with_dependent_negations(
@@ -1310,24 +1312,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     return NonLiftable(rule)
 
 
-class ConjunctComparisons(PatternWalker):
-    """The comparisons which are conjuncts of a conjunction."""
-
-    @add_match(Conjunction)
-    def conjunction(self, conjunction):
-        return tuple(chain.from_iterable(
-            self.walk(formula) for formula in conjunction.formulas
-        ))
-
-    @add_match(FunctionApplication(Constant, ...), is_comparison)
-    def comparison(self, comparison):
-        return (comparison,)
-
-    @add_match(...)
-    def other(self, expression):
-        return ()
-
-
 def different_free_variables_plan(rule, symbol_table):
     """Plan for a query with atoms of a tuple-independent relation `R`
     with free variables `x` and `y` at the same position, which Dalvi and
@@ -1938,6 +1922,7 @@ class ChoiceTermsAsEqualities(PatternWalker):
             if differences and set(differences) <= self.fresh:
                 return differences
         return None
+
 
 def _has_quantifier(formula):
     """Whether the logic *formula* has a quantifier in it."""
