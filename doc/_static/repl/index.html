@@ -73,6 +73,13 @@
   #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   #llm label { display: flex; gap: .4rem; align-items: center; }
   #llm-error { color: var(--bad); margin: 0; }
+  /* What the assistant's query does: above the query, apart from it. */
+  #summary { margin-top: .5rem; padding: .4rem .75rem; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--tk-number); border-radius: 6px; }
+  #summary[hidden] { display: none; }
+  #summary strong { color: var(--tk-number); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  #summary p { margin: .15rem 0 0; }
+  #summary p:empty { display: none; }
+  #summary-reads { font-style: italic; }
   #live { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .4rem .75rem; }
   #live[hidden] { display: none; }
   #live summary { color: var(--text); }
@@ -201,6 +208,12 @@
       <select id="mode" aria-label="Language"><option value="datalog">Datalog</option><option value="squall">SQUALL</option></select>
       <select id="history" aria-label="History"><option value="">History</option></select>
     </div>
+    <section id="summary" hidden aria-label="What the query does">
+      <strong>Summary</strong>
+      <p id="summary-text"></p>
+      <p id="summary-reads" class="note"></p>
+      <p id="summary-warning" class="agent-bad" role="alert"></p>
+    </section>
     <div class="editor">
       <pre id="mirror" aria-hidden="true"></pre>
       <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" aria-label="Query"></textarea>

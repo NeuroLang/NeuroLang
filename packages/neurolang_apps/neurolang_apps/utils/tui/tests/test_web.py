@@ -340,6 +340,10 @@ def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     step = sent[first + 1]
     assert step["action"] == "check_query" and step["observation"]
     assert sent[-1]["valid"] and sent[-1]["query"].startswith("ans(x)")
+    # What the page shows above the query: what it does, and how it reads back.
+    assert sent[-1]["explanation"] == "Everyone."
+    assert sent[-1]["back_translation"] == "Everyone with a name."
+    assert sent[-1]["verified"] is True
     assert all("messages" not in event for event in sent)
     repl.set_event_sink(None)
     sent.clear()

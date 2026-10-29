@@ -432,6 +432,26 @@ def test_feedback_end_to_end(app, tmp_path, monkeypatch):
     }]
 
 
+def test_ask_shows_the_summary_above_the_query_in_a_panel_of_its_own(app):
+    app.assistant._config.assistant.verify_rounds = 1
+    script(
+        app, *REACT_PAIN, "Every study of the database.",
+        "VERDICT: no\nIt is not about pain.",
+        *REACT_PAIN[1:], "Every study again.", "VERDICT: no\nStill not.",
+    )
+    app._run_line(".llm Which studies mention pain?")
+    text = output(app)
+    summary = text.index("Summary")  # the log of the steps has none
+    query = text.index("DATALOG query")
+    assert summary < text.index("Reads back as: Every study again.", summary)
+    assert text.index("Reads back as", summary) < query
+    # What the model said the query does is in the panel, not below the query.
+    assert summary < text.index("pain", summary) < query
+    # The warning of the check stays after the query it is about.
+    assert query < text.index("may not answer the question")
+    assert "Reads back as" not in text[query:]
+
+
 def test_ask_shows_the_query_read_back(app):
     app.assistant._config.assistant.verify_rounds = 1
     script(

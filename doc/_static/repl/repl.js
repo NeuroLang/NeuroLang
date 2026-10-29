@@ -37,6 +37,20 @@ let providers = []; // those of the AI assistant, from the worker
 const agentLog = new AgentLog();
 const live = $("live");
 const liveLog = $("live-log");
+// What the query the assistant wrote does, above the box it is in: the model's
+// explanation, and the query read back in English, with the check's doubts.
+const summary = $("summary");
+function hideSummary() {
+  summary.hidden = true;
+}
+function showSummary({ valid, explanation, back_translation: reads, verified, verification }) {
+  if (!valid || !(explanation || reads)) return hideSummary();
+  $("summary-text").textContent = explanation ?? "";
+  $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
+  $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
+  summary.hidden = false;
+}
+
 function showAgent() {
   live.hidden = false;
   live.classList.toggle("running", agentLog.running);
@@ -107,6 +121,7 @@ function showGuide() {
   const squall = $("mode").value === "squall";
   renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
     editor.value = query;
+    hideSummary();
     input.focus();
   });
   renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall);
@@ -215,6 +230,8 @@ function start() {
     } else if (data.type === "agent") {
       agentLog.apply(data);
       showAgent();
+      if (data.event === "ask") hideSummary();
+      if (data.event === "done") showSummary(data);
     } else if (data.type === "llm") {
       if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
     } else if (data.type === "reply") {
@@ -247,6 +264,7 @@ function run(text, { remember = false } = {}) {
   }
   setBusy(true);
   setStatus("Running…", "busy");
+  if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
   worker.postMessage({ text });
 }
 
@@ -304,7 +322,10 @@ $("mode").addEventListener("change", (event) => {
 });
 $("view").addEventListener("click", () => run(".view"));
 history_.addEventListener("change", () => {
-  if (history_.value) editor.value = history_.value;
+  if (history_.value) {
+    editor.value = history_.value;
+    hideSummary();
+  }
   history_.value = "";
   input.focus();
 });

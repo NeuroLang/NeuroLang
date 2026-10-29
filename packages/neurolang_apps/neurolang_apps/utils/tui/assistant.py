@@ -229,7 +229,8 @@ def _step_printer(app, language: str):
 # ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
 # answered and its tool is about to run), and for each step of the agent
 # ``step`` (thought, action, arguments, observation); ``done`` (valid,
-# query, explanation, error, calls, tokens, seconds, verified) ends them.
+# query, explanation, error, calls, tokens, seconds, verified, back_translation,
+# verification) ends them.
 AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
 
 
@@ -256,6 +257,8 @@ def _done_event(result) -> dict:
         "explanation": result.explanation, "error": result.error,
         "calls": result.calls, "tokens": sum(result.usage.values()),
         "seconds": result.seconds, "verified": result.verified,
+        "back_translation": result.back_translation,
+        "verification": result.verification,
     }
 
 
@@ -280,14 +283,29 @@ def runnable_query(result) -> str:
     return result.query
 
 
+def _show_summary(app, result) -> None:
+    """
+    Print what the query does, above it and apart from it: the
+    explanation the model gave and the query read back in English.
+    """
+    summary = Text()
+    if result.explanation:
+        summary.append(result.explanation)
+    if result.back_translation:
+        if summary:
+            summary.append("\n")
+        summary.append("Reads back as: ", style="dim")
+        summary.append(result.back_translation, style="dim italic")
+    if summary:
+        app.console.print(Panel(
+            summary, title="Summary", title_align="left",
+            border_style="cyan",
+        ))
+
+
 def _show_verification(app, result) -> None:
-    """Print the query read back in English and the verdict of its check."""
-    if not result.back_translation:
-        return
-    app.console.print(
-        f"[dim]Reads back as: {escape(result.back_translation)}[/dim]"
-    )
-    if result.verified is False:
+    """Print the verdict of the check of the query, when it is against it."""
+    if result.back_translation and result.verified is False:
         app.console.print(
             "[yellow]The check found that the query may not answer the "
             f"question: {escape(result.verification)}[/yellow]"
@@ -297,15 +315,15 @@ def _show_verification(app, result) -> None:
 def _show_result(app, result) -> None:
     """
     Print the query of the agent's *result*, each rule under a comment
-    line explaining it if the model wrote them, and put it in the prompt.
+    line explaining it if the model wrote them, below a summary of what
+    it does, and put it in the prompt.
     """
     if result.valid:
+        _show_summary(app, result)
         app.console.print(Panel(
             query_text(result.commented or result.query, result.language),
             title=f"{result.language.upper()} query", border_style="green",
         ))
-        if result.explanation:
-            app.console.print(escape(result.explanation), style="dim")
         _show_verification(app, result)
     else:
         app.failed = True

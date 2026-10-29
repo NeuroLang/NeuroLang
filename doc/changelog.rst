@@ -79,7 +79,9 @@ Unreleased
   the query as the terminal does, in Datalog and in SQUALL. Each result has a
   Download menu: all its rows as CSV or TSV, and its NIfTI image, the file
   ``.save`` writes, for each value column; the brain tab offers the images
-  too. The *Docs* menu and a hint under the box link the keyword at the
+  too. In the terminal REPL and in the page, a *Summary* of the query the
+  assistant wrote, its explanation and the query read back in English, is
+  above the query, apart from it, instead of below it. The *Docs* menu and a hint under the box link the keyword at the
   cursor (``PROB``, ``AGGREGATE``, ``:-``…) to its section of the tutorial;
   the examples and the relations of the engine, and the rules you define,
   are listed, to put them in the box with a click; and *Copy link* shares the
