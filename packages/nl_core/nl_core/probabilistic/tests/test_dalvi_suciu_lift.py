@@ -18,6 +18,7 @@ from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     Difference,
+    ExtendedProjection,
     Materialise,
     NameColumns,
     Projection,
@@ -169,6 +170,15 @@ def test_non_liftable_join():
     plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
+
+
+def test_non_liftable_within_an_extended_projection():
+    """The plan of the answers with x = y of `different_free_variables_plan`
+    is an extended projection, which may hold a non-liftable query."""
+    R = Symbol('R')
+    x = Symbol('x')
+    plan = ExtendedProjection(dalvi_suciu_lift.NonLiftable(R(x)), ())
+    assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
 
 
 def test_lifted_cq_fig_4_5():

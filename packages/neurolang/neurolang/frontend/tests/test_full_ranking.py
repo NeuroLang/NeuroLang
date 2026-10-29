@@ -9,7 +9,11 @@ import itertools
 
 import pytest
 
-from nl_expr.exceptions import NotRankedException, UnsupportedSolverError
+from nl_expr.exceptions import (
+    NonLiftableException,
+    NotRankedException,
+    UnsupportedSolverError,
+)
 from ...frontend import NeurolangPDL
 from nl_core.probabilistic import dalvi_suciu_lift
 
@@ -100,13 +104,15 @@ def test_symmetric_pair_is_lifted():
     _assert_close(_solve(nl, "q(PROB) :- R(x, y), R(y, x)"), expected)
 
 
-def test_answer_variable_to_rank_is_left_to_the_next_solver():
+def test_answer_variable_in_both_orders_is_left_to_the_next_solver():
     """Dalvi & Suciu rank Boolean queries, the answer variables being
-    constants: q(x) :- R(x, y), R(y, x) would need ranking x."""
+    constants: q(x) :- R(x, y), R(y, x) needs no ranking, but no lifting
+    rule splits y = x from y ≠ x, when R(x, y) and R(y, x) are different
+    tuples."""
     values = ("a", "b", "c")
     program = "q(x, PROB) :- R(x, y), R(y, x)"
     nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
-    with pytest.raises(NotRankedException):
+    with pytest.raises(NonLiftableException):
         _solve(nl, program)
     expected = _enumerated(
         {"R": R_FACTS},
@@ -194,15 +200,44 @@ def test_negated_atom_to_rank_is_not_ranked():
         _solve(nl, "q(PROB) :- R(x, y), ~R(y, x)")
 
 
-def test_two_answer_variables_to_rank_are_left_to_the_next_solver():
-    program = "q(x, y, PROB) :- R(x, y), R(y, x)"
-    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
-    with pytest.raises(NotRankedException):
-        _solve(nl, program)
-    pairs = tuple(R_FACTS)
-    expected = _enumerated(
-        {"R": R_FACTS},
+S_FACTS = {("a", "b"): 0.7, ("b", "b"): 0.6, ("c", "a"): 0.1}
+W_FACTS = {("b", "a"): 0.8, ("a", "c"): 0.3, ("b", "b"): 0.9}
+U_FACTS = {("a",): 0.5, ("b",): 0.2, ("c",): 0.6}
+
+
+@pytest.mark.parametrize("program, holds", (
+    (
+        "q(x, y, PROB) :- R(x, y), R(y, x)",
         lambda w, a: a in w["R"] and a[::-1] in w["R"],
-        answers=pairs
-    )
-    _assert_close(_solve(_engine({"R": R_FACTS}), program), expected)
+    ),
+    (
+        "q(x, y, PROB) :- U(x), U(y), S(x, y), W(y, x)",
+        lambda w, a: {a[:1], a[1:]} <= w["U"] and a in w["S"] and
+        a[::-1] in w["W"],
+    ),
+    (
+        "q(x, y, PROB) :- S(x, y), W(y, x)",
+        lambda w, a: a in w["S"] and a[::-1] in w["W"],
+    ),
+    (
+        "q(x, y, PROB) :- S(x, z), W(z, y), S(y, x)",
+        lambda w, a: a[::-1] in w["S"] and any(
+            (a[0], z) in w["S"] and (z, a[1]) in w["W"] for z in "abc"
+        ),
+    ),
+    (
+        "q(x, PROB) :- S(x, z), W(z, x)",
+        lambda w, a: any(
+            (a[0], z) in w["S"] and (z, a[0]) in w["W"] for z in "abc"
+        ),
+    ),
+))
+def test_answer_variables_in_both_orders_are_lifted(program, holds):
+    """The answer variables are constants, which ranking does not
+    order."""
+    relations = {"R": R_FACTS, "S": S_FACTS, "W": W_FACTS, "U": U_FACTS}
+    head = program[:program.index("PROB")]
+    answers = tuple(itertools.product("abc", repeat=head.count(",")))
+    nl = _engine(relations, solvers=(dalvi_suciu_lift,))
+    expected = _enumerated(relations, holds, answers=answers)
+    _assert_close(_solve(nl, program), expected)

@@ -147,9 +147,13 @@ Shattering constants
    of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
 
 Ranking
-   The query must be *ranked*: there is an order on the variables such
-   that the arguments of every atom follow it [Dalvi2012]_
-   (:mod:`neurolang.probabilistic.ranking`). Atoms with a repeated variable,
+   The query must be *ranked*: there is an order on the bound variables
+   such that the arguments of every atom follow it [Dalvi2012]_
+   (:mod:`neurolang.probabilistic.ranking`). The answer variables, free,
+   are constants for Dalvi and Suciu, and are not ordered: the query
+   :math:`Q(x, y) = R(x) \land R(y) \land S(x, y) \land W(y, x)` is
+   ranked, and lifted, its answers with :math:`x \neq y` and :math:`x = y`
+   apart (``different_free_variables_plan``). Atoms with a repeated variable,
    such as :math:`R(x, x)`, are first replaced by atoms of a new relation
    holding the selected tuples. A query whose variables still occur in both
    orders, such as :math:`\exists x, y\, R(x, y) \land R(y, x)`, is then
@@ -179,15 +183,20 @@ Ranking
    The query is declined, and left to the next solver, when a relation to
    split is a probabilistic choice or occurs within a negation; when a
    ranked position has a constant, or a comparison or a function has a
-   ranked variable; when an answer variable is to rank, as Dalvi and Suciu
-   rank Boolean queries, the answer variables being constants; when the
+   ranked variable; when an answer variable is at a ranked position, as
+   in :math:`\exists y\, R(x, y) \land R(y, y)`, since the ranked relations
+   do not shatter the constants it stands for; when the
    ranked columns are not all of real numbers or all of strings, the types
    with a total order and an equality, or contain NaN; or when more than
    ``MAX_RANKED_VARIABLES``, two, variables are to rank, as the number of
    orders, 1, 3, 13, 75…, makes planning exponential. Only variables in
    both orders in two atoms are detected, as in the check of rankedness: a
    cycle such as :math:`R(x, y) \land R(y, z) \land R(z, x)` is not
-   ranked, which the separator variable rule still checks.
+   ranked, which the separator variable rule still checks. A bound and an
+   answer variable in both orders, :math:`Q(x) = \exists y\, R(x, y) \land
+   R(y, x)`, need no ranking, but are not lifted: no rule splits
+   :math:`y \neq x`, when :math:`R(x, y)` and :math:`R(y, x)` are
+   different tuples, from :math:`y = x`, when they are the same.
 
 
 Base cases
@@ -1398,6 +1407,21 @@ Ranking
    * the order compared is total, with equality: real numbers or strings
      (``_is_totally_ordered``), without NaN. Sets, ordered by inclusion,
      would leave the tuples of incomparable values in no ranked relation.
+
+   The answer variables are not ordered (``verify_that_the_query_is_ranked``
+   and ``_ranked_variables_and_positions`` leave out the free variables).
+   Dalvi and Suciu lift the Boolean query of each answer, whose answer
+   variables are constants, and rank its variables only. Rankedness is
+   needed by no rule to be sound: the independent join and
+   union need relations apart, the separator variable a common position
+   of every two atoms of a relation (``find_separator_variables``),
+   inclusion–exclusion is an identity, and
+   ``different_free_variables_plan`` checks that the atoms renamed are
+   different tuples. Ranking only lets them apply; a query whose answer
+   variables would need it is lifted by them or declined. An answer
+   variable at a ranked position is still declined
+   (``_check_rankable``): splitting the relation by the order of its
+   values would order the constants.
 
 The tests of the rules of `Negations and comparisons sharing relations`_
 (``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare
