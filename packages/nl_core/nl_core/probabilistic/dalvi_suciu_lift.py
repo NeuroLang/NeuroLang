@@ -73,6 +73,7 @@ from ..relational_algebra import (
     Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -2186,6 +2187,11 @@ def _functions_of(atom, variables, symbol_table):
         atom.functor
     ).relation
     if isinstance(relation, Symbol):
+        if not isinstance(symbol_table[relation], Constant):
+            # A deterministic subquery, which is computed once.
+            symbol_table[relation] = RelationalAlgebraSolver().walk(
+                symbol_table[relation]
+            )
         relation = symbol_table[relation]
     relation = relation.value
     key = tuple(

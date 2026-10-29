@@ -8,7 +8,9 @@ from ...relational_algebra import Materialise, RelationalAlgebraSolver
 from ..cplogic.program import CPLogicProgram
 from ..deterministic_subqueries import replace_deterministic_negations
 
+EQ = Constant(operator.eq)
 NE = Constant(operator.ne)
+ADD = Constant(operator.add)
 STARTSWITH = Constant[Callable[[str, str], bool]](
     lambda prefix, string: string.startswith(prefix)
 )
@@ -105,3 +107,20 @@ def test_builtin_on_probabilistic_atom_or_comparison_is_not_replaced():
 
     assert new_formula == formula
     assert relations == {}
+
+
+def test_function_of_a_probabilistic_atom_replaced_by_relation():
+    """R(s) ∧ u = s + 1 ≡ R(s) ∧ D(s, u), D holding the values of the
+    function on the tuples of R: a deterministic relation which is a
+    function of s, for the separator variables."""
+    cpl = _program()
+    u = Symbol("u")
+    formula = Conjunction((Selected(s), EQ(u, ADD(s, Constant(1)))))
+
+    new_formula, relations = replace_deterministic_negations(formula, cpl)
+
+    assert len(relations) == 1
+    symbol, relation = next(iter(relations.items()))
+    assert new_formula == Conjunction((Selected(s), symbol(s, u)))
+    result = RelationalAlgebraSolver().walk(relation).value
+    assert set(result) == {(0, 1), (1, 2)}
