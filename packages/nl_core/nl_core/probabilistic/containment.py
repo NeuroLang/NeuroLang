@@ -175,10 +175,7 @@ def _disjunct_implies(q2_, q1_):
 def _datalog_rules(query):
     """The rules of `query`, converted once: the containments of a union
     or of the terms of inclusion–exclusion compare each query to many."""
-    return convert_pos_logic_query_to_datalog_rules(query, HEAD)
-
-
-HEAD = Symbol.fresh()
+    return convert_pos_logic_query_to_datalog_rules(query, Symbol.fresh())
 
 
 def convert_pos_logic_query_to_datalog_rules(query, head):
