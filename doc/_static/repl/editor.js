@@ -26,6 +26,14 @@ export class Editor {
     this.refresh();
   }
 
+  // Put *text* where the caret is, replacing what is selected, and keep the focus.
+  insert(text) {
+    const { textarea } = this;
+    textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end");
+    textarea.focus();
+    this.refresh();
+  }
+
   // Colour the text again, e.g. after a change of language, and fit the box to it.
   refresh() {
     const text = this.textarea.value;

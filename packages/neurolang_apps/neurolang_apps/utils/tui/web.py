@@ -28,16 +28,20 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple
 from unittest import mock
 
 import pandas as pd
 from rich.console import Console
 from rich.text import Text
 
+from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils.cli import _declared_columns
+from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
+
 from . import nifti
 from .app import InteractiveTuiApp, TuiSettings
-from .commands import QuitRepl
+from .commands import QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
 
 # The most rows of a result sent to the page.
@@ -112,7 +116,8 @@ class Reply:
     :func:`table_payload`), *failed* tells whether a statement of it
     failed, *prompt* is the query the assistant wrote, for the page
     to put in its input, and *mode* the language of the REPL, ``datalog``
-    or ``squall``, which the assistant may have switched.
+    or ``squall``, which the assistant may have switched, and *predicates*
+    those of the engine and the session (see :meth:`WebRepl.predicates`).
     """
 
     html: str
@@ -121,6 +126,7 @@ class Reply:
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
     mode: str = "datalog"
+    predicates: List[dict] = field(default_factory=list)
 
 
 class Download(NamedTuple):
@@ -325,6 +331,7 @@ class WebRepl:
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
+            self.predicates(),
         )
 
     def _print_block(self, block: ResultBlock) -> None:
@@ -343,6 +350,31 @@ class WebRepl:
         self.console.print(
             count, style="dim", markup=False, highlight=False
         )
+
+    def examples(self) -> dict:
+        """Return the example queries of the engine, by language."""
+        return engine_examples(self.app.settings.engine_name)
+
+    def predicates(self) -> List[dict]:
+        """
+        Return the predicates of the engine and of the session, for the
+        page to list: ``name``, ``kind`` (stored, derived, session...),
+        ``signature`` as ``.predicates`` shows it, and the engine's
+        ``description``, if any.
+        """
+        engine = self.app.settings.engine_name
+        signatures = engine_registry.get_signatures(engine) if engine else {}
+        described = engine_registry.get_predicates(engine) if engine else {}
+        infos = listed(predicate_catalog(
+            self.app._nl, _declared_columns(engine),
+            self.app.loaded_relations, signatures,
+        ))
+        return [
+            {"name": info.name, "kind": info.kind,
+             "signature": info.signature(),
+             "description": described.get(info.name, {}).get("description", "")}
+            for info in infos
+        ]
 
     def _downloads_of(self, block: ResultBlock) -> dict:
         """

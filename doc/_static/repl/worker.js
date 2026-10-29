@@ -177,7 +177,8 @@ def submit(text):
     return json.dumps(
         {"html": reply.html, "viewers": reply.viewers,
          "failed": reply.failed, "tables": reply.tables,
-         "prompt": reply.prompt, "mode": getattr(reply, "mode", "")}
+         "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
+         "predicates": getattr(reply, "predicates", [])}
     )
 
 # The providers of the AI assistant, for the page's form: none when this
@@ -199,7 +200,9 @@ def llm_providers():
 `);
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
-  postMessage({ type: "ready", banner, source, providers });
+  const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
+  const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
+  postMessage({ type: "ready", banner, source, providers, examples, predicates });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   return pyodide.globals.get("submit");

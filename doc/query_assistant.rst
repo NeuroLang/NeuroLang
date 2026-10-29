@@ -290,6 +290,16 @@ accept calls from web pages). The key stays in the tab, or on the device if
 you ask, and is sent to the provider and nowhere else. ``.ask`` and ``.llm``
 work as in a terminal; the query they write is put in the input of the page.
 
+The section *Assistant steps*, under the question, shows the work of the
+assistant as it happens, one line per call to the model and per tool call of
+the ReAct agent with the queries it tries and what they gave back, as the
+terminal prints them; it is closed until you open it. A step appears when its
+model reply arrives (replies are not streamed word by word), the tool call
+before its result.
+
+The code box colours the query as the terminal does, with the same
+tokenizer (``query_highlight``), in Datalog and in SQUALL.
+
 .. _assistant-feedback:
 
 Rating and correcting the answers

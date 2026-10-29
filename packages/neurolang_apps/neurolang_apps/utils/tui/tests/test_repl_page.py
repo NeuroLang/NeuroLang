@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -43,3 +44,26 @@ def test_the_table_and_history_models_of_the_page_pass_their_tests(tmp_path):
         env={**os.environ, "HIGHLIGHT_FIXTURES": str(fixtures)},
     )
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr
+
+
+ROOT = Path(__file__).resolve().parents[6]
+
+
+def test_the_links_of_the_page_point_at_headings_of_the_tutorial():
+    """
+    The page links its keywords to the sections of the Datalog tutorial; the
+    anchors are the ids docutils makes of the headings, so a renamed heading
+    shows here rather than in a link that goes nowhere.
+    """
+    nodes = pytest.importorskip("docutils.nodes")
+    lines = (ROOT / "doc" / "tutorial_datalog.rst").read_text().splitlines()
+    headings = [
+        above for above, line in zip(lines, lines[1:])
+        if above.strip() and line and set(line) <= set("=-~^\"'`#*+")
+        and len(line) >= len(above.rstrip())
+    ]
+    ids = {nodes.make_id(heading) for heading in headings}
+    docs = (ROOT / "doc" / "_static" / "repl" / "docs.js").read_text()
+    anchors = re.findall(r"\$\{DATALOG\}#([\w-]+)", docs)
+    assert len(anchors) >= 8
+    assert set(anchors) <= ids, sorted(set(anchors) - ids)

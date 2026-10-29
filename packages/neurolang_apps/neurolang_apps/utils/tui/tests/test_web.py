@@ -12,7 +12,9 @@ import numpy as np  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui import nifti  # noqa: E402
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
-from neurolang_apps.utils.tui.tests.test_nifti import tiny  # noqa: E402,F401
+from neurolang_apps.utils.tui.tests import test_nifti  # noqa: E402
+
+tiny = test_nifti.tiny  # the REPL on the tiny engine, with its template
 
 
 @pytest.fixture
@@ -273,6 +275,21 @@ def test_ask_without_a_key_tells_to_add_it_in_the_page(repl):
     assert reply.failed
     assert "API key" in reply.html and "AI assistant" in reply.html
     assert "environment variable" not in reply.html
+
+
+def test_the_predicates_of_the_session_come_with_each_reply(repl):
+    reply = repl.submit("adult(x) :- person(x, n), (n > 4)")
+    named = {p["name"]: p for p in reply.predicates}
+    assert named["person"]["kind"] == "stored"
+    assert named["person"]["signature"] == "person/2"
+    assert named["adult"]["kind"] == "session"
+    assert reply.predicates == repl.predicates()
+
+
+def test_the_examples_of_the_engine_are_by_language(repl):
+    examples = repl.examples()
+    assert examples["datalog"] and examples["squall"]
+    assert all(isinstance(query, str) for query in examples["datalog"])
 
 
 def test_the_reply_tells_the_mode_of_the_repl(repl):

@@ -5,8 +5,11 @@ import { History } from "./history.js";
 import { LlmSettings } from "./llm_settings.js";
 import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
+import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
+import { renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
+import { decodeShare, encodeShare } from "./share.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -85,6 +88,43 @@ function saveFile({ name, mime, bytes }) {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
+// The documentation: its pages in the menu, and what the keyword under the cursor is.
+const link = (href, text) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: text });
+$("docs-links").replaceChildren(...PAGES.map(([label, page]) => link(DOCS_URL + page, label)));
+
+function showHint() {
+  const topic = topicAt(input.value, input.selectionStart, $("mode").value === "squall");
+  $("hint").replaceChildren(
+    ...(topic ? [Object.assign(document.createElement("code"), { textContent: topic.word }), ` ${topic.text} · `, link(topic.url, "documentation ↗")] : []),
+  );
+}
+["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
+
+// The examples of the engine and its predicates, which put their text in the box.
+let guide = { examples: {}, predicates: [] };
+function showGuide() {
+  if (!$("guide").open) return;
+  const squall = $("mode").value === "squall";
+  renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
+    editor.value = query;
+    input.focus();
+  });
+  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall);
+}
+$("guide").addEventListener("toggle", showGuide);
+$("guide-filter").addEventListener("input", showGuide);
+
+// A query shared as a link is put in the box, not run.
+function restoreShared() {
+  const shared = decodeShare(location.hash);
+  if (!shared) return;
+  if ($("mode").value !== shared.mode) {
+    $("mode").value = shared.mode;
+    run(`.mode ${shared.mode}`);
+  }
+  editor.value = shared.code;
+}
+
 function showHistory() {
   history_.replaceChildren(new Option("History", ""), ...[...history.entries].reverse().map((e) => new Option(e.replace(/\s+/g, " ").slice(0, 90), e)));
 }
@@ -160,7 +200,10 @@ function start() {
       setStatus("Ready.");
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
+      guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [] };
+      showGuide();
       setBusy(false);
+      restoreShared();
     } else if (data.type === "file") {
       setBusy(false);
       if (data.error) {
@@ -177,7 +220,9 @@ function start() {
     } else if (data.type === "reply") {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
       out.replaceChildren(html(data.html));
+      if (data.predicates) guide.predicates = data.predicates;
       if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
+      showGuide();
       if (data.prompt) editor.value = data.prompt; // what the assistant wrote
       else editor.refresh();
       if (data.tables?.length) {
@@ -240,9 +285,21 @@ $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
   if (question.value.trim()) run(`.ask ${question.value}`);
 });
+$("share").addEventListener("click", async (event) => {
+  const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;
+  window.history.replaceState(null, "", url);
+  try {
+    await navigator.clipboard.writeText(url);
+    event.target.textContent = "Copied";
+    setTimeout(() => { event.target.textContent = "Copy link"; }, 1200);
+  } catch {
+    window.prompt("Copy this link", url); // no clipboard here, e.g. an unsecured address
+  }
+});
 $("key").addEventListener("click", () => ($("llm-details").open = !$("llm-details").open));
 $("mode").addEventListener("change", (event) => {
   editor.refresh();
+  showGuide();
   run(`.mode ${event.target.value}`);
 });
 $("view").addEventListener("click", () => run(".view"));
