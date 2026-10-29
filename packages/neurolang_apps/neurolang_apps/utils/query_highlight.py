@@ -5,8 +5,10 @@ Syntax highlighting of Datalog and SQUALL queries.
 ``comment``, ``keyword``, ``operator``, ``predicate``, ``string`` and
 ``number`` (or ``""`` for the rest): a ``%`` outside a string starts a
 comment, to the end of the line. In Datalog, the grammar's keywords (``PROB``,
-``AGGREGATE``…), its operators (``:-``, ``~``, ``//``, comparisons…) and
-the predicates applied to arguments are highlighted; in SQUALL, the
+``AGGREGATE``…), its operators (``:-``, ``~``, ``//``, comparisons…, and
+those of the logic notation, ``←``, ``∧``, ``∨``…) and the predicates
+applied to arguments are highlighted, the probabilistic facts and choices
+(:func:`probabilistic_kinds`) as ``fact`` and ``choice``; in SQUALL, the
 keywords of its grammar. Strings and numbers are highlighted in both.
 
 The REPL styles the fragments as it edits a line, and :func:`highlight`
@@ -36,6 +38,8 @@ DATALOG_OPERATORS = frozenset({
     ":-", "\N{LEFTWARDS ARROW}", "-:", "\N{RIGHTWARDS ARROW}", "~",
     "\N{NOT SIGN}", "//", "|", "::", ":~:", "^", ":=", "==", "!=", "<",
     "<=", ">", ">=", "=", "&", "\N{LOGICAL AND}", "\N{THERE EXISTS}",
+    "\N{LOGICAL OR}", "\N{FOR ALL}", "\N{NOT EQUAL TO}",
+    "\N{LESS-THAN OR EQUAL TO}", "\N{GREATER-THAN OR EQUAL TO}",
 })
 
 # The ANSI colours of the kinds of fragments, readable on light and dark
@@ -47,6 +51,8 @@ ANSI = {
     "predicate": "34",
     "string": "32",
     "number": "36",
+    "fact": "33",
+    "choice": "1;31",
 }
 
 
@@ -58,24 +64,46 @@ def _squall_words() -> frozenset:
     return frozenset(squall_keywords())
 
 
-def _word_kind(word: str, call: bool, squall: bool) -> str:
-    """Return the kind of *word*, followed by ``(`` if *call*."""
+def probabilistic_kinds(program) -> dict:
+    """
+    Return the kinds of the probabilistic predicates of *program*.
+
+    They map the names of its probabilistic facts to ``fact`` and of its
+    probabilistic choices to ``choice``.
+    """
+    kinds = {
+        symbol.name: "fact"
+        for symbol in getattr(program, "pfact_pred_symbs", ())
+    }
+    kinds.update(
+        (symbol.name, "choice")
+        for symbol in getattr(program, "pchoice_pred_symbs", ())
+    )
+    return kinds
+
+
+def _word_kind(word: str, call: bool, squall: bool, kinds) -> str:
+    """
+    Return the kind of *word*, followed by ``(`` if *call*.
+
+    A predicate has its kind in *kinds*, if it is there.
+    """
     if squall:
         return "keyword" if word in _squall_words() else ""
     if word in DATALOG_KEYWORDS:
         return "keyword"
-    return "predicate" if call else ""
+    return kinds.get(word, "predicate") if call else ""
 
 
-def _fragments(match, squall: bool):
+def _fragments(match, squall: bool, kinds):
     """Yield the ``(kind, text)`` fragments of a token *match*."""
     kind = match.lastgroup
     if kind == "call":
         word = match.group("word")
-        yield _word_kind(word, True, squall), word
+        yield _word_kind(word, True, squall, kinds), word
         yield "", match.group("call")
     elif kind == "word":
-        yield _word_kind(match.group(0), False, squall), match.group(0)
+        yield _word_kind(match.group(0), False, squall, kinds), match.group(0)
     elif kind == "operator":
         operator = match.group(0)
         highlighted = not squall and operator in DATALOG_OPERATORS
@@ -84,26 +112,31 @@ def _fragments(match, squall: bool):
         yield kind, match.group(0)
 
 
-def tokens(line: str, squall: bool = False):
-    """Yield the ``(kind, text)`` fragments of a *line* of a query."""
+def tokens(line: str, squall: bool = False, kinds=None):
+    """
+    Yield the ``(kind, text)`` fragments of a *line* of a query.
+
+    The predicates of *kinds* (:func:`probabilistic_kinds`) are of their
+    kind there.
+    """
     end = 0
     for match in _TOKEN.finditer(line):
         if match.start() > end:
             yield "", line[end:match.start()]
-        yield from _fragments(match, squall)
+        yield from _fragments(match, squall, kinds or {})
         end = match.end()
     if end < len(line):
         yield "", line[end:]
 
 
-def ansi(text: str, language: str = "datalog") -> str:
+def ansi(text: str, language: str = "datalog", kinds=None) -> str:
     """Return the query *text* in *language* with ANSI colours."""
     squall = language == "squall"
     lines = []
     for line in text.split("\n"):
         lines.append("".join(
             f"\033[{ANSI[kind]}m{fragment}\033[0m" if kind else fragment
-            for kind, fragment in tokens(line, squall)
+            for kind, fragment in tokens(line, squall, kinds)
         ))
     return "\n".join(lines)
 
@@ -115,6 +148,6 @@ def use_color(stream) -> bool:
     return bool(getattr(stream, "isatty", lambda: False)())
 
 
-def highlight(text: str, language: str, stream) -> str:
+def highlight(text: str, language: str, stream, kinds=None) -> str:
     """Return the query *text* coloured if *stream* is a terminal."""
-    return ansi(text, language) if use_color(stream) else text
+    return ansi(text, language, kinds) if use_color(stream) else text

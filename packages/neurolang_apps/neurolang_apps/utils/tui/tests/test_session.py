@@ -165,6 +165,53 @@ def test_idb_numbers_the_rules(two_rules):
     ]
 
 
+def test_idb_in_logic_notation(two_rules):
+    assert "Logic notation: on" in _command(two_rules, ".logic on")
+    out = _command(two_rules, ".idb both")
+    assert out.splitlines() == [
+        "1  both(x) ← person(x)",
+        "           ∧ plays(x)",
+        "2  both(x) ← person(x)",
+        "           ∧ sings(x)",
+    ]
+    assert "both(x) ← person(x)\n        ∧ plays(x)" in _command(
+        two_rules, ".datalog both"
+    )
+    assert "Logic notation: off" in _command(two_rules, ".logic off")
+    assert ":-" in _command(two_rules, ".idb both")
+
+
+def test_logic_shows_the_last_query(app):
+    assert "No query has been run yet." in _command(app, ".logic")
+    app._execute_and_display("ans(x) :- active(x), ~sings(x)")
+    assert _command(app, ".logic").splitlines() == [
+        "ans(x) ← active(x)",
+        "       ∧ ¬sings(x)",
+    ]
+    assert not app.settings.logic_notation
+
+
+def test_datalog_folds_the_rules_of_a_probability(conditional):
+    conditional.settings.squall = False
+    conditional._execute_and_display(
+        "ans(t, p) :- PROB[mentions(s, t), selected_study(s) // "
+        "mentions(s, 'pain'), selected_study(s)] = p, (p > 0.6)"
+    )
+    assert _command(conditional, ".datalog").splitlines() == [
+        "── query ──",
+        "ans(t, p) :-",
+        "    PROB[mentions(s, t) ∧ selected_study(s) | mentions(s, 'pain') ∧ "
+        "selected_study(s)] = p,",
+        "    p > 0.6",
+        "",
+    ]
+    assert _command(conditional, ".logic").splitlines() == [
+        "ans(t, p) ← p = P[mentions(s, t) ∧ selected_study(s)",
+        "                 | mentions(s, 'pain') ∧ selected_study(s)]",
+        "          ∧ p > 0.6",
+    ]
+
+
 def test_idb_of_unknown_predicate(app):
     assert "'nope' is not an IDB predicate" in _command(app, ".idb nope")
 
@@ -200,6 +247,23 @@ def test_idb_lists_a_conditional_predicate_once(conditional):
     output = _command(conditional, ".idb")
     assert output.count("marg") == 1
     assert "Total session IDB predicates: 2" in output
+
+
+def test_listings_colour_the_probabilistic_choices(conditional):
+    conditional.console = Console(
+        file=io.StringIO(), force_terminal=True, color_system="standard"
+    )
+    output = _command(conditional, ".datalog marg")
+    assert "\x1b[1;31mselected_study\x1b[0m" in output
+    _command(conditional, ".logic on")
+    output = re.sub(r"\x1b\[[0-9;]*m", "", _command(
+        conditional, ".datalog marg"
+    ))
+    assert output.splitlines() == [
+        "marg(s₀, P[term(s₀) ∧ ∃s₁. (selected_study(s₁) ∧ term(s₀) ∧ "
+        "mentions(s₁, s₀))",
+        "          | selected_study(s₂) ∧ mentions(s₂, 'pain')])",
+    ]
 
 
 def test_drop_removes_the_helpers_of_a_conditional(conditional):

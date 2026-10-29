@@ -52,3 +52,41 @@ def test_colour_only_on_a_terminal(monkeypatch):
     assert not query_highlight.use_color(io.StringIO())
     monkeypatch.setenv("NO_COLOR", "1")
     assert not query_highlight.use_color(Terminal())
+
+
+PROBABILISTIC = {"selected_study": "choice", "reported": "fact"}
+
+
+def test_probabilistic_predicates_in_datalog_and_logic():
+    datalog = "p(t, PROB) :- term(t, s) // selected_study(s), reported(s)"
+    assert [
+        (kind, text) for kind, text in tokens(datalog, kinds=PROBABILISTIC)
+        if kind in ("predicate", "choice", "fact")
+    ] == [
+        ("predicate", "p"), ("predicate", "term"),
+        ("choice", "selected_study"), ("fact", "reported"),
+    ]
+    logic = "p(t, P[term(t, s) | selected_study(s)]) ← reported(t) ∨ q(t)"
+    assert [
+        (kind, text) for kind, text in tokens(logic, kinds=PROBABILISTIC)
+        if kind
+    ] == [
+        ("predicate", "p"), ("predicate", "term"), ("operator", "|"),
+        ("choice", "selected_study"), ("operator", "←"),
+        ("fact", "reported"), ("operator", "∨"), ("predicate", "q"),
+    ]
+    assert "\033[1;31mselected_study\033[0m" in ansi(
+        logic, kinds=PROBABILISTIC
+    )
+
+
+def test_probabilistic_kinds_of_a_program():
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples([(0.5, "a")], name="reported")
+    nl.add_uniform_probabilistic_choice_over_set([("a",)], name="selected")
+    nl.add_tuple_set([("a",)], name="study")
+    assert query_highlight.probabilistic_kinds(nl.program_ir) == {
+        "reported": "fact", "selected": "choice",
+    }

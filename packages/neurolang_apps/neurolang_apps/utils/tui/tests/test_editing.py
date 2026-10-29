@@ -195,6 +195,19 @@ def test_session_completes_engine_predicates(app):
     assert "P" in _texts(app.completer, "ans(x) :- ")
 
 
+def test_session_colours_the_probabilistic_predicates(app):
+    session = app._make_session()
+    app._nl.add_uniform_probabilistic_choice_over_set([(1,)], name="pick")
+    app._nl.add_probabilistic_facts_from_tuples([(0.5, 1)], name="seen")
+    line = session.lexer.lex_document(Document("q(x) :- pick(x), seen(x)"))
+    assert [
+        fragment for fragment in line(0)
+        if fragment[0] in ("class:choice", "class:fact")
+    ] == [("class:choice", "pick"), ("class:fact", "seen")]
+    rules = dict(STYLE.style_rules)
+    assert rules["choice"] != rules["fact"]
+
+
 def test_toolbar(app):
     app._make_session()
     assert toolbar(app) == (

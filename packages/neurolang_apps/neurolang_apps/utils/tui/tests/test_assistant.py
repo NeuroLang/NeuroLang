@@ -91,6 +91,24 @@ def test_ask_puts_the_query_in_the_prompt(app):
     assert "Datalog syntax" in system
 
 
+def test_ask_shows_the_logic_notation_too_when_on(app):
+    answer = "```datalog\nans(s) :- study(s), mentions(s, 'pain')\n```"
+    script(app, answer)
+    app._run_line(".logic on")
+    app._run_line(".ask Which studies mention pain?")
+    text = output(app)
+    assert "DATALOG query" in text and "in logic notation" in text
+    assert "ans(s) ← study(s)" in text and "∧ mentions(s, 'pain')" in text
+    assert app.pending_input == "ans(s) :- study(s), mentions(s, 'pain')"
+    app._run_line(".logic off")
+    script(app, answer)
+    app._run_line(".ask Which studies mention pain?")
+    assert output(app).count("in logic notation") == 1
+    app.console.file.truncate(0)
+    app._run_line(".logic")
+    assert "ans(s) ← study(s)" in output(app)
+
+
 def test_ask_follows_the_mode_or_the_flag(app):
     script(app, f"```squall\n{PAIN}\n```")
     app.settings.squall = True
@@ -336,7 +354,7 @@ def test_rating_needs_sharing_on(app):
     app._run_line(".ask Which studies mention pain?")
     app._run_line(".rate good")
     assert app.failed and "NEUROLANG_LLM_FEEDBACK_URL" in output(app)
-    assert app.assistant.last_answer is None
+    assert app.assistant.last_answer["id"] is None
     assert ".rate" in help_text() and ".refine" in help_text()
     app._run_line(".help feedback")
     assert "[COMMENT]" in output(app) and ".rate ID" in output(app)

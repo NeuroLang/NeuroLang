@@ -42,31 +42,41 @@ class NeuroLangLexer(Lexer):
     ``~``, ``//``, comparisons…) and the predicates applied to arguments
     are highlighted; in SQUALL, the keywords of its grammar
     (:func:`~neurolang.utils.squall_completion.squall_keywords`), which its completion
-    offers. Strings and numbers are highlighted in both. The fragments
-    are styled with the classes ``comment``, ``keyword``, ``operator``,
-    ``predicate``, ``string`` and ``number`` of :data:`STYLE`.
+    offers. Strings and numbers are highlighted in both. *kinds* returns
+    the kinds of the probabilistic predicates
+    (:func:`~neurolang_apps.utils.query_highlight.probabilistic_kinds`).
+    The fragments are styled with the classes ``comment``, ``keyword``,
+    ``operator``, ``predicate``, ``fact``, ``choice``, ``string`` and
+    ``number`` of :data:`STYLE`.
     """
 
-    def __init__(self, is_squall: Optional[Callable[[], bool]] = None):
+    def __init__(
+        self, is_squall: Optional[Callable[[], bool]] = None,
+        kinds: Optional[Callable[[], dict]] = None,
+    ):
         """Set up the lexer of the language *is_squall* tells."""
         self._is_squall = is_squall or (lambda: False)
+        self._kinds = kinds or dict
 
     def lex_document(self, document: Document):
         """Return the function giving the styled fragments of a line."""
         squall = self._is_squall()
+        kinds = self._kinds()
 
         def get_line(lineno: int):
             if lineno >= len(document.lines):
                 return []
-            return list(self.tokens(document.lines[lineno], squall))
+            return list(self.tokens(document.lines[lineno], squall, kinds))
 
         return get_line
 
-    def tokens(self, line: str, squall: Optional[bool] = None):
+    def tokens(self, line: str, squall: Optional[bool] = None, kinds=None):
         """Yield the ``(style, text)`` fragments of *line*."""
         if squall is None:
             squall = self._is_squall()
-        for kind, text in query_highlight.tokens(line, squall):
+        if kinds is None:
+            kinds = self._kinds()
+        for kind, text in query_highlight.tokens(line, squall, kinds):
             yield (f"class:{kind}" if kind else ""), text
 
 
@@ -79,6 +89,8 @@ STYLE = Style.from_dict({
     "predicate": "ansiblue",
     "string": "ansigreen",
     "number": "ansicyan",
+    "fact": "ansiyellow",
+    "choice": "bold ansired",
 })
 
 
@@ -188,7 +200,10 @@ def session_options(app) -> dict:
         # The SQUALL grammar can take tens of milliseconds to complete a
         # long sentence: complete without blocking the typing.
         complete_in_thread=True,
-        lexer=NeuroLangLexer(lambda: app.settings.squall),
+        lexer=NeuroLangLexer(
+            lambda: app.settings.squall,
+            lambda: query_highlight.probabilistic_kinds(app._nl.program_ir),
+        ),
         auto_suggest=AutoSuggestFromHistory(),
         bottom_toolbar=lambda: toolbar(app),
         style=STYLE,

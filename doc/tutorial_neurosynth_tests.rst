@@ -195,6 +195,12 @@ viewer in the browser rather than telling to::
     Saved the viewer to: /var/folders/m_/9f8m55cs45g8_36d1wx67_jc0000gr/T/neurolang_view_r_39o2rq.html
     Open it in a browser to see the image.
 
+``.logic on`` shows the rules in logic notation, the probabilities as
+``P[A | B]``; ``.idb p_a_given_t`` then lists::
+
+    1  p_a_given_t(t, i, j, k, P[activation(i, j, k, s) ∧ selected_study(s)
+                                | term_in_study(s, t) ∧ selected_study(s)])
+
 The comments say what each line computes; some points need more words:
 
 - The term is only given in the query, ``ratios("vision", ...)``: magic
