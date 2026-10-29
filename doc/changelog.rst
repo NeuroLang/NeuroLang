@@ -32,6 +32,24 @@ Unreleased
 
 **New features:**
 
+* Confidence intervals by resampling the studies.
+  ``nl.add_resampling("boot_studies", choice="selected_study")``, or
+  ``resamplings`` in an engine's YAML, adds replicates of a probabilistic
+  choice, the Bayesian, classical or Poisson bootstrap of its outcomes.
+  ``RESAMPLE[boot_studies](pred(x)) = b`` is then ``pred(x)``, any rule
+  over ``PROB`` of the choice including the measures computed from the
+  probabilities, such as Bayes factors, on replicate ``b``, and
+  ``percentile(x, 2.5)`` and ``percentile(x, 97.5)`` over the replicates
+  give the interval. Every query sees the same replicates, so that two
+  measures are compared on the same ``b``. It rewrites the rules into
+  sums over the outcomes of the choice, weighted by each replicate, and
+  needs no other solver; on Neurosynth, the interval of the Bayes factor
+  of a term for a region takes 15 s. The ``neurosynth`` and
+  ``neurostore`` engines have ``boot_studies``, 500 replicates of
+  ``selected_study``, and the query assistant has examples and guidance
+  for questions on how certain an answer is. See the tutorial,
+  :doc:`tutorial_datalog`, section 10.6.
+
 * The example LLM configuration has the providers ``albert-deepseek``,
   ``openrouter-gemma`` and ``openrouter-deepseek``: DeepSeek V4 Flash and
   Gemma 4 31B on Albert and on OpenRouter.
@@ -86,6 +104,17 @@ Unreleased
 * ``neurolang-apps`` depends on ``pyarrow``, which the ``neurostore``
   engine needs to read the parquet files of its releases and which
   NeuroLang never declared.
+
+**Bug fixes:**
+
+* Two aggregations with arguments in one head, such as
+  ``percentile(v, 2.5)`` and ``percentile(v, 97.5)``, gave the result of
+  the last one for both: their functions shared one global name.
+
+* A query whose head aggregates over probabilities, such as
+  ``ans(max(p)) :- p_term(t, p)``, failed with
+  ``NoValidChaseClassForStratumException``: it was solved by the
+  deterministic chase, which does not compute the probabilities.
 
 
 v0.1a21 (2026-10-21)

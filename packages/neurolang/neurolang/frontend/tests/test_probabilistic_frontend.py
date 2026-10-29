@@ -2506,3 +2506,18 @@ def test_builtin_on_region_relation_in_probabilistic_rule_is_lifted():
     assert inline.sort_values("l").reset_index(drop=True).equals(
         deterministic.sort_values("l").reset_index(drop=True)
     )
+
+
+def test_query_aggregating_probabilities_in_its_head():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "r1"), ("s2", "r1"), ("s3", "r2")], name="activates"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected"
+    )
+    nl.execute_datalog_program("p(r, PROB) :- activates(s, r) & selected(s)")
+    res = nl.execute_datalog_program("ans(max(x), min(x)) :- p(r, x)")
+    assert res.columns == ("max", "min")
+    assert list(res) == [pytest.approx((2 / 3, 1 / 3))]
+    nl.execute_datalog_program("ans(max(x)) :- p(r, x)", dry_run=True)

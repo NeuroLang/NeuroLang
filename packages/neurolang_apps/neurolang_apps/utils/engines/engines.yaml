@@ -94,6 +94,16 @@ engines:
       argument, close(q, s) :- similar_study(q, s), selected_study(s);
       inside another rule the text is not known and the query fails.
       Rank by similarity rather than with a fixed threshold.
+      A question asking how certain or significant an answer is (a
+      confidence interval, an error bar, whether one probability is
+      larger than another) resamples the studies: write the measure as a
+      rule of its own over PROB, measure(t, v), then rep(b, t, v) :-
+      RESAMPLE[boot_studies](measure(t, v)) = b, its value on each
+      replicate b, and answer with the measure and percentile(x, 2.5),
+      percentile(x, 97.5) over rep(b, 'fear', x); to compare two
+      measures join their replicates on the same b.  Ask it for one
+      region or term at a time, never for voxels or every term: each
+      replicate recomputes the measure.
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
@@ -127,6 +137,14 @@ engines:
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
       cogat_definition(t, d) :- cogat_term(x, t), skos:definition(x, d)
       cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
+    # Replicates of selected_study, resampling the studies, for confidence
+    # intervals on the probabilities and the measures derived from them.
+    resamplings:
+      boot_studies:
+        choice: selected_study
+        n: 500
+        scheme: bayesian
+        seed: 0
     # The Cognitive Atlas ontology, for open-world queries over concepts,
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
     # triples are facts (``rdfs:label(iri, 'Working memory')``) and its
@@ -184,6 +202,14 @@ engines:
         columns: [tfidf]
         type: float
         description: "a TF-IDF weight"
+      replicate:
+        columns: [b]
+        type: int
+        description: "a replicate of a resampling of the studies"
+      weight:
+        columns: [w]
+        type: float
+        description: "the weight of a study in a replicate"
       voxel:
         columns: [i, j, k]
         type: int
@@ -295,6 +321,12 @@ engines:
         probability: true
         arguments:
           - study
+      boot_studies:
+        description: >
+          500 Bayesian-bootstrap replicates b of the studies, for
+          confidence intervals: RESAMPLE[boot_studies](pred(x)) = b is
+          pred(x), any rule over PROB of selected_study, on replicate b
+        arguments: [replicate, study, weight]
       voxel:
         description: "Every voxel index (i, j, k) of the MNI template grid"
         arguments:

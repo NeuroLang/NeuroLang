@@ -38,6 +38,16 @@ def test_percentile_with_ties_keeps_every_tie(nl):
     assert {s for s, in res} == set(range(10))
 
 
+def test_two_percentiles_of_a_head(nl):
+    res = nl.execute_datalog_program(
+        "ci(g, percentile(v, 2.5), percentile(v, 97.5)) :- score(g, s, v)\n"
+        "ans(g, lo, hi) :- ci(g, lo, hi)"
+    )
+    for g, lo, hi in res:
+        assert (lo, hi) == pytest.approx((2.475, 96.525))
+    assert {g for g, _, _ in res} == {"a", "b"}
+
+
 def test_count_is_a_builtin_aggregation(nl):
     res = nl.execute_datalog_program(
         "n(g, count(s)) :- score(g, s, v)\nans(g, k) :- n(g, k)"

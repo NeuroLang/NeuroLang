@@ -33,6 +33,10 @@ define:
   ``startswith``, etc.) to register as callable symbols;
 * ``probabilistic_choice`` — uniform probabilistic choices declared as
   ``name: {source: other_predicate}``.
+* ``resamplings`` — replicates of a probabilistic choice for confidence
+  intervals, ``name: {choice: selected_study, n: 1000, scheme: bayesian,
+  seed: 0}``, used as ``RESAMPLE[name](pred(x)) = b`` (see
+  :meth:`~neurolang.frontend.NeurolangPDL.add_resampling`).
 * ``atlases`` — brain atlases downloaded via nilearn (e.g. ``destrieux``,
   ``schaefer``, ``difumo``) and registered as predicates with
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
@@ -488,7 +492,10 @@ def get_predicates(
             rel_cfg.get("description", ""),
         )
 
-    for ch_name, ch_cfg in cfg.get("probabilistic_choice", {}).items():
+    for ch_name, ch_cfg in (
+        *cfg.get("probabilistic_choice", {}).items(),
+        *cfg.get("resamplings", {}).items(),
+    ):
         _merge_predicate_metadata(
             predicates,
             ch_name,
@@ -1434,6 +1441,13 @@ def _phase_probabilistic_choices(nl, cfg):
         )
 
 
+def _phase_resamplings(nl, cfg):
+    for name, options in cfg.get("resamplings", {}).items():
+        nl.add_resampling(name, **{
+            k: v for k, v in options.items() if k != "description"
+        })
+
+
 _ONTOLOGY_OPTIONS = ("format", "individuals", "names")
 
 
@@ -1647,5 +1661,6 @@ def build_engine(
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
+    _phase_resamplings(nl, cfg)
 
     return nl

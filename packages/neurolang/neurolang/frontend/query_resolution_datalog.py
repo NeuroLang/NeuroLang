@@ -53,6 +53,7 @@ from nl_core.utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
 from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
+from .resampling import uses_resampling
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -397,18 +398,19 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             if isinstance(rule, ir.Query)
         ]
         if len(queries) == 0:
-            self.program_ir.walk(intermediate_representation)
+            self._walk_program(intermediate_representation.formulas)
             return
         elif len(queries) == 1:
-            query = self.frontend_translator.walk(queries[0])
-            program = logic.Union(
+            self._walk_program(
                 [
                     rule
                     for rule in intermediate_representation.formulas
                     if not isinstance(rule, ir.Query)
                 ]
             )
-            self.program_ir.walk(program)
+            query = self.frontend_translator.walk(
+                self._expand_resamplings(queries[0])
+            )
             return self.query(
                 query.head.arguments, query.body,
                 show_rewritten=show_rewritten, dry_run=dry_run,
@@ -427,6 +429,26 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def _walk_program(self, rules):
+        """
+        Add *rules* to the program; those with ``RESAMPLE`` last, as they
+        rewrite the rules they depend on.
+        """
+        plain = [r for r in rules if not uses_resampling(r)]
+        resampled = [r for r in rules if uses_resampling(r)]
+        self.program_ir.walk(logic.Union(plain))
+        if resampled:
+            self.program_ir.walk(
+                logic.Union([self._expand_resamplings(r) for r in resampled])
+            )
+
+    def _expand_resamplings(self, rule):
+        if uses_resampling(rule):
+            raise UnsupportedProgramError(
+                "RESAMPLE needs a probabilistic program (NeurolangPDL)"
+            )
+        return rule
 
     def _expand_whole_relation(self, head_vars, body):
         """
