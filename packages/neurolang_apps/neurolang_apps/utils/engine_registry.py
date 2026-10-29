@@ -86,8 +86,6 @@ Usage
 from __future__ import annotations
 
 import functools
-import hashlib
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
@@ -97,6 +95,7 @@ import nibabel as nib
 import numpy as np
 import yaml
 
+from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
     nilearn_datasets as _nilearn_datasets,
@@ -1138,68 +1137,6 @@ def atlas_activation(
     )
 
 
-# The subdirectory of an engine's data directory where the studies activating
-# the regions of its atlases are kept (see cached_atlas_activation), and the
-# version of atlas_activation in their names: raise it when what it gives
-# changes.
-ACTIVATION_CACHE_DIR = "atlas_activation"
-ACTIVATION_CACHE_VERSION = 1
-
-
-def _activation_key(img, label_names, peaks_mm, studies, radius_mm) -> str:
-    """
-    Return what the pairs of :func:`atlas_activation` depend on, as a name.
-
-    It is made of values written out the same way on any platform: the
-    peaks to the micrometre, as numpy versions may differ in the last bit
-    of a coordinate, the integers and strings of the labels and studies.
-    """
-    digest = hashlib.sha256()
-    data = np.ascontiguousarray(np.asanyarray(img.dataobj))
-    digest.update(
-        f"{ACTIVATION_CACHE_VERSION} {float(radius_mm)!r} {data.dtype} "
-        f"{data.shape}".encode()
-    )
-    digest.update(data.tobytes())
-    digest.update(np.ascontiguousarray(img.affine, dtype="<f8").tobytes())
-    digest.update(repr(sorted(
-        (int(value), str(name)) for value, name in label_names.items()
-    )).encode())
-    digest.update(
-        np.round(np.asarray(peaks_mm, dtype=float) * 1000)
-        .astype("<i8").tobytes()
-    )
-    studies = np.asarray(studies)
-    if studies.dtype.kind in "iu":
-        digest.update(studies.astype("<i8").tobytes())
-    else:
-        digest.update(repr([str(study) for study in studies]).encode())
-    return digest.hexdigest()[:24]
-
-
-def _read_activation(path: Path) -> List[Tuple[str, Any]]:
-    """Return the pairs written by :func:`_write_activation` in *path*."""
-    with np.load(path, allow_pickle=False) as stored:
-        names = stored["names"][stored["codes"]].tolist()
-        return list(zip(names, stored["studies"].tolist()))
-
-
-def _write_activation(path: Path, pairs: List[Tuple[str, Any]]) -> None:
-    """Write the *pairs* in *path*, in one piece or not at all."""
-    names, codes = np.unique([name for name, _ in pairs], return_inverse=True)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    try:
-        with open(temporary, "wb") as file:
-            np.savez_compressed(
-                file, names=names.astype(str), codes=codes.astype(np.int32),
-                studies=np.array([study for _, study in pairs]),
-            )
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def cached_atlas_activation(
     cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
     studies: np.ndarray, radius_mm: float = 3.0,
@@ -1210,25 +1147,30 @@ def cached_atlas_activation(
     They take about 15 s per atlas to find and depend only on the atlas
     image, its labels, the peaks, their studies and the radius, which
     name the file they are kept in: a change of any of them finds another
-    file, or none and finds the pairs again. A directory that cannot be
-    written to, or a file that cannot be read, only means that the pairs
-    are found again.
+    file, or none and finds the pairs again (see
+    :mod:`neurolang_apps.utils.engine_cache`).
     """
-    path = Path(cache_dir) / (
-        f"{_activation_key(img, label_names, peaks_mm, studies, radius_mm)}"
-        ".npz"
+    key = engine_cache.digest(
+        float(radius_mm), engine_cache.image_digest(img),
+        sorted((int(value), str(name)) for value, name in label_names.items()),
+        np.asarray(peaks_mm, dtype=float), np.asarray(studies),
     )
-    if path.exists():
-        try:
-            return _read_activation(path)
-        except Exception:  # damaged, or written by another numpy
-            pass
-    pairs = atlas_activation(img, label_names, peaks_mm, studies, radius_mm)
-    try:
-        _write_activation(path, pairs)
-    except (OSError, ValueError, TypeError):
-        pass
-    return pairs
+
+    def find():
+        pairs = atlas_activation(
+            img, label_names, peaks_mm, studies, radius_mm
+        )
+        names, codes = np.unique(
+            [name for name, _ in pairs], return_inverse=True
+        )
+        return {
+            "names": names.astype(str), "codes": codes.astype(np.int32),
+            "studies": np.array([study for _, study in pairs]),
+        }
+
+    arrays = engine_cache.keep_arrays(cache_dir, "atlas_activation", key, find)
+    names = arrays["names"][arrays["codes"]].tolist()
+    return list(zip(names, arrays["studies"].tolist()))
 
 
 def _relation_frame(nl, name: str):
@@ -1266,14 +1208,15 @@ def _register_atlas_activation(
 
 
 def _load_deterministic_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path, use_cache: bool = True
+    nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
     predicates: ``{predicate_name}(label, region)``, and with ``activated``
     the studies activating each region (see
-    :func:`_register_atlas_activation`), kept in the data directory unless
-    *use_cache* is false.
+    :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
+    which also remembers where the atlas is and its labels, so that nilearn
+    is not imported to find them.
     """
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
@@ -1281,14 +1224,39 @@ def _load_deterministic_atlas(
         if k not in ("predicate_name", "activated")
     }
     fetch_kw["data_dir"] = str(data_dir)
-    atl_data = info["fetch"](**fetch_kw)
+
+    def fetch():
+        atl_data = info["fetch"](**fetch_kw)
+        maps = Path(atl_data["maps"])
+        return {
+            "maps": str(
+                maps.relative_to(data_dir)
+                if maps.is_relative_to(data_dir) else maps
+            ),
+            "labels": [
+                [int(k), v.decode("utf8") if isinstance(v, bytes) else str(v)]
+                for k, v in _parse_labels(atl_data["labels"])
+            ],
+        }
+
+    found = engine_cache.keep_json(
+        cache_dir, "fetched", engine_cache.digest(
+            atlas_name, sorted(
+                (k, repr(v)) for k, v in fetch_kw.items() if k != "data_dir"
+            ),
+        ), fetch,
+    )
+    maps = Path(data_dir) / found["maps"]
+    if not maps.exists():  # the atlas was moved: ask for it again
+        found = fetch()
+        maps = Path(data_dir) / found["maps"]
 
     from neurolang.regions import ExplicitVBR
 
-    img = nib.load(atl_data["maps"])
+    img = nib.load(str(maps))
     _register_grid(nl, atlas_name, img)
     pred_name = params.get("predicate_name", atlas_name)
-    labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
+    labels = [(k, v) for k, v in found["labels"] if k != 0]
     regions = ExplicitVBR.from_spatial_image_labels(
         img, [k for k, _ in labels]
     )
@@ -1302,8 +1270,7 @@ def _load_deterministic_atlas(
     _register_atlas_labels(nl, atlas_name, names)
     if params.get("activated"):
         _register_atlas_activation(
-            nl, names, img, params["activated"], pred_name,
-            data_dir / ACTIVATION_CACHE_DIR if use_cache else None,
+            nl, names, img, params["activated"], pred_name, cache_dir,
         )
 
 
@@ -1383,7 +1350,7 @@ def _load_probabilistic_atlas(
 
 
 def _load_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path, use_cache: bool = True
+    nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """Download a brain atlas via nilearn and register it as a predicate."""
     info = _ATLAS_REGISTRY.get(atlas_name)
@@ -1395,7 +1362,7 @@ def _load_atlas(
     if info["probabilistic"]:
         _load_probabilistic_atlas(nl, atlas_name, params, data_dir)
     else:
-        _load_deterministic_atlas(nl, atlas_name, params, data_dir, use_cache)
+        _load_deterministic_atlas(nl, atlas_name, params, data_dir, cache_dir)
 
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
@@ -1407,17 +1374,30 @@ def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
 
 
 def _resolve_mask(
-    cfg: dict, data_dir: Path, resolution: Optional[float] = None
+    cfg: dict, data_dir: Path, resolution: Optional[float] = None,
+    cache_dir=None,
 ) -> Optional[nib.Nifti1Image]:
-    """Download the MNI mask if required by the engine config."""
+    """
+    Download the MNI mask if required by the engine config.
+
+    The mask at the *resolution* is kept in *cache_dir* if there is one:
+    nilearn, which finds the template and resamples it, is then not imported.
+    """
     if not cfg.get("requires_mni_mask", False):
         return None
-    mask = _get_mni_mask(data_dir)
-    if resolution is not None:
-        # A 3x3 target affine keeps the original origin; scaling a 4x4
-        # identity would also scale its homogeneous coordinate.
-        mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
-    return mask
+
+    def find():
+        mask = _get_mni_mask(data_dir)
+        if resolution is not None:
+            # A 3x3 target affine keeps the original origin; scaling a 4x4
+            # identity would also scale its homogeneous coordinate.
+            mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
+        return mask
+
+    return engine_cache.keep_image(
+        cache_dir, "mask", engine_cache.digest("icbm152_2009", resolution),
+        find,
+    )
 
 
 def _phase_builtins(nl, cfg):
@@ -1467,9 +1447,12 @@ def _phase_templates(nl, cfg, data_dir, engine_name):
 
 
 def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
+    cache_dir = (
+        engine_cache.cache_dir(data_dir, engine_name) if use_cache else None
+    )
     for atl_name, atl_params in cfg.get("atlases", {}).items():
         _load_atlas(
-            nl, atl_name, atl_params, data_dir / engine_name, use_cache
+            nl, atl_name, atl_params, data_dir / engine_name, cache_dir
         )
 
 
@@ -1735,7 +1718,10 @@ def build_engine(
     cfg = get_engine_config(name, yaml_path)
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
-    mask = _resolve_mask(cfg, data_dir, resolution)
+    cache_dir = (
+        engine_cache.cache_dir(data_dir, name) if use_cache else None
+    )
+    mask = _resolve_mask(cfg, data_dir, resolution, cache_dir)
 
     # Wire dimension_type_predicates from YAML
     dimension_predicates = cfg.get("dimension_type_predicates")
@@ -1761,6 +1747,8 @@ def build_engine(
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
     nl.atlas_labels = {}
+    # Where the Python init of the engine may keep its tables (None: nowhere).
+    nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)

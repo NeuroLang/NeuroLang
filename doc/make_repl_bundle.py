@@ -14,7 +14,7 @@ because the fetchers of nilearn look for every file of a dataset. The
 tables that take the engine long to build are kept in the data directory by
 its build (``neurolang_apps.utils.engine_cache``) and so are in the zip: the
 page starts in about 30 s instead of 2 min. The engine is built again from the
-result, to check that it suffices.
+result, with the tables and without them, to check that it suffices.
 
 Usage::
 
@@ -80,7 +80,7 @@ def write_highlight_words(output: Path) -> None:
     )
 
 
-def build_engine(data_dir: Path) -> None:
+def build_engine(data_dir: Path, use_cache: bool = True) -> None:
     """
     Build the engine on *data_dir*, which downloads what it lacks.
 
@@ -92,13 +92,17 @@ def build_engine(data_dir: Path) -> None:
     from neurolang_apps.utils import engine_registry
 
     try:
-        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        engine_registry.build_engine(
+            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+        )
     except requests.exceptions.SSLError:
         system = next((c for c in SYSTEM_CERTIFICATES if c.is_file()), None)
         if system is None:
             raise
         os.environ["REQUESTS_CA_BUNDLE"] = str(system)
-        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        engine_registry.build_engine(
+            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+        )
 
 
 def check_engine_cache(data_dir: Path) -> None:
@@ -147,7 +151,8 @@ def main(output: Path) -> None:
         build_engine(data_dir)
         check_engine_cache(data_dir)
         trim(data_dir)
-        build_engine(data_dir)  # it must not need what was emptied
+        build_engine(data_dir)  # the page's way: from the kept tables
+        build_engine(data_dir, use_cache=False)  # and without them
         zip_directory(data_dir, output / DATA_ZIP)
     (output / "bundle.json").write_text(
         json.dumps({"wheels": wheels, "data": DATA_ZIP}) + "\n"

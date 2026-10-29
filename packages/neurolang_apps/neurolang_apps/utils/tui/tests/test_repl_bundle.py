@@ -58,7 +58,7 @@ def test_a_certificate_error_is_retried_with_the_system_certificates(
     monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
     calls = []
 
-    def build(name, data_dir, resolution):
+    def build(name, data_dir, resolution, use_cache=True):
         calls.append(os.environ.get("REQUESTS_CA_BUNDLE"))
         if len(calls) == 1:
             raise requests.exceptions.SSLError("certificate has expired")
@@ -76,7 +76,7 @@ def test_without_system_certificates_the_error_is_raised(
 
     monkeypatch.setattr(bundle, "SYSTEM_CERTIFICATES", (tmp_path / "none",))
 
-    def build(name, data_dir, resolution):
+    def build(name, data_dir, resolution, use_cache=True):
         raise requests.exceptions.SSLError("certificate has expired")
 
     monkeypatch.setattr(engine_registry, "build_engine", build)
