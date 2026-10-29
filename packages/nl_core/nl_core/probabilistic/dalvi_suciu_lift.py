@@ -35,6 +35,7 @@ from nl_expr.logic import (
     Disjunction,
     ExistentialPredicate,
     Implication,
+    LogicOperator,
     NaryLogicOperator,
     Negation,
     Quantifier,
@@ -1853,7 +1854,7 @@ def _choice_terms_as_equalities(disjuncts, quantified, symbol_table):
     return [rewriter.walk(disjunct) for disjunct in disjuncts], rewriter.fresh
 
 
-class ChoiceTermsAsEqualities(PatternWalker):
+class ChoiceTermsAsEqualities(ExpressionWalker):
     """
     Rewrite the terms `u`, not *quantified*, of the atoms of the choices
     `functors` at the `positions` by the equivalences
@@ -1905,9 +1906,11 @@ class ChoiceTermsAsEqualities(PatternWalker):
             EQ(new, old) for new, old in zip(args, atom.args) if new != old
         ))
 
-    @add_match(...)
-    def other(self, expression):
-        return expression
+    @add_match(LogicOperator)
+    def other_operator(self, operator):
+        """A fresh variable quantified in front of the formula changes the
+        meaning of what is under a negation, a quantifier or a disjunct."""
+        return operator
 
     def _same_tuple(self, atom, fresh_atom):
         """The substitution of the fresh variables of one of the atoms of

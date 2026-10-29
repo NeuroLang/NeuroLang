@@ -509,7 +509,12 @@ class UnifyChoicesInNegationsMixin(PatternWalker):
     removes C(ū) from the negation.
     """
 
-    @add_match(Conjunction)
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(
+            isinstance(formula, Negation) for formula in conjunction.formulas
+        )
+    )
     def conjunction(self, conjunction):
         formulas = tuple(
             self.walk(formula) for formula in _rewrite_given_asserted(

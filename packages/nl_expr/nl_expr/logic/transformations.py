@@ -112,7 +112,15 @@ class RemoveTrivialOperationsMixin(PatternWalker):
         return self.walk(expression.formula.formula)
 
 
-class SimplifyTruthValuesMixin(PatternWalker):
+class NegationOfTruthValueMixin(PatternWalker):
+    """¬⊥ ≡ ⊤ and ¬⊤ ≡ ⊥."""
+
+    @add_match(Negation(Constant[bool]))
+    def negation_of_truth_value(self, negation):
+        return Constant[bool](not negation.formula.value)
+
+
+class SimplifyTruthValuesMixin(NegationOfTruthValueMixin):
     """
     Simplify the truth values of a formula by the equivalences
     ⊥ ∧ φ ≡ ⊥, ⊤ ∧ φ ≡ φ, ¬⊥ ≡ ⊤, ¬⊤ ≡ ⊥ and ∃x ⊥ ≡ ⊥.
@@ -129,17 +137,11 @@ class SimplifyTruthValuesMixin(PatternWalker):
             return TRUE
         return self.walk(Conjunction(formulas))
 
-    @add_match(Negation(FALSE))
-    def negation_of_false(self, negation):
-        return TRUE
-
-    @add_match(Negation(TRUE))
-    def negation_of_true(self, negation):
-        return FALSE
-
     @add_match(ExistentialPredicate)
     def existential(self, existential):
-        """∃x ⊥ ≡ ⊥: a quantifier of a constant is not built."""
+        """∃x ⊥ ≡ ⊥: the quantifier of a constant is not built by
+        `LogicExpressionWalker`, which rebuilds the quantifier of a body
+        simplified to ⊥, so that the body is simplified here."""
         body = self.walk(existential.body)
         if body == FALSE:
             return FALSE
