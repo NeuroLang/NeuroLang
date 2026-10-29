@@ -139,6 +139,8 @@ engines:
       cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
     # Replicates of selected_study, resampling the studies, for confidence
     # intervals on the probabilities and the measures derived from them.
+    # Each replicate recomputes a measure: 500 keep the interval of a Bayes
+    # factor within the 30 s the query assistant gives a query.
     resamplings:
       boot_studies:
         choice: selected_study
@@ -323,7 +325,7 @@ engines:
           - study
       boot_studies:
         description: >
-          500 Bayesian-bootstrap replicates b of the studies, for
+          Bayesian-bootstrap replicates b of the studies, for
           confidence intervals: RESAMPLE[boot_studies](pred(x)) = b is
           pred(x), any rule over PROB of selected_study, on replicate b
         arguments: [replicate, study, weight]
@@ -597,6 +599,10 @@ engines:
       abstracts, plus the abstracts, titles and LLM-extracted cognitive
       concepts and domains of the studies.
     python_init: "neurolang_apps.utils.engines.neurostore.init"
+    # Twice as many studies as neurosynth: 200 replicates keep a query
+    # within the time and memory the query assistant gives it.
+    resamplings:
+      boot_studies: {n: 200}
     text_embeddings:
       study_abstracts:
         # The texts come with the release: no PubMed download.

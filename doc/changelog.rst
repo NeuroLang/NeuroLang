@@ -45,7 +45,7 @@ Unreleased
   sums over the outcomes of the choice, weighted by each replicate, and
   needs no other solver; on Neurosynth, the interval of the Bayes factor
   of a term for a region takes 15 s. The ``neurosynth`` and
-  ``neurostore`` engines have ``boot_studies``, 500 replicates of
+  ``neurostore`` engines have ``boot_studies``, 500 and 200 replicates of
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
   :doc:`tutorial_datalog`, section 10.6.
