@@ -80,7 +80,10 @@ from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
-from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
+from nl_core.datalog.pretty_printer import (
+    DatalogPrettyPrinter,
+    LogicPrettyPrinter,
+)
 from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from nl_expr.logic import ExistentialPredicate
@@ -619,6 +622,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "replies.",
     )
     parser.add_argument(
+        "--logic",
+        action="store_true",
+        help="With --ask, also print the query in logic notation "
+        "(head ← body, P[A | B]) on stderr. In the REPL, start with "
+        ".logic on: the assistant's queries, and the rules .idb and "
+        ".datalog list, are shown in logic notation too.",
+    )
+    parser.add_argument(
         "--strategy",
         choices=("react", "icl"),
         default=None,
@@ -760,6 +771,23 @@ def _format_ir(expr, fresh_map=None, _counter=None):
         Mutable counter [int] for generating fresh-variable aliases.
     """
     return DatalogPrettyPrinter(fresh_map, _counter).walk(expr)
+
+
+def logic_notation(program: str, squall: bool = False) -> str:
+    """Return the rules and queries of *program* in logic notation."""
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        SquallProgram,
+        parser as squall_parser,
+    )
+    from neurolang.frontend.datalog.standard_syntax import parser
+
+    parsed = (squall_parser if squall else parser)(program)
+    if isinstance(parsed, SquallProgram):
+        formulas = (*parsed.rules, *parsed.queries)
+    else:
+        formulas = getattr(parsed, "formulas", (parsed,))
+    printer = LogicPrettyPrinter()
+    return "\n".join(printer.walk(formula) for formula in formulas)
 
 
 def _show_squall_datalog(program_text: str) -> None:
@@ -1283,6 +1311,7 @@ def _tui_settings(args, tui, argv=()):
         show_ra=args.show_ra,
         ra_options=_show_ra_options(args),
         show_rewritten=args.show_rewritten,
+        logic_notation=args.logic,
         debug=_debug_enabled(args),
         history_path=str(Path.home() / ".neurolang_query_history"),
         data_dir=str(Path(args.data_dir).expanduser().resolve()),
@@ -1373,19 +1402,19 @@ def _print_step(step) -> None:
         )
 
 
-def _verbose_step_printer(language: str):
+def _verbose_step_printer(language: str, kinds=None):
     """
     Return the function printing a step of the LLM assistant on stderr:
     its thought, the tool called with its arguments, its query on its
-    lines and highlighted as *language*, and the start of what it
-    returned.
+    lines and highlighted as *language* (its probabilistic predicates
+    as *kinds* tells), and the start of what it returned.
     """
     def print_step(step) -> None:
-        _print_step_verbose(step, language)
+        _print_step_verbose(step, language, kinds)
     return print_step
 
 
-def _print_step_verbose(step, language: str = "datalog") -> None:
+def _print_step_verbose(step, language: str = "datalog", kinds=None) -> None:
     """Print a step of the LLM assistant: see :func:`_verbose_step_printer`."""
     from neurolang_apps.utils.llm.trace import query_lines
 
@@ -1402,7 +1431,8 @@ def _print_step_verbose(step, language: str = "datalog") -> None:
     query = step.arguments.get("query")
     if isinstance(query, str) and query.strip():
         lines += query_lines(
-            query, language, query_highlight.use_color(sys.stderr), "      "
+            query, language, query_highlight.use_color(sys.stderr), "      ",
+            kinds,
         )
     observation = step.observation.strip().splitlines()
     shown = observation[:VERBOSE_OBSERVATION_LINES]
@@ -1412,11 +1442,12 @@ def _print_step_verbose(step, language: str = "datalog") -> None:
     print("\n".join(lines), file=sys.stderr, flush=True)
 
 
-def _ask_reporting(args, provider, config, language):
+def _ask_reporting(args, provider, config, language, kinds):
     """
     Return the chat client and the step callback of ``--ask``, as
     ``--verbose`` asks: one line per step, the steps in full (-v), or
-    the messages to and from the model (-vv).
+    the messages to and from the model (-vv), their queries highlighted
+    with the probabilistic predicates *kinds*.
     """
     if args.verbose >= 2:
         from neurolang_apps.utils.llm import make_client
@@ -1424,11 +1455,11 @@ def _ask_reporting(args, provider, config, language):
 
         client = TracingClient(
             make_client(provider, config.assistant.timeout),
-            Printer(full=True, language=language).show,
+            Printer(full=True, language=language, kinds=kinds).show,
         )
         return client, None
     if args.verbose == 1:
-        return None, _verbose_step_printer(language)
+        return None, _verbose_step_printer(language, kinds)
     return None, _print_step
 
 
@@ -1443,6 +1474,19 @@ def _positive_int(text: str) -> int:
             f"expected a positive integer, not {text!r}"
         )
     return value
+
+
+def _print_logic(args, query: str, language: str, kinds) -> None:
+    """Print *query* in logic notation on stderr with ``--logic``."""
+    if not args.logic:
+        return
+    try:
+        logic = logic_notation(query, language == "squall")
+    except Exception:
+        return
+    print("-- in logic notation:", file=sys.stderr)
+    print(query_highlight.highlight(logic, "datalog", sys.stderr, kinds),
+          file=sys.stderr)
 
 
 def _run_ask(args) -> None:
@@ -1478,7 +1522,10 @@ def _run_ask(args) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
-    client, on_step = _ask_reporting(args, provider, config, language)
+    kinds = query_highlight.probabilistic_kinds(nl.program_ir)
+    client, on_step = _ask_reporting(
+        args, provider, config, language, kinds
+    )
     assistant = config.assistant
     if args.steps:
         assistant = dataclasses.replace(assistant, max_steps=args.steps)
@@ -1504,20 +1551,21 @@ def _run_ask(args) -> None:
         print(f"Error: no valid query: {result.error}", file=sys.stderr)
         if result.query:
             query = query_highlight.highlight(
-                result.query, language, sys.stderr
+                result.query, language, sys.stderr, kinds
             )
             print(f"Last attempt:\n{query}", file=sys.stderr)
         sys.exit(1)
     commented = result.commented and language == "datalog"
     print(query_highlight.highlight(
         result.commented if commented else result.query, language,
-        sys.stdout,
+        sys.stdout, kinds,
     ))
     if result.commented and not commented:
         # SQUALL has no comments: its rules explained go to stderr.
         print(query_highlight.highlight(
-            result.commented, language, sys.stderr
+            result.commented, language, sys.stderr, kinds
         ), file=sys.stderr)
+    _print_logic(args, result.query, language, kinds)
     if result.explanation:
         print(f"-- {result.explanation}", file=sys.stderr)
     if result.back_translation:

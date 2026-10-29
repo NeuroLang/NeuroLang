@@ -5,7 +5,8 @@ The LLM query assistant in the REPL: ``.ask`` and ``.llm``.
 language with an LLM (see :mod:`neurolang.utils.llm`), printing the
 steps of the agent as they run. The query is not run: it is put in the
 next prompt, to be read, edited and run with Enter, each rule under a
-comment line explaining it (``comment_rules``). ``.llm <question>``
+comment line explaining it (``comment_rules``), and also shown in logic
+notation with ``.logic on``. ``.llm <question>``
 does the same with the ReAct agent writing Datalog, whatever the mode
 and the configured strategy. ``--steps N`` sets the most steps of the
 ReAct agent for one question. ``.llm`` alone, ``.llm provider NAME``,
@@ -26,6 +27,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from neurolang_apps.utils import query_highlight
+from neurolang_apps.utils.cli import logic_notation
 
 from .commands import HELP_TOPICS, command
 from .interrupt import call_interruptibly
@@ -66,8 +68,9 @@ class AssistantState:
     client: object = None
     _config: object = None
     _feedback: object = None
-    # The last answer, for .rate and .refine: its id on the feedback
-    # server, its query and the REPL's last query when it was asked.
+    # The last answer, for .rate, .refine and .logic: its id on the
+    # feedback server (None if not shared), its query and the REPL's last
+    # query when it was asked.
     last_answer: Optional[dict] = None
 
     def config(self):
@@ -172,21 +175,44 @@ QUERY_STYLES = {
     "predicate": "blue",
     "string": "green",
     "number": "cyan",
+    "fact": "yellow",
+    "choice": "bold red",
 }
 
 
-def query_text(query: str, language: str, indent: str = "") -> Text:
-    """Return *query* highlighted as *language*, its lines indented."""
+def query_kinds(app) -> dict:
+    """Return the kinds of the probabilistic predicates of *app*'s engine."""
+    return query_highlight.probabilistic_kinds(app._nl.program_ir)
+
+
+def query_text(
+    query: str, language: str, indent: str = "", kinds=None
+) -> Text:
+    """
+    Return *query* highlighted as *language*, its lines indented.
+
+    The probabilistic predicates are highlighted as *kinds*
+    (:func:`query_kinds`) tells.
+    """
     text = Text()
     for n, line in enumerate(query.strip().split("\n")):
         if n:
             text.append("\n")
         text.append(indent)
         for kind, fragment in query_highlight.tokens(
-            line, language == "squall"
+            line, language == "squall", kinds
         ):
             text.append(fragment, style=QUERY_STYLES.get(kind, ""))
     return text
+
+
+def logic_text(app, program: str, squall: bool) -> Optional[Text]:
+    """Return *program* in logic notation, highlighted, or None."""
+    try:
+        logic = logic_notation(program, squall)
+    except Exception:
+        return None
+    return query_text(logic, "datalog", kinds=query_kinds(app))
 
 
 def _call_text(step) -> str:
@@ -203,6 +229,8 @@ def _step_printer(app, language: str):
     Return the function printing a step of the agent, dimmed, but for
     the query of its tool call, highlighted as *language*.
     """
+    kinds = query_kinds(app)
+
     def print_step(step) -> None:
         console = app.err_console
         if step.thought:
@@ -218,7 +246,7 @@ def _step_printer(app, language: str):
             console.print(f"  [dim]→ {escape(_call_text(step))}[/dim]")
             query = step.arguments.get("query")
             if isinstance(query, str) and query.strip():
-                console.print(query_text(query, language, "      "))
+                console.print(query_text(query, language, "      ", kinds))
             console.print(f"    [dim]{escape(summary)}[/dim]")
     return print_step
 
@@ -263,11 +291,22 @@ def _show_result(app, result) -> None:
     Print the query of the agent's *result*, each rule under a comment
     line explaining it if the model wrote them, and put it in the prompt.
     """
+    kinds = query_kinds(app)
     if result.valid:
         app.console.print(Panel(
-            query_text(result.commented or result.query, result.language),
+            query_text(
+                result.commented or result.query, result.language,
+                kinds=kinds,
+            ),
             title=f"{result.language.upper()} query", border_style="green",
         ))
+        logic = app.settings.logic_notation and logic_text(
+            app, result.query, result.language == "squall"
+        )
+        if logic:
+            app.console.print(Panel(
+                logic, title="in logic notation", border_style="green",
+            ))
         if result.explanation:
             app.console.print(escape(result.explanation), style="dim")
         _show_verification(app, result)
@@ -278,7 +317,7 @@ def _show_result(app, result) -> None:
         )
         if result.query:
             app.console.print(Panel(
-                query_text(result.query, result.language),
+                query_text(result.query, result.language, kinds=kinds),
                 title="last attempt", border_style="red",
             ))
     tokens = result.usage.get("input", 0) + result.usage.get("output", 0)
@@ -360,15 +399,16 @@ def _run_assistant(
         app.console.print(f"[red]{escape(str(exc))}[/red]")
         return
     _show_result(app, result)
+    state.last_answer = {
+        "id": None, "query": result.query, "ran": app.last_query,
+    }
     feedback = state.feedback(_say(app))
     if feedback:
         answer = feedback.share(
             question, result, provider, agent.strategy,
             app.settings.engine_name,
         )
-        state.last_answer = {
-            "id": answer, "query": result.query, "ran": app.last_query,
-        }
+        state.last_answer["id"] = answer
         if answer:
             app.err_console.print(
                 f"[dim]Shared as {answer}: rate it with .rate good|bad|"

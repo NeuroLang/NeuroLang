@@ -27,7 +27,12 @@ from nl_expr.logic import (
     ExistentialPredicate,
     UniversalPredicate,
 )
-from ..probabilistic.expressions import Condition
+from ..probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticChoice,
+    ProbabilisticFact,
+)
 
 # Binary operators that should be printed infix.
 # Maps operator function → display symbol.
@@ -167,15 +172,30 @@ class DatalogPrettyPrinter(PatternWalker):
         conding_s = self.walk(expr.conditioning)
         return f"[{cond_s} | {conding_s}]"
 
+    @add_match(ProbabilisticFact)
+    def format_probabilistic_fact(self, expr: ProbabilisticFact) -> str:
+        """Format a probabilistic fact as ``head :: probability``."""
+        return f"{self.walk(expr.body)} :: {self._probability(expr)}"
+
+    @add_match(ProbabilisticChoice)
+    def format_probabilistic_choice(self, expr: ProbabilisticChoice) -> str:
+        """Format a probabilistic choice as ``head ^ probability``."""
+        return f"{self.walk(expr.body)} ^ {self._probability(expr)}"
+
+    def _probability(self, expr) -> str:
+        """Format the probability of *expr*, in parentheses if computed."""
+        probability = self.walk(expr.probability)
+        if isinstance(expr.probability, FunctionApplication):
+            return f"({probability})"
+        return probability
+
     @add_match(ExpressionBlock)
     def format_block(self, expr: ExpressionBlock) -> str:
         return "\n\n".join(self.walk(e) for e in expr.expressions)
 
     @add_match(Implication)
     def format_implication(self, imp: Implication) -> str:
-        cons_s = self.walk(imp.consequent)
-        ante_s = self._format_body(imp.antecedent)
-        return f"{cons_s} :-\n{self._indent_body(ante_s)}"
+        return self._rule(self.walk(imp.consequent), imp.antecedent)
 
     @add_match(Query)
     def format_query(self, expr: Query) -> str:
@@ -184,14 +204,18 @@ class DatalogPrettyPrinter(PatternWalker):
             head_s = "({})".format(", ".join(head_walked))
         else:
             head_s = head_walked
-        body_s = self._format_body(expr.body)
-        return f"{head_s} :-\n{self._indent_body(body_s)}"
+        return self._rule(head_s, expr.body)
 
     @add_match(Expression)
     def format_default(self, expr: Expression) -> str:
         return repr(expr)
 
     # ── body formatting ─────────────────────────────────────
+
+    def _rule(self, head_s, body):
+        """Format a rule or query of formatted head *head_s* and *body*."""
+        body_s = self._format_body(body)
+        return f"{head_s} :-\n{self._indent_body(body_s)}"
 
     def _format_body(self, e):
         """Format an Implication/Query body.
@@ -203,3 +227,65 @@ class DatalogPrettyPrinter(PatternWalker):
         if isinstance(e, Conjunction):
             return ",\n".join(self.walk(f) for f in e.formulas)
         return self.walk(e)
+
+
+def _is_prob(arg) -> bool:
+    """Whether *arg* is the ``PROB(...)`` argument of a rule's head."""
+    return isinstance(arg, FunctionApplication) and arg.functor == PROB
+
+
+class LogicPrettyPrinter(DatalogPrettyPrinter):
+
+    """
+    Pretty-print NeuroLang IR in logic notation.
+
+    Rules read ``head ← body``, their variables implicitly universally
+    quantified, the conjuncts of the body aligned one per line under the
+    first. A rule computing a probability, ``p(x, PROB) :- A // B``,
+    reads ``p(x, P[A | B])``, and ``p(x, PROB) :- A`` reads ``p(x, P[A])``,
+    the conjuncts of ``A`` and ``B`` aligned likewise.
+
+    Examples
+    --------
+    >>> print(LogicPrettyPrinter().walk(rule))
+    close(q, s) ← similar_study(q, s)
+                ∧ selected_study(s)
+
+    """
+
+    def _aligned(self, body, column: int) -> str:
+        """Format *body*, one conjunct per line, ``∧`` at *column*."""
+        formulas = body.formulas if isinstance(body, Conjunction) else (body,)
+        separator = "\n" + " " * column + "\u2227 "
+        return separator.join(self.walk(f) for f in formulas)
+
+    def _rule(self, head_s, body):
+        """Format ``head ← body``, the conjuncts aligned under the first."""
+        return f"{head_s} \u2190 {self._aligned(body, len(head_s) + 1)}"
+
+    @add_match(Disjunction)
+    def format_disjunction(self, expr: Disjunction) -> str:
+        """Format a disjunction in parentheses, not to read ``∧`` in it."""
+        return f"({super().format_disjunction(expr)})"
+
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda imp: any(_is_prob(arg) for arg in imp.consequent.args),
+    )
+    def format_probability_rule(self, imp: Implication) -> str:
+        """Format ``p(x, PROB) :- A // B`` as ``p(x, P[A | B])``."""
+        head = imp.consequent
+        args = [self._format_arg(arg) for arg in head.args]
+        n = next(n for n, arg in enumerate(head.args) if _is_prob(arg))
+        prefix = f"{self.walk(head.functor)}("
+        prefix += "".join(f"{arg}, " for arg in args[:n]) + "P"
+        column, body = len(prefix), imp.antecedent
+        if isinstance(body, Condition):
+            body_s = (
+                f"{self._aligned(body.conditioned, column)}\n{' ' * column}| "
+                f"{self._aligned(body.conditioning, column)}"
+            )
+        else:
+            body_s = self._aligned(body, column)
+        rest = "".join(f", {arg}" for arg in args[n + 1:])
+        return f"{prefix}[{body_s}]{rest})"

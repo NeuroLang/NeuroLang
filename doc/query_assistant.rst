@@ -63,6 +63,41 @@ tokens.
 
 The assistant needs the ``llm`` extra: ``pip install "neurolang[llm]"``.
 
+Logic notation
+--------------
+
+The queries are written in Datalog, which is what the prompt holds and
+what runs. ``.logic on`` in the REPL, or ``--logic`` with ``--ask``, also
+shows each answer in logic notation: a rule reads ``head ← body``, its
+variables universally quantified, with the conjuncts of the body aligned
+one per line under the first; negation, disjunction and comparisons read
+``¬``, ``∨``, ``≠``, ``≤``, ``≥``. A rule computing a probability,
+``p(t, PROB) :- A // B``, reads ``p(t, P[A | B])``, and ``PROB`` without a
+condition ``P[A]``:
+
+.. code-block:: text
+
+    ╭──────────────────────── DATALOG query ────────────────────────╮
+    │ close(q, s) :- similar_study(q, s), selected_study(s)         │
+    │ p(t, PROB) :- (close(q, s) & term(t, s)) // selected_study(s) │
+    ╰───────────────────────────────────────────────────────────────╯
+    ╭────────────────────── in logic notation ──────────────────────╮
+    │ close(q, s) ← similar_study(q, s)                             │
+    │             ∧ selected_study(s)                               │
+    │ p(t, P[close(q, s)                                            │
+    │      ∧ term(t, s)                                             │
+    │      | selected_study(s)])                                    │
+    ╰───────────────────────────────────────────────────────────────╯
+
+``--logic`` prints the logic notation on the standard error, the
+standard output keeping the Datalog query. In the REPL, ``.logic``
+alone shows the assistant's last answer, or the last query run if it is
+newer, in logic notation, and ``.logic on`` lists the rules of ``.idb``
+and ``.datalog`` in it as well. Wherever a query is highlighted, at the
+prompt, in the assistant's answers and steps, and in these listings, the
+probabilistic choices of the engine, such as ``selected_study``, are in
+bold red and its probabilistic facts in yellow.
+
 Strategies
 ----------
 
