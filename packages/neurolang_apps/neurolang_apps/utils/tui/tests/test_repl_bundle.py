@@ -118,3 +118,38 @@ def test_the_kept_tables_are_told(bundle, monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(engine_cache, "cached_files", lambda *args: [table])
     bundle.check_engine_cache(tmp_path)
     assert "1 files" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("size, parts", [(250, 3), (100, 1), (40, 1)])
+def test_files_larger_than_github_takes_are_split_in_parts(
+    bundle, monkeypatch, tmp_path, size, parts
+):
+    """GitHub refuses files of more than 100 MB, and the documentation is
+    deployed by committing it: the SPECTER2 model is written in parts,
+    which joined are the file."""
+    monkeypatch.setattr(bundle, "PART_SIZE", 100)
+    source = tmp_path / "model.npz"
+    source.write_bytes(os.urandom(size))
+    out = tmp_path / "out"
+    out.mkdir()
+    names = bundle.write_parts(source, out, "neurosynth-model.npz")
+    assert len(names) == parts
+    assert all((out / n).stat().st_size <= 100 for n in names)
+    assert b"".join((out / n).read_bytes() for n in names) == \
+        source.read_bytes()
+    assert sorted(p.name for p in out.iterdir()) == sorted(names)
+
+
+def test_without_torch_nor_saved_embeddings_the_page_goes_without(
+    bundle, monkeypatch, tmp_path
+):
+    from neurolang.utils import engine_registry, text_embeddings
+
+    class Index:
+        encoder = type("E", (), {"numpy_path": tmp_path / "m.npz"})()
+        cache_path = tmp_path / "e.npz"
+
+    nl = type("NL", (), {"text_embedding_indexes": {"abstracts": Index()}})()
+    monkeypatch.setattr(engine_registry, "build_engine", lambda *a: nl)
+    monkeypatch.setattr(text_embeddings, "_torch_available", lambda: False)
+    assert bundle.export_embeddings(tmp_path, tmp_path) == {}

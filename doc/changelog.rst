@@ -24,6 +24,14 @@ Unreleased
   (or with ``--rebuild``) and serves it uncached at
   ``http://localhost:8766/_static/repl/index.html``. It is the command of the
   workspace's root project, whose only package is :file:`tools/serve_repl`.
+* ``query_similarity`` works in the REPL in the browser. Without ``torch``,
+  SPECTER2's query encoder runs in numpy (``neurolang.utils.specter2_numpy``:
+  BERT's WordPiece tokenizer and the model with its ad-hoc query adapter),
+  giving the embeddings of ``torch`` to within float16 rounding, with the
+  same ranking of the studies. The page fetches the exported model (268 MB,
+  in parts under GitHub's 100 MB) and the embeddings of the studies (44 MB)
+  the first time a query needs them; a query then takes about 2 s.
+  ``text_embeddings.fetch_missing`` fetches the files the embeddings lack.
 
 **Internal:**
 

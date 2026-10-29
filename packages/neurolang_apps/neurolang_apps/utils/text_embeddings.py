@@ -15,7 +15,11 @@ Nothing in this module is specific to a dataset.  Texts come from PubMed
 (:func:`fetch_pubmed_abstracts`) or from a CSV/TSV table
 (:func:`load_text_table`).  ``torch``, ``transformers`` and ``adapters``
 are only imported when the first document or query is embedded; install
-them with ``pip install "neurolang[embeddings]"``.
+them with ``pip install "neurolang[embeddings]"``. Without them, as in a
+browser, queries are embedded by the numpy encoder of
+:mod:`.specter2_numpy` from the weights exported next to the model
+(:attr:`Specter2Encoder.numpy_path`), the documents having been embedded
+beforehand; :data:`fetch_missing` can fetch both when first needed.
 
 Engines declared in ``engines.yaml`` can opt in through a
 ``text_embeddings`` section.  Embeddings are computed on the first query
@@ -55,6 +59,25 @@ MODEL_FILES = ("*.json", "*.txt", "*.bin")
 
 # Written in a local copy of a repository once it is complete.
 COMPLETE_MARKER = ".complete"
+
+# Called with the path of a file the embeddings need and that is missing,
+# to fetch it: in a browser, from the site of the page. None: no fetching.
+fetch_missing = None
+
+
+def _ensure(path):
+    """Fetch the file *path* with :data:`fetch_missing` if it is missing."""
+    if fetch_missing is not None and not Path(path).exists():
+        fetch_missing(Path(path))
+
+
+def _torch_available():
+    """Whether torch can be imported."""
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +301,7 @@ class Specter2Encoder:
         self.device = device
         self.model_dir = None if model_dir is None else Path(model_dir)
         self._model = None
+        self._numpy = None
         _ENCODERS.add(self)
 
     @property
@@ -285,6 +309,20 @@ class Specter2Encoder:
         """Identify the document embeddings this encoder produces."""
         return json.dumps(
             [self.model_name, self.document_adapter, self.query_adapter]
+        )
+
+    @property
+    def numpy_path(self):
+        """
+        The model with the query adapter for :mod:`.specter2_numpy`, which
+        embeds queries without torch: next to the local copies of the
+        model, None without them.
+        """
+        if self.model_dir is None:
+            return None
+        names = (self.model_name, self.query_adapter)
+        return self.model_dir / (
+            "+".join(n.replace("/", "--") for n in names) + ".npz"
         )
 
     def download(self):
@@ -367,9 +405,29 @@ class Specter2Encoder:
         return self._encode(docs, "document")
 
     def encode_query(self, text):
-        """Embed a free-text query as a vector."""
+        """
+        Embed a free-text query as a vector, with numpy when torch is not
+        installed (see :attr:`numpy_path`).
+        """
+        if self._model is None and not _torch_available():
+            return self._numpy_query(text)
         self._load()
         return self._encode([text], "query")[0]
+
+    def _numpy_query(self, text):
+        if self._numpy is None:
+            path = self.numpy_path
+            if path is not None:
+                _ensure(path)
+            if path is None or not path.exists():
+                raise ImportError(
+                    "Text embeddings need torch, transformers and adapters: "
+                    f"{INSTALL_HINT}"
+                )
+            from .specter2_numpy import load
+            self._numpy = load(path)
+        tokenizer, encoder = self._numpy
+        return np.asarray(encoder(tokenizer.ids(text)), dtype=float)
 
     def _encode(self, texts, adapter):
         self._model.set_active_adapters(adapter)
@@ -556,6 +614,8 @@ class EmbeddingIndex:
         return matrix
 
     def _read_cache(self):
+        if self.cache_path is not None:
+            _ensure(self.cache_path)
         if self.cache_path is None or not self.cache_path.exists():
             return None
         with np.load(self.cache_path) as data:

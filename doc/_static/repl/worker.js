@@ -172,6 +172,46 @@ if hasattr(repl, "set_event_sink"):
     import js
     repl.set_event_sink(lambda text: js.postMessage(js.JSON.parse(text)))
 
+# The files of the text embeddings (the SPECTER2 query model and the
+# embeddings of the studies) are fetched when a query first needs them.
+FILES = json.loads(${JSON.stringify(JSON.stringify(bundle.files ?? {}))})
+
+def fetch_missing(path):
+    import js
+    from pyodide.ffi import to_js
+    try:
+        parts = FILES[str(path.relative_to("/data"))]
+    except (KeyError, ValueError):
+        return
+    what = (
+        "the SPECTER2 query model" if "/models/" in str(path)
+        else "the embeddings of the studies"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(".part")
+    with open(partial, "wb") as file:
+        for number, part in enumerate(parts, 1):
+            of = f" ({number}/{len(parts)})" if len(parts) > 1 else ""
+            js.postMessage(to_js(
+                {"type": "status", "message": f"Downloading {what}{of}…"},
+                dict_converter=js.Object.fromEntries,
+            ))
+            # Synchronously, as the query waits for it: a worker may.
+            request = js.XMLHttpRequest.new()
+            request.open("GET", part, False)
+            request.responseType = "arraybuffer"
+            request.send()
+            if request.status != 200:
+                return
+            file.write(request.response.to_py())
+    partial.rename(path)
+
+try:
+    from neurolang.utils import text_embeddings
+    text_embeddings.fetch_missing = fetch_missing
+except ImportError:  # a version without text embeddings
+    pass
+
 def submit(text):
     reply = repl.submit(text)
     return json.dumps(
