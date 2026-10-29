@@ -4,8 +4,13 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 - the wheels of NeuroLang's packages,
 - the data the ``neurosynth`` engine needs, as a zip in the layout of its
   data directory, and
-- ``bundle.json``, which names them for ``doc/_static/repl/worker.js``, and
-- ``highlight.json``, the words the page's code box colours.
+- ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
+- ``highlight.json``, the words the page's code box colours, and
+- with torch installed (the ``embeddings`` extra), the files of the
+  engine's text embeddings, which the page fetches when a query first
+  needs them: the SPECTER2 query model for :mod:`specter2_numpy
+  <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
+  studies, named in ``bundle.json`` by their path in the data directory.
 
 The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
@@ -18,7 +23,12 @@ result, with the tables and without them, to check that it suffices.
 
 Usage::
 
-    python doc/make_repl_bundle.py OUTPUT_DIR
+    python doc/make_repl_bundle.py OUTPUT_DIR [EMBEDDINGS_DATA_DIR]
+
+Embedding the studies takes their abstracts from PubMed and a while:
+EMBEDDINGS_DATA_DIR keeps them: a data directory where they were embedded
+already (``python -m neurolang.utils.text_embeddings -d DIR``), or where
+they are saved for the next time, as CI caches it.
 """
 
 import json
@@ -41,6 +51,11 @@ KEPT_IMAGES = {
     "HarvardOxford-cort-maxprob-thr25-2mm.nii.gz",
 }
 TRIMMED_DATASETS = ("icbm", "fsl")
+
+# GitHub refuses files of more than 100 MB, and the documentation is
+# deployed by committing it: a larger file is written in parts of this
+# size, which the page joins.
+PART_SIZE = 95 * 2 ** 20
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -143,7 +158,73 @@ def zip_directory(directory: Path, archive: Path) -> None:
                 zipped.write(path, path.relative_to(directory))
 
 
-def main(output: Path) -> None:
+def write_parts(path: Path, output: Path, name: str) -> list:
+    """Copy *path* to *output* as *name*, in parts of ``PART_SIZE`` if it
+    is larger; return the names of the files written."""
+    names = []
+    with open(path, "rb") as source:
+        while True:
+            chunk = source.read(PART_SIZE)
+            if not chunk and names:
+                break
+            names.append(f"{name}.{len(names)}")
+            (output / names[-1]).write_bytes(chunk)
+            if len(chunk) < PART_SIZE:
+                break
+    if len(names) == 1:
+        (output / names[0]).rename(output / name)
+        names = [name]
+    return names
+
+
+def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
+    """
+    Write in *output* the files of the engine's text embeddings: for each
+    index, the query model of the numpy encoder and the embeddings of the
+    documents. Both are taken from the data directory *embedded* when it
+    has them, and saved in it when made, which needs torch: without it,
+    or if they cannot be made, the page goes without them.
+
+    They are left out of *data_dir*, not to be zipped with the data.
+    Return the names of the files of each, by its path in the data
+    directory.
+    """
+    from neurolang.utils import engine_registry, text_embeddings
+    from neurolang_apps.utils import specter2_numpy
+
+    emb_dir = data_dir / ENGINE / "embeddings"
+    saved = None
+    if embedded is not None:
+        saved = Path(embedded) / ENGINE / "embeddings"
+    if saved is not None and saved.exists():
+        shutil.copytree(saved, emb_dir, dirs_exist_ok=True)
+    torch = text_embeddings._torch_available()
+    files = {}
+    try:
+        nl = engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        for name, index in nl.text_embedding_indexes.items():
+            model = index.encoder.numpy_path
+            if not model.exists() and torch:
+                base, _, query = index.encoder.download()
+                specter2_numpy.export(base, query, model)
+            if not model.exists() or not (torch or index.cache_path.exists()):
+                print(f"No torch: the text embeddings {name} are left out.")
+                continue
+            index.build()
+            for path in (model, index.cache_path):
+                files[str(path.relative_to(data_dir))] = write_parts(
+                    path, output, f"{ENGINE}-{path.name}"
+                )
+    except Exception as error:  # the page works without them
+        print(f"The text embeddings are left out: {error!r}")
+        files = {}
+    if saved is not None and emb_dir.exists():
+        shutil.copytree(emb_dir, saved, dirs_exist_ok=True)
+    shutil.rmtree(emb_dir, ignore_errors=True)
+    return files
+
+
+def main(output: Path, embedded=None) -> None:
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
     with tempfile.TemporaryDirectory() as tmp:
@@ -153,16 +234,20 @@ def main(output: Path) -> None:
         trim(data_dir)
         build_engine(data_dir)  # the page's way: from the kept tables
         build_engine(data_dir, use_cache=False)  # and without them
+        files = export_embeddings(data_dir, output, embedded)
         zip_directory(data_dir, output / DATA_ZIP)
     (output / "bundle.json").write_text(
-        json.dumps({"wheels": wheels, "data": DATA_ZIP}) + "\n"
+        json.dumps({"wheels": wheels, "data": DATA_ZIP, "files": files})
+        + "\n"
     )
     write_highlight_words(output)
-    print(f"Wrote {', '.join(wheels)}, {DATA_ZIP} and bundle.json in "
-          f"{output}")
+    parts = [name for names in files.values() for name in names]
+    print(f"Wrote {', '.join(wheels)}, {DATA_ZIP}, "
+          f"{', '.join(parts) or 'no embeddings'}, bundle.json and "
+          f"highlight.json in {output}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         sys.exit(__doc__)
-    main(Path(sys.argv[1]))
+    main(Path(sys.argv[1]), sys.argv[2] if len(sys.argv) == 3 else None)

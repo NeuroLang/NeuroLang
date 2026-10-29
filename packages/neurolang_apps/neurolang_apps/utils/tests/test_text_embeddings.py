@@ -571,3 +571,62 @@ def test_encoder_without_model_dir_uses_the_hub(fake_hub):
         "allenai/specter2_adhoc_query",
     )
     assert fake_hub == []
+
+
+# ---------------------------------------------------------------------------
+# Without torch, as in a browser
+# ---------------------------------------------------------------------------
+
+
+def _numpy_query_model(encoder, rng_seed=0):
+    from neurolang_apps.utils import specter2_numpy as sn
+    from neurolang_apps.utils.tests.test_specter2_numpy import (
+        VOCAB, tiny_weights,
+    )
+
+    encoder.numpy_path.parent.mkdir(parents=True, exist_ok=True)
+    sn.save(
+        encoder.numpy_path, tiny_weights(np.random.default_rng(rng_seed)),
+        VOCAB, heads=2,
+    )
+
+
+def test_without_torch_queries_are_encoded_with_numpy(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "torch", None)
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    _numpy_query_model(encoder)
+    vector = encoder.encode_query("visual word forms")
+    assert vector.shape == (8,) and np.isfinite(vector).all()
+
+
+def test_without_torch_nor_numpy_model_the_error_says_what_to_install(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setitem(sys.modules, "torch", None)
+    with pytest.raises(ImportError, match="neurolang\\[embeddings\\]"):
+        te.Specter2Encoder(model_dir=tmp_path).encode_query("reading")
+
+
+def test_missing_files_are_fetched_on_demand(monkeypatch, tmp_path):
+    """In a browser the model and the document embeddings are fetched
+    from the page's site when a query first needs them."""
+    monkeypatch.setitem(sys.modules, "torch", None)
+    encoder = te.Specter2Encoder(model_dir=tmp_path / "models")
+    source = te.Specter2Encoder(model_dir=tmp_path / "site")
+    _numpy_query_model(source)
+    fetched = []
+
+    def fetch(path):
+        fetched.append(path.name)
+        if path == encoder.numpy_path:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(source.numpy_path.read_bytes())
+
+    monkeypatch.setattr(te, "fetch_missing", fetch)
+    encoder.encode_query("reading")
+    assert fetched == [encoder.numpy_path.name]
+    index = te.EmbeddingIndex([1], load_documents, encoder,
+                              tmp_path / "idx.npz")
+    with pytest.raises(ImportError):
+        index.build()       # no cache fetched: documents need torch
+    assert fetched[-1] == "idx.npz"
