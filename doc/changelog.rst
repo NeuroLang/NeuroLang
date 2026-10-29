@@ -292,6 +292,13 @@ v0.1a21 (2026-10-21)
   brain average), computed in the REPL of the ``neurosynth`` engine, see
   :ref:`tutorial-neurosynth-tests`.
 
+* Documentation: the mutual information of a term and the activation of a
+  voxel, a rule over the engine's ``p_term``, ``p_a`` and ``p_a_given_t``,
+  ranks the voxels as Neurosynth's association test does, which the lift
+  does not: for *prefrontal*, the Dice coefficient of its top 5% of the
+  brain with that of Neurosynth's map is 0.83, against 0.51 for the lift.
+  See :ref:`neurosynth-mutual-information`.
+
 * ``.view`` of a result with several value columns shows an overlay per
   column, each with its own threshold, colormap, symmetry, opacity and
   visibility, a colour bar and its value at the cursor; ``--fill V`` sets
@@ -420,6 +427,13 @@ v0.1a21 (2026-10-21)
 
 **Bug fixes:**
 
+* The REPL block of :ref:`tutorial-neurosynth-tests` names the rules
+  restricted to the cortex with ``_cortex`` (``ratios_cortex``,
+  ``selected_voxel_cortex``, …): pasted in the ``neurosynth`` engine,
+  which now predefines ``selected_voxel``, ``p_a``, ``p_a_given_t`` and
+  ``ratios`` over the brain, it failed on its second definition of
+  ``selected_voxel`` and added its rules to those of the others.
+  
 * The badges of the README: the coverage badge, deployed to ``gh-pages``,
   was deleted by each deployment of the benchmarks' dashboard there (and
   deleted it in turn): it has its own branch, ``badges``. The Python badge
@@ -441,6 +455,7 @@ v0.1a21 (2026-10-21)
   are the same event.  The lifted plan of the deterministic subquery
   ``∃y r(x, y)`` keeps its tuples with a probability of 1, and the small
   dichotomy theorem solver leaves such a query to the lifted solver.
+  
 * A probabilistic query no longer fails with ``AttributeError: type object
   'Unknown' has no attribute '__origin__'`` when the program has a
   query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
