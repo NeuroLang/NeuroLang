@@ -1177,6 +1177,16 @@ def test_functional_dependency_in_one_disjunct_only():
     )[0]
 
 
+def test_set_partitions():
+    partitions = list(dalvi_suciu_lift._set_partitions([1, 2, 3]))
+    assert sorted(sorted(map(sorted, p)) for p in partitions) == [
+        [[1], [2], [3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3]],
+        [[1, 3], [2]],
+    ]
+    assert [len(list(dalvi_suciu_lift._set_partitions(list(range(k)))))
+            for k in range(5)] == [1, 1, 2, 5, 15]
+
+
 @pytest.fixture
 def check_unate_off():
     check_unate = config.get_probabilistic_solver_check_unate()
