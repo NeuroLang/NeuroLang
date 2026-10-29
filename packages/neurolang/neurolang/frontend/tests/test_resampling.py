@@ -169,3 +169,32 @@ def test_resampling_needs_a_choice():
     nl = engine(uniform)
     with pytest.raises(ValueError, match="not a probabilistic choice"):
         nl.add_resampling("boot", "region")
+
+
+def test_resample_after_the_rules_changed():
+    nl = engine(uniform)
+    nl.add_resampling("boot", "selected_study", n=5)
+    query = """
+rep(b, r, p) :- RESAMPLE[boot](region_probability(r, p)) = b.
+ans(b, r, p) :- rep(b, r, p).
+"""
+    before = rows(nl, query)
+    nl.execute_datalog_program(
+        "active_region(r) :- region(r), selected_study(s), mentions(s, 't1')."
+    )
+    after = rows(nl, query.replace("rep", "rep2"))
+    expected = rows(nl, "ans(r, p) :- region_probability(r, p).")
+    assert after != before
+    assert np.mean([after[(b, "r1")] for b in range(5)]) == pytest.approx(
+        expected[("r1",)], abs=.2
+    )
+    assert rows(nl, query.replace("rep", "rep3")) == after
+
+
+def test_resample_in_a_query(resampled):
+    res = rows(resampled, """
+ans(b, x) :- RESAMPLE[boot_studies](bayes_factor('r1', 't1', x)) = b.
+""")
+    reps = rows(resampled, "ans(b, r, t, x) :- bf_rep(b, r, t, x).")
+    assert res == {(b,): x for (b, r, t), x in reps.items()
+                   if (r, t) == ("r1", "t1")}

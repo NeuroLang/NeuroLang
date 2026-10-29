@@ -154,12 +154,15 @@ class ResampledProgram:
       replicate as first argument.
     """
 
-    def __init__(self, idb, name, choice, weights, arity):
+    def __init__(self, idb, name, choice, weights, arity, versions):
         self.idb = idb
         self.name = name
         self.choice = choice
         self.weights = weights
         self.arity = arity
+        # The rewritings of earlier RESAMPLEs: for each predicate, its
+        # rules and the rewritten predicates they used, and its rewriting.
+        self.versions = versions
         self.kinds = {}
         self.symbols = {}
         self.rules = []
@@ -223,17 +226,45 @@ class ResampledProgram:
     def _rewrite(self, functor):
         if functor in self.symbols:
             return self.symbols[functor]
-        kind = self.kind(functor)
-        suffix = ":c" if kind == "choice" else ""
-        symbol = ir.Symbol(f"{_name(functor)}@{self.name.name}{suffix}")
+        rules = self.idb[functor]
+        uses = tuple(
+            self._rewrite(atom.functor)
+            for rule in rules.formulas
+            for atom in map(_atom_of, _body_formulas(rule.antecedent))
+            if atom is not None and atom.functor != functor
+            and self.kind(atom.functor) != "det"
+            and atom.functor != self.choice
+        )
+        earlier = self.versions.get(functor)
+        if (
+            earlier is not None and earlier[0] is rules
+            and earlier[1] == uses and earlier[2] in self.idb
+        ):
+            self.symbols[functor] = earlier[2]
+            return earlier[2]
+        symbol = self._new_symbol(functor)
         self.symbols[functor] = symbol
-        for rule in self.idb[functor].formulas:
+        self.versions[functor] = (rules, uses, symbol)
+        kind = self.kind(functor)
+        for rule in rules.formulas:
             if kind == "choice":
                 self.rules.append(self._choice_rule(rule, symbol))
             elif kind == "prob":
                 self.rules.extend(self._prob_rules(rule, symbol))
             else:
                 self.rules.append(self._replicate_rule(rule, symbol))
+        return symbol
+
+    def _new_symbol(self, functor):
+        """``f@boot`` (``f@boot:c`` below a PROB), numbered if the rules it
+        rewrites changed since an earlier RESAMPLE."""
+        suffix = ":c" if self.kind(functor) == "choice" else ""
+        base = f"{_name(functor)}@{self.name.name}"
+        symbol = ir.Symbol(base + suffix)
+        version = 1
+        while symbol in self.idb:
+            version += 1
+            symbol = ir.Symbol(f"{base}#{version}{suffix}")
         return symbol
 
     def _choice_body(self, body):

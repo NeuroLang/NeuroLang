@@ -1254,7 +1254,9 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(
         rule_dnf, ignore_symbols=deterministic_symbols
     )
-    if len(connected_components) > 1:
+    if len(connected_components) > 1 and _union_has_the_same_columns(
+        Disjunction(tuple(connected_components))
+    ):
         return components_plan(
             connected_components, rap.Union, symbol_table
         )
@@ -1354,6 +1356,9 @@ def symbol_or_deterministic_plan(rule, symbol_table):
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
         )
+        and _union_has_the_same_columns(
+            convert_to_pnf_with_dnf_matrix(rule)
+        )
     ):
         free_vars = extract_logic_free_variables(rule)
         rule = MakeExistentialsImplicit().walk(rule)
@@ -1362,6 +1367,24 @@ def symbol_or_deterministic_plan(rule, symbol_table):
         has_safe_plan = True
         res = rap.Support(rap.Projection(result, proj_cols))
     return has_safe_plan, res
+
+
+def _union_has_the_same_columns(formula):
+    """
+    Whether the disjuncts of *formula*, below its existential quantifiers,
+    all have its free variables, as the relations of a union need the
+    same columns: ``R(x, y) ∨ S(x)`` holds for any ``y`` when ``S(x)``
+    does, which the union of their plans cannot give.
+    """
+    free_variables = extract_logic_free_variables(formula)
+    while isinstance(formula, ExistentialPredicate):
+        formula = formula.body
+    if not isinstance(formula, Disjunction):
+        return True
+    return all(
+        free_variables <= extract_logic_free_variables(disjunct)
+        for disjunct in formula.formulas
+    )
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):

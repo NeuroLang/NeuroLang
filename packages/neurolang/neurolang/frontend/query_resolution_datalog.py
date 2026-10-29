@@ -432,16 +432,33 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def _walk_program(self, rules):
         """
-        Add *rules* to the program; those with ``RESAMPLE`` last, as they
-        rewrite the rules they depend on.
+        Add *rules* to the program; those with ``RESAMPLE`` after the
+        others, as they rewrite the rules they depend on, and the rules
+        over theirs last.
         """
-        plain = [r for r in rules if not uses_resampling(r)]
-        resampled = [r for r in rules if uses_resampling(r)]
-        self.program_ir.walk(logic.Union(plain))
-        if resampled:
-            self.program_ir.walk(
-                logic.Union([self._expand_resamplings(r) for r in resampled])
-            )
+        later = {id(r) for r in rules if uses_resampling(r)}
+        heads = set()
+        while later:
+            heads |= {r.consequent.functor for r in rules if id(r) in later}
+            more = {
+                id(r) for r in rules
+                if id(r) not in later and isinstance(r, logic.Implication)
+                and any(
+                    atom.functor in heads
+                    for atom in extract_logic_atoms(r.antecedent)
+                )
+            }
+            if not more:
+                break
+            later |= more
+        self.program_ir.walk(
+            logic.Union([r for r in rules if id(r) not in later])
+        )
+        for rule in rules:
+            if id(rule) in later:
+                self.program_ir.walk(logic.Union(
+                    (self._expand_resamplings(rule),)
+                ))
 
     def _expand_resamplings(self, rule):
         if uses_resampling(rule):

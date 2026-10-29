@@ -116,6 +116,15 @@ Unreleased
   ``NoValidChaseClassForStratumException``: it was solved by the
   deterministic chase, which does not compute the probabilities.
 
+* A probability over a predicate of two rules, one of which binds a
+  variable of the head only through an atom both share, as
+  ``a(s, r) :- region(r), selected_study(s), activates(s, r)`` and
+  ``a(s, r) :- region(r), selected_study(s), mentions(s, 't1')``, failed
+  with ``NeuroLangTypeException``: the lifted plan was the union of the
+  relations of ``activates(s, r)`` and ``mentions(s, 't1')``, without the
+  same columns. Such a union is declined, see
+  :doc:`probabilistic_lifting`.
+
 
 v0.1a21 (2026-10-21)
 --------------------

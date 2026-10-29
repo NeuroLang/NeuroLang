@@ -260,6 +260,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             check_qbased_pfact_tuple_unicity
         )
         self.resamplings = {}
+        self._resampled_versions = {}
 
     def load_ontology(
         self,
@@ -1254,17 +1255,13 @@ class NeurolangPDL(QueryBuilderDatalog):
                 programs[name] = ResampledProgram(
                     self.program_ir.intensional_database(),
                     name, choice, name, arity,
+                    self._resampled_versions.setdefault(name.name, {}),
                 )
             return programs[name].predicate(functor)
 
         rule = rewrite_resample_markers(rule, resampled_predicate)
         for program in programs.values():
-            new_rules = [
-                r for r in program.rules
-                if r.consequent.functor
-                not in self.program_ir.intensional_database()
-            ]
-            self.program_ir.walk(Union(new_rules))
+            self.program_ir.walk(Union(program.rules))
         return rule
 
     def add_uniform_probabilistic_choice_over_set(
