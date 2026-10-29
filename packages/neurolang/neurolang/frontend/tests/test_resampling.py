@@ -196,5 +196,6 @@ def test_resample_in_a_query(resampled):
 ans(b, x) :- RESAMPLE[boot_studies](bayes_factor('r1', 't1', x)) = b.
 """)
     reps = rows(resampled, "ans(b, r, t, x) :- bf_rep(b, r, t, x).")
-    assert res == {(b,): x for (b, r, t), x in reps.items()
-                   if (r, t) == ("r1", "t1")}
+    assert res == pytest.approx({
+        (b,): x for (b, r, t), x in reps.items() if (r, t) == ("r1", "t1")
+    })
