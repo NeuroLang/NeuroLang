@@ -1,99 +1,68 @@
+# NeuroLang's repository is a uv workspace of four packages, each of which
+# imports only those before it (see .importlinter):
+#
+#   packages/nl_expr         the expression engine
+#   packages/nl_core         relational algebra, Datalog, probabilistic Datalog
+#   packages/neurolang       the language: parsers, frontends, regions
+#   packages/neurolang_apps  the command line, terminal interface, engines
+#
+# The root is a project, never published, that installs them for
+# development: ``uv pip install -e ".[apps,dev,doc]"``, or
+# ``uv sync --all-packages --all-extras --no-extra embeddings`` (torch, of
+# the extra embeddings, has no wheel for every platform).
+
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "neurolang"
-dynamic = ["version"]
-description = "NeuroLang: Probabilistic Logic Programming for NeuroScience Research"
-readme = "README.md"
-license = "BSD-3-Clause"
+name = "neurolang-workspace"
+version = "0"
+description = "The packages of NeuroLang, for development"
 requires-python = ">=3.12"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Science/Research",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python",
-    "Topic :: Scientific/Engineering",
-]
-
-keywords = [
-    "logic programming",
-    "probabilistic logic programming",
-    "open world",
-    "ontology",
-    "neuroscience",
-    "neuroimaging",
-    "datalog",
-]
-
+classifiers = ["Private :: Do Not Upload"]
 dependencies = [
-    "numpy",
-    "scipy",
-    "nibabel>=5.0.0",
-    "nilearn>=0.10.0",
-    "pandas>=1.5",
-    "pysdd",
-    "lark>=1.1.2",
-    "scikit-learn",
-    "matplotlib",
-    "seaborn",
-    "typing_inspect",
-    "rdflib>=6.0.0",
-    "siibra>=1.0.1a15",
-    "pyyaml>=6.0",
+    "nl-expr",
+    "nl-core",
+    "neurolang",
 ]
-
-[project.scripts]
-neurolang-query = "neurolang.utils.cli:main"
 
 [project.optional-dependencies]
+apps = ["neurolang-apps"]
+tui = ["neurolang-apps[tui]"]
+llm = ["neurolang-apps[llm]"]
+embeddings = ["neurolang-apps[embeddings]"]
+ras-polars = ["nl-core[ras-polars]"]
 dev = [
+    "nl-core[dev]",
+    "neurolang[dev]",
     "pytest>=7.0",
     "pytest-benchmark",
     "pytest-cov",
-    "problog"
+    "pytest-timeout",
+    "pytest-xdist",
+    "import-linter",
 ]
-
-embeddings = [
-    "torch",
-    "transformers",
-    "adapters",
-]
-
-ras-polars = [
-    "polars>=1.17",
-    "pyarrow",
-]
-
-tui = [
-    "prompt-toolkit>=3.0.36",
-    "rich>=13.0",
-]
-
 doc = [
     "sphinx>=7.0",
     "pydata-sphinx-theme>=0.15",
     "sphinx-design>=0.5",
     "sphinx-gallery",
-    "numpydoc"
+    "numpydoc",
 ]
 
+# The project has no modules of its own: its wheel is empty.
 [tool.hatch.build.targets.wheel]
-packages = ["neurolang"]
-artifacts = [
-    "neurolang/utils/server/neurolang-web/dist/**",
-]
+bypass-selection = true
 
-[tool.hatch.build.hooks.custom]
-path = "hatch_build.py"
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "neurolang/_version_scm.py"
+[tool.uv.sources]
+nl-expr = { workspace = true }
+nl-core = { workspace = true }
+neurolang = { workspace = true }
+neurolang-apps = { workspace = true }
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
@@ -102,7 +71,6 @@ addopts = "--doctest-glob=doc/tutorial_squall.rst"
 [tool.coverage.run]
 omit = [
     "*/test_*",
-    "neurolang/deprecated",
 ]
 branch = true
 

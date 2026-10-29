@@ -1,0 +1,309 @@
+# Questions on the coordinate-based meta-analysis engines (neurosynth,
+# neurostore) with their Datalog queries: the few-shot examples of the
+# LLM query assistant, the most similar to the user's question being put
+# in the prompt. Both engines extend coordinate_meta_analysis and share
+# this bank; examples/<engine>.yaml adds those of one engine. Every
+# query is checked against the engines by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+#
+# As the engines' assistant_guidance asks, every question but a count
+# (how many) is answered with probabilistic query answering over
+# selected_study, the uniform choice of a study: a study is chosen at
+# random and the answer is the probability of what the question asks,
+# conditioned on the term it names. A study activates a point when one
+# of its peaks is within 3 mm:
+# peaks in MNI millimetres (peak_mni) for points given in MNI
+# coordinates, the Destrieux atlas for the classical anatomy of the
+# cortex (destrieux_activated), and the Schaefer networks of the cortex
+# and the Tian atlas of the subcortex for the functional anatomy
+# (schaefer_activated, tian_activated).
+#
+# A topic given as a description, or a Cognitive Atlas concept, is
+# matched to the studies by the similarity of their title and abstract
+# (similar_study: the 5% closest), with whichever text encoder the
+# engine uses; a Cognitive Atlas definition comes from cogat_definition
+# and is joined in the queried rule itself.
+examples:
+  - question: Which studies mention pain?
+    datalog: |-
+      pain_study(s) :- mentions(s, 'pain'), selected_study(s)
+      ans(p) :- PROB[pain_study(s)] = p
+
+  - question: Which terms are mentioned by the studies, and how often?
+    datalog: |-
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      ans(t, p) :- PROB[mentioned_term(t)] = p
+
+  - question: Which studies mention either language or speech?
+    datalog: |-
+      language_or_speech(s) :- mentions(s, 'language')
+      language_or_speech(s) :- mentions(s, 'speech')
+      chosen(s) :- language_or_speech(s), selected_study(s)
+      ans(p) :- PROB[chosen(s)] = p
+
+  - question: Which studies mention both pain and emotion?
+    datalog: |-
+      pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
+      ans(p) :- PROB[pain_and_emotion(s)] = p
+
+  - question: Which studies do not mention pain?
+    datalog: |-
+      no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
+      ans(p) :- PROB[no_pain(s)] = p
+
+  - question: Which terms co-occur with fear in a study?
+    datalog: |-
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(t, p) :- PROB[term_association(s, t) // term_association(s, 'fear')] = p
+
+  - question: Which voxels are activated by studies that mention pain?
+    datalog: |-
+      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // term_association(s, 'pain')] = p
+
+  - question: Which studies report an activation within 3 mm of the left amygdala, MNI (-24, -4, -20)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      active(s) :- near(s), selected_study(s)
+      ans(p) :- PROB[active(s)] = p
+
+  - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      active(s) :- near(s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active(s) // term_association(s, 'fear')] = p
+
+  - question: Which gyri and sulci are activated by studies about language?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p
+
+  - question: Is the left superior temporal gyrus activated by studies on speech?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active('L G temp sup Lateral', s) // term_association(s, 'speech')] = p
+
+  - question: Which subcortical regions are activated by studies about fear?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'fear')] = p
+
+  - question: Which parcels of the functional networks are activated by studies about the default mode?
+    datalog: |-
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'default mode')] = p
+
+  - question: Which functional regions, cortical networks and subcortex, are activated by studies about reward?
+    datalog: |-
+      functional_region(l, s) :- schaefer_activated(l, s)
+      functional_region(l, s) :- tian_activated(l, s)
+      active(l, s) :- functional_region(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
+
+  # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
+  # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
+  # being over selected_study; a BF above sqrt(10), about 3.16, is
+  # substantial evidence.
+  - question: Decode the left middle temporal gyrus, which terms have a Bayes factor above 3.16 for its activation?
+    datalog: |-
+      active_region(l) :- destrieux_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- destrieux_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(t, bf) :- bayes_factor('L G temporal middle', t, bf), (bf > 3.16)
+
+  - question: What is the Bayes factor of fear for the activation of the left amygdala?
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      active_roi(s) :- amygdala(s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(bf) :- bayes_factor('fear', bf)
+
+  - question: Which terms are associated with the MNI point (40, -60, 10), with a Bayes factor above 3.16?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -60.0, 10.0) <= 3)
+      active_roi(s) :- near(s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(t, bf) :- bayes_factor(t, bf), (bf > 3.16)
+
+  # Co-activation: regions or points activated by the same study. A pair
+  # of regions, l1 < l2 to give each pair once, is a network (.view draws
+  # it as one); a seed region or point conditions the activation of the
+  # others (meta-analytic connectivity, MACM); the lift of a pair compares
+  # its joint probability with that of independent activations.
+  - question: Which pairs of Schaefer regions are co-activated by studies about reading?
+    datalog: |-
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+
+  - question: What is the co-activation network of the subcortical regions in studies about fear?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'fear')] = p
+
+  - question: Which cortical regions are co-activated with the left amygdala?
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      seed(s) :- amygdala(s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which gyri and sulci are co-activated with the left superior temporal gyrus?
+    datalog: |-
+      seed(s) :- destrieux_activated('L G temp sup Lateral', s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which functional networks are co-activated with the MNI point (40, -60, 10)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -60.0, 10.0) <= 3)
+      seed(s) :- near(s), selected_study(s)
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: Which voxels are co-activated with the MNI point (-24, -4, -20)?
+    datalog: |-
+      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      seed(s) :- near(s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // seed(s)] = p
+
+  - question: What is the probability that a study activating the MNI point (-24, -4, -20) also activates the MNI point (24, -4, -20)?
+    datalog: |-
+      near_seed(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+      near_target(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 24.0, -4.0, -20.0) <= 3)
+      seed(s) :- near_seed(s), selected_study(s)
+      target(s) :- near_target(s), selected_study(s)
+      ans(p) :- PROB[target(s) // seed(s)] = p
+
+  - question: What is the co-activation network of the MNI points (-24, -4, -20), (24, -4, -20), (-42, 22, 8), (-50, -40, 10) and (40, -60, 10)?
+    datalog: |-
+      point(-24.0, -4.0, -20.0)
+      point(24.0, -4.0, -20.0)
+      point(-42.0, 22.0, 8.0)
+      point(-50.0, -40.0, 10.0)
+      point(40.0, -60.0, 10.0)
+      near(x, y, z, s) :- point(x, y, z), peak_mni(px, py, pz, s), (euclidean(px, py, pz, x, y, z) <= 3)
+      active(x, y, z, s) :- near(x, y, z, s), selected_study(s)
+      co_active(x1, y1, z1, x2, y2, z2, s) :- active(x1, y1, z1, s), active(x2, y2, z2, s)
+      ans(x1, y1, z1, x2, y2, z2, p) :- PROB[co_active(x1, y1, z1, x2, y2, z2, s)] = p
+
+  - question: Which pairs of subcortical regions are co-activated more than chance?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      region_probability(l, p) :- PROB[active(l, s)] = p
+      pair_probability(l1, l2, p) :- PROB[co_active(l1, l2, s)] = p
+      ans(l1, l2, lift) :- pair_probability(l1, l2, p12), region_probability(l1, p1), region_probability(l2, p2), (l1 < l2), (lift == p12 / (p1 * p2))
+
+  - question: Are the left and right amygdala co-activated more than chance?
+    datalog: |-
+      amygdala_left(s) :- tian_activated('lAMY lh', s)
+      amygdala_left(s) :- tian_activated('mAMY lh', s)
+      amygdala_right(s) :- tian_activated('lAMY rh', s)
+      amygdala_right(s) :- tian_activated('mAMY rh', s)
+      left(s) :- amygdala_left(s), selected_study(s)
+      right(s) :- amygdala_right(s), selected_study(s)
+      both(s) :- amygdala_left(s), amygdala_right(s), selected_study(s)
+      p_left(p) :- PROB[left(s)] = p
+      p_right(p) :- PROB[right(s)] = p
+      p_both(p) :- PROB[both(s)] = p
+      ans(lift) :- p_both(p12), p_left(p1), p_right(p2), (lift == p12 / (p1 * p2))
+
+  - question: Which studies are about the visual word form area? Give their titles.
+    datalog: |-
+      ans(s, title, v) :- similar_study('visual word form area', s), study_similarity('visual word form area', s, v), study_title(s, title)
+
+  - question: Which studies are about the Cognitive Atlas concept response inhibition, with their titles?
+    datalog: |-
+      ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+
+  - question: Which voxels do the studies about holding information in mind over a delay activate?
+    datalog: |-
+      ans(i, j, k, p) :- p_a_given_similar('holding information in mind over a delay', i, j, k, p)
+
+  - question: Where in the brain is working memory, by its definition in the Cognitive Atlas?
+    datalog: |-
+      ans(i, j, k, u) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, u)
+
+  - question: How likely is a study about fear, by its Cognitive Atlas definition, to report an amygdala activation?
+    datalog: |-
+      amygdala_label(l) :- tian(l, r), startswith('lAMY', l)
+      amygdala_label(l) :- tian(l, r), startswith('mAMY', l)
+      amygdala(s) :- amygdala_label(l), tian_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_amygdala_given_close(q, PROB) :- amygdala(s) // close(q, s)
+      ans(p) :- cogat_definition('fear', d), p_amygdala_given_close(d, p)
+
+  - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s), ~mentions(s, 'fear')
+      p_close(q, PROB) :- close(q, s)
+      ans(p) :- cogat_definition('fear', d), p_close(d, p)
+
+  - question: How likely is a study about pain, by its Cognitive Atlas definition, to report an activation of the insula?
+    datalog: |-
+      insula_label(l) :- destrieux(l, r), startswith('L G Ins', l)
+      insula_label(l) :- destrieux(l, r), startswith('R G Ins', l)
+      insula_label(l) :- destrieux(l, r), startswith('L G insular', l)
+      insula_label(l) :- destrieux(l, r), startswith('R G insular', l)
+      insula_label(l) :- destrieux(l, r), startswith('L S circular insula', l)
+      insula_label(l) :- destrieux(l, r), startswith('R S circular insula', l)
+      insula(s) :- insula_label(l), destrieux_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_insula_given_close(q, PROB) :- insula(s) // close(q, s)
+      ans(p) :- cogat_definition('pain', d), p_insula_given_close(d, p)
+
+  - question: How likely are the studies about recalling personal memories from the past to activate the default mode network?
+    datalog: |-
+      default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+      default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+      default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_default_given_close(q, PROB) :- default_mode(s) // close(q, s)
+      ans(p) :- p_default_given_close('recalling personal memories from the past', p)
+
+  - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear? Give their titles.
+    datalog: |-
+      ans(s, title) :- cogat_definition('fear', d), similar_study(d, s), study_title(s, title), ~mentions(s, 'fear')
+
+  - question: How often do the studies about working memory, by its Cognitive Atlas definition, mention the term working memory?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      mentions_term(s) :- mentions(s, 'working memory'), selected_study(s)
+      p_term_given_close(q, PROB) :- mentions_term(s) // close(q, s)
+      ans(p) :- cogat_definition('working memory', d), p_term_given_close(d, p)
+
+  - question: Which terms do the studies about cortical responses to noxious heat on the skin mention?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      p_term_given_close(q, t, PROB) :- term_association(s, t) // close(q, s)
+      ans(t, p) :- p_term_given_close('cortical response to noxious heat applied to the skin', t, p)
+

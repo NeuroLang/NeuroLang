@@ -94,7 +94,9 @@ a guided walkthrough.
    tutorial_cognitive_atlas
    concepts
    probabilistic_lifting
+   inclusion_exclusion
    engine_configuration
+   query_assistant
    performance
    auto_examples/index
    api

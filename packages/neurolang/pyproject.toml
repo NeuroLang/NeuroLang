@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neurolang"
+dynamic = ["version"]
+description = "NeuroLang: Probabilistic Logic Programming for NeuroScience Research"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
+keywords = [
+    "logic programming",
+    "probabilistic logic programming",
+    "open world",
+    "ontology",
+    "neuroscience",
+    "neuroimaging",
+    "datalog",
+]
+dependencies = [
+    "nl-expr",
+    "nl-core",
+    "numpy",
+    "scipy",
+    "pandas>=1.5",
+    "nibabel>=5.0.0",
+    "nilearn>=0.10.0",
+    "lark>=1.1.2",
+    "typing_inspect",
+]
+
+[project.optional-dependencies]
+# The applications: command line, terminal interface, engines, assistant.
+apps = ["neurolang-apps"]
+tui = ["neurolang-apps[tui]"]
+llm = ["neurolang-apps[llm]"]
+embeddings = ["neurolang-apps[embeddings]"]
+ras-polars = ["nl-core[ras-polars]"]
+dev = [
+    "pytest>=7.0",
+    "requests",
+    "nl-core[dev]",
+]
+
+[tool.uv.sources]
+nl-expr = { workspace = true }
+nl-core = { workspace = true }
+neurolang-apps = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["neurolang"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../.." }

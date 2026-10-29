@@ -24,21 +24,24 @@ jobs:
           python-version: "3.12"
 
       - name: Install uv
-        run: pip install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
 
-      - name: Install doc dependencies
-        run: uv pip install --system ".[doc]"
+      - name: Install the packages and the doc dependencies
+        run: uv sync --all-packages --extra doc
 
       - name: Build HTML documentation
-        run: make -C doc html SPHINXOPTS="--keep-going"
+        run: uv run --no-sync make -C doc html SPHINXOPTS="--keep-going"
 
-      # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheel and
+      # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheels and
       # the data of the neurosynth engine from beside its page. If this step
       # fails, the documentation is still deployed, with the REPL's page
       # telling that it could not start.
       - name: Build the in-browser REPL's bundle
         continue-on-error: true
-        run: python doc/make_repl_bundle.py doc/_build/html/_static/repl
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4

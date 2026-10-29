@@ -32,10 +32,43 @@ Development Install
 
    git clone https://github.com/NeuroLang/NeuroLang.git
    cd NeuroLang
-   uv pip install -e ".[dev,doc]"
+   uv sync --all-packages --all-extras --no-extra embeddings
 
-This installs NeuroLang in *editable* mode together with all development
-(``pytest``, ``pytest-cov``) and documentation (Sphinx) dependencies.
+This installs NeuroLang's four packages in *editable* mode, in the
+environment ``.venv`` of the clone, together with all development
+(``pytest``, ``pytest-cov``) and documentation (Sphinx) dependencies. To
+install them in another environment, ``uv pip install -e ".[apps,dev,doc]"``
+does the same from the root of the clone, whose ``pyproject.toml`` is a
+project, never published, depending on the four.
+
+
+The Packages
+------------
+
+The repository is a `uv workspace
+<https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ of four
+packages, each of which imports only the ones before it:
+
+=============================  ==============================================
+``packages/nl_expr``           the expression engine: expressions, walkers,
+                               types, logic, configuration
+``packages/nl_core``           relational algebra and its sets, Datalog,
+                               probabilistic Datalog
+``packages/neurolang``         the languages and frontends, brain regions
+``packages/neurolang_apps``    the command line, its interactive mode, the
+                               query assistant, the engines
+=============================  ==============================================
+
+``.importlinter`` states these layers, which CI checks with
+``uv run lint-imports``. A module put in the wrong package, or importing
+one above it, fails that check. The modules keep their former names under
+``neurolang``: ``neurolang.datalog`` is ``nl_core.datalog``, and
+``neurolang.utils.cli`` is ``neurolang_apps.utils.cli``. Code inside the
+packages imports the new names.
+
+The tests of a package are in it, beside the modules they test, and use
+only that package and the ones before it. CI runs the tests of the
+packages a pull request changes and of those built on them.
 
 
 Running the Tests
@@ -43,13 +76,15 @@ Running the Tests
 
 .. code-block:: bash
 
-   pytest neurolang/
+   uv run pytest packages/
 
-To run with coverage:
+or those of one package, e.g. ``uv run pytest packages/nl_core``. To run
+with coverage:
 
 .. code-block:: bash
 
-   pytest --cov=neurolang neurolang/
+   uv run pytest --cov=nl_expr --cov=nl_core --cov=neurolang \
+       --cov=neurolang_apps packages/
 
 The test suite should pass fully before you submit a pull request.
 
@@ -84,14 +119,14 @@ Submitting a Pull Request
 1. Fork the repository on GitHub.
 2. Create a feature branch: ``git checkout -b my-feature``
 3. Make your changes.
-4. Ensure all tests pass: ``pytest neurolang/``
+4. Ensure all tests pass: ``uv run pytest packages/``
 5. Add a changelog entry under *Unreleased* in ``doc/changelog.rst``.
 6. Update docstrings for any changed public API.
 7. Push your branch and open a pull request against ``master``.
 
 **PR checklist:**
 
-* [ ] Tests pass (``pytest neurolang/``)
+* [ ] Tests pass (``uv run pytest packages/``)
 * [ ] New code has docstrings (NumPy format)
 * [ ] Changelog entry added to ``doc/changelog.rst``
 * [ ] No new Sphinx build warnings (``make -C doc html``)
@@ -105,8 +140,7 @@ NumPy-style docstrings. Run ``flake8`` before committing:
 
 .. code-block:: bash
 
-   pip install flake8
-   flake8 neurolang/
+   uvx flake8 packages/
 
 
 Adding a New Dataset Engine
@@ -115,14 +149,14 @@ Adding a New Dataset Engine
 The ``neurolang-query`` CLI uses a declarative engine registry to manage
 dataset backends.  To add a new engine:
 
-1. Write a YAML entry in ``neurolang/utils/engines/engines.yaml``:
+1. Write a YAML entry in ``packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml``:
 
    .. code-block:: yaml
 
       my_dataset:
         description: "Short description of the dataset"
         requires_mni_mask: false
-        python_init: "neurolang.utils.engines.my_dataset.init"
+        python_init: "neurolang_apps.utils.engines.my_dataset.init"
         datalog_init: |
           derived_pred(X) :- base_pred(X)
         relations:
@@ -139,7 +173,7 @@ dataset backends.  To add a new engine:
 
 2. If your engine needs custom Python logic (data downloads, non-trivial
    processing), create the init module at
-   ``neurolang/utils/engines/my_dataset/init.py`` that defines:
+   ``packages/neurolang_apps/neurolang_apps/utils/engines/my_dataset/init.py`` that defines:
 
    .. code-block:: python
 
@@ -187,11 +221,11 @@ dataset backends.  To add a new engine:
    If using ``use_base_symbols: true`` in the YAML, do **not** also call
    ``init_base_engine`` from Python — the registry handles it for you.
 
-3. Add unit tests in ``neurolang/utils/tests/test_cli.py``, specifically
+3. Add unit tests in ``packages/neurolang_apps/neurolang_apps/utils/tests/test_cli.py``, specifically
    in the ``TestEngineRegistry`` class to verify that your engine is
    discoverable and its config loads correctly.
 
-4. Run ``pytest neurolang/utils/tests/test_cli.py`` to confirm everything
+4. Run ``uv run pytest packages/neurolang_apps/neurolang_apps/utils/tests/test_cli.py`` to confirm everything
    passes.
 
 

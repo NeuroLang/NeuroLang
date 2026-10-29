@@ -1,0 +1,738 @@
+"""Tests for the core of the interactive REPL."""
+
+import re
+
+import pandas as pd
+
+import pytest
+
+pytest.importorskip("prompt_toolkit")
+pytest.importorskip("rich")
+
+from neurolang_apps.utils.tui import (  # noqa: E402
+    InteractiveTuiApp,
+    TuiSettings,
+)
+from neurolang_apps.utils.tui.results import rows_table  # noqa: E402
+
+
+class TestDfToRichTable:
+    def test_basic_table(self):
+        df = pd.DataFrame({"x": [1, 2], "y": ["a", "b"]})
+        table = rows_table(df)
+        assert [c.header for c in table.columns] == ["x", "y"]
+
+    def test_empty_dataframe(self):
+        df = pd.DataFrame({"x": pd.Series([], dtype=int)})
+        table = rows_table(df)
+        assert [c.header for c in table.columns] == ["x"]
+
+    def test_multiple_columns(self):
+        df = pd.DataFrame({"a": [1], "b": [2.5], "c": ["x"]})
+        table = rows_table(df)
+        assert [c.header for c in table.columns] == ["a", "b", "c"]
+
+
+class TestRegionCells:
+    """Check regions show compactly in result tables."""
+
+    def _rendered(self, df):
+        console = _console()
+        console.print(rows_table(df))
+        return console.file.getvalue()
+
+    def test_region_shows_its_size_and_centroid(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+
+        affine = np.diag([2.0, 2.0, 2.0, 1.0])
+        affine[:3, 3] = [-10.0, 0.0, 4.0]
+        region = ExplicitVBR(
+            np.array([[1, 1, 1], [1, 2, 1]]), affine, image_dim=(4, 4, 4)
+        )
+        out = self._rendered(pd.DataFrame({"label": ["a"], "r": [region]}))
+        assert "VBR(n_voxels=2, centroid=(-8.0, 3.0, 6.0) mm)" in out
+        assert "affine" not in out
+
+    def test_region_cell(self):
+        import numpy as np
+
+        from neurolang.regions import ExplicitVBR
+        from neurolang_apps.utils.tui.results import cell_text
+
+        region = ExplicitVBR(np.array([[0, 0, 0]]), np.eye(4))
+        assert cell_text(region) == (
+            "VBR(n_voxels=1, centroid=(0.0, 0.0, 0.0) mm)"
+        )
+        assert cell_text(None) == "" and cell_text(1.5) == "1.5"
+
+
+def _console():
+    import io
+
+    from rich.console import Console
+
+    return Console(file=io.StringIO(), width=100)
+
+
+def _output(app):
+    return app.console.file.getvalue()
+
+
+@pytest.fixture
+def engine():
+    """Return a small engine holding the relation ``P``."""
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    return nl
+
+
+def _app(engine, **settings):
+    """Return a REPL on *engine* printing everything to one buffer."""
+    console = _console()
+    return InteractiveTuiApp(
+        engine, TuiSettings(**settings), console=console,
+        err_console=console,
+    )
+
+
+@pytest.fixture
+def small_app(engine):
+    """Return a REPL on a small engine, printing to a string buffer."""
+    return _app(engine)
+
+
+class TestInteractiveTuiApp:
+    def test_datalog_prompt(self, engine):
+        app = InteractiveTuiApp(engine, TuiSettings(engine_name="neurosynth"))
+        assert app._get_prompt() == "nl(neurosynth:DL)> "
+
+    def test_squall_prompt(self, engine):
+        app = InteractiveTuiApp(
+            engine, TuiSettings(engine_name="destrieux", squall=True)
+        )
+        assert app._get_prompt() == "nl(destrieux:SQ)> "
+
+    def test_mode_switch(self, small_app):
+        small_app._handle_dot_command(".mode squall")
+        assert small_app.settings.squall
+        small_app._handle_dot_command(".mode datalog")
+        assert not small_app.settings.squall
+
+
+def test_query_result_sorted_with_cli_helpers(engine):
+    engine.add_tuple_set([(1,), (3,), (2,)], name="Q")
+    app = InteractiveTuiApp(
+        engine, TuiSettings(sort_by=[("x", False)]), console=_console()
+    )
+    app._execute_and_display("ans(x) :- Q(x)")
+    assert list(app.results[0].frame["x"]) == [3, 2, 1]
+    text = _output(app)
+    assert text.index("3") < text.index("2") < text.index("1 ")
+
+
+@pytest.fixture
+def pipe_session(small_app):
+    """Yield a function making the REPL session fed with the given keys."""
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    with create_pipe_input() as pipe:
+        def make(keys):
+            pipe.send_text(keys)
+            return small_app._make_session(input=pipe, output=DummyOutput())
+        yield make
+
+
+def test_ctrl_c_at_prompt_keeps_session(small_app, pipe_session):
+    session = pipe_session("ans(\x03ans(x) :- P(x)\r\x04")
+    small_app.run(session)
+    out = _output(small_app)
+    assert "Query completed" in out
+    assert out.count("Query completed") == 1
+    assert "Goodbye" in out
+
+
+def test_ctrl_c_during_query_keeps_session(
+    small_app, pipe_session, monkeypatch
+):
+    calls = []
+    original = small_app._execute
+
+    def interrupted_once(program):
+        calls.append(program)
+        if len(calls) == 1:
+            raise KeyboardInterrupt()
+        return original(program)
+
+    monkeypatch.setattr(small_app, "_execute", interrupted_once)
+    session = pipe_session("ans(x) :- P(x)\rans(x) :- P(x)\r\x04")
+    small_app.run(session)
+    out = _output(small_app)
+    assert "Query interrupted" in out
+    assert len(calls) == 2
+    assert "Query completed" in out
+
+
+@pytest.mark.parametrize("quit_command", [".quit", ".exit"])
+def test_quit_commands_end_session(small_app, pipe_session, quit_command):
+    session = pipe_session(f"{quit_command}\rans(x) :- P(x)\r")
+    small_app.run(session)
+    assert "Query completed" not in _output(small_app)
+    assert "Goodbye" in _output(small_app)
+
+
+def test_ctrl_d_ends_session(small_app, pipe_session):
+    small_app.run(pipe_session("\x04"))
+    assert "Goodbye" in _output(small_app)
+
+
+def test_parse_error_is_formatted(small_app):
+    small_app._execute_and_display("ans(x) :- P(x")
+    out = _output(small_app)
+    assert "Datalog parse error" in out
+    assert "^" in out
+    assert "Location: line 1, column 14" in out
+    assert "Traceback" not in out
+
+
+def test_squall_error_is_formatted(engine):
+    engine.add_tuple_set([(1,)], name="person")
+    app = _app(engine, squall=True)
+    app._execute_and_display("obtain every persn.")
+    out = _output(app)
+    assert "Undefined symbol" in out
+    assert "Did you mean: person" in out
+
+
+def test_debug_shows_traceback(engine):
+    app = _app(engine, debug=True)
+    app._execute_and_display("ans(x) :- P(x")
+    out = _output(app)
+    assert "Traceback (most recent call last)" in out
+    assert "Datalog parse error" in out
+
+
+def test_undefined_predicate_warning_is_a_short_note(engine):
+    engine.add_tuple_set([(1,)], name="person")
+    app = _app(engine)
+    app._execute_and_display("ans(x) :- persn(x)")
+    out = _output(app)
+    assert (
+        "note: predicate persn has no facts or rules — "
+        "did you mean person?"
+    ) in out
+    assert ".py" not in out
+    assert "warnings.warn" not in out
+
+
+def _lines(app):
+    return [line.strip() for line in _output(app).splitlines()]
+
+
+def test_sort_command_resorts_last_result(small_app, capsys):
+    small_app._execute_and_display("ans(x) :- P(x)")
+    small_app._handle_dot_command(".sort x:desc")
+    assert small_app.settings.sort_by == [("x", False)]
+    assert list(small_app.results[0].frame["x"]) == [2, 1]
+    small_app._handle_dot_command(".sort")
+    assert "Sort: x:desc" in _output(small_app)
+    small_app._handle_dot_command(".sort x:sideways")
+    assert "invalid sort direction 'sideways'" in capsys.readouterr().err
+    small_app._handle_dot_command(".sort none")
+    assert small_app.settings.sort_by == []
+
+
+def test_format_command(small_app):
+    small_app._handle_dot_command(".format csv")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    lines = _lines(small_app)
+    assert lines[lines.index("x"):lines.index("x") + 3] == ["x", "1", "2"]
+    small_app._handle_dot_command(".format xml")
+    assert "Unknown format 'xml'" in _output(small_app)
+    assert small_app.settings.output_format == "csv"
+
+
+def test_ra_toggle_prints_plans_instead_of_results(small_app, capsys):
+    small_app._handle_dot_command(".ra on")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "── deterministic stratum ──" in capsys.readouterr().out
+    assert small_app.results == []
+    small_app._handle_dot_command(".ra off")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "deterministic stratum" not in capsys.readouterr().out
+    assert list(small_app.results[0].frame["x"]) == [1, 2]
+
+
+def test_rewritten_toggle(small_app, capsys):
+    small_app._handle_dot_command(".rewritten on")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "── rewritten program ──" in capsys.readouterr().out
+    assert list(small_app.results[0].frame["x"]) == [1, 2]
+    small_app._handle_dot_command(".rewritten off")
+    assert "Rewritten program: off" in _output(small_app)
+
+
+@pytest.fixture
+def long_app(engine):
+    """Return a REPL whose last result has the 45 rows 0..44."""
+    engine.add_tuple_set([(i,) for i in range(45)], name="R")
+    app = _app(engine)
+    app._execute_and_display("ans(x) :- R(x)")
+    return app
+
+
+def _shown_numbers(text):
+    import re
+
+    return [int(n) for n in re.findall(r"│\s*(\d+)\s*│", text)]
+
+
+def test_result_shows_first_page_with_caption(long_app):
+    out = _output(long_app)
+    assert _shown_numbers(out) == list(range(20))
+    assert "45 rows · showing 1–20 · .more for next" in out
+
+
+def test_more_shows_next_pages(long_app):
+    console = long_app.console
+    console.file.truncate(0)
+    console.file.seek(0)
+    long_app._handle_dot_command(".more")
+    out = _output(long_app)
+    assert _shown_numbers(out) == list(range(20, 40))
+    assert "45 rows · showing 21–40 · .more for next" in out
+    long_app._handle_dot_command(".more")
+    assert "45 rows · showing 41–45 · end" in _output(long_app)
+    long_app._handle_dot_command(".more")
+    assert "No more rows." in _output(long_app)
+
+
+def test_head_sets_page_size(long_app):
+    long_app._handle_dot_command(".head 5")
+    assert long_app.settings.page_size == 5
+    assert "45 rows · showing 1–5 · .more for next" in _output(long_app)
+    long_app._handle_dot_command(".head many")
+    assert "Page size must be a positive integer" in _output(long_app)
+    assert long_app.settings.page_size == 5
+
+
+def test_all_shows_every_row(long_app):
+    long_app._handle_dot_command(".all")
+    assert set(_shown_numbers(_output(long_app))) == set(range(45))
+    assert long_app.results[0].remaining == 0
+
+
+def test_caption_is_one_line_on_narrow_tables(long_app):
+    caption = [
+        line for line in _output(long_app).splitlines() if "rows" in line
+    ]
+    assert caption == ["45 rows · showing 1–20 · .more for next"]
+
+
+def test_small_result_caption(small_app):
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "2 rows" in _lines(small_app)
+
+
+@pytest.mark.parametrize("typed, suggestion", [
+    (".hlep", ".help"), (".mroe", ".more"), (".quti", ".quit"),
+])
+def test_unknown_command_suggests_closest(small_app, typed, suggestion):
+    small_app._handle_dot_command(typed)
+    out = " ".join(_output(small_app).split())
+    assert f"Unknown command {typed}. Did you mean {suggestion}?" in out
+
+
+def test_unknown_command_without_close_match(small_app):
+    small_app._handle_dot_command(".zzzzzz")
+    out = _output(small_app)
+    assert "Unknown command .zzzzzz." in out
+    assert "Did you mean" not in out
+
+
+@pytest.fixture
+def peaks_engine(engine):
+    """Return the small engine with a 4-column ``peak_reported``."""
+    engine.add_tuple_set(
+        [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
+    )
+    engine.add_tuple_set([(10,), (11,)], name="study")
+    return engine
+
+
+def _vocabulary_rules() -> str:
+    """Return the neurosynth rules defining its vocabulary predicates."""
+    from neurolang_apps.utils import engine_registry
+
+    datalog_init = engine_registry.get_engine_config("neurosynth")[
+        "datalog_init"
+    ]
+    return "\n".join(
+        line for line in datalog_init.splitlines()
+        if line.strip().startswith(("mentions(", "reports(", "weighted_"))
+    )
+
+
+@pytest.fixture
+def vocabulary_engine():
+    """Return a small engine with the neurosynth vocabulary predicates."""
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(10,), (11,)], name="study")
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="voxel")
+    nl.add_tuple_set(
+        [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
+    )
+    nl.add_tuple_set(
+        [
+            (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
+            (10, "spatial working memory", 0.5),
+        ],
+        name="term_in_study_tfidf",
+    )
+    # The Cognitive Atlas of the engine, reduced to a few classes.
+    from neurolang_apps.utils import conftest, engine_registry
+
+    nl.add_symbol(engine_registry._BUILTIN_SYMBOLS["lcase"], name="lcase")
+
+    nl.load_ontology(
+        str(conftest.MINI_COGAT), individuals=True, names="prefixed"
+    )
+    cogat_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if line.startswith("cogat_")
+    ]
+    # The predefined analyses (lift, uniformity) over the two voxels.
+    nl.add_tuple_set([(1, 2, 3), (4, 5, 6)], name="brain_mask")
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame({"study_id": [10, 11]}), name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        pd.DataFrame([(1, 2, 3), (4, 5, 6)], columns=["i", "j", "k"]),
+        name="selected_voxel",
+    )
+    analysis_rules = [
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines()
+        if re.match(
+            r"(term_in_study|activated|p_[a-z_]+|study_similarity|"
+            r"cutoff_similarity|similar_study|"
+            r"lift|relative_risk|uniformity|ratios)(_llm)?\(", line
+        )
+    ]
+
+    def query_similarity(query: str, study: int) -> float:
+        return {10: 0.9, 11: 0.5}[study]
+
+    nl.add_symbol(query_similarity, name="query_similarity")
+    nl.execute_datalog_program(
+        _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
+    )
+    return nl
+
+
+def test_banner_lists_relations_and_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth")
+    app._print_banner()
+    out = _output(app)
+    assert "Engine: neurosynth" in out
+    assert (
+        "Mode: Datalog · .help for help · Tab completes · "
+        "Ctrl+D or .quit to exit"
+    ) in out
+    assert "term_in_study_tfidf(study_id, term, tfidf)" in out
+    assert "weighted_mention(study_id, term, tfidf)" in out
+    example = "ans(s) :- mentions(s, 'pain')"
+    assert f"Try: {example}" in out
+    app._execute_and_display(example)
+    assert app.results[0].frame.iloc[:, 0].tolist() == [10]
+
+
+def test_banner_squall_example(vocabulary_engine):
+    app = _app(vocabulary_engine, engine_name="neurosynth", squall=True)
+    app._print_banner()
+    assert "Try: obtain every Study that mentions 'pain'." in _output(app)
+
+
+def test_engine_examples_run_on_the_vocabulary(vocabulary_engine):
+    from neurolang_apps.utils.tui.commands import engine_examples
+
+    examples = engine_examples("neurosynth")
+    for language in ("datalog", "squall"):
+        app = _app(
+            vocabulary_engine, engine_name="neurosynth",
+            squall=language == "squall",
+        )
+        for query in examples[language]:
+            app._execute_and_display(query)
+            assert not app.failed, query
+            assert len(app.results[-1].frame) > 0, query
+
+
+def test_engine_examples_default_to_the_first_relation():
+    from neurolang_apps.utils.tui.commands import engine_examples
+
+    examples = engine_examples("destrieux")
+    assert examples["squall"] == ["obtain every destrieux."]
+    assert examples["datalog"] == [
+        "ans(name, region) :- destrieux(name, region)"
+    ]
+
+
+def test_help_examples_match_engine_columns(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help")
+    out = _output(small_app)
+    assert "term_in_study_tfidf(t, w, s)" not in out
+    assert "obtain every Study that mentions 'pain'." in out
+    assert "every Weighted_mention (?s; ?t; ?w)" in out
+    assert ".more" in out
+
+
+
+def _primer_lines(out):
+    """Return the lines of the SQUALL primer panel in *out*."""
+    lines = out.splitlines()
+    start = next(
+        n for n, line in enumerate(lines) if "SQUALL primer" in line
+    )
+    end = next(
+        n for n in range(start, len(lines)) if lines[n].startswith("╰")
+    )
+    return lines[start:end]
+
+
+def test_help_squall_is_a_primer(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    out = _output(small_app)
+    assert "Dot commands" not in out
+    lines = _primer_lines(out)
+    assert len(lines) <= 30
+    primer = "\n".join(lines)
+    for text in (
+        "obtain every", "define as", "lowercase", "a Study mentions a Term",
+        "?s", "(?i; ?j; ?k)", "'pain'", '"working memory"', "in 3D",
+        "with inferred probability", "conditioned to",
+        "every Weighted_mention (?s; ?t; ?w) such that",
+    ):
+        assert text in primer, text
+
+
+def test_primer_shows_the_declared_sorts_of_several_columns(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "voxel(i, j, k)" in primer
+    assert "atlas_voxel(i, j, k)" in primer
+    assert "a voxel of the MNI template grid" in primer
+    assert "study(study_id)" not in primer
+
+
+def test_help_in_squall_mode_adds_the_primer(small_app):
+    small_app._handle_dot_command(".help")
+    assert "SQUALL primer" not in _output(small_app)
+    small_app.settings.squall = True
+    small_app._handle_dot_command(".help")
+    out = _output(small_app)
+    assert "Dot commands" in out and "SQUALL primer" in out
+
+
+def test_primer_without_engine(small_app):
+    small_app._handle_dot_command(".help squall")
+    primer = "\n".join(_primer_lines(_output(small_app)))
+    assert "obtain every" in primer and "Examples" not in primer
+
+
+def test_help_of_an_unknown_topic(small_app):
+    small_app._handle_dot_command(".help sql")
+    out = _output(small_app)
+    assert "No help on 'sql'" in out and ".help squall" in out
+
+def test_squall_obtain_shows_declared_column_names(peaks_engine):
+    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+    app._execute_and_display("obtain every peak_reported.")
+    assert list(app.results[0].frame.columns) == ["i", "j", "k", "study_id"]
+    assert "study_id" in _output(app)
+
+
+def test_several_obtain_blocks_are_all_kept(peaks_engine):
+    peaks_engine.add_tuple_set([(i,) for i in range(30)], name="many")
+    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+    app._execute_and_display(
+        "obtain every peak_reported as Peaks. obtain every many."
+    )
+    titles = [block.title for block in app.results]
+    assert titles == ["peaks", "obtain_1"]
+    assert list(app.results[0].frame.columns) == [
+        "i", "j", "k", "study_id"
+    ]
+    out = _output(app)
+    assert "── peaks ──" in out and "── obtain_1 ──" in out
+    assert "30 rows · showing 1–20 · .more for next" in out
+    app._handle_dot_command(".more")
+    assert "30 rows · showing 21–30 · end" in _output(app)
+    assert app.results[0].remaining == 0
+
+
+def test_enter_continues_incomplete_statement(small_app, pipe_session):
+    calls = []
+    original = small_app._execute
+
+    def recording(program):
+        calls.append(program)
+        return original(program)
+
+    small_app._execute = recording
+    small_app.run(pipe_session("ans(x) :-\r  P(x)\r\x04"))
+    assert calls == ["ans(x) :-\n  P(x)"]
+
+
+def test_enter_on_empty_line_submits_incomplete_statement(
+    small_app, pipe_session
+):
+    small_app.run(pipe_session("ans(x) :- P(x,\r\r\x04"))
+    assert "Datalog parse error" in _output(small_app)
+
+
+def test_batch_runs_statements_and_reports_status(small_app):
+    lines = ["ans(x) :-\n", "  P(x)\n", ".format csv\n", "ans(x) :- P(x)\n"]
+    assert small_app.run_batch(lines) == 0
+    assert "2 rows" in _output(small_app)
+    assert "x\n1\n2" in _output(small_app)
+
+
+@pytest.mark.parametrize("statement", ["ans(x) :- P(x", ".nosuchcommand"])
+def test_batch_failure_status(small_app, statement):
+    lines = [statement + "\n", "\n", "ans(x) :- P(x)\n"]
+    assert small_app.run_batch(lines) == 1
+    assert "2 rows" in _output(small_app)
+
+
+def test_batch_stops_at_quit(small_app):
+    assert small_app.run_batch([".quit\n", "ans(x) :- P(\n"]) == 0
+
+
+def test_banner_shows_relations_without_columns_by_name(engine):
+    from unittest.mock import patch
+
+    from neurolang_apps.utils.tui.commands import engine_relations
+
+    predicates = {"schaefer": {"columns": []}, "p": {"columns": ["x"]}}
+    with patch(
+        "neurolang_apps.utils.engine_registry.get_predicates",
+        return_value=predicates,
+    ):
+        relations = engine_relations("neurosynth")
+    assert relations == ["schaefer", "p(x)"]
+
+
+def test_banner_shows_the_atlas_columns():
+    from neurolang_apps.utils.tui.commands import engine_relations
+
+    assert "schaefer(label, region)" in engine_relations("neurosynth")
+
+
+def test_no_sort_warning_on_empty_result(engine, capsys):
+    app = _app(engine, sort_by=[("term", True)])
+    app._execute_and_display("ans(x) :- P(x), Q(x)")
+    assert "(empty)" in _output(app)
+    assert "sort column" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "line, message",
+    [
+        (
+            ".mode prolog",
+            "Unknown mode 'prolog'. Use one of: datalog, squall, vi, emacs.",
+        ),
+        (".mode squall", "Mode: SQUALL"),
+        (".format", "Format: table"),
+        (".format json", "Format: json"),
+        (".ra maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".ra on", "RA plans: on"),
+        (".rewritten maybe", "Use 'on' or 'off', not 'maybe'."),
+        (".rewritten on", "Rewritten program: on"),
+        (".head 0", "Page size must be a positive integer, not '0'."),
+        (".more", "No more rows."),
+        (".sort", "Sort: none"),
+        (".datalog", "No query has been run yet."),
+    ],
+)
+def test_command_messages(small_app, line, message):
+    small_app.console.width = 1000
+    small_app._handle_dot_command(line)
+    assert message in _output(small_app)
+
+
+# The escape sequences a terminal sends around pasted text.
+PASTE = "\x1b[200~{}\x1b[201~"
+
+
+def _recording_execute(app):
+    """Record the programs *app* executes, its list."""
+    calls = []
+    original = app._execute
+
+    def recording(program):
+        calls.append(program)
+        return original(program)
+
+    app._execute = recording
+    return calls
+
+
+def test_pasted_statements_run_in_turn(small_app, pipe_session):
+    """A pasted block of rules, dot-commands and queries runs as if each
+    statement were typed at the prompt."""
+    calls = _recording_execute(small_app)
+    pasted = "q(x) :- P(x)\n.format csv\nans(x) :-\n  q(x)\n.format table"
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["q(x) :- P(x)", "ans(x) :-\n  q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert small_app.settings.output_format == "table"
+
+
+
+def test_pasted_block_with_comment_lines(small_app, pipe_session):
+    """The ``%`` comment lines of a pasted block, before a rule or a
+    dot-command, run nothing and raise no error."""
+    calls = _recording_execute(small_app)
+    pasted = (
+        "% the rule\nq(x) :- P(x)\n% CSV output\n.format csv\n"
+        "% the query\nans(x) :- q(x)"
+    )
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert calls == ["% the rule\nq(x) :- P(x)\n% CSV output",
+                     "% the query\nans(x) :- q(x)"]
+    assert "x\n1\n2" in _output(small_app)
+    assert "error" not in _output(small_app).lower()
+
+
+def test_comment_line_alone_runs_nothing(small_app):
+    calls = _recording_execute(small_app)
+    small_app._run_line("% nothing to run")
+    assert calls == []
+    assert _output(small_app) == ""
+
+def test_pasted_mode_applies_to_what_follows(small_app, pipe_session):
+    pasted = ".mode squall\nobtain every P."
+    small_app.run(pipe_session(PASTE.format(pasted) + "\r\x04"))
+    assert small_app.settings.squall
+    out = _output(small_app)
+    assert out.index("Mode: SQUALL") < out.index("Running query")
+
+
+def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
+    calls = _recording_execute(small_app)
+    small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
+    assert calls == ["ans(x) :-\n  P(x)"]

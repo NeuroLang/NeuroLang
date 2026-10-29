@@ -6,8 +6,11 @@ Lifted probabilistic inference
 This page lists the strategies NeuroLang uses to compute the probability
 of a query exactly by *lifted inference*, that is by translating the query
 into a plan of relational algebra operations on probabilities, without
-grounding the program into a propositional formula. For each strategy it
-gives the formula applied, when it applies and the reference it comes from.
+grounding the program into a propositional formula. It gives first the
+algorithms of the literature that NeuroLang implements, whose correctness
+is that of the papers cited, then NeuroLang's own additions to them, each
+with the formula applied, when it applies and, in `Correctness of the
+plans`_, its proof.
 
 .. contents::
    :local:
@@ -20,23 +23,51 @@ Solvers and their order
 uses the first one which accepts the query:
 
 1. :mod:`neurolang.probabilistic.small_dichotomy_theorem_based_solver`, for
-   hierarchical queries without self-joins (see `Hierarchical queries
-   without self-joins`_);
+   conjunctive queries without negation whose existential variables all
+   occur in atoms of probabilistic choices, which it computes by a join
+   and a disjoint sum on the head (see `Conjunctive queries summed on
+   probabilistic choices`_);
 2. :mod:`neurolang.probabilistic.dalvi_suciu_lift`, which first plans
    non-repeating queries with negation (see `Non-repeating queries with
-   negation`_), and otherwise lifts unions of conjunctive queries with
-   self-joins (see `Dalvi–Suciu lifting`_), extended to negations and
-   comparisons which share relations with the rest of the query (see
-   `Negations and comparisons sharing relations`_);
+   negation`_ and `Planning non-repeating queries`_), and otherwise lifts
+   unions of conjunctive queries with self-joins (see `The Dalvi–Suciu
+   algorithm`_), with NeuroLang's additions (see `NeuroLang's
+   additions`_);
 3. :mod:`neurolang.probabilistic.weighted_model_counting`, which is not
    lifted: it compiles the provenance of the query into a sentential
    decision diagram (SDD) [Darwiche2011]_ with pysdd and computes its
    weighted model count [Chavira2008]_. It answers every query of the
    language but can be exponential in the size of the data.
 
+.. figure:: _static/lifting_pipeline.svg
+   :alt: The three solvers in order. The first sums a conjunctive query on
+         its probabilistic choices. The second prepares the query, plans
+         non-repeating queries with negation, normalises and checks the
+         query, lifts negations and comparisons sharing relations, and
+         applies the rules of the Dalvi–Suciu algorithm in order. A query
+         that neither lifted solver plans is solved by weighted model
+         counting.
+   :width: 100%
+
+   The lifting process. Each lifted solver either gives a plan, evaluated
+   on the provenance semiring of probabilities, or declines the query,
+   which is passed to the next solver. The steps of the second solver are
+   described in `Preparing the query`_, `Planning non-repeating queries`_,
+   `Negations and comparisons sharing relations`_ and `The Dalvi–Suciu
+   algorithm`_.
+
 A lifted solver declines a query by raising an
 ``UnsupportedSolverError``, such as ``NonLiftableException``, and the next
-one is then tried. Lifted plans are
+one is then tried. The Dalvi–Suciu solver turns the failures of the
+conversions to normal forms of a formula outside the fragment they support
+(``NotInFONegE``), and the splits into components it cannot plan, such as a
+union with a negated component, into ``NonLiftableException``, so that
+declining never depends on ``check_unate``. Other errors are not caught: a
+query body with a universal quantifier, given through the Python API, is
+rejected when the query is flattened
+(:func:`~neurolang.datalog.expression_processing.flatten_query` raises
+``UnsupportedProgramError``), and weighted model counting is not tried
+either. Lifted plans are
 computed on the provenance semiring of probabilities
 (:mod:`neurolang.relational_algebra_provenance`), whose operations are
 listed in `Operations of the lifted plans`_. Conditional queries (``//``,
@@ -79,7 +110,8 @@ result from the probabilities of its inputs.
      - existential quantifier on a separator variable
    * - ``IndependentProjectionUniversal`` (ind-∀-π)
      - :math:`\prod_i p_i`
-     - universal quantifier on a separator variable
+     - not used by the implemented rules (see `The Dalvi–Suciu
+       algorithm`_, separator variable)
    * - ``DisjointProjection`` (disj-π)
      - :math:`\sum_i p_i`
      - projection of mutually exclusive tuples
@@ -90,8 +122,282 @@ result from the probabilities of its inputs.
      - :math:`1`
      - the tuples of a plan, to give values to its variables
 
+Algorithms from the literature
+------------------------------
+
+The algorithms of this section are published with their proofs, which
+apply to the queries they are stated for: NeuroLang implements them, at
+times with restrictions, which are given, so that a query they decline is
+not necessarily #P-hard. `NeuroLang's additions`_ extend them beyond these
+queries.
+
+Conjunctive queries summed on probabilistic choices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The first solver,
+:func:`~neurolang.probabilistic.small_dichotomy_theorem_based_solver.solve_succ_query`,
+is a restriction of the disjoint projection of Suciu et al. (see
+`Disjoint projection on a probabilistic choice`_), and not an
+implementation of the small dichotomy theorem, despite its name. It
+accepts a query whose body, once flattened and the atoms of each
+probabilistic choice made one (see `Preparing the query`_), is a
+conjunction without negation in which
+
+* every existential variable of an atom of a probabilistic fact relation
+  also occurs in an atom of a probabilistic choice
+  (``_verify_fact_and_choice_e_quantification``);
+* no existential variable occurs in deterministic atoms only
+  (``_verify_deterministic_e_quantification``);
+* the probabilistic atoms form a hierarchical query without self-joins
+  (``is_hierarchical_without_self_joins``, see `The small dichotomy
+  theorem`_), a further restriction which the plan below does not need.
+
+Its plan is the join of the atoms of the body, followed by the projection
+on the head, which the provenance solver computes as a sum of the
+probabilities of the tuples it merges
+(``RelationalAlgebraProvenanceCountingSolverMixin``):
+
+.. math::
+
+   P[\exists \bar z\, Q] = \sum_{\bar a} P[Q[\bar a/\bar z]],
+
+:math:`\bar z` being the existential variables. This is the disjoint
+projection, exact because the merged tuples differ on the tuple of a
+choice and are mutually exclusive (see `Correctness of the plans`_). No
+completeness is claimed for the solver: the hierarchical query
+:math:`\mathit{ans}(x) \leftarrow R(x, y) \land S(y)` of probabilistic
+facts, for instance, is declined, as :math:`y` occurs in no choice, and
+is lifted by the next solver. Queries with negations or disjunctions are
+declined too.
+
+The small dichotomy theorem
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a conjunctive query in which no relation occurs twice, on
+tuple-independent relations, the small dichotomy theorem applies
+[Dalvi2007]_ [Fink2014]_: writing :math:`at(x)` for the atoms in which
+variable :math:`x` occurs, the query can be computed in polynomial time if
+it is *hierarchical*, that is if for any two variables :math:`x` and
+:math:`y`,
+
+.. math::
+
+   at(x) \subseteq at(y) \quad\text{or}\quad
+   at(x) \supseteq at(y) \quad\text{or}\quad
+   at(x) \cap at(y) = \emptyset,
+
+and is #P-hard otherwise. Each connected component of a hierarchical query
+has a variable occurring in all of its atoms, on which it is computed by
+the independent projection, and recursively: this is the separator
+variable rule of `The Dalvi–Suciu algorithm`_, restricted to queries
+without self-joins, and the projection
+of the planner of `Planning non-repeating queries`_, which Fink and
+Olteanu's extension of the theorem to negation (see `Non-repeating
+queries with negation`_) justifies.
+
+The Dalvi–Suciu algorithm
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:func:`~neurolang.probabilistic.dalvi_suciu_lift.dalvi_suciu_lift`
+implements the algorithm of Dalvi and Suciu for unions of conjunctive
+queries on tuple-independent relations [Dalvi2012]_. The query is first
+shattered and ranked, then its rules are tried in the order below, each
+one calling the algorithm on the subqueries it produces. A query to which
+no rule applies is marked ``NonLiftable`` and declined. Dalvi and Suciu
+prove their algorithm complete for unions of conjunctive queries on
+tuple-independent databases: a query on which it fails is #P-hard
+[Dalvi2012]_. The implementation restricts some of its rules, ranking and
+inclusion–exclusion, so a query it declines is not necessarily #P-hard.
+NeuroLang's additions are tried in between: independent negation,
+the disjoint separator and the guard on the clauses of the conjunctive
+normal form (see `Extensions of the Dalvi–Suciu algorithm`_).
+
+Shattering constants
+   An atom with a constant, such as :math:`R(x, a)`, is replaced by an atom
+   of a new relation holding the tuples of :math:`R` selected on that
+   constant, so that the remaining atoms of :math:`R` refer to disjoint sets
+   of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
+
+Ranking
+   The query must be *ranked*: there is an order on the variables such
+   that the arguments of every atom follow it [Dalvi2012]_
+   (:mod:`neurolang.probabilistic.ranking`). Atoms with a repeated variable,
+   such as :math:`R(x, x)`, are first replaced by atoms of a new relation
+   holding the selected tuples. A query whose variables still occur in both
+   orders, such as :math:`\exists x, y\, R(x, y) \land R(y, x)`, is then
+   rewritten into an equivalent ranked query
+   (:func:`~neurolang.probabilistic.ranking.rank_query`), following Dalvi
+   and Suciu's Proposition 4.2. The variables to rank are those occurring in
+   both orders or repeated, together with the variables at the same
+   positions of the other atoms of their relations. For every weak order of
+   them, each atom :math:`R(\bar x)` becomes an atom of the relation of the
+   tuples of :math:`R` whose values at those positions are in that order,
+   and the variables of each rank are the same in every order; the query is
+   the disjunction of these queries, one per order. For
+   :math:`R(x, y) \land R(y, x)`, the orders :math:`x < y`, :math:`x = y`
+   and :math:`y < x` give
+
+   .. math::
+
+      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2) \;\lor\;
+      \exists x_1\, R_=(x_1) \;\lor\;
+      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2),
+
+   with :math:`R_<(x_1, x_2)` standing for the tuple :math:`R(x_1, x_2)`
+   with :math:`x_1 < x_2`, :math:`R_>(x_1, x_2)` for the tuple
+   :math:`R(x_2, x_1)` with :math:`x_1 < x_2`, and :math:`R_=(x_1)` for
+   the tuple :math:`R(x_1, x_1)`. The orders :math:`x < y` and
+   :math:`y < x` give the same disjunct: in the first, :math:`x` is
+   :math:`x_1` and :math:`y` is :math:`x_2`; in the second, :math:`y` is
+   :math:`x_1` and :math:`x` is :math:`x_2`, and the atoms of
+   :math:`R(x, y)` and :math:`R(y, x)` are exchanged. The ranked
+   relations are computed on the data, each tuple keeping its probability
+   (``_ranked_relation``).
+
+   The query is declined, and left to the next solver, when a relation to
+   split is a probabilistic choice or occurs within a negation; when a
+   ranked position has a constant, or a comparison or a function has a
+   ranked variable; when an answer variable is to rank, as Dalvi and Suciu
+   rank Boolean queries, the answer variables being constants; when the
+   ranked columns are not all of real numbers or all of strings, the types
+   with a total order and an equality, or contain NaN; or when more than
+   ``MAX_RANKED_VARIABLES``, two, variables are to rank, as the number of
+   orders, 1, 3, 13, 75…, makes planning exponential. Only variables in
+   both orders in two atoms are detected, as in the check of rankedness: a
+   cycle such as :math:`R(x, y) \land R(y, z) \land R(z, x)` is not
+   ranked, which the separator variable rule still checks.
+
+
+Base cases
+   A single atom is read from its relation; a subquery whose atoms are all
+   deterministic is computed by ordinary relational algebra, with
+   probability 1.
+
+Minimisation
+   Redundant atoms and disjuncts are removed with the containment test of
+   :mod:`neurolang.probabilistic.containment`: a conjunctive query
+   contains another when there is a homomorphism from the first into the
+   second (Chandra and Merlin), and a union contains another when each
+   disjunct of the second is contained in one of the first (Sagiv and
+   Yannakakis). The base cases are then tried
+   again.
+
+
+Independent conjunction
+   With the query in conjunctive normal form, if its conjuncts split into
+   components with no probabilistic relation in common, they are
+   independent:
+
+   .. math::
+
+      P[Q_1 \land Q_2] = P[Q_1]\,P[Q_2].
+
+
+Independent disjunction
+   With the query in disjunctive normal form, if its disjuncts split into
+   components with no probabilistic relation in common:
+
+   .. math::
+
+      P[Q_1 \lor Q_2] = 1 - (1 - P[Q_1])(1 - P[Q_2]).
+
+Separator variable
+   A variable :math:`z` is a separator variable of :math:`\exists z\,Q(z)`
+   if it occurs in every atom and, for each relation, in the same position
+   of all of its atoms. The events :math:`Q(a)` for different values
+   :math:`a` then concern different tuples and are independent:
+
+   .. math::
+
+      P[\exists z\, Q(z)] = 1 - \prod_a (1 - P[Q(a)]).
+
+   The plan algebra also has ``IndependentProjectionUniversal``, the dual
+   projection for a universally quantified separator variable
+   [Suciu2020]_, but it is not one of the implemented rules: the
+   algorithm's conversions to normal forms
+   (``convert_to_dnf_existential_ucq``, ``convert_to_cnf_existential_ucq``)
+   accept FO∃¬ formulas only, ``convert_ucq_to_ccq`` rewrites universals as
+   :math:`\lnot\exists\lnot` before them, and ``separator_variable_plan``
+   chooses the universal projection only when the prenex form of the query
+   has no existential quantifier, as for :math:`\lnot\exists y\, R(y)`,
+   whose plan is then impure. No test of the lifting builds it. It would
+   need the opposite convention for the support of a plan (see the
+   probabilistic model in `Correctness of the plans`_).
+
+
+Inclusion–exclusion
+   For a conjunction :math:`Q_1 \land \dots \land Q_n` in conjunctive normal
+   form,
+
+   .. math::
+
+      P\Big[\bigwedge_{i} Q_i\Big] =
+      \sum_{\emptyset \neq S \subseteq \{1..n\}}
+      (-1)^{|S|+1}\, P\Big[\bigvee_{i \in S} Q_i\Big].
+
+   :func:`~neurolang.probabilistic.dalvi_suciu_lift.inclusion_exclusion_conjunction`
+   converts each of the :math:`2^n - 1` disjunctions
+   :math:`f(S) = \bigvee_{i \in S} Q_i` to disjunctive normal form, and
+   orders them (``_formulas_weights``): :math:`T \preceq S` when
+   :math:`T \subseteq S`, or when
+   :func:`~neurolang.probabilistic.containment.is_contained` finds that
+   :math:`f(T)` implies :math:`f(S)`, the relation being then closed
+   transitively. The test is sound but not complete: a negated atom
+   :math:`\lnot R(\bar x)` is matched only by the same negated atom,
+   through the relation :math:`\bar R` of ``NegatedSymbol``
+   (``negations_as_atoms``). The disjunctions contained in each other are
+   one term, lifted once, and the weight of each term is
+   :math:`\mu(S) = 1 - \sum_{T \prec S} \mu(T)`
+   (``mobius_weights``, ``mobius_function``), so that a term whose weight
+   is 0 is not lifted. These cancellations remove terms that may be
+   #P-hard while the conjunction is not [Dalvi2012]_; a term that is not
+   cancelled and that the algorithm cannot lift is marked ``NonLiftable``,
+   which makes the plan impure (``is_pure_lifted_plan``), and the query is
+   declined unless another rule lifts it. The rule is applied only when
+   all the conjuncts have the same free variables
+   (``_have_the_same_free_variables``).
+   :ref:`inclusion-exclusion` proves that the plan is exact although the
+   containment test is not complete.
+
+
+Disjoint projection on a probabilistic choice
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suciu et al. [Suciu2011]_ (section 4.3.1) extend the algorithm to
+block-independent disjoint relations, of which a probabilistic choice is
+one block: the events of different tuples of a block are mutually
+exclusive, and for a conjunctive query with an atom :math:`C(\bar z)` of
+a choice, :math:`\bar z` being quantified,
+
+.. math::
+
+   P[\exists \bar z\, Q] = \sum_{\bar a} P[Q[\bar a/\bar z]].
+
+NeuroLang applies it to unions of conjunctive queries as the disjoint
+separator (see `Extensions of the Dalvi–Suciu algorithm`_).
+
+Non-repeating queries with negation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A query is *non-repeating* when none of its probabilistic relations
+occurs twice in it. Fink and Olteanu show that a non-repeating query
+without union, built from joins, projections and negations, on
+tuple-independent relations, can be computed in polynomial time if it is
+hierarchical, and is #P-hard otherwise [Fink2014]_ [Fink2016]_. NeuroLang's
+planner for these queries, which accepts more of them, is described in
+`Planning non-repeating queries`_.
+
+NeuroLang's additions
+---------------------
+
+The rewritings and rules of this section are NeuroLang's own: the
+references they cite give the techniques they build on, not their
+correctness, which is proved in `Correctness of the plans`_. They are
+sound, but not known to be complete: some tractable queries may still be
+declined, and left to weighted model counting.
+
 Preparing the query
--------------------
+~~~~~~~~~~~~~~~~~~~
 
 Before lifting, :func:`~neurolang.probabilistic.dalvi_suciu_lift.solve_succ_query`
 rewrites the query as follows.
@@ -173,111 +479,129 @@ Deterministic negations
    it is a subexpression of the plan, computed as a set when the plan is
    evaluated.
 
-Probabilistic choices
+Deterministic builtins
+   The lifting rules plan comparisons but no other builtin, such as
+   ``startswith``. The conjunction :math:`B(\bar y)` of the builtins of a
+   conjunction whose variables are among those of one of its deterministic
+   atoms :math:`R(\bar x)` is replaced with :math:`R` by a fresh
+   deterministic relation, defined as for the deterministic negations,
+
+   .. math::
+
+      D(\bar x) := R(\bar x) \land B(\bar y), \qquad
+      R \land B \equiv D,
+
+   so that ``schaefer(l, r), startswith('17Networks LH Vis', l)`` in a
+   probabilistic rule is lifted as when a deterministic rule selects the
+   labels, instead of being solved by weighted model counting.
+
+   An equality :math:`y = f(\bar x)` of a variable with a function of
+   other variables, all of them in an atom :math:`A`, deterministic or
+   probabilistic, of the conjunction, is replaced by a fresh deterministic
+   relation of the values of the function on the tuples of :math:`A`, the
+   support of :math:`A` if it is probabilistic:
+
+   .. math::
+
+      F(\bar x, y) := \pi_{\bar x}(A) \land y = f(\bar x), \qquad
+      A \land y = f(\bar x) \equiv A \land F(\bar x, y).
+
+   :math:`F` is a function of :math:`\bar x`, so that in :math:`R(x)
+   \land T(y) \land y = x + 1`, :math:`y` separates the query (see the
+   separator determined by a functional dependency, in `Extensions of the
+   Dalvi–Suciu algorithm`_).
+
    Two atoms of the same probabilistic choice relation are true together
    only if they are the same tuple, as exactly one tuple of the choice is
    true. Their arguments are therefore made equal
    (:func:`~neurolang.probabilistic.expression_processing.lift_optimization_for_choice_predicates`).
+   This holds for the atoms of a conjunction: the disjuncts of a
+   disjunction are rewritten apart, and the atoms of a conjunction are not
+   made equal to those within its disjunctions, since :math:`C(s) \lor
+   C(f)` does not need both to be true.
 
-Shattering constants
-   An atom with a constant, such as :math:`R(x, a)`, is replaced by an atom
-   of a new relation holding the tuples of :math:`R` selected on that
-   constant, so that the remaining atoms of :math:`R` refer to disjoint sets
-   of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
-
-Ranking
-   The query must be *ranked*: there is an order on the variables such
-   that the arguments of every atom follow it [Dalvi2012]_
-   (:mod:`neurolang.probabilistic.ranking`). Atoms with a repeated variable,
-   such as :math:`R(x, x)`, are first replaced by atoms of a new relation
-   holding the selected tuples. A query whose variables still occur in both
-   orders, such as :math:`\exists x, y\, R(x, y) \land R(y, x)`, is then
-   rewritten into an equivalent ranked query
-   (:func:`~neurolang.probabilistic.ranking.rank_query`), following Dalvi
-   and Suciu's Proposition 4.2. The variables to rank are those occurring in
-   both orders or repeated, together with the variables at the same
-   positions of the other atoms of their relations. For every weak order of
-   them, each atom :math:`R(\bar x)` becomes an atom of the relation of the
-   tuples of :math:`R` whose values at those positions are in that order,
-   and the variables of each rank are the same in every order; the query is
-   the disjunction of these queries, one per order. For
-   :math:`R(x, y) \land R(y, x)`, the orders :math:`x < y`, :math:`x = y`
-   and :math:`y < x` give
+   An atom :math:`C(\bar v)` within a negated existential of a
+   conjunction which asserts :math:`C(\bar u)` is made :math:`C(\bar u)`,
+   when the variables of :math:`\bar v` that are not those of
+   :math:`\bar u` are quantified by the existential, which loses them:
 
    .. math::
 
-      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2) \;\lor\;
-      \exists x_1\, R_=(x_1) \;\lor\;
-      \exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2),
+      C(\bar u) \land \lnot\exists W\, (C(\bar v) \land \psi) \equiv
+      C(\bar u) \land \lnot\exists W'\, (C(\bar u) \land \psi)
+      [\bar u/\bar v],
 
-   with :math:`R_<` the tuples :math:`(a, b)` of :math:`R` with
-   :math:`a < b`, :math:`R_>` the tuples :math:`(b, a)` with
-   :math:`a < b`, and :math:`R_=` the tuples :math:`(a, a)`. The ranked
-   relations are computed on the data, each tuple keeping its probability.
+   and the absorption in negations then removes :math:`C(\bar u)` from the
+   negation. For instance, :math:`R(x) \land \lnot\exists t\, (R(t) \land
+   S(x, t))` becomes :math:`R(x) \land \lnot S(x, x)`. A negation in which
+   the substitution makes a strict comparison of a term with itself, as
+   :math:`s_2 \neq s` becoming :math:`s \neq s`, is true, and is removed
+   (:class:`~neurolang.probabilistic.expression_processing.UnifyChoicesInNegations`).
 
-   The query is declined, and left to the next solver, when a relation to
-   split is a probabilistic choice or occurs within a negation; when a
-   ranked position has a constant, or a comparison or a function has a
-   ranked variable; when an answer variable is to rank, as Dalvi and Suciu
-   rank Boolean queries, the answer variables being constants; when the
-   ranked columns are not all of real numbers or all of strings, the types
-   with a total order and an equality, or contain NaN; or when more than
-   ``MAX_RANKED_VARIABLES``, two, variables are to rank, as the number of
-   orders, 1, 3, 13, 75…, makes planning exponential. Only variables in
-   both orders in two atoms are detected, as in the check of rankedness: a
-   cycle such as :math:`R(x, y) \land R(y, z) \land R(z, x)` is not
-   ranked, which the separator variable rule still checks.
+Equalities within disjuncts
+   The variables an equality makes the same are unified, in each disjunct
+   of a union apart, as the equality holds in its disjunct only. A
+   disjunct keeps its equalities if unifying them would replace a variable
+   of the query's head, which every disjunct shares.
+
 
 Checks
    The query must have no built-in function, except comparisons within
    existential conjuncts (see `Negations and comparisons sharing
-   relations`_). Unless the ``check_unate`` option of
+   relations`_) and comparisons of the answer variables, conjuncts of the
+   query (see `Extensions of the Dalvi–Suciu algorithm`_). Unless the ``check_unate`` option of
    ``[PROBABILISTIC_SOLVER]`` is turned off (see :doc:`performance`), it
    must also use a single kind of quantifier and be *unate*, each relation
    occurring only positively or only negatively.
    The negations and comparisons of `Negations and comparisons sharing
    relations`_ are exempt from this check, as their rules check each
-   query they lift.
+   query they lift. Turning the option off disables these soundness
+   checks: the rules are then applied to queries for which they are not
+   proved, and can give wrong probabilities instead of declining the query
+   to weighted model counting.
 
-Hierarchical queries without self-joins
----------------------------------------
 
-For a conjunctive query in which no relation occurs twice, the small
-dichotomy theorem applies [Dalvi2007]_ [Fink2014]_: writing :math:`at(x)`
-for the atoms in which variable :math:`x` occurs, the query can be computed
-in polynomial time if it is *hierarchical*, that is if for any two variables
-:math:`x` and :math:`y`,
+Comparisons with a constant
+   Shattering moves a comparison of a variable with a constant, such as
+   :math:`y > 1`, into the atoms of a tuple-independent relation with that
+   variable, as it does for :math:`y \neq 1`. Each comparison
+   :math:`R.i\ \theta\ c` of a column of :math:`R` with a constant splits
+   the tuples of :math:`R` into those with :math:`R.i\ \theta\ c` and those
+   with its complement, :math:`<` and :math:`\geq`, :math:`\leq` and
+   :math:`>`, :math:`\neq` and :math:`=`, and the relation is split by the
+   product of these partitions and of that of its constants. An atom of
+   :math:`R` is replaced by the disjunction of the atoms of the sets
+   compatible with its constants and with the comparisons of its
+   variables in its conjunction, which are then removed: a comparison of a
+   variable in no such atom is kept. A comparison outside the
+   existentials of its variable's atoms, as in :math:`\exists y\,
+   (\exists x\, (R(x) \land S(x, y)) \land y > 1)` once the quantifiers
+   are pushed down, is first moved into them, :math:`C \land \exists x\,
+   \psi \equiv \exists x\, (C \land \psi)`, :math:`x` being renamed apart
+   from the variables of :math:`C`
+   (:class:`~neurolang.logic.transformations.FactorConjunctQuantifiers`,
+   the conjunction being then flattened),
+   unless the conjunction has a negation or a disjunction. The query
+   :math:`\exists x, y\, R(x) \land S_{>1}(x, y)` is then lifted by the
+   separator variable :math:`x`. A comparison :math:`c\ \theta\ y` is
+   first written :math:`y\ \theta'\ c`.
 
-.. math::
 
-   at(x) \subseteq at(y) \quad\text{or}\quad
-   at(x) \supseteq at(y) \quad\text{or}\quad
-   at(x) \cap at(y) = \emptyset,
+Planning non-repeating queries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-and is #P-hard otherwise. The plan is built from the independent join
-and existential projection only. This solver declines queries with
-negations or disjunctions, which are left to the next solver; Fink and
-Olteanu's extension of the theorem to negation is described in the next
-section.
-
-Non-repeating queries with negation
------------------------------------
-
-A query is *non-repeating* when none of its probabilistic relations
-occurs twice in it. Fink and Olteanu show that a non-repeating query
-without union, built from joins, projections and negations, on
-tuple-independent relations, can be computed in polynomial time if it is
-hierarchical, and is #P-hard otherwise [Fink2014]_. The planner below
-also accepts disjunctions, comparisons, constants, deterministic relations
-and probabilistic choices, which this theorem does not cover: its plans
-are proved correct in `Correctness of the plans`_, and it is not claimed
-to plan every tractable query. Before Dalvi–Suciu lifting,
+The planner of non-repeating queries with a negation accepts
+disjunctions, comparisons, constants, deterministic relations and
+probabilistic choices, which the theorem of `Non-repeating queries with
+negation`_ does not cover: its plans are proved correct in `Correctness
+of the plans`_, and it is not claimed to plan every tractable query.
+Before the Dalvi–Suciu algorithm,
 :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
 plans the non-repeating queries with a negation in this way. The negations
 can be nested and can quantify variables, as in
 :math:`\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land \lnot U(x,
 y))`, whose quantifiers are mixed once the negations are moved to the
-atoms, which the checks of Dalvi–Suciu lifting decline.
+atoms, which the checks of the Dalvi–Suciu algorithm decline.
 
 The query is first rewritten with two equivalences, which hold in every
 possible world and keep it non-repeating:
@@ -323,7 +647,7 @@ only:
   or if another condition fails, such as a comparison or a negation whose
   variables are not bound by the rest of its conjunction, or a choice atom
   with the variable that is not a conjunct of the group, no plan is given
-  and the query is left to Dalvi–Suciu lifting.
+  and the query is left to the Dalvi–Suciu algorithm.
 
 Deterministic relations do not count as repetitions, and do not need to
 have the projected variable.
@@ -334,94 +658,141 @@ the same free variables once the quantifiers are pushed into them;
 disjuncts with different free variables only arise in queries built with
 the Python API.
 
-Dalvi–Suciu lifting
--------------------
+Extensions of the Dalvi–Suciu algorithm
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:func:`~neurolang.probabilistic.dalvi_suciu_lift.dalvi_suciu_lift`
-implements the algorithm of Dalvi and Suciu for unions of conjunctive
-queries [Dalvi2012]_, extended to probabilistic choices [Suciu2011]_. Its
-rules are tried in the order below, each one calling the algorithm on the
-subqueries it produces. A query to which no rule applies is marked
-``NonLiftable`` and declined. Dalvi and Suciu prove their algorithm
-complete for unions of conjunctive queries on tuple-independent
-databases: a query on which it fails is #P-hard [Dalvi2012]_. The
-implementation restricts some of its rules, inclusion–exclusion for
-instance, so a query it declines is not necessarily #P-hard.
-
-Base cases
-   A single atom is read from its relation; a subquery whose atoms are all
-   deterministic is computed by ordinary relational algebra, with
-   probability 1.
-
-Minimisation
-   Redundant atoms and disjuncts are removed with the containment test of
-   :mod:`neurolang.probabilistic.containment`, and the base cases are tried
-   again.
-
-Independent conjunction
-   With the query in conjunctive normal form, if its conjuncts split into
-   components with no probabilistic relation in common, they are
-   independent:
+Independent negation
+   With the query in conjunctive normal form, a negated component sharing
+   no probabilistic relation with the rest is independent of it:
 
    .. math::
 
-      P[Q_1 \land Q_2] = P[Q_1]\,P[Q_2], \qquad
-      P[Q_1 \land \lnot Q_2] = P[Q_1]\,(1 - P[Q_2]).
+      P[Q_1 \land \lnot Q_2] = P[Q_1]\,(1 - P[Q_2]),
 
-   Negated components sharing no relation with the rest are planned this
-   way, with ``Difference``: the query is liftable when its positive and
-   negated parts are (see `Correctness of the plans`_). Fink and Olteanu
-   study the converse, for queries with negation without repeated
+   computed with ``Difference``: the query is liftable when its positive
+   and negated parts are (see `Correctness of the plans`_). Fink and
+   Olteanu study the converse, for queries with negation without repeated
    relations [Fink2014]_ [Fink2016]_.
 
-Independent disjunction
-   With the query in disjunctive normal form, if its disjuncts split into
-   components with no probabilistic relation in common:
+Disjoint separator
+   The counterpart, for probabilistic choices, of the separator variable
+   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.disjoint_separator`).
+   A choice cannot have a separator variable: the events of different
+   values of its variables are exclusive, not independent. In the prenex
+   form :math:`\exists \bar y\, \bigvee_i Q_i` of a union, the atoms of a
+   choice :math:`C`, one in each disjunct, are made the same atom
+   :math:`C(\bar z)` by renaming the quantified variables of each disjunct
+   into those of the first. The events :math:`\bigvee_i Q_i(\bar a)` for
+   different values :math:`\bar a` of :math:`\bar z` are then exclusive and
 
    .. math::
 
-      P[Q_1 \lor Q_2] = 1 - (1 - P[Q_1])(1 - P[Q_2]).
+      P\Big[\exists \bar z\, \bigvee_i Q_i\Big] =
+      \sum_{\bar a} P\Big[\bigvee_i Q_i(\bar a)\Big]
 
-Separator variable
-   A variable :math:`z` is a separator variable of :math:`\exists z\,Q(z)`
-   if it occurs in every atom and, for each relation, in the same position
-   of all of its atoms. The events :math:`Q(a)` for different values
-   :math:`a` then concern different tuples and are independent:
+   This is the disjoint projection of Suciu et al. (see `Disjoint
+   projection on a probabilistic choice`_), applied here to a union of
+   conjunctive queries, as the separator variable is to unions; its proof
+   is in `Correctness of the plans`_. When the atoms of the disjuncts
+   other than the choice atoms are deterministic, :math:`P[C(\bar a) \land
+   D(\bar a)] = P[C(\bar a)]\,[D(\bar a)]`: the plan joins the choice with
+   the support of the deterministic union :math:`D`, in a single
+   projection, whatever the number of disjuncts. Otherwise the union is
+   lifted for every :math:`\bar a` by the other rules. The rule applies
+   when every disjunct has an atom of the choice, at each position either
+   a quantified variable or the same free variable or constant in all of
+   them, and every free variable of the query. A free variable or a
+   constant :math:`u` of a choice atom, at a position where another
+   disjunct has a quantified variable, is made one,
+   :math:`C(u) \equiv \exists f\, (C(f) \land f = u)`, :math:`f` being
+   fresh; with another atom :math:`C(a)` of the choice in the disjunct,
+   :math:`C(a) \land C(f) \equiv C(a) \land a = f` and
+   :math:`\exists f\, (f = a \land \varphi) \equiv \varphi[a/f]` then give
+   :math:`C(a) \land a = u` (``ChoiceTermsAsEqualities``, one rule per
+   equivalence). The equalities, as comparisons, are the same in every
+   world and belong to the deterministic rest; a union with them and a
+   rest which is not deterministic is declined. It is
+   tried after the separator variables, a conjunctive query being the
+   union of a single disjunct.
+
+
+Clauses of the conjunctive normal form
+   The conjunctive normal form :math:`K_1 \land \dots \land K_n` of a
+   union is used to remove redundant atoms, to split it into independent
+   components, and for inclusion–exclusion. The clauses are lifted apart,
+   each into a relation of its free variables, and then joined. A clause
+   that is a disjunction with a negated atom none of whose variables a
+   positive atom of the same disjunct binds, such as :math:`\exists s\,
+   M(s, t) \lor \lnot L(t)`, is not safe range: its answers are not a
+   finite set of values of :math:`t`, though the conjunction it comes from
+   is (another clause binds :math:`t`). The conversion makes such clauses
+   from safe rules when it factors out an atom they share, as in
+   :math:`(M(s, t) \land C(s) \land \lnot L(t)) \lor (M(s', t) \land
+   C(f) \land M(f, c))`. The normal form is then not used
+   (``_clauses_are_range_restricted``): the rules that follow, the
+   disjoint separator among them, apply to the union as it is, and a union
+   none of them lifts is declined, which is sound. They also apply when
+   the components of the normal form are not all lifted. A negation alone
+   as a clause is not a disjunction, and is the difference of a
+   conjunction.
+
+Answer variables as constants
+   Dalvi and Suciu lift a query for each answer, its free variables being
+   constants [Dalvi2012]_. Two atoms of a tuple-independent relation with
+   free variables :math:`x` and :math:`y` at the same position, such as
+   :math:`\exists s\, A(x, s) \land A(y, s)`, are then different tuples
+   when :math:`x \neq y`, and the same when :math:`x = y`, which the
+   algorithm, keeping the variables, cannot tell
+   (``different_free_variables_plan``). When the other rules decline the
+   query :math:`Q`, its answers are split into those with :math:`x \neq
+   y`, for which the atoms of the relation :math:`R` with :math:`y` at
+   that position are renamed into those of an alias :math:`R'` of
+   :math:`R`, and those with :math:`x = y`:
 
    .. math::
 
-      P[\exists z\, Q(z)] = 1 - \prod_a (1 - P[Q(a)]).
+      \sigma_{x \neq y}\, \mathrm{lift}(Q[R'/R]) \;\cup\;
+      \pi_{y := x}\, \mathrm{lift}(Q[x/y]).
 
-   The dual rule, for a universally quantified separator variable, gives
-   :math:`\prod_a P[Q(a)]` [Suciu2020]_.
+   The rule applies when, for :math:`x \neq y`, every renamed atom is a
+   different tuple from the other atoms of :math:`R`, having :math:`y`
+   where they have :math:`x`. Three atoms with three free variables at the
+   same position, :math:`A(x, s) \land A(y, s) \land A(z, s)`, are not
+   lifted.
 
-Disjoint projection
-   If an atom of a probabilistic choice, or of a tuple-independent relation
-   with constants in all its positions, occurs in a conjunctive query, the
-   values of the projected variables give mutually exclusive events whose
-   probabilities add up [Suciu2011]_ (section 4.3.1). For a union of
-   conjunctive queries, the disjuncts with such an atom are separated
-   with :math:`P[A \lor B] = P[A] + P[B] - P[A \land B]`.
+Comparisons of answer variables
+   A comparison of free variables, a conjunct of the query such as
+   :math:`l_1 < l_2`, is a selection of the answers of the rest of the
+   query, which is lifted without it.
 
-Inclusion–exclusion
-   For a conjunction :math:`Q_1 \land \dots \land Q_n` in conjunctive normal
-   form,
+Separator determined by a functional dependency
+   A deterministic atom :math:`F(x, y)` whose relation is a function of
+   :math:`x`, :math:`y` being the same for all the tuples with the same
+   :math:`x`, determines :math:`y` from :math:`x`: in a conjunctive query,
+   an atom :math:`R(x)` of a tuple-independent relation is then counted as
+   having :math:`y` when looking for a separator variable
+   (``_determined_variables``). In
 
    .. math::
 
-      P\Big[\bigwedge_{i} Q_i\Big] =
-      \sum_{\emptyset \neq S \subseteq \{1..n\}}
-      (-1)^{|S|+1}\, P\Big[\bigvee_{i \in S} Q_i\Big].
+      \exists p\, \exists s\, \mathit{reliable\_peak}(p) \land
+      \mathit{peak\_study}(p, s) \land \mathit{term\_in\_study}(t, s),
 
-   Terms whose disjunctions are equivalent are merged and their
-   coefficients added, using the Möbius function of the lattice of the
-   disjunctions ordered by containment [Dalvi2012]_. This cancellation
-   removes the terms that may be #P-hard while their sum is not. The rule
-   is applied only when all the conjuncts have the same free variables,
-   for which the containment test is sound.
+   each peak being reported by one study, :math:`s` separates the query,
+   which is otherwise the #P-hard query :math:`H_0` with a deterministic
+   middle relation. Olteanu, Huang and Koch lift such queries, without
+   self-joins, under functional dependencies [Olteanu2009b]_. The
+   dependency is checked on the data of the relation, a deterministic
+   subquery being computed for it; it is followed
+   through several deterministic atoms, and from several columns. An atom
+   of a choice keeps its variables, its tuples being exclusive for all the
+   values of :math:`y`, as does an atom of a relation in several disjuncts
+   of a union, and the variables are determined in conjunctions only, by
+   atoms which are not negated.
+
 
 Negations and comparisons sharing relations
---------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :func:`~neurolang.probabilistic.dalvi_suciu_lift.lift_with_dependent_negations`
 extends the algorithm to conjunctions :math:`A \land \lnot N` in which the
@@ -430,13 +801,12 @@ and to existential conjuncts with comparisons such as :math:`t \neq x`.
 Such conjunctions fall outside unions of conjunctive queries, so the
 completeness result above does not apply to them.
 The rules below are tried in turn when the relations shared are
-tuple-independent; a conjunction sharing a probabilistic choice is
-declined. Every rule checks each query it lifts, and the lifted plans are
+tuple-independent; a conjunction sharing a probabilistic choice, which
+the rewriting of the choices in negations (see `Preparing the query`_)
+leaves, is declined. Every rule checks each query it lifts, and the lifted plans are
 sound (see `Correctness of the plans`_), but the rules are not known to be
 complete: some liftable conjunctions of this kind may still be declined
-and left to weighted model counting. These rules are NeuroLang's own: the
-references they cite give the techniques they build on, not their
-correctness, which is proved below.
+and left to weighted model counting.
 
 Comparisons in an existential conjunct
    For :math:`A \land \exists t\,(\psi(t) \land C)`, or its negation, where
@@ -494,7 +864,7 @@ Negation by subtraction
 
 Existential shattering
    For a positive existential conjunct :math:`A \land \exists t\,\psi(t)`
-   sharing relations with :math:`A`, which Dalvi–Suciu lifting declines,
+   sharing relations with :math:`A`, which the Dalvi–Suciu algorithm declines,
 
    .. math::
 
@@ -503,14 +873,15 @@ Existential shattering
 
    the latter being planned by free-variable shattering.
 
-Projection on a choice or a separator variable
+Projection on a variable
    When the rules above decline :math:`\exists X\, \varphi`, it is planned
    by projecting the plan of :math:`\varphi`, lifted with all the rules of
    this page, on variables of :math:`X` made free
    (:func:`~neurolang.probabilistic.dalvi_suciu_lift.projection_plan`).
    The quantifiers of the conjuncts of the query are first gathered,
-   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`, which
-   holds as the query is standardised apart: a closed conjunct, such as an
+   :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`
+   (``FactorQuantifiersMixin`` of :mod:`neurolang.logic.transformations`),
+   which holds as the query is standardised apart: a closed conjunct, such as an
    atom added by magic sets, does not prevent the projection. The
    projection is
 
@@ -522,6 +893,16 @@ Projection on a choice or a separator variable
 
         P[\exists X\, (C(\bar u) \land \varphi')] =
         \sum_a P[(C(\bar u) \land \exists (X - X')\, \varphi')[a/X']];
+
+   * *exclusively*, when :math:`\varphi` has the conjuncts :math:`R(\bar u)`,
+     whose only variable of :math:`X` is :math:`v`, and
+     :math:`\lnot\exists w\, (R(\bar u[w/v]) \land w \neq v)`: the
+     values of :math:`v` for which :math:`\varphi` holds are unique, and
+
+     .. math::
+
+        P[\exists X\, \varphi] = \sum_a P[(\exists (X - \{v\})\,
+        \varphi)[a/v]];
 
    * *independently*, when the conjuncts :math:`\psi` of :math:`\varphi`
      with variables of :math:`X` share no probabilistic relation with the
@@ -544,12 +925,17 @@ Projection on a choice or a separator variable
 
    is the disjoint projection on :math:`s` of a query that the comparison
    rule lifts once :math:`s` is free; with :math:`t` projected too, an
-   independent projection on :math:`t` follows. A body that is a union, of
-   which the choice is not a conjunct of every disjunct, and
-   block-independent disjoint relations other than choices, are not
-   covered. The global checks of a single kind of quantifier and of
-   unateness are skipped for a query of the first form, and applied to
-   each query lifted.
+   independent projection on :math:`t` follows. Without the choice,
+   :math:`\exists s\, \mathrm{seg}(t, s)`, the probability that exactly one
+   study mentions :math:`t`, is the exclusive projection on :math:`s`, and
+   :math:`\exists t\, \mathrm{seg}(t, s)` the independent projection on
+   :math:`t`. A body that is a union, of which the choice is not a conjunct
+   of every disjunct, block-independent disjoint relations other than
+   choices, and an exclusive projection whose atoms have a constant, which
+   shattering replaces by a quantified variable, are not covered. When the
+   query uses two kinds of quantifiers or is not unate, as the
+   segregation is, and a projection applies, the global checks are
+   skipped, and applied to each query lifted.
 
 Correctness of the plans
 ------------------------
@@ -564,17 +950,43 @@ The probabilistic model
    A tuple-independent relation has a Boolean random variable per tuple,
    these variables being independent. A probabilistic choice has one
    random variable whose value is the single tuple of the relation which
-   is true. The variables of different relations are independent, and a
-   possible world is a value for all of them. Deterministic relations are
-   the same in every world.
+   is true: its probabilities sum to one, which
+   :func:`~neurolang.probabilistic.expression_processing.check_probabilistic_choice_set_probabilities_sum_to_one`
+   checks when the choice is added to the program. The variables of
+   different relations are independent, and a possible world is a value
+   for all of them. Deterministic relations are the same in every world.
 
    For a formula :math:`\varphi` and a tuple :math:`\theta` of values for
-   its free variables, the event :math:`\varphi\theta` is the set of worlds
-   in which it holds. It is determined by the random variables of the
-   tuples :math:`R(\bar a)` such that an atom of :math:`\varphi\theta` can be
-   :math:`R(\bar a)` for some values of its quantified variables: these are
-   its *tuples*. A plan computes, for every :math:`\theta` in its support,
+   its free variables, the answer variables being constants, the event
+   :math:`\varphi\theta` is the set of worlds in which it holds. Its
+   *tuples* are the tuples :math:`R(\bar a)` of the atoms of
+   :math:`\varphi\theta` for the values of its quantified variables that
+   satisfy the comparisons and the deterministic atoms conjoined with them:
+   the other values make these conjunctions false in every world, so the
+   event is determined by the random variables of its tuples alone. For
+   instance, :math:`\exists t\, (t \neq x \land R(t))` has the tuples
+   :math:`R(a)` with :math:`a \neq x\theta`, and not :math:`R(x\theta)`.
+
+   Two distinct answer variables can take the same value in an answer:
+   for :math:`x\theta = y\theta`, the atoms :math:`R(x)` and :math:`R(y)`
+   are the same tuple. No rule shatters on the equality of two answer
+   variables but the rule "answer variables as constants" of `Extensions
+   of the Dalvi–Suciu algorithm`_, for two variables: the rules whose
+   proofs reason on the term at a position of an atom
+   (``_are_different_tuples_when_different``, ``_separates``,
+   ``find_separator_variables``) require the same variable at that
+   position in the atoms they compare, and do not take two different free
+   variables to be different values.
+
+   A plan computes, for every :math:`\theta` in its support,
    :math:`P[\varphi\theta]`, and :math:`P[\varphi\theta] = 0` outside it.
+   All the implemented rules use this convention: an answer that is not
+   in the plan of a formula has probability 0. A universal projection,
+   :math:`\prod_a P[\varphi(a)]`, ranges over all the values :math:`a`:
+   outside the support of the plan of :math:`\varphi`, the plan gives
+   :math:`P[\varphi(a)] = 0`, which would make the product 0, while the
+   projection needs :math:`P[\varphi(a)] = 1` there. It cannot be added to
+   the rules without changing this convention.
 
    The rules identify the variables by their names, so the quantified
    variables are first renamed to fresh ones
@@ -603,7 +1015,12 @@ Polynomial time
    selections, left joins for ``Difference`` and ``Subtraction``, and
    grouped products or sums for the projections. A plan is built from the
    query alone, so its size does not depend on the data, and it is
-   computed in polynomial time if the construction terminates.
+   computed in polynomial time if the construction terminates. The size of
+   the plan can be exponential in the size of the query: inclusion–exclusion
+   enumerates the :math:`2^n - 1` non-empty subsets of the :math:`n`
+   clauses (``powerset``), and ranking the weak orders of the ranked
+   variables (``_weak_orders``), of which there are at most
+   ``MAX_RANKED_VARIABLES``, two.
 
    The rules of `Negations and comparisons sharing relations`_ call each
    other through the queries they lift. Each call is on a query that is
@@ -618,7 +1035,10 @@ Polynomial time
    projections lift a body with at least one quantifier less, and a part
    of the query. The Dalvi–Suciu rules, whose recursion terminates
    [Dalvi2012]_, do not call
-   the rules of this section. The order being well founded, the
+   the rules of this section; the disjoint separator, added to them,
+   lifts a union with the variables of the choice no longer quantified,
+   one quantifier less, or nothing when the rest is deterministic. The
+   order being well founded, the
    construction terminates.
 
 Absorption in negations
@@ -664,6 +1084,19 @@ Deterministic negations
    :math:`G`, by absorption. :math:`D` is computed when the plan is, as
    one of its subexpressions, in time polynomial in the deterministic
    relations.
+
+Deterministic builtins
+   :math:`R` is a deterministic relation and a builtin is a function of
+   its arguments, so the relation of :math:`D = R \land B` is the same in
+   every world, and :math:`R(\bar x) \land B(\bar y) \equiv D(\bar x)`
+   in every world by definition. As :math:`\bar y \subseteq \bar x`,
+   :math:`D` is a selection of :math:`R`, which is finite. The replaced
+   builtins are not comparisons, which the lifting rules plan.
+
+   For :math:`y = f(\bar x)`, :math:`A` is true only for tuples of its
+   support, so :math:`A \land y = f(\bar x)` implies :math:`F(\bar x,
+   y)`, and the converse holds by definition of :math:`F`. :math:`F` is
+   the same in every world, and finite.
 
 Independent negation
    For :math:`A \land \lnot N` where :math:`N` shares no probabilistic
@@ -715,7 +1148,9 @@ Free-variable shattering
      :math:`t` at a position where each atom of the same relation in
      :math:`A` and :math:`\psi(x)` has :math:`x`
      (``_are_different_tuples_when_different``): the tuples of
-     :math:`E\theta` are not tuples of :math:`L\theta`, and by Lemma 1
+     :math:`E\theta`, those of :math:`\psi(a)\theta` for the values
+     :math:`a \neq x\theta`, the comparison :math:`t \neq x` excluding
+     :math:`a = x\theta`, are not tuples of :math:`L\theta`, and by Lemma 1
      :math:`P[(L \land \lnot E)\theta] = P[L\theta]\,(1 - P[E\theta])`,
      which ``Difference`` computes.
 
@@ -727,9 +1162,12 @@ Comparisons in an existential conjunct
    that each probabilistic atom of :math:`\psi(t)` has :math:`t` at a
    position where each atom of the same relation in :math:`A` has a term
    :math:`u` with :math:`t \neq u`, :math:`t < u` or :math:`t > u` in
-   :math:`C` (``_terms_different_from``, ``STRICT_COMPARISONS``). When
-   :math:`C\theta(a)` holds, the tuples of :math:`\psi(a)\theta` are thus
-   not tuples of :math:`A\theta`, and by Lemma 1
+   :math:`C` (``_terms_different_from``, ``STRICT_COMPARISONS``), the
+   terms of :math:`C` other than :math:`t` being free variables or
+   constants (``comparison_conjunct_plan``), fixed by :math:`\theta`. The
+   tuples of :math:`E\theta`, those of :math:`\psi(a)\theta` for the
+   values :math:`a` with :math:`C\theta(a)`, are thus not tuples of
+   :math:`A\theta`, and by Lemma 1
    :math:`P[(A \land E)\theta] = P[A\theta]\,P[E\theta]` and
    :math:`P[(A \land \lnot E)\theta] = P[A\theta]\,(1 - P[E\theta])`, which
    the join and ``Difference`` compute. Olteanu and Huang
@@ -738,6 +1176,25 @@ Comparisons in an existential conjunct
    inequalities instead to show that the tuples of a relation occurring
    in both :math:`A` and :math:`\psi` differ, which their result does not
    cover.
+
+Conjunctive queries summed on probabilistic choices
+   The body is a conjunction without negation and, the probabilistic
+   atoms forming a query without self-joins
+   (``is_hierarchical_without_self_joins``), no probabilistic relation
+   occurs in two atoms. For an assignment of all its variables, the event
+   of the body is then the conjunction of distinct tuples of distinct
+   relations, deterministic tuples being true or false in every world, so
+   its probability is the product that the join computes (Lemma 1). Every
+   existential variable occurs in a probabilistic atom
+   (``_verify_deterministic_e_quantification``), and if it occurs in an
+   atom of a probabilistic fact relation, it also occurs in an atom of a
+   probabilistic choice (``_verify_fact_and_choice_e_quantification``):
+   every existential variable occurs in an atom of a choice. Two rows of
+   the join that the projection on the head merges have the same answer
+   and differ on an existential variable, so they imply different tuples
+   of a choice, and are mutually exclusive by Lemma 2. Their probabilities
+   add up, which the projection of the provenance solver computes. The
+   hierarchy of the probabilistic atoms is not used.
 
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
@@ -801,7 +1258,249 @@ Non-repeating queries
    atoms. The plan is thus built from the query alone, and computed in
    polynomial time in the data.
 
-Projection on a choice or a separator variable
+Disjoint separator
+   *Renaming.* A quantified variable of a disjunct is renamed into the
+   corresponding variable of the first disjunct's choice atom. As
+   :math:`\exists` distributes over :math:`\lor`, a disjunct's quantified
+   variables can be renamed without changing the union, provided the new
+   name does not occur in the disjunct (no capture) and the renamings of
+   the disjunct for different choices agree (``_renamings_are_safe``); at
+   positions with a free variable or a constant, the atoms must already
+   be equal (``_align_choice_atoms``). The renaming relies on the prenex
+   form, all the quantifiers of the union before its disjunction: the rule
+   declines a disjunct that still has a quantifier (``_has_quantifier``),
+   which could capture a renamed variable.
+
+   *Exclusivity.* Every disjunct has :math:`C(\bar z)`, a conjunct of it
+   (``_choice_separators`` takes the atoms of a disjunct's conjunction,
+   one per disjunct). For a given answer, the free positions are fixed, so
+   for :math:`\bar a \neq \bar b` the events :math:`\bigvee_i
+   Q_i(\bar a)` and :math:`\bigvee_i Q_i(\bar b)` imply different tuples
+   of :math:`C` and are mutually exclusive by Lemma 2: their probabilities
+   add up, which ``DisjointProjection`` computes. With several choices,
+   two values differ on the variables of at least one of them.
+
+   *Deterministic rest.* When every other atom is deterministic, the event
+   :math:`\bigvee_i Q_i(\bar a)` is :math:`C(\bar a) \land D(\bar a)`,
+   with :math:`D(\bar a)` true or false in every world, so its probability
+   is :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds and 0 elsewhere:
+   the join of the choice with the support of :math:`D`. The choice atoms
+   are kept in :math:`D`, which is then range-restricted, and replaced in
+   its plan by their support, so that every label in :math:`D` is 0 or 1.
+   :math:`D` may have negations: the difference of provenance sets gives
+   a tuple the label :math:`l\,(1 - r)`, :math:`l` and :math:`r` those of
+   the two sides, and keeps the tuple. With the probability :math:`q` of
+   the choice in both sides, a tuple that the negation removes would get
+   :math:`q(1 - q)`, not 0, as if the negation were independent of the
+   choice; with the support, :math:`1 \cdot (1 - 1) = 0`. A tuple of null
+   label is not in the support of a provenance set, which the plan of
+   :math:`D` ends with.
+
+   *Free variables.* Every disjunct has all the free variables of the
+   query: a disjunct without one, true for every value of it, could not be
+   given by a plan, whose rows are a finite set of values.
+
+   *Equalities.* In every world, :math:`C(u) \equiv \exists f\, (C(f)
+   \land f = u)`, and, a single tuple of :math:`C` being true,
+   :math:`C(f) \land C(u) \equiv C(f) \land f = u` (Lemma 2): the
+   rewritten disjuncts are equivalent to the given ones, and their choice
+   atoms have quantified variables where the others have, so that the
+   renaming above applies. An equality, as any comparison, is true or
+   false for given values in every world, and is thus part of the
+   deterministic rest :math:`D`, whose plan selects on it.
+
+   *Termination.* The rule lifts the union with the variables of the
+   choice free, one quantifier less, or lifts nothing (deterministic rest).
+
+   *Sign of the other literals.* Let :math:`Q = \exists \bar z\,
+   \bigvee_i Q_i`, each :math:`Q_i` a conjunction of literals, positive
+   or negated, with the positive literal :math:`C(\bar z, \bar u)` as
+   a conjunct, :math:`C` a choice, :math:`\bar z` quantified and
+   :math:`\bar u` free variables or constants (what ``_choice_separators``
+   establishes: it takes the atoms among the conjuncts of a disjunct, so
+   a negated atom of :math:`C` is never a separator). Then, for fixed
+   values of the free variables,
+
+   .. math::
+
+      P[Q] = \sum_{\bar a} P\Big[\bigvee_i Q_i[\bar a/\bar z]\Big].
+
+   *Proof.* A world in which :math:`\bigvee_i Q_i[\bar a/\bar z]` holds
+   satisfies :math:`C(\bar a, \bar u)`, as every :math:`Q_i` has it as a
+   conjunct. For :math:`\bar a \neq \bar b`, no world satisfies both
+   :math:`C(\bar a, \bar u)` and :math:`C(\bar b, \bar u)` (Lemma 2, the
+   tuples of a choice are mutually exclusive), so the events for
+   :math:`\bar a` and :math:`\bar b` are disjoint. Their union over all
+   :math:`\bar a` is :math:`Q`, and the probability of a disjoint union is
+   the sum of the probabilities. :math:`\square`
+
+   The proof uses only that every disjunct has the positive conjunct
+   :math:`C(\bar z, \bar u)` and Lemma 2: the other literals, positive
+   or negated, are never looked at.
+
+   *Coverage of the disjoint projection.* The rule lifts every query that
+   the disjoint projection of Suciu et al. [Suciu2011]_ (section 4.3.1)
+   lifted, but the two listed here. For a choice :math:`C`, a relation
+   without key attribute, the disjoint projection applies to a
+   conjunctive query :math:`\exists \bar y\, Q` that has an atom
+   :math:`C(\bar u)` with a quantified variable; it sums over the values
+   of the variables :math:`\bar z` of the choice atoms that are
+   quantified, and lifts the query with them free, which is
+   :math:`\exists \bar y'\, Q` with :math:`\bar y' = \bar y \setminus
+   \bar z`: the old implementation
+   (``disjoint_project_conjunctive_query``) removed the existential
+   quantifiers of :math:`\bar z`. It was tried at the place of
+   ``disjoint_separator``, after the separator variables, on the same
+   query. For such a query, in prenex form with a single disjunct and one
+   atom of each choice:
+
+   * ``_align_choice_atoms`` has one atom to align and returns the empty
+     renaming, ``_renamings_are_safe`` holds, and the disjunct is not
+     changed;
+   * the separators are the quantified variables of the choice atoms,
+     :math:`\bar z`, which is not empty, so the rule applies;
+   * the free variables are those of the only disjunct, so the
+     free-variable condition and the prenex condition
+     (``_has_quantifier``) hold, and there is no union to decline;
+   * the sum is the one of the old rule (*Sign of the other literals*),
+     negations included, and the rule lifts
+     ``add_existentials_except`` on the free variables and :math:`\bar z`:
+     the quantifiers of all the variables but those, the very query the
+     old rule lifted, projected with ``DisjointProjection`` on the free
+     variables as the old rule did. The plans are the same;
+   * when the other atoms are all deterministic, the old rule lifted :math:`C(\bar a) \land D(\bar a)` by the
+     algorithm, whose plan gives :math:`P[C(\bar a)]` where :math:`D(\bar
+     a)` holds, and the new plan is the join of the choice with the
+     support of :math:`D`: the same probabilities (*Deterministic rest*),
+     without lifting :math:`D`.
+
+   The rule declines, where the old rule applied, in two cases:
+
+   * *A choice atom without a quantified variable,* all its terms being
+     free variables or constants. There is no sum to take: the old rule
+     removed no quantifier and lifted the same query again, making no
+     progress. The solver answers such queries before the algorithm is
+     called.
+   * *Several atoms of the same choice* in a conjunction with different
+     variables (``len(same) != 1`` in ``_choice_separators``). The rewriting
+     of the choices (Lemma 2) makes them one atom before the algorithm
+     runs, so the queries the solver gives it have none; a query that
+     still has them, given to the algorithm directly, is declined where
+     the old rule took the variables of both.
+
+   An atom of a tuple-independent relation with only constants did not
+   trigger the old rule: it raised an exception.
+
+   On unions, the old rule was a different one (:math:`P[A \lor B] = P[A]
+   + P[B] - P[A \land B]` with its own conditions, removed). The identity
+   above holds for a union with negations too, and the rule lifts it.
+   ``disjoint_separator`` lifts the unions
+   whose every disjunct has the choice in a single projection, and the
+   other unions are lifted by inclusion–exclusion, applied to the
+   conjunctive queries that the rule lifts; that this covers all that the
+   old union rule lifted is not proved.
+
+Rewriting of the choices
+   By Lemma 2, :math:`C(\bar x) \land C(\bar y) \equiv C(\bar x) \land
+   \bar x = \bar y` in every world. The equivalence needs the two atoms in
+   the same conjunction: in :math:`(C(s) \land A(s)) \lor (C(f) \land
+   B(f))`, the two disjuncts are not both true, and making :math:`s` and
+   :math:`f` equal across them would turn the union into a conjunction.
+   The rewriting descends into disjunctions and makes equal only the
+   arguments of atoms conjoined with each other
+   (``lift_optimization_for_choice_predicates``). For the same reason, the
+   unification of the variables of equalities is done in each disjunct
+   apart (``UnifyVariableEqualitiesMixin``).
+
+   Within a negation, in every world and for every answer where
+   :math:`C(\bar u)` holds, :math:`C(\bar v)` holds exactly when
+   :math:`\bar v = \bar u`, a single tuple of :math:`C` being true. So
+   :math:`\exists W\, (C(\bar v) \land \psi) \equiv \exists W\, (\bar v =
+   \bar u \land C(\bar u) \land \psi)`, and as the variables of
+   :math:`\bar v` set to those of :math:`\bar u` are in :math:`W`, each
+   variable at most once, the equalities are eliminated by substitution,
+   :math:`\exists v\, (v = u \land \varphi) \equiv \varphi[u/v]`, the
+   query being standardised apart so that no variable is captured
+   (``UnifyChoicesInNegations``). Where :math:`C(\bar u)` does not hold,
+   both sides of the rewriting are false. A strict comparison of a term
+   with itself is false, :math:`t \neq t \equiv \bot`
+   (``StrictComparisonOfATermWithItselfMixin``), and the truth values are
+   simplified by :math:`\bot \land \varphi \equiv \bot`,
+   :math:`\top \land \varphi \equiv \varphi`, :math:`\lnot\bot \equiv
+   \top` and :math:`\exists x\, \bot \equiv \bot`
+   (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
+   every step of the rewriting is an equivalence.
+
+Answer variables as constants
+   For an answer, :math:`x` and :math:`y` have values :math:`a` and
+   :math:`b`. If :math:`a \neq b`, every renamed atom :math:`R(\bar u)`
+   has :math:`b` at a position :math:`i` where every other atom
+   :math:`R(\bar v)` of :math:`Q` has :math:`a`
+   (``_are_different_tuples_when_different``), so their tuples differ, for
+   all values of the quantified variables. :math:`R'` naming the relation
+   :math:`R`, :math:`Q[R'/R] \equiv Q`; the renamed and the other atoms
+   of :math:`R` have no tuple in common, and :math:`Q[R'/R]`, with
+   :math:`R'` a relation with the tuples and probabilities of :math:`R`,
+   has the probability of :math:`Q` for this answer: in every world the
+   atoms have the values they have in :math:`Q`, and the tuples of
+   :math:`R'` are independent of those of :math:`R` that :math:`Q` uses,
+   as Lemma 1 needs. If :math:`a = b`, :math:`Q` and :math:`Q[x/y]` are
+   the same query for the answer, and the projection copies :math:`x` into
+   :math:`y`. The answers of the two plans are different, so their
+   independent union, :math:`1 - (1 - p)(1 - 0)`, gives each its
+   probability. The relation is tuple-independent: the tuples of a choice
+   are exclusive, and an alias would make them independent. The rule
+   terminates: :math:`Q[x/y]` has one free variable less, and
+   :math:`Q[R'/R]` the same free variables and fewer pairs of atoms of a
+   relation with different free variables at a position.
+
+Comparisons of answer variables
+   A comparison :math:`C` of free variables is true or false for an
+   answer, in every world: :math:`P[(Q \land C)\theta] = P[Q\theta]` if
+   :math:`C\theta` holds and 0 otherwise, which the selection computes.
+
+Comparisons with a constant
+   The sets of a relation are the cells of a product of partitions of its
+   tuples, so they are disjoint and cover the relation: each atom of the
+   query is the disjunction of the atoms of the cells it may be true in,
+   and atoms of different cells are different tuples, as shattering
+   requires [Dalvi2012]_. In a conjunction with :math:`y\ \theta\ c` and
+   an atom :math:`R(\ldots, y, \ldots)`, :math:`y` at position :math:`i`,
+   the cells with the complement of :math:`R.i\ \theta\ c` are false for
+   every value of :math:`y` satisfying the comparison, and the others
+   satisfy it: the conjunction without the comparison, with the atom
+   replaced by the disjunction of the remaining cells, is equivalent. Moving
+   the comparison into an existential is the prenex rule
+   :math:`C \land \exists x\, \psi \equiv \exists x\, (C \land \psi)`, for
+   :math:`x` not free in :math:`C`.
+
+Separator determined by a functional dependency
+   Let :math:`Q = \exists y\, \varphi(y)` be a conjunctive query in which
+   every atom of a tuple-independent relation has :math:`y`, or variables
+   :math:`\bar x` from which positive deterministic atoms of
+   :math:`\varphi` determine :math:`y`: :math:`y = f(\bar x)` in every
+   world satisfying them, :math:`f` being the same in every world. A tuple
+   :math:`R(\bar a)` of such an atom is then a tuple of
+   :math:`\varphi(b)` only for :math:`b = f(\bar a)`, the relation of
+   :math:`R` being in no other atom (the separator variable rule declines
+   a relation in two atoms without :math:`y` at the same position, and a
+   relation in two disjuncts keeps its variables). The events
+   :math:`\varphi(b)` for different :math:`b` thus have no tuple in common
+   and are independent, which is what the separator variable rule needs:
+   :math:`P[Q] = 1 - \prod_b (1 - P[\varphi(b)])`. The tuples of a choice
+   are not independent of each other, so its atoms are not extended. The
+   dependency is checked on the relation, by comparing the numbers of
+   distinct values of :math:`\bar x` and of :math:`(\bar x, y)`, in
+   polynomial time.
+
+Declined unions
+   Declining a query is sound: it is then solved by weighted model
+   counting, exactly. The disjoint separator declines the unions with a
+   disjunct without a free variable of the query, with a quantifier left
+   in a disjunct, or with the equalities of a free variable or a constant
+   of a choice atom and a rest that is not deterministic.
+
+Projection on a variable
    *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the
    body (``_split_choice_projection``), so for two values :math:`a \neq b`
    of :math:`X'` the events imply the different tuples
@@ -824,11 +1523,32 @@ Projection on a choice or a separator variable
    (``_split_separator_projection``), the join with its plan is a product
    by Lemma 1.
 
-Dalvi–Suciu rules
-   The rules of `Dalvi–Suciu lifting`_ are those of Dalvi and Suciu
-   [Dalvi2012]_, whose proofs apply to unions of conjunctive queries on
-   tuple-independent databases, and of Suciu et al. [Suciu2011]_ (section
-   4.3.1) for the disjoint projection on probabilistic choices.
+   *Exclusive projection.* Let :math:`E_a` be the event of
+   :math:`(\exists (X - \{v\})\, \varphi)[a/v]`, for fixed values of the
+   free variables. :math:`v` being the only variable of :math:`X` in
+   :math:`R(\bar u)`, a conjunct of :math:`\varphi`
+   (``_split_exclusive_projection``), :math:`E_a` implies
+   :math:`R(\bar u[a/v])`. :math:`E_b` implies the conjunct
+   :math:`\lnot\exists w\, (R(\bar u[w/v]) \land w \neq b)`
+   (``ExcludingNegations``, the patterns of such a negated conjunct),
+   hence, for :math:`w = a \neq b`, :math:`\lnot R(\bar u[a/v])`. No world satisfies :math:`E_a` and
+   :math:`E_b`: the events are mutually exclusive, their union is
+   :math:`\exists X\, \varphi`, and its probability is the sum of theirs,
+   which ``DisjointProjection`` computes. The proof does not depend on the
+   relation of :math:`R`, which can be tuple-independent, a choice or
+   deterministic, nor on the other conjuncts of :math:`\varphi`.
+
+Algorithms from the literature
+   The rules of `Algorithms from the literature`_ are proved in the papers
+   cited there: Dalvi and Suciu [Dalvi2012]_ for unions of conjunctive
+   queries on tuple-independent databases, and Suciu et al. [Suciu2011]_
+   (section 4.3.1) for the disjoint projection on probabilistic choices,
+   which the disjoint separator applies to unions (its proof is above).
+
+Inclusion–exclusion
+   The weights computed by ``_formulas_weights`` from an incomplete
+   containment test give the probability of the conjunction:
+   :ref:`inclusion-exclusion` proves it.
 
 Ranking
    Dalvi and Suciu prove the ranked query equivalent to the query, and its
@@ -851,8 +1571,26 @@ Ranking
      (``_is_totally_ordered``), without NaN. Sets, ordered by inclusion,
      would leave the tuples of incomparable values in no ranked relation.
 
+Liftable queries that are declined
+   The rules are not complete. These queries, among others, are
+   polynomial but declined, and left to weighted model counting:
+
+   * :math:`\mathit{ans}() \leftarrow R(x) \land \lnot C(x)`, with
+     :math:`C` a probabilistic choice, whose probability is
+     :math:`1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b))`, exactly one
+     tuple :math:`C(a)` being true: the atom of the choice is negated, so
+     no conjunct of the choice has :math:`x` for the projections of
+     `Planning non-repeating queries`_, and the Dalvi–Suciu algorithm marks
+     the query ``NonLiftable``;
+   * three answer variables at the same position of atoms of a relation,
+     such as :math:`\mathit{ans}(x, y, w) \leftarrow R(x) \land R(y)
+     \land R(w) \land S(x, y, w)`: "answer variables as constants" splits
+     on the equality of two of them only, and the query is declined,
+     though splitting on the equalities of the three, as shattering does
+     for constants [Dalvi2012]_, would lift it.
+
 The tests of the rules of `Negations and comparisons sharing relations`_
-(``neurolang/probabilistic/tests/test_lifted_negation.py``) also compare
+(``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare
 their plans with an enumeration of the possible worlds of small
 databases.
 
@@ -887,6 +1625,11 @@ References
    computation for conjunctive queries with inequalities*. In Proceedings
    of the 2009 ACM SIGMOD International Conference on Management of Data,
    389–402, 2009.
+
+.. [Olteanu2009b] D. Olteanu, J. Huang and C. Koch. *SPROUT: Lazy vs.
+   eager query plans for tuple-independent probabilistic databases*. In
+   Proceedings of the 25th IEEE International Conference on Data
+   Engineering (ICDE), 640–651, 2009.
 
 .. [Suciu2011] D. Suciu, D. Olteanu, C. Ré and C. Koch. *Probabilistic
    Databases*. Synthesis Lectures on Data Management. Morgan & Claypool,

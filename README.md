@@ -6,10 +6,11 @@
 </h1>
 
 [![Tests](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml/badge.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
-[![Coverage](https://raw.githubusercontent.com/NeuroLang/NeuroLang/gh-pages/coverage.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/neurolang.svg)](https://pypi.org/project/neurolang/)
-[![Python](https://img.shields.io/pypi/pyversions/neurolang.svg)](https://pypi.org/project/neurolang/)
-[![Code style](https://img.shields.io/badge/code%20style-flake8-000000.svg)](https://github.com/PyCQA/flake8)
+[![Coverage](https://raw.githubusercontent.com/NeuroLang/NeuroLang/badges/coverage.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
+[![Documentation](https://github.com/NeuroLang/NeuroLang/actions/workflows/docs.yml/badge.svg)](https://neurolang.github.io)
+[![Spelling](https://github.com/NeuroLang/NeuroLang/actions/workflows/codespell.yml/badge.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/codespell.yml)
+[![PyPI](https://img.shields.io/pypi/v/neurolang.svg?color=brightgreen)](https://pypi.org/project/neurolang/)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FNeuroLang%2FNeuroLang%2Fmaster%2Fpyproject.toml&color=brightgreen)](https://github.com/NeuroLang/NeuroLang/blob/master/pyproject.toml)
 
 
 NeuroLang enables the analysis of neuroimaging data through probabilistic logic programming. It seamlessly combines images, databases, and ontologies within a single framework.

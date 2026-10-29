@@ -1,0 +1,29 @@
+name: Layers
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  import-linter:
+    name: Check the imports between the layers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install import-linter
+        run: python -m pip install import-linter
+      - name: Check the layers
+        run: lint-imports --config .importlinter
+        env:
+          PYTHONPATH: packages/nl_expr:packages/nl_core:packages/neurolang:packages/neurolang_apps
