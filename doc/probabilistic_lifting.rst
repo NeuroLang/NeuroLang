@@ -663,9 +663,10 @@ Answer variables as constants
    (``_are_different_tuples_when_different``). A variable at that position
    in an atom of :math:`R` that is not free, as :math:`z` in :math:`A(x, s)
    \land A(y, s) \land A(z, s)`, prevents it. The number of branches is the
-   Bell number of :math:`k`, 2, 5 and 15 for 2, 3 and 4 variables, and
-   more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 4, variables at a
-   position are declined.
+   Bell number of :math:`k`, 2, 5 and 15 for 2, 3 and 4 variables; more
+   than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 3, variables at a position
+   are declined, the optimisation of the plan of 15 branches taking too
+   long.
 
 Comparisons of answer variables
    A comparison of free variables, a conjunct of the query such as
