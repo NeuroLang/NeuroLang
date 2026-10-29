@@ -8,7 +8,9 @@ a lifted solver then handles like any other deterministic relation. The
 expression is not evaluated while planning: marked with `Materialise`,
 it is computed as a set when the plan is evaluated.
 """
-from ..datalog.expression_processing import extract_logic_atoms
+from itertools import chain
+
+from ..datalog.expression_processing import EQ, extract_logic_atoms
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from nl_expr.expression_walker import ReplaceSymbolWalker, add_match
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
@@ -19,6 +21,7 @@ from ..relational_algebra import (
     Materialise,
     NumberColumns,
     Projection,
+    int2columnint_constant,
     str2columnstr_constant
 )
 from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
@@ -90,6 +93,23 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
                     replacement if formula == atom else formula
                     for formula in formulas if formula not in builtins
                 )
+        for builtin in filter(_is_function_of_variables, formulas):
+            variable, function = _function_terms(builtin)
+            for atom in formulas:
+                if _is_atom(atom) and atom.functor in self._relations() and (
+                    extract_logic_free_variables(function) <= set(atom.args)
+                ):
+                    formulas = tuple(
+                        self._new_relation(
+                            Conjunction((atom, builtin)),
+                            tuple(sorted(
+                                extract_logic_free_variables(function),
+                                key=lambda v: v.name
+                            )) + (variable,)
+                        ) if formula == builtin else formula
+                        for formula in formulas
+                    )
+                    break
         return Conjunction(formulas)
 
     @add_match(
@@ -148,6 +168,21 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
             for atom in extract_logic_atoms(formula)
         )
 
+    def _relations(self):
+        """The deterministic relations, and the tuples of the
+        probabilistic relations without their probabilities: R(x̄) is
+        true only for these."""
+        return {**self.program.extensional_database(), **{
+            symbol: Projection(relation, tuple(
+                int2columnint_constant(i)
+                for i in range(1, relation.value.arity)
+            ))
+            for symbol, relation in chain(
+                self.program.probabilistic_facts().items(),
+                self.program.probabilistic_choices().items()
+            )
+        }}
+
     def _new_relation(self, formula, columns):
         """
         Return the atom `D(columns)` of a fresh relation `D := formula`.
@@ -160,13 +195,41 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         """
         column_names = tuple(str2columnstr_constant(v.name) for v in columns)
         plan = Projection(TranslateToNamedRA().walk(formula), column_names)
-        plan = ReplaceSymbolWalker(
-            self.program.extensional_database()
-        ).walk(plan)
+        plan = ReplaceSymbolWalker(self._relations()).walk(plan)
         plan = RelationalAlgebraOptimiser().walk(plan)
         symbol = Symbol.fresh()
         self.relations[symbol] = Materialise(NumberColumns(plan, column_names))
         return symbol(*columns)
+
+
+def _is_atom(formula):
+    return (
+        isinstance(formula, FunctionApplication) and
+        isinstance(formula.functor, Symbol)
+    )
+
+
+def _is_function_of_variables(formula):
+    """Whether `formula` is `y = f(x̄)`, y a variable which is not in f(x̄)
+    and x̄ variables, such as `y = x + 1`."""
+    return (
+        isinstance(formula, FunctionApplication) and
+        formula.functor == EQ and
+        _function_terms(formula) is not None
+    )
+
+
+def _function_terms(equality):
+    """y and f(x̄) of `y = f(x̄)` or `f(x̄) = y`, or None."""
+    for variable, function in (equality.args, equality.args[::-1]):
+        if (
+            isinstance(variable, Symbol) and
+            isinstance(function, FunctionApplication) and
+            0 < len(extract_logic_free_variables(function)) and
+            variable not in extract_logic_free_variables(function)
+        ):
+            return variable, function
+    return None
 
 
 def _is_filter(formula):

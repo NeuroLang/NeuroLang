@@ -4,7 +4,12 @@ from typing import AbstractSet
 import pytest
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
-from nl_expr.exceptions import NonLiftableException
+from nl_expr.config import config
+from nl_expr.exceptions import (
+    NonLiftableException,
+    NotInFONegE,
+    UnsupportedSolverError,
+)
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import (
     Conjunction,
@@ -13,6 +18,7 @@ from nl_expr.logic import (
     Implication,
     Negation,
     Union,
+    UniversalPredicate,
 )
 from ...relational_algebra import (
     ColumnInt,
@@ -35,9 +41,11 @@ from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
-    ProbabilisticFactSet
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
 )
 from ..transforms import convert_rule_to_ucq
+from .test_lifted_negation import check
 
 TNRA = TranslateToNamedRA()
 EQ = Constant(eq)
@@ -1167,3 +1175,95 @@ def test_functional_dependency_in_one_disjunct_only():
         ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
         symbol_table
     )[0]
+
+
+@pytest.fixture
+def check_unate_off():
+    check_unate = config.get_probabilistic_solver_check_unate()
+    config.disable_probabilistic_solver_check_unate()
+    yield
+    if check_unate:
+        config.enable_probabilistic_solver_check_unate()
+
+
+def _program_to_decline():
+    T, R, S = Symbol("T"), Symbol("R"), Symbol("S")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.5, "a"), (0.6, "b")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.3, "a", "c"), (0.7, "b", "c")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(S, [(0.4, "a", "c")])
+    return cpl_program, T, R, S
+
+
+def test_formula_outside_fo_existential_negation_is_declined():
+    """The conversions to normal forms fail on a formula outside FO∃¬,
+    such as a rule: the planner declines it."""
+    cpl_program, T, R, S = _program_to_decline()
+    ans, x, y = Symbol("ans"), Symbol("x"), Symbol("y")
+    rule = Implication(
+        ans(x),
+        Conjunction(
+            (
+                T(x),
+                UniversalPredicate(
+                    y, Disjunction((Negation(R(x, y)), S(x, y)))
+                ),
+            )
+        ),
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, rule.antecedent
+    )
+    with pytest.raises(NonLiftableException) as error:
+        dalvi_suciu_lift.dalvi_suciu_lift(rule, symbol_table)
+    assert isinstance(error.value, UnsupportedSolverError)
+    assert isinstance(error.value.__cause__, NotInFONegE)
+
+
+@pytest.mark.parametrize("unate", ("on", "off"))
+def test_union_with_a_negated_component_is_not_planned(request, unate):
+    """∃y R(x, y) ∨ ¬T(x): the union of a negation is not planned, rather
+    than planned without a negative operation."""
+    if unate == "off":
+        request.getfixturevalue("check_unate_off")
+    cpl_program, T, R, _ = _program_to_decline()
+    x, y = Symbol("x"), Symbol("y")
+    formula = Disjunction((ExistentialPredicate(y, R(x, y)), Negation(T(x))))
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, formula
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(formula, symbol_table)
+    assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_negated_component_without_the_unate_check(check_unate_off):
+    """H(x) ← U(x) ∧ S(x, y) ∧ R(x, z) ∧ ¬U(y) reaches a union with a
+    negated component, which the planner declined with a ValueError."""
+    U, S, R, H, ans = (Symbol(n) for n in ("U", "S", "R", "H", "ans"))
+    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+    probabilistic_facts = {
+        U: [(0.3, "c"), (0.2, "a")],
+        S: [(0.4, "a", "c"), (0.5, "c", "b")],
+        R: [(0.3, "a", "c"), (0.7, "b", "c"), (0.4, "c", "a")],
+    }
+    rules = [
+        Implication(
+            H(x), Conjunction((U(x), S(x, y), R(x, z), Negation(U(y))))
+        )
+    ]
+
+    def oracle(database):
+        return {
+            (a,)
+            for (a,) in database[U]
+            for (b, c) in database[S]
+            if a == b
+            and (c,) not in database[U]
+            and any(d == a for d, _ in database[R])
+        }
+
+    check(probabilistic_facts, {}, rules, Implication(ans(x), H(x)), oracle)
