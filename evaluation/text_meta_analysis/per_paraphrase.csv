@@ -1,0 +1,109 @@
+term,paraphrase,n_studies,tfidf_vocab_hits,syn_mediated,rank_specter2,rank_tfidf,rank_fusion,prec_specter2,prec_tfidf,prec_fusion
+pain,cortical response to noxious heat applied to the skin,516,10,False,1,1,1,0.48643410852713176,0.29069767441860467,0.37790697674418605
+pain,hurting sensation evoked by electric shocks to the hand,516,6,False,1,3,2,0.36046511627906974,0.18410852713178294,0.25
+pain,brain activity while participants feel an aversive stinging stimulus,516,10,False,1,10,1,0.23837209302325582,0.0872093023255814,0.14147286821705427
+face,looking at pictures of people's expressions,896,5,False,1,1,1,0.19866071428571427,0.17299107142857142,0.1796875
+face,viewing photographs of human heads and identities,896,6,False,1,1,1,0.26339285714285715,0.15625,0.20424107142857142
+face,perception of another person's visage and identity,896,4,False,1,2,2,0.17857142857142858,0.17522321428571427,0.20424107142857142
+reading,silently processing printed words and text on a screen,521,8,False,1,1,1,0.33397312859884837,0.2418426103646833,0.31477927063339733
+reading,decoding written sentences and letter strings,521,8,False,1,2,2,0.44145873320537427,0.2495201535508637,0.29750479846449135
+reading,literacy skills in children with dyslexia,521,7,False,1,1,1,0.4952015355086372,0.2629558541266795,0.31477927063339733
+reward,anticipating monetary gains and winning money,922,7,True,1,1,1,0.39804772234273317,0.3362255965292842,0.4598698481561822
+reward,ventral striatum response to receiving a prize,922,6,True,1,1,1,0.48590021691973967,0.36984815618221256,0.4793926247288503
+reward,pleasure from receiving a payoff after a correct choice,922,6,False,1,6,2,0.3611713665943601,0.18004338394793926,0.2754880694143167
+fear,conditioned threat response to an aversive stimulus,363,9,False,1,1,1,0.29476584022038566,0.3002754820936639,0.3168044077134986
+fear,amygdala response to frightening images,363,4,False,1,1,1,0.209366391184573,0.17079889807162535,0.19559228650137742
+fear,acquisition and extinction of conditioned shock expectancy,363,7,False,3,1,2,0.2534435261707989,0.25895316804407714,0.2644628099173554
+speech,listening to spoken utterances and talking aloud,642,6,False,1,1,1,0.3894080996884735,0.32087227414330216,0.42679127725856697
+speech,articulating sounds and producing vocal language,642,5,False,1,1,1,0.4953271028037383,0.26947040498442365,0.3317757009345794
+speech,perception of talkers' phonemes and syllables,642,5,False,1,4,2,0.4517133956386293,0.20404984423676012,0.3037383177570093
+music,listening to melodies and harmony,163,4,False,1,3,3,0.3987730061349693,0.25153374233128833,0.26993865030674846
+music,playing instruments and perceiving songs,163,4,False,2,11,6,0.3619631901840491,0.12269938650306748,0.1411042944785276
+music,response to tunes and melodic sound sequences,163,6,False,2,3,3,0.3067484662576687,0.17177914110429449,0.20245398773006135
+working memory,holding information in mind over a delay,1091,6,False,1,2,1,0.16498625114573787,0.12557286892758937,0.15765352887259396
+working memory,n-back task performance,1091,3,False,1,1,1,0.24289642529789185,0.20898258478460127,0.2392300641613199
+working memory,keeping and manipulating items temporarily in short-term storage,1091,9,False,1,1,1,0.2612282309807516,0.18790100824931255,0.24197983501374887
+episodic memory,retrieving specific past events with their context,332,8,False,1,1,1,0.21385542168674698,0.1144578313253012,0.14156626506024098
+episodic memory,remembering what happened where and when,332,2,False,1,7,1,0.14156626506024098,0.06927710843373494,0.15060240963855423
+episodic memory,encoding of personally experienced events and recollection of details,332,9,False,1,1,1,0.18674698795180722,0.1566265060240964,0.20481927710843373
+autobiographical,recalling events from one's own life history,143,5,False,1,2,1,0.2937062937062937,0.1258741258741259,0.20279720279720279
+autobiographical,thinking about personal past experiences and one's own life story,143,9,False,1,1,1,0.16083916083916083,0.15384615384615385,0.18181818181818182
+autobiographical,self-referential recollection of life episodes,143,6,False,1,2,1,0.3006993006993007,0.0979020979020979,0.16783216783216784
+semantic,understanding the meaning of words and concepts,1031,6,True,1,1,1,0.457807953443259,0.3433559650824442,0.4005819592628516
+semantic,knowledge about object categories and word meanings,1031,8,False,1,3,2,0.3646944713870029,0.29776915615906885,0.3443258971871969
+semantic,judging whether two words are related in meaning,1031,6,True,1,1,1,0.4131910766246363,0.3394762366634336,0.3918525703200776
+empathy,sharing another person's feelings,187,4,False,1,1,1,0.26737967914438504,0.0962566844919786,0.12834224598930483
+empathy,feeling the suffering of others observed in distress,187,4,False,1,1,1,0.33689839572192515,0.1497326203208556,0.21390374331550802
+empathy,vicarious emotional resonance with other people's experience,187,6,False,1,2,1,0.24064171122994651,0.10695187165775401,0.15508021390374332
+decision making,choosing between options with uncertain outcomes,509,5,False,1,1,1,0.43222003929273084,0.24165029469548133,0.32612966601178783
+decision making,weighing costs and benefits to select an action,509,6,False,1,11,9,0.3241650294695481,0.05304518664047151,0.08447937131630648
+decision making,deliberating over alternatives to pick one,509,2,False,1,8,1,0.3182711198428291,0.05697445972495088,0.3163064833005894
+inhibition,stopping a prepared response when a signal appears,601,7,False,1,1,1,0.18302828618968386,0.17970049916805325,0.22129783693843594
+inhibition,withholding a prepotent motor action in a go/no-go paradigm,601,7,False,3,5,5,0.24126455906821964,0.11148086522462562,0.16472545757071547
+inhibition,suppressing impulses and cancelling planned movements,601,4,False,1,6,6,0.34608985024958405,0.04991680532445923,0.10149750415973377
+conflict,responding to incongruent stimuli in the Stroop color-word task,337,12,False,2,2,2,0.3353115727002967,0.20771513353115728,0.26112759643916916
+conflict,competing response tendencies and interference between stimulus dimensions,337,9,False,1,2,1,0.3323442136498516,0.18991097922848665,0.23738872403560832
+conflict,resolving clashing information that points to different answers,337,6,False,5,6,4,0.14540059347181009,0.07418397626112759,0.10979228486646884
+imagery,mentally picturing scenes without visual input,312,6,False,2,6,5,0.20833333333333334,0.10256410256410256,0.1346153846153846
+imagery,visualizing objects with the mind's eye,312,5,False,4,4,3,0.038461538461538464,0.03205128205128205,0.038461538461538464
+imagery,rotating shapes in one's head,312,3,False,7,9,5,0.04807692307692308,0.028846153846153848,0.038461538461538464
+vision,brain response to flashing checkerboards and sight of moving patterns,137,8,False,3,2,2,0.06569343065693431,0.058394160583941604,0.072992700729927
+vision,retinotopic mapping of the occipital cortex,137,6,False,2,2,2,0.051094890510948905,0.072992700729927,0.072992700729927
+vision,"processing of luminance, contrast and light stimuli",137,6,False,2,5,3,0.06569343065693431,0.021897810218978103,0.043795620437956206
+auditory,hearing tones and sounds through headphones,1252,4,False,1,1,1,0.5279552715654952,0.3146964856230032,0.5583067092651757
+auditory,response to acoustic stimulation in the temporal lobe,1252,9,False,1,1,1,0.4984025559105431,0.17891373801916932,0.33626198083067094
+auditory,processing noise bursts and pure beeps,1252,7,False,1,2,1,0.268370607028754,0.19808306709265175,0.28115015974440893
+somatosensory,touch sensations on the fingertips,674,3,False,1,4,1,0.3724035608308605,0.17507418397626112,0.37537091988130566
+somatosensory,cortical mapping of tactile stimulation of the body surface,674,11,False,1,1,1,0.4094955489614243,0.25370919881305637,0.3456973293768546
+somatosensory,sensation of vibration applied to the hand,674,5,False,1,1,1,0.41543026706231456,0.1824925816023739,0.28338278931750743
+sleep,brain activity during slumber and nocturnal rest,154,5,False,1,21,11,0.33766233766233766,0.05194805194805195,0.1038961038961039
+sleep,deprivation of nighttime rest and drowsiness,154,3,True,1,7,1,0.551948051948052,0.2987012987012987,0.33116883116883117
+sleep,dreaming and being unconscious at night,154,3,False,13,5,1,0.21428571428571427,0.2792207792207792,0.33766233766233766
+anxiety,nervousness and worry about future threats,449,3,False,1,11,3,0.18485523385300667,0.08685968819599109,0.133630289532294
+anxiety,apprehension in people with generalized worry disorders,449,5,False,1,6,2,0.3028953229398664,0.13808463251670378,0.22717149220489977
+anxiety,phobic and panic reactions in patients,449,4,False,2,7,1,0.267260579064588,0.10467706013363029,0.18930957683741648
+depression,low mood and loss of pleasure in patients with major mood disorder,502,11,True,1,1,1,0.4960159362549801,0.36254980079681276,0.4601593625498008
+depression,melancholia and rumination in clinical patients,502,4,False,1,4,2,0.3147410358565737,0.16135458167330677,0.250996015936255
+depression,sadness and hopelessness in clinically affected individuals,502,7,False,1,10,3,0.28884462151394424,0.09561752988047809,0.1693227091633466
+schizophrenia,psychosis with hallucinations and delusions in patients,715,5,False,1,1,1,0.45874125874125876,0.3734265734265734,0.5146853146853146
+schizophrenia,patients with a severe psychotic disorder compared to healthy controls,715,12,False,1,1,1,0.6125874125874126,0.2545454545454545,0.4111888111888112
+schizophrenia,auditory verbal hallucinations in psychotic illness,715,8,False,1,4,4,0.4755244755244755,0.23216783216783216,0.32727272727272727
+addiction,dependence on drugs such as cocaine or nicotine,135,4,False,1,2,1,0.37037037037037035,0.2962962962962963,0.3111111111111111
+addiction,compulsive substance use and relapse,135,6,False,2,4,3,0.32592592592592595,0.2074074074074074,0.2518518518518518
+addiction,alcohol abusers and drug users compared to controls,135,9,False,9,7,7,0.21481481481481482,0.2074074074074074,0.21481481481481482
+object,recognizing everyday items like tools and chairs,851,7,False,1,2,1,0.3372502937720329,0.11045828437132785,0.16216216216216217
+object,categorization of manmade artifacts and animals in pictures,851,5,False,1,4,2,0.27144535840188017,0.11163337250293771,0.14336075205640422
+object,viewing pictures of household things,851,5,False,1,2,2,0.19506462984723855,0.12338425381903642,0.1492361927144536
+numerical,processing quantities and magnitudes of digits,114,4,False,1,1,1,0.47368421052631576,0.2543859649122807,0.2631578947368421
+numerical,comparing which of two numbers is larger,114,3,False,1,1,1,0.42105263157894735,0.2631578947368421,0.3157894736842105
+numerical,mental math with sums and products,114,4,False,2,3,2,0.2807017543859649,0.10526315789473684,0.14912280701754385
+eye movements,gaze shifts toward peripheral targets,116,6,False,1,1,1,0.1810344827586207,0.08620689655172414,0.1206896551724138
+eye movements,pursuit of a moving dot,116,5,False,1,1,1,0.15517241379310345,0.2413793103448276,0.2413793103448276
+eye movements,voluntary glances and fixation control,116,4,False,1,3,1,0.27586206896551724,0.14655172413793102,0.16379310344827586
+disgust,revulsion at rotten food and contamination,103,4,False,8,2,2,0.0970873786407767,0.07766990291262135,0.08737864077669903
+disgust,nausea-inducing images and foul odors,103,4,False,2,3,2,0.18446601941747573,0.1650485436893204,0.17475728155339806
+disgust,reaction to repulsive stimuli like vomit,103,5,False,9,34,32,0.08737864077669903,0.05825242718446602,0.06796116504854369
+voice,perceiving speakers' vocal identity and timbre,121,6,False,1,3,3,0.3140495867768595,0.2396694214876033,0.2727272727272727
+voice,hearing human vocalizations versus other sounds,121,6,False,3,3,3,0.2727272727272727,0.05785123966942149,0.09090909090909091
+voice,processing of someone talking and their vocal characteristics,121,4,False,3,3,3,0.2396694214876033,0.2809917355371901,0.2892561983471074
+naming,retrieving the label of a pictured item aloud,179,5,False,8,6,5,0.09497206703910614,0.0670391061452514,0.0670391061452514
+naming,saying the word for a presented picture,179,6,False,5,3,3,0.0446927374301676,0.20670391061452514,0.19553072625698323
+naming,lexical retrieval when a picture is shown,179,6,False,4,3,3,0.07262569832402235,0.22346368715083798,0.20670391061452514
+reasoning,deducing conclusions from premises,182,2,False,1,16,1,0.29120879120879123,0.08241758241758242,0.24175824175824176
+reasoning,logical inference and drawing analogies,182,5,False,3,5,4,0.29120879120879123,0.17032967032967034,0.18681318681318682
+reasoning,solving relational puzzles such as Raven's matrices,182,5,False,3,2,2,0.1813186813186813,0.19230769230769232,0.2032967032967033
+planning,organizing a sequence of steps to reach a goal,258,5,False,2,1,1,0.15891472868217055,0.08527131782945736,0.1124031007751938
+planning,Tower of London puzzle solving,258,5,False,6,5,5,0.08527131782945736,0.09689922480620156,0.10852713178294573
+planning,thinking ahead about future actions,258,5,False,20,6,9,0.04263565891472868,0.05426356589147287,0.06976744186046512
+placebo,inert treatment expectations and analgesia from a sugar pill,332,6,False,4,1,1,0.12048192771084337,0.18674698795180722,0.2319277108433735
+placebo,expectation-driven benefit from a dummy treatment,332,6,False,4,6,3,0.1686746987951807,0.12951807228915663,0.1716867469879518
+placebo,response to a sham treatment that contains no active drug,332,6,False,1,1,1,0.32831325301204817,0.18373493975903615,0.28012048192771083
+stress,psychosocial challenge with mental arithmetic and cortisol,321,6,False,8,16,16,0.21495327102803738,0.1838006230529595,0.19003115264797507
+stress,acute pressure and negative arousal under time constraints,321,7,False,3,2,2,0.17445482866043613,0.11838006230529595,0.14330218068535824
+stress,response to uncontrollable aversive events and high cortisol,321,8,False,3,4,4,0.22429906542056074,0.1588785046728972,0.1806853582554517
+aging,older adults compared with young adults,293,8,True,1,1,1,0.5187713310580204,0.45733788395904434,0.5085324232081911
+aging,elderly participants and cognitive decline with years,293,7,False,1,1,1,0.5221843003412969,0.3003412969283277,0.36860068259385664
+aging,differences related to being 70 years old versus 20,293,11,False,1,2,1,0.25597269624573377,0.09556313993174062,0.18771331058020477
+default mode,task-negative network at rest with medial prefrontal and posterior cingulate,777,14,False,6,1,1,0.25611325611325614,0.25225225225225223,0.2805662805662806
+default mode,spontaneous thought during wakeful rest,777,5,False,3,1,1,0.16859716859716858,0.19433719433719435,0.21235521235521235
+default mode,deactivation of midline regions when attention is directed outward,777,9,False,12,3,10,0.138996138996139,0.16216216216216217,0.17374517374517376
