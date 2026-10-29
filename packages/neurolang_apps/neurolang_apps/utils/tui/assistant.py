@@ -2,7 +2,7 @@
 The LLM query assistant in the REPL: ``.ask`` and ``.llm``.
 
 ``.ask <question>`` turns the question into a query of the session's
-language with an LLM (see :mod:`neurolang.utils.llm`), printing the
+language with an LLM (see :mod:`neurolang_apps.utils.llm`), printing the
 steps of the agent as they run. The query is not run: it is put in the
 next prompt, to be read, edited and run with Enter, each rule under a
 comment line explaining it (``comment_rules``). ``.llm <question>``

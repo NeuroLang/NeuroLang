@@ -1045,12 +1045,7 @@ class NamedRelationalAlgebraFrozenSet(
 
     @staticmethod
     def _apply_aggregation(groups, fun):
-        fun_dict = {
-            len: 'count',
-            max: 'max',
-            min: 'min',
-            sum: 'sum'
-        }
+        fun_dict = {len: 'count', **_BUILTIN_REDUCTIONS}
         if fun in fun_dict:
             res = getattr(groups, fun_dict[fun])()
             res = res.iloc[:, 0]

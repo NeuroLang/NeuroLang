@@ -368,6 +368,13 @@ class ExtractConjunctAtoms(ExtractRelationalAtoms):
         return OrderedSet()
 
 
+def extract_conjuncts(formula):
+    """The conjuncts of *formula*, or itself if not a conjunction."""
+    if isinstance(formula, Conjunction):
+        return formula.formulas
+    return (formula,)
+
+
 class ExtractExistentialPrefix(PatternWalker):
     """The variables of the existential quantifiers a formula starts
     with, and their body."""

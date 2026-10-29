@@ -44,6 +44,7 @@ from nl_expr.logic import (
 from nl_expr.logic.expression_processing import (
     ExtractConjunctAtoms,
     ExtractExistentialPrefix,
+    extract_conjuncts,
     ExtractRelationalAtoms,
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -106,7 +107,11 @@ from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query
 )
-from .non_repeating_lift import columns_comparison, non_repeating_plan
+from .non_repeating_lift import (
+    columns_comparison,
+    non_repeating_plan,
+    select_comparisons
+)
 from .ranking import (
     partially_rank_query,
     rank_query,
@@ -511,20 +516,17 @@ def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
     comparisons = tuple(
-        f for f in _conjuncts(antecedent) if is_comparison(f)
+        f for f in extract_conjuncts(antecedent) if is_comparison(f)
     )
     if comparisons:
         # Comparisons of free variables select the answers of the rest.
         plan = lift_with_dependent_negations(
             Implication(consequent, RTO.walk(Conjunction(tuple(
-                f for f in _conjuncts(antecedent) if f not in comparisons
+                f for f in extract_conjuncts(antecedent) if f not in comparisons
             )))),
             symbol_table, check
         )
-        return reduce(
-            lambda plan, c: rap.Selection(plan, columns_comparison(c)),
-            comparisons, plan
-        )
+        return select_comparisons(plan, comparisons)
     if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
         split = _split_comparison_conjunct(antecedent)
         if split is not None:
@@ -752,7 +754,7 @@ def _split_choice_projection(antecedent, symbol_table):
             projected and functors.count(atom.functor) == 1 and
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         ):
-            return projected, variables - projected, _conjuncts(body)
+            return projected, variables - projected, extract_conjuncts(body)
     return None
 
 
@@ -764,7 +766,7 @@ def _split_separator_projection(antecedent, symbol_table):
     variables, body = _existential_variables_and_body(antecedent)
     if len(variables) == 0:
         return None
-    conjuncts = _conjuncts(body)
+    conjuncts = extract_conjuncts(body)
     inside = tuple(
         f for f in conjuncts
         if not extract_logic_free_variables(f).isdisjoint(variables)
@@ -793,7 +795,7 @@ def _split_exclusive_projection(antecedent, symbol_table):
     variable of `X` is `v`, and `¬∃w (R(ū[w/v]) ∧ w ≠ v)`, or None.
     """
     variables, body = _existential_variables_and_body(antecedent)
-    conjuncts = _conjuncts(body)
+    conjuncts = extract_conjuncts(body)
     for atom, variable in ExcludingNegations().walk(body):
         if atom in conjuncts and variables & set(atom.args) == {variable}:
             return {variable}, variables - {variable}, conjuncts
@@ -973,7 +975,7 @@ def free_variable_shattering_plan(
         the plan, or None if the rule does not apply.
     """
     free_variables = extract_logic_free_variables(negated_formula)
-    body = _existential_body(negated_formula)
+    body = ExtractExistentialPrefix().walk(negated_formula)[1]
     remainder_variables = extract_logic_free_variables(remainder)
     for t in extract_logic_free_variables(body) - free_variables:
         psi_t = add_existentials_except(body, free_variables | {t})
@@ -1041,8 +1043,8 @@ def comparison_conjunct_plan(consequent, remainder, conjunct, symbol_table):
     negated = isinstance(conjunct, Negation)
     existential = conjunct.formula if negated else conjunct
     free_variables = extract_logic_free_variables(existential)
-    body = _existential_body(existential)
-    formulas = body.formulas if isinstance(body, Conjunction) else (body,)
+    body = ExtractExistentialPrefix().walk(existential)[1]
+    formulas = extract_conjuncts(body)
     comparisons = tuple(f for f in formulas if is_comparison(f))
     psi_body = Conjunction(tuple(
         f for f in formulas if not is_comparison(f)
@@ -1101,8 +1103,7 @@ def _separated_existential_plan(
     if plans is None:
         return None
     plan = rap.NaturalJoin(plans[0], rap.Support(remainder_plan))
-    for comparison in comparisons:
-        plan = rap.Selection(plan, columns_comparison(comparison))
+    plan = select_comparisons(plan, comparisons)
     return rap.IndependentProjection(
         plan,
         tuple(str2columnstr_constant(v.name) for v in remainder_variables)
@@ -1136,12 +1137,6 @@ def _is_separator_variable(t, formula, symbol_table):
         ExistentialPredicate(t, formula), symbol_table
     )
     return t in separator_variables
-
-
-def _existential_body(formula):
-    while isinstance(formula, ExistentialPredicate):
-        formula = formula.body
-    return formula
 
 
 def _is_existential_conjunct(formula):
@@ -1380,7 +1375,7 @@ def _clauses_are_range_restricted(cnf):
     that is a negation alone is one of a conjunction, whose negative
     components are differences, and is not a disjunction.
     """
-    clauses = cnf.formulas if isinstance(cnf, Conjunction) else (cnf,)
+    clauses = extract_conjuncts(cnf)
     for clause in clauses:
         free = extract_logic_free_variables(clause)
         matrix = clause
@@ -1952,7 +1947,7 @@ def _choice_separators(disjuncts, quantified, symbol_table):
         [
             atom for atom in extract_logic_atoms(disjunct)
             if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
-            and atom in _conjuncts(disjunct)
+            and atom in extract_conjuncts(disjunct)
         ]
         for disjunct in disjuncts
     ]
@@ -2000,13 +1995,6 @@ def _renamings_are_safe(disjuncts, substitutions, renamings):
             ):
                 return False
     return True
-
-
-def _conjuncts(formula):
-    """The conjuncts of *formula*, or itself if not a conjunction."""
-    if isinstance(formula, Conjunction):
-        return formula.formulas
-    return (formula,)
 
 
 def _align_choice_atoms(atoms, quantified):
