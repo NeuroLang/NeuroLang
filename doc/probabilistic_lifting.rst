@@ -197,7 +197,11 @@ Base cases
 
 Minimisation
    Redundant atoms and disjuncts are removed with the containment test of
-   :mod:`neurolang.probabilistic.containment`, and the base cases are tried
+   :mod:`neurolang.probabilistic.containment`: a conjunctive query
+   contains another when there is a homomorphism from the first into the
+   second (Chandra and Merlin), and a union contains another when each
+   disjunct of the second is contained in one of the first (Sagiv and
+   Yannakakis). The base cases are then tried
    again.
 
 
