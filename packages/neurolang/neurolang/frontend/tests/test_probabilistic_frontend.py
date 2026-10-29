@@ -1294,7 +1294,8 @@ def test_query_without_safe_plan():
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
     res = nl.solve_all()['q']
-    assert res == expected
+    assert res.columns == expected.columns and len(res) == len(expected)
+    assert_almost_equal(res.to_unnamed(), expected.to_unnamed())
 
 
 def test_query_without_safe_plan_2():
@@ -1323,10 +1324,13 @@ def test_query_without_safe_plan_2():
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x, e.s] & e.names[e.y, e.s]
 
     res = nl.solve_all()['q']
-    assert res == expected
+    assert res.columns == expected.columns and len(res) == len(expected)
+    assert_almost_equal(res.to_unnamed(), expected.to_unnamed())
 
 
-def test_query_without_safe_fails():
+def test_query_with_answer_variables_of_a_relation_is_lifted():
+    """names(x) ∧ names(y) is lifted as names(x) for x = y, and as two
+    independent atoms for x ≠ y."""
     nl = NeurolangPDL(
         probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
         probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
@@ -1342,8 +1346,12 @@ def test_query_without_safe_fails():
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+    res = nl.solve_all()['q'].to_unnamed()
+    assert len(res) == 4
+    assert_almost_equal(res, {
+        ("alice", "alice", 0.2), ("bob", "bob", 0.8),
+        ("alice", "bob", 0.2 * 0.8), ("bob", "alice", 0.2 * 0.8),
+    })
 
 
 def test_query_self_join_matrix_query_ds():

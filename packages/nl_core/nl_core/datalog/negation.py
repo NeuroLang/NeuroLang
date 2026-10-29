@@ -14,6 +14,7 @@ from nl_expr.expressions import (
     is_leq_informative,
 )
 from nl_expr.logic import Conjunction, Implication, Negation, Union
+from nl_expr.logic.transformations import NegationOfTruthValueMixin
 from nl_expr.type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
@@ -38,7 +39,7 @@ class NegativeFact(Implication):
         )
 
 
-class DatalogProgramNegationMixin(PatternWalker):
+class DatalogProgramNegationMixin(NegationOfTruthValueMixin):
     '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''
@@ -46,13 +47,6 @@ class DatalogProgramNegationMixin(PatternWalker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
-
-    @add_match(Negation(Constant[bool]))
-    def negation_constant(self, expression):
-        if expression.formula.value:
-            return Constant[bool](False)
-        else:
-            return Constant[bool](True)
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)

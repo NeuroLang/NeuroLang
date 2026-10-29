@@ -39,6 +39,7 @@ from ..relational_algebra import (
     EVAL_OP_TO_STR,
     FullOuterNaturalJoin,
     LeftNaturalJoin,
+    ReplaceNull,
     _const_relation_type_is_known,
     _get_const_relation_type,
     _infer_relation_type,
@@ -794,3 +795,17 @@ def test_materialise_evaluates_its_relation():
     assert materialised.columns() == join.columns()
     result = RelationalAlgebraSolver().walk(materialised)
     assert result == RelationalAlgebraSolver().walk(join)
+
+
+def test_replace_null_in_an_empty_relation():
+    """An empty relation is typed AbstractSet[Tuple], without the types of
+    its columns."""
+    a, b = ColumnStr("a"), ColumnStr("b")
+    relation = C_[AbstractSet[Tuple]](
+        NamedRelationalAlgebraFrozenSet((a, b), [])
+    )
+    result = RelationalAlgebraSolver().walk(
+        ReplaceNull(relation, C_[ColumnStr](b), C_[float](0.))
+    )
+    assert result.value.is_empty()
+    assert result.value.columns == (a, b)

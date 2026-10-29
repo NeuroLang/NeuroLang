@@ -192,6 +192,12 @@ class ShatterEqualities(ExpressionWalker):
                 _formula_is_ne(formula) and
                 isinstance(formula.args[1], Constant)
                 for formula in expression.formulas
+            ) and
+            # The inequalities are moved into the atoms, the other
+            # conjuncts.
+            all(
+                isinstance(formula, FunctionApplication)
+                for formula in expression.formulas
             )
         )
     )

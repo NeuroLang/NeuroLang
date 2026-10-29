@@ -395,6 +395,24 @@ Deterministic builtins
    made equal to those within its disjunctions, since :math:`C(s) \lor
    C(f)` does not need both to be true.
 
+   An atom :math:`C(\bar v)` within a negated existential of a
+   conjunction which asserts :math:`C(\bar u)` is made :math:`C(\bar u)`,
+   when the variables of :math:`\bar v` that are not those of
+   :math:`\bar u` are quantified by the existential, which loses them:
+
+   .. math::
+
+      C(\bar u) \land \lnot\exists W\, (C(\bar v) \land \psi) \equiv
+      C(\bar u) \land \lnot\exists W'\, (C(\bar u) \land \psi)
+      [\bar u/\bar v],
+
+   and the absorption in negations then removes :math:`C(\bar u)` from the
+   negation. For instance, :math:`R(x) \land \lnot\exists t\, (R(t) \land
+   S(x, t))` becomes :math:`R(x) \land \lnot S(x, x)`. A negation in which
+   the substitution makes a strict comparison of a term with itself, as
+   :math:`s_2 \neq s` becoming :math:`s \neq s`, is true, and is removed
+   (:class:`~neurolang.probabilistic.expression_processing.UnifyChoicesInNegations`).
+
 Equalities within disjuncts
    The variables an equality makes the same are unified, in each disjunct
    of a union apart, as the equality holds in its disjunct only. A
@@ -405,7 +423,8 @@ Equalities within disjuncts
 Checks
    The query must have no built-in function, except comparisons within
    existential conjuncts (see `Negations and comparisons sharing
-   relations`_). Unless the ``check_unate`` option of
+   relations`_) and comparisons of the answer variables, conjuncts of the
+   query (see `Extensions of the Dalvi–Suciu algorithm`_). Unless the ``check_unate`` option of
    ``[PROBABILISTIC_SOLVER]`` is turned off (see :doc:`performance`), it
    must also use a single kind of quantifier and be *unate*, each relation
    occurring only positively or only negatively.
@@ -528,9 +547,19 @@ Disjoint separator
    lifted for every :math:`\bar a` by the other rules. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
-   them, and every free variable of the query. It is tried after the
-   separator variables, a conjunctive query being the union of a single
-   disjunct.
+   them, and every free variable of the query. A free variable or a
+   constant :math:`u` of a choice atom, at a position where another
+   disjunct has a quantified variable, is made one,
+   :math:`C(u) \equiv \exists f\, (C(f) \land f = u)`, :math:`f` being
+   fresh; with another atom :math:`C(a)` of the choice in the disjunct,
+   :math:`C(a) \land C(f) \equiv C(a) \land a = f` and
+   :math:`\exists f\, (f = a \land \varphi) \equiv \varphi[a/f]` then give
+   :math:`C(a) \land a = u` (``ChoiceTermsAsEqualities``, one rule per
+   equivalence). The equalities, as comparisons, are the same in every
+   world and belong to the deterministic rest; a union with them and a
+   rest which is not deterministic is declined. It is
+   tried after the separator variables, a conjunctive query being the
+   union of a single disjunct.
 
 
 Clauses of the conjunctive normal form
@@ -548,8 +577,63 @@ Clauses of the conjunctive normal form
    C(f) \land M(f, c))`. The normal form is then not used
    (``_clauses_are_range_restricted``): the rules that follow, the
    disjoint separator among them, apply to the union as it is, and a union
-   none of them lifts is declined, which is sound. A negation alone as a
-   clause is not a disjunction, and is the difference of a conjunction.
+   none of them lifts is declined, which is sound. They also apply when
+   the components of the normal form are not all lifted. A negation alone
+   as a clause is not a disjunction, and is the difference of a
+   conjunction.
+
+Answer variables as constants
+   Dalvi and Suciu lift a query for each answer, its free variables being
+   constants [Dalvi2012]_. Two atoms of a tuple-independent relation with
+   free variables :math:`x` and :math:`y` at the same position, such as
+   :math:`\exists s\, A(x, s) \land A(y, s)`, are then different tuples
+   when :math:`x \neq y`, and the same when :math:`x = y`, which the
+   algorithm, keeping the variables, cannot tell
+   (``different_free_variables_plan``). When the other rules decline the
+   query :math:`Q`, its answers are split into those with :math:`x \neq
+   y`, for which the atoms of the relation :math:`R` with :math:`y` at
+   that position are renamed into those of an alias :math:`R'` of
+   :math:`R`, and those with :math:`x = y`:
+
+   .. math::
+
+      \sigma_{x \neq y}\, \mathrm{lift}(Q[R'/R]) \;\cup\;
+      \pi_{y := x}\, \mathrm{lift}(Q[x/y]).
+
+   The rule applies when, for :math:`x \neq y`, every renamed atom is a
+   different tuple from the other atoms of :math:`R`, having :math:`y`
+   where they have :math:`x`. Three atoms with three free variables at the
+   same position, :math:`A(x, s) \land A(y, s) \land A(z, s)`, are not
+   lifted.
+
+Comparisons of answer variables
+   A comparison of free variables, a conjunct of the query such as
+   :math:`l_1 < l_2`, is a selection of the answers of the rest of the
+   query, which is lifted without it.
+
+Separator determined by a functional dependency
+   A deterministic atom :math:`F(x, y)` whose relation is a function of
+   :math:`x`, :math:`y` being the same for all the tuples with the same
+   :math:`x`, determines :math:`y` from :math:`x`: in a conjunctive query,
+   an atom :math:`R(x)` of a tuple-independent relation is then counted as
+   having :math:`y` when looking for a separator variable
+   (``_determined_variables``). In
+
+   .. math::
+
+      \exists p\, \exists s\, \mathit{reliable\_peak}(p) \land
+      \mathit{peak\_study}(p, s) \land \mathit{term\_in\_study}(t, s),
+
+   each peak being reported by one study, :math:`s` separates the query,
+   which is otherwise the #P-hard query :math:`H_0` with a deterministic
+   middle relation. Olteanu, Huang and Koch lift such queries, without
+   self-joins, under functional dependencies [Olteanu2009b]_. The
+   dependency is checked on the data of the relation; it is followed
+   through several deterministic atoms, and from several columns. An atom
+   of a choice keeps its variables, its tuples being exclusive for all the
+   values of :math:`y`, as does an atom of a relation in several disjuncts
+   of a union, and the variables are determined in conjunctions only, by
+   atoms which are not negated.
 
 
 Negations and comparisons sharing relations
@@ -562,8 +646,9 @@ and to existential conjuncts with comparisons such as :math:`t \neq x`.
 Such conjunctions fall outside unions of conjunctive queries, so the
 completeness result above does not apply to them.
 The rules below are tried in turn when the relations shared are
-tuple-independent; a conjunction sharing a probabilistic choice is
-declined. Every rule checks each query it lifts, and the lifted plans are
+tuple-independent; a conjunction sharing a probabilistic choice, which
+the rewriting of the choices in negations (see `Preparing the query`_)
+leaves, is declined. Every rule checks each query it lifts, and the lifted plans are
 sound (see `Correctness of the plans`_), but the rules are not known to be
 complete: some liftable conjunctions of this kind may still be declined
 and left to weighted model counting.
@@ -1000,6 +1085,15 @@ Disjoint separator
    query: a disjunct without one, true for every value of it, could not be
    given by a plan, whose rows are a finite set of values.
 
+   *Equalities.* In every world, :math:`C(u) \equiv \exists f\, (C(f)
+   \land f = u)`, and, a single tuple of :math:`C` being true,
+   :math:`C(f) \land C(u) \equiv C(f) \land f = u` (Lemma 2): the
+   rewritten disjuncts are equivalent to the given ones, and their choice
+   atoms have quantified variables where the others have, so that the
+   renaming above applies. An equality, as any comparison, is true or
+   false for given values in every world, and is thus part of the
+   deterministic rest :math:`D`, whose plan selects on it.
+
    *Termination.* The rule lifts the union with the variables of the
    choice free, one quantifier less, or lifts nothing (deterministic rest).
 
@@ -1103,11 +1197,78 @@ Rewriting of the choices
    unification of the variables of equalities is done in each disjunct
    apart (``UnifyVariableEqualitiesMixin``).
 
+   Within a negation, in every world and for every answer where
+   :math:`C(\bar u)` holds, :math:`C(\bar v)` holds exactly when
+   :math:`\bar v = \bar u`, a single tuple of :math:`C` being true. So
+   :math:`\exists W\, (C(\bar v) \land \psi) \equiv \exists W\, (\bar v =
+   \bar u \land C(\bar u) \land \psi)`, and as the variables of
+   :math:`\bar v` set to those of :math:`\bar u` are in :math:`W`, each
+   variable at most once, the equalities are eliminated by substitution,
+   :math:`\exists v\, (v = u \land \varphi) \equiv \varphi[u/v]`, the
+   query being standardised apart so that no variable is captured
+   (``UnifyChoicesInNegations``). Where :math:`C(\bar u)` does not hold,
+   both sides of the rewriting are false. A strict comparison of a term
+   with itself is false, :math:`t \neq t \equiv \bot`
+   (``StrictComparisonOfATermWithItselfMixin``), and the truth values are
+   simplified by :math:`\bot \land \varphi \equiv \bot`,
+   :math:`\top \land \varphi \equiv \varphi`, :math:`\lnot\bot \equiv
+   \top` and :math:`\exists x\, \bot \equiv \bot`
+   (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
+   every step of the rewriting is an equivalence.
+
+Answer variables as constants
+   For an answer, :math:`x` and :math:`y` have values :math:`a` and
+   :math:`b`. If :math:`a \neq b`, every renamed atom :math:`R(\bar u)`
+   has :math:`b` at a position :math:`i` where every other atom
+   :math:`R(\bar v)` of :math:`Q` has :math:`a`
+   (``_are_different_tuples_when_different``), so their tuples differ, for
+   all values of the quantified variables. :math:`R'` naming the relation
+   :math:`R`, :math:`Q[R'/R] \equiv Q`; the renamed and the other atoms
+   of :math:`R` have no tuple in common, and :math:`Q[R'/R]`, with
+   :math:`R'` a relation with the tuples and probabilities of :math:`R`,
+   has the probability of :math:`Q` for this answer: in every world the
+   atoms have the values they have in :math:`Q`, and the tuples of
+   :math:`R'` are independent of those of :math:`R` that :math:`Q` uses,
+   as Lemma 1 needs. If :math:`a = b`, :math:`Q` and :math:`Q[x/y]` are
+   the same query for the answer, and the projection copies :math:`x` into
+   :math:`y`. The answers of the two plans are different, so their
+   independent union, :math:`1 - (1 - p)(1 - 0)`, gives each its
+   probability. The relation is tuple-independent: the tuples of a choice
+   are exclusive, and an alias would make them independent. The rule
+   terminates: :math:`Q[x/y]` has one free variable less, and
+   :math:`Q[R'/R]` the same free variables and fewer pairs of atoms of a
+   relation with different free variables at a position.
+
+Comparisons of answer variables
+   A comparison :math:`C` of free variables is true or false for an
+   answer, in every world: :math:`P[(Q \land C)\theta] = P[Q\theta]` if
+   :math:`C\theta` holds and 0 otherwise, which the selection computes.
+
+Separator determined by a functional dependency
+   Let :math:`Q = \exists y\, \varphi(y)` be a conjunctive query in which
+   every atom of a tuple-independent relation has :math:`y`, or variables
+   :math:`\bar x` from which positive deterministic atoms of
+   :math:`\varphi` determine :math:`y`: :math:`y = f(\bar x)` in every
+   world satisfying them, :math:`f` being the same in every world. A tuple
+   :math:`R(\bar a)` of such an atom is then a tuple of
+   :math:`\varphi(b)` only for :math:`b = f(\bar a)`, the relation of
+   :math:`R` being in no other atom (the separator variable rule declines
+   a relation in two atoms without :math:`y` at the same position, and a
+   relation in two disjuncts keeps its variables). The events
+   :math:`\varphi(b)` for different :math:`b` thus have no tuple in common
+   and are independent, which is what the separator variable rule needs:
+   :math:`P[Q] = 1 - \prod_b (1 - P[\varphi(b)])`. The tuples of a choice
+   are not independent of each other, so its atoms are not extended. The
+   dependency is checked on the relation, by comparing the numbers of
+   distinct values of :math:`\bar x` and of :math:`(\bar x, y)`, in
+   polynomial time.
+
 Declined unions
    Declining a query is sound: it is then solved by weighted model
    counting, exactly. The disjoint separator declines the unions with a
-   disjunct without a free variable of the query, or with a quantifier
-   left in a disjunct.
+   disjunct without a free variable of the query, with a quantifier left
+   in a disjunct, or with the equalities of a free variable or a constant
+   of a choice atom and a rest that is not deterministic.
 
 Projection on a variable
    *Disjoint projection.* The atom :math:`C(\bar u)` is a conjunct of the
@@ -1211,6 +1372,11 @@ References
    computation for conjunctive queries with inequalities*. In Proceedings
    of the 2009 ACM SIGMOD International Conference on Management of Data,
    389–402, 2009.
+
+.. [Olteanu2009b] D. Olteanu, J. Huang and C. Koch. *SPROUT: Lazy vs.
+   eager query plans for tuple-independent probabilistic databases*. In
+   Proceedings of the 25th IEEE International Conference on Data
+   Engineering (ICDE), 640–651, 2009.
 
 .. [Suciu2011] D. Suciu, D. Olteanu, C. Ré and C. Koch. *Probabilistic
    Databases*. Synthesis Lectures on Data Management. Morgan & Claypool,
