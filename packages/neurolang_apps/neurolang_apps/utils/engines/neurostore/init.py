@@ -9,7 +9,7 @@ tables directly, so NiMARE itself is not required.
 Study ids are NeuroStore's alphanumeric strings, not PubMed integers.
 
 Registers the predicates of the ``neurosynth`` engine (see
-:func:`neurolang.utils.engines.neurosynth.init.register_tables`) —
+:func:`neurolang_apps.utils.engines.neurosynth.init.register_tables`) —
 ``term_in_study_tfidf(study_id, term, tfidf)`` is computed here from the
 study abstracts with scikit-learn (words and sequences of two or three, so
 that terms such as ``working memory`` exist; English stop words, terms found

@@ -1294,7 +1294,8 @@ def test_query_without_safe_plan():
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
     res = nl.solve_all()['q']
-    assert res == expected
+    assert res.columns == expected.columns and len(res) == len(expected)
+    assert_almost_equal(res.to_unnamed(), expected.to_unnamed())
 
 
 def test_query_without_safe_plan_2():
@@ -1323,10 +1324,13 @@ def test_query_without_safe_plan_2():
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x, e.s] & e.names[e.y, e.s]
 
     res = nl.solve_all()['q']
-    assert res == expected
+    assert res.columns == expected.columns and len(res) == len(expected)
+    assert_almost_equal(res.to_unnamed(), expected.to_unnamed())
 
 
-def test_query_without_safe_fails():
+def test_query_with_answer_variables_of_a_relation_is_lifted():
+    """names(x) ∧ names(y) is lifted as names(x) for x = y, and as two
+    independent atoms for x ≠ y."""
     nl = NeurolangPDL(
         probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
         probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
@@ -1342,8 +1346,12 @@ def test_query_without_safe_fails():
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+    res = nl.solve_all()['q'].to_unnamed()
+    assert len(res) == 4
+    assert_almost_equal(res, {
+        ("alice", "alice", 0.2), ("bob", "bob", 0.8),
+        ("alice", "bob", 0.2 * 0.8), ("bob", "alice", 0.2 * 0.8),
+    })
 
 
 def test_query_self_join_matrix_query_ds():
@@ -2521,3 +2529,52 @@ def test_query_aggregating_probabilities_in_its_head():
     assert res.columns == ("max", "min")
     assert list(res) == [pytest.approx((2 / 3, 1 / 3))]
     nl.execute_datalog_program("ans(max(x)) :- p(r, x)", dry_run=True)
+
+
+def test_query_the_lifted_solvers_decline_without_the_unate_check():
+    """
+    Without the unate check, the lifted solver raised a ValueError on a
+    union with a negated component, instead of declining it; the query is
+    answered, as possible worlds give.
+    """
+    from nl_expr.config import config
+    from nl_core.probabilistic.tests.test_lifted_negation import (
+        possible_worlds_probabilities,
+    )
+
+    U, S, R = Symbol("U"), Symbol("S"), Symbol("R")
+    probabilistic_facts = {
+        U: [(0.3, "c"), (0.2, "a")],
+        S: [(0.4, "a", "c"), (0.5, "c", "b")],
+        R: [(0.3, "a", "c"), (0.7, "b", "c"), (0.4, "c", "a")],
+    }
+    check_unate = config.get_probabilistic_solver_check_unate()
+    config.disable_probabilistic_solver_check_unate()
+    try:
+        nl = NeurolangPDL()
+        for symbol, rows in probabilistic_facts.items():
+            nl.add_probabilistic_facts_from_tuples(rows, name=symbol.name)
+        nl.execute_datalog_program(
+            "h(x) :- U(x), S(x, y), R(x, z), ~U(y)\n" "q(x, PROB) :- h(x)"
+        )
+        result = dict(
+            nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
+        )
+    finally:
+        if check_unate:
+            config.enable_probabilistic_solver_check_unate()
+
+    expected = possible_worlds_probabilities(
+        probabilistic_facts,
+        {},
+        lambda database: {
+            a
+            for (a,) in database[U]
+            for (b, c) in database[S]
+            if a == b
+            and (c,) not in database[U]
+            and any(d == a for d, _ in database[R])
+        },
+    )
+    expected = {a: p for a, p in expected.items() if p > 1e-12}
+    assert result == pytest.approx(expected)

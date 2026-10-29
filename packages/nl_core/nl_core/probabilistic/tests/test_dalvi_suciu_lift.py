@@ -4,6 +4,12 @@ from typing import AbstractSet
 import pytest
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
+from nl_expr.config import config
+from nl_expr.exceptions import (
+    NonLiftableException,
+    NotInFONegE,
+    UnsupportedSolverError,
+)
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import (
     Conjunction,
@@ -12,6 +18,7 @@ from nl_expr.logic import (
     Implication,
     Negation,
     Union,
+    UniversalPredicate,
 )
 from ...relational_algebra import (
     ColumnInt,
@@ -33,9 +40,11 @@ from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
-    ProbabilisticFactSet
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
 )
 from ..transforms import convert_rule_to_ucq
+from .test_lifted_negation import check
 
 TNRA = TranslateToNamedRA()
 EQ = Constant(eq)
@@ -781,6 +790,7 @@ def test_mixed_probabilistic_deterministic_safe():
 
 
 def test_mixed_probabilistic_deterministic_unsafe():
+    """S is a function neither of x nor of y."""
     R = Symbol("R")
     S = Symbol("S")
     T = Symbol("T")
@@ -789,9 +799,9 @@ def test_mixed_probabilistic_deterministic_unsafe():
     R_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
     )
-    S_relation = Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
-    )
+    S_relation = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+        iterable=[(1, 1), (1, 2), (2, 1)], columns=("x", "y")
+    ))
     T_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
     )
@@ -1081,3 +1091,169 @@ def test_clauses_are_range_restricted():
     assert dalvi_suciu_lift._clauses_are_range_restricted(negation_alone)
 
 
+def test_choice_terms_as_equalities():
+    """C(s) ≡ ∃f' (C(f') ∧ f' = s) at a position where another disjunct
+    has a quantified variable, and C(f) ∧ C(f') ≡ C(f) ∧ f = f', whose
+    fresh f' is then substituted."""
+    C, M = Symbol("C"), Symbol("M")
+    s, f = Symbol("s"), Symbol("f")
+    rewriter = dalvi_suciu_lift.ChoiceTermsAsEqualities({C}, {(C, 0)}, {f})
+    rewritten = rewriter.walk(Conjunction((C(s), M(s))))
+    fresh, = rewriter.fresh
+    assert set(rewritten.formulas) == {C(fresh), M(s), EQ(fresh, s)}
+    rewriter = dalvi_suciu_lift.ChoiceTermsAsEqualities({C}, {(C, 0)}, {f})
+    rewritten = rewriter.walk(Conjunction((C(f), M(f), C(s))))
+    assert rewriter.fresh == set()
+    assert set(rewritten.formulas) == {C(f), M(f), EQ(f, s)}
+
+
+@pytest.mark.parametrize("function", (True, False))
+def test_separator_determined_by_a_functional_dependency(function):
+    """∃x∃y R(x) ∧ F(x, y) ∧ T(y), with F deterministic: y separates the
+    query when F is a function of x, each tuple of R then being in the
+    subquery of one y only; the query is #P-hard otherwise."""
+    R, F, T, Z, ans = (Symbol(n) for n in ("R", "F", "T", "Z", "ans"))
+    x, y = Symbol("x"), Symbol("y")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, 1), (0.4, 2), (0.3, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a"), (0.7, "b")]
+    )
+    cpl_program.add_extensional_predicate_from_tuples(
+        F, [(1, "a"), (2, "a"), (3, "b")] + ([] if function else [(3, "a")])
+    )
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), F(x, y), T(y)))),
+    )))
+    query = Implication(ans(), Z())
+    if not function:
+        with pytest.raises(NonLiftableException):
+            dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+        return
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = 1 - (1 - 0.6 * (1 - 0.5 * 0.6)) * (1 - 0.7 * 0.3)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_functional_dependency_in_one_disjunct_only():
+    """A tuple of R in the subqueries of f(x) and of g(x): y is not a
+    separator of ∃y (∃x R(x) ∧ F(x, y) ∧ T(y)) ∨ (∃x R(x) ∧ G(x, y))."""
+    R, F, G, T = (Symbol(n) for n in ("R", "F", "G", "T"))
+    x, y = Symbol("x"), Symbol("y")
+    symbol_table = {
+        R: ProbabilisticFactSet(Symbol("r"), Constant(0)),
+        T: ProbabilisticFactSet(Symbol("t"), Constant(0)),
+        F: DeterministicFactSet(Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(("a", "b"), [(1, 1), (2, 2)])
+        )),
+        G: DeterministicFactSet(Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(("a", "b"), [(1, 2), (2, 1)])
+        )),
+    }
+    conjunction = Conjunction((R(x), F(x, y), T(y)))
+    query = ExistentialPredicate(y, ExistentialPredicate(x, Disjunction((
+        conjunction, Conjunction((R(x), G(x, y)))
+    ))))
+    assert dalvi_suciu_lift.find_separator_variables(
+        query, symbol_table
+    )[0] == set()
+    assert y in dalvi_suciu_lift.find_separator_variables(
+        ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
+        symbol_table
+    )[0]
+
+
+@pytest.fixture
+def check_unate_off():
+    check_unate = config.get_probabilistic_solver_check_unate()
+    config.disable_probabilistic_solver_check_unate()
+    yield
+    if check_unate:
+        config.enable_probabilistic_solver_check_unate()
+
+
+def _program_to_decline():
+    T, R, S = Symbol("T"), Symbol("R"), Symbol("S")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.5, "a"), (0.6, "b")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.3, "a", "c"), (0.7, "b", "c")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(S, [(0.4, "a", "c")])
+    return cpl_program, T, R, S
+
+
+def test_formula_outside_fo_existential_negation_is_declined():
+    """The conversions to normal forms fail on a formula outside FO∃¬,
+    such as a rule: the planner declines it."""
+    cpl_program, T, R, S = _program_to_decline()
+    ans, x, y = Symbol("ans"), Symbol("x"), Symbol("y")
+    rule = Implication(
+        ans(x),
+        Conjunction(
+            (
+                T(x),
+                UniversalPredicate(
+                    y, Disjunction((Negation(R(x, y)), S(x, y)))
+                ),
+            )
+        ),
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, rule.antecedent
+    )
+    with pytest.raises(NonLiftableException) as error:
+        dalvi_suciu_lift.dalvi_suciu_lift(rule, symbol_table)
+    assert isinstance(error.value, UnsupportedSolverError)
+    assert isinstance(error.value.__cause__, NotInFONegE)
+
+
+@pytest.mark.parametrize("unate", ("on", "off"))
+def test_union_with_a_negated_component_is_not_planned(request, unate):
+    """∃y R(x, y) ∨ ¬T(x): the union of a negation is not planned, rather
+    than planned without a negative operation."""
+    if unate == "off":
+        request.getfixturevalue("check_unate_off")
+    cpl_program, T, R, _ = _program_to_decline()
+    x, y = Symbol("x"), Symbol("y")
+    formula = Disjunction((ExistentialPredicate(y, R(x, y)), Negation(T(x))))
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, formula
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(formula, symbol_table)
+    assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_negated_component_without_the_unate_check(check_unate_off):
+    """H(x) ← U(x) ∧ S(x, y) ∧ R(x, z) ∧ ¬U(y) reaches a union with a
+    negated component, which the planner declined with a ValueError."""
+    U, S, R, H, ans = (Symbol(n) for n in ("U", "S", "R", "H", "ans"))
+    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+    probabilistic_facts = {
+        U: [(0.3, "c"), (0.2, "a")],
+        S: [(0.4, "a", "c"), (0.5, "c", "b")],
+        R: [(0.3, "a", "c"), (0.7, "b", "c"), (0.4, "c", "a")],
+    }
+    rules = [
+        Implication(
+            H(x), Conjunction((U(x), S(x, y), R(x, z), Negation(U(y))))
+        )
+    ]
+
+    def oracle(database):
+        return {
+            (a,)
+            for (a,) in database[U]
+            for (b, c) in database[S]
+            if a == b
+            and (c,) not in database[U]
+            and any(d == a for d, _ in database[R])
+        }
+
+    check(probabilistic_facts, {}, rules, Implication(ans(x), H(x)), oracle)

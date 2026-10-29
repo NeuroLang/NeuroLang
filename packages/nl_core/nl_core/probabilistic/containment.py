@@ -1,14 +1,12 @@
 import logging
+from functools import lru_cache
 
-from ..datalog import Fact, chase
-from ..datalog.negation import DatalogProgramNegation
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import (
     Conjunction,
     Disjunction,
     Implication,
     Negation,
-    Union,
 )
 from nl_expr.logic.expression_processing import (
     extract_logic_atoms,
@@ -20,32 +18,17 @@ from nl_expr.logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix,
 )
+from nl_expr.logic.unification import (
+    apply_substitution,
+    most_general_unifier,
+    most_general_unifier_arguments,
+)
 
 
 LOG = logging.getLogger(__name__)
 
 
 __all__ = ['is_contained_rule', 'is_contained']
-
-
-def canonical_database_program(rule):
-    '''
-    Given a datalog rule R(X):-S_1(X,Y),...,S_N(X,Y) where
-    X and Y are sets of symbols, produce the datalog program corresponding
-    to the facts
-    S_1(A,B).
-    S_2(A,B).
-    .
-    .
-    .
-    S_N(A,B).
-    where A and B are mappings from the symbols in X and Y to constants.
-    '''
-    consequent, antecedent = rule.unapply()
-    return Union(tuple(
-        Fact(freeze_atom(atom))
-        for atom in extract_logic_atoms(antecedent)
-    )), freeze_atom(consequent)
 
 
 def freeze_atom(atom):
@@ -129,30 +112,32 @@ def is_contained_rule(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
     for 2 Datalog rules without constants, computes whether
-    q1←q2. A negated atom is matched by the same negated atom
-    (see :func:`negations_as_atoms`).
+    q1←q2: there is a homomorphism from q1 to q2, mapping the head of q1
+    to that of q2, and the atoms of q1 to those of q2, frozen as facts
+    (Chandra & Merlin, 1977). A negated atom is matched by the same
+    negated atom (see :func:`negations_as_atoms`).
     '''
     q1, q2 = negations_as_atoms(q1), negations_as_atoms(q2)
-    s = Symbol.fresh()
-    q1 = Implication(
-        s(*q1.consequent.args), q1.antecedent
+    head = most_general_unifier_arguments(
+        q1.consequent.args, freeze_atom(q2.consequent).args
     )
-    q2 = Implication(
-        s(*q2.consequent.args), q2.antecedent
+    return head is not None and _maps_into(
+        tuple(extract_logic_atoms(q1.antecedent)),
+        tuple(map(freeze_atom, extract_logic_atoms(q2.antecedent))),
+        head[0]
     )
-    d_q2, frozen_head = canonical_database_program(q2)
-    dp = DatalogProgramNegation()
-    for f in d_q2.formulas:
-        dp.walk(f)
-    dp.walk(q1)
-    solution = chase.Chase(dp).build_chase_solution()
-    if len(frozen_head.args) == 0:
-        # A nullary fact is derived when its relation is not empty; its
-        # membership in the facts of the solution is not tested, as their
-        # type differs from that of the frozen head.
-        relation = solution.get(frozen_head.functor)
-        return relation is not None and not relation.value.is_empty()
-    return frozen_head in solution.as_set()
+
+
+def _maps_into(atoms, facts, substitution):
+    '''Whether `substitution` extends to map the `atoms` to `facts`.'''
+    if not atoms:
+        return True
+    atom = apply_substitution(atoms[0], substitution)
+    return any(
+        unifier is not None and
+        _maps_into(atoms[1:], facts, {**substitution, **unifier[0]})
+        for unifier in (most_general_unifier(atom, fact) for fact in facts)
+    )
 
 
 def is_contained(q1, q2):
@@ -167,12 +152,7 @@ def is_contained(q1, q2):
     ∃(fv(d2) - fv(d1)) d2 implies d1. This test is sound, and complete
     when the queries have the same free variables in every disjunct.
     '''
-    s = Symbol.fresh()
-    programs = []
-    for query in (q1, q2):
-        program = convert_pos_logic_query_to_datalog_rules(query, s)
-        LOG.debug("Canonical program for %s", query)
-        programs.append(program)
+    programs = [_datalog_rules(q1), _datalog_rules(q2)]
 
     for q2_ in programs[1]:
         for q1_ in programs[0]:
@@ -189,6 +169,13 @@ def _disjunct_implies(q2_, q1_):
         return False
     q2_ = Implication(q2_.consequent.functor(*head_args), q2_.antecedent)
     return is_contained_rule(q1_, q2_)
+
+
+@lru_cache(maxsize=1024)
+def _datalog_rules(query):
+    """The rules of `query`, converted once: the containments of a union
+    or of the terms of inclusion–exclusion compare each query to many."""
+    return convert_pos_logic_query_to_datalog_rules(query, Symbol.fresh())
 
 
 def convert_pos_logic_query_to_datalog_rules(query, head):

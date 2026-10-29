@@ -147,10 +147,7 @@ class FeedbackStore:
         row["steps"] = json.dumps(row["steps"] or [])
         row.update(id=uuid.uuid4().hex, created=_now())
         with self._connect() as db:
-            db.execute(
-                f"INSERT INTO answers ({', '.join(row)}) "
-                f"VALUES ({', '.join(':' + name for name in row)})", row,
-            )
+            _insert(db, "answers", row)
         return row["id"]
 
     def add_feedback(self, answer_id: str, data: dict) -> str:
@@ -165,10 +162,7 @@ class FeedbackStore:
                 "SELECT 1 FROM answers WHERE id = ?", (answer_id,)
             ).fetchone():
                 raise KeyError(answer_id)
-            db.execute(
-                f"INSERT INTO feedback ({', '.join(row)}) "
-                f"VALUES ({', '.join(':' + name for name in row)})", row,
-            )
+            _insert(db, "feedback", row)
         return row["id"]
 
     def answers(self, engine=None, status=None, limit=None, offset=0):
@@ -230,11 +224,27 @@ def training_pair(record: dict):
     }
 
 
+def _insert(db, table, row):
+    """Insert the *row*, a dict, into *table*."""
+    db.execute(
+        f"INSERT INTO {table} ({', '.join(row)}) "
+        f"VALUES ({', '.join(':' + name for name in row)})", row,
+    )
+
+
 def export_records(store: FeedbackStore, engine=None):
     """Yield the answers with their ratings and their training pair."""
     for record in store.answers(engine):
         record["training"] = training_pair(record)
         yield record
+
+
+def export_jsonl(store: FeedbackStore, engine=None) -> str:
+    """Return the answers with their ratings, a JSON record per line."""
+    return "".join(
+        json.dumps(record) + "\n"
+        for record in export_records(store, engine)
+    )
 
 
 def examples_yaml(store: FeedbackStore, engine=None) -> str:
@@ -345,10 +355,10 @@ class Handler(BaseHTTPRequestHandler):
                 given.encode(), f"Bearer {token}".encode()
             ):
                 return self._error(401, "admin token required")
-            self._send(200, "".join(
-                json.dumps(record) + "\n"
-                for record in export_records(store, params.get("engine"))
-            ), "application/x-ndjson")
+            self._send(
+                200, export_jsonl(store, params.get("engine")),
+                "application/x-ndjson"
+            )
         else:
             self._error(404, "not found")
 
@@ -422,10 +432,7 @@ def main(argv=None) -> None:
         store = FeedbackStore(args.db)
         text = examples_yaml(store, args.engine) if (
             args.format == "examples"
-        ) else "".join(
-            json.dumps(record) + "\n"
-            for record in export_records(store, args.engine)
-        )
+        ) else export_jsonl(store, args.engine)
         if args.output:
             Path(args.output).write_text(text, encoding="utf-8")
         else:

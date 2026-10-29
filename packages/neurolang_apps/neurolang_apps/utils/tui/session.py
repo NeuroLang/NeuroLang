@@ -574,7 +574,7 @@ def rerun_last_query(app, **flags) -> None:
     """
     Run the last query again, in a scope, with the execution *flags*.
 
-    The flags are those of :func:`~neurolang.utils.cli._execute_program`,
+    The flags are those of :func:`~neurolang_apps.utils.cli._execute_program`,
     such as ``dry_run``; errors and warnings are reported as when it
     first ran.
     """

@@ -1184,6 +1184,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         tuple_type = type_system.get_args(type_system.get_args(
             expression.relation.type)[0]
         )
+        if len(tuple_type) != len(new_relation.columns):
+            # An empty relation is typed AbstractSet[Tuple].
+            return self._build_relation_constant(new_relation)
         if tuple_type[null_index] is Unknown:
             tuple_type = (
                 tuple_type[:null_index] +

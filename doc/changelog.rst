@@ -17,6 +17,15 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**Internal:**
+
+* Helpers reused instead of repeated: the conjuncts of a formula and the
+  selection of a plan by comparisons in the probabilistic lifting, the
+  aggregate types of the magic sets, the pandas reductions table, the
+  Euclidean join's index type, the export, the insert, the ``extends`` and
+  the missing optional dependency of the apps; docstrings of the apps name
+  ``neurolang_apps``.
+
 **Performance:**
 
 * A probability over the choice of a study with a peak within a radius of

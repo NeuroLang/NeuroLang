@@ -2,7 +2,7 @@
 Command-line interface for NeuroLang query execution.
 
 Provides a ``neurolang-query`` command that initializes a NeuroLang engine
-from the :mod:`engine registry <neurolang.utils.engine_registry>` and
+from the :mod:`engine registry <neurolang_apps.utils.engine_registry>` and
 executes Datalog queries from arguments, files, or standard input.
 
 Usage
@@ -1134,7 +1134,7 @@ def _print_result(result, args, sort_by, column_names=None) -> None:
 def _export_session(args, nl, result, column_names, program):
     """
     Return the headless session of the REPL's ``.save`` and ``.view``
-    commands (:mod:`neurolang.utils.tui.nifti`) holding the *result* of
+    commands (:mod:`neurolang_apps.utils.tui.nifti`) holding the *result* of
     *program*: its engine, its result blocks with the sorts of their
     columns, and consoles on the standard error.
     """
@@ -1191,16 +1191,11 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
     try:
         from neurolang_apps.utils.tui import nifti
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] not in (
-            "prompt_toolkit", "rich"
-        ):
-            raise
-        print(
-            "Error: --save and --view need the optional dependencies of "
-            'the interactive mode. Install them with:\n    pip install '
-            '"neurolang[tui]"', file=sys.stderr,
+        _exit_missing(
+            exc, TUI_DEPENDENCIES,
+            "--save and --view need the optional dependencies of the "
+            "interactive mode", "tui",
         )
-        sys.exit(1)
     session = _export_session(args, nl, result, column_names, program)
     if not session.results:
         print("Error: the query gave no result to save.", file=sys.stderr)
@@ -1295,9 +1290,22 @@ def _tui_settings(args, tui, argv=()):
 TUI_DEPENDENCIES = ("prompt_toolkit", "rich")
 
 
+def _exit_missing(exc, dependencies, needs, extra):
+    """Raise the ImportError *exc*, unless it is of one of the optional
+    *dependencies*: exit with status 1 and a message telling how to
+    install the *extra* which has them."""
+    if (exc.name or "").split(".")[0] not in dependencies:
+        raise exc
+    print(
+        f"Error: {needs}. Install {'them' if len(dependencies) > 1 else 'it'}"
+        f' with:\n    pip install "neurolang[{extra}]"', file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def _import_tui():
     """
-    Return the :mod:`neurolang.utils.tui` module of the interactive REPL.
+    Return the :mod:`neurolang_apps.utils.tui` module of the interactive REPL.
 
     If its optional dependencies are missing, exit with status 1 and a
     message telling how to install them.
@@ -1305,15 +1313,11 @@ def _import_tui():
     try:
         from neurolang_apps.utils import tui
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] not in TUI_DEPENDENCIES:
-            raise
-        print(
-            "Error: the interactive mode needs the optional dependencies "
-            f"{' and '.join(TUI_DEPENDENCIES)}. Install them with:\n"
-            '    pip install "neurolang[tui]"',
-            file=sys.stderr,
+        _exit_missing(
+            exc, TUI_DEPENDENCIES,
+            "the interactive mode needs the optional dependencies "
+            f"{' and '.join(TUI_DEPENDENCIES)}", "tui",
         )
-        sys.exit(1)
     return tui
 
 
@@ -1461,13 +1465,10 @@ def _run_ask(args) -> None:
         )
         from neurolang_apps.utils.llm.feedback import feedback_client
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] != "httpx":
-            raise
-        print(
-            "Error: --ask needs the optional dependency httpx. Install it "
-            'with:\n    pip install "neurolang[llm]"', file=sys.stderr,
+        _exit_missing(
+            exc, ("httpx",),
+            "--ask needs the optional dependency httpx", "llm",
         )
-        sys.exit(1)
     try:
         config = load_config(args.llm_config)
         provider = config.provider(args.llm_provider)

@@ -15,6 +15,8 @@ from ..logic.expression_processing import (
 )
 from ..utils.orderedset import OrderedSet
 from . import (
+    FALSE,
+    TRUE,
     Conjunction,
     Constant,
     Disjunction,
@@ -108,6 +110,44 @@ class RemoveTrivialOperationsMixin(PatternWalker):
     @add_match(Negation(Negation(...)))
     def remove_double_negation(self, expression):
         return self.walk(expression.formula.formula)
+
+
+class NegationOfTruthValueMixin(PatternWalker):
+    """¬⊥ ≡ ⊤ and ¬⊤ ≡ ⊥."""
+
+    @add_match(Negation(Constant[bool]))
+    def negation_of_truth_value(self, negation):
+        return Constant[bool](not negation.formula.value)
+
+
+class SimplifyTruthValuesMixin(NegationOfTruthValueMixin):
+    """
+    Simplify the truth values of a formula by the equivalences
+    ⊥ ∧ φ ≡ ⊥, ⊤ ∧ φ ≡ φ, ¬⊥ ≡ ⊤, ¬⊤ ≡ ⊥ and ∃x ⊥ ≡ ⊥.
+    """
+
+    @add_match(Conjunction, lambda conjunction: FALSE in conjunction.formulas)
+    def false_conjunct(self, conjunction):
+        return FALSE
+
+    @add_match(Conjunction, lambda conjunction: TRUE in conjunction.formulas)
+    def true_conjunct(self, conjunction):
+        formulas = tuple(f for f in conjunction.formulas if f != TRUE)
+        if len(formulas) == 0:
+            return TRUE
+        return self.walk(Conjunction(formulas))
+
+    @add_match(ExistentialPredicate)
+    def existential(self, existential):
+        """∃x ⊥ ≡ ⊥: the quantifier of a constant is not built by
+        `LogicExpressionWalker`, which rebuilds the quantifier of a body
+        simplified to ⊥, so that the body is simplified here."""
+        body = self.walk(existential.body)
+        if body == FALSE:
+            return FALSE
+        if body is existential.body:
+            return existential
+        return self.walk(existential.apply(existential.head, body))
 
 
 def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
@@ -315,6 +355,11 @@ class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
     the query is in FO with Negation Existential as only quantifier.
     """
     pass
+
+
+class FactorConjunctQuantifiers(FactorQuantifiersMixin, IdentityWalker):
+    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ), for the conjuncts of a formula, the
+    variables of X being renamed apart from those of A."""
 
 
 class DesambiguateQuantifiedVariables(LogicExpressionWalker):

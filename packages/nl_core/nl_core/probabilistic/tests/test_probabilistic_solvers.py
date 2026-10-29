@@ -669,8 +669,6 @@ def test_repeated_antecedent_predicate_symbol(solver):
 
     if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotHierarchicalQueryException)
-    elif solver is dalvi_suciu_lift:
-        context = pytest.raises(NonLiftableException)
     else:
         context = nullcontext()
 
@@ -1700,10 +1698,10 @@ def test_small_dichotomy_fails_on_fact_variable_in_no_choice():
         )
 
 
-def test_dalvi_suciu_fails_builtin():
+def test_dalvi_suciu_selects_on_a_comparison_of_answer_variables():
     solver = dalvi_suciu_lift
     pfact_as_sets = {
-        P: {(0.9, 3, 2), (0.8, 3, 1)},
+        P: {(0.9, 2, 1), (0.8, 1, 2)},
     }
     pchoice_as_sets = {
         Q: {(0.6, 1), (0.4, 2)},
@@ -1718,8 +1716,9 @@ def test_dalvi_suciu_fails_builtin():
             pred_symb, pchoice_as_set
         )
     query = Implication(ans(x, y), Conjunction((Q(x), P(x, y), GT(x, y))))
-    with pytest.raises(UnsupportedSolverError):
-        solver.solve_succ_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(0.4 * 0.9, 2, 1)], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_dalvi_suciu_comparison_in_existential():

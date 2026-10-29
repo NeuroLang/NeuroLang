@@ -1045,12 +1045,7 @@ class NamedRelationalAlgebraFrozenSet(
 
     @staticmethod
     def _apply_aggregation(groups, fun):
-        fun_dict = {
-            len: 'count',
-            max: 'max',
-            min: 'min',
-            sum: 'sum'
-        }
+        fun_dict = {len: 'count', **_BUILTIN_REDUCTIONS}
         if fun in fun_dict:
             res = getattr(groups, fun_dict[fun])()
             res = res.iloc[:, 0]
@@ -1257,6 +1252,18 @@ class NamedRelationalAlgebraFrozenSet(
             )
 
         col_types = self._extract_unified_column_types(other)
+        # Integers and floats in a column are floats, not integers, which
+        # would truncate the floats.
+        numbers = {
+            col: pd.core.dtypes.cast.find_common_type(
+                [self._container[col].dtype, other._container[col].dtype]
+            )
+            for col in self._container.columns
+            if self._container[col].dtype.kind in "iuf" and
+            other._container[col].dtype.kind in "iuf" and
+            self._container[col].dtype != other._container[col].dtype
+        }
+        col_types.update(numbers)
 
         new_container = pd.concat(
             [
@@ -1266,7 +1273,7 @@ class NamedRelationalAlgebraFrozenSet(
             ignore_index=True,
         )
 
-        self._keep_column_types(new_container)
+        self._keep_column_types(new_container, skip=numbers)
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=True,
