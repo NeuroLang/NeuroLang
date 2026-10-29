@@ -450,6 +450,32 @@ Checks
    query they lift.
 
 
+Comparisons with a constant
+   Shattering moves a comparison of a variable with a constant, such as
+   :math:`y > 1`, into the atoms of a tuple-independent relation with that
+   variable, as it does for :math:`y \neq 1`. Each comparison
+   :math:`R.i\ \theta\ c` of a column of :math:`R` with a constant splits
+   the tuples of :math:`R` into those with :math:`R.i\ \theta\ c` and those
+   with its complement, :math:`<` and :math:`\geq`, :math:`\leq` and
+   :math:`>`, :math:`\neq` and :math:`=`, and the relation is split by the
+   product of these partitions and of that of its constants. An atom of
+   :math:`R` is replaced by the disjunction of the atoms of the sets
+   compatible with its constants and with the comparisons of its
+   variables in its conjunction, which are then removed: a comparison of a
+   variable in no such atom is kept. A comparison outside the
+   existentials of its variable's atoms, as in :math:`\exists y\,
+   (\exists x\, (R(x) \land S(x, y)) \land y > 1)` once the quantifiers
+   are pushed down, is first moved into them, :math:`C \land \exists x\,
+   \psi \equiv \exists x\, (C \land \psi)`, :math:`x` being renamed apart
+   from the variables of :math:`C`
+   (:class:`~neurolang.logic.transformations.FactorConjunctQuantifiers`,
+   the conjunction being then flattened),
+   unless the conjunction has a negation or a disjunction. The query
+   :math:`\exists x, y\, R(x) \land S_{>1}(x, y)` is then lifted by the
+   separator variable :math:`x`. A comparison :math:`c\ \theta\ y` is
+   first written :math:`y\ \theta'\ c`.
+
+
 Planning non-repeating queries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1260,6 +1286,21 @@ Comparisons of answer variables
    A comparison :math:`C` of free variables is true or false for an
    answer, in every world: :math:`P[(Q \land C)\theta] = P[Q\theta]` if
    :math:`C\theta` holds and 0 otherwise, which the selection computes.
+
+Comparisons with a constant
+   The sets of a relation are the cells of a product of partitions of its
+   tuples, so they are disjoint and cover the relation: each atom of the
+   query is the disjunction of the atoms of the cells it may be true in,
+   and atoms of different cells are different tuples, as shattering
+   requires [Dalvi2012]_. In a conjunction with :math:`y\ \theta\ c` and
+   an atom :math:`R(\ldots, y, \ldots)`, :math:`y` at position :math:`i`,
+   the cells with the complement of :math:`R.i\ \theta\ c` are false for
+   every value of :math:`y` satisfying the comparison, and the others
+   satisfy it: the conjunction without the comparison, with the atom
+   replaced by the disjunction of the remaining cells, is equivalent. Moving
+   the comparison into an existential is the prenex rule
+   :math:`C \land \exists x\, \psi \equiv \exists x\, (C \land \psi)`, for
+   :math:`x` not free in :math:`C`.
 
 Separator determined by a functional dependency
    Let :math:`Q = \exists y\, \varphi(y)` be a conjunctive query in which

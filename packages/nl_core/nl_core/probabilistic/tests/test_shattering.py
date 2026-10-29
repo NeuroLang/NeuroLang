@@ -7,7 +7,7 @@ from ...datalog.expression_processing import extract_logic_atoms
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Constant, Symbol
-from nl_expr.logic import Conjunction, Negation
+from nl_expr.logic import Conjunction, ExistentialPredicate, Negation
 from ...relational_algebra import Projection, Selection, int2columnint_constant
 from ...relational_algebra.optimisers import (
     PushUnnamedSelectionsUp,
@@ -21,6 +21,7 @@ RAO = RelationalAlgebraOptimiser()
 
 EQ = Constant(operator.eq)
 NE = Constant(operator.ne)
+GT = Constant(operator.gt)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -266,5 +267,27 @@ def test_shatter_binary_inequality(R1, R4):
     assert all(
         all(isinstance(arg, Symbol) for arg in atom.args)
         for atom in extract_logic_atoms(res)
+    )
+    assert ra_sol == shattered_sol
+
+
+def test_shatter_order_comparison_outside_an_existential(R4):
+    """x > f ∧ ∃z Q(x, z) ≡ ∃z (Q(x, z) ∧ x > f), whose comparison is in
+    the sets of Q."""
+    query = Conjunction((
+        GT(x, Constant("f")), ExistentialPredicate(z, Q(x, z))
+    ))
+    symbol_table = dict({Q: R4})
+    ra_sol = RelationalAlgebraSolver(symbol_table).walk(
+        TranslateToNamedRA().walk(query)
+    )
+
+    res = shatter_constants(query, symbol_table, True)
+
+    assert all(
+        isinstance(atom.functor, Symbol) for atom in extract_logic_atoms(res)
+    )
+    shattered_sol = RelationalAlgebraPushInSolver(symbol_table).walk(
+        TranslateToNamedRA().walk(res)
     )
     assert ra_sol == shattered_sol

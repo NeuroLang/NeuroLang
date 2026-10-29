@@ -22,7 +22,6 @@ from nl_expr.exceptions import (
 )
 from nl_expr.expression_walker import (
     ExpressionWalker,
-    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -54,7 +53,7 @@ from nl_expr.logic.transformations import (
     AbsorbAssertedConjuncts,
     CollapseConjunctions,
     ExtractConjunctiveQueryWithNegation,
-    FactorQuantifiersMixin,
+    FactorConjunctQuantifiers,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
@@ -724,11 +723,6 @@ def _projected_plan(
             for v in sorted(free_variables, key=lambda v: v.name)
         )
     )
-
-
-class FactorConjunctQuantifiers(FactorQuantifiersMixin, IdentityWalker):
-    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ), for the conjuncts of a formula, the
-    variables of X being renamed apart from those of A."""
 
 
 def _existential_variables_and_body(formula):

@@ -402,3 +402,33 @@ def test_union_of_a_deterministic_and_a_probabilistic_rule(solvers):
         nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
     )
     assert result == pytest.approx({0: 1.0, 2: 0.5, 3: 0.62})
+
+
+@pytest.mark.parametrize("comparison, expected", [
+    ("y > 1", 1 - (1 - 0.5 * 0.7) * (1 - 0.4 * 0.8)),
+    ("1 < y", 1 - (1 - 0.5 * 0.7) * (1 - 0.4 * 0.8)),
+    ("y != 1", 1 - (1 - 0.5 * 0.7) * (1 - 0.4 * 0.8)),
+    ("y >= 3", 0.4 * 0.8),
+    ("y <= 1", 0.5 * 0.6),
+])
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_comparison_with_a_constant_of_a_bound_variable(
+    solvers, comparison, expected
+):
+    """
+    The comparison of y with a constant, outside the existential of x
+    once the quantifiers are pushed down, selects the tuples of S.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples([(0.5, 1), (0.4, 2)], name="R")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, 1, 1), (0.7, 1, 2), (0.8, 2, 3)], name="S"
+    )
+    nl.execute_datalog_program(
+        f"q(PROB) :- R(x), S(x, y), ({comparison})"
+    )
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(expected)
