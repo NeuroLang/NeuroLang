@@ -2223,10 +2223,6 @@ class IsPureLiftedPlan(PatternWalker):
     def unary(self, expression):
         return self.walk(expression.relation)
 
-    @add_match(ExtendedProjection)
-    def extended_projection(self, expression):
-        return self.walk(expression.relation)
-
     @add_match(...)
     def other(self, expression):
         return True
