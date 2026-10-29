@@ -166,6 +166,12 @@ nl = engine_registry.build_engine(
 )
 repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
 
+# The steps of the AI assistant go to the page as they happen, while this
+# worker is busy with the question: postMessage does not wait for it.
+if hasattr(repl, "set_event_sink"):
+    import js
+    repl.set_event_sink(lambda text: js.postMessage(js.JSON.parse(text)))
+
 def submit(text):
     reply = repl.submit(text)
     return json.dumps(

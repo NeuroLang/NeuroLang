@@ -143,6 +143,9 @@ class InteractiveTuiApp:
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
+        # Where the events of the assistant are sent as they happen (a
+        # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
+        self.agent_events = None
         self.assistant = AssistantState(
             self.settings.llm_config, self.settings.llm_provider
         )

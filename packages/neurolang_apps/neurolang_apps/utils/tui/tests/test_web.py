@@ -199,6 +199,43 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     assert repl.submit("1").prompt == ""
 
 
+def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
+    import json
+
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([
+        [("check_query", {"query": "ans(x) :- person(x, n)"})],
+        [("final_answer", {
+            "query": "ans(x) :- person(x, n)", "explanation": "Everyone.",
+        })],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    sent = []
+    repl.set_event_sink(lambda text: sent.append(json.loads(text)))
+    reply = repl.submit(".ask --react Who is there?")
+    assert not reply.failed
+    assert {event["type"] for event in sent} == {"agent"}
+    kinds = [event["event"] for event in sent]
+    assert kinds[0] == "ask" and kinds[-1] == "done"
+    assert sent[0]["strategy"] == "react"
+    # The reply of the model comes before the step of its tool call.
+    first = kinds.index("reply")
+    assert kinds[first - 1] == "request"
+    assert kinds[first + 1] == "step"
+    assert sent[first]["tool_calls"][0]["name"] == "check_query"
+    step = sent[first + 1]
+    assert step["action"] == "check_query" and step["observation"]
+    assert sent[-1]["valid"] and sent[-1]["query"].startswith("ans(x)")
+    assert all("messages" not in event for event in sent)
+    repl.set_event_sink(None)
+    sent.clear()
+    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS])
+    repl.submit(".ask --icl Who is there?")
+    assert sent == []
+
+
 def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
     import httpx
 

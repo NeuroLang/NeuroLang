@@ -54,6 +54,22 @@
   #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   #llm label { display: flex; gap: .4rem; align-items: center; }
   #llm-error { color: var(--bad); margin: 0; }
+  #live { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .4rem .75rem; }
+  #live[hidden] { display: none; }
+  #live summary { color: var(--text); }
+  #live.running summary::after { content: " · working…"; color: var(--accent); }
+  .agent-log { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; font: 13px var(--mono); max-height: 28rem; overflow: auto; }
+  .agent-head, .agent-thought, .agent-obs { color: var(--muted); }
+  .agent-thought { font-style: italic; }
+  .agent-call { color: var(--text); }
+  .agent-query { margin: .25rem 0 .25rem 1rem; padding: .4rem .6rem; background: var(--term); color: #e6edf3; border-radius: 6px; overflow-x: auto; }
+  .agent-obs { margin-left: 1rem; }
+  .agent-obs summary { cursor: pointer; }
+  .agent-obs pre { margin: .25rem 0 0; white-space: pre-wrap; }
+  .agent-pending .agent-obs { color: var(--accent); }
+  .agent-wait { color: var(--accent); }
+  .agent-done { color: var(--ok); font-weight: 600; }
+  .agent-bad { color: var(--bad); }
   .note { margin: 0; font-size: .85rem; max-width: 46rem; }
   #out, #banner { overflow-x: auto; background: var(--term); border-radius: 6px; color: #e6edf3; }
   #out:empty { display: none; }
@@ -125,6 +141,11 @@
       <p id="llm-error" role="alert" hidden></p>
       <p class="note">The key stays in this tab (or on this device, if you ask) and goes only to the provider, with your question, the engine's relations and previews of query rows. <code>.ask</code> puts the query it writes in the box below.</p>
     </form>
+  </details>
+
+  <details id="live" hidden>
+    <summary id="live-summary">Assistant steps</summary>
+    <ol id="live-log" class="agent-log" aria-live="polite"></ol>
   </details>
 
   <form id="code">

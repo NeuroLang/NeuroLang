@@ -223,6 +223,42 @@ def _step_printer(app, language: str):
     return print_step
 
 
+# The events the assistant sends to ``app.agent_events`` while it works,
+# dicts with an ``event`` key: ``ask`` (question, provider, model,
+# strategy), then for each request to the model ``request`` (call) and
+# ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
+# answered and its tool is about to run), and for each step of the agent
+# ``step`` (thought, action, arguments, observation); ``done`` (valid,
+# query, explanation, error, calls, tokens, seconds, verified) ends them.
+AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
+
+
+def _step_event(step) -> dict:
+    """Return the ``step`` event of the finished *step* of the agent."""
+    return {
+        "event": "step", "thought": step.thought, "action": step.action,
+        "arguments": step.arguments, "observation": step.observation,
+    }
+
+
+def _also_sending(on_step, events):
+    """Return *on_step* sending the ``step`` event of each step too."""
+    def sending(step) -> None:
+        on_step(step)
+        events(_step_event(step))
+    return sending
+
+
+def _done_event(result) -> dict:
+    """Return the ``done`` event of the *result* of the agent."""
+    return {
+        "event": "done", "valid": result.valid, "query": result.query,
+        "explanation": result.explanation, "error": result.error,
+        "calls": result.calls, "tokens": sum(result.usage.values()),
+        "seconds": result.seconds, "verified": result.verified,
+    }
+
+
 def _switch_language(app, language: str) -> None:
     """Switch the REPL to *language*, if it is not its mode, and say so."""
     squall = language == "squall"
@@ -337,20 +373,38 @@ def _run_assistant(
         steps = steps or state.steps
         if steps:
             assistant = replace(assistant, max_steps=steps)
+        client, on_step = state.client, _step_printer(app, language)
+        events = app.agent_events
+        if events:
+            from neurolang_apps.utils.llm import make_client
+            from neurolang_apps.utils.llm.trace import TracingClient
+
+            client = TracingClient(
+                client or make_client(provider, assistant.timeout), events
+            )
+            on_step = _also_sending(on_step, events)
         agent = make_agent(
             app._nl, provider, assistant, language,
             strategy or state.strategy,
             engine_name=app.settings.engine_name,
-            loaded=app.loaded_relations, client=state.client,
-            on_step=_step_printer(app, language),
+            loaded=app.loaded_relations, client=client, on_step=on_step,
         )
         app.err_console.print(
             f"[dim]Asking {provider.name} ({provider.model or provider.api}"
             f", {agent.strategy})...[/dim]"
         )
+        if events:
+            events({
+                "event": "ask", "question": question,
+                "provider": provider.name,
+                "model": provider.model or provider.api,
+                "strategy": agent.strategy,
+            })
         result = call_interruptibly(
             lambda: agent.run(question), app._print_stuck_hint
         )
+        if events:
+            events(_done_event(result))
     except KeyboardInterrupt:
         app.failed = True
         app.console.print("[yellow]Interrupted[/yellow]")

@@ -4,6 +4,7 @@
 import { History } from "./history.js";
 import { LlmSettings } from "./llm_settings.js";
 import { renderTable } from "./table_view.js";
+import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -24,6 +25,18 @@ const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
 
+// The work of the AI assistant, shown as it comes from the worker.
+const agentLog = new AgentLog();
+const live = $("live");
+const liveLog = $("live-log");
+function showAgent() {
+  live.hidden = false;
+  live.classList.toggle("running", agentLog.running);
+  $("live-summary").textContent = agentLog.count ? `Assistant steps (${agentLog.count})` : "Assistant steps";
+  renderAgentLog(agentLog, liveLog);
+  if (agentLog.running) liveLog.scrollTop = liveLog.scrollHeight;
+}
+
 // A long step shows how long it has lasted, so that a slow one does not look stuck.
 const step = { message: "", since: 0 };
 const setStatus = (message, state = "") => {
@@ -33,6 +46,7 @@ const setStatus = (message, state = "") => {
 setInterval(() => {
   const seconds = Math.round((Date.now() - step.since) / 1000);
   if (statusBox.className === "busy" && seconds >= 5) statusBox.textContent = `${step.message} (${seconds} s)`;
+  tickWaiting(liveLog);
 }, 1000);
 const html = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }); // rich escapes its text
 const setBusy = (busy) => {
@@ -98,6 +112,8 @@ function start() {
   $("version-summary").textContent = ref ? `${repo} at ${ref}` : "the build of this page";
   out.replaceChildren();
   results.classList.remove("has");
+  agentLog.reset();
+  live.hidden = true;
   setStatus("Starting…", "busy");
   setBusy(true);
   worker = new Worker("worker.js", { type: "module" });
@@ -114,6 +130,9 @@ function start() {
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
       setBusy(false);
+    } else if (data.type === "agent") {
+      agentLog.apply(data);
+      showAgent();
     } else if (data.type === "llm") {
       if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
     } else if (data.type === "reply") {

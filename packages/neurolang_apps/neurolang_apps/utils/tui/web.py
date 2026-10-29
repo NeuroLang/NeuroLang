@@ -19,6 +19,7 @@ no one else.
 """
 
 import io
+import json
 import math
 import tempfile
 from contextlib import contextmanager
@@ -115,6 +116,10 @@ class Reply:
     failed: bool = False
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
+
+
+# What the events of the assistant carry that the page does not show.
+_PRIVATE_EVENT_KEYS = ("messages", "tools", "temperature", "start")
 
 
 def _kind(column: pd.Series) -> str:
@@ -234,6 +239,25 @@ class WebRepl:
         self.set_llm(
             provider.name, "", provider.model, provider.base_url
         )
+
+    def set_event_sink(self, send) -> None:
+        """
+        Send the events of the assistant to *send*, as it works.
+
+        *send* is called with the JSON text of each event (see
+        :data:`~neurolang_apps.utils.tui.assistant.AGENT_EVENTS`) while a
+        submission is running, so that the page can show the steps before
+        the reply. The messages of the conversation are left out of them:
+        the page does not show them, and ``"type": "agent"`` tells the page
+        what the message is. ``None`` stops sending.
+        """
+        def forward(event: dict) -> None:
+            kept = {
+                k: v for k, v in event.items() if k not in _PRIVATE_EVENT_KEYS
+            }
+            send(json.dumps({"type": "agent", **kept}, default=str))
+
+        self.app.agent_events = forward if send else None
 
     def banner(self) -> str:
         """Return the HTML of the REPL's welcome: its command and banner."""
