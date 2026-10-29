@@ -357,6 +357,11 @@ class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
     pass
 
 
+class FactorConjunctQuantifiers(FactorQuantifiersMixin, IdentityWalker):
+    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ), for the conjuncts of a formula, the
+    variables of X being renamed apart from those of A."""
+
+
 class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
     Replaces each quantified variable to a fresh one.
