@@ -75,7 +75,7 @@ def build_engine(data_dir: Path) -> None:
     those of the system: the download is then tried again with them.
     """
     import requests
-    from neurolang.utils import engine_registry
+    from neurolang_apps.utils import engine_registry
 
     try:
         engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)

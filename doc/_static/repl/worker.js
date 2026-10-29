@@ -4,7 +4,7 @@
 //
 // It loads Pyodide, gets NeuroLang, installs the Neurosynth data it ships,
 // builds the engine, and answers the page's submissions with the HTML
-// that the REPL's output renders to (neurolang.utils.tui.web.WebRepl).
+// that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //
 // NeuroLang is, by default, the wheels of its packages built with the
 // documentation (see doc/make_repl_bundle.py). When the page is asked for a
@@ -145,17 +145,21 @@ async function start({ repo, ref, full }) {
   await pyodide.runPythonAsync(`
 import json
 from pathlib import Path
-from neurolang.utils import engine_registry
-from neurolang.utils.tui.web import WebRepl
+try:
+    from neurolang_apps.utils import engine_registry
+    from neurolang_apps.utils.tui import web
+except ImportError:  # a ref from before the split into packages
+    from neurolang.utils import engine_registry
+    from neurolang.utils.tui import web
+WebRepl = web.WebRepl
 
 # The precomputed analyses (lift, ratios...) fill gigabytes, more than
 # a tab is given: they are left out unless the page asks for them.
 yaml_path = None
 if not ${full ? "True" : "False"}:
     try:
-        from neurolang.utils.tui.web import lightweight_engines_yaml
-        yaml_path = lightweight_engines_yaml("/tmp")
-    except ImportError:  # a version that predates it
+        yaml_path = web.lightweight_engines_yaml("/tmp")
+    except AttributeError:  # a version that predates it
         pass
 nl = engine_registry.build_engine(
     "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path
@@ -173,7 +177,10 @@ def submit(text):
 # The providers of the AI assistant, for the page's form: none when this
 # version of NeuroLang predates it.
 try:
-    from neurolang.utils.llm.browser import providers_for_form
+    try:
+        from neurolang_apps.utils.llm.browser import providers_for_form
+    except ImportError:
+        from neurolang.utils.llm.browser import providers_for_form
 except ImportError:
     providers_for_form = list
 
