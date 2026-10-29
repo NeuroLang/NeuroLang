@@ -243,12 +243,29 @@ Inclusion–exclusion
       \sum_{\emptyset \neq S \subseteq \{1..n\}}
       (-1)^{|S|+1}\, P\Big[\bigvee_{i \in S} Q_i\Big].
 
-   Terms whose disjunctions are equivalent are merged and their
-   coefficients added, using the Möbius function of the lattice of the
-   disjunctions ordered by containment [Dalvi2012]_. This cancellation
-   removes the terms that may be #P-hard while their sum is not. The rule
-   is applied only when all the conjuncts have the same free variables,
-   for which the containment test is sound.
+   :func:`~neurolang.probabilistic.dalvi_suciu_lift.inclusion_exclusion_conjunction`
+   converts each of the :math:`2^n - 1` disjunctions
+   :math:`f(S) = \bigvee_{i \in S} Q_i` to disjunctive normal form, and
+   orders them (``_formulas_weights``): :math:`T \preceq S` when
+   :math:`T \subseteq S`, or when
+   :func:`~neurolang.probabilistic.containment.is_contained` finds that
+   :math:`f(T)` implies :math:`f(S)`, the relation being then closed
+   transitively. The test is sound but not complete: a negated atom
+   :math:`\lnot R(\bar x)` is matched only by the same negated atom,
+   through the relation :math:`\bar R` of ``NegatedSymbol``
+   (``negations_as_atoms``). The disjunctions contained in each other are
+   one term, lifted once, and the weight of each term is
+   :math:`\mu(S) = 1 - \sum_{T \prec S} \mu(T)`
+   (``mobius_weights``, ``mobius_function``), so that a term whose weight
+   is 0 is not lifted. These cancellations remove terms that may be
+   #P-hard while the conjunction is not [Dalvi2012]_; a term that is not
+   cancelled and that the algorithm cannot lift is marked ``NonLiftable``,
+   which makes the plan impure (``is_pure_lifted_plan``), and the query is
+   declined unless another rule lifts it. The rule is applied only when
+   all the conjuncts have the same free variables
+   (``_have_the_same_free_variables``).
+   :ref:`inclusion-exclusion` proves that the plan is exact although the
+   containment test is not complete.
 
 
 Disjoint projection on a probabilistic choice
@@ -1314,6 +1331,11 @@ Algorithms from the literature
    queries on tuple-independent databases, and Suciu et al. [Suciu2011]_
    (section 4.3.1) for the disjoint projection on probabilistic choices,
    which the disjoint separator applies to unions (its proof is above).
+
+Inclusion–exclusion
+   The weights computed by ``_formulas_weights`` from an incomplete
+   containment test give the probability of the conjunction:
+   :ref:`inclusion-exclusion` proves it.
 
 Ranking
    Dalvi and Suciu prove the ranked query equivalent to the query, and its

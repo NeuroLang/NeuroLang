@@ -1,7 +1,7 @@
 import logging
 from collections import Counter
 from functools import reduce
-from itertools import chain, combinations
+from itertools import chain, combinations, product
 from typing import AbstractSet
 
 import numpy as np
@@ -2406,54 +2406,84 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
         plan for the logic expression.
     """
     formula_powerset = []
-    for formula in powerset(expression.formulas):
-        if len(formula) == 0:
+    for subset in powerset(range(len(expression.formulas))):
+        if len(subset) == 0:
             continue
 
-        formula = RTO.walk(convert_ucq_to_ccq(
-            Disjunction(tuple(formula)), transformation="DNF")
+        formula = RTO.walk(
+            convert_ucq_to_ccq(
+                Disjunction(tuple(expression.formulas[i] for i in subset)),
+                transformation="DNF",
+            )
         )
-        formula_powerset.append(formula)
-    formulas_weights = _formulas_weights(formula_powerset)
-    new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), weight)
-        for formula, weight in formulas_weights.items()
-        if weight != 0
-    ))
+        formula_powerset.append((frozenset(subset), formula))
+    formulas = dict(formula_powerset)
+    formulas_weights, _ = _formulas_weights(formula_powerset)
+    new_formulas, weights = zip(
+        *(
+            (dalvi_suciu_lift(formulas[subset], symbol_table), weight)
+            for subset, weight in formulas_weights.items()
+            if weight != 0
+        )
+    )
 
     return rap.WeightedNaturalJoin(
-        tuple(new_formulas),
-        tuple(Constant[int](w) for w in weights)
+        tuple(new_formulas), tuple(Constant[int](w) for w in weights)
     )
 
 
 def _formulas_weights(formula_powerset):
-    # Using list set instead of a dictionary
-    # due to a strange bug in dictionary lookups with Expressions
-    # as keys
-    formula_containments = [
-        set()
-        for formula in formula_powerset
+    """Möbius weights of the disjunctions of the clauses of a conjunction,
+    see :ref:`inclusion-exclusion`.
+
+    Parameters
+    ----------
+    formula_powerset : sequence of (frozenset, LogicExpression)
+        each non-empty set `S` of indices of clauses, with the
+        disjunction of these clauses.
+
+    Returns
+    -------
+    dict, dict
+        the weight of the representative set `S` of each class of
+        mutually contained disjunctions, and the representatives
+        strictly below it. `T ≼ S` when `T ⊆ S`, or when `is_contained`
+        finds that the disjunction of `T` implies that of `S`, closed
+        transitively: the order contains the inclusion of the subsets,
+        and is contained in the implication of the disjunctions.
+    """
+    subsets = [subset for subset, _ in formula_powerset]
+    formulas = [formula for _, formula in formula_powerset]
+    below = [
+        [
+            subsets[j] <= subsets[i] or is_contained(formulas[i], formulas[j])
+            for j in range(len(subsets))
+        ]
+        for i in range(len(subsets))
     ]
+    for k, i, j in product(range(len(subsets)), repeat=3):
+        below[i][j] = below[i][j] or (below[i][k] and below[k][j])
 
-    for i, f0 in enumerate(formula_powerset):
-        for j, f1 in enumerate(formula_powerset[i + 1:], start=i + 1):
-            for i0, c0, i1, c1 in ((i, f0, j, f1), (j, f1, i, f0)):
-                if (
-                    c0 not in formula_containments[i1] and
-                    is_contained(c0, c1)
-                ):
-                    formula_containments[i0] |= (
-                        {c1} | formula_containments[i1] - {c0}
-                    )
-
-    fcs = {
-        formula: containment
-        for formula, containment in
-        zip(formula_powerset, formula_containments)
+    representative = [
+        max(
+            (
+                subsets[j]
+                for j in range(len(subsets))
+                if below[i][j] and below[j][i]
+            ),
+            key=lambda subset: (len(subset), sorted(subset)),
+        )
+        for i in range(len(subsets))
+    ]
+    order = {
+        representative[i]: {
+            representative[j]
+            for j in range(len(subsets))
+            if below[i][j] and not below[j][i]
+        }
+        for i in range(len(subsets))
     }
-    formulas_weights = mobius_weights(fcs)
-    return formulas_weights
+    return mobius_weights(order), order
 
 
 def mobius_weights(formula_containments):
