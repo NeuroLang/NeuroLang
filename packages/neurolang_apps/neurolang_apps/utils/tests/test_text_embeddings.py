@@ -630,3 +630,15 @@ def test_missing_files_are_fetched_on_demand(monkeypatch, tmp_path):
     with pytest.raises(ImportError):
         index.build()       # no cache fetched: documents need torch
     assert fetched[-1] == "idx.npz"
+
+
+def test_in_a_browser_a_missing_model_says_the_page_was_built_without(
+    monkeypatch, tmp_path
+):
+    """pip cannot install torch in a browser: the model is missing because
+    the page's bundle was built without the text embeddings."""
+    monkeypatch.setitem(sys.modules, "torch", None)
+    monkeypatch.setattr(te.sys, "platform", "emscripten")
+    with pytest.raises(ImportError, match="built without") as error:
+        te.Specter2Encoder(model_dir=tmp_path).encode_query("reading")
+    assert "pip install" not in str(error.value)

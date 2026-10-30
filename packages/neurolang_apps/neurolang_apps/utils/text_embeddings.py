@@ -71,6 +71,17 @@ def _ensure(path):
         fetch_missing(Path(path))
 
 
+# Where torch cannot be installed, the missing query model is that of the
+# page the REPL runs in.
+_MISSING_MODEL = {
+    "emscripten": (
+        "query_similarity needs the text embeddings, and this page was "
+        "built without them: its bundle has them when built with torch, or "
+        "from a directory of embeddings (see neurolang-repl-serve --help)."
+    ),
+}
+
+
 def _torch_available():
     """Whether torch can be imported."""
     try:
@@ -420,10 +431,11 @@ class Specter2Encoder:
             if path is not None:
                 _ensure(path)
             if path is None or not path.exists():
-                raise ImportError(
+                raise ImportError(_MISSING_MODEL.get(
+                    sys.platform,
                     "Text embeddings need torch, transformers and adapters: "
-                    f"{INSTALL_HINT}"
-                )
+                    f"{INSTALL_HINT}",
+                ))
             from .specter2_numpy import load
             self._numpy = load(path)
         tokenizer, encoder = self._numpy

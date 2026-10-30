@@ -177,6 +177,12 @@ def write_parts(path: Path, output: Path, name: str) -> list:
     return names
 
 
+def bundle_name(path: Path) -> str:
+    """Return the name in the bundle of the file *path* of the embeddings:
+    without ``+``, a space in the URLs of some servers."""
+    return f"{ENGINE}-{path.name.replace('+', '_')}"
+
+
 def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
     """
     Write in *output* the files of the engine's text embeddings: for each
@@ -213,7 +219,7 @@ def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
             index.build()
             for path in (model, index.cache_path):
                 files[str(path.relative_to(data_dir))] = write_parts(
-                    path, output, f"{ENGINE}-{path.name}"
+                    path, output, bundle_name(path)
                 )
     except Exception as error:  # the page works without them
         print(f"The text embeddings are left out: {error!r}")
