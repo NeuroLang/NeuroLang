@@ -26,6 +26,20 @@ class RelationalAlgebraStringExpression(str):
 # tracks both regimes.
 _ANTI_JOIN_MIN_ROWS = 20
 
+def _copy_on_write() -> bool:
+    """Whether pandas copies frames on write: always from pandas 3."""
+    if int(pd.__version__.split(".")[0]) >= 3:
+        return True
+    try:
+        return pd.get_option("mode.copy_on_write") is True
+    except Exception:  # no such option before pandas 1.5
+        return False
+
+
+# With copy-on-write, a set shares the columns of the frame it is made
+# from, which cannot change it; without, it copies them.
+_COPY_ON_WRITE = _copy_on_write()
+
 # Python's reductions, which pandas runs per group in Python, and the
 # pandas reductions computing the same on columns of numbers.
 _BUILTIN_REDUCTIONS = {sum: "sum", max: "max", min: "min"}
@@ -73,7 +87,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 self._container = iterable._container
                 self._might_have_duplicates = iterable._might_have_duplicates
             elif isinstance(iterable, pd.DataFrame):
-                self._container = iterable.copy()
+                # A deep copy would also join the columns in one block: a
+                # second copy of the rows, gigabytes for those of a
+                # Euclidean bound.
+                self._container = iterable.copy(deep=not _COPY_ON_WRITE)
             else:
                 self._container = pd.DataFrame(iterable)
 

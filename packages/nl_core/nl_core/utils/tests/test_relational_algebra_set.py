@@ -1452,3 +1452,29 @@ def test_named_ra_union_of_integers_and_floats(ra_module):
     expected = {(0, 1.), (2, .5), (3, .62)}
     assert set(integers | floats) == expected
     assert {(x, p) for p, x in floats | integers} == expected
+
+
+def test_a_set_made_from_a_frame_does_not_copy_its_columns():
+    """
+    With copy-on-write (pandas 3, or its option), a set made from a data
+    frame shares its columns: the set's rows do not change when the frame
+    does, and no copy is made, which for the pairs of a Euclidean bound,
+    tens of millions of rows, would take gigabytes. Without copy-on-write
+    the frame is copied, the set's rows not to change with it.
+    """
+    import tracemalloc
+
+    import numpy as np
+    import pandas as pd
+
+    frame = pd.DataFrame({c: np.arange(1_000_000) for c in "ijks"})
+    tracemalloc.start()
+    try:
+        ras = pandas.RelationalAlgebraFrozenSet(frame)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    frame.iloc[0, 0] = -1
+    assert ras.as_pandas_dataframe().iloc[0, 0] == 0
+    if pandas._COPY_ON_WRITE:
+        assert peak < 0.1 * frame.memory_usage(index=False).sum()
