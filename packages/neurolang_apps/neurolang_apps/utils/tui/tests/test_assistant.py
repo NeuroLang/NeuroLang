@@ -432,6 +432,106 @@ def test_feedback_end_to_end(app, tmp_path, monkeypatch):
     }]
 
 
+REACT_ANSWER = (
+    'Action: final_answer\nAction Input: {"query": '
+    '"ans(s) :- mentions(s, \'pain\')", "explanation": "pain"}'
+)
+
+
+@pytest.fixture
+def real_runs(app, monkeypatch):
+    """The programs the engine runs from now on, for real."""
+    runs = []
+    execute = app._nl.execute_datalog_program
+
+    def spy(program, *args, **kwargs):
+        runs.append(program)
+        return execute(program, *args, **kwargs)
+
+    monkeypatch.setattr(app._nl, "execute_datalog_program", spy)
+    return runs
+
+
+def test_react_shows_the_result_it_got_without_running_the_query_again(
+    app, real_runs
+):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    [block] = app.results
+    assert block.frame.values.tolist() == [[1]]
+    assert real_runs == []
+    assert "press Enter to see its result again" in output(app)
+    # Enter on the query as it is shows the result again, still without a run.
+    app._run_line(app.pending_input)
+    assert real_runs == []
+    assert "not run again" in output(app)
+    assert app.results[0].frame.values.tolist() == [[1]]
+
+
+def test_an_edited_query_is_run(app, real_runs):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    app._run_line("ans(s) :- mentions(s, 'fear')")
+    assert real_runs == ["ans(s) :- mentions(s, 'fear')"]
+    assert app.results[0].frame.values.tolist() == [[2]]
+
+
+def test_any_other_input_before_enter_means_the_query_is_run(app, real_runs):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    app._run_line(".mode datalog")
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_a_result_too_large_to_keep_is_run_when_asked(
+    app, real_runs, monkeypatch
+):
+    from neurolang_apps.utils.llm import validation
+
+    monkeypatch.setattr(validation, "MAX_KEPT_CELLS", 0)
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    assert app.results == [] and app.agent_run is None
+    assert "edit it or press Enter to run it" in output(app)
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_rules_that_are_not_local_to_the_query_are_not_skipped(app, real_runs):
+    app.settings.scope_queries = False
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    assert app.results == [] and app.agent_run is None
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_ask_shows_the_summary_above_the_query_in_a_panel_of_its_own(app):
+    app.assistant._config.assistant.verify_rounds = 1
+    script(
+        app, *REACT_PAIN, "Every study of the database.",
+        "VERDICT: no\nIt is not about pain.",
+        *REACT_PAIN[1:], "Every study again.", "VERDICT: no\nStill not.",
+    )
+    app._run_line(".llm Which studies mention pain?")
+    text = output(app)
+    summary = text.index("Summary")  # the log of the steps has none
+    query = text.index("DATALOG query")
+    assert summary < text.index("Reads back as: Every study again.", summary)
+    assert text.index("Reads back as", summary) < query
+    # What the model said the query does is in the panel, not below the query.
+    assert summary < text.index("pain", summary) < query
+    # The warning of the check stays after the query it is about.
+    assert query < text.index("may not answer the question")
+    assert "Reads back as" not in text[query:]
+
+
 def test_ask_shows_the_query_read_back(app):
     app.assistant._config.assistant.verify_rounds = 1
     script(

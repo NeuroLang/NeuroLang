@@ -223,6 +223,45 @@ def _step_printer(app, language: str):
     return print_step
 
 
+# The events the assistant sends to ``app.agent_events`` while it works,
+# dicts with an ``event`` key: ``ask`` (question, language, provider, model,
+# strategy), then for each request to the model ``request`` (call) and
+# ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
+# answered and its tool is about to run), and for each step of the agent
+# ``step`` (thought, action, arguments, observation); ``done`` (valid,
+# query, explanation, error, calls, tokens, seconds, verified, back_translation,
+# verification) ends them.
+AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
+
+
+def _step_event(step) -> dict:
+    """Return the ``step`` event of the finished *step* of the agent."""
+    return {
+        "event": "step", "thought": step.thought, "action": step.action,
+        "arguments": step.arguments, "observation": step.observation,
+    }
+
+
+def _also_sending(on_step, events):
+    """Return *on_step* sending the ``step`` event of each step too."""
+    def sending(step) -> None:
+        on_step(step)
+        events(_step_event(step))
+    return sending
+
+
+def _done_event(result) -> dict:
+    """Return the ``done`` event of the *result* of the agent."""
+    return {
+        "event": "done", "valid": result.valid, "query": result.query,
+        "explanation": result.explanation, "error": result.error,
+        "calls": result.calls, "tokens": sum(result.usage.values()),
+        "seconds": result.seconds, "verified": result.verified,
+        "back_translation": result.back_translation,
+        "verification": result.verification,
+    }
+
+
 def _switch_language(app, language: str) -> None:
     """Switch the REPL to *language*, if it is not its mode, and say so."""
     squall = language == "squall"
@@ -244,14 +283,29 @@ def runnable_query(result) -> str:
     return result.query
 
 
+def _show_summary(app, result) -> None:
+    """
+    Print what the query does, above it and apart from it: the
+    explanation the model gave and the query read back in English.
+    """
+    summary = Text()
+    if result.explanation:
+        summary.append(result.explanation)
+    if result.back_translation:
+        if summary:
+            summary.append("\n")
+        summary.append("Reads back as: ", style="dim")
+        summary.append(result.back_translation, style="dim italic")
+    if summary:
+        app.console.print(Panel(
+            summary, title="Summary", title_align="left",
+            border_style="cyan",
+        ))
+
+
 def _show_verification(app, result) -> None:
-    """Print the query read back in English and the verdict of its check."""
-    if not result.back_translation:
-        return
-    app.console.print(
-        f"[dim]Reads back as: {escape(result.back_translation)}[/dim]"
-    )
-    if result.verified is False:
+    """Print the verdict of the check of the query, when it is against it."""
+    if result.back_translation and result.verified is False:
         app.console.print(
             "[yellow]The check found that the query may not answer the "
             f"question: {escape(result.verification)}[/yellow]"
@@ -261,15 +315,15 @@ def _show_verification(app, result) -> None:
 def _show_result(app, result) -> None:
     """
     Print the query of the agent's *result*, each rule under a comment
-    line explaining it if the model wrote them, and put it in the prompt.
+    line explaining it if the model wrote them, below a summary of what
+    it does, and put it in the prompt.
     """
     if result.valid:
+        _show_summary(app, result)
         app.console.print(Panel(
             query_text(result.commented or result.query, result.language),
             title=f"{result.language.upper()} query", border_style="green",
         ))
-        if result.explanation:
-            app.console.print(escape(result.explanation), style="dim")
         _show_verification(app, result)
     else:
         app.failed = True
@@ -289,7 +343,14 @@ def _show_result(app, result) -> None:
     if result.query:
         _switch_language(app, result.language)
         app.pending_input = runnable_query(result)
+        shown = False
+        if result.valid and result.frames is not None:
+            # The agent ran the query to accept it: its result, not a new run.
+            app.show_agent_run(app.pending_input, result.frames)
+            shown = app.agent_run is not None
         app.console.print(
+            "[dim]The query is in the prompt: edit it to run it again, "
+            "or press Enter to see its result again.[/dim]" if shown else
             "[dim]The query is in the prompt: edit it or press Enter to "
             "run it.[/dim]"
         )
@@ -337,20 +398,38 @@ def _run_assistant(
         steps = steps or state.steps
         if steps:
             assistant = replace(assistant, max_steps=steps)
+        client, on_step = state.client, _step_printer(app, language)
+        events = app.agent_events
+        if events:
+            from neurolang_apps.utils.llm import make_client
+            from neurolang_apps.utils.llm.trace import TracingClient
+
+            client = TracingClient(
+                client or make_client(provider, assistant.timeout), events
+            )
+            on_step = _also_sending(on_step, events)
         agent = make_agent(
             app._nl, provider, assistant, language,
             strategy or state.strategy,
             engine_name=app.settings.engine_name,
-            loaded=app.loaded_relations, client=state.client,
-            on_step=_step_printer(app, language),
+            loaded=app.loaded_relations, client=client, on_step=on_step,
         )
         app.err_console.print(
             f"[dim]Asking {provider.name} ({provider.model or provider.api}"
             f", {agent.strategy})...[/dim]"
         )
+        if events:
+            events({
+                "event": "ask", "question": question, "language": language,
+                "provider": provider.name,
+                "model": provider.model or provider.api,
+                "strategy": agent.strategy,
+            })
         result = call_interruptibly(
             lambda: agent.run(question), app._print_stuck_hint
         )
+        if events:
+            events(_done_event(result))
     except KeyboardInterrupt:
         app.failed = True
         app.console.print("[yellow]Interrupted[/yellow]")

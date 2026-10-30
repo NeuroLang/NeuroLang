@@ -52,6 +52,7 @@ from neurolang.utils.nilearn_compat import (
     nilearn_datasets,
     nilearn_image,
 )
+from neurolang_apps.utils import engine_cache
 
 COGNITIVE_ATLAS_TASKS_URL = "https://www.cognitiveatlas.org/api/v-alpha/task"
 
@@ -148,12 +149,20 @@ def register_tables(
     # The indices of a grid are distinct: say so, sparing the queries that
     # use the 8.7M-row grid its deduplication.
     nl.symbol_table["voxel"].value.might_have_duplicates = False
-    nl.add_tuple_set(
-        _cortical_voxels(fetch_cortical_atlas(data_dir), mask),
-        name="cortical_mask",
+    # The voxels of the cortex and of the brain on the grid of the mask:
+    # resampling the atlas and the brain mask needs nilearn, which takes
+    # seconds to import, so they are kept (see engine_cache).
+    voxels = engine_cache.keep_arrays(
+        getattr(nl, "engine_cache_dir", None), "voxels",
+        engine_cache.grid_digest(mask),
+        lambda: {
+            "cortical": _cortical_voxels(fetch_cortical_atlas(data_dir), mask),
+            "brain": _brain_voxels(mask),
+        },
     )
+    nl.add_tuple_set(voxels["cortical"], name="cortical_mask")
     nl.symbol_table["cortical_mask"].value.might_have_duplicates = False
-    brain = _brain_voxels(mask)
+    brain = voxels["brain"]
     nl.add_tuple_set(brain, name="brain_mask")
     nl.symbol_table["brain_mask"].value.might_have_duplicates = False
     # A uniform choice over the voxels of the brain, as selected_study is over

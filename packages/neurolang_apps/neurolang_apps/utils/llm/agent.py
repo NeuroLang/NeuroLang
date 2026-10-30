@@ -98,7 +98,11 @@ class AgentResult:
     time it took. The ReAct agent translates its query back into English
     (*back_translation*) and sets *verified* to whether the model judged
     that to answer the question (None when unchecked), with the reason
-    of its judgement (*verification*).
+    of its judgement (*verification*). The ReAct agent runs its final
+    query to accept it, and keeps the whole result, as ``(title, frame)``
+    for each relation, in *frames* (None when it is boolean, or too large
+    to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so that it need not
+    be run again to be shown.
     """
 
     query: str = ""
@@ -114,6 +118,7 @@ class AgentResult:
     back_translation: str = ""
     verified: Optional[bool] = None
     verification: str = ""
+    frames: Optional[list] = field(default=None, repr=False)
 
 
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
@@ -253,8 +258,10 @@ class Toolbox:
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
         self.queries_with_rows = []
-        # The first rows of the answer final_answer accepted last.
+        # The first rows of the answer final_answer accepted last, and its
+        # whole result (see validation.Preview.frames).
         self.answer_rows = ""
+        self.answer_frames = None
 
     def call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
@@ -334,6 +341,7 @@ class Toolbox:
                 )
             return message, None
         self.answer_rows = preview.text
+        self.answer_frames = preview.frames
         return "Accepted.", (query.strip(), explanation.strip())
 
 
@@ -608,6 +616,7 @@ class ReactAgent(Agent):
                 )
             if rejection is None or rejections >= self.config.verify_rounds:
                 result.query, result.explanation = final
+                result.frames = toolbox.answer_frames
                 result.valid = True
                 return result
             rejections += 1

@@ -18,22 +18,30 @@ memory of the session, and the worker sends it to the provider and to
 no one else.
 """
 
+import csv
+import gzip
 import io
+import json
 import math
+import re
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, NamedTuple
 from unittest import mock
 
 import pandas as pd
 from rich.console import Console
 from rich.text import Text
 
+from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils.cli import _declared_columns
+from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
+
 from . import nifti
 from .app import InteractiveTuiApp, TuiSettings
-from .commands import QuitRepl
+from .commands import QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
 
 # The most rows of a result sent to the page.
@@ -106,8 +114,10 @@ class Reply:
     *html* is its output, *viewers* the HTML pages of the brain viewer
     the submission made (``.view``), *tables* its results (see
     :func:`table_payload`), *failed* tells whether a statement of it
-    failed, and *prompt* is the query the assistant wrote, for the page
-    to put in its input.
+    failed, *prompt* is the query the assistant wrote, for the page
+    to put in its input, and *mode* the language of the REPL, ``datalog``
+    or ``squall``, which the assistant may have switched, and *predicates*
+    those of the engine and the session (see :meth:`WebRepl.predicates`).
     """
 
     html: str
@@ -115,6 +125,43 @@ class Reply:
     failed: bool = False
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
+    mode: str = "datalog"
+    predicates: List[dict] = field(default_factory=list)
+
+
+class Download(NamedTuple):
+    """A file the page offers to save: its *name*, *mime* type and *data*."""
+
+    name: str
+    mime: str
+    data: bytes
+
+
+# The files of a result: the separator of its text formats, the type of each.
+TEXT_FORMATS = {"csv": (",", "text/csv"), "tsv": ("\t", "text/tab-separated-values")}
+NIFTI_MIME = "application/gzip"
+
+
+def _file_stem(block: ResultBlock, index: int) -> str:
+    """Return the name of the files of the result *block*, the *index*-th."""
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", block.title).strip("-").lower()
+    return stem or f"result-{index + 1}"
+
+
+def _text(frame: pd.DataFrame, separator: str) -> str:
+    """Return all the rows of *frame* as delimited text, as the table's."""
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=separator, lineterminator="\n")
+    writer.writerow(frame.columns)
+    for row in frame.itertuples(index=False, name=None):
+        writer.writerow(
+            ["" if cell is None else cell for cell in map(_cell, row)]
+        )
+    return out.getvalue()
+
+
+# What the events of the assistant carry that the page does not show.
+_PRIVATE_EVENT_KEYS = ("messages", "tools", "temperature", "start")
 
 
 def _kind(column: pd.Series) -> str:
@@ -235,6 +282,25 @@ class WebRepl:
             provider.name, "", provider.model, provider.base_url
         )
 
+    def set_event_sink(self, send) -> None:
+        """
+        Send the events of the assistant to *send*, as it works.
+
+        *send* is called with the JSON text of each event (see
+        :data:`~neurolang_apps.utils.tui.assistant.AGENT_EVENTS`) while a
+        submission is running, so that the page can show the steps before
+        the reply. The messages of the conversation are left out of them:
+        the page does not show them, and ``"type": "agent"`` tells the page
+        what the message is. ``None`` stops sending.
+        """
+        def forward(event: dict) -> None:
+            kept = {
+                k: v for k, v in event.items() if k not in _PRIVATE_EVENT_KEYS
+            }
+            send(json.dumps({"type": "agent", **kept}, default=str))
+
+        self.app.agent_events = forward if send else None
+
     def banner(self) -> str:
         """Return the HTML of the REPL's welcome: its command and banner."""
         self.console.print(
@@ -263,7 +329,9 @@ class WebRepl:
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
         return Reply(
-            self._output(), viewers, self.app.failed, self._tables, prompt
+            self._output(), viewers, self.app.failed, self._tables, prompt,
+            "squall" if self.app.settings.squall else "datalog",
+            self.predicates(),
         )
 
     def _print_block(self, block: ResultBlock) -> None:
@@ -273,6 +341,7 @@ class WebRepl:
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
         table = table_payload(block.frame, block.title, self.max_rows)
+        table.update(self._downloads_of(block))
         self._tables.append(table)
         block.shown = len(block.frame)
         count = f"{table['total']} row{'s' * (table['total'] != 1)}"
@@ -280,6 +349,75 @@ class WebRepl:
             count += f" · the first {len(table['rows'])} are in the table"
         self.console.print(
             count, style="dim", markup=False, highlight=False
+        )
+
+    def examples(self) -> dict:
+        """Return the example queries of the engine, by language."""
+        return engine_examples(self.app.settings.engine_name)
+
+    def predicates(self) -> List[dict]:
+        """
+        Return the predicates of the engine and of the session, for the
+        page to list: ``name``, ``kind`` (stored, derived, session...),
+        ``signature`` as ``.predicates`` shows it, and the engine's
+        ``description``, if any.
+        """
+        engine = self.app.settings.engine_name
+        signatures = engine_registry.get_signatures(engine) if engine else {}
+        described = engine_registry.get_predicates(engine) if engine else {}
+        infos = listed(predicate_catalog(
+            self.app._nl, _declared_columns(engine),
+            self.app.loaded_relations, signatures,
+        ))
+        return [
+            {"name": info.name, "kind": info.kind,
+             "signature": info.signature(),
+             "description": described.get(info.name, {}).get("description", "")}
+            for info in infos
+        ]
+
+    def _downloads_of(self, block: ResultBlock) -> dict:
+        """
+        Return what the page may download of *block*: its ``block`` number
+        for :meth:`download`, and the value columns of its NIfTI image,
+        ``nifti`` (``None`` in the list is a mask), or else why it has
+        none, ``nifti_reason``.
+        """
+        index = next(
+            (i for i, b in enumerate(self.app.results) if b is block), 0
+        )
+        try:
+            columns = nifti.image_columns(self.app, block)
+            return {"block": index, "nifti": columns, "nifti_reason": ""}
+        except Exception as error:  # nothing that fails here may hide a result
+            reason = str(error) or "no NIfTI image can be made of this result"
+            return {"block": index, "nifti": None, "nifti_reason": reason}
+
+    def download(self, block: int, kind: str, value: str = "") -> Download:
+        """
+        Return the file of kind *kind* of the result *block*, the number the
+        table gave: ``csv`` or ``tsv`` with all its rows (the table holds
+        at most ``max_rows``), or a ``nifti`` image of the column *value*
+        (the default one when empty), gzipped. A
+        :class:`~.nifti.SaveError` tells why a result has no image.
+        """
+        try:
+            result = self.app.results[block]
+        except IndexError:
+            raise ValueError("There is no such result: run a query first.")
+        stem = _file_stem(result, block)
+        if kind in TEXT_FORMATS:
+            separator, mime = TEXT_FORMATS[kind]
+            text = _text(result.frame, separator)
+            return Download(f"{stem}.{kind}", mime, text.encode("utf-8"))
+        if kind != "nifti":
+            raise ValueError(f"Unknown kind of file {kind!r}.")
+        request = nifti.SaveRequest(Path(f"{stem}.nii.gz"), value or None)
+        saved = nifti.result_image(self.app, result, request)
+        suffix = f"-{saved.value}" if saved.value is not None else ""
+        return Download(
+            f"{stem}{suffix}.nii.gz", NIFTI_MIME,
+            gzip.compress(saved.image.to_bytes()),
         )
 
     def _output(self) -> str:

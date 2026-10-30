@@ -409,7 +409,7 @@ _FAKE_ATLASES = {
 }
 
 
-def _fake_schaefer(nl, cfg, data_dir, name):
+def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
     with the studies activating them, as ``_phase_atlases``.

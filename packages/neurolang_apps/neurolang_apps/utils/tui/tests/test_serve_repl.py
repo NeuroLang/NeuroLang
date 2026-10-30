@@ -79,3 +79,11 @@ def test_scripts_are_served_as_javascript(serve):
     handler = serve.Handler
     assert handler.extensions_map[".js"] == "text/javascript"
     assert handler.extensions_map[".mjs"] == "text/javascript"
+
+
+def test_the_embeddings_are_kept_in_a_cache_by_default(serve, tmp_path):
+    """Made once (with torch) and then reused, as CI keeps them."""
+    args = serve.parse_args([])
+    assert args.embeddings == serve.DEFAULT_EMBEDDINGS
+    assert serve.parse_args(["--embeddings", str(tmp_path)]).embeddings == \
+        tmp_path

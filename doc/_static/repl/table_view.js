@@ -27,7 +27,46 @@ function shown(value, kind) {
   return cellText(value);
 }
 
-export function renderTable(payload) {
+// The image of a result as the menu names it: its value column, or its mask.
+const imageName = (value) => (value === null ? "NIfTI image (mask)" : `NIfTI image: ${value}`);
+
+// The menu of the files a result can be saved as, all its rows as text and its
+// NIfTI image; *download*(block, kind, value) asks the worker for the file.
+function downloadMenu(payload, download) {
+  const item = (text, kind, value = "", reason = "") => {
+    const button = element("button", { type: "button", textContent: text, disabled: Boolean(reason), title: reason });
+    button.addEventListener("click", () => {
+      menu.open = false;
+      download(payload.block, kind, value);
+    });
+    return button;
+  };
+  const images = Array.isArray(payload.nifti)
+    ? payload.nifti.map((value) => item(imageName(value), "nifti", value ?? ""))
+    : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image")];
+  const menu = element("details", { className: "rt-menu" },
+    element("summary", { textContent: "Download", title: "Save the whole result as a file" }),
+    element("div", { className: "rt-menu-items" }, item("All rows, CSV", "csv"), item("All rows, TSV", "tsv"), ...images));
+  return menu;
+}
+
+// Buttons for the NIfTI images of the *payloads* (the tables of a reply), for the brain tab.
+export function imageButtons(payloads, download) {
+  const buttons = payloads.flatMap((payload) => (Array.isArray(payload.nifti)
+    ? payload.nifti.map((value) => {
+      const label = [payload.title, value].filter(Boolean).join(": ");
+      const button = element("button", {
+        type: "button", className: "ghost", textContent: label ? `Download NIfTI: ${label}` : "Download NIfTI",
+        title: "Save the result as a NIfTI image (.nii.gz)",
+      });
+      button.addEventListener("click", () => download(payload.block, "nifti", value ?? ""));
+      return button;
+    })
+    : []));
+  return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
+}
+
+export function renderTable(payload, { download = null } = {}) {
   const model = new TableModel(payload);
   let pageIndex = 0;
   let pageSize = PAGE_SIZES[0];
@@ -51,7 +90,8 @@ export function renderTable(payload) {
   const body = element("tbody");
   const table = element("table", { className: "rt-table" }, element("thead", {}, head), body);
   const root = element("section", { className: "rt" },
-    element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv),
+    element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv,
+      ...(download && payload.block !== undefined ? [downloadMenu(payload, download)] : [])),
     element("div", { className: "rt-scroll" }, table));
 
   const arrows = { asc: " ▲", desc: " ▼" };

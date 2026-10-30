@@ -7,9 +7,14 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
+import numpy as np  # noqa: E402
+
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui import nifti  # noqa: E402
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
+from neurolang_apps.utils.tui.tests import test_nifti  # noqa: E402
+
+tiny = test_nifti.tiny  # the REPL on the tiny engine, with its template
 
 
 @pytest.fixture
@@ -161,6 +166,91 @@ class TestTables:
         assert repl.submit(".more").tables == []
 
 
+class TestDownloads:
+    """The files of a result the page offers to save."""
+
+    @pytest.fixture
+    def web(self, tiny):
+        return WebRepl(tiny._nl, engine_name="tiny")
+
+    def test_a_table_tells_the_columns_of_its_image(self, web):
+        [table] = web.submit("ans(i, j, k, w) :- weight(i, j, k, w)").tables
+        assert table["block"] == 0
+        assert table["nifti"] == ["w"] and table["nifti_reason"] == ""
+
+    def test_a_mask_is_an_image_without_a_value_column(self, web):
+        [table] = web.submit("ans(i, j, k) :- voxel(i, j, k)").tables
+        assert table["nifti"] == [None]
+
+    def test_a_result_without_voxels_has_no_image_and_says_why(self, web):
+        web.app._nl.add_tuple_set([(10, 1, 2, 3)], name="seen")
+        [table] = web.submit("ans(s, a, b, c) :- seen(s, a, b, c)").tables
+        assert table["nifti"] is None
+        assert "no voxel columns" in table["nifti_reason"]
+
+    def test_the_image_is_the_one_save_writes(self, web, tmp_path):
+        web.submit("ans(i, j, k, w) :- weight(i, j, k, w)")
+        name, mime, data = web.download(0, "nifti", "w")
+        assert name == "result-1-w.nii.gz" and mime == "application/gzip"
+        image = nifti.read_nifti(_written(data, tmp_path / name))
+        assert image.shape == (4, 4, 4)
+        assert np.asanyarray(image.dataobj)[1, 2, 3] == pytest.approx(0.75)
+        web.app._handle_dot_command(f".save {tmp_path / 'saved.nii.gz'} --value w")
+        saved = nifti.read_nifti(tmp_path / "saved.nii.gz")
+        assert np.array_equal(
+            np.asanyarray(image.dataobj), np.asanyarray(saved.dataobj)
+        )
+        assert np.array_equal(image.affine, saved.affine)
+
+    def test_a_mask_is_named_without_a_value(self, web, tmp_path):
+        web.submit("ans(i, j, k) :- voxel(i, j, k)")
+        name, _, data = web.download(0, "nifti")
+        assert name == "result-1.nii.gz"
+        image = nifti.read_nifti(_written(data, tmp_path / name))
+        assert np.count_nonzero(np.asanyarray(image.dataobj)) == 2
+
+    def test_all_the_rows_come_as_text(self, web):
+        web.submit("ans(i, j, k, w) :- weight(i, j, k, w)")
+        csv_file = web.download(0, "csv")
+        assert csv_file.name == "result-1.csv"
+        lines = csv_file.data.decode().splitlines()
+        assert lines[0] == "i,j,k,w"
+        assert sorted(lines[1:]) == ["0,0,0,0.5", "1,2,3,0.25", "1,2,3,0.75"]
+        assert web.download(0, "tsv").data.decode().splitlines()[0] == (
+            "i\tj\tk\tw"
+        )
+
+    def test_text_has_every_row_though_the_table_keeps_fewer(self, tiny):
+        web = WebRepl(tiny._nl, engine_name="tiny", max_rows=1)
+        [table] = web.submit("ans(i, j, k, w) :- weight(i, j, k, w)").tables
+        assert table["truncated"] and len(table["rows"]) == 1
+        assert len(web.download(0, "csv").data.decode().splitlines()) == 4
+
+    def test_a_block_of_a_program_with_several_is_named_by_its_title(self, web):
+        web.submit(".mode squall")
+        reply = web.submit(
+            "obtain every voxel as First. obtain every voxel as Second."
+        )
+        assert [t["block"] for t in reply.tables] == [0, 1]
+        assert web.download(1, "csv").name == "second.csv"
+
+    def test_what_cannot_be_downloaded_is_told(self, web):
+        web.app._nl.add_tuple_set([(10, 1, 2, 3)], name="seen")
+        web.submit("ans(s, a, b, c) :- seen(s, a, b, c)")
+        with pytest.raises(nifti.SaveError, match="no voxel columns"):
+            web.download(0, "nifti")
+        with pytest.raises(ValueError, match="Unknown kind"):
+            web.download(0, "pdf")
+        with pytest.raises(ValueError, match="no such result"):
+            web.download(3, "csv")
+
+
+def _written(data: bytes, path):
+    """Write the *data* of a file the page saved, and return its path."""
+    path.write_bytes(data)
+    return path
+
+
 # The LLM assistant, with the key of the page's visitor.
 SECRET = "sk-test-0123456789"
 ASK = "```datalog\nans(x) :- person(x, n)\n```\nEveryone."
@@ -187,6 +277,27 @@ def test_ask_without_a_key_tells_to_add_it_in_the_page(repl):
     assert "environment variable" not in reply.html
 
 
+def test_the_predicates_of_the_session_come_with_each_reply(repl):
+    reply = repl.submit("adult(x) :- person(x, n), (n > 4)")
+    named = {p["name"]: p for p in reply.predicates}
+    assert named["person"]["kind"] == "stored"
+    assert named["person"]["signature"] == "person/2"
+    assert named["adult"]["kind"] == "session"
+    assert reply.predicates == repl.predicates()
+
+
+def test_the_examples_of_the_engine_are_by_language(repl):
+    examples = repl.examples()
+    assert examples["datalog"] and examples["squall"]
+    assert all(isinstance(query, str) for query in examples["datalog"])
+
+
+def test_the_reply_tells_the_mode_of_the_repl(repl):
+    assert repl.submit("1").mode == "datalog"
+    assert repl.submit(".mode squall").mode == "squall"
+    assert repl.submit(".mode datalog").mode == "datalog"
+
+
 def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
 
@@ -197,6 +308,75 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     assert reply.prompt.splitlines()[-1] == "ans(x) :- person(x, n)"
     assert "Asking anthropic" in reply.html
     assert repl.submit("1").prompt == ""
+
+
+def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
+    import json
+
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([
+        [("check_query", {"query": "ans(x) :- person(x, n)"})],
+        [("final_answer", {
+            "query": "ans(x) :- person(x, n)", "explanation": "Everyone.",
+        })],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    sent = []
+    repl.set_event_sink(lambda text: sent.append(json.loads(text)))
+    reply = repl.submit(".ask --react Who is there?")
+    assert not reply.failed
+    assert {event["type"] for event in sent} == {"agent"}
+    kinds = [event["event"] for event in sent]
+    assert kinds[0] == "ask" and kinds[-1] == "done"
+    assert sent[0]["strategy"] == "react"
+    assert sent[0]["language"] == "datalog"
+    # The reply of the model comes before the step of its tool call.
+    first = kinds.index("reply")
+    assert kinds[first - 1] == "request"
+    assert kinds[first + 1] == "step"
+    assert sent[first]["tool_calls"][0]["name"] == "check_query"
+    step = sent[first + 1]
+    assert step["action"] == "check_query" and step["observation"]
+    assert sent[-1]["valid"] and sent[-1]["query"].startswith("ans(x)")
+    # What the page shows above the query: what it does, and how it reads back.
+    assert sent[-1]["explanation"] == "Everyone."
+    assert sent[-1]["back_translation"] == "Everyone with a name."
+    assert sent[-1]["verified"] is True
+    assert all("messages" not in event for event in sent)
+    repl.set_event_sink(None)
+    sent.clear()
+    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS])
+    repl.submit(".ask --icl Who is there?")
+    assert sent == []
+
+
+def test_react_gives_the_result_in_the_reply_and_enter_does_not_run_it_again(
+    repl, monkeypatch
+):
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    query = "ans(x) :- person(x, n)"
+    repl.app.assistant.client = ScriptedClient([
+        [("final_answer", {"query": query, "explanation": "Everyone."})],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    reply = repl.submit(".ask --react Who is there?")
+    [table] = reply.tables
+    assert sorted(row[0] for row in table["rows"]) == ["alice", "bob"]
+    assert reply.prompt.splitlines()[-1] == query
+    runs = []
+    execute = repl.app._nl.execute_datalog_program
+    monkeypatch.setattr(
+        repl.app._nl, "execute_datalog_program",
+        lambda *args, **kwargs: runs.append(args) or execute(*args, **kwargs),
+    )
+    again = repl.submit(reply.prompt)
+    assert runs == [] and "not run again" in again.html
+    assert again.tables[0]["rows"] == table["rows"]
+    assert again.tables[0]["block"] == 0
 
 
 def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
