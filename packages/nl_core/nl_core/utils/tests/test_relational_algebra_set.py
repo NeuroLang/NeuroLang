@@ -1478,3 +1478,100 @@ def test_a_set_made_from_a_frame_does_not_copy_its_columns():
     assert ras.as_pandas_dataframe().iloc[0, 0] == 0
     if pandas._COPY_ON_WRITE:
         assert peak < 0.1 * frame.memory_usage(index=False).sum()
+
+
+def _left_and_choice(rows, studies=1000, seed=0, extent=60):
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    frame = pd.DataFrame({
+        "i": rng.integers(0, extent, rows),
+        "j": rng.integers(0, extent, rows),
+        "k": rng.integers(0, extent, rows),
+        "s": rng.integers(0, studies, rows),
+    }).drop_duplicates()
+    choice = pd.DataFrame({"s": np.arange(studies), "p": 1 / studies})
+    return frame, choice
+
+
+def _peak(function):
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        result = function()
+        return result, tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def test_a_look_up_join_holds_little_more_than_the_column_it_adds(
+    monkeypatch
+):
+    """The rows are looked up a chunk at a time: the index of the rows
+    matched, as long as the relation, is never whole."""
+    monkeypatch.setattr(pandas, "_CHUNK_ROWS", 100_000)
+    frame, choice = _left_and_choice(1_000_000)
+    left = pandas.NamedRelationalAlgebraFrozenSet(("i", "j", "k", "s"), frame)
+    right = pandas.NamedRelationalAlgebraFrozenSet(("s", "p"), choice)
+    len(left), len(right)
+    joined, peak = _peak(lambda: left.naturaljoin(right))
+    added = 8 * len(frame)  # the float64 column of p
+    assert peak < added + 0.25 * frame.memory_usage(index=False).sum()
+    assert set(joined.as_pandas_dataframe().itertuples(index=False)) == set(
+        frame.merge(choice).itertuples(index=False)
+    )
+
+
+@pytest.mark.parametrize("function", [sum, max, min, len])
+def test_large_aggregations_by_chunks_are_those_of_the_whole(
+    monkeypatch, function
+):
+    """Sums, maxima, minima and counts of many rows are computed a chunk
+    at a time and combined: groups span several chunks."""
+    import numpy as np
+
+    frame, _ = _left_and_choice(50_000, studies=50)
+    frame["v"] = (frame["s"] * 7 % 13) / 3.0
+    whole = frame.groupby(["i", "j"])["v"].agg(
+        {sum: "sum", max: "max", min: "min", len: "size"}[function]
+    )
+    monkeypatch.setattr(pandas, "_CHUNK_ROWS", 4_000)
+    ras = pandas.NamedRelationalAlgebraFrozenSet(
+        ("i", "j", "k", "s", "v"), frame
+    )
+    result = ras.aggregate(["i", "j"], {"v": function}).as_pandas_dataframe()
+    got = result.set_index(["i", "j"])["v"].sort_index()
+    assert len(got) == len(whole)
+    assert np.allclose(got.to_numpy(), whole.sort_index().to_numpy())
+
+
+def test_a_large_sum_by_chunks_takes_little_memory(monkeypatch):
+    import numpy as np
+
+    monkeypatch.setattr(pandas, "_CHUNK_ROWS", 100_000)
+    # many more rows than groups, as activations are than voxels
+    frame, choice = _left_and_choice(1_000_000, extent=20)
+    frame = frame.merge(choice)
+    ras = pandas.NamedRelationalAlgebraFrozenSet(
+        ("i", "j", "k", "s", "p"), frame
+    )
+    len(ras)
+    result, peak = _peak(lambda: ras.aggregate(["i", "j", "k"], {"p": sum}))
+    assert peak < 0.4 * frame.memory_usage(index=False).sum()
+    expected = frame.groupby(["i", "j", "k"])["p"].sum()
+    got = result.as_pandas_dataframe().set_index(["i", "j", "k"])["p"]
+    assert np.allclose(got.sort_index(), expected.sort_index())
+
+
+def test_an_aggregation_with_missing_values_is_not_by_chunks(monkeypatch):
+    """Python's sum of a group with NaN is NaN, which pandas' is not."""
+    import numpy as np
+
+    monkeypatch.setattr(pandas, "_CHUNK_ROWS", 2)
+    rows = [(0, 1.0), (0, float("nan")), (1, 2.0), (1, 3.0), (1, 4.0)]
+    result = pandas.NamedRelationalAlgebraFrozenSet(("g", "v"), rows) \
+        .aggregate(["g"], {"v": sum}).as_pandas_dataframe()
+    sums = dict(zip(result["g"], result["v"]))
+    assert np.isnan(sums[0]) and sums[1] == 9.0
