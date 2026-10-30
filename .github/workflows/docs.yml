@@ -36,9 +36,12 @@ jobs:
         run: uv run --no-sync make -C doc html SPHINXOPTS="--keep-going"
 
       # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheels and
-      # the data of the neurosynth engine from beside its page. If this step
-      # fails, the documentation is still deployed, with the REPL's page
-      # telling that it could not start.
+      # the data of the neurosynth engine from beside its page. The step builds
+      # the engine, which keeps in its data directory the tables the page
+      # would take a minute and a half to find (neurolang_apps.utils.
+      # engine_cache), so that they are in the data zip, and stops if it kept
+      # none. If this step fails, the documentation is still deployed, with
+      # the REPL's page telling that it could not start.
       - name: Build the in-browser REPL's bundle
         continue-on-error: true
         run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl

@@ -11,7 +11,10 @@ The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
 engine reads are kept, and the others are emptied rather than removed,
 because the fetchers of nilearn look for every file of a dataset. The
-engine is built again from the result, to check that it suffices.
+tables that take the engine long to build are kept in the data directory by
+its build (``neurolang_apps.utils.engine_cache``) and so are in the zip: the
+page starts in about 30 s instead of 2 min. The engine is built again from the
+result, with the tables and without them, to check that it suffices.
 
 Usage::
 
@@ -77,7 +80,7 @@ def write_highlight_words(output: Path) -> None:
     )
 
 
-def build_engine(data_dir: Path) -> None:
+def build_engine(data_dir: Path, use_cache: bool = True) -> None:
     """
     Build the engine on *data_dir*, which downloads what it lacks.
 
@@ -89,13 +92,39 @@ def build_engine(data_dir: Path) -> None:
     from neurolang_apps.utils import engine_registry
 
     try:
-        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        engine_registry.build_engine(
+            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+        )
     except requests.exceptions.SSLError:
         system = next((c for c in SYSTEM_CERTIFICATES if c.is_file()), None)
         if system is None:
             raise
         os.environ["REQUESTS_CA_BUNDLE"] = str(system)
-        engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        engine_registry.build_engine(
+            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+        )
+
+
+def check_engine_cache(data_dir: Path) -> None:
+    """
+    Stop if building the engine kept no tables in *data_dir*.
+
+    The tables the build takes long to find (the studies activating the
+    regions of the atlases, see ``neurolang_apps.utils.engine_cache``) are in
+    the data zip, so that the page reads them: without them it finds them
+    again, which takes a minute and a half of the two it needs to start.
+    """
+    from neurolang_apps.utils import engine_cache
+
+    files = engine_cache.cached_files(data_dir, ENGINE)
+    if not files:
+        sys.exit(
+            "The engine kept no tables in its data directory: the page "
+            "would find them again when it starts."
+        )
+    size = sum(path.stat().st_size for path in files) / 1048576
+    print(f"The engine's tables kept for the page: {len(files)} files, "
+          f"{size:.1f} MB")
 
 
 def trim(data_dir: Path) -> None:
@@ -120,8 +149,10 @@ def main(output: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         data_dir = Path(tmp)
         build_engine(data_dir)
+        check_engine_cache(data_dir)
         trim(data_dir)
-        build_engine(data_dir)  # it must not need what was emptied
+        build_engine(data_dir)  # the page's way: from the kept tables
+        build_engine(data_dir, use_cache=False)  # and without them
         zip_directory(data_dir, output / DATA_ZIP)
     (output / "bundle.json").write_text(
         json.dumps({"wheels": wheels, "data": DATA_ZIP}) + "\n"

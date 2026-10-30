@@ -977,7 +977,7 @@ class TestShowRewrittenFlag:
 
         build_engine_calls = []
 
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             build_engine_calls.append((name, str(data_dir), resolution))
             return nl
 
@@ -999,6 +999,26 @@ class TestShowRewrittenFlag:
         assert "rewritten program" in captured.out
         assert "Query completed" not in captured.err
 
+    @pytest.mark.parametrize("flags, use_cache", [
+        ([], True), (["--no-engine-cache"], False),
+    ])
+    def test_engine_cache_flag(self, monkeypatch, capsys, flags, use_cache):
+        """--no-engine-cache builds the engine without its kept tables."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang_apps.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,)], name="R")
+        calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
+            calls.append(use_cache)
+            return nl
+
+        monkeypatch.setattr(engine_registry, "build_engine", fake_build_engine)
+        main(["--engine", "neurosynth", *flags, "ans(x) :- R(x)."])
+        assert calls == [use_cache]
+
     def test_show_rewritten_datalog_builds_engine(self, monkeypatch, capsys):
         """--show-rewritten for classical Datalog also builds the engine."""
         from neurolang.frontend import NeurolangPDL
@@ -1009,7 +1029,7 @@ class TestShowRewrittenFlag:
 
         build_engine_calls = []
 
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             build_engine_calls.append((name, str(data_dir), resolution))
             return nl
 
@@ -1041,7 +1061,7 @@ class TestShowRAFlag:
     @staticmethod
     def _use_engine(monkeypatch, nl):
         """Make the CLI use ``nl`` as the engine it builds."""
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             return nl
 
         monkeypatch.setattr(

@@ -38,8 +38,8 @@ may specify the following keys, all of them optional:
   region, the peaks being the millimetre coordinates of the relation
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
-  not be the template's, and the pairs are computed once, when the engine
-  is built.  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  not be the template's, and the pairs are kept in the data directory once
+  found (see :ref:`engine-cache`).  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
   downloaded from the authors' repository
@@ -280,6 +280,42 @@ embedded on the first query that uses the function, and cached under
 ``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
+
+.. _engine-cache:
+
+Starting an engine without finding its tables again
+---------------------------------------------------
+
+Most of the build of the ``neurosynth`` engine, 58 s natively and 112 s in a
+browser, finds what never changes for the same data: the studies activating
+the regions of the atlases (48 s natively), and, from nilearn, the MNI mask
+resampled to the grid of the engine, the voxels of the brain and of the cortex
+on it, and where the atlases are, for which nilearn and scikit-learn are
+imported, which takes more than a second and several in a browser.
+:func:`~neurolang_apps.utils.engine_registry.build_engine` keeps all of them in
+``DATA_DIR/ENGINE/engine_cache``, in files named by their kind and by what they
+depend on, and reads them when they are there. Then nilearn is not imported at
+all, the build takes 6 s natively and 8 s in a browser, and the page starts in
+23 s instead of 127 s. A change of the atlas, the peaks, the radius or the
+resolution makes other files; a file that is missing, damaged or cannot be
+written means only that the table is found again. The MNI mask is named by
+the resolution alone, so remove the files (``--clear``) if the template
+changes.
+
+The files hold arrays, an image and text, nothing of Python or of a version of
+numpy or pandas, so the terminal REPL and the REPL in the browser read the same
+ones, whichever implementation of Python wrote them. The engine itself cannot
+be kept: its expressions cannot be pickled, and a snapshot of the memory of
+Pyodide is 780 MB (270 MB compressed).
+
+``python -m neurolang_apps.utils.engine_cache ENGINE -d DATA_DIR -r MM`` builds
+the engine at the resolution it will be used with, so that the tables are
+kept; ``--list`` lists them and ``--clear`` removes them;
+``neurolang-query --no-engine-cache`` builds the engine without reading or
+writing them. The build of the browser's bundle (``doc/make_repl_bundle.py``,
+run by the documentation workflow) keeps them in the data zip, 3.6 MB, builds
+the engine from them and without them to check that the trimmed data suffices
+for both, and stops if it kept none.
 
 Sharing configuration between engines
 -------------------------------------

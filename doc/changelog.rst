@@ -73,6 +73,26 @@ Unreleased
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
   :doc:`tutorial_datalog`, section 10.6.
+* An engine is built from the tables it kept, instead of finding them again.
+  The studies activating the regions of its atlases took 48 s of the 58 s of
+  the ``neurosynth`` engine's build, and nilearn, imported to find the MNI
+  mask, the brain and cortex voxels and the atlases, more than a second
+  (several in a browser). They are now kept in the data directory, in 3.6 MB
+  of ``.npz``, ``.nii.gz`` and ``.json`` files that the terminal REPL and the
+  REPL in the browser both read, without importing nilearn or scikit-learn:
+  the build takes 6 s natively instead of 58 s and 8 s in Pyodide instead of
+  112 s, and the page starts in 23 s instead of 127 s. The documentation
+  workflow builds the engine for its bundle, so that the tables are in its
+  data zip, and stops if none was kept. ``python -m
+  neurolang_apps.utils.engine_cache ENGINE`` keeps them, lists them
+  (``--list``) and removes them (``--clear``), and ``neurolang-query
+  --no-engine-cache`` builds the engine without them. nilearn's file fetcher
+  returns the files already in the data directory without being imported.
+  The page says which step of its start it is in (importing NeuroLang,
+  loading the Neurosynth data, the atlases, the ontologies...) instead of
+  "Building the engine" for all of it: ``build_engine`` takes a ``progress``
+  function that is told each step before it starts.
+
 * The REPL in the browser shows the work of the AI assistant as it happens, in
   a section of the page you can open: the model's calls, the tool calls of
   the ReAct agent, its queries and what they gave back. The code box colours

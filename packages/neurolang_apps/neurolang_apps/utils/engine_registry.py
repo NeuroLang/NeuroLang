@@ -85,15 +85,19 @@ Usage
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
+)
 
 import nibabel as nib
 
 import numpy as np
 import yaml
 
+from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
     nilearn_datasets as _nilearn_datasets,
@@ -1135,6 +1139,42 @@ def atlas_activation(
     )
 
 
+def cached_atlas_activation(
+    cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
+    studies: np.ndarray, radius_mm: float = 3.0,
+) -> List[Tuple[str, Any]]:
+    """
+    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*.
+
+    They take about 15 s per atlas to find and depend only on the atlas
+    image, its labels, the peaks, their studies and the radius, which
+    name the file they are kept in: a change of any of them finds another
+    file, or none and finds the pairs again (see
+    :mod:`neurolang_apps.utils.engine_cache`).
+    """
+    key = engine_cache.digest(
+        float(radius_mm), engine_cache.image_digest(img),
+        sorted((int(value), str(name)) for value, name in label_names.items()),
+        np.asarray(peaks_mm, dtype=float), np.asarray(studies),
+    )
+
+    def find():
+        pairs = atlas_activation(
+            img, label_names, peaks_mm, studies, radius_mm
+        )
+        names, codes = np.unique(
+            [name for name, _ in pairs], return_inverse=True
+        )
+        return {
+            "names": names.astype(str), "codes": codes.astype(np.int32),
+            "studies": np.array([study for _, study in pairs]),
+        }
+
+    arrays = engine_cache.keep_arrays(cache_dir, "atlas_activation", key, find)
+    names = arrays["names"][arrays["codes"]].tolist()
+    return list(zip(names, arrays["studies"].tolist()))
+
+
 def _relation_frame(nl, name: str):
     """Return the rows of the stored relation *name* of *nl*, as a frame."""
     import pandas as pd
@@ -1147,16 +1187,20 @@ def _relation_frame(nl, name: str):
 
 
 def _register_atlas_activation(
-    nl, labels: dict, img, settings: dict, pred_name: str
+    nl, labels: dict, img, settings: dict, pred_name: str, cache_dir=None
 ) -> None:
     """
     Register ``{predicate_name}(label, study)``, the studies activating
     each region of the atlas (see :func:`atlas_activation`), from the
     peaks in millimetres of the relation ``peaks`` (``x, y, z, study``),
-    ``peak_mni`` by default, within ``radius_mm`` (3 by default).
+    ``peak_mni`` by default, within ``radius_mm`` (3 by default). With a
+    *cache_dir* the pairs are kept there (:func:`cached_atlas_activation`).
     """
     peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
-    pairs = atlas_activation(
+    find = atlas_activation if cache_dir is None else functools.partial(
+        cached_atlas_activation, cache_dir
+    )
+    pairs = find(
         img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
         peaks.iloc[:, 3].to_numpy(), float(settings.get("radius_mm", 3)),
     )
@@ -1166,13 +1210,15 @@ def _register_atlas_activation(
 
 
 def _load_deterministic_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path
+    nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
     predicates: ``{predicate_name}(label, region)``, and with ``activated``
     the studies activating each region (see
-    :func:`_register_atlas_activation`).
+    :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
+    which also remembers where the atlas is and its labels, so that nilearn
+    is not imported to find them.
     """
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
@@ -1180,14 +1226,39 @@ def _load_deterministic_atlas(
         if k not in ("predicate_name", "activated")
     }
     fetch_kw["data_dir"] = str(data_dir)
-    atl_data = info["fetch"](**fetch_kw)
+
+    def fetch():
+        atl_data = info["fetch"](**fetch_kw)
+        maps = Path(atl_data["maps"])
+        return {
+            "maps": str(
+                maps.relative_to(data_dir)
+                if maps.is_relative_to(data_dir) else maps
+            ),
+            "labels": [
+                [int(k), v.decode("utf8") if isinstance(v, bytes) else str(v)]
+                for k, v in _parse_labels(atl_data["labels"])
+            ],
+        }
+
+    found = engine_cache.keep_json(
+        cache_dir, "fetched", engine_cache.digest(
+            atlas_name, sorted(
+                (k, repr(v)) for k, v in fetch_kw.items() if k != "data_dir"
+            ),
+        ), fetch,
+    )
+    maps = Path(data_dir) / found["maps"]
+    if not maps.exists():  # the atlas was moved: ask for it again
+        found = fetch()
+        maps = Path(data_dir) / found["maps"]
 
     from neurolang.regions import ExplicitVBR
 
-    img = nib.load(atl_data["maps"])
+    img = nib.load(str(maps))
     _register_grid(nl, atlas_name, img)
     pred_name = params.get("predicate_name", atlas_name)
-    labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
+    labels = [(k, v) for k, v in found["labels"] if k != 0]
     regions = ExplicitVBR.from_spatial_image_labels(
         img, [k for k, _ in labels]
     )
@@ -1201,7 +1272,7 @@ def _load_deterministic_atlas(
     _register_atlas_labels(nl, atlas_name, names)
     if params.get("activated"):
         _register_atlas_activation(
-            nl, names, img, params["activated"], pred_name,
+            nl, names, img, params["activated"], pred_name, cache_dir,
         )
 
 
@@ -1281,7 +1352,7 @@ def _load_probabilistic_atlas(
 
 
 def _load_atlas(
-    nl, atlas_name: str, params: dict, data_dir: Path
+    nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """Download a brain atlas via nilearn and register it as a predicate."""
     info = _ATLAS_REGISTRY.get(atlas_name)
@@ -1293,7 +1364,7 @@ def _load_atlas(
     if info["probabilistic"]:
         _load_probabilistic_atlas(nl, atlas_name, params, data_dir)
     else:
-        _load_deterministic_atlas(nl, atlas_name, params, data_dir)
+        _load_deterministic_atlas(nl, atlas_name, params, data_dir, cache_dir)
 
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
@@ -1305,17 +1376,30 @@ def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
 
 
 def _resolve_mask(
-    cfg: dict, data_dir: Path, resolution: Optional[float] = None
+    cfg: dict, data_dir: Path, resolution: Optional[float] = None,
+    cache_dir=None,
 ) -> Optional[nib.Nifti1Image]:
-    """Download the MNI mask if required by the engine config."""
+    """
+    Download the MNI mask if required by the engine config.
+
+    The mask at the *resolution* is kept in *cache_dir* if there is one:
+    nilearn, which finds the template and resamples it, is then not imported.
+    """
     if not cfg.get("requires_mni_mask", False):
         return None
-    mask = _get_mni_mask(data_dir)
-    if resolution is not None:
-        # A 3x3 target affine keeps the original origin; scaling a 4x4
-        # identity would also scale its homogeneous coordinate.
-        mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
-    return mask
+
+    def find():
+        mask = _get_mni_mask(data_dir)
+        if resolution is not None:
+            # A 3x3 target affine keeps the original origin; scaling a 4x4
+            # identity would also scale its homogeneous coordinate.
+            mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
+        return mask
+
+    return engine_cache.keep_image(
+        cache_dir, "mask", engine_cache.digest("icbm152_2009", resolution),
+        find,
+    )
 
 
 def _phase_builtins(nl, cfg):
@@ -1364,9 +1448,14 @@ def _phase_templates(nl, cfg, data_dir, engine_name):
         _load_template(nl, tpl_name, tpl_params, data_dir / engine_name)
 
 
-def _phase_atlases(nl, cfg, data_dir, engine_name):
+def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
+    cache_dir = (
+        engine_cache.cache_dir(data_dir, engine_name) if use_cache else None
+    )
     for atl_name, atl_params in cfg.get("atlases", {}).items():
-        _load_atlas(nl, atl_name, atl_params, data_dir / engine_name)
+        _load_atlas(
+            nl, atl_name, atl_params, data_dir / engine_name, cache_dir
+        )
 
 
 def _phase_datalog_init(nl, cfg):
@@ -1583,6 +1672,8 @@ def build_engine(
     data_dir: Path,
     resolution: Optional[float] = None,
     yaml_path: Optional[Path] = None,
+    use_cache: bool = True,
+    progress: Optional[Callable[[str], None]] = None,
 ) -> "NeurolangPDL":
     """
     Create and populate a :class:`NeurolangPDL` engine from its
@@ -1599,6 +1690,16 @@ def build_engine(
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
+    use_cache :
+        Whether the tables the build takes long to find, the studies
+        activating the regions of the atlases, are read from the data
+        directory when they are there, and written there when they are
+        not (see :mod:`neurolang_apps.utils.engine_cache`).
+    progress :
+        A function called with a sentence telling what the build is about to
+        load, before each of the steps that take a while (``Loading the
+        ontologies``…), e.g. for a page to show; only the steps the engine
+        has are told.
 
     Returns
     -------
@@ -1625,7 +1726,13 @@ def build_engine(
     cfg = get_engine_config(name, yaml_path)
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
-    mask = _resolve_mask(cfg, data_dir, resolution)
+    cache_dir = (
+        engine_cache.cache_dir(data_dir, name) if use_cache else None
+    )
+    tell = progress or (lambda message: None)
+    if cfg.get("requires_mni_mask"):
+        tell("Reading the MNI template")
+    mask = _resolve_mask(cfg, data_dir, resolution, cache_dir)
 
     # Wire dimension_type_predicates from YAML
     dimension_predicates = cfg.get("dimension_type_predicates")
@@ -1651,18 +1758,30 @@ def build_engine(
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
     nl.atlas_labels = {}
+    # Where the Python init of the engine may keep its tables (None: nowhere).
+    nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
+    if cfg.get("python_init"):
+        tell(f"Loading the data of {name}")
     _phase_python_init(nl, cfg, mask, data_dir)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
-    _phase_atlases(nl, cfg, data_dir, name)
+    if cfg.get("atlases"):
+        tell("Loading the atlases: " + ", ".join(cfg["atlases"]))
+    _phase_atlases(nl, cfg, data_dir, name, use_cache)
     # Before the rules, which may use the predicates of the ontologies.
+    if cfg.get("ontologies"):
+        tell("Loading the ontologies (parsing them takes a few seconds)")
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
+    if cfg.get("datalog_init"):
+        tell(f"Defining the rules of {name}")
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
+    if cfg.get("resamplings"):
+        tell("Drawing the bootstrap replicates")
     _phase_resamplings(nl, cfg)
 
     return nl
