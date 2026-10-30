@@ -124,6 +124,12 @@ Unreleased
 
 **Bug fixes:**
 
+* A function of the engine, such as ``query_similarity``, and a threshold on
+  it within ``PROB[...]`` give the same probabilities as the deterministic
+  rule computing them, instead of an error: the program of the
+  probabilistic stratum has the engine's functions, and the deterministic
+  relation replacing the function of an atom resolves them.
+
 * Two aggregations with arguments in one head, such as
   ``percentile(v, 2.5)`` and ``percentile(v, 97.5)``, gave the result of
   the last one for both: their functions shared one global name.

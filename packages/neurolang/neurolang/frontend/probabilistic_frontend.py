@@ -905,6 +905,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     succ_solver,
                     marg_solver,
                     self.check_qbased_pfact_tuple_unicity,
+                    self.program_ir.builtins(),
                 )
             except UnsupportedSolverError:
                 if i == len(self.probabilistic_solvers) - 1:
