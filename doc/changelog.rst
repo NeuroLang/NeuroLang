@@ -17,6 +17,14 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**New features:**
+
+* ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
+  of a checkout on this machine: it builds the page's bundle the first time
+  (or with ``--rebuild``) and serves it uncached at
+  ``http://localhost:8766/_static/repl/index.html``. It is the command of the
+  workspace's root project, whose only package is :file:`tools/serve_repl`.
+
 **Internal:**
 
 * Helpers reused instead of repeated: the conjuncts of a formula and the

@@ -19,7 +19,7 @@ NeuroLang enables the analysis of neuroimaging data through probabilistic logic 
 Important links
 ===============
 - Official source code repo: https://github.com/Neurolang/Neurolang/
-- Try the interactive query REPL, `neurolang-query -i --engine neurosynth --resolution 2`, in your browser, with nothing to install (it downloads about 100 MB): https://neurolang.github.io/_static/repl/index.html. Add `?ref=BRANCH` (a branch, tag or commit; `&repo=OWNER/NAME` for a fork) to run the NeuroLang of that ref instead of the page's own
+- Try the interactive query REPL, `neurolang-query -i --engine neurosynth --resolution 2`, in your browser, with nothing to install (it downloads about 100 MB): https://neurolang.github.io/_static/repl/index.html. Add `?ref=BRANCH` (a branch, tag or commit; `&repo=OWNER/NAME` for a fork) to run the NeuroLang of that ref instead of the page's own. To run it from a checkout on your machine: `uv run --extra apps neurolang-repl-serve`
 - In-development interactive gallery of examples (best viewed with Chrome) http://neurolang-u18.saclay.inria.fr/hub/gallery
 - HTML documentation (stable release): http://neurolang.github.io/
 - HTML documentation (dev release): http://neurolang.github.io/dev
