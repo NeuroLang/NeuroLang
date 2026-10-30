@@ -273,6 +273,7 @@ def compute_probabilistic_solution(
     succ_prob_solver,
     marg_prob_solver,
     check_qbased_pfact_tuple_unicity=False,
+    builtins=None,
 ):
     solution = MapInstance()
     cpl, prob_idb = _build_probabilistic_program(
@@ -281,6 +282,7 @@ def compute_probabilistic_solution(
         pchoice_edb,
         prob_idb,
         check_qbased_pfact_tuple_unicity,
+        builtins,
     )
     for rule in prob_idb.formulas:
         if is_within_language_prob_query(rule):
@@ -411,8 +413,14 @@ def _build_probabilistic_program(
     pchoice_edb,
     prob_idb,
     check_qbased_pfact_tuple_unicity=False,
+    builtins=None,
 ):
+    """The program of the probabilistic stratum, in which the *builtins*,
+    the functions the engine knows by name, are symbols, as they are in
+    the engine's, for the queries to use them."""
     cpl = CPLogicProgram()
+    for symbol, function in (builtins or {}).items():
+        cpl.symbol_table[symbol] = function
     db_to_add_fun = [
         (det_edb, cpl.add_extensional_predicate_from_tuples),
         (pfact_db, cpl.add_probabilistic_facts_from_tuples),

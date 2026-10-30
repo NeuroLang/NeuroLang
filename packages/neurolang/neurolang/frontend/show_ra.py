@@ -1187,6 +1187,7 @@ class ShowRAStratumSolver(StratumSolver):
             engine.program_ir.probabilistic_choices(),
             prob_idb,
             engine.check_qbased_pfact_tuple_unicity,
+            engine.program_ir.builtins(),
         )
         dedup = RemoveDuplicatedConjunctsDisjuncts()
         prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
