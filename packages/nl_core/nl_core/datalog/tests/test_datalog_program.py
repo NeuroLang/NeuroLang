@@ -325,6 +325,8 @@ def test_infer_iterable_type():
 
 
 def test_add_extensional_preducate_from_tuples():
+    # typing keeps its generic types in a bounded cache: equal ones need
+    # not be the same object after a long run, so they are compared with ==.
     iterable = ((i,) for i in range(5))
 
     Q = S_('Q')
@@ -332,19 +334,19 @@ def test_add_extensional_preducate_from_tuples():
     dl = Datalog()
     dl.add_extensional_predicate_from_tuples(Q, iterable)
     q = dl.extensional_database()[Q]
-    assert q.type is AbstractSet[Tuple[int]]
+    assert q.type == AbstractSet[Tuple[int]]
     assert q.value == {(i,) for i in range(5)}
 
     dl = Datalog()
     r = RelationalAlgebraFrozenSet([(2, 'a')])
     dl.add_extensional_predicate_from_tuples(Q, r)
     q = dl.extensional_database()[Q]
-    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.type == AbstractSet[Tuple[int, str]]
     assert q.value == r
 
     dl = Datalog()
     rw = WrappedRelationalAlgebraFrozenSet(r)
     dl.add_extensional_predicate_from_tuples(Q, rw)
     q = dl.extensional_database()[Q]
-    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.type == AbstractSet[Tuple[int, str]]
     assert q.value == rw
