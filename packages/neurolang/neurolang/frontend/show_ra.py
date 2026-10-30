@@ -747,7 +747,8 @@ class ShowRAChaseMixin:
         return super().chase_step(instance, rule, restriction_instance)
 
     def obtain_substitutions(
-        self, rule_predicates_iterator, instance, restriction_instance
+        self, rule_predicates_iterator, instance, restriction_instance,
+        columns=None,
     ):
         """Record the RA plan of the current rule, then evaluate it."""
         predicates = tuple(rule_predicates_iterator)
@@ -760,7 +761,7 @@ class ShowRAChaseMixin:
             predicates, symbol_table, restriction_instance
         )
         substitutions = super().obtain_substitutions(
-            iter(predicates), instance, restriction_instance
+            iter(predicates), instance, restriction_instance, columns=columns
         )
         if self.show_ra_display.options.analyze:
             self._count_show_ra_rows(plan, symbol_table, substitutions)
