@@ -40,8 +40,18 @@ Unreleased
   its bundle (``doc/make_repl_bundle.py``) imported modules from
   ``neurolang.utils`` that the split into packages moved to
   ``neurolang_apps.utils``.
+* The union of an instance known to be empty and one known not to be was
+  taken for empty, which could end a semi-naive chase before its fixpoint.
 
 **Performance:**
+
+* Recursive rules: from the second iteration on, the semi-naive chase joined
+  the whole relation again and re-evaluated the rules without a recursive
+  atom. A rule with one recursive atom now has it bound to the tuples new
+  since the previous iteration, and is skipped when there are none. A
+  transitive closure of 2.56 M tuples takes 21 s and 1.8 GB instead of 49 s
+  and 2.5 GB with pandas, and one of 10 M tuples 104 s instead of more than
+  120 s. Non-recursive queries are unchanged.
 
 * A probability over the choice of a study with a peak within a radius of
   each voxel, ``PROB[brain_mask(i, j, k), (euclidean(i, j, k, i1, j1, k1) <
