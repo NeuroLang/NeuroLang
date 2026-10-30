@@ -2578,3 +2578,52 @@ def test_query_the_lifted_solvers_decline_without_the_unate_check():
     )
     expected = {a: p for a, p in expected.items() if p > 1e-12}
     assert result == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_uniformity_of_the_activations_given_a_term(seed):
+    """
+    The uniformity of the neurosynth engine, P(v activated | t) over the
+    probability that a voxel chosen at random is, both over the choice of
+    a study, is computed as the shares of the studies of the term, by
+    brute force. The query binds the term: magic sets restrict the rules
+    to it.
+    """
+    rng = np.random.default_rng(seed)
+    voxels = sorted({tuple(v) for v in rng.integers(0, 4, size=(30, 3))})
+    studies = list(range(12))
+    activated = {
+        (*voxels[v], s) for v, s in zip(
+            rng.integers(0, len(voxels), 80), rng.choice(studies, 80)
+        )
+    }
+    terms = {(s, t) for s in studies for t in ("a", "b") if rng.random() < .5}
+    terms |= {(0, "a")}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(activated, name="activated")
+    nl.add_tuple_set(terms, name="term_in_study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        voxels, name="selected_voxel"
+    )
+    result = nl.execute_datalog_program("""
+p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+p_any_voxel_given_t(t, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
+ans(i, j, k, u) :- uniformity('a', i, j, k, u)
+""").as_pandas_dataframe()  # noqa: E501
+    got = {
+        tuple(int(c) for c in row[:3]): row[3]
+        for row in result.itertuples(index=False, name=None)
+    }
+    term_studies = {s for s, t in terms if t == "a"}
+    share = {}
+    for *v, s in activated:
+        if s in term_studies:
+            share[tuple(v)] = share.get(tuple(v), 0) + 1 / len(term_studies)
+    average = sum(share.values()) / len(voxels)
+    assert got.keys() == share.keys()
+    for voxel, p in share.items():
+        assert got[voxel] == pytest.approx(p / average)
