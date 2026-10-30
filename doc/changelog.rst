@@ -17,6 +17,18 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**Performance:**
+
+* ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
+  instead of 55 s, and the memory of the engine instead of 18 GB, so that it
+  runs in the REPL in the browser with the full engine (``?engine=full``):
+  the chase projects a rule's substitutions on the variables of its head,
+  which the optimisers push into the joins, instead of computing, and
+  comparing with the rows already found, all the combinations of the body's
+  variables (45 M rows of activations for 11 k of the head). A relation made
+  from a data frame shares its columns, with copy-on-write, rather than
+  copying them in one block, 1.4 GB for the activations.
+
 **New features:**
 
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
