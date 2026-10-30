@@ -28,6 +28,12 @@ Unreleased
   variables (45 M rows of activations for 11 k of the head). A relation made
   from a data frame shares its columns, with copy-on-write, rather than
   copying them in one block, 1.4 GB for the activations.
+* ``lift`` of a term (``lift('pain', i, j, k, l)``) runs in the REPL in the
+  browser with the full engine too: a look-up join (the probabilities of a
+  choice) and a grouped sum, maximum, minimum or count of many rows go a
+  chunk of 4 M rows at a time, which for the probability of each voxel over
+  45 M activations takes 0.5 GB instead of 1.2 GB and 0.2 GB instead of
+  1.9 GB, for a second more.
 
 **New features:**
 
