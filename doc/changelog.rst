@@ -88,6 +88,10 @@ Unreleased
   (``--list``) and removes them (``--clear``), and ``neurolang-query
   --no-engine-cache`` builds the engine without them. nilearn's file fetcher
   returns the files already in the data directory without being imported.
+  The page says which step of its start it is in (importing NeuroLang,
+  loading the Neurosynth data, the atlases, the ontologies...) instead of
+  "Building the engine" for all of it: ``build_engine`` takes a ``progress``
+  function that is told each step before it starts.
 
 * The REPL in the browser shows the work of the AI assistant as it happens, in
   a section of the page you can open: the model's calls, the tool calls of

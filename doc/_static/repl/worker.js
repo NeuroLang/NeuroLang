@@ -141,10 +141,18 @@ async function start({ repo, ref, full }) {
   pyodide.FS.mkdirTree("/data");
   pyodide.unpackArchive(data, "zip", { extractDir: "/data" });
 
-  status(`Building the ${ENGINE} engine at ${RESOLUTION} mm…`);
+  status("Importing NeuroLang…");
   await pyodide.runPythonAsync(`
+import inspect
 import json
 from pathlib import Path
+
+import js
+
+def say(message):
+    # To the page while this worker is busy: postMessage does not wait for it.
+    js.postMessage(js.JSON.parse(json.dumps({"type": "status", "message": message + "…"})))
+
 try:
     from neurolang_apps.utils import engine_registry
     from neurolang_apps.utils.tui import web
@@ -161,15 +169,19 @@ if not ${full ? "True" : "False"}:
         yaml_path = web.lightweight_engines_yaml("/tmp")
     except AttributeError:  # a version that predates it
         pass
+# The steps of the build are told as they start, by the versions that can.
+tells = {}
+if "progress" in inspect.signature(engine_registry.build_engine).parameters:
+    tells = {"progress": say}
 nl = engine_registry.build_engine(
-    "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path
+    "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
 )
+say("Starting the REPL")
 repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
 
 # The steps of the AI assistant go to the page as they happen, while this
 # worker is busy with the question: postMessage does not wait for it.
 if hasattr(repl, "set_event_sink"):
-    import js
     repl.set_event_sink(lambda text: js.postMessage(js.JSON.parse(text)))
 
 def submit(text):

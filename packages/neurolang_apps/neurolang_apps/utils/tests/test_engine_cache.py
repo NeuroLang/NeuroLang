@@ -287,3 +287,18 @@ def test_the_mask_is_kept_and_nilearn_not_asked_for_it_again(
     engine_registry._resolve_mask(cfg, tmp_path, 2.0, None)
     engine_registry._resolve_mask(cfg, tmp_path, 2.0, None)
     assert asked == [1, 1, 1, 1]
+
+
+def test_the_build_tells_what_it_is_about_to_load(engine):
+    told = []
+    engine_registry.build_engine("e", engine, progress=told.append)
+    assert told == ["Loading the atlases: schaefer"]
+
+
+def test_an_engine_without_such_steps_tells_nothing(tmp_path, monkeypatch):
+    path = tmp_path / "engines.yaml"
+    path.write_text("engines:\n  bare:\n    description: nothing to load\n")
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    told = []
+    engine_registry.build_engine("bare", tmp_path, progress=told.append)
+    assert told == []

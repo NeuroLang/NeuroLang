@@ -88,7 +88,9 @@ from __future__ import annotations
 import functools
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
+)
 
 import nibabel as nib
 
@@ -1671,6 +1673,7 @@ def build_engine(
     resolution: Optional[float] = None,
     yaml_path: Optional[Path] = None,
     use_cache: bool = True,
+    progress: Optional[Callable[[str], None]] = None,
 ) -> "NeurolangPDL":
     """
     Create and populate a :class:`NeurolangPDL` engine from its
@@ -1692,6 +1695,11 @@ def build_engine(
         activating the regions of the atlases, are read from the data
         directory when they are there, and written there when they are
         not (see :mod:`neurolang_apps.utils.engine_cache`).
+    progress :
+        A function called with a sentence telling what the build is about to
+        load, before each of the steps that take a while (``Loading the
+        ontologies``…), e.g. for a page to show; only the steps the engine
+        has are told.
 
     Returns
     -------
@@ -1721,6 +1729,9 @@ def build_engine(
     cache_dir = (
         engine_cache.cache_dir(data_dir, name) if use_cache else None
     )
+    tell = progress or (lambda message: None)
+    if cfg.get("requires_mni_mask"):
+        tell("Reading the MNI template")
     mask = _resolve_mask(cfg, data_dir, resolution, cache_dir)
 
     # Wire dimension_type_predicates from YAML
@@ -1751,16 +1762,26 @@ def build_engine(
     nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
+    if cfg.get("python_init"):
+        tell(f"Loading the data of {name}")
     _phase_python_init(nl, cfg, mask, data_dir)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
+    if cfg.get("atlases"):
+        tell("Loading the atlases: " + ", ".join(cfg["atlases"]))
     _phase_atlases(nl, cfg, data_dir, name, use_cache)
     # Before the rules, which may use the predicates of the ontologies.
+    if cfg.get("ontologies"):
+        tell("Loading the ontologies (parsing them takes a few seconds)")
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
+    if cfg.get("datalog_init"):
+        tell(f"Defining the rules of {name}")
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
+    if cfg.get("resamplings"):
+        tell("Drawing the bootstrap replicates")
     _phase_resamplings(nl, cfg)
 
     return nl
