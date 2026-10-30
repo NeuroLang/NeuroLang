@@ -14,9 +14,11 @@ Usage, from a checkout::
         [--embeddings DIR] [--site SITE] [--host 0.0.0.0] [--no-browser]
 
 the command of the workspace's root project, or ``python -m serve_repl``.
-It opens the page in the browser. ``--embeddings`` is the data directory
-``make_repl_bundle.py`` takes the text embeddings from, if it supports
-them.
+It opens the page in the browser. The text embeddings of
+``query_similarity`` are kept in ``--embeddings`` (by default
+``~/.cache/neurolang/repl-embeddings``): the bundle has them if they are
+there, or if torch is installed to make them (``--extra embeddings``),
+which takes a while the first time; otherwise the page goes without.
 """
 
 import argparse
@@ -33,6 +35,9 @@ BUNDLE_SCRIPT = DOC / "make_repl_bundle.py"
 PAGE = DOC / "_static" / "repl"
 LOGO = DOC / "_static" / "logo"
 DEFAULT_SITE = Path("~/.cache/neurolang/repl-site").expanduser()
+# Where the text embeddings are kept between builds: making them takes
+# torch, the abstracts of the studies from PubMed and a while.
+DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
 
 
 def build_bundle(repl: Path, embeddings) -> None:
@@ -98,7 +103,8 @@ def make_server(site: Path, host: str, port: int):
     )
 
 
-def main(argv=None) -> None:
+def parse_args(argv=None):
+    """Return the options of the command line *argv*."""
     parser = argparse.ArgumentParser(
         prog="neurolang-repl-serve", description=__doc__.split("\n\n")[0],
     )
@@ -110,10 +116,17 @@ def main(argv=None) -> None:
     parser.add_argument("--site", type=Path, default=DEFAULT_SITE)
     parser.add_argument("--rebuild", action="store_true",
                         help="build the bundle again, from this checkout")
-    parser.add_argument("--embeddings", type=Path,
-                        help="data directory with the text embeddings")
+    parser.add_argument(
+        "--embeddings", type=Path, default=DEFAULT_EMBEDDINGS,
+        help="data directory keeping the text embeddings (default: "
+        "%(default)s)",
+    )
     parser.add_argument("--no-browser", action="store_true")
-    args = parser.parse_args(argv)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> None:
+    args = parse_args(argv)
     page = prepare_site(args.site, args.rebuild, args.embeddings)
     server = make_server(args.site, args.host, args.port)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host

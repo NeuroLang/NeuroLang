@@ -153,3 +153,11 @@ def test_without_torch_nor_saved_embeddings_the_page_goes_without(
     monkeypatch.setattr(engine_registry, "build_engine", lambda *a: nl)
     monkeypatch.setattr(text_embeddings, "_torch_available", lambda: False)
     assert bundle.export_embeddings(tmp_path, tmp_path) == {}
+
+
+def test_the_files_of_the_embeddings_have_plain_names(bundle):
+    """A ``+`` in a URL is a space for some servers."""
+    name = bundle.bundle_name(
+        Path("neurosynth/embeddings/models/a--base+a--query.npz")
+    )
+    assert name == "neurosynth-a--base_a--query.npz"

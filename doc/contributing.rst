@@ -133,6 +133,15 @@ from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
 
+``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
+query model and the embeddings of the studies.  They are kept in
+:file:`~/.cache/neurolang/repl-embeddings` (``--embeddings``) and made
+there, the first time, by a build with torch: ``uv run --extra apps --extra
+embeddings neurolang-repl-serve --rebuild``, which downloads SPECTER2 and the
+abstracts of the studies from PubMed and embeds them (minutes on a GPU,
+longer on a CPU).  Without them the page works, but ``query_similarity``
+says that it was built without them.
+
 
 Submitting a Pull Request
 --------------------------
