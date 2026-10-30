@@ -113,6 +113,27 @@ This will build the HTML docs into ``doc/_build/html/``. Open
       make -C doc html SPHINXOPTS="-D plot_gallery=0"
 
 
+Running the REPL in the Browser Locally
+---------------------------------------
+
+The `REPL in the browser <_static/repl/index.html>`_ runs NeuroLang on
+Pyodide, from a static page.  To run that of your checkout on your machine:
+
+.. code-block:: bash
+
+   uv run --extra apps neurolang-repl-serve
+
+The first run builds the page's bundle (NeuroLang's wheels and the data of
+the ``neurosynth`` engine, a few minutes) in
+:file:`~/.cache/neurolang/repl-site`; later runs serve it at once, and
+``--rebuild`` builds it again from the checkout.  The page opens at
+``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
+from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
+``--port`` changes the port, ``--no-browser`` does not open the page, and
+``--help`` lists the options.  The command is that of the workspace's root
+project (:file:`tools/serve_repl`).
+
+
 Submitting a Pull Request
 --------------------------
 
