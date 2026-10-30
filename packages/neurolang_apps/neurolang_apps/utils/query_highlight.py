@@ -58,6 +58,19 @@ def _squall_words() -> frozenset:
     return frozenset(squall_keywords())
 
 
+def word_sets() -> dict:
+    """
+    Return the words and operators the highlighting knows, as lists of
+    strings for a page to highlight as the terminal does (the REPL in the
+    browser, ``doc/_static/repl/highlight.js``).
+    """
+    return {
+        "datalog_keywords": sorted(DATALOG_KEYWORDS),
+        "datalog_operators": sorted(DATALOG_OPERATORS),
+        "squall_keywords": sorted(_squall_words()),
+    }
+
+
 def _word_kind(word: str, call: bool, squall: bool) -> str:
     """Return the kind of *word*, followed by ``(`` if *call*."""
     if squall:

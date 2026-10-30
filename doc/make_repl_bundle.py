@@ -4,7 +4,8 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 - the wheels of NeuroLang's packages,
 - the data the ``neurosynth`` engine needs, as a zip in the layout of its
   data directory, and
-- ``bundle.json``, which names them for ``doc/_static/repl/worker.js``.
+- ``bundle.json``, which names them for ``doc/_static/repl/worker.js``, and
+- ``highlight.json``, the words the page's code box colours.
 
 The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
@@ -29,6 +30,7 @@ from pathlib import Path
 ENGINE = "neurosynth"
 RESOLUTION = 2.0
 DATA_ZIP = "neurolang-neurosynth-data.zip"
+HIGHLIGHT_WORDS = "highlight.json"
 
 # The images of the datasets the engine reads; the other ones are emptied.
 KEPT_IMAGES = {
@@ -66,6 +68,15 @@ def build_wheels(output: Path) -> list:
     return [next(output.glob(f"{name}-*.whl")).name for name in PACKAGES]
 
 
+def write_highlight_words(output: Path) -> None:
+    """Write the words the page highlights in *output*, as the terminal does."""
+    from neurolang_apps.utils import query_highlight
+
+    (output / HIGHLIGHT_WORDS).write_text(
+        json.dumps(query_highlight.word_sets()) + "\n"
+    )
+
+
 def build_engine(data_dir: Path) -> None:
     """
     Build the engine on *data_dir*, which downloads what it lacks.
@@ -75,7 +86,7 @@ def build_engine(data_dir: Path) -> None:
     those of the system: the download is then tried again with them.
     """
     import requests
-    from neurolang.utils import engine_registry
+    from neurolang_apps.utils import engine_registry
 
     try:
         engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
@@ -115,6 +126,7 @@ def main(output: Path) -> None:
     (output / "bundle.json").write_text(
         json.dumps({"wheels": wheels, "data": DATA_ZIP}) + "\n"
     )
+    write_highlight_words(output)
     print(f"Wrote {', '.join(wheels)}, {DATA_ZIP} and bundle.json in "
           f"{output}")
 

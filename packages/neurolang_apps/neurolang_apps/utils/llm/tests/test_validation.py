@@ -100,6 +100,34 @@ def test_run_preview_of_several_results(nl):
     assert "a: 3 rows" in preview.text and "b: 1 rows" in preview.text
 
 
+def test_a_preview_keeps_the_whole_result(nl):
+    preview = run_preview(nl, "ans(s, t) :- mentions(s, t)", "datalog", 2)
+    [(title, frame)] = preview.frames
+    assert title == "" and len(frame) == 4  # the text shows 2 rows only
+    several = run_preview(
+        nl, "obtain every Study as A. obtain every Study that mentions "
+        "'fear' as B.", "squall",
+    )
+    assert [(t, len(f)) for t, f in several.frames] == [("a", 3), ("b", 1)]
+
+
+def test_the_whole_result_comes_back_from_the_child_process(forking, nl):
+    preview = run_preview(
+        nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,
+    )
+    [(_, frame)] = preview.frames
+    assert len(frame) == 4 and list(frame.columns) == ["s", "t"]
+
+
+def test_a_result_too_large_or_boolean_is_not_kept(nl, monkeypatch):
+    from .. import validation
+
+    monkeypatch.setattr(validation, "MAX_KEPT_CELLS", 3)
+    large = run_preview(nl, "ans(s, t) :- mentions(s, t)", "datalog")
+    assert large.ok and large.frames is None
+    assert run_preview(nl, "ans() :- mentions(s, t)", "datalog").frames is None
+
+
 def test_run_preview_error(nl):
     preview = run_preview(nl, "ans(s) :- mentions(s, 'pain'", "datalog")
     assert not preview.ok and "parse error" in preview.text

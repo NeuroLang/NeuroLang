@@ -34,6 +34,13 @@ Unreleased
   the missing optional dependency of the apps; docstrings of the apps name
   ``neurolang_apps``.
 
+**Bug fixes:**
+
+* The REPL in the browser could not start: its page and the script that builds
+  its bundle (``doc/make_repl_bundle.py``) imported modules from
+  ``neurolang.utils`` that the split into packages moved to
+  ``neurolang_apps.utils``.
+
 **Performance:**
 
 * A probability over the choice of a study with a peak within a radius of
@@ -66,6 +73,24 @@ Unreleased
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
   :doc:`tutorial_datalog`, section 10.6.
+* The REPL in the browser shows the work of the AI assistant as it happens, in
+  a section of the page you can open: the model's calls, the tool calls of
+  the ReAct agent, its queries and what they gave back. The code box colours
+  the query as the terminal does, in Datalog and in SQUALL. Each result has a
+  Download menu: all its rows as CSV or TSV, and its NIfTI image, the file
+  ``.save`` writes, for each value column; the brain tab offers the images
+  too. In the terminal REPL and in the page, a *Summary* of the query the
+  assistant wrote, its explanation and the query read back in English, is
+  above the query, apart from it, instead of below it. The ReAct agent runs
+  its final query to accept it, and the result it got is shown right away,
+  in the terminal and in the page, instead of the query being run a second
+  time: Enter on the query as it is shows that result again, and an edited
+  query is run as usual. A result larger than 5 million cells, or a query with
+  ``.scope off``, is run when asked, as before. The *Docs* menu and a hint under the box link the keyword at the
+  cursor (``PROB``, ``AGGREGATE``, ``:-``…) to its section of the tutorial;
+  the examples and the relations of the engine, and the rules you define,
+  are listed, to put them in the box with a click; and *Copy link* shares the
+  query in the address (after the ``#``, which no server receives).
 
 * The example LLM configuration has the providers ``albert-deepseek``,
   ``openrouter-gemma`` and ``openrouter-deepseek``: DeepSeek V4 Flash and

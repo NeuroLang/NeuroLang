@@ -44,6 +44,25 @@
   input, select, textarea { background: var(--raised); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .4rem .6rem; font: 13px var(--mono); }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   textarea { width: 100%; min-height: 7rem; resize: vertical; }
+  /* The code box: a transparent textarea over a <pre> with the same text, coloured. */
+  .editor { position: relative; margin-top: .5rem; }
+  .editor pre, .editor textarea { margin: 0; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; font: 13px/1.5 var(--mono); tab-size: 4;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0; scrollbar-gutter: stable; }
+  .editor pre { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: var(--raised); color: var(--text); }
+  .editor textarea { position: relative; display: block; resize: none; max-height: 24rem; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--text); }
+  .editor textarea::placeholder { -webkit-text-fill-color: var(--muted); color: var(--muted); }
+  .editor textarea:disabled { opacity: 1; }
+  .editor:has(textarea:disabled) { opacity: .5; }
+  :root { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
+  :root[data-theme=light] { --tk-comment: #59636e; --tk-keyword: #8250df; --tk-operator: #0550ae; --tk-predicate: #0969da; --tk-string: #116329; --tk-number: #0a7285; }
+  .tk-comment { color: var(--tk-comment); font-style: italic; }
+  .tk-keyword { color: var(--tk-keyword); font-weight: 700; }
+  .tk-operator { color: var(--tk-operator); font-weight: 700; }
+  .tk-predicate { color: var(--tk-predicate); }
+  .tk-string { color: var(--tk-string); }
+  .tk-number { color: var(--tk-number); }
+  /* On the terminal's dark background, whatever the theme. */
+  .agent-query { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
   #question { flex: 1; min-width: 12rem; font-family: var(--sans); font-size: 14px; }
   button { background: var(--ok); color: var(--on-ok); border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-weight: 600; cursor: pointer; }
   button.ghost { background: var(--raised); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
@@ -54,6 +73,29 @@
   #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   #llm label { display: flex; gap: .4rem; align-items: center; }
   #llm-error { color: var(--bad); margin: 0; }
+  /* What the assistant's query does: above the query, apart from it. */
+  #summary { margin-top: .5rem; padding: .4rem .75rem; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--tk-number); border-radius: 6px; }
+  #summary[hidden] { display: none; }
+  #summary strong { color: var(--tk-number); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  #summary p { margin: .15rem 0 0; }
+  #summary p:empty { display: none; }
+  #summary-reads { font-style: italic; }
+  #live { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .4rem .75rem; }
+  #live[hidden] { display: none; }
+  #live summary { color: var(--text); }
+  #live.running summary::after { content: " · working…"; color: var(--accent); }
+  .agent-log { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; font: 13px var(--mono); max-height: 28rem; overflow: auto; }
+  .agent-head, .agent-thought, .agent-obs { color: var(--muted); }
+  .agent-thought { font-style: italic; }
+  .agent-call { color: var(--text); }
+  .agent-query { margin: .25rem 0 .25rem 1rem; padding: .4rem .6rem; background: var(--term); color: #e6edf3; border-radius: 6px; overflow-x: auto; }
+  .agent-obs { margin-left: 1rem; }
+  .agent-obs summary { cursor: pointer; }
+  .agent-obs pre { margin: .25rem 0 0; white-space: pre-wrap; }
+  .agent-pending .agent-obs { color: var(--accent); }
+  .agent-wait { color: var(--accent); }
+  .agent-done { color: var(--ok); font-weight: 600; }
+  .agent-bad { color: var(--bad); }
   .note { margin: 0; font-size: .85rem; max-width: 46rem; }
   #out, #banner { overflow-x: auto; background: var(--term); border-radius: 6px; color: #e6edf3; }
   #out:empty { display: none; }
@@ -82,6 +124,35 @@
   .rt-filter { flex: 1 1 14rem; min-width: 10rem; background: var(--raised); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .25rem .5rem; font: 13px ui-monospace, Menlo, monospace; }
   .rt-bar select, .rt-bar button { background: var(--hover); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: .2rem .6rem; font: inherit; cursor: pointer; }
   .rt-bar button:disabled { opacity: .4; cursor: default; }
+  .rt-menu { position: relative; color: var(--text); }
+  .rt-menu summary { list-style: none; background: var(--hover); border: 1px solid var(--border); border-radius: 6px; padding: .2rem .6rem; }
+  .rt-menu summary::-webkit-details-marker { display: none; }
+  .rt-menu summary::after { content: " ▾"; }
+  .rt-menu-items { position: absolute; right: 0; z-index: 5; display: grid; min-width: 15rem; margin-top: .25rem; padding: .25rem; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+  .rt-menu-items button { background: none; color: var(--text); border: 0; border-radius: 4px; padding: .3rem .6rem; text-align: left; font-weight: 400; }
+  .rt-menu-items button:hover:not(:disabled) { background: var(--hover); }
+  .rt-menu-items button:disabled { opacity: .5; cursor: help; }
+  body[data-busy] .rt-menu summary, body[data-busy] .brain-bar button { pointer-events: none; opacity: .4; }
+  .brain-bar { margin-bottom: .5rem; }
+  .nav-menu { position: relative; color: var(--accent); }
+  .nav-menu summary { list-style: none; cursor: pointer; }
+  .nav-menu summary::-webkit-details-marker { display: none; }
+  .nav-menu summary::after { content: " ▾"; }
+  .nav-menu-items { position: absolute; right: 0; z-index: 5; display: grid; min-width: 14rem; margin-top: .25rem; padding: .25rem; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+  .nav-menu-items a { padding: .3rem .6rem; border-radius: 4px; }
+  .nav-menu-items a:hover { background: var(--hover); }
+  #hint { min-height: 1.4rem; margin-top: .25rem; }
+  #hint code { color: var(--text); }
+  #guide { margin-top: .5rem; }
+  .guide-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
+  .guide-cols h3 { margin: 0 0 .4rem; font-size: .9rem; color: var(--text); }
+  .guide-cols h3 .note { font-weight: 400; margin-left: .4rem; }
+  .guide-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
+  .guide-list li + li { border-top: 1px solid var(--border); }
+  .guide-item { all: unset; display: flex; justify-content: space-between; gap: .5rem; width: 100%; box-sizing: border-box; padding: .3rem .6rem; cursor: pointer; font: 12px var(--mono); color: var(--text); white-space: pre-wrap; }
+  .guide-item:hover, .guide-item:focus-visible { background: var(--hover); }
+  .guide-kind { color: var(--muted); font-family: var(--sans); }
+  #guide-filter { width: 100%; margin-bottom: .4rem; }
   .rt-scroll { max-height: 32rem; overflow: auto; }
   .rt-table { border-collapse: collapse; width: 100%; font: 13px ui-monospace, Menlo, monospace; }
   .rt-table th { position: sticky; top: 0; background: var(--raised); text-align: left; padding: 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -104,7 +175,7 @@
         <button type="button" data-theme="system" title="Computer's theme" aria-label="Computer's theme"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
         <button type="button" data-theme="light" title="Light" aria-label="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
         <button type="button" data-theme="dark" title="Dark" aria-label="Dark"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
-      </div><a href="https://neurolang.github.io/">Docs</a><a href="https://github.com/NeuroLang/NeuroLang">GitHub</a></nav>
+      </div><details id="docs" class="nav-menu"><summary>Docs</summary><div id="docs-links" class="nav-menu-items"></div></details><a href="https://github.com/NeuroLang/NeuroLang">GitHub</a></nav>
   </header>
 
   <form id="ask" class="row">
@@ -127,19 +198,45 @@
     </form>
   </details>
 
+  <details id="live" hidden>
+    <summary id="live-summary">Assistant steps</summary>
+    <ol id="live-log" class="agent-log" aria-live="polite"></ol>
+  </details>
+
   <form id="code">
     <div class="row">
       <select id="mode" aria-label="Language"><option value="datalog">Datalog</option><option value="squall">SQUALL</option></select>
       <select id="history" aria-label="History"><option value="">History</option></select>
     </div>
-    <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" style="margin-top:.5rem"></textarea>
+    <section id="summary" hidden aria-label="What the query does">
+      <strong>Summary</strong>
+      <p id="summary-text"></p>
+      <p id="summary-reads" class="note"></p>
+      <p id="summary-warning" class="agent-bad" role="alert"></p>
+    </section>
+    <div class="editor">
+      <pre id="mirror" aria-hidden="true"></pre>
+      <textarea id="input" spellcheck="false" disabled placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" aria-label="Query"></textarea>
+    </div>
     <div class="row" style="margin-top:.5rem">
       <button id="run" disabled>Run</button>
       <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>
+      <button id="share" type="button" class="ghost" title="Copy a link to this query: it is in the address after the #, which the server never gets">Copy link</button>
       <button id="restart" type="button" class="ghost">Restart</button>
       <span class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
     </div>
   </form>
+  <p id="hint" class="note" aria-live="polite"></p>
+
+  <details id="guide">
+    <summary>Examples and relations</summary>
+    <div class="guide-cols">
+      <div><h3>Examples <span class="note">click one to put it in the box</span></h3><ul id="guide-examples" class="guide-list"></ul></div>
+      <div><h3>Relations and rules <span class="note">click one to add it at the cursor</span></h3>
+        <input id="guide-filter" type="search" placeholder="Filter: name, entity, kind…" aria-label="Filter the relations" spellcheck="false" autocomplete="off">
+        <ul id="guide-relations" class="guide-list"></ul></div>
+    </div>
+  </details>
 
   <div id="out" aria-live="polite"></div>
   <section id="results" data-tab="table">

@@ -4,7 +4,7 @@
 //
 // It loads Pyodide, gets NeuroLang, installs the Neurosynth data it ships,
 // builds the engine, and answers the page's submissions with the HTML
-// that the REPL's output renders to (neurolang.utils.tui.web.WebRepl).
+// that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //
 // NeuroLang is, by default, the wheels of its packages built with the
 // documentation (see doc/make_repl_bundle.py). When the page is asked for a
@@ -145,51 +145,73 @@ async function start({ repo, ref, full }) {
   await pyodide.runPythonAsync(`
 import json
 from pathlib import Path
-from neurolang.utils import engine_registry
-from neurolang.utils.tui.web import WebRepl
+try:
+    from neurolang_apps.utils import engine_registry
+    from neurolang_apps.utils.tui import web
+except ImportError:  # a ref from before the split into packages
+    from neurolang.utils import engine_registry
+    from neurolang.utils.tui import web
+WebRepl = web.WebRepl
 
 # The precomputed analyses (lift, ratios...) fill gigabytes, more than
 # a tab is given: they are left out unless the page asks for them.
 yaml_path = None
 if not ${full ? "True" : "False"}:
     try:
-        from neurolang.utils.tui.web import lightweight_engines_yaml
-        yaml_path = lightweight_engines_yaml("/tmp")
-    except ImportError:  # a version that predates it
+        yaml_path = web.lightweight_engines_yaml("/tmp")
+    except AttributeError:  # a version that predates it
         pass
 nl = engine_registry.build_engine(
     "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path
 )
 repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
 
+# The steps of the AI assistant go to the page as they happen, while this
+# worker is busy with the question: postMessage does not wait for it.
+if hasattr(repl, "set_event_sink"):
+    import js
+    repl.set_event_sink(lambda text: js.postMessage(js.JSON.parse(text)))
+
 def submit(text):
     reply = repl.submit(text)
     return json.dumps(
         {"html": reply.html, "viewers": reply.viewers,
          "failed": reply.failed, "tables": reply.tables,
-         "prompt": reply.prompt}
+         "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
+         "predicates": getattr(reply, "predicates", [])}
     )
 
 # The providers of the AI assistant, for the page's form: none when this
 # version of NeuroLang predates it.
 try:
-    from neurolang.utils.llm.browser import providers_for_form
+    try:
+        from neurolang_apps.utils.llm.browser import providers_for_form
+    except ImportError:
+        from neurolang.utils.llm.browser import providers_for_form
 except ImportError:
     providers_for_form = list
+
+def download(block, kind, value):
+    file = repl.download(block, kind, value)
+    return file.name, file.mime, file.data
 
 def llm_providers():
     return json.dumps(providers_for_form())
 `);
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
-  postMessage({ type: "ready", banner, source, providers });
+  const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
+  const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
+  postMessage({ type: "ready", banner, source, providers, examples, predicates });
   repl = pyodide.globals.get("repl");
+  makeFile = pyodide.globals.get("download");
   return pyodide.globals.get("submit");
 }
 
 // The page starts the worker with the version to run, then submits.
 let submit = null;
 let repl = null;
+let makeFile = null; // the file of a result, for a download
 
 // The visitor's key is given to the REPL, in this worker's memory: from
 // here it goes to the provider, and to no one else.
@@ -219,6 +241,16 @@ onmessage = async ({ data }) => {
       // A ValueError of Python says what is wrong with the choices.
       const message = String(error.message ?? error).trim().split("\n").at(-1);
       postMessage({ type: "llm", ok: false, message: message.replace(/^\w+Error: /, "") });
+    }
+    return;
+  }
+  if (data.type === "download") {
+    try {
+      const [name, mime, bytes] = makeFile(data.block, data.kind, data.value ?? "").toJs();
+      postMessage({ type: "file", name, mime, bytes }, [bytes.buffer]);
+    } catch (error) {
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "file", error: message.replace(/^[\w.]+Error: /, "") });
     }
     return;
   }

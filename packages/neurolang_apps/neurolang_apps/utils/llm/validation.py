@@ -299,14 +299,26 @@ def check_query(nl, text: str, language: str) -> CheckResult:
     return CheckResult(True, datalog=datalog)
 
 
+# The most cells (rows times columns) of a result kept whole, to show it
+# without running its query again: a larger one is run again.
+MAX_KEPT_CELLS = 5_000_000
+
+
 @dataclass
 class Preview:
-    """The rows of a query's result: their number and the first ones."""
+    """
+    The rows of a query's result: their number and the first ones.
+
+    *frame* is the first relation of the result, and *frames* all of them,
+    ``(title, frame)``, when the result is not larger than
+    :data:`MAX_KEPT_CELLS` (None for a boolean, or too large).
+    """
 
     ok: bool
     text: str
     rows: int = 0
     frame: object = None
+    frames: object = None
 
 
 def _frames(result, column_names: dict) -> list:
@@ -476,7 +488,8 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
         else {}
     )
     parts, total, first = [], 0, None
-    for key, frame in _frames(result, names):
+    frames = _frames(result, names)
+    for key, frame in frames:
         total += len(frame)
         first = frame if first is None else first
         title = f"{key}: " if key else ""
@@ -488,4 +501,5 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
                 f"{', '.join(map(str, frame.columns))}\n"
                 + frame.head(rows).to_string(index=False)
             )
-    return Preview(True, "\n".join(parts), total, first)
+    kept = frames if sum(f.size for _, f in frames) <= MAX_KEPT_CELLS else None
+    return Preview(True, "\n".join(parts), total, first, kept)
