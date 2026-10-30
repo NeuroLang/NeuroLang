@@ -26,6 +26,7 @@ class RelationalAlgebraStringExpression(str):
 # tracks both regimes.
 _ANTI_JOIN_MIN_ROWS = 20
 
+
 def _copy_on_write() -> bool:
     """Whether pandas copies frames on write: always from pandas 3."""
     if int(pd.__version__.split(".")[0]) >= 3:

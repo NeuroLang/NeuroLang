@@ -2608,12 +2608,17 @@ def test_uniformity_of_the_activations_given_a_term(seed):
     nl.add_uniform_probabilistic_choice_over_set(
         voxels, name="selected_voxel"
     )
-    result = nl.execute_datalog_program("""
-p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
-p_any_voxel_given_t(t, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
-uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
-ans(i, j, k, u) :- uniformity('a', i, j, k, u)
-""").as_pandas_dataframe()  # noqa: E501
+    result = nl.execute_datalog_program(
+        "p_a_given_t(t, i, j, k, PROB) :- "
+        "(activated(i, j, k, s) & selected_study(s)) // "
+        "(term_in_study(s, t) & selected_study(s))\n"
+        "p_any_voxel_given_t(t, PROB) :- "
+        "(activated(i, j, k, s) & selected_voxel(i, j, k) "
+        "& selected_study(s)) // (term_in_study(s, t) & selected_study(s))\n"
+        "uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) "
+        "& p_any_voxel_given_t(t, pbar) & (u == pat / pbar)\n"
+        "ans(i, j, k, u) :- uniformity('a', i, j, k, u)"
+    ).as_pandas_dataframe()
     got = {
         tuple(int(c) for c in row[:3]): row[3]
         for row in result.itertuples(index=False, name=None)
