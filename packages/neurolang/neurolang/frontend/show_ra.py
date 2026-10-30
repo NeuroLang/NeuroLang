@@ -549,8 +549,8 @@ class RulePlan:
     leaf_arities : dict
         arities of the relations of the plan's leaves.
     deltas : frozenset
-        predicate symbols bound to the tuples derived in the current
-        iteration only (semi-naive evaluation).
+        predicate symbols bound to the tuples derived in the previous
+        iteration or earlier in the current one (semi-naive evaluation).
     iterations : list
         iterations of the chase the plan was evaluated in.
     body_code : Expression
@@ -880,8 +880,8 @@ class ShowRAChaseMixin:
         for symbol in sorted(deltas, key=lambda symbol: symbol.name):
             name = self.show_ra_display.symbol_name(symbol)
             print(
-                f"(Δ{name}: only the {name} tuples derived in the current "
-                "iteration)"
+                f"(Δ{name}: only the {name} tuples derived in the previous "
+                "iteration or earlier in this one)"
             )
 
     def _print_rule_plans(self, rule, variants):

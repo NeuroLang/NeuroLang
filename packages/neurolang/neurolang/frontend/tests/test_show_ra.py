@@ -148,7 +148,7 @@ def test_recursive_leaves_have_no_size(capsys):
         "ans(x, y) :- reach(x, y).",
     )
     assert "edge(z, y) ‹3 rows›" in out
-    assert "├─ reach(x, z)\n" in out
+    assert "├─ Δreach(x, z)\n" in out
     assert "reach(x, z) ‹" not in out
 
 
@@ -431,16 +431,15 @@ def test_recursive_rule_delta_plan_marked(capsys):
     """Check that plans binding a predicate to its delta are marked Δ."""
     out = show_ra_output(capsys, TRANSITIVE_CLOSURE)
     recursive = out.split("    reach(x, z),\n    edge(z, y) ──\n")[1]
-    assert recursive.splitlines()[:6] == [
-        "iteration 1:",
+    # Bound to its delta in every iteration, the rule has a single plan.
+    assert recursive.splitlines()[:4] == [
         "⋈",
         "├─ Δreach(x, z)",
         "└─ edge(z, y) ‹3 rows›",
-        "iterations 2–3:",
-        "⋈",
+        "(fixpoint reached after 3 iterations)",
     ]
-    assert "(Δreach: only the reach tuples derived in the current " \
-        "iteration)" in out
+    assert "(Δreach: only the reach tuples derived in the previous " \
+        "iteration or earlier in this one)" in out
 
 
 def test_non_recursive_stratum_has_no_fixpoint(capsys):
@@ -638,8 +637,10 @@ def test_analyze_partial_atom_rows(capsys):
 
 def test_analyze_recursive_rows_summed_over_iterations(capsys):
     out = show_ra_output(capsys, TRANSITIVE_CLOSURE, show_ra=ANALYZE)
-    assert "iterations 2–3:\n(rows summed over 2 iterations)\n⋈ ‹" in out
-    assert "├─ Δreach(x, z) ‹3 rows›" in out
+    # Deltas of 3, 5 (the 3 edges and the 2 paths of 2 found in the first
+    # iteration) and 1 rows.
+    assert "(rows summed over 3 iterations)\n⋈ ‹5 rows›" in out
+    assert "├─ Δreach(x, z) ‹9 rows›" in out
     assert out.endswith("reach(x, y) ‹6 rows›\n")
 
 

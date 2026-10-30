@@ -119,7 +119,7 @@ class FrozenInstance:
             )
         res = type(self)(new_elements)
         if self._no_sets is not None and other._no_sets is not None:
-            res._no_sets = self._no_sets | other._no_sets
+            res._no_sets = self._no_sets & other._no_sets
         elif self._no_sets is False or other._no_sets is False:
             res._no_sets = False
         return res
