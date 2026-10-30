@@ -1,8 +1,9 @@
 import operator as op
+import random
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture, raises, skip
+from pytest import fixture, mark, raises, skip
 
 from nl_expr import expression_walker as ew
 from nl_expr import expressions
@@ -806,3 +807,53 @@ def test_nested_function_application(chase_class):
         C_(((2 ** 2 + 1 ** 2) // 2,)),
         C_(((2 ** 2 + 2 ** 2) // 2,)),
     }
+
+
+E, F, P, R = S_('E'), S_('F'), S_('P'), S_('R')
+SEMI_NAIVE_PROGRAMS = {
+    'transitive closure': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(x, y), P(x, z) & E(z, y)),
+    ),
+    'mutual recursion': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(Q(x, y), P(x, z) & E(z, y)),
+        Imp_(P(x, y), Q(x, z) & E(z, y)),
+    ),
+    # R(0, 5) joins P(0, 4), derived late, with Q(4, 5), derived early,
+    # while Q still grows: binding both atoms to their deltas would lose it.
+    'two recursive atoms': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(x, y), P(x, z) & E(z, y)),
+        Imp_(Q(x, y), F(x, y)),
+        Imp_(Q(x, y), Q(x, z) & F(z, y)),
+        Imp_(R(x, y), P(x, z) & Q(z, y)),
+    ),
+}
+
+
+@mark.parametrize('seed', range(3))
+@mark.parametrize('program', SEMI_NAIVE_PROGRAMS)
+@mark.parametrize('cq_class', (
+    ChaseMGUMixin,
+    ChaseNamedRelationalAlgebraMixin,
+    ChaseRelationalAlgebraPlusCeriMixin,
+))
+def test_semi_naive_solution_is_the_naive_one(program, cq_class, seed):
+    rng = random.Random(seed)
+    edges = {(i, i + 1) for i in range(4)} | {
+        (rng.randrange(8), rng.randrange(8)) for _ in range(12)
+    }
+    solutions = []
+    for step_class in (ChaseNaive, ChaseSemiNaive):
+        class C(step_class, cq_class, ChaseGeneral):
+            pass
+
+        dl = Datalog()
+        dl.add_extensional_predicate_from_tuples(E, edges)
+        dl.add_extensional_predicate_from_tuples(
+            F, {(i, i + 1) for i in range(4, 14)}
+        )
+        dl.walk(Eb_(SEMI_NAIVE_PROGRAMS[program]))
+        solutions.append(C(dl).build_chase_solution())
+    assert solutions[0] == solutions[1]
