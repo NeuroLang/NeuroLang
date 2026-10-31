@@ -50,6 +50,9 @@ Unreleased
   other, a term a lot; their peaks; the terms of a study), the ones the
   engine has the predicates of, which puts the Datalog query in the box.
 
+* ``.explain`` reads the last query that ran in English, with the assistant;
+  the browser REPL has an *Explain* button for it once an API key is in use.
+
 * The browser REPL has a *Stop* button while a query runs: the engine is
   restarted (its data are kept by the browser) and the rules defined in the
   session are run again; *Save session* and *Open session* keep the

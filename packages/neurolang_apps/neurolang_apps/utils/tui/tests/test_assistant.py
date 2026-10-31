@@ -544,3 +544,43 @@ def test_ask_shows_the_query_read_back(app):
     assert "→ verify()" in text
     assert "Reads back as: Every study again." in text
     assert "may not answer the question: Still not." in text
+
+
+def test_explain_reads_the_last_query_in_english(app):
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    client = script(app, "The studies that mention the term pain.")
+    app._run_line(".explain")
+    assert not app.failed
+    assert "Reads as: The studies that mention the term pain." in output(app)
+    request = client.requests[0]["messages"][1]["content"]
+    assert "ans(s) :- mentions(s, 'pain')" in request
+    assert "Datalog" in client.requests[0]["messages"][0]["content"]
+
+
+def test_explain_follows_the_language_of_the_query(app):
+    app.settings.squall = True
+    app._run_line(PAIN)
+    client = script(app, "Every study that mentions pain.")
+    app._run_line(".explain")
+    assert "SQUALL" in client.requests[0]["messages"][0]["content"]
+    assert "Reads as: Every study that mentions pain." in output(app)
+
+
+def test_explain_without_a_query_or_with_an_arg_says_the_usage(app):
+    app._run_line(".explain")
+    assert app.failed and "Run a query first" in output(app)
+    app._run_line(".explain ans(s) :- study(s)")
+    assert "Usage: .explain" in output(app)
+
+
+def test_explain_reports_provider_errors(app):
+    from neurolang_apps.utils.llm import LLMError
+
+    class Failing:
+        def complete(self, *args, **kwargs):
+            raise LLMError("first: HTTP 401: bad key")
+
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    app.assistant.client = Failing()
+    app._run_line(".explain")
+    assert app.failed and "HTTP 401: bad key" in output(app)
