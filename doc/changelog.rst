@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The browser REPL opens its examples on the first start, when the box is
+  empty; the assistant's *Ask* button is filled only once a key is in use, so
+  that *Run* is the only primary action; the empty gap above the examples is
+  gone; a result table is as wide as its columns, with the header over its
+  numbers; and the keyboard focus is visible on the lists and the sortable
+  headers.
+
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at

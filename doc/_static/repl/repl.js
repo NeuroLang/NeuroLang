@@ -168,6 +168,7 @@ function useKey() {
   $("llm-error").hidden = true;
   const chosen = choices();
   worker.postMessage({ type: "llm", ...chosen });
+  Object.assign($("ask-run"), { title: "" }).classList.remove("ghost");
   $("llm-summary").textContent = `${providers.find((p) => p.id === chosen.provider)?.label ?? chosen.provider}, key in use`;
 }
 
@@ -216,6 +217,7 @@ function start() {
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
       guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [] };
+      if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
       showGuide();
       setBusy(false);
       restoreShared();
@@ -342,6 +344,7 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign(llmForm.elements.key, { value: "" });
   llmForm.elements.remember.checked = false;
   worker.postMessage({ type: "llm", key: "" });
+  Object.assign($("ask-run"), { title: "Add an API key to use the assistant" }).classList.add("ghost");
   $("llm-error").hidden = true;
   $("llm-summary").textContent = "bring your own API key";
 });
