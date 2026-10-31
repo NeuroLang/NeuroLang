@@ -26,7 +26,6 @@ Unreleased
   numbers; and the keyboard focus is visible on the lists and the sortable
   headers.
 
-
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at
