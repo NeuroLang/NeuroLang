@@ -10,6 +10,7 @@ import { Editor } from "./editor.js";
 import { renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
+import { followUpQuery } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
 import { tabAfter } from "./tabs.js";
@@ -279,7 +280,14 @@ function start() {
       else editor.refresh();
       if (data.tables?.length) {
         lastTables = data.tables;
-        show("table", ...data.tables.map((table) => renderTable(table, { download: requestDownload })));
+        // A result is a relation to go on from only if the query that made it is known.
+        const query = data.prompt || (lastRun.trim().startsWith(".") ? "" : lastRun);
+        const squall = $("mode").value === "squall";
+        show("table", ...data.tables.map((table) => renderTable(table, {
+          download: requestDownload,
+          followUp: data.tables.length === 1 ? (payload) => followUpQuery(payload, query, squall) : null,
+          use: goOn,
+        })));
       }
       if (data.viewers?.length) {
         const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: data.viewers.at(-1), title: "NeuroLang brain viewer" });
@@ -300,6 +308,15 @@ function showLog(log, fold) {
   out.replaceChildren(details);
 }
 
+// The query that goes on from a result takes the place of what is in the box, the caret at its end.
+let lastRun = ""; // what was last submitted
+function goOn(text) {
+  editor.value = text;
+  hideSummary();
+  input.focus();
+  input.setSelectionRange(text.length, text.length);
+}
+
 function run(text, { remember = false } = {}) {
   text = text.trim();
   if (!text) return;
@@ -308,6 +325,7 @@ function run(text, { remember = false } = {}) {
     showHistory();
   }
   setBusy(true);
+  lastRun = text;
   setStatus("Running…", "busy");
   if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
   worker.postMessage({ text });
