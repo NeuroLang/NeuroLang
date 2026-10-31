@@ -457,3 +457,68 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     assert engine_registry.list_engine_names(
         path
     ) == engine_registry.list_engine_names()
+
+
+STUDIES = [
+    {"id": 9065511, "doi": "10.1523/JNEUROSCI.17-07-02512.1997",
+     "title": "Environmental knowledge.", "authors": "Aguirre GK",
+     "year": 1997, "journal": "J Neurosci"},
+    {"id": 9084599, "doi": None, "title": "Anatomy of motor learning.",
+     "authors": "Jueptner M", "year": 1997, "journal": float("nan")},
+    {"id": 1, "doi": None, "title": "Not in the result", "authors": "",
+     "year": 2000, "journal": ""},
+]
+
+
+@pytest.fixture
+def studies_repl():
+    import pandas as pd
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(9065511,), (9084599,)], name="study")
+    nl.add_tuple_set([(9065511, "pain"), (9084599, "motor")], name="mentions")
+    return WebRepl(
+        nl, engine_name="neurosynth", study_metadata=pd.DataFrame(STUDIES)
+    )
+
+
+class TestStudyLinks:
+    def test_a_column_of_studies_tells_its_sort(self, studies_repl):
+        [table] = studies_repl.submit("ans(s, t) :- mentions(s, t)").tables
+        assert table["sorts"] == ["study", "term"]
+
+    def test_the_records_of_the_studies_shown_come_with_the_table(
+        self, studies_repl
+    ):
+        [table] = studies_repl.submit("ans(s) :- study(s)").tables
+        links = table["study_links"]
+        assert links["columns"] == [0]
+        assert set(links["records"]) == {"9065511", "9084599"}
+        first = links["records"]["9065511"]
+        assert first["doi"] == "10.1523/JNEUROSCI.17-07-02512.1997"
+        assert first["title"] == "Environmental knowledge."
+        assert first["year"] == 1997
+        # What the metadata lacks is left out, not null or NaN.
+        assert links["records"]["9084599"] == {
+            "title": "Anatomy of motor learning.", "authors": "Jueptner M",
+            "year": 1997,
+        }
+
+    def test_the_links_are_json(self, studies_repl):
+        import json
+
+        reply = studies_repl.submit("ans(s) :- study(s)")
+        assert json.loads(json.dumps(reply.tables)) == reply.tables
+
+    def test_a_result_without_studies_has_no_links(self, studies_repl):
+        [table] = studies_repl.submit("ans(t) :- mentions(s, t)").tables
+        assert "study_links" not in table
+
+    def test_without_metadata_there_are_no_links(self, repl):
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,)], name="study")
+        [table] = WebRepl(nl, engine_name="neurosynth").submit(
+            "ans(s) :- study(s)"
+        ).tables
+        assert table["sorts"] == ["study"]
+        assert "study_links" not in table

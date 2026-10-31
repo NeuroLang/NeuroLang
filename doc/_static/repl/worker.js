@@ -177,7 +177,16 @@ nl = engine_registry.build_engine(
     "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
 )
 say("Starting the REPL")
-repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION})
+# The metadata of the studies (their DOIs, titles...) let the page link the
+# studies of a result; a version that predates them does not take them.
+options = {}
+if "study_metadata" in inspect.signature(WebRepl).parameters:
+    try:
+        from neurolang.frontend.neurosynth_utils import fetch_study_metadata
+        options["study_metadata"] = fetch_study_metadata(Path("/data"), verbose=0)
+    except Exception:
+        pass
+repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION}, **options)
 
 # The steps of the AI assistant go to the page as they happen, while this
 # worker is busy with the question: postMessage does not wait for it.

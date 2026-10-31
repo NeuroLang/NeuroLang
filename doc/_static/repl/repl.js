@@ -15,6 +15,7 @@ import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
 import { Session, parseSession, replayTexts } from "./session.js";
+import { PmcLookup } from "./study_links.js";
 import { tabAfter } from "./tabs.js";
 
 const $ = (id) => document.getElementById(id);
@@ -334,6 +335,7 @@ function start({ restore = null } = {}) {
         const squall = $("mode").value === "squall";
         show("table", ...data.tables.map((table) => renderTable(table, {
           download: requestDownload,
+          pmc,
           followUps: data.tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
           use: goOn,
         })));
@@ -360,6 +362,7 @@ function showLog(log, fold) {
 // The query that goes on from a result takes the place of what is in the box, the caret at its end.
 // Whether the engine has the peaks the studies report, from which a result of studies is mapped.
 const hasPeaks = () => guide.predicates.some((predicate) => predicate.name === "peak_reported");
+const pmc = new PmcLookup(); // the PubMed Central records of the studies shown, from Europe PMC
 let lastRun = ""; // what was last submitted
 const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
