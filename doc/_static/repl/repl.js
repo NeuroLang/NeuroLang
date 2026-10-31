@@ -10,7 +10,7 @@ import { Editor } from "./editor.js";
 import { renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
-import { followUpQuery } from "./follow_up.js";
+import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
 import { Session, parseSession, replayTexts } from "./session.js";
@@ -296,7 +296,7 @@ function start({ restore = null } = {}) {
         const squall = $("mode").value === "squall";
         show("table", ...data.tables.map((table) => renderTable(table, {
           download: requestDownload,
-          followUp: data.tables.length === 1 ? (payload) => followUpQuery(payload, query, squall) : null,
+          followUps: data.tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
           use: goOn,
         })));
       }
@@ -320,6 +320,8 @@ function showLog(log, fold) {
 }
 
 // The query that goes on from a result takes the place of what is in the box, the caret at its end.
+// Whether the engine has the peaks the studies report, from which a result of studies is mapped.
+const hasPeaks = () => guide.predicates.some((predicate) => predicate.name === "peak_reported");
 let lastRun = ""; // what was last submitted
 const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
