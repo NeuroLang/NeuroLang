@@ -192,8 +192,34 @@ def _cell(value):
     return cell_text(value)
 
 
+# The sort of the studies of the engines whose studies are those of PubMed.
+STUDY_SORT = "study"
+# What the page shows of a study: its metadata, the DOI first.
+STUDY_FIELDS = ("doi", "title", "authors", "year", "journal")
+
+
+def study_records(metadata: pd.DataFrame) -> dict:
+    """
+    Return the records of the studies of *metadata*, a frame with an ``id``
+    column (the PubMed id) and some of :data:`STUDY_FIELDS`, by id. What a
+    study lacks is not in its record.
+    """
+    columns = [name for name in STUDY_FIELDS if name in metadata.columns]
+    records = {}
+    for row in metadata[["id", *columns]].itertuples(index=False, name=None):
+        cells = {
+            name: _cell(value) for name, value in zip(columns, row[1:])
+        }
+        records[int(row[0])] = {
+            name: value for name, value in cells.items()
+            if value not in (None, "")
+        }
+    return records
+
+
 def table_payload(
-    frame: pd.DataFrame, title: str = "", max_rows: int = MAX_ROWS
+    frame: pd.DataFrame, title: str = "", max_rows: int = MAX_ROWS,
+    sorts=None, studies=None,
 ) -> dict:
     """
     Return the result *frame* as JSON data for the page's table viewer.
@@ -201,9 +227,13 @@ def table_payload(
     The ``columns`` and their ``kinds`` (bool, int, float, str or other,
     for the sort), the first *max_rows* ``rows`` of cells, the ``total``
     number of rows, whether the rows are ``truncated`` and the ``title``.
+    With the *sorts* of the columns (the name of each, None if unknown),
+    ``sorts``; and if some columns are of studies, and the *studies* are
+    known (see :func:`study_records`), ``study_links``: those ``columns``,
+    and the ``records`` of the studies the rows hold, by id.
     """
     kept = frame.iloc[:max_rows]
-    return {
+    payload = {
         "title": title,
         "columns": [str(column) for column in frame.columns],
         "kinds": [_kind(frame[column]) for column in frame.columns],
@@ -212,6 +242,28 @@ def table_payload(
         "total": len(frame),
         "truncated": len(frame) > len(kept),
     }
+    if sorts is not None:
+        payload["sorts"] = list(sorts)
+        links = _study_links(kept, payload["sorts"], studies)
+        if links:
+            payload["study_links"] = links
+    return payload
+
+
+def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
+    """Return the ``study_links`` of the *frame*, or an empty dict."""
+    columns = [i for i, sort in enumerate(sorts) if sort == STUDY_SORT]
+    if not columns or not studies:
+        return {}
+    ids = {
+        _cell(value) for i in columns for value in frame.iloc[:, i]
+    }
+    return {
+        "columns": columns,
+        "records": {
+            str(study): studies[study] for study in ids if study in studies
+        },
+    }
 
 
 class WebRepl:
@@ -219,15 +271,21 @@ class WebRepl:
 
     def __init__(
         self, nl, engine_name: str = "", resolution=None, width: int = 100,
-        max_rows: int = MAX_ROWS,
+        max_rows: int = MAX_ROWS, study_metadata=None,
     ):
         """
         Set up the REPL on *nl*, the engine *engine_name* at *resolution*.
 
         The output is laid out on *width* columns, and at most *max_rows*
-        rows of a result are sent to the page.
+        rows of a result are sent to the page. The *study_metadata* (see
+        :func:`study_records`) of the engine's studies, whose ids are
+        those of PubMed, let the page link the studies of a result.
         """
         self.max_rows = max_rows
+        self._studies = (
+            study_records(study_metadata) if study_metadata is not None
+            else None
+        )
         self._tables: list = []
         command = "neurolang-query -i"
         if engine_name:
@@ -340,7 +398,12 @@ class WebRepl:
             self.console.print(
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
-        table = table_payload(block.frame, block.title, self.max_rows)
+        sorts = [s.sort if s else None for s in block.sorts or ()]
+        table = table_payload(
+            block.frame, block.title, self.max_rows,
+            sorts if len(sorts) == len(block.frame.columns) else None,
+            self._studies,
+        )
         table.update(self._downloads_of(block))
         self._tables.append(table)
         block.shown = len(block.frame)

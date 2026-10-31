@@ -2,6 +2,7 @@
 // filter, page through, copy and download. The rows are the model's
 // (table_model.js).
 import { TableModel, cellText } from "./table_model.js";
+import { citation, doiUrl, pmcUrl, pubmedUrl, studyColumns } from "./study_links.js";
 
 const PAGE_SIZES = [20, 50, 100, 500];
 const NUMERIC = new Set(["int", "float"]);
@@ -66,9 +67,15 @@ export function imageButtons(payloads, download) {
   return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
 }
 
+// A link that opens in a new tab.
+const outside = (href, text, title, className = "") =>
+  element("a", { href, target: "_blank", rel: "noopener", textContent: text, title, className });
+
 // *followUps*(payload) gives the queries that go on from the result, each with a
 // *label*, a *title* and its *text*, which *use*(text) puts in the code box.
-export function renderTable(payload, { download = null, followUps = null, use = null } = {}) {
+// *pmc*, if given, looks the PubMed Central records of the studies up (see
+// study_links.js) for the pages it shows.
+export function renderTable(payload, { download = null, followUps = null, use = null, pmc = null } = {}) {
   const model = new TableModel(payload);
   let pageIndex = 0;
   let pageSize = PAGE_SIZES[0];
@@ -120,12 +127,40 @@ export function renderTable(payload, { download = null, followUps = null, use = 
     });
   }
 
-  function renderBody() {
+  const studies = new Set(studyColumns(payload));
+  const records = payload.study_links?.records ?? {};
+
+  // A study: its PubMed record, and its DOI and PubMed Central record when they are known.
+  function studyCell(value) {
+    const record = records[value] ?? {};
+    const found = pmc?.known.get(String(value)) ?? {};
+    const doi = record.doi ?? found.doi;
+    const text = citation(record);
+    return element("td", { className: "rt-num rt-study", title: text },
+      outside(pubmedUrl(value), String(value), text || "The PubMed record of the study"),
+      ...(doi ? [outside(doiUrl(doi), "DOI", `DOI ${doi}`, "rt-ref")] : []),
+      ...(found.pmcid ? [outside(pmcUrl(found.pmcid), "PMC", `${found.pmcid}, found with Europe PMC`, "rt-ref")] : []));
+  }
+
+  // The PubMed Central records of the studies of the page, which are shown when they come.
+  function findRecords(page) {
+    const ids = page.rows.flatMap(({ cells }) => [...studies].map((column) => cells[column]))
+      .filter((id) => Number.isInteger(id));
+    if (!pmc || !ids.length) return;
+    const before = pmc.known.size;
+    pmc.lookup(ids).then(() => {
+      if (pmc.known.size > before) renderBody({ lookUp: false });
+    });
+  }
+
+  function renderBody({ lookUp = true } = {}) {
     const page = model.page(pageIndex, pageSize);
     pageIndex = page.index;
+    if (lookUp) findRecords(page);
     body.replaceChildren(...page.rows.map(({ number, cells }) => element("tr", {},
       element("td", { className: "rt-number", textContent: number }),
       ...cells.map((value, column) => {
+        if (studies.has(column) && Number.isInteger(value)) return studyCell(value);
         const text = shown(value, model.kinds[column]);
         const cell = element("td", {
           className: NUMERIC.has(model.kinds[column]) ? "rt-num" : "", textContent: text, title: text,

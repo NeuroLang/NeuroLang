@@ -53,6 +53,14 @@ Unreleased
 * ``.explain`` reads the last query that ran in English, with the assistant;
   the browser REPL has an *Explain* button for it once an API key is in use.
 
+* In the browser REPL, the studies of a result are links: to their PubMed
+  record, to their DOI (the engine's metadata have it; the tooltip gives the
+  title, authors, year and journal) and, when Europe PMC knows it, to their
+  PubMed Central record. Europe PMC is asked for the PubMed ids of the studies
+  on the page, nothing else; if it cannot be reached the other links stay.
+  A table tells the sort of each of its columns (``sorts``) and, if some are
+  studies, their ``study_links``.
+
 * The browser REPL has a *Stop* button while a query runs: the engine is
   restarted (its data are kept by the browser) and the rules defined in the
   session are run again; *Save session* and *Open session* keep the
