@@ -13,6 +13,7 @@ import { decodeShare, encodeShare } from "./share.js";
 import { followUpQuery } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
+import { Session, parseSession, replayTexts } from "./session.js";
 import { tabAfter } from "./tabs.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +21,7 @@ const [statusBox, out, input, question, history_] = ["status", "out", "input", "
 const llmForm = $("llm");
 const results = $("results");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
-const busyControls = [input, question, $("run"), $("ask-run"), $("view")];
+const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("session-open")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
 loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
@@ -84,7 +85,10 @@ const html = (markup) => Object.assign(document.createElement("div"), { innerHTM
 const setBusy = (busy) => {
   document.body.toggleAttribute("data-busy", busy);
   busyControls.forEach((control) => (control.disabled = busy));
-  if (!busy) input.focus();
+  if (!busy) {
+    $("stop").hidden = true;
+    input.focus();
+  }
 };
 
 // The tables of the last result, for the downloads of the brain tab, which
@@ -216,7 +220,8 @@ function setProviders(list) {
 }
 
 // The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH.
-function start() {
+function start({ restore = null } = {}) {
+  if (!restore) session.replace([]); // a new engine has none of the rules
   worker?.terminate();
   const params = new URLSearchParams(location.search);
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
@@ -253,8 +258,11 @@ function start() {
       guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [] };
       if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
       showGuide();
-      setBusy(false);
-      restoreShared();
+      if (restore) replay(restore);
+      else {
+        setBusy(false);
+        restoreShared();
+      }
     } else if (data.type === "file") {
       setBusy(false);
       if (data.error) {
@@ -270,8 +278,11 @@ function start() {
       if (data.event === "done") showSummary(data);
     } else if (data.type === "llm") {
       if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
+    } else if (data.type === "reply" && replaying) {
+      replayStep(data);
     } else if (data.type === "reply") {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
+      if (!data.failed) session.add(lastRun, $("mode").value);
       showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
       if (data.predicates) guide.predicates = data.predicates;
       if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
@@ -310,11 +321,42 @@ function showLog(log, fold) {
 
 // The query that goes on from a result takes the place of what is in the box, the caret at its end.
 let lastRun = ""; // what was last submitted
+const session = new Session();
+let replaying = null; // the statements being run again, silently, and how many failed
 function goOn(text) {
   editor.value = text;
   hideSummary();
   input.focus();
   input.setSelectionRange(text.length, text.length);
+}
+
+// Run again, one after the other, the statements that give back a session's rules.
+function replay({ entries, box, mode }, { clear = false } = {}) {
+  replaying = { queue: replayTexts(entries, mode, { clear }), total: 0, failed: 0, box, mode };
+  replaying.total = replaying.queue.length;
+  setBusy(true);
+  replayNext();
+}
+
+function replayNext() {
+  const text = replaying.queue.shift();
+  if (text === undefined) {
+    const { failed, box, mode } = replaying;
+    replaying = null;
+    $("mode").value = mode;
+    editor.refresh();
+    if (box) editor.value = box;
+    setStatus(failed ? `Ready. ${failed} statement${failed === 1 ? "" : "s"} of the session did not run again.` : "Ready: the rules of the session are back.");
+    setBusy(false);
+    return;
+  }
+  setStatus(`Restoring the rules of the session (${replaying.total - replaying.queue.length} of ${replaying.total})…`, "busy");
+  worker.postMessage({ text });
+}
+
+function replayStep(data) {
+  if (data.failed) replaying.failed += 1;
+  replayNext();
 }
 
 function run(text, { remember = false } = {}) {
@@ -325,6 +367,7 @@ function run(text, { remember = false } = {}) {
     showHistory();
   }
   setBusy(true);
+  $("stop").hidden = false;
   lastRun = text;
   setStatus("Running…", "busy");
   if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
@@ -431,7 +474,31 @@ $("llm-forget").addEventListener("click", () => {
   $("key").textContent = "API key";
   $("ask-note").hidden = false;
 });
-$("restart").addEventListener("click", start);
+$("restart").addEventListener("click", () => start());
+$("stop").addEventListener("click", () => {
+  const entries = session.entries.map((entry) => ({ ...entry }));
+  worker.terminate();
+  setStatus("Stopped. The engine restarts, with the rules of the session (its data are kept by the browser)…", "busy");
+  start({ restore: { entries, box: editor.value, mode: $("mode").value } });
+});
+$("session-save").addEventListener("click", () => {
+  saveFile({ name: "neurolang-session.json", mime: "application/json", bytes: session.serialise(editor.value, $("mode").value) });
+});
+$("session-open").addEventListener("click", () => $("session-file").click());
+$("session-file").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const opened = parseSession(await file.text());
+    session.replace(opened.entries);
+    $("mode").value = opened.mode;
+    replay(opened, { clear: true });
+  } catch (error) {
+    out.classList.remove("quiet");
+    out.replaceChildren(Object.assign(document.createElement("pre"), { textContent: error.message }));
+  }
+});
 version.addEventListener("submit", (event) => {
   event.preventDefault();
   const params = new URLSearchParams();
