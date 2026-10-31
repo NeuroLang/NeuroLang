@@ -20,6 +20,7 @@ no one else.
 
 import csv
 import gzip
+import inspect
 import io
 import json
 import math
@@ -41,7 +42,7 @@ from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
 
 from . import nifti
 from .app import InteractiveTuiApp, TuiSettings
-from .commands import QuitRepl, engine_examples
+from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
 
 # The most rows of a result sent to the page.
@@ -191,6 +192,9 @@ def _cell(value):
         return value
     return cell_text(value)
 
+
+# The commands that end a terminal session, which a page cannot end.
+TERMINAL_COMMANDS = (".quit", ".exit")
 
 # The sort of the studies of the engines whose studies are those of PubMed.
 STUDY_SORT = "study"
@@ -423,7 +427,8 @@ class WebRepl:
         Return the predicates of the engine and of the session, for the
         page to list: ``name``, ``kind`` (stored, derived, session...),
         ``signature`` as ``.predicates`` shows it, and the engine's
-        ``description``, if any.
+        ``description``, if any, with its ``arguments``: the ``columns``,
+        ``sort`` and ``type`` of each.
         """
         engine = self.app.settings.engine_name
         signatures = engine_registry.get_signatures(engine) if engine else {}
@@ -435,8 +440,31 @@ class WebRepl:
         return [
             {"name": info.name, "kind": info.kind,
              "signature": info.signature(),
-             "description": described.get(info.name, {}).get("description", "")}
+             "description": described.get(info.name, {}).get("description", ""),
+             "arguments": [
+                 {"columns": list(argument["columns"]),
+                  "sort": argument["sort"], "type": argument["type"]}
+                 for argument in described.get(info.name, {}).get(
+                     "arguments", []
+                 )
+             ]}
             for info in infos
+        ]
+
+    def commands(self) -> List[dict]:
+        """
+        Return the dot-commands the page can run, to document them: the
+        ``name``, ``usage`` and ``description``, the ``details`` of its
+        function's docstring and its help ``topic`` (``.help TOPIC`` tells
+        more), or an empty one.
+        """
+        return [
+            {"name": name, "usage": command.usage,
+             "description": command.help,
+             "details": inspect.getdoc(command.handler) or "",
+             "topic": name[1:] if name[1:] in HELP_TOPICS else ""}
+            for name, command in COMMANDS.items()
+            if name not in TERMINAL_COMMANDS
         ]
 
     def _downloads_of(self, block: ResultBlock) -> dict:

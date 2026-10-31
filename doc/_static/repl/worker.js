@@ -263,7 +263,8 @@ def llm_providers():
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
-  postMessage({ type: "ready", banner, source, providers, examples, predicates });
+  const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
+  postMessage({ type: "ready", banner, source, providers, examples, predicates, commands });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   return pyodide.globals.get("submit");

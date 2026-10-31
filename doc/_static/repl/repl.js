@@ -7,7 +7,7 @@ import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
-import { renderExamples, renderPredicates } from "./guide.js";
+import { renderCommands, renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -125,7 +125,7 @@ function showHint() {
 ["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
 
 // The examples of the engine and its predicates, which put their text in the box.
-let guide = { examples: {}, predicates: [] };
+let guide = { examples: {}, predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
@@ -134,7 +134,12 @@ function showGuide() {
     hideSummary();
     input.focus();
   });
-  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall);
+  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, 200, (query) => {
+    editor.value = query;
+    hideSummary();
+    input.focus();
+  });
+  renderCommands($("guide-commands"), guide.commands, $("guide-filter").value, (name) => editor.insert(name), (topic) => run(`.help ${topic}`));
   showBuilder();
 }
 // The form of the common questions: those the engine has the predicates of, in Datalog.
@@ -294,7 +299,7 @@ function start({ restore = null } = {}) {
       $("boot").hidden = true;
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
-      guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [] };
+      guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
       if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
       showGuide();
       if (restore) replay(restore);
