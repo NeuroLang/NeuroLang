@@ -150,7 +150,16 @@
   .guide-cols h3 { margin: 0 0 .4rem; font-size: .9rem; color: var(--text); }
   .guide-cols h3 .note { font-weight: 400; margin-left: .4rem; }
   .guide-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
-  .guide-list li + li { border-top: 1px solid var(--border); }
+  .guide-list > li + li { border-top: 1px solid var(--border); }
+  .guide-list > li { display: flex; flex-wrap: wrap; align-items: flex-start; }
+  .guide-list .guide-item { flex: 1 1 0; width: auto; min-width: 0; }
+  .guide-info { background: none; color: var(--muted); border: 0; padding: .3rem .6rem; font-weight: 400; }
+  .guide-info[aria-expanded=true] { color: var(--accent); }
+  .guide-doc { flex-basis: 100%; padding: .25rem .75rem .6rem; background: var(--bg); color: var(--text); border-top: 1px dashed var(--border); }
+  .guide-doc[hidden] { display: none; }
+  .guide-doc p { margin: .25rem 0; }
+  .guide-doc ul { margin: .25rem 0; padding-left: 1.2rem; }
+  .guide-doc .note { white-space: pre-wrap; }
   .guide-item { all: unset; display: flex; justify-content: space-between; gap: .5rem; width: 100%; box-sizing: border-box; padding: .3rem .6rem; cursor: pointer; font: 12px var(--mono); color: var(--text); white-space: pre-wrap; }
   .guide-item:hover, .guide-item:focus-visible { background: var(--hover); }
   .guide-kind { color: var(--muted); font-family: var(--sans); }
@@ -158,6 +167,8 @@
   #builder { margin-bottom: .75rem; color: var(--text); }
   #builder[hidden] { display: none; }
   #builder-fields input { width: 9rem; }
+  #builder select { max-width: 100%; }
+  #guide { min-width: 0; }
   .rt-scroll { max-height: 32rem; overflow: auto; }
   .rt-table { border-collapse: collapse; min-width: 20rem; font: 13px ui-monospace, Menlo, monospace; }
   .rt-table th { position: sticky; top: 0; background: var(--raised); text-align: left; padding: 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -282,9 +293,11 @@
     </form>
     <div class="guide-cols">
       <div><h3>Examples <span class="note">click one to put it in the box</span></h3><ul id="guide-examples" class="guide-list"></ul></div>
-      <div><h3>Relations and rules <span class="note">click one to add it at the cursor</span></h3>
-        <input id="guide-filter" type="search" placeholder="Filter: name, entity, kind…" aria-label="Filter the relations" spellcheck="false" autocomplete="off">
+      <div><h3>Relations and rules <span class="note">click one to add it at the cursor, ⓘ for its documentation</span></h3>
+        <input id="guide-filter" type="search" placeholder="Filter relations and commands…" aria-label="Filter the relations and the commands" spellcheck="false" autocomplete="off">
         <ul id="guide-relations" class="guide-list"></ul></div>
+      <div><h3>Commands <span class="note">click one to type it, ⓘ for what it does</span></h3>
+        <ul id="guide-commands" class="guide-list"></ul></div>
     </div>
   </details>
 

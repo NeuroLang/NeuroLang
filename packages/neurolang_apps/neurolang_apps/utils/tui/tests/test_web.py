@@ -522,3 +522,42 @@ class TestStudyLinks:
         ).tables
         assert table["sorts"] == ["study"]
         assert "study_links" not in table
+
+
+def test_the_predicates_of_the_engine_say_what_their_columns_are(repl):
+    named = {p["name"]: p for p in repl.predicates()}
+    assert named["person"]["arguments"] == []  # the session's have no declaration
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3, 9065511)], name="peak_reported")
+    peaks = {
+        p["name"]: p
+        for p in WebRepl(nl, engine_name="neurosynth").predicates()
+    }["peak_reported"]
+    assert peaks["description"]
+    assert peaks["arguments"] == [
+        {"columns": ["i", "j", "k"], "sort": "voxel", "type": "int"},
+        {"columns": ["study_id"], "sort": "study", "type": "int"},
+    ]
+
+
+def test_the_commands_come_with_what_they_do(repl):
+    commands = {c["name"]: c for c in repl.commands()}
+    assert {".view", ".mode", ".help", ".ask"} <= set(commands)
+    view = commands[".view"]
+    assert view["usage"].startswith(".view")
+    assert view["description"]
+    assert view["topic"] == "view"  # .help view tells more
+    assert commands[".mode"]["topic"] == ""
+    assert "Switch the query language" in commands[".mode"]["description"]
+    assert commands[".mode"]["details"].startswith("Switch between")
+
+
+def test_the_commands_that_end_a_terminal_session_are_not_listed(repl):
+    names = {c["name"] for c in repl.commands()}
+    assert ".quit" not in names and ".exit" not in names
+
+
+def test_the_commands_are_json(repl):
+    import json
+
+    assert json.loads(json.dumps(repl.commands())) == repl.commands()

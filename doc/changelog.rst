@@ -61,6 +61,14 @@ Unreleased
   A table tells the sort of each of its columns (``sorts``) and, if some are
   studies, their ``study_links``.
 
+* The browser REPL documents each relation and each command. In *Examples and
+  relations*, the button *ⓘ* of a relation tells what it holds (the engine's
+  description), its columns with their sort and type, and where it comes from,
+  and puts it in the box or the query for all its rows; there is a list of the
+  commands, each with what it does and its full help. One filter searches both
+  lists. ``WebRepl.predicates()`` gives the ``arguments`` of each relation and
+  ``WebRepl.commands()`` the commands.
+
 * The browser REPL has a *Stop* button while a query runs: the engine is
   restarted (its data are kept by the browser) and the rules defined in the
   session are run again; *Save session* and *Open session* keep the
