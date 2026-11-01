@@ -1,6 +1,7 @@
 # The packages of NeuroLang, from the top: each imports only the packages
 # below it. Tests are checked as part of their package.
 #   neurolang_apps  the command line, terminal interface, engines, assistant
+#   nl_tracts       tractography: atlases and tractograms as relations
 #   neurolang       the language: parsers, frontends, regions, neuroimaging
 #   nl_core         relational algebra and its sets, Datalog, probabilistic
 #   nl_expr         the expression engine: expressions, walkers, types, logic
@@ -10,14 +11,16 @@ root_packages =
     nl_expr
     nl_core
     neurolang
+    nl_tracts
     neurolang_apps
 include_external_packages = True
 
 [importlinter:contract:layers]
-name = NeuroLang packages: apps > language > core > expression engine
+name = NeuroLang packages: apps > tractography > language > core > expression engine
 type = layers
 layers =
     neurolang_apps
+    nl_tracts
     neurolang
     nl_core
     nl_expr
@@ -43,4 +46,20 @@ source_modules =
 forbidden_modules =
     lark
     nibabel
+    nilearn
+
+[importlinter:contract:tracts-core-dependencies]
+name = The core of nl_tracts needs neither NeuroLang nor the parsers
+type = forbidden
+source_modules =
+    nl_tracts.spaces
+    nl_tracts.atlas
+    nl_tracts.tractogram
+    nl_tracts.indexing
+    nl_tracts.cache
+forbidden_modules =
+    neurolang
+    nl_core
+    nl_expr
+    lark
     nilearn
