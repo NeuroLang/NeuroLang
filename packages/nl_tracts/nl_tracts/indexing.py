@@ -42,8 +42,9 @@ class IndexingParams:
         Streamlines shorter than this, in mm, are left out of *every*
         relation (their ids are not reused). 0 keeps all.
     emit_background : bool
-        If True, ``traverses`` and ``endpoint`` also have rows for the
-        atlas's background label. Default False (DESIGN.md, 7.3).
+        If True, ``traverses`` also has rows for the atlas's background
+        label. Default False (DESIGN.md, 6.3). ``endpoint`` never has rows
+        for the background label, whatever this says.
     """
 
     crossing_threshold: float = 2.0
@@ -86,7 +87,8 @@ def endpoint_relation(
     """``endpoint(a, t, s, e, l)``: columns ``a, t, s, e, l``.
 
     ``e`` is 0 for the first and 1 for the last point of the streamline,
-    ``l`` the label of that point.
+    ``l`` the label of that point. An end in the background has no row
+    (DESIGN.md, 6.3).
     """
     raise NotImplementedError
 

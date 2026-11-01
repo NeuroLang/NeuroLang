@@ -257,7 +257,7 @@ have a test** (13.2):
 | 3 | `point_labels = img[ijk]`, labels used as indices of `np.bincount` | integer labels; **negative labels** are not supported by the reference (bincount fails); we raise a clear error |
 | 4 | Streamline `i` traverses `l` iff `count_l / n_points >= threshold / 100.`, `threshold` = **2.0** by default (the CLI's), and the denominator is **all** the points, label 0 included | `crossing_threshold`, default 2.0; the same float expression `count / n >= threshold / 100.` so that the comparison is bit-identical |
 | 5 | The result includes label **0** when >= threshold of the points are in the background | see 6.3 |
-| 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]` | `endpoint(a, t, s, e, l)`, `e` = 0 first, 1 last; label 0 as in 6.3 |
+| 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]`, label 0 included | `endpoint(a, t, s, e, l)`, `e` = 0 first, 1 last; **rows with the background label are never emitted** (6.3), so the equivalence tests drop label 0 from the reference's endpoints before comparing |
 | 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file; filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
@@ -297,18 +297,19 @@ The reference treats 0 as a label like any other: it counts in the
 denominators, can be traversed, and can be an endpoint label. nl_tracts:
 
 * Points in the background **always count in the denominator** (parity 4).
-* `traverses` and `endpoint` have rows for the background label **only if
+* **`endpoint` never carries the background label** (decision of the
+  maintainer, not a flag): an endpoint whose point is in the background has
+  *no row* for that end. "This end is in no region" is the safe negation
+  `no_region(a, t, s, e) :- streamline(t, s), end_index(e), ~has_end(a, t, s, e)`
+  with `has_end(a, t, s, e) :- endpoint(a, t, s, e, l)`; `end_index(e)`
+  is `{0, 1}` (a two-row relation in the rule, or `e = 0`/`e = 1` written
+  out).
+* `traverses` has rows for the background label **only if
   `IndexingParams.emit_background=True`**. Default is **False**: with 0
   emitted, almost every streamline has a `(a, t, s, 0)` row and `traverses`
   grows by a factor of 1.1-1.3 for facts no rule should use.
-  `emit_background=True` reproduces the reference exactly and is what the
-  equivalence tests use.
-* For `endpoint` the default hides a real fact, "this end is in no region"
-  (rows with `l = background` are left out too). The factor is 1 (two rows
-  per streamline either way), so open question 15.2 recommends that
-  `endpoint` always carries the background label; as written, the flag
-  governs both relations, as the brief's "document label 0 handling" asks
-  for one rule.
+  `emit_background=True` reproduces the reference's `traverses` and is what
+  the equivalence tests use; it has no effect on `endpoint`.
 * `label` has a row for the background only if the label table has one (the
   FreeSurfer LUT does: `0 Unknown`).
 * WMQL's `not`/`-` operate on the set of labels that appear in the data,
@@ -613,7 +614,9 @@ universe, not on streamline sets; plain Datalog `~` is the streamline-level
 difference; (ii) the label set of `A and B` is a **union**, so
 `only(A and B)` keeps streamlines whose labels lie in `L_A ∪ L_B`; (iii) the
 data's label universe includes the background (6.3), so both traps need
-`emit_background=True` to agree with the reference; (iv) `not` ignores the
+`emit_background=True` to agree with the reference, and queries whose label
+set contains the background *and* that read the endpoint predicates are out
+of the equivalence scope (the endpoint relation has no background rows); (iv) `not` ignores the
 endpoint sets (they become empty) and `only` filters them: a translation
 that treats them uniformly is wrong.
 
@@ -703,7 +706,9 @@ checked in phase 1, 15.9).
 * The same synthetic atlas and tractogram go through
   `TractographySpatialIndexing` and through nl_tracts with
   `emit_background=True`, and the sets are compared exactly: `traverses`
-  vs `crossing_tracts_labels`, `endpoint` vs `ending_tracts_labels`, for
+  vs `crossing_tracts_labels`, `endpoint` vs `ending_tracts_labels` minus
+  its label-0 entries (and, for a streamline whose end is in the
+  background, the absence of the row), for
   several `crossing_threshold` values including 0, 2, 25, 50 and 100,
   oblique and flipped affines, points outside the volume and exactly on
   voxel boundaries.
@@ -736,6 +741,17 @@ checked in phase 1, 15.9).
 
 ## 14. Phases
 
+**Method: test-driven development.** In every phase the tests of 13 for that
+phase are written first and seen to fail for the right reason (a
+`NotImplementedError` is not the right reason: the first red is an assertion
+on a value); then the smallest implementation that turns them green; then
+refactor with the tests green. Oracle cases (13.2) and boundary cases
+(half-integer coordinates, the exact threshold, the background) are tests
+before they are code. The CI wiring of 9.3 is done in the PR of phase 1,
+also test-first (`plan_tests.py` has tests in the repository: extend them
+for the new package before editing it). Each phase is one PR, merged on its
+own; the scaffold's smoke test stays.
+
 1. **Core**: `spaces`, `atlas` (loaders, hemispheres, `label` and
    `label_term`), `tractogram`, `indexing` (`traverses`, `endpoint`), and
    the oracle tests. Re-measure the sizes of 7.2.
@@ -757,11 +773,9 @@ Recommendations in bold; none changes a decision of section 2.
    **Hard dependency** (it is already one of `neurolang_apps`, and every
    engine call benefits from reading the cache); the alternative is a
    `cache` extra and an import inside `cache.py`.
-2. **Should `endpoint` always carry label 0?** (6.3.) Two rows per
-   streamline either way; omitting them loses "ends in no region".
-   **Always emit the background label in `endpoint`**, and keep
-   `emit_background` for `traverses` only. This changes the default of
-   decision 5's "document label 0 handling" and so needs your agreement.
+2. ~~Should `endpoint` carry label 0?~~ **Decided: never.** `emit_background`
+   governs `traverses` only; "no region at this end" is the negation of
+   6.3.
 3. **String `a` and `t` columns at 10^8 rows.** 1.6 GB of pointers.
    **Keep strings until measured**; the fallback is `string[pyarrow]`
    (+27 % time in the probe), not surrogate ints.
