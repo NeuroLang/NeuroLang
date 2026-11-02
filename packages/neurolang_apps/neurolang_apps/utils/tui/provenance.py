@@ -15,16 +15,23 @@ rules defining the others, as
 :func:`~neurolang_apps.utils.cli.squall_column_names` follows their names.
 """
 
+import operator
 from typing import NamedTuple, Optional
 
 from nl_core.datalog import Implication
-from nl_expr.expressions import Query, Symbol
+from nl_expr.expressions import Constant, FunctionApplication, Query, Symbol
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
 )
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.cli import _body_atoms, _whole_relation
+from neurolang_apps.utils.cli import (
+    _body_atoms, _subformulas, _whole_relation,
+)
+
+# The sort of a column that a rule computes, ``b == p / p0``: a measure,
+# whatever its name, which may be that of a column of a sort.
+COMPUTED = "computed"
 
 
 class ColumnSort(NamedTuple):
@@ -60,12 +67,15 @@ def declared_column_sorts(engine_name: str) -> dict:
     }
 
 
-def _term_sort(term, atoms, known: dict) -> Optional[ColumnSort]:
+def _term_sort(
+    term, atoms, known: dict, computed=()
+) -> Optional[ColumnSort]:
     """
     Return the sort of the head *term*, from the first of *atoms* with it.
 
     Only the atoms of the predicates of *known* sorts count; a term that
-    is not a variable, or in none of them, has no known sort.
+    is not a variable, or in none of them, has no known sort, unless it is
+    one of the *computed* variables: that of :data:`COMPUTED`.
     """
     if not isinstance(term, Symbol):
         return None
@@ -73,7 +83,22 @@ def _term_sort(term, atoms, known: dict) -> Optional[ColumnSort]:
         sorts = known.get(atom.functor.name)
         if term in atom.args and sorts and len(sorts) == len(atom.args):
             return sorts[atom.args.index(term)]
-    return None
+    return ColumnSort(COMPUTED, 0) if term in computed else None
+
+
+def _computed_terms(formula) -> set:
+    """Return the variables *formula* defines as ``variable == expression``."""
+    defined = set()
+    functor = getattr(formula, "functor", None)
+    if (
+        isinstance(formula, FunctionApplication)
+        and isinstance(functor, Constant) and functor.value is operator.eq
+        and isinstance(formula.args[0], Symbol)
+    ):
+        defined.add(formula.args[0])
+    for sub in _subformulas(formula):
+        defined |= _computed_terms(sub)
+    return defined
 
 
 def head_sorts(terms, body, known: dict) -> tuple:
@@ -84,7 +109,8 @@ def head_sorts(terms, body, known: dict) -> tuple:
     :func:`declared_column_sorts`); a term of unknown sort has None.
     """
     atoms = list(_body_atoms(body))
-    return tuple(_term_sort(term, atoms, known) for term in terms)
+    computed = _computed_terms(body)
+    return tuple(_term_sort(term, atoms, known, computed) for term in terms)
 
 
 def _add_rule_sorts(rule, known: dict) -> None:
