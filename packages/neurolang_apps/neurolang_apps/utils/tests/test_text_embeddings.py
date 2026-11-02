@@ -269,6 +269,12 @@ def _engine(frontend, index):
     return nl
 
 
+def test_similarity_function_wants_the_text_first(index):
+    similarity = te.make_similarity_function(index)
+    with pytest.raises(TypeError, match="query text first"):
+        similarity(3, "reading")
+
+
 def test_similarity_function():
     index = te.EmbeddingIndex([1, 2, 3, 4], load_documents, FakeEncoder())
     query_similarity = te.make_similarity_function(index)

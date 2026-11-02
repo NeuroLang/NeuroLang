@@ -706,6 +706,11 @@ def make_similarity_function(index, id_type=None):
         id_type = type(index.ids[0]) if index.ids else str
 
     def query_similarity(query, doc):
+        if not isinstance(query, str):
+            raise TypeError(
+                f"query_similarity(query, doc) takes the query text first: "
+                f"got {query!r} as the query"
+            )
         return index.similarities(query).get(doc, float("nan"))
 
     query_similarity.__annotations__ = {
