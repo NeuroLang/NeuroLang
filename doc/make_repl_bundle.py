@@ -6,11 +6,13 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
   data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
-- with torch installed (the ``embeddings`` extra), the files of the
-  engine's text embeddings, which the page fetches when a query first
-  needs them: the SPECTER2 query model for :mod:`specter2_numpy
-  <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
-  studies, named in ``bundle.json`` by their path in the data directory.
+- the files the page fetches only when the engine first needs them
+  (:mod:`neurolang_apps.utils.data_files`), named in ``bundle.json`` by
+  their path in the data directory: the MNI template, which the engine
+  needs only to make again the mask it kept, and, with torch installed (the
+  ``embeddings`` extra), the files of the text embeddings: the SPECTER2
+  query model for :mod:`specter2_numpy
+  <neurolang_apps.utils.specter2_numpy>` and the embeddings of the studies.
 
 The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
@@ -177,6 +179,23 @@ def write_parts(path: Path, output: Path, name: str) -> list:
     return names
 
 
+def export_template(data_dir: Path, output: Path) -> dict:
+    """
+    Move the MNI template out of *data_dir*, to *output*: the engine reads
+    the mask it kept, made from it, and the page fetches it only to make the
+    mask again. Return the names of its files by its path in the data
+    directory; nothing if it is not there.
+    """
+    from neurolang_apps.utils.engine_registry import ICBM_T1
+
+    template = data_dir / "icbm" / ICBM_T1
+    if not template.exists():
+        return {}
+    names = write_parts(template, output, bundle_name(template))
+    template.unlink()
+    return {str(template.relative_to(data_dir)): names}
+
+
 def bundle_name(path: Path) -> str:
     """Return the name in the bundle of the file *path* of the embeddings:
     without ``+``, a space in the URLs of some servers."""
@@ -241,6 +260,7 @@ def main(output: Path, embedded=None) -> None:
         build_engine(data_dir)  # the page's way: from the kept tables
         build_engine(data_dir, use_cache=False)  # and without them
         files = export_embeddings(data_dir, output, embedded)
+        files.update(export_template(data_dir, output))
         zip_directory(data_dir, output / DATA_ZIP)
     (output / "bundle.json").write_text(
         json.dumps({"wheels": wheels, "data": DATA_ZIP, "files": files})
@@ -249,7 +269,7 @@ def main(output: Path, embedded=None) -> None:
     write_highlight_words(output)
     parts = [name for names in files.values() for name in names]
     print(f"Wrote {', '.join(wheels)}, {DATA_ZIP}, "
-          f"{', '.join(parts) or 'no embeddings'}, bundle.json and "
+          f"{', '.join(parts) or 'no files on demand'}, bundle.json and "
           f"highlight.json in {output}")
 
 

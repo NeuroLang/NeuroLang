@@ -161,3 +161,27 @@ def test_the_files_of_the_embeddings_have_plain_names(bundle):
         Path("neurosynth/embeddings/models/a--base+a--query.npz")
     )
     assert name == "neurosynth-a--base_a--query.npz"
+
+
+def test_the_mni_template_is_fetched_by_the_page_when_needed(
+    bundle, tmp_path
+):
+    """The engine reads the mask it kept; the template it was made from,
+    the largest file of the data, is left out of the zip, and the page
+    fetches it only to make the mask again (a version of NeuroLang that
+    keeps it otherwise)."""
+    from neurolang_apps.utils import engine_registry
+
+    data_dir, output = tmp_path / "data", tmp_path / "out"
+    template = data_dir / "icbm" / engine_registry.ICBM_T1
+    template.parent.mkdir(parents=True)
+    template.write_bytes(b"t1" * 100)
+    (template.parent / "other.nii.gz").write_bytes(b"")
+    output.mkdir()
+    files = bundle.export_template(data_dir, output)
+    key = str(template.relative_to(data_dir))
+    assert list(files) == [key]
+    assert not template.exists()
+    assert (template.parent / "other.nii.gz").exists()
+    assert b"".join((output / n).read_bytes() for n in files[key]) == \
+        b"t1" * 100

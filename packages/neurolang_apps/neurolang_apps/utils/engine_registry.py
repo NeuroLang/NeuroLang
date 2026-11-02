@@ -97,7 +97,7 @@ import nibabel as nib
 import numpy as np
 import yaml
 
-from neurolang_apps.utils import engine_cache
+from neurolang_apps.utils import data_files, engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
     nilearn_datasets as _nilearn_datasets,
@@ -1367,7 +1367,17 @@ def _load_atlas(
         _load_deterministic_atlas(nl, atlas_name, params, data_dir, cache_dir)
 
 
+# The MNI template the mask is made from, in nilearn's directory of the
+# ICBM 152 2009 dataset.
+ICBM_T1 = Path(
+    "icbm152_2009/mni_icbm152_nlin_sym_09a/"
+    "mni_icbm152_t1_tal_nlin_sym_09a.nii.gz"
+)
+
+
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
+    # Where nilearn cannot download it (a browser), it may be fetched first.
+    data_files.ensure(data_dir / "icbm" / ICBM_T1)
     return nib.load(
         _nilearn_datasets().fetch_icbm152_2009(
             data_dir=str(data_dir / "icbm")
