@@ -42,6 +42,15 @@ requests per second, through the environment::
     export NEUROLANG_ENTREZ_EMAIL=you@example.org
     export NCBI_API_KEY=...
 
+Without ``torch``, as in the `REPL in the browser <_static/repl/index.html>`_,
+queries are embedded by a numpy version of the encoder
+(:mod:`neurolang.utils.specter2_numpy`), which gives the same embeddings
+to within float16 rounding, from the base model and the query adapter
+exported with ``specter2_numpy.export`` next to the local copies
+(``Specter2Encoder.numpy_path``); the studies must have been embedded
+beforehand.  The page downloads both, about 310 MB, the first time a query
+uses ``query_similarity``.
+
 The engine configuration is described in :ref:`text-embeddings-section`.
 
 

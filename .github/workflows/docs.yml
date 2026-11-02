@@ -35,6 +35,24 @@ jobs:
       - name: Build HTML documentation
         run: uv run --no-sync make -C doc html SPHINXOPTS="--keep-going"
 
+      # The REPL's text embeddings (query_similarity) need torch to export
+      # SPECTER2 for numpy and to embed the studies: the CPU build, much
+      # smaller than the default one. Without it the REPL goes without them.
+      - name: Install torch, for the REPL's text embeddings
+        continue-on-error: true
+        run: |
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch
+          uv pip install adapters
+
+      # The studies' embeddings take their abstracts from PubMed and a long
+      # while on a CPU: they are kept from one build to the next.
+      - name: Restore the REPL's text embeddings
+        uses: actions/cache@v4
+        with:
+          path: ~/repl-embeddings
+          key: repl-embeddings-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/specter2_numpy.py') }}
+          restore-keys: repl-embeddings-
+
       # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheels and
       # the data of the neurosynth engine from beside its page. The step builds
       # the engine, which keeps in its data directory the tables the page
@@ -44,7 +62,7 @@ jobs:
       # the REPL's page telling that it could not start.
       - name: Build the in-browser REPL's bundle
         continue-on-error: true
-        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
