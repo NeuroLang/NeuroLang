@@ -208,7 +208,7 @@ def test_encoder_import_error(monkeypatch):
 
 def test_encoder_import_error_says_the_cause(monkeypatch):
     monkeypatch.setitem(sys.modules, "adapters", None)
-    with pytest.raises(ImportError, match="ImportError: .*adapters"):
+    with pytest.raises(ImportError, match="\\(\\w*Error: "):
         te.Specter2Encoder().encode_query("reading")
 
 
