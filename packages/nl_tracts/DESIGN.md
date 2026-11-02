@@ -1,10 +1,12 @@
 # nl_tracts: tractography for NeuroLang
 
-Status: **design only**. The package is a scaffold: modules hold signatures
-and docstrings, every body raises `NotImplementedError`. Numbers below marked
-*measured* come from probes run on this repository (NeuroLang `master`
-at the time of the split, pandas backend, an Intel Mac); the rest are
-estimates to be checked in phase 1.
+Status: **the atlas layer is implemented** (`spaces`, `terms`, `atlas`:
+sections 3.2, 4, 5, and `label_extent` of 6.1); the rest (tractogram,
+indexing, cache, frontend) is still a scaffold whose bodies raise
+`NotImplementedError`. Numbers below marked *measured* come from probes run
+on this repository (NeuroLang `master` at the time of the split, pandas
+3.0.6, pandas backend, an Intel Mac); the rest are estimates to be checked
+in phase 1.
 
 Contents: 1 Goals · 2 Decisions taken · 3 Relations · 4 Atlases ·
 5 Spaces · 6 Indexing semantics · 7 Data formats and cache ·
@@ -93,9 +95,9 @@ deviation from a decision:
   rules (`long(t, s) :- streamline_length(t, s, d), d > 40`) the length has
   to be a relation. The *index* parameter `length_threshold` remains, to
   keep out of every relation the streamlines nobody will query (6.1).
-* **`label_extent` and `streamline_extent` are in world mm**, computed from
-  the data (voxel centres, and points), see 6.1 for why not the corner
-  boxes of the reference.
+* **`label_extent` and `streamline_extent` are in world mm.** `label_extent`
+  is by voxel *edges*, from the box of each label, see 6.1 for why and how
+  it relates to the reference; `streamline_extent` is the box of the points.
 * `opposite_hemisphere` is `{(left, right), (right, left), (none, none)}`:
   the brief leaves it open; `none` is its own opposite so that rules over
   midline structures keep working.
@@ -109,17 +111,31 @@ from them).
 
 `label_term(a, l, term)` maps each atlas's raw labels to a shared
 vocabulary, **many-to-many**: a label may have several terms
-(`("precentral", "frontal_lobe", "motor_cortex")`) and a term covers labels
-of several atlases. The hemisphere is *not* in the term: it lives in
-`label(a, l, name, hemi)`, so that `"precentral"` is the same term for the
-left and the right label, and rules choose hemispheres explicitly:
+(`precentral` and `frontal`) and a term covers labels of several atlases.
+The hemisphere is *not* in the term: it lives in `label(a, l, name, hemi)`,
+so that `precentral` is the same term for the left and the right label, and
+rules choose hemispheres explicitly. A test checks that no shipped term has
+a hemisphere token (`lh`, `rh`, `left`, `right` as a word, `_L`/`_R` suffix).
+
+**The vocabulary is tract_querier's**, from its
+`tract_querier/data/freesurfer_queries.qry`: the Desikan-Killiany names in
+lower case (`precentral`, `temporalpole`, `lateralorbitofrontal`, ...), and
+the groups that file defines as unions of them: `frontal`, `temporal`,
+`parietal`, `occipital`, `cingular`, `orbitofrontalgyrus`,
+`middle_frontal_gyrus`, `inferior_frontal_gyrus`,
+`superior_parietal_lobule`, `inferior_parietal_lobule`, `subcortical`,
+`cerebellum`, `ventricles`, `corpus_callosum`. Reusing it makes the
+standard bundle definitions of the phase-3 tutorial a transcription of
+tract_querier's queries (`UF.side` ...). The groups are copied as the file
+has them, odd parts included (`subcortical` has no caudate, hippocampus or
+accumbens), and the file's `.side` becomes `label.hemi`:
 
 ```
 % uncinate fasciculus, any atlas, either hemisphere
 uf(a, t, h, s) :-
-    traverses(a, t, s, l1), label_term(a, l1, "temporal_pole"),
+    traverses(a, t, s, l1), label_term(a, l1, "temporalpole"),
         label(a, l1, _n1, h),
-    traverses(a, t, s, l2), label_term(a, l2, "orbitofrontal"),
+    traverses(a, t, s, l2), label_term(a, l2, "orbitofrontalgyrus"),
         label(a, l2, _n2, h)
 % the same, with the two ends in opposite hemispheres
 callosal(a, t, s) :-
@@ -133,15 +149,38 @@ variables, negation `~` and `AGGREGATE`, is that of
 `neurolang/frontend/datalog/standard_syntax.py`; the test plan checks
 every rule of this document parses, 13.)
 
-Mapping files ship in `nl_tracts/mappings/<atlas-key>.tsv`, columns
-`base_name`, `term`; `base_name` is the raw label name **after** the
-hemisphere token has been stripped (4.3), so `ctx-lh-precentral` and
-`ctx-rh-precentral` both read the row `precentral<TAB>precentral`. Rows
-are many-to-many. An atlas without a mapping file gets one term per label,
-its base name lower-cased with non-alphanumerics replaced by `_`
-(`default_term`), which keeps single-atlas use working. The vocabulary is
-curated, small, and versioned with the package; the files are plain TSV so
-users can pass their own (`Atlas(..., term_mapping=...)`).
+**Mapping file format** (`nl_tracts.terms`): a TSV with the columns
+`atlas_label_name`, `term` and optionally `hemi`; `#` lines and blank lines
+are ignored. `atlas_label_name` is the **raw** name as the atlas has it
+(`ctx-lh-precentral`, `L G_precentral`); a name has one row per term;
+`hemi` is `left`, `right`, `none` or empty. A mapping is rejected on a
+missing column, an empty name or term, a bad `hemi`, a duplicate
+(name, term), or two rows of one name with different `hemi`. There is no
+default term for an atlas without a mapping: `label_term` is then empty and
+every label is reported by `Atlas.unmapped_labels()`, which returns the
+atlas's labels (background excluded) that have no term, to see what a
+mapping leaves out.
+
+A mapping is passed to `Atlas(..., term_mapping=...)` as a DataFrame, a
+path or the key of a shipped one. Shipped, in `nl_tracts/mappings`, both
+generated by `tools/make_freesurfer_mappings.py` (which holds the compact
+tables; edit that, not the TSVs):
+
+| Key | Labels |
+|---|---|
+| `freesurfer_aseg_aparc` | aseg (both `Left-Thalamus` and `Left-Thalamus-Proper`, the LUT's two spellings) and aparc, as `ctx-lh-*`/`ctx-rh-*`; vocabulary and groups from the `.qry` |
+| `freesurfer_destrieux` | a2009s, in **both** naming schemes: FreeSurfer's LUT (`ctx_lh_G_precentral`) and nilearn's lateralised atlas (`L G_precentral`), because the mapping is keyed by raw name |
+
+The Destrieux assignments are a **draft to be reviewed by an anatomist**:
+the parcellation has no one-to-one Desikan equivalent, so a label gets a
+Desikan name only where it is the obvious one, and a lobe otherwise. The
+boundaries (lateral fissure, central sulcus, parieto-occipital sulcus), the
+medial wall and `Unknown` have no term, on purpose, and are what
+`unmapped_labels` reports. Against a real FreeSurfer LUT (skipped if there
+is none) a test checks that every shipped FreeSurfer name exists and that
+the standard aseg, aparc and a2009s labels are all mapped, except those
+left out on purpose; against nilearn's Destrieux, that the unmapped labels
+are exactly those.
 
 ## 4. Atlases
 
@@ -157,9 +196,16 @@ is in `indexing.py` (6).
 
 An atlas `name` is unique in an engine and is the value of the column `a`.
 Ids that are in the table but not in the volume, and ids in the volume but
-not in the table, are reported: the former are dropped from `label`, the
-latter are kept with `name = "label_<id>"` and `hemi = "none"` and a
-warning, since `traverses` would otherwise refer to an unknown label.
+not in the table, are reported with a warning that names them: the former
+are dropped from `label` (nilearn's Destrieux has two, the medial walls),
+the latter are kept with `name = "label_<id>"` and `hemi = "none"`, since
+`traverses` would otherwise refer to an unknown label. The background has a
+row in `label` only if the table has one, and none in `label_extent`. Labels
+must be non-negative integers (a float volume with integral values is
+accepted, read through `dataobj`, never `get_fdata`); a 4D image is a
+probabilistic atlas (4.4) and raises `NotImplementedError`. Attributes:
+`name`, `space`, `labels`, `affine`, `background`, and `table`, the
+resolved label table (`id` int32, `name`, `hemi`).
 
 ### 4.2 Loaders
 
@@ -167,34 +213,40 @@ warning, since `traverses` would otherwise refer to an unknown label.
 |---|---|---|
 | `Atlas.from_freesurfer` | label image + FreeSurfer LUT (`FreeSurferColorLUT.txt`) | `load_label_table_freesurfer_lut` skips comments; ids and names only, colours are ignored |
 | `Atlas.from_bids_dseg` | label image + `*_dseg.tsv` | columns `index`, `name` |
-| `Atlas.from_nilearn` | the object a nilearn fetcher returns | **duck-typed**: `.maps` (path or image), `.labels`, optional `.lut`; nilearn is not imported (decision 7 forbids it in the core). Only the tests build such objects with nilearn |
+| `Atlas.from_nilearn` | the object a nilearn fetcher returns | **duck-typed**: `.maps` (path or image) and `.lut` (a DataFrame with `index`, `name`) if present, else `.labels`, the id of a name being its position; bytes are decoded; nilearn is not imported (decision 7 forbids it in the core). Only the tests fetch atlases with nilearn, behind the `network` marker: a fetch that fails skips the test |
 | `Atlas.from_tsv` | label image + plain TSV | columns `id`, `name`, optional `hemi` |
 
-All accept a path or an already loaded nibabel image. The nilearn
-convention that `labels[i]` is the name of id `i` (with a leading
-`Background`) is the loader's, not the core's.
+All accept a path or an already loaded nibabel image, and forward keyword
+arguments (`background`, `hemisphere_rules`, `term_mapping`) to `Atlas`.
+The nilearn convention that `labels[i]` is the name of id `i` (with a
+leading `Background`) is the loader's, not the core's.
 
 ### 4.3 Hemisphere inference
 
-A `HemisphereRule(pattern, hemi)` has a regular expression that must
-**fully** match the raw name and capture a named group `base`; the rules
-are ordered and the first match wins. Defaults, `HEMISPHERE_RULES`:
+A `HemisphereRule(pattern, hemi)` has a regular expression that must match
+the **whole** raw name, and `hemi` `left` or `right`; the rules are ordered
+and the first match wins; `infer_hemispheres(names, rules)` returns a Series
+of `left`, `right` or `none`. Defaults, `HEMISPHERE_RULES` (the first five
+are the brief's; the sixth is what real atlases needed):
 
-| Convention | Left | Right |
-|---|---|---|
-| FreeSurfer subcortical | `Left-(?P<base>.+)` | `Right-(?P<base>.+)` |
-| FreeSurfer cortical | `ctx-lh-(?P<base>.+)` | `ctx-rh-(?P<base>.+)` |
-| Suffix | `(?P<base>.+)_L` | `(?P<base>.+)_R` |
-| Prefix `lh.`/`rh.` | `lh\.(?P<base>.+)` | `rh\.(?P<base>.+)` |
-| Suffix `.left`/`.right` | `(?P<base>.+)\.left` | `(?P<base>.+)\.right` |
+| Convention | Left | Right | Seen in |
+|---|---|---|---|
+| `Left-`/`Right-` (or a space) | `Left[- ].+` | `Right[- ].+` | FreeSurfer aseg; Harvard-Oxford (`Left Thalamus`) |
+| `ctx-lh-` / `ctx_lh_` | `ctx[-_]lh[-_].+` | `ctx[-_]rh[-_].+` | FreeSurfer aparc; a2009s |
+| Suffix `_L`/`_R` | `.+_L` | `.+_R` | AAL |
+| Prefix `lh.`/`rh.` | `lh\..+` | `rh\..+` | |
+| Suffix `.left`/`.right` | `.+\.left` | `.+\.right` | |
+| `L `/`R ` | `L .+` | `R .+` | nilearn's Destrieux |
 
-No match: `hemi = "none"`, `base_name = name`. The rules are a parameter of
-the loaders; a table with an explicit `hemi` column bypasses them, but still
-gets `base_name` from them (so mapping files work). Known hazards, each covered by a test: the `_L`/`_R` suffix rules match any
-name that ends that way, so a name such as `Pallidum_R` is right but
-`Foo_L_R` is read as right with base `Foo_L`; matching is case-sensitive;
-and a name that is half of a pair (`Left-X` without `Right-X`) is
-reported with a warning, not fixed.
+No match: `none`. `hemisphere_rules=()` infers nothing, and rules given
+*replace* the defaults. **Precedence** for the `hemi` of a label: the
+`hemi` of the label table if not empty (an explicit `none` is a decision);
+else the `hemi` of the term mapping for that raw name if not empty; else the
+inference. A warning names each label for which two of these sources
+disagree (the inference counting only when it is not `none`). Known hazards,
+each covered by a test: the `_L`/`_R` suffixes match any name that ends that
+way; matching is case-sensitive; `Leftover`, `Rightmost_area` and
+`Lateral-Ventricle` are *not* hemispheric.
 
 ### 4.4 Extension point: probabilistic atlases
 
@@ -261,8 +313,39 @@ have a test** (13.2):
 | 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file; filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
-| 10 | `compute_label_bounding_boxes` uses `ndimage.find_objects` on the *ijk corners* `(start, stop)` mapped by the linear part: wrong for oblique affines, `stop` is exclusive, labels start at 1 | `label_extent` is from all the voxel centres of the label, mapped by the full affine, so it is right for any affine; **not** bit-identical to the reference, and the tests compare it to a brute force instead |
+| 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
 | 11 | `tract_endpoints_pos` = first and last point | `endpoint_coord`, float32 (the reference holds float64; tests compare with `atol` 1e-4 mm) |
+
+#### 6.1.1 `label_extent`: voxel edges, not centres
+
+*Choice.* A label whose first and last voxel are `start` and `stop - 1`
+along a voxel axis spans `[start - 0.5, stop - 0.5]` in voxel units, the
+physical extent of its voxels (nibabel's affine maps an index to the
+**centre** of its voxel). A one-voxel label has the extent of one voxel,
+not zero; the extent is what a directional relation (12) wants to compare a
+streamline against. The alternative, voxel centres `[start, stop - 1]`, is
+the extent of the voxel *centres*: shorter by one voxel, zero for a single
+voxel.
+
+*Consistency with the reference*, tested by transcribing
+`compute_label_bounding_boxes`: the reference maps `[start, stop]`, which is
+`[start - 0.5, stop - 0.5]` shifted by `+0.5` voxel at both ends, so for
+every affine in which each world axis depends on one voxel axis (aligned,
+flipped by negative scales, or permuted) `label_extent` equals the
+reference's box shifted by `affine[:3, :3] @ (-.5, -.5, -.5)`, exactly, and
+equals a brute force over every corner of every voxel. Flipped axes: both
+implementations take min and max, so `lo < hi` always.
+
+*Oblique affines.* The reference maps two corners, which is not a box of
+anything. nl_tracts maps the 8 corners of the label's box, which gives the
+world box of the *box*: it **contains** the extent of the label's voxels and
+is larger than it when the label is not box-shaped (the tests have a
+diagonal line to show it, and check both the containment and the equality
+with the 8-corner brute force). Tightening it needs the voxels, not the
+box: a pass over all the voxels of the atlas (the earlier design) instead of
+one `find_objects`; not done, because atlases are in practice aligned or
+nearly, and the loose box is safe for the uses planned (a conservative
+bound). Open question 15.13.
 
 ### 6.2 Algorithm (all vectorised)
 
@@ -285,8 +368,10 @@ Given `P` points with a streamline id each (`np.repeat(arange(S), lengths)`):
 5. Streamline extents: `np.minimum.reduceat` / `np.maximum.reduceat` over
    the points at `offsets[:-1]`, per axis; lengths: `np.add.reduceat` of the
    segment norms, with the last segment of each streamline masked out.
-6. `label_extent`: one pass over the nonzero voxels, `np.minimum.reduceat`
-   on the voxels sorted by label.
+6. `label_extent`: one `ndimage.find_objects` for all the labels, the
+   `(L, 3)` starts and stops as arrays, the 8 corners of every box mapped by
+   the affine in one product, min and max (6.1.1). The only Python loop is
+   the unpacking of the slices `find_objects` returns, one per label.
 
 No Python loop over streamlines or over labels; the only loops are over
 chunks of points and over the three axes.
@@ -340,23 +425,33 @@ per streamline on average:
 
 | Relation | Rows | Bytes/row | Memory |
 |---|---|---|---|
-| `traverses` | 10^7 | 8 (a) + 8 (t) + 4 + 4 = 24 | 240 MB |
-| `endpoint` | 2x10^6 | 8 + 8 + 4 + 1 + 4 = 25 | 50 MB |
-| `streamline_extent` | 3x10^6 | 8 + 4 + 1 + 4 + 4 = 21 | 63 MB |
-| `endpoint_coord` | 6x10^6 | 8 + 4 + 1 + 1 + 4 = 18 | 108 MB |
+| `traverses` | 10^7 | 10 (a) + 10 (t) + 4 + 4 = 28 | 280 MB |
+| `endpoint` | 2x10^6 | 10 + 10 + 4 + 1 + 4 = 29 | 58 MB |
+| `streamline_extent` | 3x10^6 | 10 + 4 + 1 + 4 + 4 = 23 | 69 MB |
+| `endpoint_coord` | 6x10^6 | 10 + 4 + 1 + 1 + 4 = 20 | 120 MB |
 
-The `a` and `t` columns are Python-object string columns whose entries are
-all the *same* string object, so the cost is the 8-byte pointer, not the
-string. *Measured* at 3x10^6 rows: an `int` atlas column 719 MB peak RSS /
-0.95 s, an `object` string column 841 MB / 1.12 s, a `string[pyarrow]`
-column 751 MB / 1.43 s for the join with `label_term` (the numbers include
-the DataFrame and the engine's copy). **Decision: keep strings** for `a`
-and `t`: queries switch atlas by editing a literal (decision 2), the
-overhead is 17 % of a ~720 MB baseline, and surrogate integer keys would
-need a lookup relation in every rule. Revisit if 10^8 rows (then the
-pointer columns are 1.6 GB) is a real use; see 15.3. `t` and `a` are
-low-cardinality: `Categorical` is not used because the engine's behaviour
-on categorical columns is untested.
+**String columns.** The `a` and `t` columns are pandas' default string
+dtype. *Measured* (pandas 3.0.6): a constant string column of 3x10^6 rows is
+`str` dtype, Arrow-backed, **30 MB** (10 bytes a row); the same column
+forced to `object` is 153 MB (a pointer, a string object, and the
+bookkeeping); before pandas 3, `object` is the default and is what the
+pointer arithmetic of an earlier version of this section described.
+**A correction to the earlier measurement**: the `object` column of the
+probe (3x10^6 rows, join of `traverses` with `label_term`: `int` atlas
+column 719 MB peak RSS / 0.95 s, 841 MB / 1.12 s for the "object" column,
+751 MB / 1.43 s for an explicit `string[pyarrow]`) was, under pandas 3, the
+Arrow `str` dtype too, since a DataFrame built from an object array of
+strings converts it. So the 841 MB figure is for `str`, and the engine runs
+joins and constant selections on it without trouble. **Decision: keep
+strings** for `a` and `t`: queries switch atlas by editing a literal
+(decision 2), and surrogate integer keys would need a lookup relation in
+every rule. At 10^8 rows the two columns are about 2 GB under either dtype
+and the integer alternative saves most of it: revisit then (15.3).
+`Categorical` is not used because the engine's behaviour on categorical
+columns is untested. The code does not choose the dtype: it builds
+DataFrames from Python strings and lets pandas decide, so that it behaves
+the same on pandas 1.5 (`object`) and 3 (`str`); the tests assert a string
+dtype, not the identity of the objects.
 
 ### 7.3 On disk: parquet, keyed by content
 
@@ -385,8 +480,8 @@ one repeated string is a few bytes on disk).
 
 Reading is `pandas.read_parquet` with the dtypes of 3.1 restored (parquet
 stores `int32`/`int8`/`float32` natively); the `a` and `t` columns are
-rebuilt as object columns pointing to **one** string object each, so the
-memory of 7.2 holds after a cache hit.
+read back in pandas' default string dtype (7.2), so the memory of 7.2 holds
+after a cache hit.
 
 ### 7.4 Chunking
 
@@ -466,16 +561,19 @@ packages/nl_tracts/
                         nibabel, pandas, pyarrow; extra dev (pytest, nilearn)
   README.md
   DESIGN.md             this file
+  tools/make_freesurfer_mappings.py   writes the shipped mappings
   nl_tracts/
     __init__.py         re-exports the public classes (core only)
     spaces.py           Space, SpaceMismatchError, check_same_space
+    terms.py            term-mapping format, validation, shipped keys
     atlas.py            Atlas, ProbabilisticAtlas, HemisphereRule, loaders
     tractogram.py       Tractogram
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
     cache.py            parquet cache: cache_key, read_cached, write_cached
     frontend.py         register(), RELATION_NAMES -- the only NeuroLang use
-    mappings/           per-atlas label_term TSVs (shipped data)
-    tests/
+    mappings/           shipped term mappings (TSV): freesurfer_aseg_aparc,
+                        freesurfer_destrieux
+    tests/              conftest.py: synthetic volumes, `network` marker
 ```
 
 ### 9.2 `.importlinter`
@@ -483,8 +581,8 @@ packages/nl_tracts/
 * `root_packages` gains `nl_tracts`.
 * The layers contract becomes `neurolang_apps > nl_tracts > neurolang >
   nl_core > nl_expr`.
-* A new `forbidden` contract: `nl_tracts.{spaces, atlas, tractogram,
-  indexing, cache}` may import none of `neurolang`, `nl_core`, `nl_expr`,
+* A new `forbidden` contract: `nl_tracts.{spaces, terms, atlas,
+  tractogram, indexing, cache}` may import none of `neurolang`, `nl_core`, `nl_expr`,
   `lark`, `nilearn`. `frontend` is exempt, and is the only module that may
   import NeuroLang.
 
@@ -511,16 +609,21 @@ broken; with `import neurolang` planted in `nl_tracts/atlas.py` and
 `import nl_tracts` planted in `neurolang/regions.py`, both are reported
 broken.
 
-### 9.3 CI and release touch points (not changed by the scaffold)
+### 9.3 CI and release touch points
 
-Changed because the `.importlinter` change would otherwise break CI:
-`.github/workflows/layers.yml` (`PYTHONPATH` gains `packages/nl_tracts`).
-**Not changed, to decide in review** (15.8): `.github/plan_tests.py`
-(`PACKAGES`, order is semantic: insert `nl_tracts` between `neurolang` and
-`neurolang_apps`, extras `--extra dev`), `.github/workflows/tests.yml`
-(paths-filter `nl_tracts`), `.github/workflows/publish.yml` (build loop:
-do not publish an empty scaffold), `doc/conf.py` (sys.path), `Makefile`
-(`--cov=nl_tracts`), and the documentation page.
+Changed with the scaffold, because the `.importlinter` change would
+otherwise break CI: `.github/workflows/layers.yml` (`PYTHONPATH` gains
+`packages/nl_tracts`). Changed with the atlas layer, because it is what makes
+the package's tests run: `.github/plan_tests.py` (`PACKAGES`, order is
+semantic: `nl_tracts` between `neurolang` and `neurolang_apps`, extras
+`--extra dev`) and `.github/workflows/tests.yml` (paths-filter `nl_tracts`);
+`plan()` gives, for a change to `nl_tracts`, its tests on 3.12-3.14 and those
+of `neurolang_apps` on 3.12, and a change to `neurolang` or below now also
+runs `nl_tracts`. **Not changed** (15.8): `.github/workflows/publish.yml`
+(build loop: do not publish before the package does something),
+`doc/conf.py` (sys.path), `Makefile` (`--cov=nl_tracts`), and the
+documentation page. The `network`-marked tests fetch nilearn atlases, which
+`tests.yml` already caches (`~/nilearn_data`).
 
 ## 10. Public API
 
@@ -535,7 +638,7 @@ def check_same_space(atlas_space, tractogram_space, allow_mismatch=False) -> Non
 # atlas.py
 @dataclass(frozen=True) class HemisphereRule: pattern: str; hemi: str
 HEMISPHERE_RULES: Sequence[HemisphereRule]
-def infer_hemispheres(names, rules=HEMISPHERE_RULES) -> DataFrame     # name, base_name, hemi
+def infer_hemispheres(names, rules=HEMISPHERE_RULES) -> Series        # left|right|none
 def load_label_table_freesurfer_lut(path) -> DataFrame
 def load_label_table_bids_dseg(path) -> DataFrame
 def load_label_table_tsv(path) -> DataFrame
@@ -545,8 +648,17 @@ class Atlas:
     from_freesurfer(name, image, lut, space, **kw) / from_bids_dseg(...) /
     from_tsv(...) / from_nilearn(name, bunch, space, **kw)
     label_relation() / label_term_relation() / label_extent_relation()
+    unmapped_labels() -> DataFrame                 # id, name, hemi
+    check_same_space(other, allow_mismatch=False) -> None
     content_hash() -> str
+    attributes: name, space, labels, affine, background, table
 class ProbabilisticAtlas:      # extension point, constructor raises
+
+# terms.py
+COLUMNS = ["atlas_label_name", "term", "hemi"]
+SHIPPED_MAPPINGS = ("freesurfer_aseg_aparc", "freesurfer_destrieux")
+def load_term_mapping(source) -> DataFrame   # DataFrame, path or shipped key
+def shipped_mapping_path(key) -> Traversable
 
 # tractogram.py
 class Tractogram:
@@ -742,22 +854,29 @@ checked in phase 1, 15.9).
 ## 14. Phases
 
 **Method: test-driven development.** In every phase the tests of 13 for that
-phase are written first and seen to fail for the right reason (a
-`NotImplementedError` is not the right reason: the first red is an assertion
-on a value); then the smallest implementation that turns them green; then
-refactor with the tests green. Oracle cases (13.2) and boundary cases
+phase are written first and seen to fail (for a function that is only a
+signature the first red is the scaffold's `NotImplementedError` or a missing
+module; after that, reds are assertions on values); then the smallest
+implementation that turns them green; then refactor with the tests green.
+A test that cannot fail is not a test: key tests are checked by mutating the
+implementation (the atlas layer's were, for the extent convention and the
+hemisphere precedence: 12 and 4 tests fail). Oracle cases (13.2) and boundary cases
 (half-integer coordinates, the exact threshold, the background) are tests
-before they are code. The CI wiring of 9.3 is done in the PR of phase 1,
-also test-first (`plan_tests.py` has tests in the repository: extend them
-for the new package before editing it). Each phase is one PR, merged on its
+before they are code. The CI wiring of 9.3 is done in the PRs of phase 1
+(`plan_tests.py` and `tests.yml` with the atlas layer; the repository has
+**no** tests of `plan_tests.py`, so the change was checked by calling
+`plan()` for the changed-package cases, not by a test: adding a test for it
+is an open item, 15.8). Each phase is one PR, merged on its
 own; the scaffold's smoke test stays.
 
-1. **Core**: `spaces`, `atlas` (loaders, hemispheres, `label` and
-   `label_term`), `tractogram`, `indexing` (`traverses`, `endpoint`), and
-   the oracle tests. Re-measure the sizes of 7.2.
+1. **Core**: `spaces`, `terms`, `atlas` (loaders, hemispheres, `label`,
+   `label_term`, `label_extent`) -- **done**, the atlas layer --;
+   `tractogram`, `indexing` (`traverses`, `endpoint`), and the oracle tests.
+   Re-measure the sizes of 7.2.
 2. **Relations, cache, frontend**: the atlas-independent relations,
-   `label_extent`, `RelationStore`, parquet cache, `register`, the mapping
-   files for FreeSurfer (aseg, DKT), AAL and Schaefer, multi-atlas tests.
+   `RelationStore`, parquet cache, `register`, the mapping files for AAL and
+   Schaefer (FreeSurfer aseg+aparc and Destrieux are shipped), multi-atlas
+   tests.
 3. **Examples and docs**: a tutorial of tract_querier's standard bundles
    (uncinate, arcuate, corticospinal...) as Datalog rules over `label_term`;
    docs page; CI wiring (9.3).
@@ -776,9 +895,10 @@ Recommendations in bold; none changes a decision of section 2.
 2. ~~Should `endpoint` carry label 0?~~ **Decided: never.** `emit_background`
    governs `traverses` only; "no region at this end" is the negation of
    6.3.
-3. **String `a` and `t` columns at 10^8 rows.** 1.6 GB of pointers.
-   **Keep strings until measured**; the fallback is `string[pyarrow]`
-   (+27 % time in the probe), not surrogate ints.
+3. **String `a` and `t` columns at 10^8 rows.** About 2 GB for the two
+   (10 bytes a row each, pandas 3's `str` dtype, 7.2). **Keep strings until
+   measured**; the fallback is surrogate integer keys with a lookup
+   relation.
 4. **The extra copy in `RelationalAlgebraFrozenSet.__init__`** for
    DataFrames. A change in `nl_core` (adopt without copying); **separate PR
    if the footprint matters**, not part of this package.
@@ -792,21 +912,47 @@ Recommendations in bold; none changes a decision of section 2.
    DataFrames (4.4). **Fix in neurolang/nl_core** (infer the row type from
    the first row of a DataFrame, as `add_tuple_set` does), with a test,
    before phase 5; outside this task.
-8. **CI and release wiring** (9.3): `plan_tests.py`, `tests.yml`,
-   `publish.yml`, docs, Makefile. **Do in the PR that implements phase 1**,
-   not on the scaffold; `layers.yml` is already done.
+8. **CI and release wiring** (9.3): `layers.yml`, `plan_tests.py` and
+   `tests.yml` are done; `publish.yml`, docs and the Makefile are not, and
+   `plan_tests.py` has no test of its own. **Do the rest when the package
+   does something worth publishing; add a test of `plan()`** (it is a pure
+   function, five lines of table).
 9. **Installing tract_querier for the oracle tests.** Not checked here
    (the reference was read, never run). **Vendor nothing**; test against an
    installed copy, skipped if absent, and if it does not install next to
    the repository's numpy, run the oracle in a dedicated CI job or compare
    against golden outputs generated once and committed (small fixtures).
-10. **Term vocabulary governance.** Who curates the shared terms and how a
-    new atlas is added (a TSV and a test that every label has a term).
-    **A single curated vocabulary file listing the allowed terms, and a
-    test that each mapping file uses only listed terms.**
+10. **Term vocabulary governance.** The vocabulary is now tract_querier's
+    (3.2), which fixes the names but not who adds a term. **A single
+    curated vocabulary file listing the allowed terms, and a test that each
+    mapping file uses only listed terms**; today the tests only check the
+    form (`[a-z][a-z0-9_]*`) and the absence of hemisphere tokens.
 11. **Axis and variant encoding by int.** Rule authors must remember
     `axis = 1` is y. **Document it; if it hurts, add a tiny `axis(n, name)`
     relation rather than a string column.**
 12. **LPS/RAS+ files.** `from_file` converts to RAS+ with nibabel and the
     oracle compares in RAS+. **State it and test only RAS+ against the
     reference**; the conversion itself is nibabel's.
+13. **Destrieux mapping** (3.2) is a draft by a non-anatomist, with the
+    boundary structures left unmapped on purpose. **Review it**, and decide
+    whether the lateral fissure and the central sulcus should get terms
+    (`central_sulcus` is not in tract_querier's vocabulary).
+14. **`label_extent` under oblique affines** (6.1.1) is the box of the
+    box, a superset. **Keep** (conservative; aligned atlases are exact), and
+    tighten with a pass over the voxels if a use needs the exact extent of
+    a label under an oblique affine.
+15. **Combining atlases in different spaces.** Decision 4 says combining
+    mismatched spaces raises; its subject is an atlas and a tractogram. Two
+    atlases in different spaces *do* coexist in one engine (decision 2), so
+    no cross-atlas rule is imposed; `Atlas.check_same_space(other)` and
+    `check_same_space` implement the check for when two things must agree
+    (an atlas and a tractogram, or two atlases that are to be compared
+    voxel by voxel), and the tests exercise it on two atlases. **Keep**;
+    `RelationStore.add_index` (phase 1, indexing) is where an atlas meets a
+    tractogram.
+16. **The vocabulary's oddities** are copied from the `.qry` on purpose
+    (3.2): `subcortical` without caudate, hippocampus and accumbens; the
+    `.qry` also defines `middlefrontalgyrus` and `middle_frontal_gyrus`
+    (likewise the inferior) with the same content, of which one is kept.
+    **Keep, and say so in the tutorial**; a better `subcortical` is a
+    vocabulary change, with the portability cost that implies.

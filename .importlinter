@@ -53,6 +53,7 @@ name = The core of nl_tracts needs neither NeuroLang nor the parsers
 type = forbidden
 source_modules =
     nl_tracts.spaces
+    nl_tracts.terms
     nl_tracts.atlas
     nl_tracts.tractogram
     nl_tracts.indexing

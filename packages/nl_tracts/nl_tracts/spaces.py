@@ -1,5 +1,6 @@
 """Space tags: nl_tracts does no registration (DESIGN.md, 5)."""
 
+import warnings
 from typing import NewType
 
 __all__ = ["Space", "SpaceMismatchError", "check_same_space"]
@@ -26,4 +27,12 @@ def check_same_space(
         The explicit override: if True, warn instead of raising. The caller
         asserts that the two are aligned by other means.
     """
-    raise NotImplementedError
+    if atlas_space == tractogram_space:
+        return
+    message = (
+        f"spaces differ: {atlas_space!r} and {tractogram_space!r}; "
+        "nl_tracts does no registration"
+    )
+    if not allow_mismatch:
+        raise SpaceMismatchError(message)
+    warnings.warn(message + " (allow_mismatch=True)", stacklevel=2)
