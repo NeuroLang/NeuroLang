@@ -91,6 +91,11 @@ def _torch_available():
     return True
 
 
+def _cause(error):
+    """The import error *error* as ``" (ImportError: ...)"``, for a message."""
+    return f" ({type(error).__name__}: {error})"
+
+
 # ---------------------------------------------------------------------------
 # Text sources
 # ---------------------------------------------------------------------------
@@ -363,7 +368,7 @@ class Specter2Encoder:
         except ImportError as e:
             raise ImportError(
                 f"Text embeddings need torch, transformers and adapters: "
-                f"{INSTALL_HINT}"
+                f"{INSTALL_HINT}{_cause(e)}"
             ) from e
         self._torch = torch
         self.device = self.device or _default_device(torch)
@@ -431,10 +436,15 @@ class Specter2Encoder:
             if path is not None:
                 _ensure(path)
             if path is None or not path.exists():
+                try:
+                    import torch  # noqa: F401
+                    cause = ""
+                except ImportError as e:
+                    cause = _cause(e)
                 raise ImportError(_MISSING_MODEL.get(
                     sys.platform,
                     "Text embeddings need torch, transformers and adapters: "
-                    f"{INSTALL_HINT}",
+                    f"{INSTALL_HINT}{cause}",
                 ))
             from .specter2_numpy import load
             self._numpy = load(path)
