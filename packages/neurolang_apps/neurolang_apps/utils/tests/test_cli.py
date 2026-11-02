@@ -1523,6 +1523,20 @@ class TestErrorReporting:
         err = self.run_failing(capsys, "ans(x) :- item(x)")
         assert err.startswith("Internal error — ValueError: boom")
         assert "--debug" in err
+        assert "raised in test_cli.py:" in err
+        assert "in broken: ValueError: boom" in err
+
+    def test_internal_error_names_its_cause(self, capsys, monkeypatch):
+        def broken(*args, **kwargs):
+            try:
+                raise KeyError("inner")
+            except KeyError as error:
+                raise RuntimeError("outer") from error
+
+        monkeypatch.setattr("neurolang_apps.utils.cli._execute_program", broken)
+        err = self.run_failing(capsys, "ans(x) :- item(x)")
+        assert "caused by test_cli.py:" in err
+        assert "KeyError: 'inner'" in err
 
 
 # ---------------------------------------------------------------------------
