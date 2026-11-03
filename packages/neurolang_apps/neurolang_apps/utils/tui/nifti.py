@@ -1556,12 +1556,13 @@ def last_result_network(app, request: ViewRequest):
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
-    shown = len(connectome["edges"])
+    shown = len(brain_viewer.shown_edges(connectome))
     value = repr(str(network.value)) if network.value else "1 (pairs)"
     message = (
         f"Network of {len(network.names)} nodes and {len(network.edges)} "
         f"edges, value: {value}; {shown} shown, those of values from "
-        f"{connectome['edgeMin']:g} (--threshold)"
+        f"{connectome['threshold']:g} (--threshold, or the edge threshold "
+        "of the viewer)"
     )
     if network.merged:
         message += (

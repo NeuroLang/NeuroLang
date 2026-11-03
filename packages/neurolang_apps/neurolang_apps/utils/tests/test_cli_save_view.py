@@ -195,7 +195,7 @@ def test_view_a_network_of_regions(atlas, viewer, capsys):
     [(image, options)] = viewer
     network = options["connectome"]
     assert [n["name"] for n in network["nodes"]] == ["A", "B"]
-    assert [e["colorValue"] for e in network["edges"]] == [1.0]
+    assert [e["value"] for e in network["edges"]] == [1.0]
     assert "Network of 2 nodes and 1 edges" in capsys.readouterr().err
 
 

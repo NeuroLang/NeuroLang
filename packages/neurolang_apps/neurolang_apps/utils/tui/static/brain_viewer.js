@@ -152,8 +152,8 @@
       // within a few millimetres of it.
       nv.opts.meshXRay = NETWORK_XRAY;
       nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
-      nv.loadConnectome(data.connectome);
-      listEdges(data.connectome);
+      viewer.network = data.connectome;
+      setUpEdgeThreshold(nv, data.connectome);
     }
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
@@ -161,23 +161,116 @@
   }
 
   // The strongest edges of the network, listed under the views, how
-  // much the network shows through the 3D render, and the thickness of
-  // the slab of a slice it is drawn in, in millimetres.
-  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6;
+  // much the network shows through the 3D render, the thickness of the
+  // slab of a slice it is drawn in, in millimetres, and the thickness of
+  // the edge at the threshold, a share of that of the largest edge.
+  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6,
+    THINNEST_EDGE = 0.2;
 
-  function listEdges(network) {
-    var edges = network.edges.slice().sort(function (a, b) {
-      return Math.abs(b.colorValue) - Math.abs(a.colorValue);
+  // The network as NiiVue draws it, of the edges of |value| at least
+  // *threshold* and the nodes they join. The colour and the size of a
+  // node is its strength, the sum of the values of its edges; the colour
+  // and the thickness of an edge its value, from the threshold (the
+  // thinnest, THINNEST_EDGE of the thickest) to the largest value. NiiVue
+  // makes an edge as thick as its value: the values it is given are
+  // those above the threshold, plus that of the thinnest edge.
+  function networkState(network, threshold) {
+    var edges = network.edges.filter(function (e) {
+      return e.value !== 0 && Math.abs(e.value) >= threshold;
+    });
+    var top = 0, strength = {}, kept = [];
+    edges.forEach(function (e) {
+      top = Math.max(top, Math.abs(e.value));
+      [e.first, e.second].forEach(function (n) {
+        if (!(n in strength)) { strength[n] = 0; kept.push(n); }
+        strength[n] += e.value;
+      });
+    });
+    kept.sort(function (a, b) { return a - b; });
+    var position = {}, topNode = 0;
+    kept.forEach(function (n, p) {
+      position[n] = p;
+      topNode = Math.max(topNode, Math.abs(strength[n]));
+    });
+    topNode = topNode || 1;
+    var low = Math.min(threshold, top), span = top - low;
+    var base = span > 0 ? span * THINNEST_EDGE / (1 - THINNEST_EDGE) : (top || 1);
+    return {
+      name: 'network',
+      nodeColormap: 'winter', nodeColormapNegative: 'cool',
+      nodeMinColor: 0, nodeMaxColor: topNode, nodeScale: network.nodeRadius,
+      edgeColormap: 'warm', edgeColormapNegative: 'cool',
+      edgeMin: base, edgeMax: span + base,
+      edgeScale: network.edgeRadius / (span + base),
+      legendLineThickness: 0, showLegend: false,
+      nodes: kept.map(function (n) {
+        var node = network.nodes[n];
+        return {
+          name: node.name, x: node.x, y: node.y, z: node.z,
+          colorValue: strength[n],
+          sizeValue: Math.max(Math.abs(strength[n]) / topNode, 0.4)
+        };
+      }),
+      edges: edges.map(function (e) {
+        var magnitude = Math.abs(e.value) - low + base;
+        return {
+          first: position[e.first], second: position[e.second],
+          colorValue: e.value < 0 ? -magnitude : magnitude, value: e.value
+        };
+      })
+    };
+  }
+
+  // Draw the edges of the network of |value| at least *threshold*, and
+  // list the strongest.
+  function drawNetwork(nv, threshold) {
+    var state = networkState(viewer.network, threshold);
+    nv.meshes.slice().forEach(function (mesh) { nv.removeMesh(mesh); });
+    if (state.edges.length) nv.addMesh(nv.loadConnectomeAsMesh(state));
+    nv.drawScene();
+    listEdges(state);
+  }
+
+  // The edge threshold, a value and a slider from the smallest |value|
+  // of the edges to the largest, which draws the network again.
+  function setUpEdgeThreshold(nv, network) {
+    var values = network.edges.map(function (e) { return Math.abs(e.value); });
+    var lo = values.length ? Math.min.apply(null, values) : 0;
+    var hi = values.length ? Math.max.apply(null, values) : 0;
+    var input = $('edge-threshold'), slider = $('edge-slider');
+    var toSlider = function (v) {
+      return hi > lo ? Math.round(1000 * (v - lo) / (hi - lo)) : 0;
+    };
+    input.value = format(network.threshold);
+    slider.value = toSlider(network.threshold);
+    input.addEventListener('input', function () {
+      var v = parseFloat(input.value);
+      if (!isFinite(v)) return;
+      slider.value = toSlider(v);
+      drawNetwork(nv, v);
+    });
+    slider.addEventListener('input', function () {
+      var v = lo + (hi - lo) * slider.value / 1000;
+      input.value = format(v);
+      drawNetwork(nv, v);
+    });
+    drawNetwork(nv, network.threshold);
+  }
+
+  function listEdges(state) {
+    var edges = state.edges.slice().sort(function (a, b) {
+      return Math.abs(b.value) - Math.abs(a.value);
     }).slice(0, LISTED_EDGES);
     var list = $('edges');
+    list.replaceChildren();
     $('network').style.display = '';
-    $('network-count').textContent = network.nodes.length + ' nodes, ' +
-      network.edges.length + ' edges shown' +
-      (network.edges.length > edges.length ? ', the strongest ' + edges.length : '');
+    $('network-count').textContent = state.nodes.length + ' nodes, ' +
+      state.edges.length + ' edges shown' +
+      (state.edges.length > edges.length ? ', the strongest ' + edges.length : '');
     edges.forEach(function (e) {
       var item = document.createElement('li');
-      item.textContent = network.nodes[e.first].name + ' — ' +
-        network.nodes[e.second].name + ': ' + format(e.colorValue);
+      item.textContent = state.nodes[e.first].name + ' — ' +
+        state.nodes[e.second].name + ': ' + format(e.value);
       list.appendChild(item);
     });
   }

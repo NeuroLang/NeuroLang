@@ -642,6 +642,20 @@ brainViewer.ready.then(function () {
     first: document.querySelector('#edges li').textContent,
     errors: window.__errors || []
   };
+  var mesh = nv.meshes[0];
+  out.radii = mesh.edges.map(function (e) {
+    return e.colorValue * mesh.edgeScale;
+  });
+  out.strength = mesh.nodes.map(function (n) { return n.colorValue; });
+  var input = document.getElementById('edge-threshold');
+  input.value = '0.15';
+  input.dispatchEvent(new Event('input'));
+  out.thresholded = {
+    meshes: nv.meshes.length, nodes: nv.meshes[0].nodes.length,
+    edges: nv.meshes[0].edges.length,
+    count: document.getElementById('network-count').textContent,
+    slider: document.getElementById('edge-slider').value
+  };
   report(out);
 }).catch(function (e) { report({failed: String(e)}); });
 </script>
@@ -666,3 +680,14 @@ def test_the_network_in_a_headless_browser(tmp_path):
     assert result["renderTile"] is True
     assert result["listed"] == 3 and "3 nodes, 3 edges" in result["count"]
     assert result["first"] == "a — c: 0.4"
+    # thicker with the value: from a fifth of the thickest at the
+    # threshold (0, the thinnest edge 0.1 above it) to the largest
+    assert result["radii"] == pytest.approx([
+        brain_viewer.EDGE_RADIUS * (v + 0.1) / 0.5 for v in (0.4, 0.2, 0.1)
+    ])
+    assert result["strength"] == pytest.approx([0.5, 0.3, 0.6])
+    # the edge threshold draws the network again, of the edges above it
+    assert result["thresholded"] == {
+        "meshes": 1, "nodes": 3, "edges": 2,
+        "count": "3 nodes, 2 edges shown", "slider": "167",
+    }
