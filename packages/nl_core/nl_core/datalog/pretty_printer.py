@@ -27,7 +27,7 @@ from nl_expr.logic import (
     ExistentialPredicate,
     UniversalPredicate,
 )
-from ..probabilistic.expressions import Condition
+from ..probabilistic.expressions import Condition, ProbabilisticFact
 
 # Binary operators that should be printed infix.
 # Maps operator function → display symbol.
@@ -42,7 +42,30 @@ _INFIX_OPS = {
     _operator.sub: "\u2212",
     _operator.mul: "\u00d7",
     _operator.truediv: "\u00f7",
+    _operator.pow: "**",
 }
+
+# How tightly each infix operator binds: an operand binding less tightly is
+# printed between parentheses.
+_PRECEDENCE = {
+    **dict.fromkeys(_INFIX_OPS, 0),
+    _operator.add: 1, _operator.sub: 1,
+    _operator.mul: 2, _operator.truediv: 2,
+    _operator.pow: 3,
+}
+
+
+def _infix_operator(expr):
+    """Return the operator of *expr* if it is printed infix, else None."""
+    if (
+        isinstance(expr, FunctionApplication)
+        and isinstance(expr.functor, Constant)
+        and callable(expr.functor.value)
+        and expr.functor.value in _INFIX_OPS
+        and len(expr.args) == 2
+    ):
+        return expr.functor.value
+    return None
 
 
 class DatalogPrettyPrinter(PatternWalker):
@@ -106,17 +129,33 @@ class DatalogPrettyPrinter(PatternWalker):
 
     @add_match(FunctionApplication)
     def format_fa(self, expr: FunctionApplication) -> str:
-        if (
-            isinstance(expr.functor, Constant)
-            and callable(expr.functor.value)
-            and expr.functor.value in _INFIX_OPS
-            and len(expr.args) == 2
-        ):
-            left = self.walk(expr.args[0])
-            right = self.walk(expr.args[1])
-            return f"{left} {_INFIX_OPS[expr.functor.value]} {right}"
+        op = _infix_operator(expr)
+        if op is not None:
+            # a - (b - c), a / (b * c) and (a ** b) ** c keep their brackets
+            left = self._operand(expr.args[0], op, op is _operator.pow)
+            right = self._operand(
+                expr.args[1], op, op in (_operator.sub, _operator.truediv)
+            )
+            return f"{left} {_INFIX_OPS[op]} {right}"
         args = ", ".join(self._format_arg(a) for a in expr.args)
         return f"{self.walk(expr.functor)}({args})"
+
+    def _operand(self, arg, op, bracket_equal: bool) -> str:
+        """Format *arg*, an operand of *op*, between parentheses if it binds
+        less tightly, or as tightly if *bracket_equal*."""
+        text = self.walk(arg)
+        inner = _infix_operator(arg)
+        if inner is None:
+            return text
+        if _PRECEDENCE[inner] < _PRECEDENCE[op] or (
+            bracket_equal and _PRECEDENCE[inner] == _PRECEDENCE[op]
+        ):
+            return f"({text})"
+        return text
+
+    @add_match(ProbabilisticFact)
+    def format_probabilistic_fact(self, expr: ProbabilisticFact) -> str:
+        return f"{self.walk(expr.body)} :: {self.walk(expr.probability)}"
 
     def _format_arg(self, arg):
         if isinstance(arg, tuple):

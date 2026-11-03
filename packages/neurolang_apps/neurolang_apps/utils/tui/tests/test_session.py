@@ -255,6 +255,25 @@ def test_datalog_shows_the_rules_as_written(app):
     assert output.split("\n\n")[-1].startswith("near_study(s) :-")
 
 
+def test_datalog_shows_a_probabilistic_rule(app):
+    app._nl.add_tuple_set([("alice", 0.5)], name="weight")
+    app._execute_and_display("likes(x) :: w :- weight(x, w)")
+    app._execute_and_display("p_likes(x, PROB) :- likes(x)")
+    output = _command(app, ".datalog p_likes")
+    assert output.split("\n\n")[0] == "likes(x) :: w :-\n    weight(x, w)"
+
+
+def test_datalog_leaves_out_the_rules_local_to_a_query(app):
+    app._execute_and_display("tmp(x) :- person(x)\nans(x) :- tmp(x)")
+    app._execute_and_display("tmp(x) :- plays(x)")
+    assert _command(app, ".datalog tmp") == "tmp(x) :-\n    plays(x)\n"
+
+
+def test_datalog_of_an_engine_the_registry_does_not_know(app):
+    app.settings.engine_name = "not_an_engine"
+    assert _command(app, ".datalog active").startswith("active(x) :-")
+
+
 def test_datalog_of_an_unknown_predicate(app):
     assert "'nothing' is not an IDB predicate" in _command(
         app, ".datalog nothing"

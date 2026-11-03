@@ -29,10 +29,7 @@ from rich.table import Table
 
 from nl_core.datalog import Union as DatalogUnion
 from nl_core.datalog.basic_representation import UnionOfConjunctiveQueries
-from nl_core.datalog.expression_processing import (
-    extract_logic_atoms,
-    reachable_code,
-)
+from nl_core.datalog.expression_processing import extract_logic_atoms
 from nl_core.datalog.expressions import AdornedSymbol
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Query, Symbol
@@ -651,11 +648,18 @@ def _parsed_rules(parsed) -> tuple:
     return tuple(f for f in formulas if isinstance(f, Implication))
 
 
+def _predicate_name(atom):
+    """Return the name of the predicate of *atom*, or of the head of a
+    probabilistic rule, ``p :: head``; None if it is not a symbol's."""
+    atom = getattr(atom, "body", atom)
+    return getattr(atom.functor, "name", None)
+
+
 def _rules_by_name(rules) -> dict:
     """Return the lists of the *rules* by the name of their predicate."""
     by_name = {}
     for rule in rules:
-        by_name.setdefault(rule.consequent.functor.name, []).append(rule)
+        by_name.setdefault(_predicate_name(rule.consequent), []).append(rule)
     return by_name
 
 
@@ -680,11 +684,16 @@ def record_written_rules(app, program: str) -> None:
 
 
 def _engine_rules_as_written(app) -> dict:
-    """Return the rules of the engine's ``datalog_init`` by predicate name."""
-    name = app.settings.engine_name
-    program = name and engine_registry.get_engine_config(name).get(
-        "datalog_init"
-    )
+    """
+    Return the rules of the engine's ``datalog_init`` by predicate name,
+    none for an engine the registry does not know.
+    """
+    try:
+        program = engine_registry.get_engine_config(
+            app.settings.engine_name
+        ).get("datalog_init")
+    except ValueError:
+        return {}
     if not program:
         return {}
     return _rules_by_name(_parsed_rules(app._nl.datalog_parser(program)))
@@ -696,20 +705,20 @@ def _dependency_order(rules) -> list:
     those of the predicates they use, or as they are if they are mutually
     recursive.
     """
-    def name(expression):
-        return getattr(expression.functor, "name", None)
-
-    graph = {name(rule.consequent): set() for rule in rules}
+    graph = {_predicate_name(rule.consequent): set() for rule in rules}
     for rule in rules:
-        head = name(rule.consequent)
+        head = _predicate_name(rule.consequent)
         graph[head] |= {
-            name(atom) for atom in extract_logic_atoms(rule.antecedent)
+            _predicate_name(atom)
+            for atom in extract_logic_atoms(rule.antecedent)
         } & graph.keys() - {head}
     try:
         order = list(TopologicalSorter(graph).static_order())
     except CycleError:
         return list(rules)
-    return sorted(rules, key=lambda rule: order.index(name(rule.consequent)))
+    return sorted(
+        rules, key=lambda rule: order.index(_predicate_name(rule.consequent))
+    )
 
 
 def _print_datalog_of(app, name: str) -> None:
@@ -721,27 +730,33 @@ def _print_datalog_of(app, name: str) -> None:
     session, those of SQUALL as it translated them (see
     :func:`record_written_rules`); the others as the engine holds them.
     """
-    value = app._nl.program_ir.symbol_table.get(Symbol(name))
-    if not isinstance(value, DatalogUnion):
+    symbol_table = app._nl.program_ir.symbol_table
+    if not isinstance(symbol_table.get(Symbol(name)), DatalogUnion):
         _warn(app, f"{name!r} is not an IDB predicate.")
         return
-    used = reachable_code(value.formulas, app._nl.program_ir).formulas
     engine = _engine_rules_as_written(app)
-    rules = {}
-    # those of a predicate print as written, the helpers of a conditional
-    # rule, which have its name, included
-    for rule in _dependency_order(used):
-        functor_name = rule.consequent.functor.name
-        written = (
-            engine.get(functor_name, [])
-            + app.written_rules.get(functor_name, [])
+    rules, to_visit, visited = {}, [name], set()
+    while to_visit:
+        predicate = to_visit.pop()
+        if predicate in visited:
+            continue
+        visited.add(predicate)
+        value = symbol_table.get(Symbol(predicate))
+        written = engine.get(predicate, []) + app.written_rules.get(
+            predicate, []
         )
-        for shown in written or (rule,):
-            rules.setdefault(shown)
+        if not written and isinstance(value, DatalogUnion):
+            written = value.formulas
+        for rule in written:
+            rules.setdefault(rule)
+            to_visit.extend(
+                _predicate_name(atom)
+                for atom in extract_logic_atoms(rule.antecedent)
+            )
     printer = DatalogPrettyPrinter()
     app.console.print(
-        "\n\n".join(printer.walk(rule) for rule in rules), markup=False,
-        highlight=False, soft_wrap=True,
+        "\n\n".join(printer.walk(rule) for rule in _dependency_order(rules)),
+        markup=False, highlight=False, soft_wrap=True,
     )
 
 
