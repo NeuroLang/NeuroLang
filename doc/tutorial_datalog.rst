@@ -1107,9 +1107,12 @@ activates each Destrieux region::
 
 A result of pairs of regions, or of points (``x1, y1, z1, x2, y2, z2``),
 with a value is a network: ``--view`` draws a node at the centre of each
-region and an edge per pair, its thickness and colour the value, the
-strongest 5% by default, in the 3D render of the brain and on the
-slices, and lists the strongest edges.  The co-activation of the
+region and an edge per pair, its colour and thickness the value, from
+the thinnest at the edge threshold to the thickest at the largest value,
+in the 3D render of the brain and on the slices, and lists the strongest
+edges.  The edge threshold, the strongest 5% by default (``--threshold``),
+is changed in the viewer, under the views: "Edges from" and its slider
+draw the network again with the edges above it.  The co-activation of the
 Schaefer regions by studies about reading, the probability that a study
 mentioning reading activates both regions of a pair::
 

@@ -37,6 +37,12 @@ Unreleased
 
 **New features:**
 
+* The brain viewer of a network (``.view`` of a result of pairs of regions or
+  points) thresholds its edges in the page: "Edges from" and its slider draw
+  the network again with the edges above the value, the strongest 5% at
+  first. An edge is thicker with its value from the threshold, where it is a
+  fifth of the thickest, to the largest value, rather than in proportion to
+  the value, which made edges of close values look alike.
 * The REPL in the browser asks "Did this query do what you wanted?" after a
   query typed in the page too, not only after an answer of the assistant, in
   a row between the output and the result: a rating

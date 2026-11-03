@@ -45,6 +45,8 @@
   #colorbars canvas { display: block; }
   .colorbar-name { color: #bbb; margin-top: 4px; }
   #network { margin: 8px 0; color: #ccc; }
+  #edge-threshold { width: 7em; }
+  #edge-slider { width: 180px; vertical-align: middle; }
   #edges { margin: 4px 0; padding-left: 28px; font-size: 13px; }
 </style>
 </head>
@@ -127,6 +129,10 @@
 </div>
 <div id="colorbars"><canvas id="colorbar" width="480" height="44"></canvas></div>
 <div id="network" style="display: none">
+  <label title="The edges of |value| at least this one are drawn">Edges from
+    <input id="edge-threshold" type="number" min="0" step="any"></label>
+  <input id="edge-slider" type="range" min="0" max="1000" step="1">
+  <br>
   Network: <span id="network-count"></span>
   <ol id="edges"></ol>
 </div>

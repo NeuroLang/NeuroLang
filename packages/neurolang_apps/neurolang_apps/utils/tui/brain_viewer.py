@@ -313,6 +313,9 @@ NETWORK_OVERLAY_OPACITY = 0.5
 # when there are fewer.
 MIN_SHOWN_EDGES = 20
 
+# The number of edges, the largest, given to the page to threshold there.
+MAX_EDGES = 20000
+
 
 def edge_threshold(values, threshold, at_least: int = 0) -> float:
     """
@@ -333,57 +336,49 @@ def edge_threshold(values, threshold, at_least: int = 0) -> float:
 
 def connectome_state(names, coordinates, edges, threshold) -> dict:
     """
-    Return the network of *edges* as NiiVue draws it, a JSON-able dict.
+    Return the network of *edges* for the page to draw, a JSON-able dict.
 
     The nodes have *names* and the millimetre *coordinates* of their
     centre; an edge ``(first, second, value)`` joins two of them, by
-    index. Only the edges of |value| at least the threshold
-    (:func:`edge_threshold`; a percentile shows the
-    :data:`MIN_SHOWN_EDGES` largest at least) are drawn, and the nodes
-    they join: the
-    colour and the size of a node is its strength, the sum of the values
-    of its edges drawn, and the colour and the thickness of an edge its
-    value.
+    index. The page draws the edges of |value| at least its edge
+    threshold, which starts at *threshold* (:func:`edge_threshold`; a
+    percentile shows the :data:`MIN_SHOWN_EDGES` largest at least) and
+    can be changed there, and the nodes they join: the colour and the
+    size of a node is its strength, the sum of the values of its edges
+    drawn, and the colour and the thickness of an edge its value, from
+    the threshold to the largest. The :data:`MAX_EDGES` largest edges
+    are given to the page.
     """
-    minimum = edge_threshold(
-        [w for _, _, w in edges], threshold, MIN_SHOWN_EDGES
-    )
-    shown = [e for e in edges if abs(e[2]) >= minimum and e[2] != 0]
-    strength = np.zeros(len(names))
-    for first, second, weight in shown:
-        strength[first] += weight
-        strength[second] += weight
-    kept = sorted({n for first, second, _ in shown for n in (first, second)})
-    position = {n: p for p, n in enumerate(kept)}
-    top_node = max((abs(strength[n]) for n in kept), default=0.0) or 1.0
-    top_edge = max((abs(w) for _, _, w in shown), default=0.0) or 1.0
+    edges = sorted(
+        (e for e in edges if e[2] != 0 and not np.isnan(e[2])),
+        key=lambda e: -abs(e[2]),
+    )[:MAX_EDGES]
     return {
         "name": "network",
-        "nodeColormap": "winter", "nodeColormapNegative": "cool",
-        "nodeMinColor": 0.0, "nodeMaxColor": float(top_node),
-        "nodeScale": NODE_RADIUS,
-        "edgeColormap": "warm", "edgeColormapNegative": "cool",
-        "edgeMin": float(minimum), "edgeMax": float(top_edge),
-        "edgeScale": EDGE_RADIUS / top_edge,
-        "legendLineThickness": 0, "showLegend": False,
+        "threshold": edge_threshold(
+            [w for _, _, w in edges], threshold, MIN_SHOWN_EDGES
+        ),
+        "nodeRadius": NODE_RADIUS, "edgeRadius": EDGE_RADIUS,
         "nodes": [
             {
-                "name": str(names[n]),
-                "x": float(coordinates[n][0]), "y": float(coordinates[n][1]),
-                "z": float(coordinates[n][2]),
-                "colorValue": float(strength[n]),
-                "sizeValue": float(max(abs(strength[n]) / top_node, 0.4)),
+                "name": str(name), "x": float(x), "y": float(y),
+                "z": float(z),
             }
-            for n in kept
+            for name, (x, y, z) in zip(names, coordinates)
         ],
         "edges": [
-            {
-                "first": position[first], "second": position[second],
-                "colorValue": float(weight),
-            }
-            for first, second, weight in shown
+            {"first": int(a), "second": int(b), "value": float(w)}
+            for a, b, w in edges
         ],
     }
+
+
+def shown_edges(connectome: dict) -> list:
+    """Return the edges of *connectome* the page draws at first."""
+    return [
+        e for e in connectome["edges"]
+        if abs(e["value"]) >= connectome["threshold"]
+    ]
 
 
 def _script_json(state: dict) -> str:
