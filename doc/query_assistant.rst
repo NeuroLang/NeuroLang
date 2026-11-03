@@ -336,7 +336,8 @@ whom. If the server cannot be reached, a warning is printed once and the
 assistant works as before.
 
 **What is sent.** For each answer of ``.ask``, ``.llm`` or
-``neurolang-query --ask``: the question; the query, its explanation, and
+``neurolang-query --ask``, including those without a valid query or that
+failed for an error of the provider: the question; the query, its explanation, and
 whether it is valid or why not; the steps of the agent (thought, tool,
 arguments, and the first 1000 characters of what the tool returned); the
 rows the agent saw when it ran the final query; the engine's name; the
@@ -363,6 +364,32 @@ private data.
 
 ``.help feedback`` recalls these commands. In the browser, the REPL does not
 share its answers.
+
+**In a Grist document.** Instead of a server, the answers can be rows of a
+`Grist <https://www.getgrist.com>`_ document:
+
+.. code-block:: yaml
+
+    feedback:
+      enabled: true
+      url: https://grist.numerique.gouv.fr   # the Grist instance
+      grist_doc: YOUR_DOC_ID                 # in the document's address
+      api_key_env: GRIST_API_KEY             # the default
+      user: Ada
+
+The API key (in Grist, *Profile settings*, *API*) is read from the
+environment variable ``api_key_env`` only; without it, a warning is printed
+once and nothing is shared. The document needs a table ``Answers`` with the
+columns ``time`` (date and time), ``question``, ``query``, ``valid``
+(toggle), ``error``, ``explanation``, ``engine``, ``provider``, ``model``,
+``strategy``, ``language``, ``rows``, ``steps`` (JSON text), ``seconds``,
+``calls``, ``tokens``, ``user`` and ``client_version``, plus the review
+columns ``verdict`` (choice: good, bad or unsure), ``comment`` and
+``corrected_query``. Each answer is a row, its id the row's number. Flag the
+rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
+``bad`` set the ``verdict``) and ``.refine submit`` (``bad`` and the
+``corrected_query``). The browser REPL never shares, so the key never
+reaches the page.
 
 **Running a server.** ``neurolang-feedback-server`` comes with
 ``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and

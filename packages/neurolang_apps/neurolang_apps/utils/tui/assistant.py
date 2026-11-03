@@ -388,7 +388,9 @@ def _run_assistant(
     agent) override those of the session and of the configuration when
     given.
     """
-    from neurolang_apps.utils.llm import LLMConfigError, LLMError, make_agent
+    from neurolang_apps.utils.llm import (
+        AgentResult, LLMConfigError, LLMError, make_agent
+    )
     state = app.assistant
     try:
         config = state.config()
@@ -425,9 +427,12 @@ def _run_assistant(
                 "model": provider.model or provider.api,
                 "strategy": agent.strategy,
             })
-        result = call_interruptibly(
-            lambda: agent.run(question), app._print_stuck_hint
-        )
+        try:
+            result = call_interruptibly(
+                lambda: agent.run(question), app._print_stuck_hint
+            )
+        except LLMError as exc:  # a failure, shared too
+            result = AgentResult(language=language, error=str(exc))
         if events:
             events(_done_event(result))
     except KeyboardInterrupt:
@@ -549,6 +554,8 @@ assistant. Turn it on in the LLM configuration (llm.yaml):
     enabled: true
     url: https://feedback.example.org
     user: your name                   (optional)
+    grist_doc: DOC_ID                 (or: rows of this Grist document at
+                                      url, the API key in GRIST_API_KEY)
 
 or with the environment variable NEUROLANG_LLM_FEEDBACK_URL.
 

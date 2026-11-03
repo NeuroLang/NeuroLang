@@ -1493,6 +1493,7 @@ def _run_ask(args) -> None:
     """
     try:
         from neurolang_apps.utils.llm import (
+            AgentResult,
             LLMConfigError,
             LLMError,
             load_config,
@@ -1525,9 +1526,8 @@ def _run_ask(args) -> None:
     )
     try:
         result = agent.run(args.ask)
-    except LLMError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    except LLMError as exc:  # a failure, shared too
+        result = AgentResult(language=language, error=str(exc))
     feedback = feedback_client(
         config, lambda text: print(text, file=sys.stderr)
     )
