@@ -169,3 +169,7 @@ uv.lock
 # uv package manager
 uv.lock
 .omo/
+
+# What a test leaves in the working directory (see conftest.py)
+MagicMock/
+unused/
