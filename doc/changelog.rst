@@ -160,6 +160,9 @@ Unreleased
   ``neurolang_apps.utils``.
 * The union of an instance known to be empty and one known not to be was
   taken for empty, which could end a semi-naive chase before its fixpoint.
+* ``PROB[...]`` and ``MARG[...]`` accept their conjunctions in parentheses,
+  as a rule's condition does: ``PROB[(a(x, s), (x < y)) // (b(s), c(s))] = p``
+  was a syntax error.
 
 **Performance:**
 

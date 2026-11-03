@@ -108,16 +108,21 @@ predicate : id_application
           | succ_body_predicate
 
 // PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
-prob_body_predicate : "PROB" "[" conjunction "]" "=" argument
-                    | "PROB" "[" conjunction PROB_SEP body "]" "=" argument
+prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
+                    | "PROB" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
+
+// Inside PROB[...] and MARG[...], a conjunction may be in parentheses, as in
+// a rule's condition: PROB[(a(x), (x < y)) // (b(x), c(x))] = p
+?bracketed_conjunction : conjunction
+                       | "(" conjunction ")"
 
 // RESAMPLE[boot](pred(x)) = b  —  pred(x) on each replicate b of the resampling boot
 resample_body_predicate : "RESAMPLE" "[" cmd_identifier "]" "(" id_application ")" "=" argument
 
 // MARG[pred] = var  —  marginal probability query inside a rule body
 // MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
-marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
-                    | "MARG" "[" conjunction PROB_SEP body "]" "=" argument
+marg_body_predicate : "MARG" "[" bracketed_conjunction "]" "=" argument
+                    | "MARG" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
 
 // SUCC[...] = var  —  success probability query (skipped in execution)
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
@@ -127,8 +132,8 @@ SUCC_INNER : /[a-zA-Z_*+.,()&@\\/ \t-]+/
 PROB_SEP : "//" | "|"
 
 // MARG head rule  —  declare a marginal probability rule
-marg_head_rule : "MARG" "[" conjunction "]" IMPLICATION (condition | body)
-               | "MARG" "[" conjunction PROB_SEP body "]" IMPLICATION (condition | body)
+marg_head_rule : "MARG" "[" bracketed_conjunction "]" IMPLICATION (condition | body)
+               | "MARG" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" IMPLICATION (condition | body)
 
 // SUCC head rule  —  success probability rule (skipped in execution)
 succ_head_rule : "SUCC" "[" SUCC_INNER "]" IMPLICATION (condition | body)
