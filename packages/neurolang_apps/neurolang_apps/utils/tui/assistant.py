@@ -69,6 +69,9 @@ class AssistantState:
     # The last answer, for .rate and .refine: its id on the feedback
     # server, its query and the REPL's last query when it was asked.
     last_answer: Optional[dict] = None
+    # What the last answer was made of, to share it when it is rated:
+    # (question, result, provider, strategy).
+    last_run: Optional[tuple] = None
 
     def config(self):
         """Return the configuration, reading it the first time."""
@@ -453,6 +456,7 @@ def _run_assistant(
         app.console.print(f"[red]{escape(str(exc))}[/red]")
         return
     _show_result(app, result)
+    state.last_run = (question, result, provider, agent.strategy)
     feedback = state.feedback(_say(app))
     if feedback:
         answer = feedback.share(

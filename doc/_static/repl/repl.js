@@ -58,6 +58,33 @@ function showSummary({ valid, explanation, back_translation: reads, verified, ve
   summary.hidden = false;
 }
 
+// Rating the assistant's answer: "Yes" sends it at once, "No" asks what was
+// wrong first. Shown only where answers can be rated (feedback.json).
+let canRate = false;
+const rate = $("rate");
+const rateButtons = ["rate-good", "rate-bad", "rate-send"].map($);
+function hideRating() {
+  rate.hidden = true;
+  $("rate-note").textContent = "";
+  $("rate-comment").value = "";
+  $("rate-comment").hidden = $("rate-send").hidden = true;
+  rateButtons.forEach((button) => (button.disabled = false));
+}
+function showRating() {
+  rate.hidden = !canRate;
+}
+function sendRating(verdict) {
+  rateButtons.forEach((button) => (button.disabled = true));
+  $("rate-note").textContent = "Sending…";
+  worker.postMessage({ type: "rate", verdict, comment: $("rate-comment").value.trim() });
+}
+$("rate-good").addEventListener("click", () => sendRating("good"));
+$("rate-bad").addEventListener("click", () => {
+  $("rate-comment").hidden = $("rate-send").hidden = false;
+  $("rate-comment").focus();
+});
+$("rate-send").addEventListener("click", () => sendRating("bad"));
+
 function showAgent() {
   live.hidden = false;
   live.classList.toggle("running", agentLog.running);
@@ -304,6 +331,7 @@ const workerMessages = {
     $("boot").hidden = true;
     $("banner").replaceChildren(html(data.banner));
     setProviders(data.providers ?? []);
+    canRate = Boolean(data.canRate);
     guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
     if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
     showGuide();
@@ -320,8 +348,19 @@ const workerMessages = {
   agent: (data) => {
     agentLog.apply(data);
     showAgent();
-    if (data.event === "ask") hideSummary();
-    if (data.event === "done") showSummary(data);
+    if (data.event === "ask") {
+      hideSummary();
+      hideRating();
+    }
+    if (data.event === "done") {
+      showSummary(data);
+      showRating();
+    }
+  },
+  rated: (data) => {
+    $("rate-note").textContent = data.message;
+    if (!data.ok) rateButtons.forEach((button) => (button.disabled = false));
+    else $("rate-comment").hidden = $("rate-send").hidden = true;
   },
   llm: (data) => {
     if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });

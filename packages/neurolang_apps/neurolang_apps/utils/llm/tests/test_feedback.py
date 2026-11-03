@@ -196,3 +196,27 @@ def test_grist_without_key_warns_once(monkeypatch):
     assert len(said) == 2 and "GRIST_API_KEY is not set" in said[1]
     with pytest.raises(FeedbackError, match="GRIST_API_KEY"):
         client.rate("7", "correct")
+
+
+def test_anonymous_grist_adds_a_rated_row():
+    from ..feedback import GristFeedbackClient
+
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"records": [{"id": 9}]})
+
+    client = GristFeedbackClient(
+        "https://grist.test", "doc1", api_key_env="",
+        transport=httpx.MockTransport(handle),
+    )
+    assert client.share_rated(
+        "Pain?", result(), PROVIDER, "react", "ns", "bad", "too broad"
+    ) == "9"
+    (request,) = requests
+    assert request.method == "POST" and "Authorization" not in request.headers
+    (row,) = json.loads(request.content)["records"]
+    fields = row["fields"]
+    assert fields["verdict"] == "bad" and fields["comment"] == "too broad"
+    assert fields["question"] == "Pain?" and fields["engine"] == "ns"

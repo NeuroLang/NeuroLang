@@ -175,7 +175,10 @@ class GristFeedbackClient(FeedbackClient):
     of its table ``Answers``, whose id is the answer's; a rating sets the
     row's ``verdict`` (good, bad or unsure), ``comment`` and
     ``corrected_query``. The API key is in the environment variable
-    *api_key_env*.
+    *api_key_env*. Without one (``api_key_env=""``) the client is
+    anonymous, as a web page must be (Grist does not accept its key from
+    another origin): the document lets everyone add rows, and
+    :meth:`share_rated` adds the answer with its verdict, in one row.
     """
 
     VERDICTS = {"correct": "good", "incorrect": "bad"}
@@ -190,6 +193,8 @@ class GristFeedbackClient(FeedbackClient):
         self.api_key_env = api_key_env
 
     def _headers(self) -> dict:
+        if not self.api_key_env:
+            return {}
         key = os.environ.get(self.api_key_env)
         if not key:
             raise FeedbackError(
@@ -204,6 +209,24 @@ class GristFeedbackClient(FeedbackClient):
             "POST", self.records, {"records": [{"fields": record}]},
             lambda reply: str(reply["records"][0]["id"]),
         )
+
+    def share_rated(
+        self, question, result, provider, strategy, engine, verdict,
+        comment="",
+    ) -> str:
+        """
+        Add the answer with its *verdict* and *comment* as a row and return
+        its id; raise FeedbackError. Nothing of an answer is sent but when
+        it is rated.
+        """
+        record = answer_record(
+            question, result, provider, strategy, engine, self.user
+        )
+        record.update(
+            verdict=self.VERDICTS.get(verdict, verdict),
+            comment=_anonymous(comment),
+        )
+        return self._share(record)
 
     def _rate(self, answer_id: str, data: dict) -> str:
         if not str(answer_id).isdigit():

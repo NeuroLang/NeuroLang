@@ -37,6 +37,12 @@ Unreleased
 
 **New features:**
 
+* The REPL in the browser asks whether an answer of the assistant was what
+  the visitor wanted, and sends it, rated good or bad with a comment, as a
+  row of a Grist document that anyone can add rows to (``feedback.json`` next
+  to the page names it; without a document the page does not ask). Nothing of
+  an answer is sent unless it is rated, and the page holds no key: Grist does
+  not accept one from a web page.
 * The relations and rules list of the REPL in the browser leaves out the IRIs
   of an ontology's classes and properties, such as
   ``http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00137``, unless the

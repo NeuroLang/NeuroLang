@@ -80,6 +80,10 @@
   #summary p { margin: .15rem 0 0; }
   #summary p:empty { display: none; }
   #summary-reads { font-style: italic; }
+  #rate { margin-top: .5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  #rate[hidden], #rate [hidden] { display: none; }
+  #rate-note:empty { display: none; }
+  #rate-comment { flex: 1 1 14rem; }
   #live { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .4rem .75rem; }
   #live[hidden] { display: none; }
   #live summary { color: var(--text); }
@@ -261,6 +265,15 @@
       <p id="summary-text"></p>
       <p id="summary-reads" class="note"></p>
       <p id="summary-warning" class="agent-bad" role="alert"></p>
+    </section>
+    <section id="rate" hidden aria-label="Rate the assistant's answer">
+      <span>Was this what you wanted?</span>
+      <button id="rate-good" type="button" class="ghost">Yes</button>
+      <button id="rate-bad" type="button" class="ghost">No</button>
+      <input id="rate-comment" type="text" maxlength="500" placeholder="What was wrong? (optional)" aria-label="What was wrong?" hidden>
+      <button id="rate-send" type="button" hidden>Send</button>
+      <span id="rate-note" class="note" role="status"></span>
+      <span class="note">A rating sends the question, the query, the assistant's steps and the first rows of its result to the NeuroLang feedback table.</span>
     </section>
     <div class="editor">
       <pre id="mirror" aria-hidden="true"></pre>

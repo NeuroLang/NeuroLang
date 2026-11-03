@@ -1,5 +1,6 @@
 """Tests for the REPL driven from a web page."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -538,6 +539,67 @@ def test_the_predicates_of_the_engine_say_what_their_columns_are(repl):
         {"columns": ["i", "j", "k"], "sort": "voxel", "type": "int"},
         {"columns": ["study_id"], "sort": "study", "type": "int"},
     ]
+
+
+class TestRatingAnAnswer:
+    """The page shares a rated answer in a Grist table, anonymously."""
+
+    @staticmethod
+    def answered(repl, transport):
+        from collections import Counter
+
+        from neurolang_apps.utils.llm import AgentResult
+        from neurolang_apps.utils.llm.config import ProviderConfig
+
+        repl.set_feedback("https://grist.test", "doc1", transport)
+        provider = ProviderConfig("p", "openai", "m", "http://x/v1")
+        result = AgentResult(
+            query="ans(s) :- person(s, n)", language="datalog", valid=True,
+            usage=Counter(input=1, output=2),
+        )
+        repl.app.assistant.last_run = ("Who?", result, provider, "react")
+
+    def test_without_a_document_nothing_can_be_rated(self, repl):
+        assert not repl.can_rate()
+        assert not repl.rate_answer("good")["ok"]
+
+    def test_the_rating_is_a_row_with_the_answer(self, repl):
+        import httpx
+
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            return httpx.Response(200, json={"records": [{"id": 3}]})
+
+        self.answered(repl, httpx.MockTransport(handle))
+        assert repl.can_rate()
+        assert repl.rate_answer("bad", "wrong table")["ok"]
+        (request,) = requests
+        assert "Authorization" not in request.headers
+        fields = json.loads(request.content)["records"][0]["fields"]
+        assert fields["verdict"] == "bad" and fields["comment"] == "wrong table"
+        assert fields["question"] == "Who?"
+        assert fields["query"] == "ans(s) :- person(s, n)"
+
+    def test_a_failure_says_so(self, repl):
+        import httpx
+
+        self.answered(repl, httpx.MockTransport(
+            lambda request: httpx.Response(403, json={"error": "no"})
+        ))
+        reply = repl.rate_answer("good")
+        assert not reply["ok"] and "failed" in reply["message"]
+
+    def test_there_is_nothing_to_rate_before_an_answer(self, repl):
+        import httpx
+
+        repl.set_feedback(
+            "https://grist.test", "doc1",
+            httpx.MockTransport(lambda request: httpx.Response(200)),
+        )
+        assert not repl.rate_answer("good")["ok"]
+        assert not repl.rate_answer("meh")["ok"]
 
 
 def test_the_iris_of_an_ontology_are_not_listed(repl):

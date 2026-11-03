@@ -301,6 +301,7 @@ class WebRepl:
             else None
         )
         self._tables: list = []
+        self._rating = None  # where a rated answer goes (see set_feedback)
         command = "neurolang-query -i"
         if engine_name:
             command += f" --engine {engine_name}"
@@ -353,6 +354,44 @@ class WebRepl:
         self.set_llm(
             provider.name, "", provider.model, provider.base_url
         )
+
+    def set_feedback(self, url: str, doc: str, transport=None) -> None:
+        """
+        Let the page share a rated answer in the table ``Answers`` of the
+        Grist document *doc* at *url*, anonymously (see
+        :class:`~neurolang_apps.utils.llm.feedback.GristFeedbackClient`):
+        without a *doc*, answers cannot be rated. *transport* replaces the
+        browser's (in tests).
+        """
+        from neurolang_apps.utils.llm.feedback import GristFeedbackClient
+
+        self._rating = GristFeedbackClient(
+            url, doc, api_key_env="", transport=transport
+        ) if doc else None
+
+    def can_rate(self) -> bool:
+        """Whether the page can send the rating of an answer."""
+        return self._rating is not None
+
+    def rate_answer(self, verdict: str, comment: str = "") -> dict:
+        """
+        Share the last answer of the assistant, rated *verdict* (``good``
+        or ``bad``) with the visitor's *comment*, and return ``ok`` and
+        a ``message`` to show.
+        """
+        from neurolang_apps.utils.llm.feedback import FeedbackError
+
+        run = self.app.assistant.last_run
+        if self._rating is None or run is None or verdict not in (
+            "good", "bad"
+        ):
+            return {"ok": False, "message": "There is no answer to rate."}
+        engine = self.app.settings.engine_name
+        try:
+            self._rating.share_rated(*run, engine, verdict, comment)
+        except FeedbackError as error:
+            return {"ok": False, "message": str(error)}
+        return {"ok": True, "message": "Thank you: your rating is sent."}
 
     def set_event_sink(self, send) -> None:
         """
