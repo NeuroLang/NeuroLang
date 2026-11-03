@@ -7,6 +7,8 @@ an engine with ``add_tuple_set(DataFrame, name=...)``, such as
 
 from typing import Any, Iterable, Optional
 
+import pandas as pd
+
 from .indexing import RelationStore
 
 __all__ = ["register", "RELATION_NAMES"]
@@ -49,4 +51,13 @@ def register(
     only : iterable of str, optional
         Add only these relations.
     """
-    raise NotImplementedError
+    frames = dict(store.relations)
+    frames["opposite_hemisphere"] = pd.DataFrame(
+        {
+            "h1": ["left", "right", "none"],
+            "h2": ["right", "left", "none"],
+        }
+    )
+    for name in (frames if only is None else only):
+        if name in frames:
+            engine.add_tuple_set(frames[name], name=name)

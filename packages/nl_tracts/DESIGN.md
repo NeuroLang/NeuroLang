@@ -2,8 +2,11 @@
 
 Status: **the atlas layer and the WMQL transpiler are implemented**
 (`spaces`, `terms`, `atlas`: sections 3.2, 4, 5, and `label_extent` of 6.1;
-`wmql`: section 11); the rest (tractogram, indexing, cache, frontend) is
-still a scaffold whose bodies raise `NotImplementedError`. Numbers below marked *measured* come from probes run
+`wmql`: section 11, **directional terms included**) and **the geometry of a
+tractogram** (`Tractogram`, `streamline_extent`, `endpoint_coord`,
+`streamline_length`, `RelationStore.add_atlas`/`add_tractogram`, `register`);
+the voxel indexing (`traverses`, `endpoint`), the cache and `build_relations`
+are still a scaffold whose bodies raise `NotImplementedError`. Numbers below marked *measured* come from probes run
 on this repository (NeuroLang `master` at the time of the split, pandas
 3.0.6, pandas backend, an Intel Mac); the rest are estimates to be checked
 in phase 1.
@@ -11,8 +14,7 @@ in phase 1.
 Contents: 1 Goals · 2 Decisions taken · 3 Relations · 4 Atlases ·
 5 Spaces · 6 Indexing semantics · 7 Data formats and cache ·
 8 Handing the relations to the engine · 9 Packaging and layering ·
-10 Public API · 11 From tract_querier to Datalog · 12 Future work:
-directional relations · 13 Test plan · 14 Phases · 15 Open questions
+10 Public API · 11 From tract_querier to Datalog · 12 Directional terms · 13 Test plan · 14 Phases · 15 Open questions
 
 ## 1. Goals
 
@@ -27,9 +29,8 @@ regions, probabilistic facts), and so that the same rule runs on several
 atlases.
 
 Non-goals: registration or resampling between spaces; tractography
-algorithms; visualisation; directional relations in the first phases (12);
-probabilistic atlases (4.4); the directional terms of WMQL (12). (The
-other constructs of WMQL are a transpiler, section 11.)
+algorithms; visualisation; probabilistic atlases (4.4); the variants of the directional terms that are
+not tract_querier's (12). (WMQL is a transpiler, section 11.)
 
 ## 2. Decisions taken
 
@@ -51,7 +52,10 @@ These are fixed; the sections they affect expand them.
 4. **Spaces**: no registration. Atlases and tractograms carry a space tag;
    combining mismatched tags raises unless explicitly overridden (5).
 5. **Indexing semantics match tract_querier**, the equivalence oracle (6).
-6. **Directional relations are future work** (12).
+6. **Directional relations are future work** (12). *Overridden on
+   2026-11-03: the directional terms of WMQL are required, and implemented as
+   tract_querier has them (11, 12); only the variants that are not its are
+   future work.*
 7. **Layering**: a core that depends only on numpy/scipy/nibabel/pandas
    (and pyarrow for parquet, 15.1), and a thin `nl_tracts.frontend`. The
    package sits between `neurolang_apps` and `neurolang` (9).
@@ -320,7 +324,7 @@ have a test** (13.2):
 | 4 | Streamline `i` traverses `l` iff `count_l / n_points >= threshold / 100.`, `threshold` = **2.0** by default (the CLI's), and the denominator is **all** the points, label 0 included | `crossing_threshold`, default 2.0; the same float expression `count / n >= threshold / 100.` so that the comparison is bit-identical |
 | 5 | The result includes label **0** when >= threshold of the points are in the background | see 6.3 |
 | 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]`, label 0 included | `endpoint(a, t, s, e, l)`, `e` = 0 first, 1 last; **rows with the background label are never emitted** (6.3), so the equivalence tests drop label 0 from the reference's endpoints before comparing |
-| 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file; filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list |
+| 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file; filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list. **The reference's `tract_bounding_boxes` and `tract_endpoints_pos` are computed on all the tracts, unfiltered, so its directional terms are misaligned with the renumbered ids when `length_threshold > 0`** (11.5): not comparable there |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
 | 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
@@ -611,11 +615,14 @@ that the core can be used (and tested) without importing NeuroLang. It is
 the same pattern as `nl_core` not importing `nibabel`. A layers
 contract alone would not say that: nl_tracts's own core is *allowed* to
 import `neurolang`, and the forbidden contract is what forbids it. Today
-`frontend.py` needs no import of `neurolang` (it uses the engine duck-typed),
-so the declared dependency on `neurolang` is for the directional relations
-(12), which would read the region types and the thresholds in `config`; if
-phase 4 turns out not to need them, the layer and the dependency should be
-reconsidered (15.6).
+neither `frontend.py` nor `wmql.py` imports `neurolang` (the first uses the
+engine duck-typed, the second turns text into text), and the directional
+terms, now implemented, did not need it either (they are comparisons over
+relations, 12), so the declared dependency on `neurolang` is for what is
+still to come (the text-to-query integration, the probabilistic variants of
+the directional terms, which read the engine's types) and for the tests; if
+that does not come, the layer and the dependency should be reconsidered
+(15.6).
 
 `lint-imports` was run on the scaffold with the contracts above: 4 kept, 0
 broken; with `import neurolang` planted in `nl_tracts/atlas.py` and
@@ -674,7 +681,8 @@ def load_term_mapping(source) -> DataFrame   # DataFrame, path or shipped key
 def shipped_mapping_path(key) -> Traversable
 
 # wmql.py
-def transpile(source, atlas, include_folders=(), skip_unsupported=False)
+def transpile(source, atlas, include_folders=(), skip_unsupported=False,
+              anatomical_vertical=False)
     -> Transpiled   # .text, .program(*names, components=...), .defined,
                     # .saved, .skipped
 class QueryPredicates: tracts, labels, end0, end1     # predicate names | None
@@ -731,14 +739,20 @@ transpile(source, atlas, include_folders=(), skip_unsupported=False)
 In the reference every query value is a **triple** (`FiberQueryInfo`): the
 streamlines `tracts`, a set of `labels`, and two sets of streamlines
 `tracts_endpoints[0|1]` (those whose first / last point is in one of the
-labels). A WMQL name `x` becomes four predicates over `traverses(a, t, s,
-l)` and `endpoint(a, t, s, e, l)`, with the atlas `a` a constant of the
-program (WMQL labels are the ids of an atlas, as `FreeSurfer.qry` has them):
+labels). A WMQL name `x` becomes four predicates over `tractogram(t)`,
+`traverses(a, t, s, l)` and `endpoint(a, t, s, e, l)` and, for the directional
+terms, `label_extent(a, l, axis, lo, hi)`, `streamline_extent(t, s, axis,
+lo, hi)` and `endpoint_coord(t, s, e, axis, v)`, with the atlas `a` a
+constant of the program (WMQL labels are the ids of an atlas, as
+`FreeSurfer.qry` has them). **The label set carries the tractogram**, since
+the labels of a directional result are those its streamlines traverse, which
+depends on the data of each tractogram, as in the reference, where each run
+has one:
 
 | Predicate | Component |
 |---|---|
 | `q_x(t, s)` | the streamlines |
-| `q_x__label(l)` | the labels |
+| `q_x__label(t, l)` | the labels, for each tractogram |
 | `q_x__end0(t, s)`, `q_x__end1(t, s)` | streamlines whose first / last point is in the labels |
 
 `x.left` is `q_x_left`; the prefix keeps WMQL names (`label`, `endpoint`)
@@ -755,13 +769,13 @@ Read from `query_processor.py` and checked against it (13.2).
 
 | WMQL | Reference semantics (componentwise on the triple) | Datalog |
 |---|---|---|
-| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(t,s) :- traverses(a,t,s,7)`; fact `E_label(7)`; `E_end0(t,s) :- endpoint(a,t,s,0,7)`, same for 1 |
+| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(t,s) :- traverses(a,t,s,7)`; `E_label(t,7) :- tractogram(t)`; `E_end0(t,s) :- endpoint(a,t,s,0,7)`, same for 1 |
 | `A or B`, `A + B` | union of tracts, labels, endpoints | two rules per predicate, same head |
-| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(t,s) :- A(t,s), B(t,s)`; `E_label(l)` from both; `E_end0(t,s) :- A_end0(t,s), B_end0(t,s)` |
+| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(t,s) :- A(t,s), B(t,s)`; `E_label(t,l)` from both; `E_end0(t,s) :- A_end0(t,s), B_end0(t,s)` |
 | `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets; `a not in b not in c` is sequential | `E(t,s) :- A(t,s), ~B(t,s)`; the same for labels and ends |
-| `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(l) :- traverses(a,t,s,l)`; `E_label(l) :- U(l), ~A_label(l)`; `E(t,s) :- traverses(a,t,s,l), E_label(l)`. **Not** `~A(t,s)` |
-| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- traverses(a,t,s,l), ~A_label(l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
-| `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(t,s) :- A_end0(t,s), endpoint(a,t,s,0,l), A_label(l)` |
+| `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(t,l) :- traverses(a,t,s,l)`; `E_label(t,l) :- U(t,l), ~A_label(t,l)`; `E(t,s) :- traverses(a,t,s,l), E_label(t,l)`. **Not** `~A(t,s)` |
+| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- traverses(a,t,s,l), ~A_label(t,l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
+| `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(t,s) :- A_end0(t,s), endpoint(a,t,s,0,l), A_label(t,l)` |
 | `+A` | A | A |
 | `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(t,s) :- A_end0(t,s)`; `E(t,s) :- A_end1(t,s)` |
 | `both_endpoints_in(A)` | tracts = end0 ∩ end1 of A | `E(t,s) :- A_end0(t,s), A_end1(t,s)` |
@@ -769,8 +783,8 @@ Read from `query_processor.py` and checked against it (13.2).
 | `x.side = e`, `.opposite` | the statement is repeated for `x.left` and `x.right`, `side` and `opposite` swapped | the same, at transpile time |
 | `for v in [a, b]` / `'p*'` | the body repeated with the **names** equal to `v` replaced (not attributes, not the names of targets) | expanded at transpile time |
 | `import f.qry` | the file's statements, in place | inlined, with `include_folders` |
-| `anterior_of(...)` etc. | cardinal relations to a reference region | `WMQLUnsupported`, naming the term and 12 |
-| `save(...)` | (does not work in the reference) | `WMQLUnsupported` |
+| `anterior_of(A)` etc. | six terms, 11.5: the streamlines (of **all** the tractogram, not of `A`) beyond a face of the union of the boxes of the labels of `A`; the ends likewise; labels = those the streamlines traverse | box aggregate and comparisons, 11.5 |
+| `save(...)`, unknown functions | (`save` does not work in the reference) | `WMQLUnsupported` |
 
 Rules of the language the transpiler reproduces: **everything is lower
 case** (names, attributes, strings, but not `or`/`and`); evaluation is
@@ -797,14 +811,16 @@ translation that treats them alike is wrong (an earlier version of this
 section did, until the transpiler's tests were written against the
 reference).
 
-`skip_unsupported=True` leaves out the queries that use a directional
-term, and those that use them, and says which and why (`Transpiled.skipped`):
-`freesurfer_queries.qry` has four such bundles (`af`, `ec`, `ilf`, `uf`).
+`skip_unsupported=True` leaves out the queries that use an unsupported
+construct (`save`, an unknown function), and those that use them, and says
+which and why (`Transpiled.skipped`). The whole of `freesurfer_queries.qry`,
+the four directional bundles (`af`, `ec`, `ilf`, `uf`) included, transpiles
+without it.
 
 ### 11.3 What the transpiler found: the vocabulary against the file
 
-`tests/test_wmql_vocabulary.py` transpiles `freesurfer_queries.qry` (1516
-names) and evaluates its label sets with NeuroLang, over an atlas made of
+`tests/test_wmql_vocabulary.py` transpiles `freesurfer_queries.qry` (over
+1500 names) and evaluates its label sets with NeuroLang, over an atlas made of
 the colour LUT of FreeSurfer 6, against `label_term`. The first comparison,
 before the mapping was changed, showed **168 differences**, a few of them
 artifacts of comparing names without a side (settled below); the real ones
@@ -843,48 +859,348 @@ thalamus proper in FreeSurfer 7 (10): ours maps the name to
 The ids of these differences are those of the LUT of FreeSurfer 6; the test
 skips on another.
 
-## 12. Future work: directional relations
+### 11.4 The algorithm
 
-**Not in phases 1-3**, and written down so nothing in the schema
-forecloses it. The reference's `anterior_of`, `posterior_of`, `medial_of`,
-`lateral_of`, `inferior_of`, `superior_of` are, in tract_querier, per-point
-relations to a reference region's bounding box; NeuroLang's
-`CD_relations.cardinal_relation` decides the cardinal-direction relation of
-two `Region`s from interval algebra on their (tree) bounding boxes, which is
-a per-pair Python evaluation and unusable for streamlines (decision 1).
+`transpile(source, atlas, ...)` is a compiler with four stages: the program
+is parsed and normalised as a syntax tree; its statements are interpreted in
+order, which expands what can be expanded statically; each expression is
+compiled to a `QueryPredicates` by set algebra on its four components, a rule
+being emitted for each operation that is not trivial; and the predicates are
+named. Nothing is evaluated: the output is text for NeuroLang.
 
-Proposal:
+**Stage 1: parse.** `ast.parse`: WMQL is Python syntax. A syntax error is a
+`WMQLError` with the line.
 
-1. **Vectorised cardinal-direction tile counts.** For a reference region
-   (a label, a union of labels, or an explicit box from `label_extent`) with
-   box `[lo, hi]` per axis, compute for every point the 3-vector of
-   `sign` classes (before / within / after) on each axis: 27 tiles, in one
-   pass over the `(P, 3)` array (`np.digitize` or two comparisons per
-   axis). `np.add.reduceat` / `bincount` over the streamline ids gives a
-   `(S, 27)` count matrix. Memory is `S x 27` int32, 108 MB per 10^6
-   streamlines, and is computed **per reference region**, not per atlas.
-2. **Column-wise directional maps.** Each directional relation is a linear
-   map (a 0/1 matrix) from the 27 columns to a count: "anterior" is the sum
-   of the tiles with the anterior class on the y axis, and so on, with the
-   anatomical variants of `region_solver` (a direction holds and its inverse
-   and the overlap do not) as masks over the same columns. All six
-   directions are one matrix product on the count matrix.
-3. **Four variants**, by how the counts become a relation:
-   * *strict*: all the points of the streamline are in the direction;
-   * *partial*: at least one point is;
-   * *endpoint*: the first or the last point is (reading the same tiles at
-     the offsets);
-   * *fractional* (probabilistic): `count / n_points` as the probability of a
-     probabilistic fact, for `NeurolangPDL` (and after 4.4's fix of
-     probabilistic facts from DataFrames).
-4. **Schema**: `anterior_of(a, t, s, l, variant)` (reference label `l`) and
-   siblings, or one relation `direction(a, t, s, l, dir, variant)` with
-   `dir` a small int; `variant` a small int; the fractional relation is the
-   probabilistic one with the probability as first column. To decide when
-   the phase starts.
-5. These need `neurolang` (the region types and the thresholds in
-   `config`), which is the reason `nl_tracts` is above `neurolang` and not a
-   leaf next to `nl_core` (9.2, 15.6).
+**Stage 2: two normalising passes** (ports of tract_querier's
+`RewritePreprocess` and `RewriteChangeNotInPrescedence`, so the tree is the
+one the reference evaluates).
+
+1. *Lower case and imports.* Every `Name.id`, `Attribute.attr` and string
+   constant is lower-cased (so `Only(Alpha)` is `only(alpha)`; the operators
+   `or`, `and`, `not` are Python keywords and stay case-sensitive). An
+   `import f.qry` is replaced, in the statement list, by the statements of
+   the file, found under `include_folders` (the current folder if none),
+   which are parsed and normalised in turn (so their imports are expanded).
+2. *`not in` binds looser than `and` and `or`.* Python reads `a and b not in
+   c` as `a and (b not in c)`; WMQL reads `(a and b) not in c`. For a
+   `BoolOp(op, [v0, ..., vk])`: find the first `vi`, `i >= 1`, that is a
+   comparison whose first operator is `not in`; if there is none, leave the
+   node. Otherwise build `Compare(left=BoolOp(op, [v0, ..., v(i-1),
+   vi.left]), ops=vi.ops, comparators=vi.comparators)`; if values remain
+   after `vi`, the new comparison becomes the first value of a `BoolOp(op,
+   [new, v(i+1), ...])`, which is rewritten again (so a second `not in` is
+   hoisted likewise). `a and b not in c and d` (Python: `And(a, b not in c,
+   d)`) becomes `((a and b) not in c) and d`. A comparison chain `x not in y
+   not in z` stays one node with two comparators, applied in order. **The
+   rewrite does not descend into the values of a `BoolOp` that has no such
+   comparison among its own**, as in the reference: in `a or b not in c and
+   d` Python's grouping `a or ((b not in c) and d)` stands, since the
+   comparison is a value of the inner `and`, not of the `or` (the oracle
+   checks that this is what the reference does).
+
+**Stage 3: the statement walk.** The state is a table `defined` (name to the
+`QueryPredicates` of its *current* definition), the list of all the
+definitions of each name (`versions`), the list of saved names, and, with
+`skip_unsupported`, the table of skipped names. The statements are taken in
+order, as in the reference (evaluation is sequential: a name must be defined
+before it is used).
+
+| Statement | Action |
+|---|---|
+| `x = e` | `define(x, e, saved=True)` |
+| `x \|= e` | `define(x, e, saved=False)`: a plain definition, **not** a union with the earlier `x` |
+| `x` (a bare name) | mark `x` saved (an error if unknown) |
+| `x.attr = e` | the name is `"x.attr"` |
+| `x.side = e` | the statement is copied twice, and in each copy every attribute `side` and `opposite` of the *whole statement* (target included) is replaced, by `left` and `right` in the first copy and by `right` and `left` in the second; each copy is executed as a statement, so the target becomes `x.left` and `x.right` |
+| `for v in [a, b]:` / `for v in 'p*':` | the items are the listed names, or the names of `defined` that match the pattern (a snapshot at that point); for each item the body is copied and **the `Name` nodes whose id is `v`** (not attributes, not other names) are replaced by the item, then executed |
+
+Two consequences of those rules, both the reference's: a loop whose body
+defines `f_i` defines the same `f_i` once per item (only the *name* `i` is
+substituted), and a name defined again replaces the earlier one for the
+statements that follow (the transpiler keeps the earlier predicates for the
+statements that already read them, below).
+
+**Stage 4: expressions.** `expr(node)` returns a `QueryPredicates`, four
+predicate names or `None`. *`None` means that the component is empty
+whatever the data*; it is not a predicate and no rule is emitted for it. Each
+set operation is done by one of three functions that know it:
+
+| `a`, `b` | `union` | `intersection` | `difference` `a \ b` |
+|---|---|---|---|
+| `None`, `None` | `None` | `None` | `None` |
+| `None`, `B` | `B` | `None` | `None` |
+| `A`, `None` | `A` | `None` | `A` |
+| `A`, `A` (the same predicate) | `A` | `A` | `None` |
+| `A`, `B` | new `P`, rules `P :- A`; `P :- B` | new `P :- A, B` | new `P :- A, ~B` |
+
+A new predicate is named `qi_N` with `N` increasing, and the arguments of a
+component are `(t, s)` for streamlines and `(t, l)` for labels. The
+operations, each on the four components (11.2 has the semantics):
+
+* `Name`, `Attribute(Name, attr)`: look `name` or `name.attr` up in
+  `defined`; an unknown name is an error (or, if it was skipped, a skipped
+  query that depends on a skipped one).
+* A string: the names of `defined` that `fnmatch` the pattern are united,
+  in the order of `defined` (nothing matching: all four `None`).
+* A number `n`: four predicates, `traverses(a, t, s, n)`;
+  `tractogram(t)` gives `(t, n)` for the labels; `endpoint(a, t, s, 0, n)` and
+  `endpoint(a, t, s, 1, n)`. Other numbers than integers are an error.
+* `or`, `+`: `union` on the four components, folded left over the operands.
+  `and`, `*`: `intersection` on the streamlines and the endpoint sets,
+  **`union` on the labels**. `-` and `not in`: `difference` on all four.
+* `+x`: `x`.
+* `not x`, `-x` (**complement**): the *universe* `U(t, l) :- traverses(a, t,
+  s, l)` is emitted once (the labels the streamlines of each tractogram
+  traverse, the background included when it is a row of `traverses`); the
+  labels are `difference(U, x.labels)`; the streamlines are `C(t, s) :-
+  traverses(a, t, s, l), labels(t, l)`; the endpoint sets are `None`.
+* `~x` (**invert**): `outside(t, s) :- traverses(a, t, s, l), ~x.labels(t,
+  l)` (without the negation if `x.labels` is `None`: every traversed label is
+  outside); the streamlines are `difference(x.tracts, outside)`; the labels
+  are `x.labels`; the endpoint sets are `None`.
+* `only(x)`: as `~x` for the streamlines and the labels; **each endpoint set
+  is kept**, `E_end_i(t, s) :- x.end_i(t, s), endpoint(a, t, s, i, l),
+  x.labels(t, l)` (the end label must be in the labels), `None` if `x.end_i`
+  or `x.labels` is.
+* `endpoints_in(x)`: streamlines `union(x.end0, x.end1)`, labels and endpoint
+  sets of `x`. `both_endpoints_in(x)`: `intersection`.
+* A directional term: 11.5.
+* Anything else (`save`, an unknown function, a call with other than one
+  argument, a comparison other than `not in`, another operator) is an error;
+  `WMQLUnsupported` for `save` and the unknown functions.
+
+**Definition.** `define(name, value, saved)` compiles `value`; then *copies*
+every component that is not `None` into a predicate of its own (`P_new(args)
+:- P(args)`), binds `name` to the copies, and appends them to the versions of
+`name`. The copy is what makes a redefinition safe: `y = x` followed by `x =
+c` would otherwise leave `y` aliasing a predicate that a later rule for `x`
+extended (Datalog unions all the rules of one head).
+
+**Naming (`finish`).** The mangled form of a name replaces `.` by `_`
+(`x.left` is `x_left`) and must be `[a-z0-9_]+`; two names with one mangled
+form (`x.left`, `x_left`) are an error. The last definition of a name is
+`q_<mangled>` (`q_<mangled>__label`, `__end0`, `__end1` for the other
+components); the earlier definitions are `q_<mangled>__v1`, `__v2`, ... . The
+prefix `q_` keeps WMQL names (`label`, `endpoint`, `ans`) apart from the
+relations and the keywords of Datalog; the intermediate predicates are `qi_N`,
+which cannot collide with a `q_` name. The rules are kept as structures, with
+the extensional atoms (`traverses`, `endpoint`, `tractogram`,
+`label_extent`, `streamline_extent`, `endpoint_coord`) marked, and are
+rendered, with the renaming applied to the others, only at the end, which is
+why a name can be given its final form after the program is read.
+
+**Slicing.** `Transpiled.program(*names, components=...)` takes the
+predicates of the wanted components of the names and the reverse dependency
+closure of their rules (a rule depends on the non-extensional atoms of its
+body); the rules of the closure are written in their original order. A
+program for the label sets of a thousand names, or for the streamlines of
+one bundle, has only the rules they need.
+
+**Properties of the output.** (1) *Non-recursive*: a rule only reads
+predicates created before it (the numbering increases), so the program is a
+DAG and trivially stratified; the negations (`~`) are over predicates of a
+lower stratum, as is the aggregate of the directional terms. (2) *Safe*:
+every variable of a head or of a negated atom is bound by a positive atom
+of the body. (3) *Size*: at most one rule per non-`None` component for each operation
+(four for `or`, `and` and `not in`, about five for `only`, five for a
+directional term: the box, the streamlines, two ends, the labels), and four
+per definition, so the number of rules is proportional to the number of nodes
+of the tree; `freesurfer_queries.qry`,
+with its 1500 definitions, is a few thousand rules, and a slice for 74 terms
+is 945. (4) *Cost*: NeuroLang compiles a rule in about 55 ms (945 rules in
+about a minute), which is what dominates; the label sets of constants and of
+their unions are plain unions that the transpiler could fold into one rule
+each (15.19).
+
+**A worked example.** The program (an uncinate-like bundle; the labels are
+made up):
+
+```
+amy.left = 18
+amy.right = 54
+tmp.left = 5
+tmp.right = 6
+uf.side = endpoints_in(tmp.side and anterior_of(amy.side)) not in only(tmp.opposite)
+```
+
+Stage 3 expands the last statement into `uf.left = endpoints_in(tmp.left and
+anterior_of(amy.left)) not in only(tmp.right)` and the same with the sides
+exchanged. `transpile(source, atlas="fs").program("uf.left")` is, for the
+left bundle:
+
+```
+% the labels, the streamlines and the ends of amy.left (the labels only:
+% the streamlines of the argument of anterior_of are not read), tmp.left, tmp.right
+qi_2(t, 18) :- tractogram(t)
+q_amy_left__label(t, l) :- qi_2(t, l)
+qi_18(t, 5) :- tractogram(t)
+qi_19(t, s) :- endpoint("fs", t, s, 0, 5)
+qi_20(t, s) :- endpoint("fs", t, s, 1, 5)
+q_tmp_left__label(t, l) :- qi_18(t, l)
+q_tmp_left__end0(t, s) :- qi_19(t, s)
+q_tmp_left__end1(t, s) :- qi_20(t, s)
+qi_25(t, s) :- traverses("fs", t, s, 6)
+qi_26(t, 6) :- tractogram(t)
+qi_27(t, s) :- endpoint("fs", t, s, 0, 6)
+qi_28(t, s) :- endpoint("fs", t, s, 1, 6)
+q_tmp_right(t, s) :- qi_25(t, s)
+q_tmp_right__label(t, l) :- qi_26(t, l)
+q_tmp_right__end0(t, s) :- qi_27(t, s)
+q_tmp_right__end1(t, s) :- qi_28(t, s)
+% anterior_of(amy.left): the face of the box, per tractogram, then the tests
+qi_33(t, max(hi)) :- q_amy_left__label(t, l), label_extent("fs", l, 1, lo, hi)
+qi_34(t, s) :- streamline_extent(t, s, 1, lo, hi), qi_33(t, box), (hi > box)
+qi_35(t, s) :- endpoint_coord(t, s, 0, 1, v), qi_33(t, box), (v > box)
+qi_36(t, s) :- endpoint_coord(t, s, 1, 1, v), qi_33(t, box), (v > box)
+qi_37(t, l) :- qi_34(t, s), traverses("fs", t, s, l)
+% tmp.left and anterior_of(...): labels united, the ends intersected
+qi_39(t, l) :- q_tmp_left__label(t, l)
+qi_39(t, l) :- qi_37(t, l)
+qi_40(t, s) :- q_tmp_left__end0(t, s), qi_35(t, s)
+qi_41(t, s) :- q_tmp_left__end1(t, s), qi_36(t, s)
+% endpoints_in: the streamlines are the union of the two end sets
+qi_42(t, s) :- qi_40(t, s)
+qi_42(t, s) :- qi_41(t, s)
+% only(tmp.right): the streamlines with all their labels in tmp.right, and its ends filtered
+qi_43(t, s) :- traverses("fs", t, s, l), ~q_tmp_right__label(t, l)
+qi_44(t, s) :- q_tmp_right(t, s), ~qi_43(t, s)
+qi_45(t, s) :- q_tmp_right__end0(t, s), endpoint("fs", t, s, 0, l), q_tmp_right__label(t, l)
+qi_46(t, s) :- q_tmp_right__end1(t, s), endpoint("fs", t, s, 1, l), q_tmp_right__label(t, l)
+% not in: the difference of the four components
+qi_47(t, s) :- qi_42(t, s), ~qi_44(t, s)
+qi_48(t, l) :- qi_39(t, l), ~q_tmp_right__label(t, l)
+qi_49(t, s) :- qi_40(t, s), ~qi_45(t, s)
+qi_50(t, s) :- qi_41(t, s), ~qi_46(t, s)
+% the definition of uf.left: a copy of each component
+q_uf_left(t, s) :- qi_47(t, s)
+q_uf_left__label(t, l) :- qi_48(t, l)
+q_uf_left__end0(t, s) :- qi_49(t, s)
+q_uf_left__end1(t, s) :- qi_50(t, s)
+```
+
+(The `%` lines are added here to read it; the program has none. The numbers
+`qi_N` skip because the slice leaves out the rules `uf.left` does not need,
+such as the streamlines of `amy.left`.) `q_uf_left(t, s)` is the answer; a
+query that asks for the streamlines of one subject is `ans(s) :-
+q_uf_left("100307", s)`.
+
+### 11.5 The directional terms
+
+`anterior_of`, `posterior_of`, `superior_of`, `inferior_of`, `medial_of` and
+`lateral_of`, as `process_relative_term` of the reference has them (the
+transcription is `_DIRECTIONS` and `_SIDED_DIRECTIONS` in `wmql.py`, and the
+oracle tests it on random geometry).
+
+**What the reference does.**
+
+1. The argument must be a **name**, or `name.left` / `name.right`; anything
+   else (`anterior_of(a or b)`, `anterior_of(x.foo)`) is a syntax error. Only
+   its **label set** is read, never its streamlines.
+2. The box is the union of the boxes of those labels: the minimum of the
+   lows and the maximum of the highs, per axis (`BoundingBox.union`).
+3. The result streamlines are taken among **all** the streamlines of the
+   tractography, whether or not they belong to the argument: a streamline is
+   selected if one face of its own bounding box is beyond the same-named face
+   of the box (below); an end, if its coordinate on that axis is.
+4. The labels of the result are the union of the labels the selected
+   streamlines traverse. The comparisons are strict.
+
+| Term | Face of the box | Tested on | Operator |
+|---|---|---|---|
+| `anterior_of(A)` | `hi` on y (the maximum) | `hi` of the streamline | `>` |
+| `posterior_of(A)` | `lo` on y | `lo` | `<` |
+| `medial_of(A.left)` | `hi` on x | `hi` | `>` |
+| `medial_of(A.right)` | `lo` on x | `lo` | `<` |
+| `lateral_of(A.left)` | `lo` on x | `lo` | `<` |
+| `lateral_of(A.right)` | `hi` on x | `hi` | `>` |
+| `superior_of(A)` | `hi` on z | `hi` | **`<`** |
+| `inferior_of(A)` | `lo` on z | `lo` | **`>`** |
+
+(Axes 0, 1, 2 are x, y, z of the space, RAS+; `lo` and `hi` are the columns
+of `label_extent` and `streamline_extent`.) The first six rows read as
+"extends beyond that face of the box"; **the last two do not**:
+`superior_of` selects the streamlines whose top is *below* the top of the
+box, and `inferior_of` those whose bottom is *above* the bottom of the box,
+the reverse of the other directions. They are the reference's, **reproduced
+as they are**, because the reference is the oracle; none of the shipped
+`.qry` files uses them (`anterior_of`, `posterior_of` and `medial_of` are the
+ones used), and no test of tract_querier covers a directional term. The table
+is one constant in `wmql.py`, and `transpile(..., anatomical_vertical=True)`
+gives `superior_of` as `hi >` and `inferior_of` as `lo <`. Which is wanted is
+15.20.
+
+**Compilation.** For `T(A)` with the face `f`, the axis `k` and the operator
+`op` of the table, and `A.labels` the label predicate of the argument:
+
+```
+box(t, max(hi)) :- A_label(t, l), label_extent(a, l, k, lo, hi)   % min(lo) for a lo face
+T(t, s)         :- streamline_extent(t, s, k, lo, hi), box(t, v), (hi op v)     % lo op v for a lo face
+T_end0(t, s)    :- endpoint_coord(t, s, 0, k, w), box(t, v), (w op v)
+T_end1(t, s)    :- endpoint_coord(t, s, 1, k, w), box(t, v), (w op v)
+T_label(t, l)   :- T(t, s), traverses(a, t, s, l)
+```
+
+The aggregate is NeuroLang's head aggregation (`max`, `min`) over a join,
+grouped by `t`, so there is one box per tractogram; the comparisons are
+parenthesised, as the syntax asks.
+
+**Where it differs from the reference.**
+
+* *A label without a box*: the background, or a label absent from the volume.
+  The reference raises `TractQuerierLabelNotFound`; the join drops it, and
+  the box is that of the other labels. The oracle tests avoid it.
+* *No label, or no box at all*: the reference fails with `StopIteration` on
+  an empty label set and returns an empty query when there are no boxes; here
+  both give an empty result (`None` for a statically empty argument).
+* *An un-sided `medial_of(x)` or `lateral_of(x)`*: the reference fails with an
+  unbound variable; here a `WMQLError` that says what is needed.
+* *The boxes come from other numbers.* The reference's label boxes are two
+  corners `[start, stop]` of the voxels; ours are the voxel edges (6.1.1), so
+  on a real atlas the faces differ by half a voxel. The oracle feeds the same
+  numbers to both, to test the query and not the convention.
+* *Float32*: `lo` and `hi` are float32 (3.1); a comparison that is a tie in
+  float64 can differ. The oracle's coordinates are multiples of 0.25.
+* *`length_threshold` in the reference*: its `tract_bounding_boxes` and
+  `tract_endpoints_pos` are computed on **all** the tracts, while its other
+  indices are renumbered after the length filter (6.1, parity 7), so its
+  directional terms are misaligned when `length_threshold > 0`. Ours keep the
+  ids (`streamline_extent` has the same streamlines as `traverses`), so the
+  two cannot be compared there, and ours are the ones that are right.
+
+## 12. Directional terms
+
+**Implemented** as tract_querier has them (11.5): a streamline is selected by
+comparing a face of its bounding box with a face of the union of the boxes of
+the labels of the argument, and its ends by comparing their coordinates.
+That needs no per-pair evaluation and no new relation beyond `label_extent`,
+`streamline_extent` and `endpoint_coord` of 3.1, which `nl_tracts` computes in
+bulk (6.2): the cardinal-direction machinery of `CD_relations` (interval
+algebra on the boxes of two `Region`s, a per-pair Python evaluation) is not
+used, in keeping with decision 1.
+
+In terms of the variants this section first proposed, the reference's terms
+are: **partial** on the streamlines (a face of the box, not the points) and
+**endpoint** on the ends. The other two variants are *not* tract_querier's
+and remain future work:
+
+* **Strict**: *all* the points of the streamline are beyond the face of the
+  box; **fractional** (probabilistic): the fraction of the points that are,
+  as the probability of a probabilistic fact for `NeurolangPDL` (after the
+  fix of 15.7). Both need the points, not the box of the streamline, so
+  they need the tile counts below.
+* **Vectorised cardinal-direction tile counts.** For a reference region (a
+  label, a union of labels, or a box from `label_extent`) with box `[lo, hi]`
+  per axis, the 3-vector of classes (before / within / after) of every point
+  on each axis: 27 tiles, one pass over the `(P, 3)` array; `np.add.reduceat`
+  over the streamline offsets gives an `(S, 27)` count matrix (108 MB per
+  10^6 streamlines, per reference region). Each direction is then a 0/1 mask
+  over the 27 columns (the anatomical variants of `region_solver` -- the
+  direction holds, its inverse and the overlap do not -- masks over the same
+  columns), and *strict* is `count == n_points`, *fractional* is
+  `count / n_points`.
+* **Schema** for them: `direction(a, t, s, l, dir, variant)`, with `dir`
+  and `variant` small integers, the fractional one a probabilistic relation
+  with the probability first. To decide when the phase starts.
 
 ## 13. Test plan
 
@@ -934,18 +1250,34 @@ data files are those the vocabulary test reads.)
 a spatial indexing, so no tractogram or voxels are needed: the same random
 `crossing` and `endings` become the reference's dictionaries on one side and
 the relations `traverses` and `endpoint` (DataFrames to `NeurolangDL`) on
-the other. 50 tests: 41 programs of one expression each (every
+the other. 74 tests: 41 programs of one expression each (every
 operator, `not`/`-`/`~`/`only`, the endpoint functions, nesting, labels that
-are absent from the data), and 9 for the sequential rules, overwriting, wildcards
-over the names so far, `.side`, `for`, redefinition, a statically empty
-query; each on 3 seeds x 2 tractograms; **every defined query, not only the
-saved ones, is compared on its four components**. Data conventions: the
+are absent from the data), 22 for the **directional terms** (each term;
+`medial_of` and `lateral_of` with both sides; the box of a union of labels;
+inside `endpoints_in`, `only`, `not in`, `and`; `.side` with `.opposite`;
+two bundles shaped like the uncinate), the case of no label boxes, the
+vertical terms, and 9 for the sequential rules, overwriting, wildcards over
+the names so far, `.side`, `for`, redefinition, a statically empty query;
+each on 3 seeds x 2 tractograms, with random label boxes, streamline boxes
+and endpoint positions (multiples of 0.25, exact in float32); **every
+defined query, not only the saved ones, is compared on its four components,
+for each tractogram**. Data conventions: the
 background is among the traversed labels, never the label of an endpoint
-(6.3, 11.2). The oracle found nothing wrong with the transpiler's design;
-writing it against the reference source is what corrected section 11 (`~A`
-has no endpoints). The tests are `slow` (3 minutes: each starts an engine).
+(6.3, 11.2), and every label is traversed in every tractogram, so that the
+labels the reference takes from its one tractography (`not`, the labels of a
+directional result) are comparable. The oracle found nothing wrong with the
+transpiler's design; writing it against the reference source is what
+corrected section 11 (`~A` has no endpoints). The tests were checked by
+mutation (the operator of `anterior_of`, the face of `medial_of`: red). The tests are `slow` (about 5 minutes: each starts an engine).
 
 **The vocabulary (done)**: 11.3.
+
+**The geometry of a tractogram (done)**: `Tractogram`, the three
+atlas-independent relations and the store, against loops over the raw
+points (`tests/test_tractogram.py`, `test_relations.py`); and a directional
+query run end to end, from a `Tractogram` and an `Atlas` to NeurolangDL,
+against numpy over the points and the voxels of the label
+(`test_frontend.py`).
 
 **The indexing (phase 1, to do).**
 
@@ -999,9 +1331,13 @@ is an open item, 15.8). Each phase is one PR, merged on its
 own; the scaffold's smoke test stays.
 
 1. **Core**: `spaces`, `terms`, `atlas` (loaders, hemispheres, `label`,
-   `label_term`, `label_extent`) and `wmql`, the WMQL transpiler -- **done**
-   --;
-   `tractogram`, `indexing` (`traverses`, `endpoint`), and the oracle tests.
+   `label_term`, `label_extent`), `wmql`, the WMQL transpiler with the
+   directional terms, and `tractogram` with the geometry relations
+   (`streamline_extent`, `endpoint_coord`, `streamline_length`), the store and
+   `register` -- **done** --;
+   `indexing` (`traverses`, `endpoint`, and the cache), and the oracle tests
+   (13.2). Until then the bundles of the vocabulary file transpile but cannot
+   be run on a tractogram: their constants read `traverses` and `endpoint`.
    Re-measure the sizes of 7.2.
 2. **Relations, cache, frontend**: the atlas-independent relations,
    `RelationStore`, parquet cache, `register`, the mapping files for AAL and
@@ -1010,7 +1346,8 @@ own; the scaffold's smoke test stays.
 3. **Examples and docs**: a tutorial of tract_querier's standard bundles
    (uncinate, arcuate, corticospinal...) as Datalog rules over `label_term`;
    docs page; CI wiring (9.3).
-4. **Directional relations** (12).
+4. **The variants of the directional terms that are not tract_querier's**
+   (12): strict and fractional.
 5. **Probabilistic atlases** (4.4), after the engine fix in 15.7.
 
 ## 15. Open questions
@@ -1035,9 +1372,11 @@ Recommendations in bold; none changes a decision of section 2.
 5. **Incremental registration**: `add_tuple_set` replaces. Phase 1 builds the
    `RelationStore` first and registers once. **Keep**, and revisit if
    interactive loading of tractograms one by one is needed.
-6. **Is `nl_tracts` above `neurolang` only for the directional relations?**
-   (9.2.) Today the frontend is duck-typed and needs no `neurolang` import.
-   **Keep the layer and the dependency** as asked, and review at phase 4.
+6. **Is `nl_tracts` above `neurolang` for anything yet?** (9.2.) Neither the
+   frontend (duck-typed) nor the transpiler imports it, and the directional
+   terms did not need it. **Keep the layer and the dependency** as asked, and
+   review when the probabilistic variants (12) or the text-to-query
+   integration are started.
 7. **Engine bug**: `add_probabilistic_facts_from_tuples` rejects
    DataFrames (4.4). **Fix in neurolang/nl_core** (infer the row type from
    the first row of a DataFrame, as `add_tuple_set` does), with a test,
@@ -1104,3 +1443,32 @@ Recommendations in bold; none changes a decision of section 2.
     about 55 ms of compilation), which is why the vocabulary and oracle tests
     are `slow`. **If it matters**, fold the constant label sets in the
     transpiler (they are plain unions) instead of rules.
+20. **`superior_of` and `inferior_of` are inverted in the reference** (11.5):
+    they select the streamlines whose top is *below* the top of the box, and
+    whose bottom is *above* its bottom, where the other four terms select
+    those that extend beyond a face. Reproduced, because the reference is the
+    oracle; no shipped query and no test of tract_querier uses them. **Decide**:
+    keep (`anatomical_vertical=False`, the default), or make the anatomical
+    reading the default (`True`), which is a one-line flip of `_DIRECTIONS`
+    and a decision about the oracle. It is the user's own code, and the fix
+    belongs in tract_querier too.
+21. **`medial_of(x)` and `lateral_of(x)` need `.left` or `.right`** (11.5): the
+    reference fails with an unbound variable on a bare name; here a
+    `WMQLError` that says so. **Keep.**
+22. **A label without a box** is ignored by the directional terms, where the
+    reference raises `TractQuerierLabelNotFound` (11.5). A silent drop is
+    unlike an error. **Keep, and warn at run time** in the frontend if a label
+    of an argument has no `label_extent` row (not possible in Datalog itself).
+23. **Label sets are per tractogram** (11.1): `q_x__label(t, l)`, so that a
+    program for many subjects is the program of each one, as the reference is.
+    It costs the `tractogram(t)` relation and one column. The alternative,
+    atlas-level labels, is the same for everything but a directional term
+    applied to a name whose label set depends on the data (`anterior_of(x)`
+    where `x = anterior_of(...)`), where it would mix the subjects.
+24. **The geometry relations are float32** (3.1), the reference's float64: a
+    tie in the reference can be a different answer here. Real coordinates in
+    mm are not on a lattice, so ties are measure-zero. **Keep.**
+25. **The bundles of the vocabulary file cannot yet be run on a tractogram**:
+    they read `traverses` and `endpoint`, which are phase-1 voxel indexing,
+    still a scaffold. The directional terms alone (`anterior_of(a)` with the
+    label sets and `components=("tracts", "end0", "end1")`) run end to end.

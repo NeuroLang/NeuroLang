@@ -14,6 +14,7 @@ import os
 import sys
 import types
 
+import numpy as np
 import pytest
 
 
@@ -52,6 +53,19 @@ def load_reference():
     return module
 
 
+def load_aabb():
+    """tract_querier's ``aabb.BoundingBox`` (numpy only), loaded by path."""
+    path = reference_dir()
+    if path is None:
+        pytest.skip("tract_querier not found (set TRACT_QUERIER_DIR)")
+    spec = importlib.util.spec_from_file_location(
+        "_tq_reference_aabb", os.path.join(path, "aabb.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def data_file(name):
     path = reference_dir()
     full = path and os.path.join(path, "data", name)
@@ -60,13 +74,20 @@ def data_file(name):
     return full
 
 
+BOX_FIELDS = ("left", "posterior", "inferior", "right", "anterior", "superior")
+
+
 class Indexing:
     """What ``EvaluateQueries`` reads of a ``TractographySpatialIndexing``:
-    the four dictionaries."""
+    the four dictionaries, and for the directional terms the boxes of the
+    labels and of the streamlines and the positions of their endpoints."""
 
-    def __init__(self, crossing, endings):
+    def __init__(self, crossing, endings, label_boxes=None, tract_boxes=None,
+                 endpoints_pos=None):
         """crossing: {tract: set of labels}; endings: ({tract: label} for
-        the first point, {tract: label} for the last)."""
+        the first point, {tract: label} for the last); label_boxes: {label:
+        (low xyz, high xyz)}; tract_boxes: (n, 2, 3) low and high xyz of
+        each streamline; endpoints_pos: (n, 2, 3) first and last point."""
         self.crossing_tracts_labels = {k: set(v) for k, v in crossing.items()}
         self.crossing_labels_tracts = {}
         for tract, labels in crossing.items():
@@ -79,6 +100,22 @@ class Indexing:
                 self.ending_labels_tracts[i].setdefault(label, set()).add(
                     tract
                 )
+        box = load_aabb().BoundingBox if label_boxes else None
+        self.label_bounding_boxes = {
+            label: box(np.r_[lo, hi]) for label, (lo, hi) in
+            (label_boxes or {}).items()
+        }
+        n = len(crossing)
+        boxes = np.empty(n, dtype=[(name, float) for name in BOX_FIELDS])
+        if tract_boxes is not None:
+            flat = np.asarray(tract_boxes, float).reshape(n, 6)
+            for i, name in enumerate(BOX_FIELDS):
+                boxes[name] = flat[:, i]
+        self.tract_bounding_boxes = boxes
+        self.tract_endpoints_pos = (
+            np.zeros((n, 2, 3)) if endpoints_pos is None
+            else np.asarray(endpoints_pos, float)
+        )
 
 
 def evaluate(reference, source, indexing, include_folders=()):

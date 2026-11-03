@@ -131,8 +131,13 @@ def differences(qry, ours):
         if n in qry.defined
     ]
     nl = NeurolangDL()
+    # the label sets of a tractogram: one, and no streamlines
+    nl.add_tuple_set(pd.DataFrame({"t": ["lut"]}), name="tractogram")
     for relation, columns in (
-        ("traverses", "atsl"), ("endpoint", "atsel")
+        ("traverses", "atsl"), ("endpoint", "atsel"),
+        ("label_extent", ["a", "l", "axis", "lo", "hi"]),
+        ("streamline_extent", ["t", "s", "axis", "lo", "hi"]),
+        ("endpoint_coord", ["t", "s", "e", "axis", "v"]),
     ):  # not read by label sets; the program may mention them
         nl.add_tuple_set(
             pd.DataFrame({c: pd.Series(dtype="int64") for c in columns}),
@@ -149,7 +154,7 @@ def differences(qry, ours):
             mine = mine[mine["hemi"] == side]
         pred = qry.defined[name].labels
         theirs = {
-            l for (l,) in solution[pred].as_pandas_dataframe().itertuples(
+            l for (_, l) in solution[pred].as_pandas_dataframe().itertuples(
                 index=False, name=None
             )
         } if pred in solution else set()
@@ -159,12 +164,10 @@ def differences(qry, ours):
     return out
 
 
-def test_the_file_is_transpiled_but_for_the_directional_bundles(qry):
-    assert {n.split(".")[0] for n in qry.skipped} == {
-        "af", "ec", "ilf", "uf"
-    }
-    assert all("DESIGN" in why or "skipped" in why
-               for why in qry.skipped.values())
+def test_the_whole_file_is_transpiled(qry):
+    """The four directional bundles (af, ec, ilf, uf) included."""
+    assert qry.skipped == {}
+    assert {"af.left", "ec.right", "ilf.left", "uf.right"} <= set(qry.defined)
     assert len(qry.defined) > 1500
 
 

@@ -22,8 +22,13 @@ def test_a_label_is_a_set_of_one_label_and_the_streamlines_that_have_it():
     assert (q.tracts, q.labels, q.end0, q.end1) == (
         "q_a", "q_a__label", "q_a__end0", "q_a__end1"
     )
-    assert re.search(r"^qi_\d+\(7\)$", p.text, re.M)  # a fact
-    assert re.search(r"^q_a__label\(l\) :- qi_\d+\(l\)$", p.text, re.M)
+    # the label of every tractogram
+    assert re.search(
+        r"^qi_\d+\(t, 7\) :- tractogram\(t\)$", p.text, re.M
+    )
+    assert re.search(
+        r"^q_a__label\(t, l\) :- qi_\d+\(t, l\)$", p.text, re.M
+    )
     assert re.search(
         r'^qi_\d+\(t, s\) :- traverses\("fs", t, s, 7\)$', p.text, re.M
     )
@@ -129,7 +134,11 @@ def test_an_unknown_name_is_an_error():
     "source",
     ["x = a < b", "x = a in b", "x = a ** b", "x = a / b", "x, y = a, b",
      "x = a if b else c", "x = [a]", "x = f(a, b)", "x = only(a, b)",
-     "x = a.b.c", "x == a", "x = 1.5"],
+     "x = a.b.c", "x == a", "x = 1.5",
+     # the arguments of a directional term: a name, or name.left / .right
+     "x = anterior_of(a or b)", "x = anterior_of(not a)",
+     "x = anterior_of(a.foo)", "x = medial_of(a)", "x = lateral_of(a)",
+     "x = superior_of(only(a))", "x = anterior_of(a, b)"],
 )
 def test_what_the_reference_rejects_is_rejected(source):
     with pytest.raises(WMQLError):
@@ -143,12 +152,82 @@ def test_a_syntax_error_says_where():
 
 @pytest.mark.parametrize(
     "term",
-    ["anterior_of", "posterior_of", "medial_of", "lateral_of",
-     "inferior_of", "superior_of"],
+    ["anterior_of", "posterior_of", "superior_of", "inferior_of"],
 )
-def test_directional_terms_name_themselves_and_the_design(term):
-    with pytest.raises(WMQLUnsupported, match=f"{term}.*DESIGN"):
-        t(f"a = 1\nx = {term}(a)\n")
+def test_a_directional_term_compares_the_streamlines_with_a_box(term):
+    p = t(BASE + f"x = {term}(a)\n")
+    q = p.defined["x"]
+    assert None not in (q.tracts, q.labels, q.end0, q.end1)
+    text = p.text
+    # the face of the box of the labels, per tractogram, by an aggregate
+    assert re.search(r"^qi_\d+\(t, (max\(hi\)|min\(lo\))\) :- ", text, re.M)
+    assert 'label_extent("fs", l, ' in text
+    assert "streamline_extent(t, s, " in text
+    assert "endpoint_coord(t, s, 0, " in text and \
+        "endpoint_coord(t, s, 1, " in text
+    # the labels of the result are those its streamlines traverse
+    assert re.search(
+        r'^qi_\d+\(t, l\) :- qi_\d+\(t, s\), traverses\("fs", t, s, l\)$',
+        text, re.M,
+    )
+
+
+# term -> (axis, face of the box, operator on the streamline), as in the
+# reference's process_relative_term; the vertical terms are its, reversed
+TABLE = {
+    "anterior_of(a)": (1, "max(hi)", ">", "hi"),
+    "posterior_of(a)": (1, "min(lo)", "<", "lo"),
+    "superior_of(a)": (2, "max(hi)", "<", "hi"),
+    "inferior_of(a)": (2, "min(lo)", ">", "lo"),
+    "medial_of(a.left)": (0, "max(hi)", ">", "hi"),
+    "medial_of(a.right)": (0, "min(lo)", "<", "lo"),
+    "lateral_of(a.left)": (0, "min(lo)", "<", "lo"),
+    "lateral_of(a.right)": (0, "max(hi)", ">", "hi"),
+}
+
+
+@pytest.mark.parametrize("call", sorted(TABLE))
+def test_the_direction_table_is_the_references(call):
+    axis, aggregate, op, edge = TABLE[call]
+    p = t("a.left = 1\na.right = 2\na = 3\nx = " + call + "\n")
+    text = p.text
+    assert re.search(
+        rf'^qi_\d+\(t, {re.escape(aggregate)}\) :- \w+\(t, l\), '
+        rf'label_extent\("fs", l, {axis}, lo, hi\)$', text, re.M)
+    assert f"streamline_extent(t, s, {axis}, lo, hi), " in text
+    assert f", ({edge} {op} box)" in text
+    assert re.search(
+        rf"endpoint_coord\(t, s, 0, {axis}, v\), .*\(v {op} box\)", text
+    )
+
+
+def test_the_vertical_terms_can_be_anatomical():
+    reference = t(BASE + "x = superior_of(a)\ny = inferior_of(a)\n")
+    fixed = t(BASE + "x = superior_of(a)\ny = inferior_of(a)\n",
+              anatomical_vertical=True)
+    assert ", (hi < box)" in reference.text
+    assert ", (lo > box)" in reference.text
+    assert ", (hi > box)" in fixed.text and ", (lo < box)" in fixed.text
+
+
+def test_a_directional_term_with_no_labels_is_empty():
+    q = t("none = 'nomatch*'\nx = anterior_of(none)\n").defined["x"]
+    assert (q.tracts, q.labels, q.end0, q.end1) == (None, None, None, None)
+
+
+def test_a_directional_term_does_not_read_the_streamlines_of_its_argument():
+    """Only the labels of the argument count (the reference): the rules of
+    the box need the label set, not the streamlines."""
+    p = t("a = 1\nx = anterior_of(a)\n")
+    needed = p.program("x", components=("tracts",))
+    assert 'traverses("fs", t, s, 1)' not in needed
+    assert "label_extent" in needed and "tractogram(t)" in needed
+
+
+def test_unsupported_constructs_name_themselves():
+    for source in ("x = save(a)", "x = frobnicate(a)"):
+        with pytest.raises(WMQLUnsupported, match=source[4:8]):
+            t("a = 1\n" + source + "\n")
     assert issubclass(WMQLUnsupported, NotImplementedError)
     assert issubclass(WMQLUnsupported, WMQLError)
 
@@ -156,7 +235,7 @@ def test_directional_terms_name_themselves_and_the_design(term):
 def test_skip_unsupported_leaves_out_the_query_and_what_depends_on_it():
     source = (
         "a = 1\nb = 2\n"
-        "far = endpoints_in(a and anterior_of(b))\n"
+        "far = endpoints_in(a and frobnicate(b))\n"
         "uses_far = far or a\n"
         "fine = a or b\n"
         "ok_again.side = a\n"
@@ -165,14 +244,14 @@ def test_skip_unsupported_leaves_out_the_query_and_what_depends_on_it():
     assert set(p.defined) == {"a", "b", "fine", "ok_again.left",
                               "ok_again.right"}
     assert set(p.skipped) == {"far", "uses_far"}
-    assert "anterior_of" in p.skipped["far"]
+    assert "frobnicate" in p.skipped["far"]
     assert "far" in p.skipped["uses_far"]
     with pytest.raises(WMQLUnsupported):
         t(source)
 
 
 def test_a_redefinition_that_works_replaces_a_skipped_name():
-    p = t("a = 1\nx = anterior_of(a)\nx = a\n", skip_unsupported=True)
+    p = t("a = 1\nx = frobnicate(a)\nx = a\n", skip_unsupported=True)
     assert "x" in p.defined and "x" not in p.skipped
 
 

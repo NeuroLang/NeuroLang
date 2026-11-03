@@ -69,6 +69,22 @@ def points_to_voxels(
     raise NotImplementedError
 
 
+def _kept_streamlines(
+    tractogram: Tractogram, params: IndexingParams
+) -> np.ndarray:
+    """The ids of the streamlines the relations have: all of them, or those
+    at least ``length_threshold`` mm long. The ids are never renumbered
+    (DESIGN.md, 6.1, parity 7)."""
+    ids = np.arange(tractogram.n_streamlines)
+    if params.length_threshold > 0:
+        ids = ids[tractogram.lengths_in_mm() >= params.length_threshold]
+    return ids
+
+
+def _column_t(tractogram: Tractogram, n: int) -> np.ndarray:
+    return np.full(n, tractogram.id, dtype=object)
+
+
 def traverses_relation(
     tractogram: Tractogram, atlas: Atlas, params: IndexingParams
 ) -> pd.DataFrame:
@@ -99,24 +115,65 @@ def streamline_extent_relation(
     """``streamline_extent(t, s, axis, lo, hi)``: atlas-independent.
 
     The bounding box of the streamline's points in world mm; ``axis`` is
-    0, 1, 2 for x, y, z.
+    0, 1, 2 for x, y, z. One ``reduceat`` per bound over all the points.
     """
-    raise NotImplementedError
+    ids = _kept_streamlines(tractogram, params)
+    start = tractogram.offsets[:-1]
+    low = np.minimum.reduceat(tractogram.points, start, axis=0)[ids]
+    high = np.maximum.reduceat(tractogram.points, start, axis=0)[ids]
+    n = len(ids)
+    return pd.DataFrame(
+        {
+            "t": _column_t(tractogram, 3 * n),
+            "s": np.repeat(ids, 3).astype(np.int32),
+            "axis": np.tile(np.arange(3), n).astype(np.int8),
+            "lo": low.reshape(-1),
+            "hi": high.reshape(-1),
+        }
+    )
 
 
 def endpoint_coord_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
-    """``endpoint_coord(t, s, e, axis, v)``: atlas-independent."""
-    raise NotImplementedError
+    """``endpoint_coord(t, s, e, axis, v)``: atlas-independent.
+
+    The coordinates of the first (``e`` 0) and the last (``e`` 1) point of
+    each streamline, in world mm.
+    """
+    ids = _kept_streamlines(tractogram, params)
+    ends = np.stack(
+        [
+            tractogram.points[tractogram.offsets[:-1]],
+            tractogram.points[tractogram.offsets[1:] - 1],
+        ],
+        axis=1,
+    )[ids]  # (K, 2, 3)
+    n = len(ids)
+    return pd.DataFrame(
+        {
+            "t": _column_t(tractogram, 6 * n),
+            "s": np.repeat(ids, 6).astype(np.int32),
+            "e": np.tile(np.repeat(np.arange(2), 3), n).astype(np.int8),
+            "axis": np.tile(np.arange(3), 2 * n).astype(np.int8),
+            "v": ends.reshape(-1),
+        }
+    )
 
 
 def streamline_length_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
     """``streamline_length(t, s, mm)``: atlas-independent (an addition to
-    the schema, DESIGN.md, 3.3)."""
-    raise NotImplementedError
+    the schema, DESIGN.md, 3.1)."""
+    ids = _kept_streamlines(tractogram, params)
+    return pd.DataFrame(
+        {
+            "t": _column_t(tractogram, len(ids)),
+            "s": ids.astype(np.int32),
+            "mm": tractogram.lengths_in_mm()[ids].astype(np.float32),
+        }
+    )
 
 
 @dataclass
@@ -135,16 +192,71 @@ class RelationStore:
 
     relations: Dict[str, pd.DataFrame] = field(default_factory=dict)
 
+    def _append(self, name: str, frame: pd.DataFrame) -> None:
+        if name in self.relations:
+            frame = pd.concat(
+                [self.relations[name], frame], ignore_index=True
+            )
+        self.relations[name] = frame
+
     def add_atlas(self, atlas: Atlas) -> None:
-        """Add ``atlas``, ``label``, ``label_term`` and ``label_extent``."""
-        raise NotImplementedError
+        """Add ``atlas``, ``label``, ``label_term`` and ``label_extent``.
+
+        Raises
+        ------
+        ValueError
+            If an atlas of that name was added: it would have its rows twice.
+        """
+        known = self.relations.get("atlas")
+        if known is not None and atlas.name in set(known["a"]):
+            raise ValueError(f"atlas {atlas.name!r} was already added")
+        self._append(
+            "atlas", pd.DataFrame({"a": np.array([atlas.name], dtype=object)})
+        )
+        self._append("label", atlas.label_relation())
+        self._append("label_term", atlas.label_term_relation())
+        self._append("label_extent", atlas.label_extent_relation())
 
     def add_tractogram(
         self, tractogram: Tractogram, params: IndexingParams
     ) -> None:
         """Add ``tractogram``, ``streamline`` and the atlas-independent
-        relations."""
-        raise NotImplementedError
+        relations (``streamline_extent``, ``endpoint_coord``,
+        ``streamline_length``).
+
+        Raises
+        ------
+        ValueError
+            If a tractogram of that id was added.
+        """
+        known = self.relations.get("tractogram")
+        if known is not None and tractogram.id in set(known["t"]):
+            raise ValueError(
+                f"tractogram {tractogram.id!r} was already added"
+            )
+        ids = _kept_streamlines(tractogram, params)
+        self._append(
+            "tractogram",
+            pd.DataFrame({"t": np.array([tractogram.id], dtype=object)}),
+        )
+        self._append(
+            "streamline",
+            pd.DataFrame(
+                {
+                    "t": _column_t(tractogram, len(ids)),
+                    "s": ids.astype(np.int32),
+                }
+            ),
+        )
+        self._append(
+            "streamline_extent", streamline_extent_relation(tractogram, params)
+        )
+        self._append(
+            "endpoint_coord", endpoint_coord_relation(tractogram, params)
+        )
+        self._append(
+            "streamline_length", streamline_length_relation(tractogram, params)
+        )
 
     def add_index(
         self,

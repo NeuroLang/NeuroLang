@@ -7,15 +7,27 @@ and the streamlines whose first and last point are in the labels,
 
 ========================  ==========================================
 ``q_x(t, s)``             the streamlines of tractogram ``t``
-``q_x__label(l)``         the labels of the query
+``q_x__label(t, l)``      the labels of the query, for each tractogram
 ``q_x__end0(t, s)``       streamlines with the first point in labels
 ``q_x__end1(t, s)``       streamlines with the last point in labels
 ========================  ==========================================
 
-over the relations ``traverses(a, t, s, l)`` and ``endpoint(a, t, s, e, l)``
-of DESIGN.md, 3, with the atlas ``a`` fixed to a constant (labels in WMQL
-are the ids of an atlas, as ``FreeSurfer.qry`` has them). A component that is
-empty whatever the data is ``None`` and has no predicate.
+over the relations of DESIGN.md, 3, with the atlas ``a`` fixed to a constant
+(labels in WMQL are the ids of an atlas, as ``FreeSurfer.qry`` has them):
+``tractogram(t)``, ``traverses(a, t, s, l)``, ``endpoint(a, t, s, e, l)``,
+and for the directional terms ``label_extent(a, l, axis, lo, hi)``,
+``streamline_extent(t, s, axis, lo, hi)`` and
+``endpoint_coord(t, s, e, axis, v)``. A component that is empty whatever the
+data is ``None`` and has no predicate.
+
+The algorithm, in order (DESIGN.md, 11.4): parse the program as Python;
+lower-case it, inline the imports and rewrite ``not in`` to its WMQL
+precedence; walk the statements, expanding ``.side``, ``for`` and string
+patterns on the syntax tree; compile each expression to one
+``QueryPredicates`` by set algebra on the four components, emitting a rule
+for each non-trivial operation (a component known to be empty is carried as
+``None`` and disappears); copy each definition into predicates of its own;
+name the predicates once all the definitions are known.
 
 The semantics are those of ``tract_querier.query_processor`` (DESIGN.md, 11),
 read from its source and checked against it, on synthetic data, by
@@ -26,8 +38,10 @@ not; ``.side`` expands to ``.left`` and ``.right``; a string is a
 ``fnmatch`` over the names defined so far; ``for`` and ``import`` are
 expanded here.
 
-Not supported: the directional terms (``anterior_of``, ..., DESIGN.md, 12),
-which need the geometry of the labels, and ``save``.
+Not supported: ``save`` and unknown functions (``WMQLUnsupported``).
+``superior_of`` and ``inferior_of`` are tract_querier's, which select the
+reverse of what their names say: see ``_DIRECTIONS`` and
+``anatomical_vertical``.
 
 This module imports nothing of NeuroLang: it turns text into text.
 """
@@ -40,7 +54,7 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import takewhile
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 __all__ = [
     "QueryPredicates",
@@ -91,9 +105,21 @@ class _Atom:
 
 
 @dataclass(frozen=True)
+class _Comparison:
+    """``(left op right)`` in a rule body; Datalog needs the parentheses."""
+
+    left: str
+    op: str
+    right: str
+
+    def render(self, rename) -> str:
+        return f"({self.left} {self.op} {self.right})"
+
+
+@dataclass(frozen=True)
 class _Rule:
     head: _Atom
-    body: Tuple[_Atom, ...] = ()
+    body: Tuple[Union[_Atom, _Comparison], ...] = ()
 
     def render(self, rename) -> str:
         head = self.head.render(rename)
@@ -102,7 +128,10 @@ class _Rule:
         return f"{head} :- " + ", ".join(b.render(rename) for b in self.body)
 
     def dependencies(self) -> List[str]:
-        return [b.pred for b in self.body if not b.extensional]
+        return [
+            b.pred for b in self.body
+            if isinstance(b, _Atom) and not b.extensional
+        ]
 
 
 @dataclass(frozen=True)
@@ -265,12 +294,49 @@ def _parse(source: str, filename: str = "<wmql>") -> ast.Module:
 # --- code generation ----------------------------------------------------
 
 _TS = ("t", "s")
-_L = ("l",)
+_TL = ("t", "l")
+
+# The directional terms, as tract_querier's ``process_relative_term`` has
+# them: ``term -> (axis, face, operator)``. A streamline is selected if its
+# ``face`` (``lo`` the minimum, ``hi`` the maximum, along ``axis``: 0 x, 1 y,
+# 2 z, RAS) is ``operator`` than that face of the union of the boxes of the
+# labels of the argument; its end is selected, by the same test, on the
+# coordinate of the end. NOTE superior_of and inferior_of are the reference's,
+# whose tests are the reverse of anterior_of and posterior_of: the streamlines
+# whose top is *below* that of the box, and whose bottom is *above* its
+# bottom. ``_ANATOMICAL_VERTICAL`` is the same table with them the other way
+# round, for ``anatomical_vertical=True`` (DESIGN.md, 11.2, 15.20).
+_DIRECTIONS = {
+    "anterior_of": (1, "hi", ">"),
+    "posterior_of": (1, "lo", "<"),
+    "superior_of": (2, "hi", "<"),
+    "inferior_of": (2, "lo", ">"),
+}
+_ANATOMICAL_VERTICAL = {
+    "superior_of": (2, "hi", ">"),
+    "inferior_of": (2, "lo", "<"),
+}
+# medial_of and lateral_of depend on the side of the argument, which must be
+# written ``x.left`` or ``x.right``: (term, side) -> (axis, face, operator)
+_SIDED_DIRECTIONS = {
+    ("medial_of", "left"): (0, "hi", ">"),
+    ("medial_of", "right"): (0, "lo", "<"),
+    ("lateral_of", "left"): (0, "lo", "<"),
+    ("lateral_of", "right"): (0, "hi", ">"),
+}
 
 
 class _Transpiler:
-    def __init__(self, atlas: str, skip_unsupported: bool = False):
+    def __init__(
+        self,
+        atlas: str,
+        skip_unsupported: bool = False,
+        anatomical_vertical: bool = False,
+    ):
         self.skip_unsupported = skip_unsupported
+        self.directions = dict(_DIRECTIONS)
+        if anatomical_vertical:
+            self.directions.update(_ANATOMICAL_VERTICAL)
         self.skipped: Dict[str, str] = {}
         if '"' in atlas:
             raise WMQLError("the atlas name cannot have a double quote")
@@ -330,7 +396,7 @@ class _Transpiler:
     def q_union(self, a, b):
         return QueryPredicates(
             self.union(a.tracts, b.tracts, _TS),
-            self.union(a.labels, b.labels, _L),
+            self.union(a.labels, b.labels, _TL),
             self.union(a.end0, b.end0, _TS),
             self.union(a.end1, b.end1, _TS),
         )
@@ -340,7 +406,7 @@ class _Transpiler:
         # are united
         return QueryPredicates(
             self.intersection(a.tracts, b.tracts, _TS),
-            self.union(a.labels, b.labels, _L),
+            self.union(a.labels, b.labels, _TL),
             self.intersection(a.end0, b.end0, _TS),
             self.intersection(a.end1, b.end1, _TS),
         )
@@ -348,17 +414,17 @@ class _Transpiler:
     def q_difference(self, a, b):
         return QueryPredicates(
             self.difference(a.tracts, b.tracts, _TS),
-            self.difference(a.labels, b.labels, _L),
+            self.difference(a.labels, b.labels, _TL),
             self.difference(a.end0, b.end0, _TS),
             self.difference(a.end1, b.end1, _TS),
         )
 
     def universe(self):
-        """The labels that are traversed by some streamline."""
+        """The labels traversed by some streamline of each tractogram."""
         if self._universe is None:
             self._universe = self.fresh()
             self.emit(
-                self._universe, _L,
+                self._universe, _TL,
                 self.ext("traverses", self.atlas, "t", "s", "l"),
             )
         return self._universe
@@ -366,14 +432,14 @@ class _Transpiler:
     def q_complement(self, a):
         """``not`` and unary ``-``: the streamlines that traverse some
         label outside the labels; no endpoints."""
-        labels = self.difference(self.universe(), a.labels, _L)
+        labels = self.difference(self.universe(), a.labels, _TL)
         tracts = None
         if labels is not None:
             tracts = self.fresh()
             self.emit(
                 tracts, _TS,
                 self.ext("traverses", self.atlas, "t", "s", "l"),
-                self.atom(labels, _L),
+                self.atom(labels, _TL),
             )
         return QueryPredicates(tracts, labels, None, None)
 
@@ -384,7 +450,7 @@ class _Transpiler:
         outside = self.fresh()
         body = [self.ext("traverses", self.atlas, "t", "s", "l")]
         if a.labels is not None:
-            body.append(self.atom(a.labels, _L, True))
+            body.append(self.atom(a.labels, _TL, True))
         self.emit(outside, _TS, *body)
         return self.difference(a.tracts, outside, _TS)
 
@@ -405,7 +471,7 @@ class _Transpiler:
                 p, _TS,
                 self.atom(end, _TS),
                 self.ext("endpoint", self.atlas, "t", "s", str(e), "l"),
-                self.atom(a.labels, _L),
+                self.atom(a.labels, _TL),
             )
             return p
 
@@ -423,13 +489,64 @@ class _Transpiler:
             self.intersection(a.end0, a.end1, _TS), a.labels, a.end0, a.end1
         )
 
+    def q_directional(self, term: str, arg: QueryPredicates, side=None):
+        """``anterior_of(A)`` and the other directional terms.
+
+        The reference takes the union of the boxes of the labels of ``A``
+        (its streamlines are not read), and keeps the streamlines whose
+        ``face`` is beyond that face of the box (``_DIRECTIONS``); so do
+        their ends, on the coordinate of the end. The labels of the result
+        are those that the streamlines traverse. A label without a box
+        (the background, or a label absent from the volume) is ignored, where
+        the reference raises; no label, or no box, gives an empty query.
+        """
+        axis, face, op = (
+            _SIDED_DIRECTIONS[(term, side)] if side
+            else self.directions[term]
+        )
+        if arg.labels is None:
+            return QueryPredicates()
+        aggregate = "max" if face == "hi" else "min"
+        bound = self.fresh()  # the face of the box of the labels, per t
+        self.emit(
+            bound, ("t", f"{aggregate}({face})"),
+            self.atom(arg.labels, _TL),
+            self.ext("label_extent", self.atlas, "l", str(axis), "lo", "hi"),
+        )
+        edge = {"lo": "lo", "hi": "hi"}[face]
+
+        tracts = self.fresh()
+        self.emit(
+            tracts, _TS,
+            self.ext("streamline_extent", "t", "s", str(axis), "lo", "hi"),
+            self.atom(bound, ("t", "box")),
+            _Comparison(edge, op, "box"),
+        )
+        ends = []
+        for e in (0, 1):
+            p = self.fresh()
+            self.emit(
+                p, _TS,
+                self.ext("endpoint_coord", "t", "s", str(e), str(axis), "v"),
+                self.atom(bound, ("t", "box")),
+                _Comparison("v", op, "box"),
+            )
+            ends.append(p)
+        labels = self.fresh()
+        self.emit(
+            labels, _TL,
+            self.atom(tracts, _TS),
+            self.ext("traverses", self.atlas, "t", "s", "l"),
+        )
+        return QueryPredicates(tracts, labels, *ends)
+
     def q_label(self, value: int):
         t = self.fresh()
         self.emit(
             t, _TS, self.ext("traverses", self.atlas, "t", "s", str(value))
         )
         labels = self.fresh()
-        self.emit(labels, (str(value),))
+        self.emit(labels, ("t", str(value)), self.ext("tractogram", "t"))
         ends = []
         for e in (0, 1):
             p = self.fresh()
@@ -528,10 +645,7 @@ class _Transpiler:
             raise WMQLError(f"invalid call in line {node.lineno}")
         name = node.func.id
         if name in RELATIVE_TERMS:
-            raise WMQLUnsupported(
-                f"{name} (line {node.lineno}): directional relations are "
-                "future work (DESIGN.md, 12)"
-            )
+            return self.directional(name, node)
         calls = {
             "only": self.q_only,
             "endpoints_in": self.q_endpoints_in,
@@ -540,6 +654,35 @@ class _Transpiler:
         if name not in calls:
             raise WMQLUnsupported(f"{name} (line {node.lineno})")
         return calls[name](self.expr(node.args[0]))
+
+    def directional(self, name, node):
+        """The argument must be a name, or ``name.left`` / ``name.right``
+        (the side matters to ``medial_of`` and ``lateral_of``, which cannot
+        have a bare name: the reference fails on it); nothing else, as in the
+        reference."""
+        arg = node.args[0]
+        side = None
+        if isinstance(arg, ast.Attribute):
+            if arg.attr not in ("left", "right"):
+                raise WMQLError(
+                    f"attribute not recognized for {name} in line "
+                    f"{node.lineno}: use .left or .right"
+                )
+            side = arg.attr
+        elif not isinstance(arg, ast.Name):
+            raise WMQLError(
+                f"the argument of {name} (line {node.lineno}) must be a "
+                "query name, not an expression"
+            )
+        sided = name in ("medial_of", "lateral_of")
+        if sided and side is None:
+            raise WMQLError(
+                f"{name} (line {node.lineno}) needs an argument ending in "
+                ".left or .right"
+            )
+        return self.q_directional(
+            name, self.expr(arg), side if sided else None
+        )
 
     # statements
     def statement(self, node):
@@ -600,7 +743,7 @@ class _Transpiler:
             if pred is None:
                 copy.append(None)
                 continue
-            args = _L if kind == "labels" else _TS
+            args = _TL if kind == "labels" else _TS
             new = self.fresh()
             self.emit(new, args, self.atom(pred, args))
             copy.append(new)
@@ -683,6 +826,7 @@ def transpile(
     atlas: str,
     include_folders: Sequence[str] = (),
     skip_unsupported: bool = False,
+    anatomical_vertical: bool = False,
 ) -> Transpiled:
     """Transpile a WMQL program to Datalog.
 
@@ -698,8 +842,13 @@ def transpile(
     skip_unsupported : bool
         Leave out the queries that use an unsupported construct, and those
         that use them (``Transpiled.skipped`` says which and why), instead
-        of raising :class:`WMQLUnsupported`. For files such as
-        ``freesurfer_queries.qry``, which have a few directional queries.
+        of raising :class:`WMQLUnsupported`. For programs that use a
+        construct that is not transpiled (``save``, an unknown function).
+    anatomical_vertical : bool
+        ``superior_of`` and ``inferior_of`` as their names say (the streamlines
+        whose top is above the top of the box, whose bottom is below its
+        bottom) instead of as tract_querier has them, the other way round
+        (``_DIRECTIONS``).
 
     Returns
     -------
@@ -717,7 +866,7 @@ def transpile(
     module = _NotInPrecedence().visit(
         _Preprocess(include_folders).visit(module)
     )
-    transpiler = _Transpiler(atlas, skip_unsupported)
+    transpiler = _Transpiler(atlas, skip_unsupported, anatomical_vertical)
     for statement in module.body:
         try:
             transpiler.statement(statement)

@@ -1,15 +1,22 @@
 """The WMQL transpiler against tract_querier's own evaluator.
 
 Both run on the same synthetic data: ``crossing`` (the labels each streamline
-traverses) and ``endings`` (the label at each end). The reference reads them
-as four dictionaries; the Datalog program reads them as the relations
-``traverses`` and ``endpoint``. Every query *defined* by a program, not only
-the saved ones, is compared on its four components: the streamlines, the
-label set, and the streamlines whose first / last point is in the labels.
+traverses), ``endings`` (the label at each end), and for the directional
+terms the boxes of the labels and of the streamlines and the positions of
+their endpoints. The reference reads them as dictionaries and arrays, one
+tractography at a time; the Datalog program reads them as the relations
+``traverses``, ``endpoint``, ``label_extent``, ``streamline_extent`` and
+``endpoint_coord``, for all the tractograms at once. Every query *defined* by
+a program, not only the saved ones, is compared, for each tractogram, on its
+four components: the streamlines, the label set, and the streamlines whose
+first / last point is in the labels.
 
 Data conventions (DESIGN.md, 6.3 and 11): the background, label 0, is among
 the traversed labels (``emit_background=True``) and is never the label of an
-endpoint, because ``endpoint`` has no background rows.
+endpoint, because ``endpoint`` has no background rows; the labels 1 to 7 have
+boxes, label 0 has none (the reference fails on a label without a box, so the
+directional arguments never have label 0); the coordinates are multiples of
+0.25, which a float32 holds exactly.
 """
 
 import numpy as np
@@ -24,6 +31,7 @@ pytestmark = pytest.mark.slow  # 3 minutes: each test starts an engine
 
 ATLAS = "fs"
 TRACTOGRAMS = ("t1", "t2")
+LABELS = 7
 
 
 @pytest.fixture(scope="module")
@@ -31,51 +39,93 @@ def reference():
     return load_reference()
 
 
-def synthetic(seed, n=60, labels=7):
-    """crossing and endings of one tractogram."""
+def label_boxes(seed):
+    """{label: (low, high)} of the atlas, shared by the tractograms."""
+    rng = np.random.default_rng(1000 + seed)
+    boxes = {}
+    for label in range(1, LABELS + 1):
+        low = rng.integers(-20, 20, 3) * 0.5
+        boxes[label] = (low, low + rng.integers(1, 16, 3) * 0.5)
+    return boxes
+
+
+def synthetic(seed, n=60):
+    """What one tractogram has: crossing, endings, boxes, endpoints."""
     rng = np.random.default_rng(seed)
     crossing = {}
     for s in range(n):
         k = rng.integers(0, 5)
-        chosen = set(rng.choice(labels + 1, size=k, replace=False).tolist())
+        chosen = set(rng.choice(LABELS + 1, size=k, replace=False).tolist())
         if rng.random() < 0.5:
             chosen.add(0)  # the background, as in emit_background=True
         crossing[s] = chosen
+    # every label is traversed by someone in every tractogram: the labels
+    # the reference gets from the data (``not``, the labels of a directional
+    # result) are those of one tractogram
+    for label in range(LABELS + 1):
+        crossing[label].add(label)
     endings = tuple(
-        {s: int(rng.integers(1, labels + 1)) for s in range(n)}
+        {s: int(rng.integers(1, LABELS + 1)) for s in range(n)}
         for _ in range(2)
     )
-    return crossing, endings
+    low = rng.integers(-40, 40, (n, 3)) * 0.25
+    size = rng.integers(0, 40, (n, 3))
+    high = low + size * 0.25
+    endpoints = np.empty((n, 2, 3))
+    for e in range(2):
+        endpoints[:, e, :] = low + rng.integers(0, size + 1) * 0.25
+    return crossing, endings, np.stack([low, high], axis=1), endpoints
 
 
-def relations(data):
-    """``traverses`` and ``endpoint`` of {t: (crossing, endings)}."""
-    traverses = [
-        (ATLAS, t, s, label)
-        for t, (crossing, _) in data.items()
-        for s, labels in crossing.items()
-        for label in sorted(labels)
+def relations(data, boxes):
+    """The relations of {t: synthetic(...)} and of the label boxes."""
+    traverses, endpoint, streamline, coord = [], [], [], []
+    for t, (crossing, endings, tract_boxes, endpoints) in data.items():
+        for s, labels in crossing.items():
+            traverses += [(ATLAS, t, s, label) for label in sorted(labels)]
+        for e in (0, 1):
+            endpoint += [
+                (ATLAS, t, s, e, label) for s, label in endings[e].items()
+                if label != 0
+            ]
+            for s in range(len(crossing)):
+                for axis in range(3):
+                    coord.append((t, s, e, axis, endpoints[s, e, axis]))
+        for s in range(len(crossing)):
+            for axis in range(3):
+                streamline.append(
+                    (t, s, axis, tract_boxes[s, 0, axis],
+                     tract_boxes[s, 1, axis])
+                )
+    extent = [
+        (ATLAS, label, axis, lo[axis], hi[axis])
+        for label, (lo, hi) in boxes.items() for axis in range(3)
     ]
-    endpoint = [
-        (ATLAS, t, s, e, label)
-        for t, (_, endings) in data.items()
-        for e in (0, 1)
-        for s, label in endings[e].items()
-        if label != 0
-    ]
-    return (
-        pd.DataFrame(traverses, columns=list("atsl")),
-        pd.DataFrame(endpoint, columns=list("atsel")),
-    )
+    return {
+        "traverses": pd.DataFrame(traverses, columns=list("atsl")),
+        "endpoint": pd.DataFrame(endpoint, columns=list("atsel")),
+        "tractogram": pd.DataFrame({"t": list(data)}),
+        "label_extent": pd.DataFrame(
+            extent, columns=["a", "l", "axis", "lo", "hi"]
+        ).astype({"l": np.int32, "axis": np.int8, "lo": np.float32,
+                  "hi": np.float32}),
+        "streamline_extent": pd.DataFrame(
+            streamline, columns=["t", "s", "axis", "lo", "hi"]
+        ).astype({"s": np.int32, "axis": np.int8, "lo": np.float32,
+                  "hi": np.float32}),
+        "endpoint_coord": pd.DataFrame(
+            coord, columns=["t", "s", "e", "axis", "v"]
+        ).astype({"s": np.int32, "e": np.int8, "axis": np.int8,
+                  "v": np.float32}),
+    }
 
 
-def run_datalog(program, data):
+def run_datalog(program, data, boxes):
     from neurolang.frontend import NeurolangDL
 
     nl = NeurolangDL()
-    traverses, endpoint = relations(data)
-    nl.add_tuple_set(traverses, name="traverses")
-    nl.add_tuple_set(endpoint, name="endpoint")
+    for name, frame in relations(data, boxes).items():
+        nl.add_tuple_set(frame, name=name)
     nl.execute_datalog_program(program)
     return {
         name: {tuple(row) for row in sol.as_pandas_dataframe().itertuples(
@@ -84,35 +134,33 @@ def run_datalog(program, data):
     }
 
 
-def split_by_t(rows):
-    out = {t: set() for t in TRACTOGRAMS}
-    for t, s in rows:
-        out[t].add(s)
-    return out
+def of(rows, t):
+    """The values of tractogram ``t`` in rows ``(t, value)``."""
+    return {r[1] for r in rows if r[0] == t}
 
 
-def check_program(reference, source, seeds=(0, 1, 2)):
-    program = transpile(source, atlas=ATLAS)
+def check_program(reference, source, seeds=(0, 1, 2), boxes=True,
+                  **transpile_kwargs):
+    program = transpile(source, atlas=ATLAS, **transpile_kwargs)
     for seed in seeds:
+        atlas_boxes = label_boxes(seed) if boxes else {}
         data = {
             t: synthetic(seed * 10 + i) for i, t in enumerate(TRACTOGRAMS)
         }
-        solution = run_datalog(program.text, data)
-        for t, (crossing, endings) in data.items():
-            expected = evaluate(reference, source, Indexing(crossing, endings))
+        solution = run_datalog(program.text, data, atlas_boxes)
+        for t, (crossing, endings, tract_boxes, endpoints) in data.items():
+            expected = evaluate(
+                reference, source,
+                Indexing(crossing, endings, atlas_boxes, tract_boxes,
+                         endpoints),
+            )
             assert set(expected) == set(program.defined), (
                 set(expected) ^ set(program.defined)
             )
             for name, q in program.defined.items():
-                got = (
-                    split_by_t(solution.get(q.tracts, set()))[t]
-                    if q.tracts else set(),
-                    {x for (x,) in solution.get(q.labels, set())}
-                    if q.labels else set(),
-                    split_by_t(solution.get(q.end0, set()))[t]
-                    if q.end0 else set(),
-                    split_by_t(solution.get(q.end1, set()))[t]
-                    if q.end1 else set(),
+                got = tuple(
+                    of(solution.get(pred, set()), t) if pred else set()
+                    for pred in (q.tracts, q.labels, q.end0, q.end1)
                 )
                 assert got == expected[name], (name, seed, t)
 
@@ -166,7 +214,66 @@ EXPRESSIONS = [
 
 @pytest.mark.parametrize("expression", EXPRESSIONS)
 def test_expressions_against_the_reference(reference, expression):
-    check_program(reference, BASE + expression + "\n")
+    check_program(reference, BASE + expression + "\n", boxes=False)
+
+
+# the directional terms: each with a name, medial and lateral with both
+# sides, inside the other constructs, on a union of labels, with .side, and
+# in the shape of the uncinate fasciculus of freesurfer_queries.qry
+SIDED = "p.left = 6\np.right = 7\nq.left = 1\nq.right = 2\n"
+DIRECTIONAL = [
+    "x = anterior_of(a)",
+    "x = posterior_of(a)",
+    "x = superior_of(a)",
+    "x = inferior_of(a)",
+    "x = medial_of(p.left)",
+    "x = medial_of(p.right)",
+    "x = lateral_of(p.left)",
+    "x = lateral_of(p.right)",
+    "u = a or b\nx = anterior_of(u)",
+    "u = a and b and c\nx = posterior_of(u)",
+    "x = endpoints_in(anterior_of(a))",
+    "x = both_endpoints_in(posterior_of(b))",
+    "x = only(anterior_of(a))",
+    "x = anterior_of(a) not in posterior_of(b)",
+    "x = anterior_of(a) and posterior_of(b) and c",
+    "x = not anterior_of(a)",
+    "x = anterior_of(a) or medial_of(p.left)",
+    "x = only(superior_of(a) or inferior_of(b))",
+    "x = anterior_of(Q.left)",
+    "y.side = medial_of(q.side) and not p.opposite\n"
+    "z.side = lateral_of(q.opposite) not in q.side",
+    "uf.side = (a and endpoints_in(b and anterior_of(c)))"
+    " not in posterior_of(d)",
+    "uf.side = ((p.side or q.side) and endpoints_in(c and anterior_of(a)))"
+    " not in posterior_of(b) not in q.opposite",
+]
+
+
+@pytest.mark.parametrize("expression", DIRECTIONAL)
+def test_directional_terms_against_the_reference(reference, expression):
+    check_program(reference, BASE + SIDED + expression + "\n")
+
+
+def test_directional_terms_with_no_label_boxes_select_nothing(reference):
+    """``label_bounding_boxes`` empty: the reference returns an empty
+    query, and so do the rules, over an empty ``label_extent``."""
+    check_program(
+        reference, BASE + "x = anterior_of(a)\ny = endpoints_in(x) or a\n",
+        boxes=False,
+    )
+
+
+def test_the_vertical_terms_are_the_references_by_default(reference):
+    """``superior_of`` and ``inferior_of`` select, in the reference, the
+    streamlines whose top is *below*, and whose bottom is *above*, those of
+    the box: the opposite of the other terms (DESIGN.md, 11.2). That is
+    what is reproduced, unless ``anatomical_vertical`` says otherwise."""
+    source = BASE + "x = superior_of(a)\ny = inferior_of(a)\n"
+    check_program(reference, source)
+    ref = transpile(source, atlas=ATLAS)
+    fixed = transpile(source, atlas=ATLAS, anatomical_vertical=True)
+    assert ref.text != fixed.text
 
 
 def test_sequential_definitions_and_the_overwriting_of_names(reference):
@@ -177,7 +284,7 @@ def test_sequential_definitions_and_the_overwriting_of_names(reference):
         + "x |= d\n"  # overwrites: y keeps the first x
         + "z = x or y\n"
     )
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_a_bare_name_marks_a_query_as_saved(reference):
@@ -193,17 +300,17 @@ def test_dotted_names_and_wildcards(reference):
         "none = 'nomatch*'\n"
         "mixed = hemisphere.left and not hemisphere.right\n"
     )
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_wildcards_match_only_the_names_defined_so_far(reference):
     source = "p_1 = 1\nearly = 'p_*'\np_2 = 2\nlate = 'p_*'\n"
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_names_are_case_insensitive(reference):
     source = "Alpha = 1\nBETA |= 2\nx = ALPHA or beta\ny = Only(Alpha)\n"
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_side_expands_to_left_and_right(reference):
@@ -213,7 +320,7 @@ def test_side_expands_to_left_and_right(reference):
         "both.side |= ctx.side or put.side\n"
         "other.side = (ctx.side and put.opposite) not in put.side\n"
     )
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_for_loops_over_a_list_and_a_pattern(reference):
@@ -224,13 +331,16 @@ def test_for_loops_over_a_list_and_a_pattern(reference):
         "for i in [r1, r2]:\n    i |= i or r3\n    g = only(i)\n"
         "for j in 'r*':\n    h = endpoints_in(j)\n    k = h or j\n"
     )
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
 
 
 def test_a_redefinition_is_a_new_definition(reference):
-    check_program(reference, BASE + "x = a\ny = x or b\nx = c\nz = x or y\n")
+    check_program(
+        reference, BASE + "x = a\ny = x or b\nx = c\nz = x or y\n",
+        boxes=False,
+    )
 
 
 def test_a_query_that_is_statically_empty(reference):
     source = BASE + "x = not a\ny = x and endpoints_in(b)\nz = y or c\n"
-    check_program(reference, source)
+    check_program(reference, source, boxes=False)
