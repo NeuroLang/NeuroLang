@@ -1,0 +1,66 @@
+terms 36, paraphrases 108, studies per term median 334 (range 103-1252); 0 paraphrases have no TF-IDF vocabulary hit
+most similar reference maps: speech~auditory 0.918, reading~semantic 0.859, fear~anxiety 0.812, music~auditory 0.807, working memory~conflict 0.802
+paraphrases containing a vocabulary term that overlaps the target term's studies (Jaccard >= 0.2): 7 / 108
+== identification of the term among 36 (raw  correlation); chance acc@1 = 2.8%
+  split-half ceiling (map of half the term's studies vs the other halves): 43.9% (sd 3.2)
+  selection from the paraphrase   acc@1   acc@3   acc@5 | acc@1 95% CI      | selection precision | discrimination r
+  SPECTER2                     64.8%   84.3%   89.8% | [50.9, 77.8]%      | 0.28 | +0.296
+  TF-IDF                       38.0%   66.7%   78.7% | [27.8, 48.1]%      | 0.18 | +0.210
+  fusion (z-score)             53.7%   83.3%   91.7% | [42.6, 64.8]%      | 0.23 | +0.260
+  random                        2.8%    8.3%   12.0% | [ 0.0,  8.3]%      | 0.03 | -0.000
+  SPECTER2, term as query      75.0%   97.2%  100.0% | (36 term labels, for context)
+  TF-IDF, term as query       100.0%  100.0%  100.0% | (36 term labels, for context)
+  SPECTER2 - TF-IDF acc@1: +26.9 points, 95% CI [+15.7, +37.0] (bootstrap over terms)
+  synonym-mediated paraphrases     n=  7  acc@1 SPECTER2 100.0%  TF-IDF 85.7%  fusion 100.0%
+  paraphrases without such a term  n=101  acc@1 SPECTER2 62.4%  TF-IDF 34.7%  fusion 50.5%
+== identification of the term among 36 (centered  correlation, common network removed); chance acc@1 = 2.8%
+  split-half ceiling (map of half the term's studies vs the other halves): 46.9% (sd 3.2)
+  selection from the paraphrase   acc@1   acc@3   acc@5 | acc@1 95% CI      | selection precision | discrimination r
+  SPECTER2                     69.4%   85.2%   96.3% | [56.5, 80.6]%      | 0.28 | +0.592
+  TF-IDF                       53.7%   81.5%   88.0% | [41.7, 64.8]%      | 0.18 | +0.436
+  fusion (z-score)             59.3%   87.0%   93.5% | [48.1, 70.4]%      | 0.23 | +0.527
+  random                        2.8%    6.5%    8.3% | [ 0.0,  8.3]%      | 0.03 | -0.001
+  SPECTER2, term as query      77.8%  100.0%  100.0% | (36 term labels, for context)
+  TF-IDF, term as query       100.0%  100.0%  100.0% | (36 term labels, for context)
+  SPECTER2 - TF-IDF acc@1: +15.7 points, 95% CI [+5.6, +25.9] (bootstrap over terms)
+  synonym-mediated paraphrases     n=  7  acc@1 SPECTER2 100.0%  TF-IDF 100.0%  fusion 100.0%
+  paraphrases without such a term  n=101  acc@1 SPECTER2 67.3%  TF-IDF 50.5%  fusion 56.4%
+per term (median rank of the right term over its 3 paraphrases; selection precision):
+                  rank_specter2  rank_tfidf  rank_fusion  prec_specter2  prec_tfidf     n
+term                                                                                     
+aging                       1.0         1.0          1.0           0.43        0.28   293
+anxiety                     1.0         7.0          2.0           0.25        0.11   449
+auditory                    1.0         1.0          1.0           0.43        0.23  1252
+autobiographical            1.0         2.0          1.0           0.25        0.13   143
+decision making             1.0         8.0          1.0           0.36        0.12   509
+episodic memory             1.0         1.0          1.0           0.18        0.11   332
+empathy                     1.0         1.0          1.0           0.28        0.12   187
+depression                  1.0         4.0          2.0           0.37        0.21   502
+fear                        1.0         1.0          1.0           0.25        0.24   363
+face                        1.0         1.0          1.0           0.21        0.17   896
+eye movements               1.0         1.0          1.0           0.20        0.16   116
+semantic                    1.0         1.0          1.0           0.41        0.33  1031
+object                      1.0         2.0          2.0           0.27        0.12   851
+pain                        1.0         3.0          1.0           0.36        0.19   516
+numerical                   1.0         1.0          1.0           0.39        0.21   114
+inhibition                  1.0         5.0          5.0           0.26        0.11   601
+somatosensory               1.0         1.0          1.0           0.40        0.20   674
+sleep                       1.0         7.0          1.0           0.37        0.21   154
+speech                      1.0         1.0          1.0           0.45        0.26   642
+reading                     1.0         1.0          1.0           0.42        0.25   521
+reward                      1.0         1.0          1.0           0.42        0.30   922
+schizophrenia               1.0         1.0          1.0           0.52        0.29   715
+working memory              1.0         1.0          1.0           0.22        0.17  1091
+addiction                   2.0         4.0          3.0           0.30        0.24   135
+music                       2.0         3.0          3.0           0.36        0.18   163
+conflict                    2.0         2.0          2.0           0.27        0.16   337
+vision                      2.0         2.0          2.0           0.06        0.05   137
+reasoning                   3.0         5.0          2.0           0.25        0.15   182
+voice                       3.0         3.0          3.0           0.28        0.19   121
+stress                      3.0         4.0          4.0           0.20        0.15   321
+imagery                     4.0         6.0          5.0           0.10        0.05   312
+placebo                     4.0         1.0          1.0           0.21        0.17   332
+naming                      5.0         3.0          3.0           0.07        0.17   179
+default mode                6.0         1.0          1.0           0.19        0.20   777
+planning                    6.0         5.0          5.0           0.10        0.08   258
+disgust                     8.0         3.0          2.0           0.12        0.10   103

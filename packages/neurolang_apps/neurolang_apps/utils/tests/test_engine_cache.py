@@ -262,7 +262,7 @@ def test_the_mask_is_kept_and_nilearn_not_asked_for_it_again(
     )
     asked = []
 
-    def get_mask(data_dir):
+    def get_mask(data_dir, *args):
         asked.append(1)
         return template
 

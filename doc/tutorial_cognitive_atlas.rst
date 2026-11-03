@@ -137,6 +137,47 @@ to three words of the abstracts, so multi-word concepts such as *working
 memory* or *spatial working memory* are terms; the ``neurosynth`` vocabulary
 has its own multi-word terms.
 
+Linking a definition to the studies with SPECTER2
+-------------------------------------------------
+
+A term does not need to be mentioned: the ontology defines the concept it
+names with a text, and SPECTER2 (see :ref:`tutorial-text-embeddings`) measures
+how close the title and abstract of every study are to that text.  With the
+term as the first argument of every rule, the definition of ``'working
+memory'`` is the query of ``query_similarity``, and the 5% of the studies
+closest to it are the studies of the term, whose uniformity map is computed
+as in :ref:`tutorial-neurosynth-tests`::
+
+    definition(t, d) :- cogat_term(c, t) & skos:definition(c, d)
+    similarity(t, s, v) :- study(s) & definition(t, d) & (v == query_similarity(d, s))
+    cutoff(t, percentile(v, 95)) :- similarity(t, s, v)
+    similar(t, s) :- similarity(t, s, v) & cutoff(t, c) & (v >= c)
+
+``examples/plot_cognitive_atlas_uniformity.py`` (in the example gallery)
+computes the map for ``'working memory'`` in the ``neurostore`` engine, over
+the whole brain (``brain_mask``), and compares it with the map of the studies
+that mention the term.  A study without abstract has a similarity of 0 and is
+left out of the cutoff.  In the 2026-10 release the 35,880 studies with an
+abstract have a mean similarity of 0.68 (standard deviation 0.02); 1,794
+studies are in the top 5%, 478 of them among the 2,031 that mention *working
+memory*, the others being about its neighbours, for instance cognitive control
+and goal maintenance.  Both uniformity maps show the dorsolateral prefrontal
+cortex, the supplementary motor area and dorsal anterior cingulate, the
+parietal cortex and the anterior insula; their voxels in the brain correlate
+at 0.94 (the top 5% of their voxels overlap with a Dice coefficient of 0.81),
+and the largest ratios are 10.5 for the studies close to the definition and
+11.6 for those that mention the term.  The basal ganglia and the thalamus
+are above the average of the brain (a mean ratio of 1.4 to 1.7, up to 3.5 to
+4.3 in the caudate, the pallidum and the thalamus), whereas the hippocampus
+and the amygdala are barely above it (a mean ratio of 1.2 to 1.3, and at most
+2.5), for both selections of studies: below the 95th percentile of the map
+that the example plots.  Averaging over ``cortical_mask`` instead of
+``brain_mask`` would leave them out of the map altogether.
+
+The abstracts are embedded once (about 70 minutes on 32 CPU cores for the
+36,884 studies, minutes on a GPU), then cached; see
+:ref:`tutorial-text-embeddings` to compute them ahead of time.
+
 Using the ontology without an engine
 ------------------------------------
 

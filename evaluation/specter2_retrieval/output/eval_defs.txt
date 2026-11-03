@@ -1,0 +1,17 @@
+== E6 NeuroStore concepts with a Cognitive Atlas definition: 124 concepts, median 58 studies
+  query                                                   MAP  nDCG@10   P@10  R@100
+  SPECTER2 ad hoc adapter, label                        0.111    0.275  0.263  0.191
+  SPECTER2 ad hoc adapter, Cognitive Atlas definition   0.056    0.127  0.126  0.099
+  SPECTER2 document adapter, definition                 0.055    0.138  0.126  0.095
+  TF-IDF lexical, label                                 0.248    0.465  0.460  0.367
+  TF-IDF lexical, definition                            0.043    0.078  0.078  0.082
+  fusion RRF, SPECTER2 definition + TF-IDF label        0.193    0.389  0.373  0.306
+  fusion RRF, SPECTER2 label + TF-IDF label             0.218    0.432  0.421  0.335
+  definition vs label with SPECTER2: mean AP diff -0.055 (se 0.007), definition better on 11% of concepts
+
+== 'working memory' in detail (NeuroStore studies annotated with the concept by the LLM extraction)
+  annotated studies: 1944 of 35880
+  SPECTER2 definition (the example's query)    AP 0.155  P@10 0.40  | top 1,794 (5%):  393 annotated = precision 22%, recall 20%
+  SPECTER2 label                               AP 0.295  P@10 0.70  | top 1,794 (5%):  643 annotated = precision 36%, recall 33%
+  TF-IDF label                                 AP 0.503  P@10 0.70  | top 1,794 (5%): 1138 annotated = precision 63%, recall 59%
+  TF-IDF definition                            AP 0.106  P@10 0.60  | top 1,794 (5%):  255 annotated = precision 14%, recall 13%
