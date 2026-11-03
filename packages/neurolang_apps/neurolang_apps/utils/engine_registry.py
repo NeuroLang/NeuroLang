@@ -6,7 +6,9 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``);
+* a **Python initialisation script** (``python_init``), whose
+  ``init_engine`` is also given the keyword arguments of
+  ``python_init_options``;
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -1428,7 +1430,7 @@ def _phase_python_init(nl, cfg, mask, data_dir):
     import importlib
 
     mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir)
+    mod.init_engine(nl, mask, data_dir, **cfg.get("python_init_options", {}))
 
 
 def _phase_downloads(cfg, data_dir, engine_name):

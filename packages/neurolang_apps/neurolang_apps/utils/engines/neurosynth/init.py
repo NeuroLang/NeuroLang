@@ -4,7 +4,8 @@ NeuroSynth engine initialization.
 Registers the following predicates:
 
 * ``peak_reported(i, j, k, study_id)`` — reported activation peaks
-  converted to voxel coordinates.
+  converted to voxel coordinates, the Talairach ones converted to MNI
+  (see :func:`process_peaks` for those of ``UNKNOWN`` space).
 * ``peak_mni(x, y, z, study_id)`` — the same peaks in MNI coordinates, in
   millimetres.
 * ``study(study_id)`` — all study identifiers.
@@ -58,7 +59,8 @@ COGNITIVE_ATLAS_TASKS_URL = "https://www.cognitiveatlas.org/api/v-alpha/task"
 
 
 def init_engine(
-    nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path
+    nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path,
+    unknown_space: str = "mni",
 ) -> None:
     """Populate a fresh engine with NeuroSynth data.
 
@@ -70,10 +72,13 @@ def init_engine(
         MNI template image for voxel-space coordinate mapping.
     data_dir :
         Directory under which downloaded data is cached.
+    unknown_space :
+        How the peaks of the studies of ``UNKNOWN`` space are taken (see
+        :func:`process_peaks`); the engine's ``python_init_options``.
 
     """
     activations = fetch_neurosynth_peak_data(data_dir, verbose=0)
-    peak_data = process_peaks(activations, mask)
+    peak_data = process_peaks(activations, mask, unknown_space=unknown_space)
 
     term_data = get_ns_term_study_associations(
         data_dir, verbose=0, convert_study_ids=True, tfidf_threshold=1e-3
@@ -244,21 +249,37 @@ def _cortical_voxels(
     )
     return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
 
+
+UNKNOWN_SPACES = {"mni": "MNI", "tal": "TAL", "drop": None}
+
+
 def process_peaks(
     activations: pd.DataFrame,
     mni_mask: nib.Nifti1Image,
     study_id_type: type = StudyID,
+    unknown_space: str = "mni",
 ) -> pd.DataFrame:
     """Convert MNI / Talairach peak coordinates to voxel indices.
 
-    The ``study_id`` of the result is cast to *study_id_type*.
+    Only the ``TAL`` peaks are converted to MNI.  The peaks of any other
+    space than ``MNI`` and ``TAL`` (Neurosynth's ``UNKNOWN``) are taken as
+    MNI when *unknown_space* is ``"mni"``, as Neurosynth and NiMARE do,
+    converted as Talairach when it is ``"tal"``, and left out when it is
+    ``"drop"``.  The ``study_id`` of the result is cast to *study_id_type*.
     """
-    mni_peaks = activations.loc[activations.space == "MNI"][
-        ["x", "y", "z", "id"]
-    ].rename(columns={"id": "study_id"})
-    non_mni_peaks = activations.loc[activations.space != "MNI"][
-        ["x", "y", "z", "id"]
-    ].rename(columns={"id": "study_id"})
+    if unknown_space not in UNKNOWN_SPACES:
+        raise ValueError(
+            f"unknown_space must be one of {', '.join(UNKNOWN_SPACES)}, "
+            f"not {unknown_space!r}"
+        )
+    space = activations.space.where(
+        activations.space.isin(["MNI", "TAL"]), UNKNOWN_SPACES[unknown_space]
+    )
+    peaks = activations[["x", "y", "z", "id"]].rename(
+        columns={"id": "study_id"}
+    )
+    mni_peaks = peaks.loc[space == "MNI"]
+    non_mni_peaks = peaks.loc[space == "TAL"]
 
     proj_mat = np.linalg.pinv(
         np.array(

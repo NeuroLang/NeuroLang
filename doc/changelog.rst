@@ -166,6 +166,12 @@ Unreleased
 
 **Bug fixes:**
 
+* The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
+  studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
+  were converted too, moving them by 7 mm (median).  They are now taken as
+  MNI, as Neurosynth and NiMARE do; the engine option ``unknown_space``
+  (``python_init_options`` in ``engines.yaml``) converts them as Talairach
+  (``tal``) or leaves them out (``drop``) (#1071).
 * ``neurolang-repl-serve --rebuild`` serves the wheels it built, not those of
   an earlier build: their versions follow the commits, so the old ones kept
   their names next to the new ones and could be the ones the bundle named.

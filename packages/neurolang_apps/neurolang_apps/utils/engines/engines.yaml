@@ -515,6 +515,11 @@ engines:
       reported activation peaks, TF-IDF term frequencies, and a
       probabilistic choice over studies.
     python_init: "neurolang_apps.utils.engines.neurosynth.init"
+    python_init_options:
+      # The peaks of the 1,832 studies of UNKNOWN space (10.6% of them):
+      # ``mni`` takes them as MNI, as Neurosynth and NiMARE do; ``tal``
+      # converts them as Talairach; ``drop`` leaves them out.
+      unknown_space: mni
 
   neurostore:
     extends: coordinate_meta_analysis
