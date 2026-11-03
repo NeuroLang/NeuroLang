@@ -240,6 +240,8 @@ class EngineContext:
         text = self.predicate_line(info, self._size(name))
         if info.kind == "function":
             return text
+        if info.probabilistic and info.kind == "rule":
+            return f"{text}\n{self._bound_usage(name)}"
         try:
             return f"{text}\n{self.sample_rows(name, rows)}"
         except UnboundVariablesError:

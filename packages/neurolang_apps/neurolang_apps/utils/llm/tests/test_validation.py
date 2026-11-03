@@ -213,6 +213,16 @@ def test_describe_a_rule_computed_for_a_given_text(nl, monkeypatch):
     assert "4 rows, e.g.:" in context.describe("mentions")
 
 
+def test_describe_does_not_compute_a_probabilistic_rule(nl):
+    nl.add_uniform_probabilistic_choice_over_set([(1,), (2,)], name="chosen")
+    nl.execute_datalog_program(
+        "p(t, PROB) :- mentions(s, t), chosen(s)"
+    )
+    description = EngineContext(nl).describe("p")
+    assert "Its rows are not listed" in description
+    assert "rows, e.g." not in description
+
+
 def test_search_shows_the_closest_of_many_values(nl, monkeypatch):
     monkeypatch.setattr(
         "neurolang_apps.utils.llm.context.MAX_VALUES_LISTED", 2
