@@ -338,7 +338,9 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _record_ontology_symbols(self, names, paths) -> None:
         """Remember the files the predicates of the ontologies come from."""
-        files = tuple([paths] if isinstance(paths, str) else map(str, paths))
+        if not isinstance(paths, (list, tuple)):
+            paths = [paths]
+        files = tuple(map(str, paths))
         registry = getattr(self, "ontology_symbols", None)
         if registry is None:
             registry = self.ontology_symbols = {}
