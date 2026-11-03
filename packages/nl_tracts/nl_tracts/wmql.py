@@ -154,18 +154,24 @@ class Transpiled:
     saved: Tuple[str, ...]
     skipped: Dict[str, str]
     _rules: Tuple[_Rule, ...] = field(repr=False)
-    _renames: Dict[str, str] = field(repr=False)
+    # name -> kind -> the rule that gives the last definition its public name
+    _public: Dict[str, Dict[str, _Rule]] = field(repr=False)
+    # the rules that give their public names to the earlier definitions
+    _earlier: Tuple[_Rule, ...] = field(repr=False)
 
-    def _render(self, rules: Iterable[_Rule]) -> str:
-        rename = self._renames.get
-        return "\n".join(
-            r.render(lambda p: rename(p, p)) for r in rules
-        ) + "\n"
+    @staticmethod
+    def _render(rules: Iterable[_Rule]) -> str:
+        return "\n".join(r.render(lambda p: p) for r in rules) + "\n"
 
     @property
     def text(self) -> str:
         """The whole program, in the syntax of NeuroLang's Datalog."""
-        return self._render(self._rules)
+        public = [
+            rule for kinds in self._public.values() for rule in kinds.values()
+        ]
+        return self._render(
+            list(self._rules) + list(self._earlier) + public
+        )
 
     def program(
         self,
@@ -181,20 +187,23 @@ class Transpiled:
         components : sequence of str
             Which of ``tracts``, ``labels``, ``end0``, ``end1`` of the
             names are wanted; ``("labels",)`` leaves out the rules over the
-            streamlines.
+            streamlines. A component is computed only if it is wanted or
+            another wanted component needs it.
         """
         names = names or self.saved
-        internal = {public: i for i, public in self._renames.items()}
-        wanted = set()
+        aliases, stack = [], []
         for name in names:
             if name not in self.defined:
                 raise WMQLError(f"unknown query {name!r}")
-            query = vars(self.defined[name])
-            wanted |= {internal[query[c]] for c in components if query[c]}
+            for kind in components:
+                rule = self._public[name].get(kind)
+                if rule is not None:
+                    aliases.append(rule)
+                    stack.extend(rule.dependencies())
         by_head: Dict[str, List[_Rule]] = {}
         for rule in self._rules:
             by_head.setdefault(rule.head.pred, []).append(rule)
-        needed, stack = set(), list(wanted)
+        needed = set()
         while stack:
             pred = stack.pop()
             if pred in needed:
@@ -202,7 +211,8 @@ class Transpiled:
             needed.add(pred)
             for rule in by_head.get(pred, ()):
                 stack.extend(rule.dependencies())
-        return self._render(r for r in self._rules if r.head.pred in needed)
+        kept = [r for r in self._rules if r.head.pred in needed]
+        return self._render(kept + aliases)
 
 
 # --- preprocessing: a port of tract_querier's RewritePreprocess and
@@ -448,7 +458,12 @@ class _Transpiler:
         if a.tracts is None:
             return None
         outside = self.fresh()
-        body = [self.ext("traverses", self.atlas, "t", "s", "l")]
+        # of the streamlines of ``a`` only: a join that starts from them, and
+        # a result of their size, not of all the rows of ``traverses``
+        body = [
+            self.atom(a.tracts, _TS),
+            self.ext("traverses", self.atlas, "t", "s", "l"),
+        ]
         if a.labels is not None:
             body.append(self.atom(a.labels, _TL, True))
         self.emit(outside, _TS, *body)
@@ -738,16 +753,7 @@ class _Transpiler:
             self.defined.pop(name, None)
             return
         self.skipped.pop(name, None)
-        copy = []
-        for kind, pred in vars(query).items():
-            if pred is None:
-                copy.append(None)
-                continue
-            args = _TL if kind == "labels" else _TS
-            new = self.fresh()
-            self.emit(new, args, self.atom(pred, args))
-            copy.append(new)
-        own = QueryPredicates(*copy)
+        own = query  # no copy: the public name is an alias, at the output
         self.defined[name] = own
         self.versions.setdefault(name, []).append(own)
         if saved:
@@ -789,7 +795,13 @@ class _Transpiler:
     # the names of the predicates, once the definitions are known
     def finish(self) -> Transpiled:
         mangled: Dict[str, str] = {}
-        renames: Dict[str, str] = {}
+        public: Dict[str, Dict[str, _Rule]] = {}
+        earlier: List[_Rule] = []
+        suffixes = {
+            "tracts": "", "labels": "__label", "end0": "__end0",
+            "end1": "__end1",
+        }
+        names = {}  # name -> the public QueryPredicates of its last version
         for name, versions in self.versions.items():
             base = name.replace(".", "_")
             if not _NAME.fullmatch(base):
@@ -800,24 +812,35 @@ class _Transpiler:
                     f"be q_{base}"
                 )
             for k, query in enumerate(versions, 1):
-                suffix = "" if k == len(versions) else f"__v{k}"
+                last = k == len(versions)
+                tag = "" if last else f"__v{k}"
+                kinds = {}
                 for kind, pred in vars(query).items():
-                    if pred is not None:
-                        extra = {"tracts": "", "labels": "__label",
-                                 "end0": "__end0", "end1": "__end1"}[kind]
-                        renames[pred] = f"q_{base}{suffix}{extra}"
+                    if pred is None:
+                        continue
+                    args = _TL if kind == "labels" else _TS
+                    name_ = f"q_{base}{tag}{suffixes[kind]}"
+                    rule = _Rule(
+                        _Atom(name_, args), (_Atom(pred, args),)
+                    )
+                    kinds[kind] = rule
+                    if not last:
+                        earlier.append(rule)
+                if last:
+                    public[name] = kinds
+                    names[name] = QueryPredicates(
+                        **{k_: r.head.pred for k_, r in kinds.items()}
+                    )
         defined = {
-            name: QueryPredicates(
-                *(renames.get(p) for p in vars(self.defined[name]).values())
-            )
-            for name in self.defined
+            name: names[name] for name in self.defined if name in names
         }
         return Transpiled(
             defined=defined,
             saved=tuple(self.saved),
             skipped=dict(self.skipped),
             _rules=tuple(self.rules),
-            _renames=renames,
+            _public=public,
+            _earlier=tuple(earlier),
         )
 
 

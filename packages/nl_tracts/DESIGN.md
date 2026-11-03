@@ -774,7 +774,7 @@ Read from `query_processor.py` and checked against it (13.2).
 | `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(t,s) :- A(t,s), B(t,s)`; `E_label(t,l)` from both; `E_end0(t,s) :- A_end0(t,s), B_end0(t,s)` |
 | `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets; `a not in b not in c` is sequential | `E(t,s) :- A(t,s), ~B(t,s)`; the same for labels and ends |
 | `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(t,l) :- traverses(a,t,s,l)`; `E_label(t,l) :- U(t,l), ~A_label(t,l)`; `E(t,s) :- traverses(a,t,s,l), E_label(t,l)`. **Not** `~A(t,s)` |
-| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- traverses(a,t,s,l), ~A_label(t,l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
+| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- A(t,s), traverses(a,t,s,l), ~A_label(t,l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
 | `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(t,s) :- A_end0(t,s), endpoint(a,t,s,0,l), A_label(t,l)` |
 | `+A` | A | A |
 | `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(t,s) :- A_end0(t,s)`; `E(t,s) :- A_end1(t,s)` |
@@ -954,9 +954,11 @@ operations, each on the four components (11.2 has the semantics):
   traverse, the background included when it is a row of `traverses`); the
   labels are `difference(U, x.labels)`; the streamlines are `C(t, s) :-
   traverses(a, t, s, l), labels(t, l)`; the endpoint sets are `None`.
-* `~x` (**invert**): `outside(t, s) :- traverses(a, t, s, l), ~x.labels(t,
-  l)` (without the negation if `x.labels` is `None`: every traversed label is
-  outside); the streamlines are `difference(x.tracts, outside)`; the labels
+* `~x` (**invert**): `outside(t, s) :- x.tracts(t, s), traverses(a, t, s,
+  l), ~x.labels(t, l)` (without the negation if `x.labels` is `None`: every
+  traversed label is outside), which starts from the streamlines of `x`, so
+  that the join and its result are of their size and not of all of
+  `traverses`; the streamlines are `difference(x.tracts, outside)`; the labels
   are `x.labels`; the endpoint sets are `None`.
 * `only(x)`: as `~x` for the streamlines and the labels; **each endpoint set
   is kept**, `E_end_i(t, s) :- x.end_i(t, s), endpoint(a, t, s, i, l),
@@ -969,48 +971,56 @@ operations, each on the four components (11.2 has the semantics):
   argument, a comparison other than `not in`, another operator) is an error;
   `WMQLUnsupported` for `save` and the unknown functions.
 
-**Definition.** `define(name, value, saved)` compiles `value`; then *copies*
-every component that is not `None` into a predicate of its own (`P_new(args)
-:- P(args)`), binds `name` to the copies, and appends them to the versions of
-`name`. The copy is what makes a redefinition safe: `y = x` followed by `x =
-c` would otherwise leave `y` aliasing a predicate that a later rule for `x`
-extended (Datalog unions all the rules of one head).
+**Definition.** `define(name, value, saved)` compiles `value`, binds `name`
+to the resulting `QueryPredicates`, and appends them to the versions of
+`name`. It emits **no rule of its own**: a name given by another name
+(`x = a`) shares its predicates. That is safe because a rule is only ever
+emitted for a *fresh* predicate (the numbering increases, and the two rules
+of a union are emitted together), so no head gets a rule after the
+predicates are bound, and a later redefinition of a name cannot extend what
+an earlier use read. (An earlier version copied every component into a
+predicate of its own; the copies were extra steps for the engine, each a
+pass over a possibly large relation, and are now made only at the output.)
 
 **Naming (`finish`).** The mangled form of a name replaces `.` by `_`
 (`x.left` is `x_left`) and must be `[a-z0-9_]+`; two names with one mangled
 form (`x.left`, `x_left`) are an error. The last definition of a name is
 `q_<mangled>` (`q_<mangled>__label`, `__end0`, `__end1` for the other
-components); the earlier definitions are `q_<mangled>__v1`, `__v2`, ... . The
-prefix `q_` keeps WMQL names (`label`, `endpoint`, `ans`) apart from the
-relations and the keywords of Datalog; the intermediate predicates are `qi_N`,
-which cannot collide with a `q_` name. The rules are kept as structures, with
-the extensional atoms (`traverses`, `endpoint`, `tractogram`,
-`label_extent`, `streamline_extent`, `endpoint_coord`) marked, and are
-rendered, with the renaming applied to the others, only at the end, which is
-why a name can be given its final form after the program is read.
+components); the earlier definitions are `q_<mangled>__v1`, `__v2`, ... .
+Each public predicate is an **alias rule** `q_x(t, s) :- qi_N(t, s)` for the
+internal predicate of that component; the prefix `q_` keeps WMQL names
+(`label`, `endpoint`, `ans`) apart from the relations and the keywords of
+Datalog; the intermediate predicates are `qi_N`, which cannot collide with a
+`q_` name. The rules are kept as structures, with the extensional atoms
+(`traverses`, `endpoint`, `tractogram`, `label_extent`, `streamline_extent`,
+`endpoint_coord`) marked.
 
-**Slicing.** `Transpiled.program(*names, components=...)` takes the
-predicates of the wanted components of the names and the reverse dependency
-closure of their rules (a rule depends on the non-extensional atoms of its
-body); the rules of the closure are written in their original order. A
-program for the label sets of a thousand names, or for the streamlines of
-one bundle, has only the rules they need.
+**Output and slicing.** `Transpiled.text` is all the rules and the aliases of
+every version of every name. `Transpiled.program(*names, components=...)`
+takes the alias rules of the wanted components of the names and the reverse
+dependency closure of their bodies (a rule depends on the non-extensional
+atoms of its body); the rules of the closure are written in their original
+order, then the aliases. So **a component is computed only if it is wanted or
+another wanted component needs it**: the streamlines of a bundle do not pay
+for the labels of its directional terms, a join of the streamlines with
+`traverses` (the difference between 3.8 s and 0.5 s for `anterior_of(a)` at a
+million streamlines, 11.6).
 
 **Properties of the output.** (1) *Non-recursive*: a rule only reads
 predicates created before it (the numbering increases), so the program is a
 DAG and trivially stratified; the negations (`~`) are over predicates of a
-lower stratum, as is the aggregate of the directional terms. (2) *Safe*:
+lower stratum, as is the aggregate of the directional terms. (This relies on
+the engine scheduling a rule that reads a predicate only after *all* the rules
+of that predicate, which it did not do for predicates with rules at different
+depths, such as a union of a union; fixed in `stratify`, 11.6.) (2) *Safe*:
 every variable of a head or of a negated atom is bound by a positive atom
-of the body. (3) *Size*: at most one rule per non-`None` component for each operation
-(four for `or`, `and` and `not in`, about five for `only`, five for a
-directional term: the box, the streamlines, two ends, the labels), and four
-per definition, so the number of rules is proportional to the number of nodes
-of the tree; `freesurfer_queries.qry`,
-with its 1500 definitions, is a few thousand rules, and a slice for 74 terms
-is 945. (4) *Cost*: NeuroLang compiles a rule in about 55 ms (945 rules in
-about a minute), which is what dominates; the label sets of constants and of
-their unions are plain unions that the transpiler could fold into one rule
-each (15.19).
+of the body. (3) *Size*: at most one rule per non-`None` component for each
+operation (four for `or`, `and` and `not in`, about five for `only`, five
+for a directional term: the box, the streamlines, two ends, the labels),
+plus one alias per component at the output, so the number of rules is
+proportional to the number of nodes of the tree. (4) *Cost*: NeuroLang
+compiles a rule in about 55 ms and evaluates it in a pass over its inputs;
+11.6.
 
 **A worked example.** The program (an uncinate-like bundle; the labels are
 made up):
@@ -1026,56 +1036,48 @@ uf.side = endpoints_in(tmp.side and anterior_of(amy.side)) not in only(tmp.oppos
 Stage 3 expands the last statement into `uf.left = endpoints_in(tmp.left and
 anterior_of(amy.left)) not in only(tmp.right)` and the same with the sides
 exchanged. `transpile(source, atlas="fs").program("uf.left")` is, for the
-left bundle:
+left bundle (31 rules; 16 with `components=("tracts",)`):
 
 ```
-% the labels, the streamlines and the ends of amy.left (the labels only:
-% the streamlines of the argument of anterior_of are not read), tmp.left, tmp.right
+% the labels of amy.left (its streamlines are not read), then tmp.left
+% (labels, ends) and tmp.right (streamlines, labels, ends)
 qi_2(t, 18) :- tractogram(t)
-q_amy_left__label(t, l) :- qi_2(t, l)
-qi_18(t, 5) :- tractogram(t)
-qi_19(t, s) :- endpoint("fs", t, s, 0, 5)
-qi_20(t, s) :- endpoint("fs", t, s, 1, 5)
-q_tmp_left__label(t, l) :- qi_18(t, l)
-q_tmp_left__end0(t, s) :- qi_19(t, s)
-q_tmp_left__end1(t, s) :- qi_20(t, s)
-qi_25(t, s) :- traverses("fs", t, s, 6)
-qi_26(t, 6) :- tractogram(t)
-qi_27(t, s) :- endpoint("fs", t, s, 0, 6)
-qi_28(t, s) :- endpoint("fs", t, s, 1, 6)
-q_tmp_right(t, s) :- qi_25(t, s)
-q_tmp_right__label(t, l) :- qi_26(t, l)
-q_tmp_right__end0(t, s) :- qi_27(t, s)
-q_tmp_right__end1(t, s) :- qi_28(t, s)
+qi_10(t, 5) :- tractogram(t)
+qi_11(t, s) :- endpoint("fs", t, s, 0, 5)
+qi_12(t, s) :- endpoint("fs", t, s, 1, 5)
+qi_13(t, s) :- traverses("fs", t, s, 6)
+qi_14(t, 6) :- tractogram(t)
+qi_15(t, s) :- endpoint("fs", t, s, 0, 6)
+qi_16(t, s) :- endpoint("fs", t, s, 1, 6)
 % anterior_of(amy.left): the face of the box, per tractogram, then the tests
-qi_33(t, max(hi)) :- q_amy_left__label(t, l), label_extent("fs", l, 1, lo, hi)
-qi_34(t, s) :- streamline_extent(t, s, 1, lo, hi), qi_33(t, box), (hi > box)
-qi_35(t, s) :- endpoint_coord(t, s, 0, 1, v), qi_33(t, box), (v > box)
-qi_36(t, s) :- endpoint_coord(t, s, 1, 1, v), qi_33(t, box), (v > box)
-qi_37(t, l) :- qi_34(t, s), traverses("fs", t, s, l)
+qi_17(t, max(hi)) :- qi_2(t, l), label_extent("fs", l, 1, lo, hi)
+qi_18(t, s) :- streamline_extent(t, s, 1, lo, hi), qi_17(t, box), (hi > box)
+qi_19(t, s) :- endpoint_coord(t, s, 0, 1, v), qi_17(t, box), (v > box)
+qi_20(t, s) :- endpoint_coord(t, s, 1, 1, v), qi_17(t, box), (v > box)
+qi_21(t, l) :- qi_18(t, s), traverses("fs", t, s, l)
 % tmp.left and anterior_of(...): labels united, the ends intersected
-qi_39(t, l) :- q_tmp_left__label(t, l)
-qi_39(t, l) :- qi_37(t, l)
-qi_40(t, s) :- q_tmp_left__end0(t, s), qi_35(t, s)
-qi_41(t, s) :- q_tmp_left__end1(t, s), qi_36(t, s)
+qi_23(t, l) :- qi_10(t, l)
+qi_23(t, l) :- qi_21(t, l)
+qi_24(t, s) :- qi_11(t, s), qi_19(t, s)
+qi_25(t, s) :- qi_12(t, s), qi_20(t, s)
 % endpoints_in: the streamlines are the union of the two end sets
-qi_42(t, s) :- qi_40(t, s)
-qi_42(t, s) :- qi_41(t, s)
-% only(tmp.right): the streamlines with all their labels in tmp.right, and its ends filtered
-qi_43(t, s) :- traverses("fs", t, s, l), ~q_tmp_right__label(t, l)
-qi_44(t, s) :- q_tmp_right(t, s), ~qi_43(t, s)
-qi_45(t, s) :- q_tmp_right__end0(t, s), endpoint("fs", t, s, 0, l), q_tmp_right__label(t, l)
-qi_46(t, s) :- q_tmp_right__end1(t, s), endpoint("fs", t, s, 1, l), q_tmp_right__label(t, l)
+qi_26(t, s) :- qi_24(t, s)
+qi_26(t, s) :- qi_25(t, s)
+% only(tmp.right): from its streamlines only; its ends filtered
+qi_27(t, s) :- qi_13(t, s), traverses("fs", t, s, l), ~qi_14(t, l)
+qi_28(t, s) :- qi_13(t, s), ~qi_27(t, s)
+qi_29(t, s) :- qi_15(t, s), endpoint("fs", t, s, 0, l), qi_14(t, l)
+qi_30(t, s) :- qi_16(t, s), endpoint("fs", t, s, 1, l), qi_14(t, l)
 % not in: the difference of the four components
-qi_47(t, s) :- qi_42(t, s), ~qi_44(t, s)
-qi_48(t, l) :- qi_39(t, l), ~q_tmp_right__label(t, l)
-qi_49(t, s) :- qi_40(t, s), ~qi_45(t, s)
-qi_50(t, s) :- qi_41(t, s), ~qi_46(t, s)
-% the definition of uf.left: a copy of each component
-q_uf_left(t, s) :- qi_47(t, s)
-q_uf_left__label(t, l) :- qi_48(t, l)
-q_uf_left__end0(t, s) :- qi_49(t, s)
-q_uf_left__end1(t, s) :- qi_50(t, s)
+qi_31(t, s) :- qi_26(t, s), ~qi_28(t, s)
+qi_32(t, l) :- qi_23(t, l), ~qi_14(t, l)
+qi_33(t, s) :- qi_24(t, s), ~qi_29(t, s)
+qi_34(t, s) :- qi_25(t, s), ~qi_30(t, s)
+% the public names of uf.left: one alias per component
+q_uf_left(t, s) :- qi_31(t, s)
+q_uf_left__label(t, l) :- qi_32(t, l)
+q_uf_left__end0(t, s) :- qi_33(t, s)
+q_uf_left__end1(t, s) :- qi_34(t, s)
 ```
 
 (The `%` lines are added here to read it; the program has none. The numbers
@@ -1175,55 +1177,79 @@ tract_querier's `EvaluateQueries` and, as the transpiled program, to
 NeuroLang (pandas backend, one machine, one run each). The reference's
 indexing (its dictionaries) is built beforehand and not timed, as is the
 building of the relations, which is a vectorised `np.unique` once cached
-(6.2, 7.3, not yet written); the table is the cost of *a query*.
+(6.2, 7.3, not yet written); the table is the cost of *a query*. "All four"
+computes the four components, as the reference always does; "streamlines
+only" is what a user usually wants, and what slicing makes cheaper.
 
-| Program (streamlines) | tract_querier | NeuroLang (load + compile + evaluate) | Ratio |
-|---|---|---|---|
-| `a and b not in c` (100k) | 0.001 s | 1.00 s (0.01 + 0.18 + 0.81) | ~750x |
-| `a and b not in c` (1M) | 0.018 s | 1.65 s (0.07 + 0.71 + 0.88) | ~90x |
-| `only(a or b)` (100k) | 0.011 s | 1.45 s | ~140x |
-| `only(a or b)` (1M) | 0.100 s | 8.12 s (0.09 + 0.13 + 7.89) | ~80x |
-| `not a` (100k / 1M) | 0.036 s / 0.384 s | 0.42 s / 2.70 s | 12x / 7x |
-| `anterior_of(a)` (100k / 1M) | 0.088 s / 0.521 s | 0.67 s / 3.62 s | 8x / 7x |
-| uncinate-like bundle (20k) | 0.025 s | 1.38 s | ~56x |
-| uncinate-like bundle (100k) | 0.109 s | 1.68 s | 15x |
-| uncinate-like bundle (1M, 7.7M `traverses` rows) | 0.945 s | **11.5 s** (0.06 + 0.18 + 11.30) | **12x** |
+| Program | tract_querier | NeuroLang, all four | NeuroLang, streamlines only | Ratio, streamlines only |
+|---|---|---|---|---|
+| **1M streamlines (7.7M `traverses` rows)** | | | | |
+| `a and b not in c` | 0.023 s | 1.75 s | 0.34 s | 15x |
+| `only(a or b)` | 0.109 s | 5.93 s | 4.94 s | 45x |
+| `not a` | 0.356 s | 2.82 s | 2.77 s | 8x |
+| `endpoints_in(a) and endpoints_in(b)` | 0.010 s | 0.60 s | 0.40 s | 40x |
+| `anterior_of(a)` | 0.533 s | 3.82 s | **0.51 s** | **1x** |
+| uncinate-like bundle (11.4) | 1.021 s | 9.27 s | 5.67 s | 5.6x |
+| **100k streamlines** | | | | |
+| `a and b not in c` | 0.001 s | 1.05 s | 0.17 s | ~170x |
+| `only(a or b)` | 0.009 s | 1.00 s | 0.58 s | 64x |
+| `anterior_of(a)` | 0.062 s | 0.57 s | 0.16 s | 2.6x |
+| uncinate-like bundle | 0.122 s | 1.54 s | 0.89 s | 7x |
+
+What was changed after a first measurement (1M, all four components:
+`only(a or b)` 8.12 s, bundle 11.54 s, `anterior_of(a)` 3.62 s):
+
+* **No copy of a definition** (11.4): 8 rules fewer per program (32 to 24 for
+  `only`, 39 to 31 for the bundle) and as many passes over relations that
+  can be large.
+* **`only` and `~` scan the streamlines of their argument**, not all of
+  `traverses` (11.4): `only(a or b)` from 8.12 s to 5.93 s.
+* **Slicing by component** (`components=("tracts",)`): the labels of a
+  directional result are a join of its streamlines with `traverses`, which
+  `anterior_of(a)` does not need to give its streamlines: 3.8 s to 0.5 s.
+* **Two engine fixes found on the way** (`nl_core`): a predicate with rules at
+  different depths could be read before it was complete, which made an
+  aggregation over a union of a union fail (`NoValidChaseClassForStratum`;
+  `stratify`, with a test); and the polars backend failed to union an `Int32`
+  with an `Int64` column, which is what a literal and a column are (a
+  numeric-type relaxation in the union, with tests).
 
 Reading it:
 
-* **The Datalog route is slower for one query on one subject**, by one to
-  two orders of magnitude, and by 7x to 12x on the operations that scan
-  `traverses` at 1M streamlines. In absolute terms it is a second for the
-  simple set algebra and about ten seconds for a bundle with `only` and a
-  directional term at a million streamlines.
-* **There is a fixed cost of about a second per program** (compiling and
-  setting up the chase), which is why the small cases are the worst ratios
-  (reference sets of 10^4 elements are a millisecond), and why the ratio
-  *falls* with the size of the tractogram: from 56x to 15x to 12x for the
-  bundle at 20k, 100k and 1M, as the time grows about 7x for 10x the data
-  against about 9x for the reference.
-* **What costs at scale is the scans of `traverses`**: `only(a or b)`
-  (8 s at 1M) is an anti-join of all the 7.7M rows with the label set;
-  `not a` and the box of `anterior_of` are scans too. The set algebra on the
-  four components is cheap (0.9 s at 1M).
+* **For one query on one subject the Datalog route is slower**, from about
+  the same (`anterior_of(a)`, 1x) to a few tens of times at a million
+  streamlines, and by a hundred or more for the set algebra on a small
+  tractogram, where the reference takes a millisecond. In absolute terms:
+  under half a second to about six seconds at a million streamlines.
+* **There is a fixed cost of about a second per program** with all four
+  components (compiling and setting up the chase), which is why the small
+  cases have the worst ratios and why the ratio falls with the size.
+* **What costs at scale is each pass over `traverses`**: `only(a or b)`
+  (4.9 s), `not a` (2.8 s). Each reference to the relation selects the atlas
+  constant, drops that column and removes duplicates, which is of the order
+  of a second on 7.7M rows; a profile of the earlier version at 300k put the anti-join at
+  a third of the time, de-duplication at a fifth and the merges at a quarter.
+  The set algebra on the four components is cheap.
 * **What the table leaves out, in both directions.** tract_querier indexes
-  at every invocation (the cost of `compute_tract_label_indices`, a Python
-  loop over the streamlines; 9 s for the 1M dictionaries of this benchmark,
-  and more in the real one), and has nothing to cache between runs, nor any
-  way to run many subjects in one program; here the relations are built once
-  by numpy and cached as parquet (7.3). A *session* of many queries on one
-  tractogram pays the indexing once, and the query costs above each time.
-* **Not measured**: the polars backend (`--backend polars`) fails on these
-  programs, on a union of an `Int32` and an `Int64` column (an engine issue to
-  look at, 15.19), so the numbers are pandas'; real tractograms and atlases
-  (the data here is random); the memory (about 840 MB for a 3M-row join,
-  7.3); several runs, so no variance.
-* **Where the time could be cut, untested**: folding the label constants and
-  their unions into one rule each (the compile share, 0.1-0.7 s here, is
-  small, but 55 ms a rule becomes a minute for the vocabulary file, 11.3);
-  a per-streamline count of labels, `streamline_label_count(t, s, n)`, so
-  that `only` is a join on a count instead of an anti-join over all the
-  rows; the polars backend, once the typing issue is settled.
+  at every invocation (a Python loop over the streamlines; 10 s for the 1M
+  dictionaries of this benchmark, and more in the real one), has nothing to
+  cache between runs and cannot run many subjects in one program; here the
+  relations are built once by numpy and cached as parquet (7.3). A *session*
+  of many queries on one tractogram pays the indexing once.
+* **Tried, and not a lever**: the polars backend (`--backend polars`), which
+  runs these programs since the union fix, is *slower*: 100k streamlines,
+  `only(a or b)` 8.3 s against 1.0 s on pandas, and the next program aborts
+  on polars' out-of-core budget (`POLARS_OOC_DISK_BUDGET_MB`). Pandas stays
+  the backend.
+* **Considered, not done**: folding the label constants and their unions into
+  one rule each (the compile share is 0.1-0.5 s in these programs; it matters
+  for the vocabulary file, 11.3, which is a minute of compilation); a
+  per-streamline label count `streamline_label_count(t, s, n)` so that `only`
+  is a join on a count (the scans are the cost, not the anti-join alone, after
+  the restriction).
+* **Not measured**: real tractograms and atlases (the data here is random);
+  the memory (about 840 MB for a 3M-row join, 7.3); several runs, so no
+  variance.
 
 ## 12. Directional terms
 
@@ -1497,15 +1523,14 @@ Recommendations in bold; none changes a decision of section 2.
     FreeSurfer 6 and the thalamus proper (10) in 7. The mapping is keyed by
     raw name and maps it to `thalamus_proper`. **Keep**, and give the mapping
     a LUT-version key if a FreeSurfer 7 LUT is ever found to need otherwise.
-19. **Speed** (11.6). A query is about a second of fixed cost plus the scans
-    of `traverses`: 1-12 s at a million streamlines, 7x to 90x the
-    reference's wall-clock for a single query, with the gap narrowing as the
+19. **Speed** (11.6). One query is a fixed second plus a second or so per
+    pass over `traverses`: 0.5-6 s at a million streamlines for the
+    streamlines, 1x to 45x the reference's wall-clock, the gap narrowing as the
     data grows. Evaluating the 945 label rules of the vocabulary file takes
     about a minute (a rule costs about 55 ms to compile), which is why the
-    vocabulary and oracle tests are `slow`. **Keep for now**; the levers are
-    in 11.6. **Open**: the polars backend fails on the transpiled programs
-    (a union of an `Int32` and an `Int64` column; the pandas backend accepts
-    the mix), which is worth a look in `nl_core` before relying on it.
+    vocabulary and oracle tests are `slow`. **Keep for now**; the levers left
+    are in 11.6 (folding constants; a label count per streamline). The polars
+    backend is slower on these programs and was not adopted.
 20. **`superior_of` and `inferior_of` are inverted in the reference** (11.5):
     they select the streamlines whose top is *below* the top of the box, and
     whose bottom is *above* its bottom, where the other four terms select

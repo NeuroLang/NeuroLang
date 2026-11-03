@@ -292,3 +292,48 @@ def test_the_module_imports_nothing_of_neurolang():
         "assert not bad, bad"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_a_definition_adds_no_rule_of_its_own():
+    """The public name of a query is an alias at the output, not a copy
+    in the middle of the program: a copy is a step for the engine, and one
+    more pass over a large relation."""
+    p = t("a = 1\nb = 2\nx = a or b\n")
+    rules = p.program("x", components=("tracts",)).strip().split("\n")
+    # the streamlines of a and of b, their union (two rules), the name
+    assert len(rules) == 5
+    assert re.fullmatch(r"q_x\(t, s\) :- qi_\d+\(t, s\)", rules[-1])
+
+
+def test_a_name_defined_by_a_name_is_an_alias():
+    p = t("a = 1\nx = a\ny = x\n")
+    rules = p.program("y", components=("tracts",)).strip().split("\n")
+    assert len(rules) == 2  # the streamlines of 1, and the name y
+    assert p.defined["x"].tracts == "q_x" and p.defined["y"].tracts == "q_y"
+
+
+def test_every_version_of_a_name_has_its_alias_in_the_whole_program():
+    p = t("x = 1\ny = x\nx = 2\n")
+    assert re.search(r"^q_x__v1\(t, s\) :- qi_\d+\(t, s\)$", p.text, re.M)
+    assert re.search(r"^q_x\(t, s\) :- qi_\d+\(t, s\)$", p.text, re.M)
+
+
+@pytest.mark.parametrize("source", ["x = only(a)", "x = ~a"])
+def test_the_scan_of_only_and_invert_is_of_the_streamlines_of_the_argument(
+    source
+):
+    """``outside`` is the streamlines of the argument with a label outside
+    its labels, not all the streamlines with a label outside: the same
+    streamlines in the difference, without a pass over, and a result as
+    large as, all of ``traverses``."""
+    text = t("a = 1\n" + source + "\n").text
+    assert re.search(
+        r'^qi_\d+\(t, s\) :- qi_\d+\(t, s\), traverses\("fs", t, s, l\), '
+        r"~qi_\d+\(t, l\)$",
+        text, re.M,
+    )
+
+
+def test_the_scan_of_only_without_labels_is_still_restricted():
+    p = t("none = 'zz*'\nx = only(none)\n")
+    assert p.defined["x"].tracts is None

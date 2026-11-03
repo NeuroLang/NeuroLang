@@ -131,25 +131,33 @@ def main(sizes, backend="pandas"):
         rows = len(frames["traverses"])
         print(f"\n{n} streamlines, {rows} traverses rows "
               f"(reference indexing built in {t_index:.1f} s)")
-        print(f"{'program':38s} {'tract_querier':>14s} {'load':>7s} "
+        print(f"{'program':36s} {'tract_querier':>13s} {'load':>6s} "
               f"{'compile':>8s} {'evaluate':>9s} {'datalog':>8s} "
-              f"{'ratio':>6s}  rules")
+              f"{'ratio':>6s} {'streamlines only':>17s}  rules")
         for name, source in PROGRAMS.items():
             body = reference.queries_preprocess(source)
             _, t_ref = timed(lambda: reference.EvaluateQueries(
                 index).visit(ast.Module(body, type_ignores=[])))
             program = transpile(source, atlas="fs")
             saved = program.saved[-1]
+
+            def run(text):
+                nl = NeurolangDL()
+                _, t_load = timed(lambda: [
+                    nl.add_tuple_set(f, name=k) for k, f in frames.items()])
+                _, t_compile = timed(
+                    lambda: nl.execute_datalog_program(text))
+                _, t_eval = timed(nl.solve_all)
+                return t_load, t_compile, t_eval
+
             text = program.program(saved)
-            nl = NeurolangDL()
-            _, t_load = timed(lambda: [
-                nl.add_tuple_set(f, name=k) for k, f in frames.items()])
-            _, t_compile = timed(lambda: nl.execute_datalog_program(text))
-            _, t_eval = timed(nl.solve_all)
+            t_load, t_compile, t_eval = run(text)
             total = t_load + t_compile + t_eval
-            print(f"{name:38s} {t_ref:13.3f}s {t_load:6.2f}s "
+            only = sum(run(program.program(saved, components=("tracts",))))
+            print(f"{name:36s} {t_ref:12.3f}s {t_load:5.2f}s "
                   f"{t_compile:7.2f}s {t_eval:8.2f}s {total:7.2f}s "
-                  f"{total / t_ref:5.0f}x  {text.count(chr(10))}")
+                  f"{total / t_ref:5.0f}x {only:16.2f}s  "
+                  f"{text.count(chr(10))}")
 
 
 if __name__ == "__main__":
