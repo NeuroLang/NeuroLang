@@ -377,6 +377,17 @@ def cmd_ask(app, arg: str) -> None:
     )
 
 
+def _make_agent(app, provider, assistant, language, strategy, **options):
+    """Return the agent of the session's engine and loaded relations."""
+    from neurolang_apps.utils.llm import make_agent
+
+    return make_agent(
+        app._nl, provider, assistant, language, strategy,
+        engine_name=app.settings.engine_name, loaded=app.loaded_relations,
+        **options,
+    )
+
+
 def _run_assistant(
     app, question: str, language: Optional[str] = None,
     strategy: Optional[str] = None, steps: Optional[int] = None,
@@ -389,7 +400,7 @@ def _run_assistant(
     given.
     """
     from neurolang_apps.utils.llm import (
-        AgentResult, LLMConfigError, LLMError, make_agent
+        AgentResult, LLMConfigError, LLMError
     )
     state = app.assistant
     try:
@@ -410,11 +421,9 @@ def _run_assistant(
                 client or make_client(provider, assistant.timeout), events
             )
             on_step = _also_sending(on_step, events)
-        agent = make_agent(
-            app._nl, provider, assistant, language,
-            strategy or state.strategy,
-            engine_name=app.settings.engine_name,
-            loaded=app.loaded_relations, client=client, on_step=on_step,
+        agent = _make_agent(
+            app, provider, assistant, language, strategy or state.strategy,
+            client=client, on_step=on_step,
         )
         app.err_console.print(
             f"[dim]Asking {provider.name} ({provider.model or provider.api}"
@@ -458,6 +467,48 @@ def _run_assistant(
                 f"[dim]Shared as {answer}: rate it with .rate good|bad|"
                 "unsure \\[comment], correct it with .refine.[/dim]"
             )
+
+
+@command(
+    ".explain", "Read the last query in English with the assistant",
+    ".explain",
+)
+def cmd_explain(app, arg: str) -> None:
+    """Print the last query that ran, translated into English."""
+    from neurolang_apps.utils.llm import LLMConfigError, LLMError
+
+    if arg.strip():
+        app.failed = True
+        app.console.print("[yellow]Usage: .explain[/yellow]")
+        return
+    if app.last_query is None:
+        app.failed = True
+        app.console.print("[yellow]Run a query first.[/yellow]")
+        return
+    if not _llm_available(app):
+        return
+    program, squall = app.last_query
+    state = app.assistant
+    try:
+        config = state.config()
+        provider = config.provider(state.provider)
+        agent = _make_agent(
+            app, provider, config.assistant,
+            "squall" if squall else "datalog", state.strategy,
+            client=state.client,
+        )
+        english = call_interruptibly(
+            lambda: agent.explain(program), app._print_stuck_hint
+        )
+    except KeyboardInterrupt:
+        app.failed = True
+        app.console.print("[yellow]Interrupted[/yellow]")
+        return
+    except (LLMConfigError, LLMError) as exc:
+        app.failed = True
+        app.console.print(f"[red]{escape(str(exc))}[/red]")
+        return
+    app.console.print(Text("Reads as: " + english, style="dim italic"))
 
 
 def _say(app):

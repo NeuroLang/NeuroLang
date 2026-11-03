@@ -49,6 +49,54 @@ Unreleased
   numbers; and the keyboard focus is visible on the lists and the sortable
   headers.
 
+* The browser REPL: the query can be written while the engine loads, which
+  says how long it takes; a failed start says in plain words what to do, with
+  a *Try again* button; the Brain tab is shown only when there is a brain to
+  see; the log of a query is folded to the time it took; the result tabs are
+  a tab list for the keyboard and screen readers; the table's controls are
+  shorter and the page fits a phone; and the button for the assistant's key
+  opens the key form, tells when a key is in use, and says what *Ask* needs.
+
+* The browser REPL shows the probabilities of a result (a ``p`` or ``prob``
+  column of numbers between 0 and 1) as bars, the most probable rows first.
+
+* The browser REPL has a *Use in a query* button on a result: the query that
+  made it is put in the box again, its answer renamed ``result``, with a new
+  ``ans(...) :- result(...), `` to complete. (A result is not a relation of
+  the session: ``ans`` cannot be used in a body.)
+  A result of studies also has *Map the studies*: the query that counts, for
+  each voxel, the studies of the result that report a peak there, which the
+  brain tab shows.
+
+* The browser REPL has *Ask a question* in its examples: a form for the common
+  questions (the studies that mention a term, two terms, one and not the
+  other, a term a lot; their peaks; the terms of a study), the ones the
+  engine has the predicates of, which puts the Datalog query in the box.
+
+* ``.explain`` reads the last query that ran in English, with the assistant;
+  the browser REPL has an *Explain* button for it once an API key is in use.
+
+* In the browser REPL, the studies of a result are links: to their PubMed
+  record, to their DOI (the engine's metadata have it; the tooltip gives the
+  title, authors, year and journal) and, when Europe PMC knows it, to their
+  PubMed Central record. Europe PMC is asked for the PubMed ids of the studies
+  on the page, nothing else; if it cannot be reached the other links stay.
+  A table tells the sort of each of its columns (``sorts``) and, if some are
+  studies, their ``study_links``.
+
+* The browser REPL documents each relation and each command. In *Examples and
+  relations*, the button *ⓘ* of a relation tells what it holds (the engine's
+  description), its columns with their sort and type, and where it comes from,
+  and puts it in the box or the query for all its rows; there is a list of the
+  commands, each with what it does and its full help. One filter searches both
+  lists. ``WebRepl.predicates()`` gives the ``arguments`` of each relation and
+  ``WebRepl.commands()`` the commands.
+
+* The browser REPL has a *Stop* button while a query runs: the engine is
+  restarted (its data are kept by the browser) and the rules defined in the
+  session are run again; *Save session* and *Open session* keep the
+  statements of a session in a file and give its rules back.
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at
