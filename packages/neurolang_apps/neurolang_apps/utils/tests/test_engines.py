@@ -81,7 +81,7 @@ class TestNeurosynthEngineStudyIdConsistency:
         )
 
         # ---- Mock NeurolangPDL to capture add_tuple_set calls ---------------
-        nl = MagicMock()
+        nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
         init_engine(nl, mask, data_dir=str(tmp_path / "fake"))
 
         # Collect the DataFrames that were passed to add_tuple_set
@@ -141,7 +141,7 @@ def test_neurosynth_cortical_mask(
     mock_atlas.return_value = nib.Nifti1Image(labels, affine)
     mask = nib.Nifti1Image(np.ones((10, 10, 10), dtype=np.uint8), np.eye(4))
 
-    nl = MagicMock()
+    nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
     init_engine(nl, mask, data_dir=Path("unused"))
 
     sets = {
@@ -183,7 +183,7 @@ def test_neurosynth_cognitive_atlas_tasks(
     )
     mock_tasks.return_value = _COGNITIVE_ATLAS_TASKS
 
-    nl = MagicMock()
+    nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
     init_engine(nl, mask, data_dir=Path("unused"))
 
     sets = {
@@ -316,7 +316,7 @@ class TestNeurosynthEngineVocabulary:
         mock_atlas.return_value = nib.Nifti1Image(
             np.zeros((4, 4, 4), dtype=np.int16), np.eye(4)
         )
-        nl = MagicMock()
+        nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
 
         init_engine(nl, mask, data_dir="unused")
 
