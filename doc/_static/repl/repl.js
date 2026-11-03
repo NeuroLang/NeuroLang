@@ -58,8 +58,9 @@ function showSummary({ valid, explanation, back_translation: reads, verified, ve
   summary.hidden = false;
 }
 
-// Rating the assistant's answer: "Yes" sends it at once, "No" asks what was
-// wrong first. Shown only where answers can be rated (feedback.json).
+// Rating the last query, or the assistant's answer: "Yes" sends it at once,
+// "No" asks what was wrong first. Shown only where answers can be rated
+// (feedback.json), after a query or an answer, not after other commands.
 let canRate = false;
 const rate = $("rate");
 const rateButtons = ["rate-good", "rate-bad", "rate-send"].map($);
@@ -84,6 +85,11 @@ $("rate-bad").addEventListener("click", () => {
   $("rate-comment").focus();
 });
 $("rate-send").addEventListener("click", () => sendRating("bad"));
+$("rate-comment").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  sendRating("bad");
+});
 
 function showAgent() {
   live.hidden = false;
@@ -359,6 +365,7 @@ const workerMessages = {
   },
   rated: (data) => {
     $("rate-note").textContent = data.message;
+    $("rate-note").focus();
     if (!data.ok) rateButtons.forEach((button) => (button.disabled = false));
     else $("rate-comment").hidden = $("rate-send").hidden = true;
   },
@@ -369,6 +376,7 @@ const workerMessages = {
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
+    if (data.ratable) showRating();
     applyReply(data);
     // A failure without a table hides the last result, not to be taken for its own.
     if (data.failed && !data.tables?.length) results.classList.remove("has");
@@ -476,6 +484,7 @@ function run(text, { remember = false } = {}) {
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
   if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
+  hideRating();
   worker.postMessage({ text });
 }
 

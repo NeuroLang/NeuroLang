@@ -90,6 +90,21 @@ def answer_record(
     })
 
 
+def query_record(
+    query: str, rows: str, error: str, engine: str = "", user: str = "",
+) -> dict:
+    """
+    Return what is shared of a query run without the assistant: no
+    question and no steps, its *rows* (a preview) or its *error*.
+    """
+    return _anonymous({
+        "client_version": _client_version(), "engine": engine,
+        "question": "", "query": query, "steps": [],
+        "rows": rows[:MAX_OBSERVATION], "valid": not error,
+        "error": error[:MAX_OBSERVATION], "user": user,
+    })
+
+
 class FeedbackClient:
     """
     The client of the feedback server at *url*, its ratings signed
@@ -219,9 +234,19 @@ class GristFeedbackClient(FeedbackClient):
         its id; raise FeedbackError. Nothing of an answer is sent but when
         it is rated.
         """
-        record = answer_record(
-            question, result, provider, strategy, engine, self.user
+        return self.share_record(
+            answer_record(
+                question, result, provider, strategy, engine, self.user
+            ),
+            verdict, comment,
         )
+
+    def share_record(self, record: dict, verdict: str, comment="") -> str:
+        """
+        Add *record* (:func:`answer_record`, :func:`query_record`) with its
+        *verdict* and *comment* as a row and return its id; raise
+        FeedbackError.
+        """
         record.update(
             verdict=self.VERDICTS.get(verdict, verdict),
             comment=_anonymous(comment),

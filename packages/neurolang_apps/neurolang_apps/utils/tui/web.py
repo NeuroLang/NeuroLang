@@ -126,8 +126,10 @@ class Reply:
     :func:`table_payload`), *failed* tells whether a statement of it
     failed, *prompt* is the query the assistant wrote, for the page
     to put in its input, and *mode* the language of the REPL, ``datalog``
-    or ``squall``, which the assistant may have switched, and *predicates*
-    those of the engine and the session (see :meth:`WebRepl.predicates`).
+    or ``squall``, which the assistant may have switched, *predicates*
+    those of the engine and the session (see :meth:`WebRepl.predicates`),
+    and *ratable* whether it was a query or an answer of the assistant,
+    which :meth:`WebRepl.rate_answer` can share.
     """
 
     html: str
@@ -137,6 +139,7 @@ class Reply:
     prompt: str = ""
     mode: str = "datalog"
     predicates: List[dict] = field(default_factory=list)
+    ratable: bool = False
 
 
 class Download(NamedTuple):
@@ -302,6 +305,10 @@ class WebRepl:
         )
         self._tables: list = []
         self._rating = None  # where a rated answer goes (see set_feedback)
+        # What a rating shares: "answer" (the assistant's last), the record
+        # of the last query, or None.
+        self._rated = None
+        self._frames: list = []  # the results of the last submission
         command = "neurolang-query -i"
         if engine_name:
             command += f" --engine {engine_name}"
@@ -375,20 +382,26 @@ class WebRepl:
 
     def rate_answer(self, verdict: str, comment: str = "") -> dict:
         """
-        Share the last answer of the assistant, rated *verdict* (``good``
-        or ``bad``) with the visitor's *comment*, and return ``ok`` and
-        a ``message`` to show.
+        Share the last answer of the assistant, or the last query, rated
+        *verdict* (``good`` or ``bad``) with the visitor's *comment*, and
+        return ``ok`` and a ``message`` to show. A query is shared with its
+        first rows or its error (see
+        :func:`~neurolang_apps.utils.llm.feedback.query_record`).
         """
         from neurolang_apps.utils.llm.feedback import FeedbackError
 
         run = self.app.assistant.last_run
-        if self._rating is None or run is None or verdict not in (
-            "good", "bad"
+        rated = self._rated
+        if self._rating is None or verdict not in ("good", "bad") or not (
+            isinstance(rated, dict) or (rated == "answer" and run)
         ):
             return {"ok": False, "message": "There is no answer to rate."}
         engine = self.app.settings.engine_name
         try:
-            self._rating.share_rated(*run, engine, verdict, comment)
+            if isinstance(rated, dict):
+                self._rating.share_record(dict(rated), verdict, comment)
+            else:
+                self._rating.share_rated(*run, engine, verdict, comment)
         except FeedbackError as error:
             return {"ok": False, "message": str(error)}
         return {"ok": True, "message": "Thank you: your rating is sent."}
@@ -430,6 +443,8 @@ class WebRepl:
         """
         self.app.failed = False
         self._tables = []
+        self._frames = []
+        answered = self.app.assistant.last_run
         with _viewers_returned() as viewers:
             try:
                 self.app._run_line(text)
@@ -439,10 +454,36 @@ class WebRepl:
                     "start a new one.[/dim]"
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
+        self._rated = self._what_is_rated(
+            text, self.app.assistant.last_run is not answered
+        )
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(),
+            self.predicates(), self._rated is not None,
+        )
+
+    def _what_is_rated(self, text: str, answered: bool):
+        """
+        Return what a rating of the submission *text* shares: "answer"
+        when the assistant *answered* it, the record of a query, or None
+        for a dot-command.
+        """
+        if answered:
+            return "answer"
+        if not text.strip() or text.strip().startswith("."):
+            return None
+        from neurolang_apps.utils.llm.feedback import query_record
+
+        output = self.console.export_text(clear=False).strip()
+        rows = "\n\n".join(
+            f"{len(frame)} rows; columns {', '.join(map(str, frame.columns))}"
+            f"\n{frame.head(10).to_string(index=False)}"
+            for frame in self._frames
+        )
+        return query_record(
+            text.strip(), rows, output if self.app.failed else "",
+            self.app.settings.engine_name,
         )
 
     def _print_block(self, block: ResultBlock) -> None:
@@ -452,6 +493,7 @@ class WebRepl:
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
         sorts = [s.sort if s else None for s in block.sorts or ()]
+        self._frames.append(block.frame)
         table = table_payload(
             block.frame, block.title, self.max_rows,
             sorts if len(sorts) == len(block.frame.columns) else None,
