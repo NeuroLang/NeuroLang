@@ -285,12 +285,17 @@ def stratify(union, datalog_instance):
             to_process, seen
         )
         to_process = new_to_process
-        if len(new_seen) == 0:
+        if len(stratum) == 0:
             stratifiable = False
             stratum, to_process = stratify_obtain_recursive_stratum(
                 to_process, seen
             )
             new_seen = {r.consequent.functor for r in stratum}
+        else:
+            # A predicate is complete, and can be read by a rule that is not
+            # monotone, only when no rule of it is left to process: its
+            # rules can be at different depths.
+            new_seen -= {r.consequent.functor for r in to_process}
         strata.append(stratum)
         seen |= new_seen
 
