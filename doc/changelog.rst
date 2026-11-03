@@ -34,6 +34,9 @@ Unreleased
   shorter and the page fits a phone; and the button for the assistant's key
   opens the key form, tells when a key is in use, and says what *Ask* needs.
 
+* The browser REPL shows the probabilities of a result (a ``p`` or ``prob``
+  column of numbers between 0 and 1) as bars, the most probable rows first.
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at

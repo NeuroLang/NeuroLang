@@ -123,9 +123,14 @@ export function renderTable(payload, { download = null } = {}) {
       element("td", { className: "rt-number", textContent: number }),
       ...cells.map((value, column) => {
         const text = shown(value, model.kinds[column]);
-        return element("td", {
+        const cell = element("td", {
           className: NUMERIC.has(model.kinds[column]) ? "rt-num" : "", textContent: text, title: text,
         });
+        if (column === model.probability && value !== null) {
+          cell.classList.add("rt-prob");
+          cell.style.setProperty("--bar", `${(Number(value) * 100).toFixed(1)}%`);
+        }
+        return cell;
       }))));
     const total = model.visibleCount;
     count.textContent = model.filterText
