@@ -298,7 +298,11 @@ language, in plain English. Given the predicates of an engine, a
 {language} query and the first rows of its answer, say in one or two
 sentences what the query returns: what a row of its answer is, and the
 conditions its rows satisfy. Describe only what the query computes,
-without guessing the question it was written for."""
+without guessing the question it was written for. In PROB[A // B] = p,
+as in r(PROB) :- A // B, // conditions: p is P(A | B), the probability
+of A given B: among the cases of B, the share that are cases of A (how
+likely a B is to be A), not the probability of both A and B, nor
+P(B | A) (how likely an A is to be B)."""
 
 VERIFICATION = """\
 You check whether a query answers a question. Given the engine and its
@@ -310,9 +314,13 @@ question's: a word of the question that a predicate stands for means
 that predicate, with the thresholds of its description (e.g. "mention"
 is the predicate mentions), and constants written as the engine stores
 them (e.g. coordinates converted to its grid) are the question's, and
-so is the form of answer its guidance asks for. Check each condition of
-the question in a short sentence, then end with a line `VERDICT: yes`
-or `VERDICT: no`."""
+so is the form of answer its guidance asks for. Judge the conditions
+from what the query returns, never from the text of its rows: the
+engine applied its definitions, so a title containing a word is no
+evidence that its study mentions it. "How likely is a study that does B to do A" asks for the
+conditional probability P(A | B); "both A and B" for the probability of
+both. Check each condition of the question in a short sentence, then
+end with a line `VERDICT: yes` or `VERDICT: no`."""
 
 
 def _engine_part(engine_description: str) -> str:

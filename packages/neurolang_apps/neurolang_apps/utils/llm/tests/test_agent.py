@@ -426,6 +426,13 @@ def test_react_verifies_the_final_answer(nl):
     assert "The engine's definitions are the" in (
         judgement["messages"][0]["content"]
     )
+    # Both read PROB[A // B] as P(A | B), and the rows' text is no
+    # evidence against the engine's definitions.
+    assert "// conditions: p is P(A | B)" in (
+        translation["messages"][0]["content"]
+    )
+    for text in ("never from the text of its rows", "conditional probability"):
+        assert text in judgement["messages"][0]["content"]
     assert "# Predicates\n- mentions(" in judged
     assert "The studies that mention the term pain." in judged
 
