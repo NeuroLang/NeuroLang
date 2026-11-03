@@ -285,6 +285,11 @@ change the settings:
 
     nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
 
+``.explain`` reads the last query that ran, whoever wrote it, in English: the
+model is given the query, in its language, with the engine's predicates,
+and answers with a sentence or two, printed after ``Reads as:``. It takes
+no argument, and does not run the query again.
+
 .. note::
 
    The question, the description of the engine's predicates, some of

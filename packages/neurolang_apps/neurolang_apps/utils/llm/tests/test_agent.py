@@ -516,3 +516,13 @@ def test_verification_reads_the_engine_description_and_guidance(nl):
     guidance = "# How to answer on this engine\nAnswer with probabilities."
     assert guidance in judgement["messages"][1]["content"]
     assert guidance not in translation["messages"][1]["content"]
+
+
+def test_explain_translates_a_query_into_english(nl):
+    react, _ = agent(nl, ReactAgent, ["The studies that mention pain."],
+                     language="datalog")
+    english = react.explain(PAIN_DATALOG)
+    assert english == "The studies that mention pain."
+    messages = react.client.requests[0]["messages"]
+    assert PAIN_DATALOG in messages[1]["content"]
+    assert "# Predicates\n- mentions(" in messages[1]["content"]

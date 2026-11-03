@@ -22,7 +22,7 @@ const [statusBox, out, input, question, history_] = ["status", "out", "input", "
 const llmForm = $("llm");
 const results = $("results");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
-const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("session-open")];
+const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
 loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
@@ -237,6 +237,7 @@ function useKey() {
   $("llm-summary").textContent = `${providers.find((p) => p.id === chosen.provider)?.label ?? chosen.provider}, key in use`;
   $("key").textContent = "API key ✓";
   $("ask-note").hidden = true;
+  $("explain").hidden = false;
 }
 
 function setProviders(list) {
@@ -477,6 +478,7 @@ $("mode").addEventListener("change", (event) => {
   run(`.mode ${event.target.value}`);
 });
 $("view").addEventListener("click", () => run(".view"));
+$("explain").addEventListener("click", () => run(".explain"));
 history_.addEventListener("change", () => {
   if (history_.value) {
     editor.value = history_.value;
@@ -512,6 +514,7 @@ $("llm-forget").addEventListener("click", () => {
   $("llm-summary").textContent = "bring your own API key";
   $("key").textContent = "API key";
   $("ask-note").hidden = false;
+  $("explain").hidden = true;
 });
 $("restart").addEventListener("click", () => start());
 $("stop").addEventListener("click", () => {
