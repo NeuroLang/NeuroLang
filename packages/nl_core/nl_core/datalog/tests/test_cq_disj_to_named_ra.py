@@ -349,6 +349,26 @@ def test_extended_projection_algebraic_expression():
     )
 
 
+def test_nested_constant_expression_is_evaluated():
+    """``y == 2 * (3 * 4)`` is ``y == 24``: the constant expression is not
+    a relation."""
+    x = S_("x")
+    y = S_("y")
+    R1 = S_("R1")
+    fa = R1(x, y)
+    nested = C_(mul)(C_(2), C_(mul)(C_(3), C_(4)))
+    exp = Conjunction((fa, C_(eq)(nested, y)))
+
+    res = TranslateToNamedRA().walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+    )
+    assert res == Selection(
+        fa_trans, Constant(eq)(Constant(ColumnStr("y")), Constant(24))
+    )
+
+
 @pytest.mark.parametrize("swap", [False, True])
 def test_equality_expression_with_bound_variable_is_selection(swap):
     x = S_("x")

@@ -112,7 +112,8 @@ that mention *working memory* itself)::
 
     ans(s) :- mentions(s, 'working memory')
 
-and the voxels they report, to map the concept with all its sub-concepts::
+and the voxels they activate, within 3 voxels of their peaks, to map the
+concept with all its sub-concepts::
 
     ans(i, j, k, s) :- rdfs:label(c, 'Cognitive control'),
         cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t),

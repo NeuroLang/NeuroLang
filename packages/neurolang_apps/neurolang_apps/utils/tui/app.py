@@ -38,7 +38,7 @@ from .editing import session_options
 from .interrupt import call_interruptibly
 from .provenance import column_sorts
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import open_session_scope, record_squall_rules
+from .session import open_session_scope, record_written_rules
 from .submission import Submission, submission_outline
 from .statements import (
     is_comment,
@@ -166,7 +166,7 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
-        self.squall_rules: dict = {}
+        self.written_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
@@ -395,8 +395,8 @@ class InteractiveTuiApp:
         """
         with submission:
             result = self._execute_noting_warnings(program)
-            if self.settings.squall and submission.keep:
-                record_squall_rules(self, program)
+            if submission.keep:
+                record_written_rules(self, program)
         return result
 
     def _note_discarded(self, submission: Submission) -> None:

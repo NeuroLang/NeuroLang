@@ -83,7 +83,8 @@ of the previous section, as predicates ``(term, voxel, ratio…)``, and they are
 listed by ``--list-predicates``.  Their definitions are the rules of the
 next section, with three differences: a term is in a study when its TF-IDF is
 above 0.001 (``term_in_study``), a study activates the voxels of the whole
-brain within 6 mm of its peaks (``activated``; ``brain_mask``), and the
+brain within 3 voxels of its peaks, 6 mm on the 2 mm grid (``activated``,
+also named ``reports``; ``brain_mask``), and the
 average of the uniformity test is over the brain rather than over
 ``cortical_mask``, so that the subcortical structures, the cerebellum and
 the hippocampus are in the map; ``selected_voxel`` is the uniform choice over
@@ -93,14 +94,48 @@ grid.  In the ``neurostore`` engine the terms are those of
 :ref:`its TF-IDF <tutorial-cognitive-atlas>`.  A probabilistic query needs
 the term as a constant: without one the rules cannot be rewritten for it.
 
+The maps Neurosynth publishes are not the ratios but the :math:`z`-scores of
+the tests, and they are predefined too, as ``association_z`` and
+``uniformity_z``::
+
+    ans(i, j, k, z) :- association_z('pain', i, j, k, z)
+    ans(i, j, k, z) :- uniformity_z('pain', i, j, k, z)
+
+A :math:`\chi^2` with one degree of freedom is the square of a standard
+normal, so the :math:`z`-score is the square root of the statistic of the
+previous section, with the sign of the effect:
+
+.. math::
+
+   z_\text{association} = (P(A_v \mid T) - P(A_v))
+       \sqrt{\frac{N\, P(T)}{P(A_v)\, P(\lnot A_v)\, P(\lnot T)}},
+   \qquad
+   z_\text{uniformity} = (P(A_v \mid T) - \bar p)
+       \sqrt{\frac{N\, P(T)}{\bar p\, (1 - \bar p)}},
+
+:math:`N` being ``n_studies``.  Neurosynth keeps the voxels passing a
+false discovery rate of 0.01; the engine gives the :math:`z` of every voxel
+which a study of the term activates, without correcting for the multiple
+comparisons, and leaves out the others, whose :math:`z` is negative.  For *prefrontal*, on the 2 mm grid, ``association_z`` takes 15
+seconds and ``uniformity_z`` 24; the 5% of the voxels of the brain with the
+largest ``association_z`` overlap those of Neurosynth's association map with
+a Dice coefficient of 0.824, as the :math:`z` recomputed in
+:ref:`neurosynth-mutual-information` does.
+
+To see the rules computing a predicate, ``.datalog lift`` in the REPL prints
+them, after the rules of the predicates they use, as the engine defines
+them.
+
 Free-text queries
 -----------------
 
 The same ratios exist for a free text instead of a term, with the suffix
 ``_llm``: ``uniformity_llm``, ``lift_llm``, ``relative_risk_llm`` and
-``ratios_llm``.  The studies of the "term" are then the 5% of the studies
-closest to the text, by the cosine similarity of the SPECTER2 embeddings of
-their title and abstract to the text (see :doc:`tutorial_text_embeddings`)::
+``ratios_llm``, and so do ``association_z_llm``, ``uniformity_z_llm`` and
+``ale_llm`` (see :ref:`neurosynth-ale`).  The studies of the "term" are then
+the 5% of the studies closest to the text, by the cosine similarity of the
+SPECTER2 embeddings of their title and abstract to the text (see
+:doc:`tutorial_text_embeddings`)::
 
     ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)
 
@@ -340,6 +375,76 @@ for a prior of 0.5,
 
 which ranks the voxels as :math:`I_v` does.
 
+.. _neurosynth-ale:
+
+Activation likelihood estimation
+--------------------------------
+
+The activation likelihood estimate (ALE) [eickhoff2012]_ of a set of
+studies at a voxel is the probability that one of them activates it, the
+studies activating the voxels independently.  Each study activates a voxel
+with the probability that its nearest peak lies in it, the *modelled
+activation* of the voxel [turkeltaub2012]_: a peak is spread as a
+three-dimensional Gaussian, the probability of the voxel being the volume of
+the voxel times the density of the Gaussian at the distance :math:`d` of
+the peak,
+
+.. math::
+
+   MA_s(v) = \max_{\text{peaks } f \text{ of } s}
+       \frac{V}{(2 \pi \sigma^2)^{3/2}}
+       \exp\left(-\frac{d(v, f)^2}{2 \sigma^2}\right),
+   \qquad
+   ALE(v) = 1 - \prod_s \left(1 - MA_s(v)\right).
+
+This is a probabilistic program: ``ma(i, j, k, s)`` is a probabilistic
+fact of probability :math:`MA_s(v)` for each study and voxel, and the ALE
+is the probability of the existence of a study, among those of the term,
+activating the voxel::
+
+    ma_value(i, j, k, s, max(v)) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & voxel_size(r) & (e == EUCLIDEAN(i, j, k, i1, j1, k1)) & (e <= 3) & (d == r * e) & (v == r ** 3 * exp(-d * d / (2 * 4.246609 ** 2)) / (2 * 3.14159265 * 4.246609 ** 2) ** 1.5)
+    ma(i, j, k, s) :: v :- ma_value(i, j, k, s, v)
+    ale(t, i, j, k, PROB) :- ma(i, j, k, s) & term_in_study(s, t)
+
+These are the rules of the engines, so that a query is one line::
+
+    ans(i, j, k, a) :- ale('reading', i, j, k, a)
+
+and the ALE of any studies is a rule of one's own over ``ma``, such as those
+of the 5% closest to a text, ``ale_llm``::
+
+    ale_of_mine(i, j, k, PROB) :- ma(i, j, k, s) & mentions(s, 'reading') & mentions(s, 'children')
+
+Notes:
+
+- The width of the Gaussian depends, in GingerALE, on the number of
+  subjects of each study [eickhoff2009]_, which Neurosynth does not record:
+  the engines use one full width at half maximum of 10 mm,
+  :math:`\sigma = 4.25` mm, that of a study of about 20 subjects.
+- The Gaussian is cut 3 voxels away from the peak, as ``activated`` is:
+  6 mm on the 2 mm grid, 1.4 :math:`\sigma`, the grid to use for the ALE,
+  but 3 mm on the default 1 mm grid.  A wider cut is a rule of one's own,
+  with ``(e <= 5)``, at the price of the distances to more voxels.
+- The significance of the ALE, against random locations of the peaks, is not
+  computed: the map ranks the voxels.
+
+On the 2 mm grid the ALE of a term takes 70 to 95 seconds, whether it has
+521 studies (*reading*) or 76 (*dyslexia*): most of the time computes
+``ma`` for every study.  The values agree, within :math:`10^{-9}`, with those
+computed directly from the formula above.
+
+.. [eickhoff2009] S. B. Eickhoff, A. R. Laird, C. Grefkes, L. E. Wang, K.
+   Zilles and P. T. Fox. Coordinate-based activation likelihood estimation
+   meta-analysis of neuroimaging data: a random-effects approach based on
+   empirical estimates of spatial uncertainty. *Human Brain Mapping*
+   30(9):2907–2926, 2009.
+.. [eickhoff2012] S. B. Eickhoff, D. Bzdok, A. R. Laird, F. Kurth and P. T.
+   Fox. Activation likelihood estimation meta-analysis revisited.
+   *NeuroImage* 59(3):2349–2361, 2012.
+.. [turkeltaub2012] P. E. Turkeltaub, S. B. Eickhoff, A. R. Laird, M. Fox,
+   M. Wiener and P. Fox. Minimizing within-experiment and within-group
+   effects in activation likelihood estimation meta-analyses. *Human Brain
+   Mapping* 33(1):1–13, 2012.
 .. [yarkoni2011] T. Yarkoni, R. A. Poldrack, T. E. Nichols, D. C. Van
    Essen and T. D. Wager. Large-scale automated synthesis of human
    functional neuroimaging data. *Nature Methods* 8(8):665–670, 2011.

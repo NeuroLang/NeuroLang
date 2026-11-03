@@ -14,6 +14,7 @@ Registers the following predicates:
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
 * ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
+* ``voxel_size(mm)`` — the size of the voxels of that grid, in millimetres.
 * ``brain_mask(i, j, k)`` — the voxels of the MNI template grid inside the
   MNI152 brain mask (whole brain, subcortical structures included).
 * ``selected_voxel(i, j, k)`` — uniform probabilistic choice over the voxels
@@ -27,7 +28,8 @@ Registers the following predicates:
   NeuroSynth metadata.
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
-``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
+``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``, the
+voxels within 3 voxels of the peaks of a study.
 
 Predicate names are lowercase to match SQUALL's case-folding convention
 (see ``intransitive`` in ``squall_syntax_lark.py``).
@@ -132,6 +134,10 @@ def register_tables(
 
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(peak_mni(peak_data, mask), name="peak_mni")
+    # The distances between voxels are in voxels: this converts them to mm.
+    nl.add_tuple_set(
+        [(float(abs(mask.affine[0, 0])),)], name="voxel_size"
+    )
     nl.add_tuple_set(study_ids, name="study")
     nl.add_tuple_set(term_data, name="term_in_study_tfidf")
     # The vocabulary, stored once rather than derived from the 1M-row

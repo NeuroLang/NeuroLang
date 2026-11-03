@@ -20,6 +20,7 @@ import shlex
 import traceback
 import warnings
 from contextlib import contextmanager
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,7 @@ from rich.table import Table
 
 from nl_core.datalog import Union as DatalogUnion
 from nl_core.datalog.basic_representation import UnionOfConjunctiveQueries
+from nl_core.datalog.expression_processing import extract_logic_atoms
 from nl_core.datalog.expressions import AdornedSymbol
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Query, Symbol
@@ -200,7 +202,7 @@ def _drop_all_rules(app, name: str, rules: tuple) -> None:
     """Remove the session's rules of the predicate *name*."""
     del app._nl.program_ir.symbol_table[Symbol(name)]
     _drop_helpers(app, name)
-    app.squall_rules.pop(name, None)
+    app.written_rules.pop(name, None)
     kept = len(_engine_rules(app, name))
     app.console.print(
         _removal_message(name, "rule", len(rules), kept), style="green",
@@ -221,7 +223,7 @@ def _drop_rule(app, name: str, rules: tuple, number: int) -> None:
         return
     remaining = rules[:number - 1] + rules[number:]
     # its rules as compiled are not numbered as those SQUALL translated
-    app.squall_rules.pop(name, None)
+    app.written_rules.pop(name, None)
     symbol_table = app._nl.program_ir.symbol_table
     if remaining:
         symbol = Symbol(name).cast(UnionOfConjunctiveQueries)
@@ -336,7 +338,7 @@ def cmd_clear(app, arg: str) -> None:
     app._nl.program_ir.pop_scope()
     open_session_scope(app._nl)
     app.loaded_relations.clear()
-    app.squall_rules.clear()
+    app.written_rules.clear()
     for line in lines or ["nothing to clear"]:
         app.console.print(line, style="green", markup=False)
 
@@ -646,42 +648,115 @@ def _parsed_rules(parsed) -> tuple:
     return tuple(f for f in formulas if isinstance(f, Implication))
 
 
-def record_squall_rules(app, program: str) -> None:
+def _predicate_name(atom):
+    """Return the name of the predicate of *atom*, or of the head of a
+    probabilistic rule, ``p :: head``; None if it is not a symbol's."""
+    atom = getattr(atom, "body", atom)
+    return getattr(atom.functor, "name", None)
+
+
+def _rules_by_name(rules) -> dict:
+    """Return the lists of the *rules* by the name of their predicate."""
+    by_name = {}
+    for rule in rules:
+        by_name.setdefault(_predicate_name(rule.consequent), []).append(rule)
+    return by_name
+
+
+def record_written_rules(app, program: str) -> None:
     """
-    Keep the Datalog rules of the SQUALL *program*, which just ran.
+    Keep the rules of the *program*, which just ran, as written.
 
     They are kept by predicate name in the application's
-    ``squall_rules``, as SQUALL translated them, for ``.datalog
-    PREDICATE``: NeuroLang compiles some of them further, for instance a
-    conditional probability into the predicate and two helpers.
+    ``written_rules``, for ``.datalog PREDICATE``, the rules of a SQUALL
+    program as SQUALL translated them: NeuroLang compiles some rules
+    further, for instance a conditional probability into the predicate
+    and two helpers, or a bounded ``EUCLIDEAN`` distance into a relation.
     """
-    if "define" not in program.lower():
+    if not app.settings.squall:
+        parsed = app._nl.datalog_parser(program)
+    elif "define" in program.lower():
+        parsed = squall_parser(program)
+    else:
         return
-    for rule in _parsed_rules(squall_parser(program)):
-        name = rule.consequent.functor.name
-        app.squall_rules.setdefault(name, []).append(rule)
+    for name, rules in _rules_by_name(_parsed_rules(parsed)).items():
+        app.written_rules.setdefault(name, []).extend(rules)
+
+
+def _engine_rules_as_written(app) -> dict:
+    """
+    Return the rules of the engine's ``datalog_init`` by predicate name,
+    none for an engine the registry does not know.
+    """
+    try:
+        program = engine_registry.get_engine_config(
+            app.settings.engine_name
+        ).get("datalog_init")
+    except ValueError:
+        return {}
+    if not program:
+        return {}
+    return _rules_by_name(_parsed_rules(app._nl.datalog_parser(program)))
+
+
+def _dependency_order(rules) -> list:
+    """
+    Return the *rules* ordered so that those of a predicate come after
+    those of the predicates they use, or as they are if they are mutually
+    recursive.
+    """
+    graph = {_predicate_name(rule.consequent): set() for rule in rules}
+    for rule in rules:
+        head = _predicate_name(rule.consequent)
+        graph[head] |= {
+            _predicate_name(atom)
+            for atom in extract_logic_atoms(rule.antecedent)
+        } & graph.keys() - {head}
+    try:
+        order = list(TopologicalSorter(graph).static_order())
+    except CycleError:
+        return list(rules)
+    return sorted(
+        rules, key=lambda rule: order.index(_predicate_name(rule.consequent))
+    )
 
 
 def _print_datalog_of(app, name: str) -> None:
     """
-    Print the Datalog rules of the predicate *name*.
+    Print the Datalog rules of the predicate *name*, after those of the
+    predicates they use, each once: the program computing it.
 
-    A predicate defined in SQUALL during the session has its rules as
-    SQUALL translated them; any other has its rules as the engine holds
-    them.
+    The rules are as written, in the engine's ``datalog_init`` or in the
+    session, those of SQUALL as it translated them (see
+    :func:`record_written_rules`); the others as the engine holds them.
     """
-    rules = app.squall_rules.get(name)
-    if rules is None:
-        symbol_table = app._nl.program_ir.symbol_table
-        value = symbol_table.get(Symbol(name))
-        if not isinstance(value, DatalogUnion):
-            _warn(app, f"{name!r} is not an IDB predicate.")
-            return
-        rules = value.formulas
+    symbol_table = app._nl.program_ir.symbol_table
+    if not isinstance(symbol_table.get(Symbol(name)), DatalogUnion):
+        _warn(app, f"{name!r} is not an IDB predicate.")
+        return
+    engine = _engine_rules_as_written(app)
+    rules, to_visit, visited = {}, [name], set()
+    while to_visit:
+        predicate = to_visit.pop()
+        if predicate in visited:
+            continue
+        visited.add(predicate)
+        value = symbol_table.get(Symbol(predicate))
+        written = engine.get(predicate, []) + app.written_rules.get(
+            predicate, []
+        )
+        if not written and isinstance(value, DatalogUnion):
+            written = value.formulas
+        for rule in written:
+            rules.setdefault(rule)
+            to_visit.extend(
+                _predicate_name(atom)
+                for atom in extract_logic_atoms(rule.antecedent)
+            )
     printer = DatalogPrettyPrinter()
     app.console.print(
-        "\n\n".join(printer.walk(rule) for rule in rules), markup=False,
-        highlight=False, soft_wrap=True,
+        "\n\n".join(printer.walk(rule) for rule in _dependency_order(rules)),
+        markup=False, highlight=False, soft_wrap=True,
     )
 
 
@@ -699,7 +774,7 @@ def _print_datalog_program(app, program: str) -> None:
 
 @command(
     ".datalog", "Show the Datalog program of the last query, translated "
-    "from SQUALL, or the Datalog rules of a predicate",
+    "from SQUALL, or the rules of a predicate and of those it uses",
     ".datalog [PREDICATE]",
 )
 def cmd_datalog(app, arg: str) -> None:

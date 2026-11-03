@@ -419,7 +419,7 @@ def distance_variable_form(implication):
 
 def _mentions_euclidean(formula, names=_EUCLIDEAN_NAMES):
     """
-    Return whether *formula* applies a Euclidean distance at its top level.
+    Return whether *formula* applies a Euclidean distance in its arguments.
 
     Parameters
     ----------
@@ -431,12 +431,15 @@ def _mentions_euclidean(formula, names=_EUCLIDEAN_NAMES):
     Returns
     -------
     bool
-        Whether an argument of *formula* applies one of the functions.
+        Whether an argument of *formula*, or of a function in them, such
+        as ``r * EUCLIDEAN(...)``, applies one of the functions.
     """
     return isinstance(formula, FunctionApplication) and any(
         isinstance(arg, FunctionApplication)
-        and isinstance(arg.functor, Symbol)
-        and arg.functor.name in names
+        and (
+            isinstance(arg.functor, Symbol) and arg.functor.name in names
+            or _mentions_euclidean(arg, names)
+        )
         for arg in formula.args
     )
 

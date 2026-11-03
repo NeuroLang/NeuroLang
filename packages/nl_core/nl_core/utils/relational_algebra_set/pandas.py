@@ -56,6 +56,12 @@ _COMBINED_REDUCTIONS = {
 # pandas reductions computing the same on columns of numbers.
 _BUILTIN_REDUCTIONS = {sum: "sum", max: "max", min: "min"}
 
+# The same for numpy's, those of NeuroLang's aggregations, which pandas 3
+# runs per group in Python too.
+_NUMPY_REDUCTIONS = {
+    np.sum: "sum", np.max: "max", np.min: "min", np.mean: "mean",
+}
+
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
@@ -1226,18 +1232,19 @@ class NamedRelationalAlgebraFrozenSet(
         """
         Return the pandas reduction computing *fun* on *column*, or *fun*.
 
-        Python's ``sum``, ``max`` and ``min`` are pandas' on a column of
-        numbers without missing values (Python's give NaN, or an order
-        dependent result, on one with them), and ``len`` is the size of
-        each group.
+        Python's and numpy's ``sum``, ``max`` and ``min``, and numpy's
+        ``mean``, are pandas' on a column of numbers without missing values
+        (theirs give NaN, or an order dependent result, on one with them),
+        and ``len`` is the size of each group.
         """
         if fun is len:
             return "size"
-        if fun not in _BUILTIN_REDUCTIONS:
+        reductions = {**_BUILTIN_REDUCTIONS, **_NUMPY_REDUCTIONS}
+        if fun not in reductions:
             return fun
         values = self._container[column]
         if values.dtype.kind in "iuf" and not values.hasnans:
-            return _BUILTIN_REDUCTIONS[fun]
+            return reductions[fun]
         return fun
 
     def extended_projection(self, eval_expressions):

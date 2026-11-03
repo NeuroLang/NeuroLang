@@ -48,6 +48,18 @@ Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
 
 
+def _is_constant_expression(expression):
+    """Whether *expression* is a constant, not a column, or a built-in
+    function of constant expressions."""
+    if isinstance(expression, Constant):
+        return not issubclass(expression.type, (ColumnInt, ColumnStr))
+    return (
+        isinstance(expression, FunctionApplication)
+        and isinstance(expression.functor, Constant)
+        and all(_is_constant_expression(arg) for arg in expression.args)
+    )
+
+
 class TranslateToNamedRA(ExpressionBasicEvaluator):
     """Partial implementation of algorithm 5.4.8 from [1]_.
 
@@ -160,6 +172,19 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     )
     def translate_builtin_fa_constants(self, expression):
         return ExpressionBasicEvaluator.evaluate_function(self, expression)
+
+    @add_match(
+        FunctionApplication(Builtin_pattern, ...),
+        lambda exp: _is_constant_expression(exp) and any(
+            isinstance(arg, FunctionApplication) for arg in exp.args
+        ),
+    )
+    def translate_builtin_fa_constant_arguments(self, expression):
+        """Evaluate a built-in function of constant expressions, such as
+        ``2 * 3.0 ** 2``, its arguments first."""
+        return self.walk(FunctionApplication(
+            expression.functor, tuple(self.walk(arg) for arg in expression.args)
+        ))
 
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
