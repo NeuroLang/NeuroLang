@@ -17,10 +17,13 @@ from typing import Optional
 
 from pandas.api.types import is_object_dtype, is_string_dtype
 
+from nl_expr.exceptions import UnboundVariablesError
 from nl_expr.expressions import Symbol
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import result_to_dataframe
 from neurolang_apps.utils.predicate_catalog import predicate_catalog
+
+from .examples import load_examples
 
 # Kinds of the predicates searched by search_values when none is given.
 SEARCHED_KINDS = frozenset({"stored", "loaded", "probabilistic"})
@@ -237,7 +240,27 @@ class EngineContext:
         text = self.predicate_line(info, self._size(name))
         if info.kind == "function":
             return text
-        return f"{text}\n{self.sample_rows(name, rows)}"
+        try:
+            return f"{text}\n{self.sample_rows(name, rows)}"
+        except UnboundVariablesError:
+            return f"{text}\n{self._bound_usage(name)}"
+
+    def _bound_usage(self, name: str) -> str:
+        """
+        Tell that the rows of the rule *name* are only computed for some
+        arguments given, with an example query using it if one has.
+        """
+        text = (
+            "Its rows are not listed: a query must give some of its "
+            "arguments, e.g. a text as a constant or a variable bound by "
+            "another atom."
+        )
+        used = re.compile(rf"(?<![\w:]){re.escape(name)}\(")
+        for example in load_examples(self.engine_name):
+            query = example.query("datalog")
+            if query and used.search(query):
+                return f"{text} For example:\n{query.strip()}"
+        return text
 
     def sample_rows(self, name: str, rows: int = 5) -> str:
         """Return the first *rows* rows of the predicate *name* as text."""

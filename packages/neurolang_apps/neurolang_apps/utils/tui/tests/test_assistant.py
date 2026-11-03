@@ -331,6 +331,55 @@ def test_answers_are_shared_when_on(app, shared):
     assert f"Shared as {2:032x}" in text and "unsure [comment]" in text
 
 
+def test_failures_are_shared(app, shared):
+    from neurolang_apps.utils.llm import LLMError
+
+    wrong = "```datalog\nans(s) :- mention(s, 'pain')\n```"
+    script(app, wrong, wrong)
+    app._run_line(".ask Which studies mention pain?")
+
+    class Failing:
+        def complete(self, *args, **kwargs):
+            raise LLMError("first: HTTP 401: bad key")
+
+    app.assistant.client = Failing()
+    app._run_line(".ask Which studies?")
+    assert app.failed and "HTTP 401: bad key" in output(app)
+    assert [record["valid"] for _, record in shared] == [False, False]
+    assert shared[0][1]["query"] == "ans(s) :- mention(s, 'pain')"
+    assert shared[1][1]["error"] == "first: HTTP 401: bad key"
+
+
+def test_rate_and_refine_on_grist(app, monkeypatch):
+    import httpx
+
+    from neurolang_apps.utils.llm.feedback import GristFeedbackClient
+
+    monkeypatch.setenv("GRIST_API_KEY", "k")
+    sent = []
+
+    def handle(request):
+        sent.append((request.method, json.loads(request.content)))
+        return httpx.Response(200, json={"records": [{"id": 3}]})
+    app.assistant._feedback = GristFeedbackClient(
+        "https://grist.test", "doc1", say=app.console.print,
+        transport=httpx.MockTransport(handle),
+    )
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line(".rate bad misses chronic pain")
+    app._run_line(".refine")
+    app._run_line("ans(s) :- mentions(s, 'fear')")
+    app._run_line(".refine submit fear")
+    assert not app.failed and "answer 3 rated incorrect" in output(app)
+    assert [method for method, _ in sent] == ["POST", "PATCH", "PATCH"]
+    assert [body["records"][0]["fields"] for _, body in sent[1:]] == [
+        {"verdict": "bad", "comment": "misses chronic pain"},
+        {"verdict": "bad", "comment": "fear",
+         "corrected_query": "ans(s) :- mentions(s, 'fear')"},
+    ]
+
+
 def test_rating_needs_sharing_on(app):
     script(app, ASKED)
     app._run_line(".ask Which studies mention pain?")
@@ -544,3 +593,43 @@ def test_ask_shows_the_query_read_back(app):
     assert "→ verify()" in text
     assert "Reads back as: Every study again." in text
     assert "may not answer the question: Still not." in text
+
+
+def test_explain_reads_the_last_query_in_english(app):
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    client = script(app, "The studies that mention the term pain.")
+    app._run_line(".explain")
+    assert not app.failed
+    assert "Reads as: The studies that mention the term pain." in output(app)
+    request = client.requests[0]["messages"][1]["content"]
+    assert "ans(s) :- mentions(s, 'pain')" in request
+    assert "Datalog" in client.requests[0]["messages"][0]["content"]
+
+
+def test_explain_follows_the_language_of_the_query(app):
+    app.settings.squall = True
+    app._run_line(PAIN)
+    client = script(app, "Every study that mentions pain.")
+    app._run_line(".explain")
+    assert "SQUALL" in client.requests[0]["messages"][0]["content"]
+    assert "Reads as: Every study that mentions pain." in output(app)
+
+
+def test_explain_without_a_query_or_with_an_arg_says_the_usage(app):
+    app._run_line(".explain")
+    assert app.failed and "Run a query first" in output(app)
+    app._run_line(".explain ans(s) :- study(s)")
+    assert "Usage: .explain" in output(app)
+
+
+def test_explain_reports_provider_errors(app):
+    from neurolang_apps.utils.llm import LLMError
+
+    class Failing:
+        def complete(self, *args, **kwargs):
+            raise LLMError("first: HTTP 401: bad key")
+
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    app.assistant.client = Failing()
+    app._run_line(".explain")
+    assert app.failed and "HTTP 401: bad key" in output(app)

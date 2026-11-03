@@ -115,6 +115,15 @@ def test_convert_instance_to_map():
     assert set_instance.elements is map_instance.elements
 
 
+def test_union_with_empty_instance_is_not_empty():
+    empty = MapInstance()
+    non_empty = MapInstance({Q: {(C_(2),)}})
+    # Both know whether they are empty before the union.
+    assert empty.is_empty() and not non_empty.is_empty()
+    assert not (empty | non_empty).is_empty()
+    assert not (non_empty | empty).is_empty()
+
+
 def test_instance_union():
     elements1 = {
         Q: frozenset({(C_(2), ), (C_(3), )}),

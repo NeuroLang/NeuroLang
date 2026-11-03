@@ -122,3 +122,77 @@ def test_rate_posts_the_corrected_query():
     )
     with pytest.raises(FeedbackError):
         client.rate("c" * 32, "correct")
+
+
+GRIST = dict(
+    enabled=True, url="https://grist.test", grist_doc="doc1", user="ann"
+)
+RECORDS = "https://grist.test/api/docs/doc1/tables/Answers/records"
+
+
+def grist(monkeypatch, said=None):
+    monkeypatch.setenv("GRIST_API_KEY", "grist-secret")
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"records": [{"id": 7}]})
+    client = feedback_client(
+        config(**GRIST), (said if said is not None else []).append,
+        httpx.MockTransport(handle),
+    )
+    return requests, client
+
+
+def test_grist_shares_a_row(monkeypatch):
+    said = []
+    requests, client = grist(monkeypatch, said)
+    assert client.share("Pain?", result(), PROVIDER, "react", "ns") == "7"
+    (request,) = requests
+    assert request.method == "POST" and str(request.url) == RECORDS
+    assert request.headers["Authorization"] == "Bearer grist-secret"
+    (row,) = json.loads(request.content)["records"]
+    fields = row["fields"]
+    assert fields["question"] == "Pain?" and fields["valid"] is True
+    assert json.loads(fields["steps"])[0]["action"] == "run_query"
+    assert isinstance(fields["time"], float) and fields["user"] == "ann"
+    assert "https://grist.test/doc1" in said[0]
+    assert not any("grist-secret" in text for text in said)
+
+
+def test_grist_shares_failures(monkeypatch):
+    requests, client = grist(monkeypatch)
+    failed = AgentResult(language="datalog", error="HTTP 429")
+    assert client.share("Pain?", failed, PROVIDER, "react") == "7"
+    fields = json.loads(requests[0].content)["records"][0]["fields"]
+    assert fields["valid"] is False and fields["error"] == "HTTP 429"
+    assert fields["query"] == "" and fields["steps"] == "[]"
+
+
+def test_grist_rate_patches_the_row(monkeypatch):
+    requests, client = grist(monkeypatch)
+    assert client.rate("7", "incorrect", "too broad") == "7"
+    client.rate("7", "unsure", "", "ans(s) :- study(s)", "s\n1")
+    assert [r.method for r in requests] == ["PATCH"] * 2
+    assert {str(r.url) for r in requests} == {RECORDS}
+    assert [json.loads(r.content) for r in requests] == [
+        {"records": [{"id": 7, "fields": {
+            "verdict": "bad", "comment": "too broad"}}]},
+        {"records": [{"id": 7, "fields": {
+            "verdict": "unsure", "comment": "",
+            "corrected_query": "ans(s) :- study(s)"}}]},
+    ]
+    with pytest.raises(FeedbackError, match="not a row"):
+        client.rate("a" * 32, "correct")
+
+
+def test_grist_without_key_warns_once(monkeypatch):
+    said = []
+    requests, client = grist(monkeypatch, said)
+    monkeypatch.delenv("GRIST_API_KEY")
+    for _ in range(2):
+        assert client.share("Q?", result(), PROVIDER, "icl") is None
+    assert not requests
+    assert len(said) == 2 and "GRIST_API_KEY is not set" in said[1]
+    with pytest.raises(FeedbackError, match="GRIST_API_KEY"):
+        client.rate("7", "correct")

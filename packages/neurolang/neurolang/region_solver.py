@@ -90,6 +90,7 @@ class RegionSolver(PatternWalker[Region]):
     def function_regexp(
         self, regexp: typing.Text
     ) -> typing.AbstractSet[Region]:
+        """The regions whose symbol name matches the regular expression."""
         regions = []
         for k in self.symbol_table.symbols_by_type(Region):
             if re.search(regexp, k.name):

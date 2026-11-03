@@ -35,6 +35,7 @@ from neurolang_apps.utils import engine_registry
 
 from . import brain_viewer
 from .commands import HELP_TOPICS, command
+from .provenance import COMPUTED
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 
@@ -479,6 +480,14 @@ def _column_sort(df: pd.DataFrame, column, sorts: dict, provenance):
     return sorts.get(column_sort.sort) if column_sort else None
 
 
+def _is_computed(df: pd.DataFrame, column, provenance) -> bool:
+    """Whether the query computes *column* of *df* (see :data:`COMPUTED`)."""
+    if provenance is None or len(provenance) != len(df.columns):
+        return False
+    column_sort = provenance[list(df.columns).index(column)]
+    return column_sort is not None and column_sort.sort == COMPUTED
+
+
 def _measure_columns(
     df: pd.DataFrame, columns: list, sorts: dict, provenance=None
 ) -> list:
@@ -496,7 +505,10 @@ def _measure_columns(
     measures = []
     for c in columns:
         sort = _column_sort(df, c, sorts, provenance)
-        entity = c in entities if sort is None else sort.type != "float"
+        if _is_computed(df, c, provenance):
+            entity = False
+        else:
+            entity = c in entities if sort is None else sort.type != "float"
         if not entity and pd.api.types.is_numeric_dtype(df[c]):
             measures.append(c)
     return measures

@@ -207,6 +207,12 @@ def test_encoder_import_error(monkeypatch):
         te.Specter2Encoder().encode_query("reading")
 
 
+def test_encoder_import_error_says_the_cause(monkeypatch):
+    monkeypatch.setitem(sys.modules, "adapters", None)
+    with pytest.raises(ImportError, match="\\(\\w*Error: "):
+        te.Specter2Encoder().encode_query("reading")
+
+
 def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
     """On macOS a forked child, as the assistant checks queries in, cannot
     load a model nor use MPS: before the assistant forks, the encoders with
@@ -262,6 +268,12 @@ def _engine(frontend, index):
     nl.add_tuple_set(STUDIES, name="study")
     nl.add_symbol(te.make_similarity_function(index), name="query_similarity")
     return nl
+
+
+def test_similarity_function_wants_the_text_first(index):
+    similarity = te.make_similarity_function(index)
+    with pytest.raises(TypeError, match="query text first"):
+        similarity(3, "reading")
 
 
 def test_similarity_function():

@@ -2,6 +2,7 @@
 // filter, page through, copy and download. The rows are the model's
 // (table_model.js).
 import { TableModel, cellText } from "./table_model.js";
+import { citation, doiUrl, pmcUrl, pubmedUrl, studyColumns } from "./study_links.js";
 
 const PAGE_SIZES = [20, 50, 100, 500];
 const NUMERIC = new Set(["int", "float"]);
@@ -66,33 +67,78 @@ export function imageButtons(payloads, download) {
   return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
 }
 
-export function renderTable(payload, { download = null } = {}) {
-  const model = new TableModel(payload);
-  let pageIndex = 0;
-  let pageSize = PAGE_SIZES[0];
+// A link that opens in a new tab.
+const outside = (href, text, title, className = "") =>
+  element("a", { href, target: "_blank", rel: "noopener", textContent: text, title, className });
 
+// The bar of controls of a table: its title and count, the filter, the size and the pages, the copy and
+// the downloads, and the buttons of the queries that go on from it. They are returned for the table to listen to.
+function controlBar(payload, { download, followUps, use }) {
   const title = payload.title ? element("strong", { textContent: payload.title }) : "";
   const count = element("span", { className: "rt-count" });
   const filter = element("input", {
     type: "search", className: "rt-filter", spellcheck: false,
-    placeholder: "Filter rows (name:text for one column)",
+    placeholder: "Filter rows", title: "Words in any column; name:text for one column",
   });
   filter.setAttribute("aria-label", "Filter the rows");
   const size = element("select", { className: "rt-size" },
-    ...PAGE_SIZES.map((n) => element("option", { value: n, textContent: `${n} rows` })));
+    ...PAGE_SIZES.map((n) => element("option", { value: n, textContent: `Show ${n}` })));
   size.setAttribute("aria-label", "Rows per page");
   const previous = element("button", { type: "button", textContent: "‹", title: "Previous page" });
+  previous.setAttribute("aria-label", "Previous page");
   const next = element("button", { type: "button", textContent: "›", title: "Next page" });
+  next.setAttribute("aria-label", "Next page");
   const range = element("span", { className: "rt-range" });
-  const copy = element("button", { type: "button", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
+  const copy = element("button", { type: "button", className: "rt-copy", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
   const csv = element("button", { type: "button", textContent: "CSV", title: "Download the rows shown as CSV" });
+  const goOn = (followUps && use ? followUps(payload) : []).map(({ label, title: hint, text }) =>
+    element("button", { type: "button", textContent: label, title: hint, onclick: () => use(text) }));
+  const menu = download && payload.block !== undefined ? [downloadMenu(payload, download)] : [];
+  const bar = element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv, ...goOn, ...menu);
+  return { bar, count, filter, size, previous, range, next, copy, csv };
+}
+
+// A study: its PubMed record, and its DOI and PubMed Central record when they are known.
+function studyCell(value, record = {}, found = {}) {
+  const doi = record.doi ?? found.doi;
+  const text = citation(record);
+  return element("td", { className: "rt-num rt-study", title: text },
+    outside(pubmedUrl(value), String(value), text || "The PubMed record of the study"),
+    ...(doi ? [outside(doiUrl(doi), "DOI", `DOI ${doi}`, "rt-ref")] : []),
+    ...(found.pmcid ? [outside(pmcUrl(found.pmcid), "PMC", `${found.pmcid}, found with Europe PMC`, "rt-ref")] : []));
+}
+
+// The cell of a *value* of a column of the *kind*, with a bar behind it if it is a probability.
+function valueCell(value, kind, probability) {
+  const text = shown(value, kind);
+  const cell = element("td", { className: NUMERIC.has(kind) ? "rt-num" : "", textContent: text, title: text });
+  if (probability && value !== null) {
+    cell.classList.add("rt-prob");
+    cell.style.setProperty("--bar", `${(Number(value) * 100).toFixed(1)}%`);
+  }
+  return cell;
+}
+
+// What the count of a table says: the rows the filter keeps, or that it is cut.
+function countText(model) {
+  if (model.filterText) return `${model.visibleCount} of ${model.rows.length} rows`;
+  return model.truncated ? `${model.total} rows (the first ${model.rows.length} shown)` : "";
+}
+
+// *followUps*(payload) gives the queries that go on from the result, each with a
+// *label*, a *title* and its *text*, which *use*(text) puts in the code box.
+// *pmc*, if given, looks the PubMed Central records of the studies up (see
+// study_links.js) for the pages it shows.
+export function renderTable(payload, { download = null, followUps = null, use = null, pmc = null } = {}) {
+  const model = new TableModel(payload);
+  let pageIndex = 0;
+  let pageSize = PAGE_SIZES[0];
+
+  const { bar, count, filter, size, previous, range, next, copy, csv } = controlBar(payload, { download, followUps, use });
   const head = element("tr");
   const body = element("tbody");
   const table = element("table", { className: "rt-table" }, element("thead", {}, head), body);
-  const root = element("section", { className: "rt" },
-    element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv,
-      ...(download && payload.block !== undefined ? [downloadMenu(payload, download)] : [])),
-    element("div", { className: "rt-scroll" }, table));
+  const root = element("section", { className: "rt" }, bar, element("div", { className: "rt-scroll" }, table));
 
   const arrows = { asc: " ▲", desc: " ▼" };
   function renderHead() {
@@ -114,22 +160,32 @@ export function renderTable(payload, { download = null } = {}) {
     });
   }
 
-  function renderBody() {
+  const studies = new Set(studyColumns(payload));
+  const records = payload.study_links?.records ?? {};
+
+  // The PubMed Central records of the studies of the page, which are shown when they come.
+  function findRecords(page) {
+    const ids = page.rows.flatMap(({ cells }) => [...studies].map((column) => cells[column]))
+      .filter((id) => Number.isInteger(id));
+    if (!pmc || !ids.length) return;
+    const before = pmc.known.size;
+    pmc.lookup(ids).then(() => {
+      if (pmc.known.size > before) renderBody({ lookUp: false });
+    });
+  }
+
+  function renderBody({ lookUp = true } = {}) {
     const page = model.page(pageIndex, pageSize);
     pageIndex = page.index;
+    if (lookUp) findRecords(page);
     body.replaceChildren(...page.rows.map(({ number, cells }) => element("tr", {},
       element("td", { className: "rt-number", textContent: number }),
       ...cells.map((value, column) => {
-        const text = shown(value, model.kinds[column]);
-        return element("td", {
-          className: NUMERIC.has(model.kinds[column]) ? "rt-num" : "", textContent: text, title: text,
-        });
+        if (studies.has(column) && Number.isInteger(value)) return studyCell(value, records[value], pmc?.known.get(String(value)));
+        return valueCell(value, model.kinds[column], column === model.probability);
       }))));
     const total = model.visibleCount;
-    count.textContent = model.filterText
-      ? `${total} of ${model.rows.length} rows`
-      : `${model.total} row${model.total === 1 ? "" : "s"}` +
-        (model.truncated ? ` (the first ${model.rows.length} shown)` : "");
+    count.textContent = countText(model);
     range.textContent = total ? `${page.start + 1}–${page.end} of ${total}` : "no rows";
     previous.disabled = page.index === 0;
     next.disabled = page.end >= total;
