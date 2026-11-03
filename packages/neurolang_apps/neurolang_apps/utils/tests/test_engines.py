@@ -1,6 +1,7 @@
 """Tests for engine initialization modules."""
 
 import numbers
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,9 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from neurolang.frontend.neurosynth_utils import StudyID
+
+# Where the engines keep their cache: a directory of the run, not the working one.
+DATA_DIR = Path(tempfile.mkdtemp(prefix="neurolang-test-data-"))
 
 NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
 
@@ -492,14 +496,14 @@ def _build_small_neurosynth(free_text=True):
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
         if free_text:
-            return engine_registry.build_engine("neurosynth", Path("unused"))
+            return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config
 
         def get_config(name, yaml_path=None):
             return _without_free_text_rules(config(name, yaml_path))
 
         with patch.object(engine_registry, "get_engine_config", get_config):
-            return engine_registry.build_engine("neurosynth", Path("unused"))
+            return engine_registry.build_engine("neurosynth", DATA_DIR)
 
 
 _TYPES = {
