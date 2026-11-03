@@ -113,3 +113,17 @@ def test_the_assistant_tools_observe_the_notes(terms):
     for tool in ("check_query", "run_query", "final_answer"):
         observation, _ = getattr(toolbox, f"tool_{tool}")(query)
         assert note in observation
+
+
+def test_a_final_answer_with_notes_is_confirmed_first(terms):
+    """The notes of an answer with rows are told once before it is."""
+    from neurolang_apps.utils.llm.agent import Toolbox
+    from neurolang_apps.utils.llm.context import EngineContext
+
+    toolbox = Toolbox(EngineContext(terms, "neurosynth"), "datalog")
+    query = "ans(s) :- mentions(s, pain)"
+    observation, answer = toolbox.tool_final_answer(query)
+    assert answer is None
+    assert "Note: pain in mentions(...) is a variable" in observation
+    observation, answer = toolbox.tool_final_answer(query)
+    assert observation == "Accepted." and answer[0] == query

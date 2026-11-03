@@ -254,7 +254,8 @@ class Toolbox:
         self.preview_rows = preview_rows
         self.query_timeout = query_timeout
         self.query_memory_mb = query_memory_mb
-        # Queries whose answer of no rows has been confirmed.
+        # Queries whose answer of no rows, or with notes on its
+        # constants, has been confirmed.
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
         self.queries_with_rows = []
@@ -335,16 +336,22 @@ class Toolbox:
                 f"The answer is rejected: running the query fails:\n"
                 f"{preview.text}\nCorrect it and call final_answer again."
             ), None
-        if preview.rows == 0 and normalised not in self.confirmed_empty:
+        if (
+            (preview.rows == 0 or result.notes)
+            and normalised not in self.confirmed_empty
+        ):
             self.confirmed_empty.add(normalised)
             message = (
                 "The query gives no rows. Check its constants with "
                 "search_values and its joins with run_query; if no rows is "
                 "the answer, call final_answer again with the same query."
+            ) if preview.rows == 0 else (
+                "Check the constants of the query; if it is right, call "
+                "final_answer again with the same query."
             )
             if result.notes:
                 message += f"\n{result.notes}"
-            if self.queries_with_rows:
+            if self.queries_with_rows and preview.rows == 0:
                 message += (
                     "\nYour query that gave rows was:\n"
                     + self.queries_with_rows[-1]

@@ -33,7 +33,6 @@ from neurolang_apps.utils.cli import (
     warning_note,
 )
 from neurolang_apps.utils.predicate_catalog import predicate_catalog
-from neurolang_apps.utils.tui.constant_notes import constant_notes
 
 LANGUAGE_NAMES = {"squall": "SQUALL", "datalog": "Datalog"}
 CHILD_POLL_SECONDS = 0.25
@@ -485,6 +484,10 @@ def run_preview(
 
 def _notes(nl, engine_name, text, language) -> str:
     """Return the notes on the constants of the query *text*, one a line."""
+    try:
+        from neurolang_apps.utils.tui.constant_notes import constant_notes
+    except ImportError:  # without the tui dependencies
+        return ""
     return "\n".join(
         f"Note: {note}" for note in constant_notes(
             nl, engine_name, text, language == "squall"
