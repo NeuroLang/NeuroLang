@@ -427,6 +427,20 @@ class Agent:
         result.steps.append(step)
         self.on_step(step)
 
+    def explain(self, query: str, rows: str = "") -> str:
+        """
+        Return *query* in English, as the check of an answer reads it back
+        (see :func:`~.prompts.back_translation_request`); *rows* are the
+        first rows of its answer, if given.
+        """
+        return self._complete(
+            AgentResult(language=self.language),
+            prompts.back_translation_request(
+                query, self.language, self.context.schema_summary(), rows,
+                self._engine_text(self.description, "description"),
+            ),
+        ).text.strip()
+
     def run(self, question: str) -> AgentResult:
         """
         Return the query answering *question*.

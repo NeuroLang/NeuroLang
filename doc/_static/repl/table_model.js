@@ -20,6 +20,9 @@ function csvField(text) {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+// The names of the column of a probability, as PROB[...] = p or = prob gives it.
+const PROBABILITY_NAME = /^(p|prob|proba|probability)$/i;
+
 export class TableModel {
   constructor(payload) {
     this.title = payload.title ?? "";
@@ -32,6 +35,21 @@ export class TableModel {
     this.sort = null; // { column: index, direction: "asc" | "desc" }
     this.order = this.rows.map((_, index) => index);
     this.texts = null; // the lower-case text of each row's cells, when needed
+    // The most probable rows first, as a probabilistic result is read.
+    this.probability = this.probabilityColumn();
+    if (this.probability >= 0) {
+      this.sort = { column: this.probability, direction: "desc" };
+      this.refresh();
+    }
+  }
+
+  // The index of the column of probabilities, or -1: a float column named
+  // like one whose cells are all between 0 and 1.
+  probabilityColumn() {
+    return this.columns.findIndex((name, column) => {
+      const range = PROBABILITY_NAME.test(name) ? this.range(column) : null;
+      return this.kinds[column] === "float" && range !== null && range.low >= 0 && range.high <= 1;
+    });
   }
 
   // The number of rows the filter keeps.
