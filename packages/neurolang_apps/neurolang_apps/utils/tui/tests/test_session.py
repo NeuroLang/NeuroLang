@@ -221,6 +221,40 @@ def test_datalog_of_a_datalog_predicate(app):
     assert "plays(x)" in output
 
 
+def test_datalog_of_a_predicate_shows_the_rules_it_uses(app):
+    app._execute_and_display("listener(x) :- person(x), sings(x)")
+    app._execute_and_display("member(x) :- active(x)")
+    app._execute_and_display("member(x) :- listener(x)")
+    output = _command(app, ".datalog member")
+    rules = [rule for rule in output.split("\n\n") if rule.strip()]
+    assert len(rules) == 4
+    assert rules[-2].startswith("member(x) :-")
+    assert rules[-1].startswith("member(x) :-")
+    assert sum(r.startswith(("active(x) :-", "listener(x) :-")) for r in rules) == 2
+
+
+def test_datalog_of_a_squall_predicate_used_by_another(conditional):
+    conditional._handle_dot_command(".mode datalog")
+    conditional._execute_and_display("top(t, p) :- marg(t, p), (p > 0.5)")
+    output = _command(conditional, ".datalog top")
+    assert "marg(s₀, PROB(s₀)) :-" in output
+    assert "cond_num" not in output and "cond_den" not in output
+    assert output.split("\n\n")[-1].startswith("top(")
+
+
+def test_datalog_shows_the_rules_as_written(app):
+    app._nl.add_tuple_set([(0, 0, 0, "s1")], name="peak")
+    app._nl.add_tuple_set([(1, 0, 0), (5, 0, 0)], name="mask")
+    app._execute_and_display(
+        "near(i, j, k, s) :- mask(i, j, k) & peak(i1, j1, k1, s) "
+        "& (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)"
+    )
+    app._execute_and_display("near_study(s) :- near(i, j, k, s)")
+    output = _command(app, ".datalog near_study")
+    assert "EUCLIDEAN(i, j, k, i1, j1, k1) ≤ 3" in output
+    assert output.split("\n\n")[-1].startswith("near_study(s) :-")
+
+
 def test_datalog_of_an_unknown_predicate(app):
     assert "'nothing' is not an IDB predicate" in _command(
         app, ".datalog nothing"
@@ -497,7 +531,7 @@ def test_failed_submission_defines_nothing(app, squall, program):
     assert _same_symbols(before, _session_symbols(app))
     assert sorted(_idb_names(app)) == ["active"]
     assert "'bar' is not an IDB predicate" in _command(app, ".datalog bar")
-    assert app.squall_rules == {}
+    assert list(app.written_rules) == ["active"]
 
 
 def test_failed_rule_of_a_predicate_is_not_added(app):
