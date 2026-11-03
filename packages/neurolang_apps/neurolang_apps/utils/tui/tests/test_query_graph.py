@@ -83,6 +83,13 @@ def test_a_probability_is_named_by_what_it_is_of_not_a_fresh_symbol(nl):
     assert "fresh" not in prob.label + prob.detail
     assert "//" in prob.label
     assert "r1 < r2" in prob.detail and "mentions(s, 'memory')" in prob.detail
+    aggregated = query_graph(
+        nl, "q(r, n) :- AGGREGATE[r](activated(r, s) @ count(s)) = n\n"
+        "ans(r, n) :- q(r, n)",
+    )
+    assert _kinds(aggregated) == {
+        "q": "rule", "activated": "data", "ans": "answer"
+    }
 
 
 def test_a_conditional_probability_of_the_engine_is_read_back(nl):
@@ -118,10 +125,13 @@ def test_rules_using_a_random_choice_are_probabilistic(nl):
         "active(r, s) :- activated(r, s), selected_study(s)\n"
         "trusted(r) :- reliable(r)\n"
         "named(r) :- activated(r, s)\n"
-        "ans(r, p) :- PROB[active(r, s), trusted(r)] = p, named(r)",
+        "maybe(r) :: 0.5 :- activated(r, s)\n"
+        "likely(r) :- maybe(r)\n"
+        "ans(r, p) :- PROB[active(r, s), trusted(r), likely(r)] = p, named(r)",
     )
     kinds = _kinds(graph)
     assert kinds["active"] == kinds["trusted"] == "probabilistic"
+    assert kinds["maybe"] == kinds["likely"] == "probabilistic"
     assert kinds["reliable"] == "facts"
     assert kinds["named"] == "rule"
     assert kinds["ans"] == "answer"

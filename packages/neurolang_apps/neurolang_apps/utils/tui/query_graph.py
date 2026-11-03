@@ -19,7 +19,9 @@ from typing import NamedTuple, Optional
 
 from nl_core.datalog.expression_processing import extract_logic_predicates
 from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
-from nl_core.probabilistic.expressions import PROB, Condition
+from nl_core.probabilistic.expressions import (
+    PROB, Condition, ProbabilisticPredicate
+)
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
 from nl_core.datalog import Union
 from nl_core.datalog.expressions import AdornedSymbol
@@ -99,11 +101,18 @@ def _text(expression) -> str:
     return " ".join(_PRINTER.walk(expression).split())
 
 
+def _head(rule):
+    """Return the atom of the head of *rule*, ``p(x)`` of ``p(x) :: 0.5``
+    too."""
+    head = rule.consequent
+    return head.body if isinstance(head, ProbabilisticPredicate) else head
+
+
 def _is_probability(rule) -> bool:
     """Whether the head of *rule* asks for a probability, ``PROB``."""
     return any(
         isinstance(arg, FunctionApplication) and arg.functor == PROB
-        for arg in rule.consequent.args
+        for arg in _head(rule).args
     )
 
 
@@ -163,7 +172,7 @@ class _Builder:
         self.descriptions = descriptions
         self.program_rules = {}
         for rule in rules:
-            name = rule.consequent.functor.name
+            name = _head(rule).functor.name
             self.program_rules.setdefault(name, []).append(rule)
         self.nodes = {}
         self.edges = {}
@@ -198,6 +207,8 @@ class _Builder:
         numerator, denominator = parts["cond_num"], parts["cond_den"]
         given = _conjuncts(denominator.antecedent)
         both = _conjuncts(numerator.antecedent)
+        if both[len(both) - len(given):] != given:
+            return rule  # not as the sugar compiles it: shown as it is
         head = numerator.consequent
         return Implication(
             head.functor.expression(*head.args),
@@ -271,7 +282,15 @@ class _Builder:
                 [self.descriptions.get(name, "")]
                 + [_PRINTER.walk(rule) for rule in rules]
             ).strip()
-        kind = "probability" if probability else "rule"
+        if probability:
+            kind = "probability"
+        elif any(
+            isinstance(rule.consequent, ProbabilisticPredicate)
+            for rule in rules
+        ):
+            kind = "probabilistic"  # p(x) :: 0.5 :- ..., p(x) :~: ...
+        else:
+            kind = "rule"
         self.nodes[name] = Node(name, label, kind, detail)
 
     def graph(self) -> QueryGraph:
@@ -286,7 +305,7 @@ class _Builder:
 def _probabilistic(nodes: dict, edges: dict) -> dict:
     """Return *nodes*, the rules using random choices made probabilistic."""
     uncertain = {n for n, node in nodes.items() if node.kind in (
-        "choice", "facts"
+        "choice", "facts", "probabilistic"
     )}
     changed = True
     while changed:
