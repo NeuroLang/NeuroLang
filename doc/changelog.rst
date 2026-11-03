@@ -37,6 +37,10 @@ Unreleased
 
 **New features:**
 
+* In the REPL in the browser, the examples and relations the page opens on a
+  first visit close at the first run, so that the result is in view, and a
+  query that fails without a result hides the last result, not to be taken
+  for its own.
 * The REPL in the browser asks whether an answer of the assistant was what
   the visitor wanted, and sends it, rated good or bad with a comment, as a
   row of a Grist document that anyone can add rows to (``feedback.json`` next

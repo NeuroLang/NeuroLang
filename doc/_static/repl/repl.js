@@ -333,7 +333,7 @@ const workerMessages = {
     setProviders(data.providers ?? []);
     canRate = Boolean(data.canRate);
     guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
-    if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
+    if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     showGuide();
     if (restore) return replay(restore);
     setBusy(false);
@@ -370,6 +370,8 @@ const workerMessages = {
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
     applyReply(data);
+    // A failure without a table hides the last result, not to be taken for its own.
+    if (data.failed && !data.tables?.length) results.classList.remove("has");
     if (data.tables?.length) showTables(data);
     if (data.viewers?.length) showViewer(data.viewers.at(-1));
     setBusy(false);
@@ -420,6 +422,9 @@ function showLog(log, fold) {
 const hasPeaks = () => guide.predicates.some((predicate) => predicate.name === "peak_reported");
 const pmc = new PmcLookup(); // the PubMed Central records of the studies shown, from Europe PMC
 let lastRun = ""; // what was last submitted
+// The guide the page opened for a first visit, to close at the first run so
+// that the result is not pushed below it; one opened by hand stays open.
+let guideForStart = false;
 const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
 function goOn(text) {
@@ -468,6 +473,7 @@ function run(text, { remember = false } = {}) {
   setBusy(true);
   $("stop").hidden = false;
   lastRun = text;
+  if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
   if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
   worker.postMessage({ text });
