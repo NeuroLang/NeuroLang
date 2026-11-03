@@ -7,6 +7,7 @@ import pytest
 from nl_expr.exceptions import UnboundVariablesError
 from neurolang.frontend import NeurolangDL, NeurolangPDL
 from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils import data_files
 from neurolang_apps.utils import text_embeddings as te
 
 VOCABULARY = ["reading", "word", "visual", "motor", "hand", "memory"]
@@ -634,7 +635,7 @@ def test_missing_files_are_fetched_on_demand(monkeypatch, tmp_path):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(source.numpy_path.read_bytes())
 
-    monkeypatch.setattr(te, "fetch_missing", fetch)
+    monkeypatch.setattr(data_files, "fetch_missing", fetch)
     encoder.encode_query("reading")
     assert fetched == [encoder.numpy_path.name]
     index = te.EmbeddingIndex([1], load_documents, encoder,

@@ -19,6 +19,11 @@ Unreleased
 
 **Performance:**
 
+* The REPL in the browser downloads 19 MB of data instead of 35 MB: the MNI
+  template, of which the engine reads the mask it kept, is fetched from the
+  page's site only to make that mask again (``neurolang_apps.utils.data_files``,
+  which the text embeddings use too).
+
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):

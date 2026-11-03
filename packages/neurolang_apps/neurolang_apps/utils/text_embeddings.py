@@ -19,7 +19,7 @@ them with ``pip install "neurolang[embeddings]"``. Without them, as in a
 browser, queries are embedded by the numpy encoder of
 :mod:`.specter2_numpy` from the weights exported next to the model
 (:attr:`Specter2Encoder.numpy_path`), the documents having been embedded
-beforehand; :data:`fetch_missing` can fetch both when first needed.
+beforehand; :mod:`.data_files` can fetch both when first needed.
 
 Engines declared in ``engines.yaml`` can opt in through a
 ``text_embeddings`` section.  Embeddings are computed on the first query
@@ -46,6 +46,8 @@ from types import MappingProxyType
 
 import numpy as np
 
+from . import data_files
+
 LOG = logging.getLogger(__name__)
 
 EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
@@ -59,17 +61,6 @@ MODEL_FILES = ("*.json", "*.txt", "*.bin")
 
 # Written in a local copy of a repository once it is complete.
 COMPLETE_MARKER = ".complete"
-
-# Called with the path of a file the embeddings need and that is missing,
-# to fetch it: in a browser, from the site of the page. None: no fetching.
-fetch_missing = None
-
-
-def _ensure(path):
-    """Fetch the file *path* with :data:`fetch_missing` if it is missing."""
-    if fetch_missing is not None and not Path(path).exists():
-        fetch_missing(Path(path))
-
 
 # Where torch cannot be installed, the missing query model is that of the
 # page the REPL runs in.
@@ -434,7 +425,7 @@ class Specter2Encoder:
         if self._numpy is None:
             path = self.numpy_path
             if path is not None:
-                _ensure(path)
+                data_files.ensure(path)
             if path is None or not path.exists():
                 try:
                     import torch  # noqa: F401
@@ -637,7 +628,7 @@ class EmbeddingIndex:
 
     def _read_cache(self):
         if self.cache_path is not None:
-            _ensure(self.cache_path)
+            data_files.ensure(self.cache_path)
         if self.cache_path is None or not self.cache_path.exists():
             return None
         with np.load(self.cache_path) as data:
