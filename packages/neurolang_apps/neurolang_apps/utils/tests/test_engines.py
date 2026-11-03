@@ -358,7 +358,7 @@ class TestNeurosynthEngineVocabulary:
         assert (
             "mentions(s, t) :- term_in_study_tfidf(s, t, v)" in datalog_init
         )
-        assert "reports(s, i, j, k) :- peak_reported(i, j, k, s)" in datalog_init
+        assert "reports(s, i, j, k) :- activated(i, j, k, s)" in datalog_init
 
     def test_weighted_mention_is_declared(self):
         """Check ``weighted_mention`` has the columns of the TF-IDF."""
@@ -439,8 +439,12 @@ def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
 # as a constant, not for every text (``solve_all`` cannot).
 FREE_TEXT_PREDICATES = frozenset({
     "study_similarity", "similar_study", "lift_llm", "relative_risk_llm",
-    "uniformity_llm", "ratios_llm",
+    "uniformity_llm", "ratios_llm", "association_z_llm", "uniformity_z_llm",
+    "ale_llm",
 })
+
+# The probabilistic facts a rule defines, which solve_all leaves out.
+RULE_PROBABILISTIC_FACTS = frozenset({"ma"})
 
 
 def _without_free_text_rules(config):
@@ -479,8 +483,9 @@ def _build_small_neurosynth(free_text=True):
         "term": ["memory", "memory", "language"],
         "tfidf": [0.5, 0.3, 0.02],
     })
-    mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
-    cortex = np.zeros((4, 4, 4), dtype=np.int16)
+    # wide enough for voxels farther than 3 voxels from the peaks of a study
+    mask = nib.Nifti1Image(np.ones((8, 8, 8), dtype=np.uint8), np.eye(4))
+    cortex = np.zeros((8, 8, 8), dtype=np.int16)
     cortex[1, 2, 3] = 1
     init = "neurolang_apps.utils.engines.neurosynth.init"
     with patch(f"{init}.fetch_neurosynth_peak_data", return_value=peaks), \
@@ -585,7 +590,7 @@ class TestNeurosynthDeclarations:
             solution = small_neurosynth.solve_all()
         assert set(signatures) == set(predicates)
         for name, arguments in signatures.items():
-            if name in FREE_TEXT_PREDICATES:
+            if name in FREE_TEXT_PREDICATES | RULE_PROBABILISTIC_FACTS:
                 continue
             frame = _relation(small_neurosynth, solution, name)
             probability = int(bool(predicates[name].get("probability")))
@@ -607,13 +612,13 @@ class TestNeurosynthDeclarations:
         assert hidden <= set(engine_registry.get_predicates("neurosynth"))
 
     def test_probability_declared_for_the_choice(self):
-        """Check the choices over the studies and the voxels are the
-        probabilistic predicates."""
+        """Check the choices over the studies and the voxels, and the
+        modelled activations of the ALE, are the probabilistic predicates."""
         from neurolang_apps.utils import engine_registry
 
         assert engine_registry.get_probabilistic_predicates(
             "neurosynth"
-        ) == {"selected_study", "selected_voxel"}
+        ) == {"selected_study", "selected_voxel", "ma"}
 
 
 class TestPredicateArguments:
@@ -895,7 +900,7 @@ class TestEngineTemplate:
     def test_the_template_is_the_mask(self, small_neurosynth):
         """Check the voxel grid of neurosynth is the MNI mask's."""
         template = small_neurosynth.template
-        assert template.shape == (4, 4, 4)
+        assert template.shape == (8, 8, 8)
         assert np.array_equal(template.affine, np.eye(4))
 
     def test_no_template_without_a_mask(self, tmp_path):

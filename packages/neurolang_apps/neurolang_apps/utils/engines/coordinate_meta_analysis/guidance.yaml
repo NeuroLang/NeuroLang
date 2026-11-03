@@ -18,10 +18,17 @@ assistant_guidance: >
   PROB[activation // term] = p, or a ratio of probabilities (lift,
   Bayes factor) when it asks for an association; a question asking
   for a list (which studies, which regions) gets the probability of
-  each.  A study activates a point when one of its peaks is within
-  3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
-  <= 3), with the coordinates of the question as MNI millimetres,
-  written as they are.  For the classical anatomy of the cortex
+  each.  A study activates a voxel when one of its peaks is within 3
+  voxels of it: activated(i, j, k, s), the same as reports(s, i, j,
+  k), never peak_reported, the peaks alone; for a point given as MNI
+  millimetres, peak_mni(x, y, z, s), voxel_size(r), (euclidean(x, y,
+  z, x0, y0, z0) <= 3 * r), its coordinates written as they are.
+  Neurosynth's maps of a term are uniformity_z (uniformity test) and
+  association_z (association test), z-scores, and ale the activation
+  likelihood estimate (ALE) of its studies; ma(i, j, k, s), the
+  modelled activation of a study, gives the ALE of any studies,
+  PROB over ma(i, j, k, s) and the rule selecting them.  For the
+  classical anatomy of the cortex
   (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated;
   for the functional anatomy, the Schaefer networks of the cortex,
   schaefer_activated, and the Tian atlas of the subcortex,

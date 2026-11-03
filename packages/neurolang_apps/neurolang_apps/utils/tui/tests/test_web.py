@@ -446,10 +446,13 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     path = lightweight_engines_yaml(tmp_path)
     full = engine_registry.get_engine_config("neurosynth")
     light = engine_registry.get_engine_config("neurosynth", path)
-    for heavy in ("activated", "lift", "ratios", "lift_llm", "p_a_given_t"):
+    for heavy in (
+        "activated", "reports", "lift", "ratios", "lift_llm", "p_a_given_t",
+        "association_z", "ma", "ale",
+    ):
         assert f"\n{heavy}(" not in "\n" + light["datalog_init"]
         assert f"\n{heavy}(" in "\n" + full["datalog_init"]
-    for light_rule in ("mentions", "reports", "p_term", "bayes"):
+    for light_rule in ("mentions", "p_term", "n_studies", "bayes"):
         if f"\n{light_rule}(" in "\n" + full["datalog_init"]:
             assert f"\n{light_rule}(" in "\n" + light["datalog_init"]
     assert not {"activated", "lift", "ratios"} & set(light["predicates"])

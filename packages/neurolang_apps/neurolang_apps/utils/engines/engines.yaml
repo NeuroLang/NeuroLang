@@ -48,7 +48,7 @@ engines:
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
-      reports(s, i, j, k) :- peak_reported(i, j, k, s)
+      reports(s, i, j, k) :- activated(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
       term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
       activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
@@ -60,6 +60,12 @@ engines:
       relative_risk(t, i, j, k, r) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
       uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
       ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+      n_studies(count(s)) :- study(s)
+      association_z(t, i, j, k, z) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & n_studies(n) & (pa < 1) & (pt < 1) & (z == (pat - pa) * (n * pt / (pa * (1 - pa) * (1 - pt))) ** 0.5)
+      uniformity_z(t, i, j, k, z) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & p_term(t, pt) & n_studies(n) & (pbar < 1) & (z == (pat - pbar) * (n * pt / (pbar * (1 - pbar))) ** 0.5)
+      ma_value(i, j, k, s, max(v)) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & voxel_size(r) & (e == EUCLIDEAN(i, j, k, i1, j1, k1)) & (e <= 3) & (d == r * e) & (v == r ** 3 * exp(-d * d / (2 * 4.246609 ** 2)) / (2 * 3.14159265 * 4.246609 ** 2) ** 1.5)
+      ma(i, j, k, s) :: v :- ma_value(i, j, k, s, v)
+      ale(t, i, j, k, PROB) :- ma(i, j, k, s) & term_in_study(s, t)
       study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
       cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
       similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
@@ -70,6 +76,9 @@ engines:
       relative_risk_llm(q, i, j, k, r) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
       uniformity_llm(q, i, j, k, u) :- p_a_given_similar(q, i, j, k, pat) & p_any_voxel_given_similar(q, pbar) & (u == pat / pbar)
       ratios_llm(q, i, j, k, lift, relative_risk, uniformity) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & p_any_voxel_given_similar(q, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
+      association_z_llm(q, i, j, k, z) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & n_studies(n) & (pa < 1) & (pt < 1) & (z == (pat - pa) * (n * pt / (pa * (1 - pa) * (1 - pt))) ** 0.5)
+      uniformity_z_llm(q, i, j, k, z) :- p_a_given_similar(q, i, j, k, pat) & p_any_voxel_given_similar(q, pbar) & p_similar(q, pt) & n_studies(n) & (pbar < 1) & (z == (pat - pbar) * (n * pt / (pbar * (1 - pbar))) ** 0.5)
+      ale_llm(q, i, j, k, PROB) :- ma(i, j, k, s) & similar_study(q, s)
       cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
       cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
@@ -209,6 +218,18 @@ engines:
         columns: [uniformity]
         type: float
         description: "a uniformity ratio P(A_v | T) / P(A_V | T), 1 under uniformity"
+      z_score:
+        columns: [z]
+        type: float
+        description: "a z-score, 0 under the null hypothesis"
+      ale:
+        columns: [ale]
+        type: float
+        description: "an activation likelihood estimate, the probability that a study activates a voxel"
+      millimetres:
+        columns: [mm]
+        type: float
+        description: "a length in millimetres"
       cogat_term:
         columns: [term]
         type: str
@@ -307,7 +328,9 @@ engines:
           - study
           - term
       reports:
-        description: "Studies reporting an activation peak at a voxel"
+        description: >-
+          Studies activating a voxel, as activated: one of their peaks is
+          within 3 voxels of it
         arguments:
           - study
           - voxel
@@ -365,6 +388,46 @@ engines:
           - lift
           - relative_risk
           - uniformity
+      association_z:
+        description: >-
+          z-score of Neurosynth's association test of a term at a voxel:
+          positive where the studies of the term activate the voxel more
+          often than the other studies; its square is the chi-square of
+          the test of independence of the term and the activation
+        arguments:
+          - term
+          - voxel
+          - z_score
+      uniformity_z:
+        description: >-
+          z-score of Neurosynth's uniformity test of a term at a voxel:
+          positive where the studies of the term activate the voxel more
+          often than they activate the average voxel of the brain
+        arguments:
+          - term
+          - voxel
+          - z_score
+      ale:
+        description: >-
+          Activation likelihood estimate (ALE) of the studies of a term at a
+          voxel: the probability that one of them activates it, as ma
+        arguments:
+          - term
+          - voxel
+          - ale
+      ma:
+        description: >-
+          Modelled activation of a voxel by a study (ALE): the study activates
+          the voxel with the probability that its nearest peak is there, a
+          Gaussian of 10 mm FWHM cut at 3 voxels (6 mm on the 2 mm grid)
+        probability: true
+        arguments:
+          - voxel
+          - study
+      voxel_size:
+        description: "The size of the voxels of the grid, in millimetres"
+        arguments:
+          - millimetres
       selected_voxel:
         description: "Uniform probabilistic choice over the voxels of the brain mask"
         probability: true
@@ -416,6 +479,24 @@ engines:
           - lift
           - relative_risk
           - uniformity
+      ale_llm:
+        description: "ale of a free-text query (see lift_llm)"
+        arguments:
+          - query
+          - voxel
+          - ale
+      association_z_llm:
+        description: "association_z of a free-text query (see lift_llm)"
+        arguments:
+          - query
+          - voxel
+          - z_score
+      uniformity_z_llm:
+        description: "uniformity_z of a free-text query (see lift_llm)"
+        arguments:
+          - query
+          - voxel
+          - z_score
       cogat_subclass_of:
         description: >-
           Cognitive Atlas classes below others, at any depth (concepts,

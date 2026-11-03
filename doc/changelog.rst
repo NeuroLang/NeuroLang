@@ -19,6 +19,10 @@ Unreleased
 
 **Performance:**
 
+* NeuroLang's ``max``, ``min``, ``sum`` and ``mean`` aggregations, numpy's
+  functions, run as pandas' reductions on numbers: pandas 3 runs numpy's
+  once per group in Python, and ``max(v)`` over 2 M rows took 64 s instead of
+  0.3 s.
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):
@@ -37,6 +41,23 @@ Unreleased
 
 **New features:**
 
+* In the meta-analysis engines (``neurosynth``, ``neurostore``), a study
+  reports the voxels within 3 voxels of its peaks: ``reports(s, i, j, k)``
+  is ``activated``, as the predefined probabilities are; ``peak_reported``
+  keeps the peaks alone.  New predicates: ``association_z`` and
+  ``uniformity_z``, the z-scores of Neurosynth's association and uniformity
+  tests (``association_z('prefrontal', ...)`` overlaps Neurosynth's map with a
+  Dice of 0.824 on its 5% largest voxels); ``ale``, the activation likelihood
+  estimate of the studies of a term, from ``ma(i, j, k, s)``, the modelled
+  activation of each study, a probabilistic fact, for the ALE of any studies;
+  their ``_llm`` versions; ``voxel_size``.  See
+  :doc:`tutorial_neurosynth_tests`.
+* ``.datalog PREDICATE`` in the REPL prints the program computing the
+  predicate, such as ``lift``: its rules after those of the predicates they
+  use, as written in the engine or the session, a bounded ``EUCLIDEAN``
+  distance included, rather than as compiled.  The Datalog pretty-printer
+  puts operands in parentheses where needed, prints ``**``, and prints a
+  probabilistic rule as ``head :: p :- body``.
 * The LLM assistant can record its questions and answers in a Grist document
   instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
   the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to
@@ -134,6 +155,11 @@ Unreleased
 
 **Bug fixes:**
 
+* A built-in function of constant expressions in a rule, such as
+  ``v == x / (2 * exp(1.0))``, failed with an ``AttributeError``: it was
+  translated as a relation.
+* ``EUCLIDEAN`` within arithmetic, ``d == 2 * EUCLIDEAN(...)``, failed with an
+  ``AttributeError`` instead of asking for a bound on the distance.
 * The REPL in the browser could not start: its page and the script that builds
   its bundle (``doc/make_repl_bundle.py``) imported modules from
   ``neurolang.utils`` that the split into packages moved to
