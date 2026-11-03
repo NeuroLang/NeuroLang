@@ -249,8 +249,9 @@ def export_jsonl(store: FeedbackStore, engine=None) -> str:
 
 def examples_yaml(store: FeedbackStore, engine=None) -> str:
     """
-    Return the training pairs as a bank of examples (``examples/*.yaml``),
-    one example per question, its latest best query.
+    Return the training pairs as a bank of examples (the
+    ``assistant_examples`` of ``engines/<engine>/examples.yaml``), one
+    example per question, its latest best query.
     """
     import yaml
 
@@ -272,7 +273,7 @@ def examples_yaml(store: FeedbackStore, engine=None) -> str:
         + (f" ({engine})" if engine else "") + ".\n"
     )
     return header + yaml.dump(
-        {"examples": list(examples.values())}, Dumper=Dumper,
+        {"assistant_examples": list(examples.values())}, Dumper=Dumper,
         sort_keys=False, allow_unicode=True,
     )
 

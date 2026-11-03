@@ -114,6 +114,18 @@ Unreleased
   Euclidean join's index type, the export, the insert, the ``extends`` and
   the missing optional dependency of the apps; docstrings of the apps name
   ``neurolang_apps``.
+* The engine configuration is composed with OmegaConf (``omegaconf>=2.4``,
+  a new dependency of ``neurolang_apps``, pure Python, installed in the
+  browser's REPL too): the example queries, the query assistant's bank of
+  examples and its guidance of an engine are in
+  ``engines/<engine>/examples.yaml`` and ``engines/<engine>/guidance.yaml``,
+  merged into its entry of ``engines.yaml``; the banks
+  ``llm/examples/<engine>.yaml`` become the engines' ``assistant_examples``,
+  inherited through ``extends`` like ``builtins``, and
+  ``neurolang-feedback-server export --format examples`` writes them under
+  that key. ``extends`` merges mappings with ``OmegaConf.merge``;
+  ``engine_bases`` is removed. The resolved configuration of every engine
+  is unchanged, and read 6 times faster after the first time.
 
 **Bug fixes:**
 

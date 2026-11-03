@@ -32,6 +32,9 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "pyyaml>=6.0",
+    # Composes engines.yaml with the files of each engine; 2.4 is the
+    # first without antlr4, which has no wheel for the browser REPL.
+    "omegaconf>=2.4",
     # The neurostore engine reads the parquet files of its releases.
     "pyarrow",
 ]

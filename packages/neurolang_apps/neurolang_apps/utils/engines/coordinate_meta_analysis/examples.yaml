@@ -1,8 +1,25 @@
+# The example queries of coordinate_meta_analysis, merged into its
+# entry of ../engines.yaml (see doc/engine_configuration.rst): those
+# the REPL shows (examples) and the questions of the query assistant
+# (assistant_examples).
+examples:
+  datalog:
+    - "ans(s) :- mentions(s, 'pain')"
+    - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+    - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
+    - "ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)"
+    - "ans(t) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t)"
+    - "ans(s) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
+  squall:
+    - "obtain every Study that mentions 'pain'."
+    - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
+    - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
+
 # Questions on the coordinate-based meta-analysis engines (neurosynth,
 # neurostore) with their Datalog queries: the few-shot examples of the
 # LLM query assistant, the most similar to the user's question being put
 # in the prompt. Both engines extend coordinate_meta_analysis and share
-# this bank; examples/<engine>.yaml adds those of one engine. Every
+# this bank; <engine>/examples.yaml adds those of one engine. Every
 # query is checked against the engines by the tests
 # (NEUROLANG_TEST_DATA_DIR).
 #
@@ -29,7 +46,7 @@
 # is pred(x), a rule over PROB, on each of the replicates b of
 # boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
 # replicates; two measures are compared on the same replicate b.
-examples:
+assistant_examples:
   - question: Which studies mention pain?
     datalog: |-
       pain_study(s) :- mentions(s, 'pain'), selected_study(s)
