@@ -25,11 +25,10 @@ library without the applications.
 
 .. note::
 
-   ``pip install neurolang`` installs the latest release published on PyPI
-   (``0.1a21``, October 2026), from before the split: one package, with the
-   applications. The commands below install the current ``master`` branch
-   from GitHub instead, with the changes listed as *Unreleased* in the
-   :doc:`changelog`.
+   ``pip install "neurolang[apps]"`` installs the latest release published
+   on PyPI (``0.1a22``, November 2026), the first as the four packages above.
+   The commands below install the current ``master`` branch from GitHub
+   instead, with the changes listed as *Unreleased* in the :doc:`changelog`.
 
 .. tab-set::
 

@@ -17,6 +17,12 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+Nothing yet.
+
+
+v0.1a22 (2026-11-03)
+--------------------
+
 **Performance:**
 
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
