@@ -85,6 +85,11 @@ $("rate-bad").addEventListener("click", () => {
   $("rate-comment").focus();
 });
 $("rate-send").addEventListener("click", () => sendRating("bad"));
+$("rate-comment").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  sendRating("bad");
+});
 
 function showAgent() {
   live.hidden = false;
@@ -360,6 +365,7 @@ const workerMessages = {
   },
   rated: (data) => {
     $("rate-note").textContent = data.message;
+    $("rate-note").focus();
     if (!data.ok) rateButtons.forEach((button) => (button.disabled = false));
     else $("rate-comment").hidden = $("rate-send").hidden = true;
   },
