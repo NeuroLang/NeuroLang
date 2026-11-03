@@ -199,7 +199,11 @@ dataset backends.  To add a new engine:
 
    The optional fields ``datalog_init`` (inline Datalog rules) and
    ``relations`` (CSV/TSV files loaded as predicates) run after the
-   Python init.  See :ref:`concepts` for details.
+   Python init.  See :ref:`concepts` for details.  Example queries
+   (``examples``, ``assistant_examples``) and the query assistant's
+   ``assistant_guidance`` go in ``engines/my_dataset/examples.yaml`` and
+   ``engines/my_dataset/guidance.yaml``, merged into the entry (see
+   :ref:`neurolang-engine-registry`).
 
 2. If your engine needs custom Python logic (data downloads, non-trivial
    processing), create the init module at

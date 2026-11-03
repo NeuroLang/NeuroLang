@@ -86,12 +86,15 @@ and text-to-SPARQL systems.
     queries. The predicates are given with their columns, their
     description in the engine configuration and their size (schema
     linking). The examples are those closest to the question, chosen by
-    BM25 from a bank of checked examples
-    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
+    BM25 from a bank of checked examples, the ``assistant_examples`` of
+    the engine's configuration, kept in
+    ``packages/neurolang_apps/neurolang_apps/utils/engines/<engine>/examples.yaml``
+    (see :ref:`neurolang-engine-registry`).
     An engine inherits the banks of the engines it ``extends``: the
     ``neurosynth`` and ``neurostore`` engines share that of
-    ``coordinate_meta_analysis``, and ``neurostore.yaml`` adds questions
-    on its concepts, domains and abstracts.
+    ``coordinate_meta_analysis``, and ``neurostore/examples.yaml`` adds
+    questions on its concepts, domains and abstracts. The guidance of the
+    prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
 
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
@@ -434,8 +437,8 @@ The JSON lines hold each answer with its steps and ratings, plus a
 ``training`` pair. That pair is the question with its best query: the latest
 corrected query that was checked on the engine, or else the answer's own query
 when most ratings say it is correct. ``--format examples`` writes these pairs
-as a bank of examples (``examples/*.yaml``), one per question, ready to be
-reviewed and added to an engine's bank.
+as a bank of examples (``assistant_examples``), one per question, ready to be
+reviewed and added to an engine's ``<engine>/examples.yaml``.
 
 Evaluation
 ----------

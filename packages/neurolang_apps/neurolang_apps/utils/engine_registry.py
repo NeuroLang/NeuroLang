@@ -1,7 +1,9 @@
 """
 Declarative engine registry for the neurolang-query CLI.
 
-Engines are declared in :file:`engines/engines.yaml`.  Each engine may
+Engines are declared in :file:`engines/engines.yaml`, into whose entries
+the files :file:`engines/<engine>/*.yaml` (their example queries and the
+query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
 * a **Python initialisation script** (``python_init``);
@@ -85,6 +87,7 @@ Usage
 
 from __future__ import annotations
 
+import copy
 import functools
 import re
 from pathlib import Path
@@ -96,6 +99,7 @@ import nibabel as nib
 
 import numpy as np
 import yaml
+from omegaconf import DictConfig, OmegaConf
 
 from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
@@ -222,13 +226,28 @@ def _merge_predicate_metadata(
         predicates[name]["description"] = description
 
 
+@functools.lru_cache(maxsize=None)
+def _composed_config(path: Path) -> DictConfig:
+    """
+    Return the engines of the file *path* merged with the files
+    ``<engine>/*.yaml`` next to it, each into the entry of its engine.
+    """
+    config = OmegaConf.load(path)
+    return OmegaConf.merge(config, *(
+        {"engines": {name: OmegaConf.load(part)}}
+        for name in config.get("engines", {})
+        for part in sorted(path.parent.glob(f"{name}/*.yaml"))
+    ))
+
+
 def _load_yaml_config(yaml_path: Optional[Path] = None) -> dict:
-    """Load engine YAML from *yaml_path* or the built-in engines file."""
+    """Load engine YAML from *yaml_path* or the built-in engines files."""
     if yaml_path is not None:
         with open(yaml_path) as f:
             return yaml.safe_load(f)
-    with open(_ENGINES_YAML) as f:
-        return yaml.safe_load(f)
+    return OmegaConf.to_container(
+        _composed_config(_ENGINES_YAML), resolve=True
+    )
 
 
 def _resolve_relation_file(
@@ -274,11 +293,12 @@ def _resolve_relation_file(
         return resolved
 
 
-# Top-level keys holding lists that are concatenated (parent first,
+# Top-level keys whose texts or lists are concatenated (parent first,
 # duplicates dropped) when inherited; every other list is replaced.
-_MERGED_LIST_KEYS = frozenset(
-    {"builtins", "downloads", "ontologies", "dimension_type_predicates"}
-)
+_CONCATENATED_KEYS = frozenset({
+    "datalog_init", "builtins", "downloads", "ontologies",
+    "dimension_type_predicates", "assistant_examples",
+})
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
@@ -289,50 +309,44 @@ def _extends(raw: Optional[Dict[str, Any]]) -> List[str]:
     return [bases] if isinstance(bases, str) else bases
 
 
-def _merge_mappings(parent: Dict[str, Any], child: Dict[str, Any]):
-    """Deep-merge two mappings; ``None`` in *child* deletes the entry."""
-    merged = dict(parent)
-    for key, value in child.items():
-        if value is None:
-            merged.pop(key, None)
-        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _merge_mappings(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+def _concatenate(inherited, value):
+    """Return *value* after *inherited*, if both are texts or lists."""
+    if not (inherited and value):
+        return value
+    if isinstance(value, str):
+        return inherited.rstrip("\n") + "\n" + value
+    return list(inherited) + [v for v in value if v not in inherited]
 
 
-def _merge_engine_configs(
-    parent: Dict[str, Any], child: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Merge *child* over *parent* engine configurations.
-
-    * ``datalog_init`` texts are concatenated, parent rules first;
-    * the lists in :data:`_MERGED_LIST_KEYS` are concatenated without
-      duplicates;
-    * mappings (``atlases``, ``predicates``, ...) are merged recursively,
-      and an entry set to ``null`` in the child removes the inherited one;
-    * any other value in the child replaces the inherited one.
-    """
-    merged = {
-        k: v for k, v in parent.items() if k not in _NON_INHERITED_KEYS
+def _without_nulls(mapping: Dict[str, Any]) -> Dict[str, Any]:
+    """Return *mapping* without its entries set to ``None``, recursively."""
+    return {
+        k: _without_nulls(v) if isinstance(v, dict) else v
+        for k, v in mapping.items() if v is not None
     }
-    for key, value in child.items():
-        inherited = merged.get(key)
-        if key == "datalog_init" and inherited and value:
-            merged[key] = inherited.rstrip("\n") + "\n" + value
-        elif key in _MERGED_LIST_KEYS and inherited and value:
-            merged[key] = list(inherited) + [
-                v for v in value if v not in inherited
-            ]
-        elif isinstance(value, dict) and isinstance(inherited, dict):
-            merged[key] = _merge_mappings(inherited, value)
-        elif isinstance(value, dict):
-            merged[key] = _merge_mappings({}, value)
-        else:
-            merged[key] = value
-    return merged
+
+
+def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge engine *configs*, each over the previous ones.
+
+    * mappings (``atlases``, ``predicates``, ...) are merged recursively
+      by :meth:`OmegaConf.merge`, and an entry set to ``null`` removes the
+      inherited one;
+    * the values of :data:`_CONCATENATED_KEYS` are concatenated (see
+      :func:`_concatenate`);
+    * any other value replaces the inherited one.
+    """
+    configs = [
+        {k: v for k, v in c.items() if k not in _NON_INHERITED_KEYS}
+        for c in configs
+    ]
+    merged = OmegaConf.to_container(OmegaConf.merge(*configs))
+    for key in _CONCATENATED_KEYS:
+        values = [c[key] for c in configs if key in c]
+        if values:
+            merged[key] = functools.reduce(_concatenate, values)
+    return _without_nulls(merged)
 
 
 def resolve_engine_config(
@@ -366,38 +380,26 @@ def resolve_engine_config(
             f"Unknown engine: {name!r}. Available engines: {available}"
         )
     raw = engines[name] or {}
-    resolved: Dict[str, Any] = {}
-    for base in _extends(raw):
-        resolved = _merge_engine_configs(
-            resolved, resolve_engine_config(engines, base, _stack + (name,))
-        )
-    merged = _merge_engine_configs(resolved, raw)
-    return {k: v for k, v in merged.items() if k not in _NON_INHERITED_KEYS}
+    return _merge_engine_configs(*(
+        resolve_engine_config(engines, base, _stack + (name,))
+        for base in _extends(raw)
+    ), raw)
+
+
+@functools.lru_cache(maxsize=None)
+def _resolved_config(path: Path, name: str) -> Dict[str, Any]:
+    """
+    Return the configuration of the engine *name* of the engines file
+    *path*, composed with its files and its ``extends`` resolved.
+
+    It is kept for the next calls: copy it before modifying it.
+    """
+    config = OmegaConf.to_container(_composed_config(path), resolve=True)
+    return resolve_engine_config(config["engines"], name)
 
 
 def _is_abstract(engines: Dict[str, Dict[str, Any]], name: str) -> bool:
     return bool((engines[name] or {}).get("abstract", False))
-
-
-def engine_bases(name: str, yaml_path: Optional[Path] = None) -> List[str]:
-    """
-    Return the engines *name* extends, directly or not, bases first.
-
-    Unknown engines have no bases.
-    """
-    engines = _load_yaml_config(yaml_path).get("engines", {})
-    bases: List[str] = []
-    seen = {name}
-
-    def visit(engine: str) -> None:
-        for parent in _extends(engines.get(engine)):
-            if parent not in seen:
-                seen.add(parent)
-                visit(parent)
-                bases.append(parent)
-
-    visit(name)
-    return bases
 
 
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
@@ -442,6 +444,8 @@ def get_engine_config(
         raise ValueError(
             f"Engine {name!r} is abstract and can only be extended"
         )
+    if yaml_path is None:
+        return copy.deepcopy(_resolved_config(_ENGINES_YAML, name))
     return resolve_engine_config(engines, name)
 
 

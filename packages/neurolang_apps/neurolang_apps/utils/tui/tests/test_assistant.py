@@ -475,7 +475,7 @@ def test_feedback_end_to_end(app, tmp_path, monkeypatch):
     assert [r["verdict"] for r in record["feedback"]] == ["incorrect"] * 2
     store = FeedbackStore(tmp_path / "fb.sqlite")
     bank = yaml.safe_load(examples_yaml(store))
-    assert bank["examples"] == [{
+    assert bank["assistant_examples"] == [{
         "question": "Which studies mention pain?",
         "datalog": "ans(s) :- mentions(s, 'fear')",
     }]

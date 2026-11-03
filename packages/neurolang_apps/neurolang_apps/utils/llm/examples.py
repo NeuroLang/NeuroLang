@@ -2,8 +2,9 @@
 The example questions of the engines, for in-context learning.
 
 Each engine can have a bank of questions with their SQUALL and Datalog
-queries, ``examples/<engine>.yaml`` next to this module, and inherits
-the banks of the engines it extends. The examples
+queries, the ``assistant_examples`` of its configuration (kept in
+``engines/<engine>/examples.yaml``), and inherits the banks of the
+engines it extends. The examples
 put in the prompt are those whose question is the most similar to the
 user's (:func:`select_examples`), ranked by BM25 over their words: no
 embedding model is needed. Engines without a bank fall back on the
@@ -13,15 +14,10 @@ example queries of their configuration.
 import math
 import re
 from collections import Counter
-from functools import lru_cache
-from pathlib import Path
 from typing import NamedTuple, Optional
-
-import yaml
 
 from neurolang_apps.utils import engine_registry
 
-EXAMPLES_DIR = Path(__file__).with_name("examples")
 _WORD = re.compile(r"[a-z0-9]+")
 STOP_WORDS = frozenset(
     "a an and are as at be by do does each for from give have in is it "
@@ -49,29 +45,6 @@ def words(text: str) -> list:
     ]
 
 
-def bank_path(engine_name: str) -> Path:
-    """Return the path of the example bank of *engine_name*."""
-    return EXAMPLES_DIR / f"{engine_name}.yaml"
-
-
-@lru_cache(maxsize=None)
-def _load_bank(path: Path) -> tuple:
-    """Return the examples of the bank at *path*."""
-    with open(path, encoding="utf-8") as stream:
-        data = yaml.safe_load(stream) or {}
-    return tuple(
-        Example(
-            entry["question"],
-            {
-                language: entry[language].strip()
-                for language in ("squall", "datalog")
-                if entry.get(language)
-            },
-        )
-        for entry in data.get("examples", ())
-    )
-
-
 def _configuration_examples(engine_name: str) -> list:
     """
     Return the example queries of the engine's configuration.
@@ -94,15 +67,21 @@ def load_examples(engine_name: str) -> list:
     the ``neurosynth`` and ``neurostore`` engines share the bank of
     ``coordinate_meta_analysis``.
     """
-    if not engine_name:
+    engines = engine_registry._load_yaml_config()["engines"]
+    if engine_name not in engines:
         return []
-    banks = [
-        bank_path(name)
-        for name in engine_registry.engine_bases(engine_name) + [engine_name]
-    ]
-    banks = [path for path in banks if path.exists()]
-    if banks:
-        return [example for path in banks for example in _load_bank(path)]
+    bank = engine_registry.resolve_engine_config(engines, engine_name).get(
+        "assistant_examples"
+    )
+    if bank:
+        return [
+            Example(entry["question"], {
+                language: entry[language].strip()
+                for language in ("squall", "datalog")
+                if entry.get(language)
+            })
+            for entry in bank
+        ]
     if engine_name in engine_registry.list_engine_names():
         try:
             return _configuration_examples(engine_name)

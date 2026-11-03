@@ -28,7 +28,7 @@ const PYODIDE_PACKAGES = [
 ];
 const PYPI_PACKAGES = [
   "lark", "typing_inspect", "rdflib", "nibabel", "rich",
-  "prompt_toolkit", "httpx",
+  "prompt_toolkit", "httpx", "omegaconf",
 ];
 
 const status = (message) => postMessage({ type: "status", message });

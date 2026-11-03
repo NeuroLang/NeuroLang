@@ -79,6 +79,13 @@ may specify the following keys, all of them optional:
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
   obtaining the first declared predicate)
+- ``assistant_examples`` — the bank of questions with their ``datalog``
+  or ``squall`` queries from which the LLM query assistant takes its
+  few-shot examples (see :doc:`query_assistant`)
+
+The long entries, ``examples``, ``assistant_examples`` and
+``assistant_guidance``, are kept out of ``engines.yaml``, in files of the
+engine's directory next to it (see `Files of an engine`_).
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
@@ -349,16 +356,40 @@ With several bases (``extends: [a, b]``) later ones override earlier ones,
 and the engine's own entries override all of them.  Merging works per key:
 
 - ``datalog_init`` texts are concatenated, inherited rules first;
-- ``builtins``, ``downloads``, ``ontologies`` and
-  ``dimension_type_predicates`` are concatenated without duplicates;
+- ``builtins``, ``downloads``, ``ontologies``,
+  ``dimension_type_predicates`` and ``assistant_examples`` are
+  concatenated without duplicates;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
-  ``predicates``, ``text_embeddings``, ...) are merged recursively, so an
-  engine can change one parameter of an inherited entry; setting an entry
-  to ``null`` removes the inherited one;
+  ``predicates``, ``text_embeddings``, ...) are merged recursively by
+  OmegaConf, so an engine can change one parameter of an inherited entry;
+  setting an entry to ``null`` removes the inherited one (a list cannot
+  replace a mapping, nor a mapping a list);
 - every other value, lists included (``python_init``, ``description``,
   ``hidden_predicates``, ...), is replaced.
 
 Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+
+Files of an engine
+------------------
+
+Every file ``<engine>/*.yaml`` in the directory of the built-in
+``engines.yaml`` is merged into the entry of its engine, in the order of
+the file names, with OmegaConf (``OmegaConf.merge``, which merges
+mappings and replaces lists: a key is best set in one file only).  The
+built-in engines keep there
+
+- ``<engine>/examples.yaml``: the queries the REPL shows (``examples``)
+  and the questions of the query assistant (``assistant_examples``);
+- ``<engine>/guidance.yaml``: the ``assistant_guidance``.
+
+``coordinate_meta_analysis/`` holds the examples and the guidance shared by
+``neurosynth`` and ``neurostore``, and ``neurostore/examples.yaml`` adds the
+questions on NeuroStore's own predicates: an engine inherits
+``assistant_examples`` as it inherits ``builtins``, those of its bases
+first.  The OmegaConf interpolation ``${engines.<engine>.<key>}`` can refer
+to any value of the composed configuration.  An engines file given to
+the functions of :mod:`~neurolang_apps.utils.engine_registry` as
+``yaml_path`` is read alone.
 
 The ``neurostore`` engine
 -------------------------

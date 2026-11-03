@@ -182,7 +182,7 @@ def test_examples_export(tmp_path, capsys):
     })
     store.add_answer({**ANSWER, "question": "Unrated?"})
     bank = yaml.safe_load(examples_yaml(store))
-    assert bank == {"examples": [
+    assert bank == {"assistant_examples": [
         {"question": "Fear?",
          "datalog": "a(s) :- mentions(s, 'fear')\nans(s) :- a(s)"},
         {"question": "Pain?", "datalog": ANSWER["query"]},

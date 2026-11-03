@@ -1,3 +1,6 @@
+# Merged into the entry of neurostore in ../engines.yaml (see
+# doc/engine_configuration.rst).
+#
 # Questions on the neurostore engine only, added after the bank of
 # coordinate_meta_analysis, which it shares with neurosynth. NeuroStore
 # comes with the titles and abstracts of its studies (study_title,
@@ -7,7 +10,7 @@
 # capitalised ('Executive cognitive control'): search_values shows how a
 # value is stored. Every query is checked against the engine by the tests
 # (NEUROLANG_TEST_DATA_DIR).
-examples:
+assistant_examples:
   - question: Which NeuroStore studies were annotated with the concept working memory? Give their titles.
     datalog: |-
       ans(s, title) :- study_concept(s, 'working memory'), study_title(s, title)
