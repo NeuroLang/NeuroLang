@@ -26,6 +26,14 @@ Unreleased
   numbers; and the keyboard focus is visible on the lists and the sortable
   headers.
 
+* The browser REPL: the query can be written while the engine loads, which
+  says how long it takes; a failed start says in plain words what to do, with
+  a *Try again* button; the Brain tab is shown only when there is a brain to
+  see; the log of a query is folded to the time it took; the result tabs are
+  a tab list for the keyboard and screen readers; the table's controls are
+  shorter and the page fits a phone; and the button for the assistant's key
+  opens the key form, tells when a key is in use, and says what *Ask* needs.
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at

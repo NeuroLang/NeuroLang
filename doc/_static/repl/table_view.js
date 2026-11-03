@@ -75,16 +75,18 @@ export function renderTable(payload, { download = null } = {}) {
   const count = element("span", { className: "rt-count" });
   const filter = element("input", {
     type: "search", className: "rt-filter", spellcheck: false,
-    placeholder: "Filter rows (name:text for one column)",
+    placeholder: "Filter rows", title: "Words in any column; name:text for one column",
   });
   filter.setAttribute("aria-label", "Filter the rows");
   const size = element("select", { className: "rt-size" },
-    ...PAGE_SIZES.map((n) => element("option", { value: n, textContent: `${n} rows` })));
+    ...PAGE_SIZES.map((n) => element("option", { value: n, textContent: `Show ${n}` })));
   size.setAttribute("aria-label", "Rows per page");
   const previous = element("button", { type: "button", textContent: "‹", title: "Previous page" });
+  previous.setAttribute("aria-label", "Previous page");
   const next = element("button", { type: "button", textContent: "›", title: "Next page" });
+  next.setAttribute("aria-label", "Next page");
   const range = element("span", { className: "rt-range" });
-  const copy = element("button", { type: "button", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
+  const copy = element("button", { type: "button", className: "rt-copy", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
   const csv = element("button", { type: "button", textContent: "CSV", title: "Download the rows shown as CSV" });
   const head = element("tr");
   const body = element("tbody");
@@ -128,8 +130,7 @@ export function renderTable(payload, { download = null } = {}) {
     const total = model.visibleCount;
     count.textContent = model.filterText
       ? `${total} of ${model.rows.length} rows`
-      : `${model.total} row${model.total === 1 ? "" : "s"}` +
-        (model.truncated ? ` (the first ${model.rows.length} shown)` : "");
+      : (model.truncated ? `${model.total} rows (the first ${model.rows.length} shown)` : "");
     range.textContent = total ? `${page.start + 1}–${page.end} of ${total}` : "no rows";
     previous.disabled = page.index === 0;
     next.disabled = page.end >= total;

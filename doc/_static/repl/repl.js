@@ -10,6 +10,9 @@ import { Editor } from "./editor.js";
 import { renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
+import { logSummary } from "./log_view.js";
+import { explainStartError } from "./start_error.js";
+import { tabAfter } from "./tabs.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -73,7 +76,7 @@ const setStatus = (message, state = "") => {
 };
 setInterval(() => {
   const seconds = Math.round((Date.now() - step.since) / 1000);
-  if (statusBox.className === "busy" && seconds >= 5) statusBox.textContent = `${step.message} (${seconds} s)`;
+  if (statusBox.className === "busy" && seconds >= 2) statusBox.textContent = `${step.message} (${seconds} s)`;
   tickWaiting(liveLog);
 }, 1000);
 const html = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }); // rich escapes its text
@@ -147,8 +150,28 @@ function showHistory() {
 // Show *what* in the results, in the tab *tab*.
 function show(tab, ...nodes) {
   $(tab).replaceChildren(...nodes);
+  $(`tab-${tab}`).hidden = false;
   results.classList.add("has");
+  selectTab(tab);
+}
+
+// The tab shown of the results, as the tab list tells it.
+function selectTab(tab) {
   results.dataset.tab = tab;
+  for (const name of ["table", "brain"]) {
+    $(`tab-${name}`).setAttribute("aria-selected", name === tab);
+    $(`tab-${name}`).tabIndex = name === tab ? 0 : -1;
+  }
+}
+
+// A failed start, in plain words, with the technical message folded.
+function fail(message) {
+  const { summary, detail } = explainStartError(message);
+  setStatus("The REPL could not start.", "error");
+  $("fatal-text").textContent = summary;
+  $("fatal-detail").textContent = detail;
+  $("fatal").hidden = false;
+  $("boot").hidden = true;
 }
 
 // The AI assistant: the form, and the key given to the worker.
@@ -170,6 +193,8 @@ function useKey() {
   worker.postMessage({ type: "llm", ...chosen });
   Object.assign($("ask-run"), { title: "" }).classList.remove("ghost");
   $("llm-summary").textContent = `${providers.find((p) => p.id === chosen.provider)?.label ?? chosen.provider}, key in use`;
+  $("key").textContent = "API key ✓";
+  $("ask-note").hidden = true;
 }
 
 function setProviders(list) {
@@ -198,22 +223,30 @@ function start() {
   Object.assign(version.elements.ref, { value: ref });
   $("version-summary").textContent = ref ? `${repo} at ${ref}` : "the build of this page";
   out.replaceChildren();
+  out.classList.remove("quiet");
   results.classList.remove("has");
+  $("table").replaceChildren();
+  $("brain").replaceChildren();
+  $("tab-brain").hidden = true;
+  selectTab("table");
+  $("fatal").hidden = true;
+  $("boot").hidden = false;
   agentLog.reset();
   live.hidden = true;
   setStatus("Starting…", "busy");
   setBusy(true);
+  input.disabled = false; // the query can be written while the engine loads
   worker = new Worker("worker.js", { type: "module" });
   worker.postMessage({ type: "start", repo, ref, full: params.get("engine") === "full" });
-  worker.onerror = (event) =>
-    setStatus(`The REPL stopped: ${event.message || "the browser ended its worker, perhaps out of memory"}. Restart it.`, "error");
+  worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "status") {
       setStatus(data.message, "busy");
     } else if (data.type === "error") {
-      setStatus(`The REPL could not start: ${data.message}`, "error");
+      fail(data.message);
     } else if (data.type === "ready") {
       setStatus("Ready.");
+      $("boot").hidden = true;
       $("banner").replaceChildren(html(data.banner));
       setProviders(data.providers ?? []);
       guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [] };
@@ -238,7 +271,7 @@ function start() {
       if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
     } else if (data.type === "reply") {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
-      out.replaceChildren(html(data.html));
+      showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
       if (data.predicates) guide.predicates = data.predicates;
       if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
       showGuide();
@@ -255,6 +288,16 @@ function start() {
       setBusy(false);
     }
   };
+}
+
+// The log of a query that gave a table is folded to its last line, which says how long it took.
+function showLog(log, fold) {
+  const last = fold && logSummary(log.textContent);
+  out.classList.toggle("quiet", Boolean(last));
+  if (!last) return out.replaceChildren(log);
+  const details = document.createElement("details");
+  details.append(Object.assign(document.createElement("summary"), { textContent: last }), log);
+  out.replaceChildren(details);
 }
 
 function run(text, { remember = false } = {}) {
@@ -290,6 +333,13 @@ for (const button of themeButtons) {
 system.addEventListener("change", () => applyTheme(chosen()));
 applyTheme(chosen());
 
+// The question box is narrow on a phone: its example is left out there.
+const askPlaceholder = question.placeholder;
+const narrow = matchMedia("(max-width: 40rem)");
+const placeAsk = () => (question.placeholder = narrow.matches ? "Ask in English…" : askPlaceholder);
+narrow.addEventListener("change", placeAsk);
+placeAsk();
+
 const version = $("version");
 $("code").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -316,7 +366,11 @@ $("share").addEventListener("click", async (event) => {
     window.prompt("Copy this link", url); // no clipboard here, e.g. an unsecured address
   }
 });
-$("key").addEventListener("click", () => ($("llm-details").open = !$("llm-details").open));
+$("key").addEventListener("click", () => {
+  const details = $("llm-details");
+  details.open = !details.open;
+  if (details.open) llmForm.elements.key.focus();
+});
 $("mode").addEventListener("change", (event) => {
   editor.refresh();
   showGuide();
@@ -331,7 +385,16 @@ history_.addEventListener("change", () => {
   history_.value = "";
   input.focus();
 });
-for (const tab of ["table", "brain"]) $(`tab-${tab}`).addEventListener("click", () => (results.dataset.tab = tab));
+for (const tab of ["table", "brain"]) $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+$("tabs").addEventListener("keydown", (event) => {
+  const shown = ["table", "brain"].filter((tab) => !$(`tab-${tab}`).hidden);
+  const next = tabAfter(shown, results.dataset.tab, event.key);
+  if (!next) return;
+  event.preventDefault();
+  selectTab(next);
+  $(`tab-${next}`).focus();
+});
+$("retry").addEventListener("click", start);
 llmForm.elements.provider.addEventListener("change", showProvider);
 llmForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -347,6 +410,8 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign($("ask-run"), { title: "Add an API key to use the assistant" }).classList.add("ghost");
   $("llm-error").hidden = true;
   $("llm-summary").textContent = "bring your own API key";
+  $("key").textContent = "API key";
+  $("ask-note").hidden = false;
 });
 $("restart").addEventListener("click", start);
 version.addEventListener("submit", (event) => {
