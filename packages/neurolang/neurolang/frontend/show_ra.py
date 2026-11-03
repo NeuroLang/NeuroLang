@@ -549,8 +549,8 @@ class RulePlan:
     leaf_arities : dict
         arities of the relations of the plan's leaves.
     deltas : frozenset
-        predicate symbols bound to the tuples derived in the current
-        iteration only (semi-naive evaluation).
+        predicate symbols bound to the tuples derived in the previous
+        iteration or earlier in the current one (semi-naive evaluation).
     iterations : list
         iterations of the chase the plan was evaluated in.
     body_code : Expression
@@ -747,7 +747,8 @@ class ShowRAChaseMixin:
         return super().chase_step(instance, rule, restriction_instance)
 
     def obtain_substitutions(
-        self, rule_predicates_iterator, instance, restriction_instance
+        self, rule_predicates_iterator, instance, restriction_instance,
+        columns=None,
     ):
         """Record the RA plan of the current rule, then evaluate it."""
         predicates = tuple(rule_predicates_iterator)
@@ -760,7 +761,7 @@ class ShowRAChaseMixin:
             predicates, symbol_table, restriction_instance
         )
         substitutions = super().obtain_substitutions(
-            iter(predicates), instance, restriction_instance
+            iter(predicates), instance, restriction_instance, columns=columns
         )
         if self.show_ra_display.options.analyze:
             self._count_show_ra_rows(plan, symbol_table, substitutions)
@@ -880,8 +881,8 @@ class ShowRAChaseMixin:
         for symbol in sorted(deltas, key=lambda symbol: symbol.name):
             name = self.show_ra_display.symbol_name(symbol)
             print(
-                f"(Δ{name}: only the {name} tuples derived in the current "
-                "iteration)"
+                f"(Δ{name}: only the {name} tuples derived in the previous "
+                "iteration or earlier in this one)"
             )
 
     def _print_rule_plans(self, rule, variants):
@@ -1187,6 +1188,7 @@ class ShowRAStratumSolver(StratumSolver):
             engine.program_ir.probabilistic_choices(),
             prob_idb,
             engine.check_qbased_pfact_tuple_unicity,
+            engine.program_ir.builtins(),
         )
         dedup = RemoveDuplicatedConjunctsDisjuncts()
         prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))

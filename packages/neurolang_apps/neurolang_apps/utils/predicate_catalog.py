@@ -33,7 +33,7 @@ class PredicateInfo(NamedTuple):
     unknown, and *arity* its number of columns, or None when it is
     unknown. A *probabilistic* predicate has a probability column
     besides its *arity* columns. *arguments* are the
-    :class:`~neurolang.utils.engine_registry.Argument` the engine
+    :class:`~neurolang_apps.utils.engine_registry.Argument` the engine
     declares, the entities it relates, or None.
     """
 
@@ -272,7 +272,7 @@ def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
     their declared columns (e.g. from the engine's configuration) and
     *loaded* those of the relations loaded with ``.load``. *signatures*
     maps predicate names to the arguments the engine declares (see
-    :func:`~neurolang.utils.engine_registry.get_signatures`).
+    :func:`~neurolang_apps.utils.engine_registry.get_signatures`).
     """
     builder = CatalogBuilder(nl, columns, loaded, signatures)
     return collect_catalog(builder, nl.program_ir.symbol_table)

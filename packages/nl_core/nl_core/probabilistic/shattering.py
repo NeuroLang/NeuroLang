@@ -5,9 +5,16 @@ import operator
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import ExpressionWalker, expression_iterator
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
-from nl_expr.logic import Conjunction, Disjunction, ExistentialPredicate
+from nl_expr.logic import (
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Negation,
+)
 from nl_expr.logic.expression_processing import extract_logic_atoms
 from nl_expr.logic.transformations import (
+    CollapseConjunctions,
+    FactorConjunctQuantifiers,
     LogicExpressionWalker,
     RemoveTrivialOperations,
     convert_to_pnf_with_dnf_matrix,
@@ -17,6 +24,14 @@ from .probabilistic_ra_utils import ProbabilisticFactSet
 
 EQ = Constant(operator.eq)
 NE = Constant(operator.ne)
+LT = Constant(operator.lt)
+LE = Constant(operator.le)
+GT = Constant(operator.gt)
+GE = Constant(operator.ge)
+# The comparisons of a variable with a constant that are shattered, with
+# their complement and with the comparison of the arguments swapped.
+COMPLEMENT = {NE: EQ, LT: GE, LE: GT, GT: LE, GE: LT}
+SWAPPED = {NE: NE, LT: GT, LE: GE, GT: LT, GE: LE}
 RTO = RemoveTrivialOperations()
 
 
@@ -30,10 +45,13 @@ def atom_to_constant_to_RA_conditions(atom: FunctionApplication) -> set:
 
 
 class NormalizeNotEquals(LogicExpressionWalker):
-    @add_match(FunctionApplication(NE, (Constant, Symbol)))
+    @add_match(
+        FunctionApplication(Constant, (Constant, Symbol)),
+        lambda expression: expression.functor in SWAPPED
+    )
     def flip_ne_arguments(self, expression):
         return expression.apply(
-            NE,
+            SWAPPED[expression.functor],
             expression.args[::-1]
         )
 
@@ -72,7 +90,7 @@ def conditions_per_symbol(ucq_query):
                 if not isinstance(atom.functor, Symbol):
                     continue
                 ne_conditions = {
-                    NE(int2columnint_constant(i), ne_constant)
+                    ne.functor(int2columnint_constant(i), ne_constant)
                     for i, s in enumerate(atom.args)
                     if s == ne_symbol
                 }
@@ -84,12 +102,13 @@ def conditions_per_symbol(ucq_query):
 
 
 def _formula_is_ne(formula):
-    """Whether `formula` is `variable ≠ constant`, inequalities between
-    variables are not shattered.
+    """Whether `formula` is the comparison of a variable with a constant,
+    such as `variable ≠ constant`; comparisons between variables are not
+    shattered.
     """
     return (
         isinstance(formula, FunctionApplication) and
-        formula.functor == NE and
+        formula.functor in COMPLEMENT and
         isinstance(formula.args[0], Symbol) and
         isinstance(formula.args[1], Constant)
     )
@@ -98,31 +117,41 @@ def _formula_is_ne(formula):
 def sets_per_symbol(ucq_query):
     cps, number_of_args = conditions_per_symbol(ucq_query)
 
-    complementary = {EQ: NE, NE: EQ}
     symbol_sets = dict()
 
     for symbol, conditions in cps.items():
         if len(conditions) == 0:
             continue
+        # A partition of the column's values for its constants, and one
+        # for each other comparison: the tuples of each set of the
+        # product of these partitions are disjoint from those of others.
         column_conditions = collections.defaultdict(set)
         for condition in conditions:
-            if condition.functor == NE:
-                condition = condition.apply(EQ, condition.unapply()[1])
-            column_conditions[condition.args[0]].add((condition,))
+            if condition.functor in (EQ, NE):
+                column_conditions[condition.args[0]].add(
+                    (EQ(*condition.args),)
+                )
+            else:
+                column_conditions[condition] = {
+                    (condition,),
+                    (COMPLEMENT[condition.functor](*condition.args),)
+                }
 
         for column, conditions in column_conditions.items():
+            if isinstance(column, FunctionApplication):
+                continue
             column_conditions[column].add(
-                tuple(
-                    complementary[c[0].functor](*c[0].args) for c in conditions
-
-                )
+                tuple(NE(*c[0].args) for c in conditions)
             )
 
         set_formulas = list(
             Conjunction(tuple(
                 sorted(
                     itertools.chain(*conditions),
-                    key=lambda exp: (exp.args[0].value, exp.args[1].value)
+                    key=lambda exp: (
+                        exp.args[0].value, exp.args[1].value,
+                        exp.functor.value.__name__
+                    )
                 )
             ))
             for conditions in
@@ -211,13 +240,41 @@ class ShatterEqualities(ExpressionWalker):
                 formulas_to_keep.append(formula)
 
         resulting_formulas = tuple()
+        shattered_variables = set()
         for formula in formulas_to_keep:
             if formula.functor not in self.symbol_sets:
                 resulting_formulas += (formula,)
             else:
                 resulting_formulas += (self._shatter_atom(formula, nes=nes),)
+                shattered_variables |= set(formula.args)
 
-        return Conjunction(resulting_formulas)
+        if not shattered_variables:
+            return expression
+        # A comparison is in the sets of the atoms with its variable.
+        return Conjunction(resulting_formulas + tuple(
+            ne for ne in nes if ne.args[0] not in shattered_variables
+        ))
+
+    @add_match(
+        Conjunction,
+        lambda expression: (
+            any(_formula_is_ne(formula) for formula in expression.formulas)
+            and any(
+                isinstance(formula, ExistentialPredicate)
+                for formula in expression.formulas
+            ) and not any(
+                isinstance(e, (Negation, Disjunction))
+                for _, e in expression_iterator(expression)
+            )
+        )
+    )
+    def comparison_into_existentials(self, expression):
+        """C ∧ ∃x ψ ≡ ∃x (C ∧ ψ), x renamed apart: the comparisons with
+        a constant are then in the conjunction of the atoms of their
+        variable."""
+        return self.walk(CollapseConjunctions().walk(
+            FactorConjunctQuantifiers().walk(expression)
+        ))
 
     def _compute_expression_arguments(self, expression, sets_to_keep):
         args = []
@@ -245,16 +302,11 @@ class ShatterEqualities(ExpressionWalker):
     def _identify_sets_to_keep(self, expression, sets, nes=None):
         conditions = atom_to_constant_to_RA_conditions(expression)
         negative_conditions = set()
-        if nes is not None:
-            args = list(expression.args)
-            for ne in nes:
-                if ne.args[0] in expression.args:
-                    negative_conditions.add(
-                        EQ(
-                            int2columnint_constant(args.index(ne.args[0])),
-                            ne.args[1]
-                        )
-                    )
+        for ne in nes or ():
+            negative_conditions |= {
+                COMPLEMENT[ne.functor](int2columnint_constant(i), ne.args[1])
+                for i, arg in enumerate(expression.args) if arg == ne.args[0]
+            }
         sets_to_keep = []
         for set_ in sets:
             set_conditions = self._selection_formulas(set_)
@@ -289,6 +341,7 @@ class RelationalAlgebraSelectionConjunction(ExpressionWalker):
 
 
 def shatter_constants(query, symbol_table, shatter_all=False):
+    query = NormalizeNotEquals().walk(query)
     symbol_sets = sets_per_symbol(query)
     if not shatter_all:
         for k in list(symbol_sets.keys()):

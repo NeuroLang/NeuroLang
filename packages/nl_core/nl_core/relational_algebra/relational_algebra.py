@@ -455,7 +455,7 @@ class GroupByAggregation(RelationalAlgebraOperation):
         )
 
 
-class ExtendedProjection(RelationalAlgebraOperation):
+class ExtendedProjection(UnaryRelationalAlgebraOperation):
     """
     General operation defining string-based relational algebra projections
     allowing flexible computations on a relation's columns.

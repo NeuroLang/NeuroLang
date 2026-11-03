@@ -53,6 +53,7 @@ from nl_core.utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
 from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
+from .resampling import uses_resampling
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -397,18 +398,19 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             if isinstance(rule, ir.Query)
         ]
         if len(queries) == 0:
-            self.program_ir.walk(intermediate_representation)
+            self._walk_program(intermediate_representation.formulas)
             return
         elif len(queries) == 1:
-            query = self.frontend_translator.walk(queries[0])
-            program = logic.Union(
+            self._walk_program(
                 [
                     rule
                     for rule in intermediate_representation.formulas
                     if not isinstance(rule, ir.Query)
                 ]
             )
-            self.program_ir.walk(program)
+            query = self.frontend_translator.walk(
+                self._expand_resamplings(queries[0])
+            )
             return self.query(
                 query.head.arguments, query.body,
                 show_rewritten=show_rewritten, dry_run=dry_run,
@@ -427,6 +429,43 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def _walk_program(self, rules):
+        """
+        Add *rules* to the program; those with ``RESAMPLE`` after the
+        others, as they rewrite the rules they depend on, and the rules
+        over theirs last.
+        """
+        later = {id(r) for r in rules if uses_resampling(r)}
+        heads = set()
+        while later:
+            heads |= {r.consequent.functor for r in rules if id(r) in later}
+            more = {
+                id(r) for r in rules
+                if id(r) not in later and isinstance(r, logic.Implication)
+                and any(
+                    atom.functor in heads
+                    for atom in extract_logic_atoms(r.antecedent)
+                )
+            }
+            if not more:
+                break
+            later |= more
+        self.program_ir.walk(
+            logic.Union([r for r in rules if id(r) not in later])
+        )
+        for rule in rules:
+            if id(rule) in later:
+                self.program_ir.walk(logic.Union(
+                    (self._expand_resamplings(rule),)
+                ))
+
+    def _expand_resamplings(self, rule):
+        if uses_resampling(rule):
+            raise UnsupportedProgramError(
+                "RESAMPLE needs a probabilistic program (NeurolangPDL)"
+            )
+        return rule
 
     def _expand_whole_relation(self, head_vars, body):
         """

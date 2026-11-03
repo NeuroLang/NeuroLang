@@ -2,7 +2,7 @@
 Notes on the entities of several columns, for the errors on them.
 
 An engine declares the sorts of its predicates' arguments (see
-:func:`~neurolang.utils.engine_registry.get_signatures`). A voxel spans
+:func:`~neurolang_apps.utils.engine_registry.get_signatures`). A voxel spans
 three columns, ``i, j, k``, so the noun ``Voxel`` reads ``every Voxel in
 3D`` in SQUALL, and ``reports``, relating a study and a voxel, reads
 ``a Study reports a Voxel in 3D``. When a query fails on the number of

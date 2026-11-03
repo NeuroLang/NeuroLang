@@ -52,6 +52,7 @@ from nl_expr.logic import (
     Negation,
 )
 from nl_expr.logic.expression_processing import (
+    extract_conjuncts,
     extract_logic_atoms,
     extract_logic_free_variables,
 )
@@ -111,6 +112,16 @@ def columns_comparison(comparison):
     ))
 
 
+def select_comparisons(plan, comparisons):
+    """`plan` selected by the `comparisons` of its columns."""
+    return reduce(
+        lambda plan, comparison: rap.Selection(
+            plan, columns_comparison(comparison)
+        ),
+        comparisons, plan
+    )
+
+
 class NormaliseNonRepeatingQuery(
     UnifyExistentialVariableEqualitiesMixin,
     MoveNegationsIntoDisjunctionsMixin,
@@ -159,7 +170,7 @@ class NonRepeatingPlanner(PatternWalker):
         variables of v̄ are each projected on one of their variables
         occurring in all of their probabilistic atoms."""
         variables, body = _quantified_body(existential)
-        conjuncts = _conjuncts(body)
+        conjuncts = extract_conjuncts(body)
         outside = [
             f for f in conjuncts
             if extract_logic_free_variables(f).isdisjoint(variables)
@@ -192,16 +203,14 @@ class NonRepeatingPlanner(PatternWalker):
         plan = TranslateToNamedRA().walk(atom.functor(*args))
         if len(selections) == 0:
             return plan
-        for selection in selections:
-            plan = rap.Selection(plan, columns_comparison(selection))
         return rap.Projection(
-            plan, tuple(str2columnstr_constant(v.name) for v in variables)
+            select_comparisons(plan, selections), tuple(str2columnstr_constant(v.name) for v in variables)
         )
 
     def _conjunction_plan(self, formulas, planned=()):
         """Plan of the conjunction of `formulas` and of the plans
         `planned`, pairs of a plan and its columns."""
-        positives, comparisons, negations = _partition_conjuncts(formulas)
+        positives, comparisons, negations = _partitionextract_conjuncts(formulas)
         plans = self._positive_plans(positives, list(planned))
         if not plans:
             return None
@@ -321,7 +330,7 @@ def _quantified_body(existential):
     return variables, body
 
 
-def _partition_conjuncts(formulas):
+def _partitionextract_conjuncts(formulas):
     """The positive conjuncts, comparisons and negations of `formulas`."""
     negations = [f for f in formulas if isinstance(f, Negation)]
     comparisons = [f for f in formulas if is_comparison(f)]
@@ -335,17 +344,12 @@ def _partition_conjuncts(formulas):
 def _selected_by_comparisons(plan, columns, comparisons):
     """`plan` selected by `comparisons`, or None if one has a variable
     that is not in `columns`."""
-    for comparison in comparisons:
-        if not extract_logic_free_variables(comparison) <= columns:
-            return None
-        plan = rap.Selection(plan, columns_comparison(comparison))
-    return plan
-
-
-def _conjuncts(formula):
-    if isinstance(formula, Conjunction):
-        return list(formula.formulas)
-    return [formula]
+    if any(
+        not extract_logic_free_variables(comparison) <= columns
+        for comparison in comparisons
+    ):
+        return None
+    return select_comparisons(plan, comparisons)
 
 
 def _connected_groups(formulas, variables):

@@ -1,10 +1,11 @@
 """
 Ranking of queries, Dalvi & Suciu [1]_, section 4.1.
 
-A query is ranked when there is an order on its variables such that the
-variables of every atom follow it. A query that is not ranked is
-rewritten into an equivalent ranked one, so that the lifting rules, which
-need it, can apply.
+A query is ranked when there is an order on its bound variables such that
+the variables of every atom follow it: its free variables, the answer
+variables, are constants, as in Dalvi & Suciu, and need no order. A query
+that is not ranked is rewritten into an equivalent ranked one, so that the
+lifting rules, which need it, can apply.
 
 .. [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference for
    unions of conjunctive queries. J. ACM 59, 1–87 (2012).
@@ -52,6 +53,7 @@ MAX_RANKED_VARIABLES = 2
 
 def verify_that_the_query_is_ranked(query):
     argument_precedence = defaultdict(set)
+    free_variables = extract_logic_free_variables(query)
     query = convert_to_pnf_with_dnf_matrix(query)
 
     for atom in extract_logic_atoms(query):
@@ -60,7 +62,9 @@ def verify_that_the_query_is_ranked(query):
         if not isinstance(atom.functor, Symbol):
             return False
         for i, arg in enumerate(atom.args[1:], 1):
-            argument_precedence[arg].update(atom.args[:i])
+            argument_precedence[arg].update(
+                set(atom.args[:i]) - free_variables
+            )
 
     for arg1, arg2 in product(argument_precedence, argument_precedence):
         if (
@@ -141,7 +145,7 @@ def rank_query(query, symbol_table):
     Rewrite `query`, a union of conjunctive queries, into an equivalent
     ranked query, following Dalvi & Suciu, Proposition 4.2.
 
-    The variables `S` which occur in both orders in atoms, or repeated
+    The bound variables `S` in both orders in atoms, or repeated
     in an atom, are ranked, together with the variables occurring, in an
     atom of a relation, at a position where another atom of the relation
     has a variable of `S`: every atom of a relation has variables of `S`
@@ -186,7 +190,9 @@ def rank_query(query, symbol_table):
         atom for atom in extract_logic_atoms(matrix)
         if isinstance(atom.functor, Symbol)
     ]
-    variables, positions = _ranked_variables_and_positions(atoms)
+    variables, positions = _ranked_variables_and_positions(
+        atoms, free_variables
+    )
     _check_rankable(
         matrix, variables, positions, free_variables, symbol_table
     )
@@ -291,14 +297,14 @@ def _ranked_relation(symbol, arity, ranked, pattern, symbol_table):
     return DeterministicFactSet(fresh)
 
 
-def _ranked_variables_and_positions(atoms):
+def _ranked_variables_and_positions(atoms, free_variables):
     """The variables to rank, and the ranked positions of each relation,
     closed so that every atom of a relation has variables to rank at its
     ranked positions."""
     precedence = defaultdict(set)
     for atom in atoms:
         for i, arg in enumerate(atom.args):
-            precedence[arg].update(atom.args[:i])
+            precedence[arg].update(set(atom.args[:i]) - free_variables)
     variables = {
         arg for arg, previous in precedence.items()
         if isinstance(arg, Symbol) and (

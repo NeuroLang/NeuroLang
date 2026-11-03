@@ -600,7 +600,7 @@ def _index_lookup(keys, size):
         Function mapping an array of keys to their positions in *keys*,
         -1 for those missing.
     """
-    index_type = numpy.int32 if len(keys) < 2 ** 31 else numpy.int64
+    index_type = _index_type(len(keys))
     if size <= max(GRID_MIN_CELLS, GRID_CELLS_PER_POINT * len(keys)):
         grid = numpy.full(size, -1, dtype=index_type)
         grid[keys] = numpy.arange(len(keys), dtype=index_type)

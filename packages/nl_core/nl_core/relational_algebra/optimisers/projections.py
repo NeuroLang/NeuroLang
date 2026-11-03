@@ -164,6 +164,8 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             )
         )
 
+    # A constant of the side of an outer join that may be null is not moved
+    # up: the rows without a match have no value for it, not the constant.
     @ew.add_match(
         ExtendedProjection(
             NaturalJoin(ExtendedProjection, ...),
@@ -192,19 +194,6 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
 
     @ew.add_match(
         ExtendedProjection(
-            FullOuterNaturalJoin(ExtendedProjection, ...),
-            ...
-        ),
-        lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_left.projection_list
-        )
-    )
-    def nested_extended_projection_outernaturaljoin_constant(self, expression):
-        return self._nested_ep_join_constant_left(expression)
-
-    @ew.add_match(
-        ExtendedProjection(
             NaturalJoin(..., ExtendedProjection),
             ...
         ),
@@ -214,32 +203,6 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_naturaljoin_constantr(self, expression):
-        return self._nested_ep_join_constant_left(expression, flip=True)
-
-    @ew.add_match(
-        ExtendedProjection(
-            LeftNaturalJoin(..., ExtendedProjection),
-            ...
-        ),
-        lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_right.projection_list
-        )
-    )
-    def nested_extended_projection_leftnaturaljoin_constantr(self, expression):
-        return self._nested_ep_join_constant_left(expression, flip=True)
-
-    @ew.add_match(
-        ExtendedProjection(
-            FullOuterNaturalJoin(..., ExtendedProjection),
-            ...
-        ),
-        lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_right.projection_list
-        )
-    )
-    def nested_extended_projection_outernaturaljoin_constantr(self, expression):
         return self._nested_ep_join_constant_left(expression, flip=True)
 
     def _nested_ep_join_constant_left(self, expression, flip=False):
@@ -376,9 +339,14 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 for proj in expression.relation_left.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
             ) - expression.relation_right.columns()
+        ) and not any(
+            _function_application_list_member_has_constant_exp(proj)
+            for proj in expression.relation_left.projection_list
         )
     )
     def push_computed_columns_up_outer(self, expression):
+        """The columns of a side that may be null are null in the rows
+        without a match, as the functions of them; not so a constant."""
         return self.push_computed_columns_up(expression)
 
     @ew.add_match(

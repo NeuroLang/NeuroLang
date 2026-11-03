@@ -44,6 +44,9 @@ from .expression_processing import (
 )
 
 
+AGGREGATES = (AggregationApplication, ProbabilisticQuery)
+
+
 def order_conjunction_constant_atoms_first(
     formulas: Tuple[Expression, ...],
 ) -> Tuple[Expression, ...]:
@@ -173,7 +176,7 @@ class SIPS(ABC):
         bound_aggregates = {
             arg
             for arg, ad in zip(rule.consequent.args, adornment)
-            if isinstance(arg, (AggregationApplication, ProbabilisticQuery))
+            if isinstance(arg, AGGREGATES)
             and ad == "b"
         }
         if len(bound_aggregates) > 0:
@@ -406,9 +409,7 @@ def aggregate_positions(datalog):
             }
             new = {
                 i for i, arg in enumerate(rule.consequent.args)
-                if arg in aggregated or isinstance(
-                    arg, (AggregationApplication, ProbabilisticQuery)
-                )
+                if arg in aggregated or isinstance(arg, AGGREGATES)
             }
             known = positions.setdefault(rule.consequent.functor, set())
             if not new <= known:

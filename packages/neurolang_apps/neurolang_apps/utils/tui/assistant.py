@@ -2,7 +2,7 @@
 The LLM query assistant in the REPL: ``.ask`` and ``.llm``.
 
 ``.ask <question>`` turns the question into a query of the session's
-language with an LLM (see :mod:`neurolang.utils.llm`), printing the
+language with an LLM (see :mod:`neurolang_apps.utils.llm`), printing the
 steps of the agent as they run. The query is not run: it is put in the
 next prompt, to be read, edited and run with Enter, each rule under a
 comment line explaining it (``comment_rules``), and also shown in logic
@@ -251,6 +251,45 @@ def _step_printer(app, language: str):
     return print_step
 
 
+# The events the assistant sends to ``app.agent_events`` while it works,
+# dicts with an ``event`` key: ``ask`` (question, language, provider, model,
+# strategy), then for each request to the model ``request`` (call) and
+# ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
+# answered and its tool is about to run), and for each step of the agent
+# ``step`` (thought, action, arguments, observation); ``done`` (valid,
+# query, explanation, error, calls, tokens, seconds, verified, back_translation,
+# verification) ends them.
+AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
+
+
+def _step_event(step) -> dict:
+    """Return the ``step`` event of the finished *step* of the agent."""
+    return {
+        "event": "step", "thought": step.thought, "action": step.action,
+        "arguments": step.arguments, "observation": step.observation,
+    }
+
+
+def _also_sending(on_step, events):
+    """Return *on_step* sending the ``step`` event of each step too."""
+    def sending(step) -> None:
+        on_step(step)
+        events(_step_event(step))
+    return sending
+
+
+def _done_event(result) -> dict:
+    """Return the ``done`` event of the *result* of the agent."""
+    return {
+        "event": "done", "valid": result.valid, "query": result.query,
+        "explanation": result.explanation, "error": result.error,
+        "calls": result.calls, "tokens": sum(result.usage.values()),
+        "seconds": result.seconds, "verified": result.verified,
+        "back_translation": result.back_translation,
+        "verification": result.verification,
+    }
+
+
 def _switch_language(app, language: str) -> None:
     """Switch the REPL to *language*, if it is not its mode, and say so."""
     squall = language == "squall"
@@ -272,14 +311,29 @@ def runnable_query(result) -> str:
     return result.query
 
 
+def _show_summary(app, result) -> None:
+    """
+    Print what the query does, above it and apart from it: the
+    explanation the model gave and the query read back in English.
+    """
+    summary = Text()
+    if result.explanation:
+        summary.append(result.explanation)
+    if result.back_translation:
+        if summary:
+            summary.append("\n")
+        summary.append("Reads back as: ", style="dim")
+        summary.append(result.back_translation, style="dim italic")
+    if summary:
+        app.console.print(Panel(
+            summary, title="Summary", title_align="left",
+            border_style="cyan",
+        ))
+
+
 def _show_verification(app, result) -> None:
-    """Print the query read back in English and the verdict of its check."""
-    if not result.back_translation:
-        return
-    app.console.print(
-        f"[dim]Reads back as: {escape(result.back_translation)}[/dim]"
-    )
-    if result.verified is False:
+    """Print the verdict of the check of the query, when it is against it."""
+    if result.back_translation and result.verified is False:
         app.console.print(
             "[yellow]The check found that the query may not answer the "
             f"question: {escape(result.verification)}[/yellow]"
@@ -289,10 +343,12 @@ def _show_verification(app, result) -> None:
 def _show_result(app, result) -> None:
     """
     Print the query of the agent's *result*, each rule under a comment
-    line explaining it if the model wrote them, and put it in the prompt.
+    line explaining it if the model wrote them, below a summary of what
+    it does, and put it in the prompt.
     """
     kinds = query_kinds(app)
     if result.valid:
+        _show_summary(app, result)
         app.console.print(Panel(
             query_text(
                 result.commented or result.query, result.language,
@@ -307,8 +363,6 @@ def _show_result(app, result) -> None:
             app.console.print(Panel(
                 logic, title="in logic notation", border_style="green",
             ))
-        if result.explanation:
-            app.console.print(escape(result.explanation), style="dim")
         _show_verification(app, result)
     else:
         app.failed = True
@@ -328,7 +382,14 @@ def _show_result(app, result) -> None:
     if result.query:
         _switch_language(app, result.language)
         app.pending_input = runnable_query(result)
+        shown = False
+        if result.valid and result.frames is not None:
+            # The agent ran the query to accept it: its result, not a new run.
+            app.show_agent_run(app.pending_input, result.frames)
+            shown = app.agent_run is not None
         app.console.print(
+            "[dim]The query is in the prompt: edit it to run it again, "
+            "or press Enter to see its result again.[/dim]" if shown else
             "[dim]The query is in the prompt: edit it or press Enter to "
             "run it.[/dim]"
         )
@@ -355,6 +416,17 @@ def cmd_ask(app, arg: str) -> None:
     )
 
 
+def _make_agent(app, provider, assistant, language, strategy, **options):
+    """Return the agent of the session's engine and loaded relations."""
+    from neurolang_apps.utils.llm import make_agent
+
+    return make_agent(
+        app._nl, provider, assistant, language, strategy,
+        engine_name=app.settings.engine_name, loaded=app.loaded_relations,
+        **options,
+    )
+
+
 def _run_assistant(
     app, question: str, language: Optional[str] = None,
     strategy: Optional[str] = None, steps: Optional[int] = None,
@@ -366,7 +438,9 @@ def _run_assistant(
     agent) override those of the session and of the configuration when
     given.
     """
-    from neurolang_apps.utils.llm import LLMConfigError, LLMError, make_agent
+    from neurolang_apps.utils.llm import (
+        AgentResult, LLMConfigError, LLMError
+    )
     state = app.assistant
     try:
         config = state.config()
@@ -376,20 +450,39 @@ def _run_assistant(
         steps = steps or state.steps
         if steps:
             assistant = replace(assistant, max_steps=steps)
-        agent = make_agent(
-            app._nl, provider, assistant, language,
-            strategy or state.strategy,
-            engine_name=app.settings.engine_name,
-            loaded=app.loaded_relations, client=state.client,
-            on_step=_step_printer(app, language),
+        client, on_step = state.client, _step_printer(app, language)
+        events = app.agent_events
+        if events:
+            from neurolang_apps.utils.llm import make_client
+            from neurolang_apps.utils.llm.trace import TracingClient
+
+            client = TracingClient(
+                client or make_client(provider, assistant.timeout), events
+            )
+            on_step = _also_sending(on_step, events)
+        agent = _make_agent(
+            app, provider, assistant, language, strategy or state.strategy,
+            client=client, on_step=on_step,
         )
         app.err_console.print(
             f"[dim]Asking {provider.name} ({provider.model or provider.api}"
             f", {agent.strategy})...[/dim]"
         )
-        result = call_interruptibly(
-            lambda: agent.run(question), app._print_stuck_hint
-        )
+        if events:
+            events({
+                "event": "ask", "question": question, "language": language,
+                "provider": provider.name,
+                "model": provider.model or provider.api,
+                "strategy": agent.strategy,
+            })
+        try:
+            result = call_interruptibly(
+                lambda: agent.run(question), app._print_stuck_hint
+            )
+        except LLMError as exc:  # a failure, shared too
+            result = AgentResult(language=language, error=str(exc))
+        if events:
+            events(_done_event(result))
     except KeyboardInterrupt:
         app.failed = True
         app.console.print("[yellow]Interrupted[/yellow]")
@@ -414,6 +507,48 @@ def _run_assistant(
                 f"[dim]Shared as {answer}: rate it with .rate good|bad|"
                 "unsure \\[comment], correct it with .refine.[/dim]"
             )
+
+
+@command(
+    ".explain", "Read the last query in English with the assistant",
+    ".explain",
+)
+def cmd_explain(app, arg: str) -> None:
+    """Print the last query that ran, translated into English."""
+    from neurolang_apps.utils.llm import LLMConfigError, LLMError
+
+    if arg.strip():
+        app.failed = True
+        app.console.print("[yellow]Usage: .explain[/yellow]")
+        return
+    if app.last_query is None:
+        app.failed = True
+        app.console.print("[yellow]Run a query first.[/yellow]")
+        return
+    if not _llm_available(app):
+        return
+    program, squall = app.last_query
+    state = app.assistant
+    try:
+        config = state.config()
+        provider = config.provider(state.provider)
+        agent = _make_agent(
+            app, provider, config.assistant,
+            "squall" if squall else "datalog", state.strategy,
+            client=state.client,
+        )
+        english = call_interruptibly(
+            lambda: agent.explain(program), app._print_stuck_hint
+        )
+    except KeyboardInterrupt:
+        app.failed = True
+        app.console.print("[yellow]Interrupted[/yellow]")
+        return
+    except (LLMConfigError, LLMError) as exc:
+        app.failed = True
+        app.console.print(f"[red]{escape(str(exc))}[/red]")
+        return
+    app.console.print(Text("Reads as: " + english, style="dim italic"))
 
 
 def _say(app):
@@ -510,6 +645,8 @@ assistant. Turn it on in the LLM configuration (llm.yaml):
     enabled: true
     url: https://feedback.example.org
     user: your name                   (optional)
+    grist_doc: DOC_ID                 (or: rows of this Grist document at
+                                      url, the API key in GRIST_API_KEY)
 
 or with the environment variable NEUROLANG_LLM_FEEDBACK_URL.
 

@@ -688,7 +688,7 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     """
     )
     expected = {'Signs': {'values': {'@', '∃', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'MARG', 'PROB', 'SUCC', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
 
@@ -863,6 +863,27 @@ def test_unbound_variables_in_aggregation_rule_rejected():
             "n_close(i, count(s)) :- peak_reported(i, j, k, s) "
             "& (euclidean(i, j, k, i1, j1, k1) < 2.)"
         )
+
+
+@ENGINES
+@pytest.mark.parametrize("program", [
+    "ans(s, t) :- title(s, t), ~regexp(t, 'default mode', 'i')",
+    "p(s) :- title(s, t), regexp(t, 'default mode')",
+])
+def test_function_with_wrong_arguments_rejected(engine_class, program):
+    nl = engine_class()
+    nl.add_tuple_set([(1, "a default mode network")], name="title")
+    with pytest.raises(WrongArgumentsInPredicateError) as exc_info:
+        nl.execute_datalog_program(program)
+    assert str(exc_info.value).startswith(
+        "`regexp` is used with "
+    )
+    assert "but is the function regexp(regexp: str) -> " in str(
+        exc_info.value
+    )
+    assert str(exc_info.value).endswith(
+        ": The regions whose symbol name matches the regular expression."
+    )
 
 
 @pytest.mark.parametrize("head", ["ans(i)", "ans(i, m)"])

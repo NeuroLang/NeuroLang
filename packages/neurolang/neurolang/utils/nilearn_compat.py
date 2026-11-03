@@ -8,6 +8,9 @@ downloaded or resampled keeps ``import neurolang`` and the
 """
 
 
+from pathlib import Path
+
+
 def nilearn_datasets():
     """
     Return the ``nilearn.datasets`` module, importing it on first use.
@@ -54,7 +57,21 @@ def fetch_files(*args, **kwargs):
     list of str
         paths of the downloaded (or already cached) files.
 
+    Notes
+    -----
+    When every file is already in the data directory, and none is to be
+    downloaded again, their paths are returned without importing nilearn,
+    as it would, which takes seconds.
+
     """
+    files = list(args[1] if len(args) > 1 else kwargs.get("files", ()))
+    data_dir = args[0] if args else kwargs.get("data_dir")
+    options = set(kwargs) - {"data_dir", "files", "verbose", "resume"}
+    if data_dir is not None and not options and len(args) <= 2 and all(
+        not opts.get("overwrite") and (Path(data_dir) / name).exists()
+        for name, _, opts in files
+    ):
+        return [str(Path(data_dir) / name) for name, _, _ in files]
     try:
         from nilearn.datasets.utils import _fetch_files as fetcher
     except ImportError:

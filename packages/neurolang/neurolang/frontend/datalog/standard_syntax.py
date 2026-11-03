@@ -30,6 +30,7 @@ from nl_core.probabilistic.expressions import (
 )
 from nl_expr.type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
+from ..resampling import RESAMPLE_MARKER
 from .lark_errors import lark_errors_as_neurolang
 
 # Aggregation function names recognised in rule head arguments.
@@ -102,12 +103,16 @@ predicate : id_application
           | "(" comparison ")"
           | logical_constant
           | prob_body_predicate
+          | resample_body_predicate
           | marg_body_predicate
           | succ_body_predicate
 
 // PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
 prob_body_predicate : "PROB" "[" conjunction "]" "=" argument
                     | "PROB" "[" conjunction PROB_SEP body "]" "=" argument
+
+// RESAMPLE[boot](pred(x)) = b  —  pred(x) on each replicate b of the resampling boot
+resample_body_predicate : "RESAMPLE" "[" cmd_identifier "]" "(" id_application ")" "=" argument
 
 // MARG[pred] = var  —  marginal probability query inside a rule body
 // MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
@@ -826,6 +831,10 @@ class DatalogTransformer(Transformer):
             Symbol("__PROB__"),
             (pred, cond_body, result_var)
         )
+
+    def resample_body_predicate(self, ast):
+        # RESAMPLE[boot](pred(x)) = b → ast = [boot, pred(x), b]
+        return FunctionApplication(RESAMPLE_MARKER, tuple(ast))
 
     def marg_body_predicate(self, ast):
         # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)

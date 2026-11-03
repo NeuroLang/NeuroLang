@@ -3,6 +3,7 @@ import warnings
 import pytest
 
 from ..context import EngineContext
+from ..examples import Example
 from ..validation import (
     _undefined_predicates,
     arity_errors,
@@ -100,6 +101,34 @@ def test_run_preview_of_several_results(nl):
     assert "a: 3 rows" in preview.text and "b: 1 rows" in preview.text
 
 
+def test_a_preview_keeps_the_whole_result(nl):
+    preview = run_preview(nl, "ans(s, t) :- mentions(s, t)", "datalog", 2)
+    [(title, frame)] = preview.frames
+    assert title == "" and len(frame) == 4  # the text shows 2 rows only
+    several = run_preview(
+        nl, "obtain every Study as A. obtain every Study that mentions "
+        "'fear' as B.", "squall",
+    )
+    assert [(t, len(f)) for t, f in several.frames] == [("a", 3), ("b", 1)]
+
+
+def test_the_whole_result_comes_back_from_the_child_process(forking, nl):
+    preview = run_preview(
+        nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,
+    )
+    [(_, frame)] = preview.frames
+    assert len(frame) == 4 and list(frame.columns) == ["s", "t"]
+
+
+def test_a_result_too_large_or_boolean_is_not_kept(nl, monkeypatch):
+    from .. import validation
+
+    monkeypatch.setattr(validation, "MAX_KEPT_CELLS", 3)
+    large = run_preview(nl, "ans(s, t) :- mentions(s, t)", "datalog")
+    assert large.ok and large.frames is None
+    assert run_preview(nl, "ans() :- mentions(s, t)", "datalog").frames is None
+
+
 def test_run_preview_error(nl):
     preview = run_preview(nl, "ans(s) :- mentions(s, 'pain'", "datalog")
     assert not preview.ok and "parse error" in preview.text
@@ -155,6 +184,33 @@ def test_describe_and_search(nl):
     assert "Unknown predicate 'nothing'" in context.search_values(
         "x", "nothing"
     )
+
+
+def test_describe_a_rule_computed_for_a_given_text(nl, monkeypatch):
+    def query_similarity(q: str, s: int) -> float:
+        return 1.0 / s
+
+    nl.add_symbol(query_similarity, name="query_similarity")
+    nl.execute_datalog_program(
+        "study_similarity(q, s, v) :- study(s) & "
+        "(v == query_similarity(q, s)) & (v > 0)\n"
+        "similar_study(q, s) :- study_similarity(q, s, v) & (v > 0.4)"
+    )
+    example = "ans(s) :- similar_study('fear', s)"
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.load_examples",
+        lambda name: [Example("Studies close to fear?", {"datalog": example})],
+    )
+    context = EngineContext(nl)
+    lines = context.describe("study_similarity").splitlines()
+    assert lines == [
+        "study_similarity(q, s, v) [rule]",
+        "Its rows are not listed: a query must give some of its arguments, "
+        "e.g. a text as a constant or a variable bound by another atom.",
+    ]
+    lines = context.describe("similar_study").splitlines()
+    assert lines[1].endswith("For example:") and lines[2] == example
+    assert "4 rows, e.g.:" in context.describe("mentions")
 
 
 def test_search_shows_the_closest_of_many_values(nl, monkeypatch):
@@ -332,17 +388,27 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
 
 def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
     """A child killed by a signal (e.g. a library that cannot run after
-    fork) is reported as a crash, not as a query using too much memory."""
+    fork) is reported as a crash, not as a query using too much memory.
+
+    The child is killed by SIGTERM: one that dumps core (SIGABRT, SIGSEGV)
+    stays alive while the system writes the core of the large process of a
+    whole test run, longer than the timeout, whatever RLIMIT_CORE says
+    when the dump is piped to a program (systemd-coredump).
+    """
     import os
+    import signal
 
     from .. import validation
 
-    monkeypatch.setattr(validation, "_execute", lambda *a, **k: os.abort())
+    monkeypatch.setattr(
+        validation, "_execute",
+        lambda *a, **k: os.kill(os.getpid(), signal.SIGTERM),
+    )
     preview = run_preview(
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=4096
     )
     assert not preview.ok
-    assert "crashed (SIGABRT)" in preview.text
+    assert "crashed (SIGTERM)" in preview.text
     assert "too much memory" not in preview.text
 
 

@@ -1,6 +1,7 @@
 """Tests for engine initialization modules."""
 
 import numbers
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,9 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from neurolang.frontend.neurosynth_utils import StudyID
+
+# Where the engines keep their cache: a directory of the run, not the working one.
+DATA_DIR = Path(tempfile.mkdtemp(prefix="neurolang-test-data-"))
 
 NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
 
@@ -81,7 +85,7 @@ class TestNeurosynthEngineStudyIdConsistency:
         )
 
         # ---- Mock NeurolangPDL to capture add_tuple_set calls ---------------
-        nl = MagicMock()
+        nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
         init_engine(nl, mask, data_dir=str(tmp_path / "fake"))
 
         # Collect the DataFrames that were passed to add_tuple_set
@@ -141,7 +145,7 @@ def test_neurosynth_cortical_mask(
     mock_atlas.return_value = nib.Nifti1Image(labels, affine)
     mask = nib.Nifti1Image(np.ones((10, 10, 10), dtype=np.uint8), np.eye(4))
 
-    nl = MagicMock()
+    nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
     init_engine(nl, mask, data_dir=Path("unused"))
 
     sets = {
@@ -183,7 +187,7 @@ def test_neurosynth_cognitive_atlas_tasks(
     )
     mock_tasks.return_value = _COGNITIVE_ATLAS_TASKS
 
-    nl = MagicMock()
+    nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
     init_engine(nl, mask, data_dir=Path("unused"))
 
     sets = {
@@ -316,7 +320,7 @@ class TestNeurosynthEngineVocabulary:
         mock_atlas.return_value = nib.Nifti1Image(
             np.zeros((4, 4, 4), dtype=np.int16), np.eye(4)
         )
-        nl = MagicMock()
+        nl = MagicMock(engine_cache_dir=None)  # no cache: a mock would be a path
 
         init_engine(nl, mask, data_dir="unused")
 
@@ -409,7 +413,7 @@ _FAKE_ATLASES = {
 }
 
 
-def _fake_schaefer(nl, cfg, data_dir, name):
+def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
     with the studies activating them, as ``_phase_atlases``.
@@ -492,14 +496,14 @@ def _build_small_neurosynth(free_text=True):
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
         if free_text:
-            return engine_registry.build_engine("neurosynth", Path("unused"))
+            return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config
 
         def get_config(name, yaml_path=None):
             return _without_free_text_rules(config(name, yaml_path))
 
         with patch.object(engine_registry, "get_engine_config", get_config):
-            return engine_registry.build_engine("neurosynth", Path("unused"))
+            return engine_registry.build_engine("neurosynth", DATA_DIR)
 
 
 _TYPES = {
@@ -938,3 +942,41 @@ class TestEngineTemplate:
         grid = nl.grids["schaefer"]
         assert grid.shape == (3, 5, 2)
         assert np.array_equal(grid.affine, affine)
+
+
+def test_resamplings_of_a_choice(tmp_path):
+    """Check ``resamplings`` adds replicates of a choice, for RESAMPLE."""
+    from neurolang_apps.utils import engine_registry
+
+    (tmp_path / "study.tsv").write_text("study_id\n1\n2\n3\n4\n")
+    (tmp_path / "mentions.tsv").write_text(
+        "study_id\tterm\n1\tpain\n2\tpain\n"
+    )
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        """
+engines:
+  e:
+    relations:
+      study: study.tsv
+      mentions: mentions.tsv
+    probabilistic_choice:
+      selected_study: {source: study}
+    resamplings:
+      boot_studies:
+        choice: selected_study
+        n: 20
+        description: "Replicates of the studies"
+"""
+    )
+    nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+    res = nl.execute_datalog_program(
+        "p(PROB) :- mentions(s, 'pain') & selected_study(s)\n"
+        "rep(b, x) :- RESAMPLE[boot_studies](p(x)) = b\n"
+        "ans(count(b), percentile(x, 2.5), percentile(x, 97.5)) :- rep(b, x)"
+    )
+    (n, lo, hi), = res
+    assert n == 20
+    assert 0 < lo < .5 < hi < 1
+    predicates = engine_registry.get_predicates("e", path)
+    assert "boot_studies" in predicates

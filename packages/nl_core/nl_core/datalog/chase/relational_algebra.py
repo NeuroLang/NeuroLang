@@ -16,7 +16,9 @@ from nl_expr.logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    PushInSelections,
-                                   RelationalAlgebraSolver, Selection, eq_)
+                                   RelationalAlgebraSolver, Selection, eq_,
+                                   str2columnstr_constant)
+from ...relational_algebra.optimisers.columns import _ra_columns
 from nl_expr.type_system import Unknown, is_leq_informative
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
@@ -318,21 +320,18 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         )
         symbol_table.update(instance)
+        positive = {
+            predicate.functor for predicate in predicates
+            if isinstance(predicate, FunctionApplication)
+        }
+        # Differential evaluation: a positive body predicate is bound to the
+        # delta alone, without merging it with the instance, which would
+        # cost as much as the relation; negated predicates are bound to both
+        # so that set-difference (RA difference) computes correctly.
         for k, v in restriction_instance.items():
-            if k in symbol_table:
-                s = symbol_table[k]
-                v = v.apply(s.value | v.value)
+            if k in symbol_table and k not in positive:
+                v = v.apply(symbol_table[k].value | v.value)
             symbol_table[k] = v
-        # Differential evaluation fix: for positive body predicates that
-        # exist in restriction_instance, use ONLY the delta instead of the
-        # merged instance|delta.  This restores semi-naive differential
-        # evaluation. Negated predicates keep the merged value so that
-        # set-difference (RA difference) computes correctly.
-        for predicate in predicates:
-            if isinstance(predicate, FunctionApplication):
-                functor = predicate.functor
-                if functor in restriction_instance:
-                    symbol_table[functor] = restriction_instance[functor]
         return symbol_table
 
     def _rule_substitutions(
@@ -344,7 +343,8 @@ class ChaseNamedRelationalAlgebraMixin:
         """
         try:
             return self.obtain_substitutions(
-                predicates, instance, restriction_instance
+                predicates, instance, restriction_instance,
+                columns=self._head_columns(rule),
             )
         except UnboundVariablesError as error:
             functor = rule.consequent.functor
@@ -352,9 +352,31 @@ class ChaseNamedRelationalAlgebraMixin:
                 raise
             raise error.located(functor.name) from None
 
+    @staticmethod
+    def _head_columns(rule):
+        """
+        Return the variables of the head of *rule*, which its substitutions
+        need, or None for all those of its body.
+
+        Projected on them, the substitutions are as many as the rows of the
+        head, not as the combinations of the variables of the body; a head
+        with other arguments (an aggregation's) keeps them all.
+        """
+        args = rule.consequent.args
+        if not all(isinstance(arg, (Symbol, Constant)) for arg in args):
+            return None
+        return tuple(dict.fromkeys(
+            arg.name for arg in args if isinstance(arg, Symbol)
+        ))
+
     def obtain_substitutions(
-        self, rule_predicates_iterator, instance, restriction_instance
+        self, rule_predicates_iterator, instance, restriction_instance,
+        columns=None,
     ):
+        """
+        Return the substitutions of the conjunction of the predicates, on
+        *columns* only if given (see :meth:`_head_columns`).
+        """
         predicates = tuple(rule_predicates_iterator)
         symbol_table = self.ra_symbol_table(
             predicates, instance, restriction_instance
@@ -364,7 +386,7 @@ class ChaseNamedRelationalAlgebraMixin:
             return [{}]
 
         ra_code = self.translate_conjunction_to_named_ra(
-            Conjunction(predicates)
+            Conjunction(predicates), columns
         )
 
         LOG.info('About to execute RA query %s', ra_code)
@@ -379,7 +401,7 @@ class ChaseNamedRelationalAlgebraMixin:
         return substitutions
 
     @lru_cache(1024)
-    def translate_conjunction_to_named_ra(self, conjunction):
+    def translate_conjunction_to_named_ra(self, conjunction, columns=None):
         if not hasattr(self, "_builtins"):
             self._builtins = self.datalog_program.builtins()
 
@@ -389,9 +411,28 @@ class ChaseNamedRelationalAlgebraMixin:
         traslator_to_named_ra = TranslateToNamedRA()
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
+        ra_code = self._project_on(ra_code, columns)
         ra_code = NamedRelationalAlgebraOptimiser().walk(ra_code)
         ra_code = RelationalAlgebraOptimiser().walk(ra_code)
         return ra_code
+
+    @staticmethod
+    def _project_on(ra_code, columns):
+        """
+        Return *ra_code* projected on *columns*, for the optimisers to
+        push the projection into its joins; as it is when *columns* is None,
+        empty, all its columns, or not all among them.
+        """
+        if not columns:
+            return ra_code
+        available = _ra_columns(ra_code)
+        kept = tuple(map(str2columnstr_constant, columns))
+        # An operation may not tell all its columns (a region destroyed in
+        # points): the projection is only made when it has all of the head's.
+        if any(column not in available for column in kept) or \
+                len(kept) == len(available):
+            return ra_code
+        return Projection(ra_code, kept)
 
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None

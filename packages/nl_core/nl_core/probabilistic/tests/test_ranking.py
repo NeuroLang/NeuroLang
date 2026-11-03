@@ -18,6 +18,7 @@ from nl_expr.logic.expression_processing import extract_logic_atoms
 from ...relational_algebra import int2columnint_constant
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
 from ..probabilistic_ra_utils import ProbabilisticChoiceSet
+from ..transforms import add_existentials_except
 from ..ranking import (
     partially_rank_query,
     rank_query,
@@ -50,20 +51,42 @@ def test_query_not_ranked():
     query = Conjunction(
         (Q(x, y), Q(x, z), Q(z, x), P(x, y), Negation(Q(y, z)))
     )
-    assert not verify_that_the_query_is_ranked(query)
+    assert not verify_that_the_query_is_ranked(_boolean(query))
 
     query = Conjunction(
         (Q(x, y), Q(x, z), P(z, x), P(x, y), Negation(Q(y, z)))
     )
-    assert not verify_that_the_query_is_ranked(query)
+    assert not verify_that_the_query_is_ranked(_boolean(query))
 
     query = Disjunction((Q(x, y), Conjunction((Q(x, z), P(y, y)))))
 
-    assert not verify_that_the_query_is_ranked(query)
+    assert not verify_that_the_query_is_ranked(_boolean(query))
 
     query = Conjunction((Q(x, z), P(y, x), EQ(x, y)))
 
-    assert not verify_that_the_query_is_ranked(query)
+    assert not verify_that_the_query_is_ranked(_boolean(query))
+
+
+def _boolean(query):
+    return add_existentials_except(query, set())
+
+
+def test_answer_variables_need_no_order():
+    """The answer variables, the free ones, are constants: only the
+    bound variables are ordered."""
+    query = Conjunction((Q(x, y), Q(y, x)))
+    assert verify_that_the_query_is_ranked(query)
+    assert verify_that_the_query_is_ranked(
+        ExistentialPredicate(y, Conjunction((Q(x, y), Q(y, x), P(y))))
+    )
+    assert not verify_that_the_query_is_ranked(_boolean(query))
+
+
+def test_rank_query_answer_variable_at_a_ranked_position():
+    query = ExistentialPredicate(y, Conjunction((Q(x, y), Q(y, y))))
+    symbol_table = {Q: _pairs((1, 2), (2, 1), (1, 1))}
+    with pytest.raises(NotRankedException, match="answer variable"):
+        rank_query(query, symbol_table)
 
 
 @fixture
@@ -148,7 +171,7 @@ def test_cant_rank_repeated():
 
     res = partially_rank_query(query, symbol_table)
 
-    assert not verify_that_the_query_is_ranked(res)
+    assert not verify_that_the_query_is_ranked(_boolean(res))
 
 
 def test_query_with_comparison_ranked():

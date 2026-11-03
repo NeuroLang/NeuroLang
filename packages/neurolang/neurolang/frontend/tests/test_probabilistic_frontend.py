@@ -2514,3 +2514,121 @@ def test_builtin_on_region_relation_in_probabilistic_rule_is_lifted():
     assert inline.sort_values("l").reset_index(drop=True).equals(
         deterministic.sort_values("l").reset_index(drop=True)
     )
+
+
+def test_query_aggregating_probabilities_in_its_head():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1", "r1"), ("s2", "r1"), ("s3", "r2")], name="activates"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected"
+    )
+    nl.execute_datalog_program("p(r, PROB) :- activates(s, r) & selected(s)")
+    res = nl.execute_datalog_program("ans(max(x), min(x)) :- p(r, x)")
+    assert res.columns == ("max", "min")
+    assert list(res) == [pytest.approx((2 / 3, 1 / 3))]
+    nl.execute_datalog_program("ans(max(x)) :- p(r, x)", dry_run=True)
+
+
+def test_query_the_lifted_solvers_decline_without_the_unate_check():
+    """
+    Without the unate check, the lifted solver raised a ValueError on a
+    union with a negated component, instead of declining it; the query is
+    answered, as possible worlds give.
+    """
+    from nl_expr.config import config
+    from nl_core.probabilistic.tests.test_lifted_negation import (
+        possible_worlds_probabilities,
+    )
+
+    U, S, R = Symbol("U"), Symbol("S"), Symbol("R")
+    probabilistic_facts = {
+        U: [(0.3, "c"), (0.2, "a")],
+        S: [(0.4, "a", "c"), (0.5, "c", "b")],
+        R: [(0.3, "a", "c"), (0.7, "b", "c"), (0.4, "c", "a")],
+    }
+    check_unate = config.get_probabilistic_solver_check_unate()
+    config.disable_probabilistic_solver_check_unate()
+    try:
+        nl = NeurolangPDL()
+        for symbol, rows in probabilistic_facts.items():
+            nl.add_probabilistic_facts_from_tuples(rows, name=symbol.name)
+        nl.execute_datalog_program(
+            "h(x) :- U(x), S(x, y), R(x, z), ~U(y)\n" "q(x, PROB) :- h(x)"
+        )
+        result = dict(
+            nl.solve_all()["q"].as_pandas_dataframe().itertuples(index=False)
+        )
+    finally:
+        if check_unate:
+            config.enable_probabilistic_solver_check_unate()
+
+    expected = possible_worlds_probabilities(
+        probabilistic_facts,
+        {},
+        lambda database: {
+            a
+            for (a,) in database[U]
+            for (b, c) in database[S]
+            if a == b
+            and (c,) not in database[U]
+            and any(d == a for d, _ in database[R])
+        },
+    )
+    expected = {a: p for a, p in expected.items() if p > 1e-12}
+    assert result == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_uniformity_of_the_activations_given_a_term(seed):
+    """
+    The uniformity of the neurosynth engine, P(v activated | t) over the
+    probability that a voxel chosen at random is, both over the choice of
+    a study, is computed as the shares of the studies of the term, by
+    brute force. The query binds the term: magic sets restrict the rules
+    to it.
+    """
+    rng = np.random.default_rng(seed)
+    voxels = sorted({tuple(v) for v in rng.integers(0, 4, size=(30, 3))})
+    studies = list(range(12))
+    activated = {
+        (*voxels[v], s) for v, s in zip(
+            rng.integers(0, len(voxels), 80), rng.choice(studies, 80)
+        )
+    }
+    terms = {(s, t) for s in studies for t in ("a", "b") if rng.random() < .5}
+    terms |= {(0, "a")}
+    nl = NeurolangPDL()
+    nl.add_tuple_set(activated, name="activated")
+    nl.add_tuple_set(terms, name="term_in_study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        voxels, name="selected_voxel"
+    )
+    result = nl.execute_datalog_program(
+        "p_a_given_t(t, i, j, k, PROB) :- "
+        "(activated(i, j, k, s) & selected_study(s)) // "
+        "(term_in_study(s, t) & selected_study(s))\n"
+        "p_any_voxel_given_t(t, PROB) :- "
+        "(activated(i, j, k, s) & selected_voxel(i, j, k) "
+        "& selected_study(s)) // (term_in_study(s, t) & selected_study(s))\n"
+        "uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) "
+        "& p_any_voxel_given_t(t, pbar) & (u == pat / pbar)\n"
+        "ans(i, j, k, u) :- uniformity('a', i, j, k, u)"
+    ).as_pandas_dataframe()
+    got = {
+        tuple(int(c) for c in row[:3]): row[3]
+        for row in result.itertuples(index=False, name=None)
+    }
+    term_studies = {s for s, t in terms if t == "a"}
+    share = {}
+    for *v, s in activated:
+        if s in term_studies:
+            share[tuple(v)] = share.get(tuple(v), 0) + 1 / len(term_studies)
+    average = sum(share.values()) / len(voxels)
+    assert got.keys() == share.keys()
+    for voxel, p in share.items():
+        assert got[voxel] == pytest.approx(p / average)

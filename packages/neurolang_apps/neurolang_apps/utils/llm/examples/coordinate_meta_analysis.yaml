@@ -23,6 +23,12 @@
 # (similar_study: the 5% closest), with whichever text encoder the
 # engine uses; a Cognitive Atlas definition comes from cogat_definition
 # and is joined in the queried rule itself.
+#
+# A question asking how certain an answer is (a confidence interval, an
+# error bar) resamples the studies: RESAMPLE[boot_studies](pred(x)) = b
+# is pred(x), a rule over PROB, on each of the replicates b of
+# boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
+# replicates; two measures are compared on the same replicate b.
 examples:
   - question: Which studies mention pain?
     datalog: |-
@@ -134,6 +140,39 @@ examples:
       joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
       bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
       ans(bf) :- bayes_factor('fear', bf)
+
+  - question: What is the Bayes factor of fear for the activation of the left amygdala, with its 95% confidence interval?
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      active_roi(s) :- amygdala(s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+      roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      bf_replicate(b, t, bf) :- RESAMPLE[boot_studies](bayes_factor(t, bf)) = b
+      ans(bf, percentile(x, 2.5), percentile(x, 97.5)) :- bayes_factor('fear', bf), bf_replicate(b, 'fear', x)
+
+  - question: How likely is the left superior temporal gyrus to be activated by studies on speech, and how certain is it?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      p_active_given_term(l, t, p) :- PROB[active(l, s) // term_association(s, t)] = p
+      p_replicate(b, l, t, p) :- RESAMPLE[boot_studies](p_active_given_term(l, t, p)) = b
+      ans(p, percentile(x, 2.5), percentile(x, 97.5)) :- p_active_given_term('L G temp sup Lateral', 'speech', p), p_replicate(b, 'L G temp sup Lateral', 'speech', x)
+
+  - question: Is the left amygdala activated more often by studies about fear than by studies about pain? Give a 95% confidence interval of the difference.
+    datalog: |-
+      amygdala(s) :- tian_activated('lAMY lh', s)
+      amygdala(s) :- tian_activated('mAMY lh', s)
+      active_roi(s) :- amygdala(s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      p_roi_given_term(t, p) :- PROB[active_roi(s) // term_association(s, t)] = p
+      p_replicate(b, t, p) :- RESAMPLE[boot_studies](p_roi_given_term(t, p)) = b
+      difference(b, d) :- p_replicate(b, 'fear', p_fear), p_replicate(b, 'pain', p_pain), (d == p_fear - p_pain)
+      ans(percentile(d, 2.5), percentile(d, 50.0), percentile(d, 97.5)) :- difference(b, d)
 
   - question: Which terms are associated with the MNI point (40, -60, 10), with a Bayes factor above 3.16?
     datalog: |-

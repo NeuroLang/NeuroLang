@@ -1,7 +1,7 @@
 import logging
 from collections import Counter
 from functools import reduce
-from itertools import chain, combinations
+from itertools import chain, combinations, product
 from typing import AbstractSet
 
 import numpy as np
@@ -22,7 +22,6 @@ from nl_expr.exceptions import (
 )
 from nl_expr.expression_walker import (
     ExpressionWalker,
-    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -44,6 +43,7 @@ from nl_expr.logic import (
 from nl_expr.logic.expression_processing import (
     ExtractConjunctAtoms,
     ExtractExistentialPrefix,
+    extract_conjuncts,
     ExtractRelationalAtoms,
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -53,7 +53,7 @@ from nl_expr.logic.transformations import (
     AbsorbAssertedConjuncts,
     CollapseConjunctions,
     ExtractConjunctiveQueryWithNegation,
-    FactorQuantifiersMixin,
+    FactorConjunctQuantifiers,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
@@ -73,6 +73,7 @@ from ..relational_algebra import (
     Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -106,7 +107,10 @@ from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query
 )
-from .non_repeating_lift import columns_comparison, non_repeating_plan
+from .non_repeating_lift import (
+    non_repeating_plan,
+    select_comparisons
+)
 from .ranking import (
     partially_rank_query,
     rank_query,
@@ -124,6 +128,11 @@ from .transforms import (
 )
 
 LOG = logging.getLogger(__name__)
+
+# The answers are split on the Bell(k) partitions of k answer variables,
+# 2, 5 and 15 for 2, 3 and 4, whose plans the optimiser of the relational
+# algebra takes too long for k = 4.
+MAX_ANSWER_VARIABLES_AT_A_POSITION = 3
 
 
 __all__ = [
@@ -332,7 +341,9 @@ def _non_repeating_query_plan(
 def _prepare_and_optimise_query(
     flat_query, cpl_program, deterministic_relations=None
 ):
-    flat_query_body = convert_to_dnf_existential_ucq(flat_query.antecedent)
+    flat_query_body = _normal_form(
+        convert_to_dnf_existential_ucq, flat_query.antecedent
+    )
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
         for f in flat_query_body.formulas
@@ -511,20 +522,17 @@ def _lift_with_dependent_negations(rule, symbol_table, check):
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
     comparisons = tuple(
-        f for f in _conjuncts(antecedent) if is_comparison(f)
+        f for f in extract_conjuncts(antecedent) if is_comparison(f)
     )
     if comparisons:
         # Comparisons of free variables select the answers of the rest.
         plan = lift_with_dependent_negations(
             Implication(consequent, RTO.walk(Conjunction(tuple(
-                f for f in _conjuncts(antecedent) if f not in comparisons
+                f for f in extract_conjuncts(antecedent) if f not in comparisons
             )))),
             symbol_table, check
         )
-        return reduce(
-            lambda plan, c: rap.Selection(plan, columns_comparison(c)),
-            comparisons, plan
-        )
+        return select_comparisons(plan, comparisons)
     if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
         split = _split_comparison_conjunct(antecedent)
         if split is not None:
@@ -724,11 +732,6 @@ def _projected_plan(
     )
 
 
-class FactorConjunctQuantifiers(FactorQuantifiersMixin, IdentityWalker):
-    """A ∧ ∃X ψ ≡ ∃X (A ∧ ψ), for the conjuncts of a formula, the
-    variables of X being renamed apart from those of A."""
-
-
 def _existential_variables_and_body(formula):
     """The variables quantified by `formula`, or by its conjuncts
     (`FactorConjunctQuantifiers`), and the conjunction of their bodies."""
@@ -752,7 +755,7 @@ def _split_choice_projection(antecedent, symbol_table):
             projected and functors.count(atom.functor) == 1 and
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         ):
-            return projected, variables - projected, _conjuncts(body)
+            return projected, variables - projected, extract_conjuncts(body)
     return None
 
 
@@ -764,7 +767,7 @@ def _split_separator_projection(antecedent, symbol_table):
     variables, body = _existential_variables_and_body(antecedent)
     if len(variables) == 0:
         return None
-    conjuncts = _conjuncts(body)
+    conjuncts = extract_conjuncts(body)
     inside = tuple(
         f for f in conjuncts
         if not extract_logic_free_variables(f).isdisjoint(variables)
@@ -793,7 +796,7 @@ def _split_exclusive_projection(antecedent, symbol_table):
     variable of `X` is `v`, and `¬∃w (R(ū[w/v]) ∧ w ≠ v)`, or None.
     """
     variables, body = _existential_variables_and_body(antecedent)
-    conjuncts = _conjuncts(body)
+    conjuncts = extract_conjuncts(body)
     for atom, variable in ExcludingNegations().walk(body):
         if atom in conjuncts and variables & set(atom.args) == {variable}:
             return {variable}, variables - {variable}, conjuncts
@@ -973,7 +976,7 @@ def free_variable_shattering_plan(
         the plan, or None if the rule does not apply.
     """
     free_variables = extract_logic_free_variables(negated_formula)
-    body = _existential_body(negated_formula)
+    body = ExtractExistentialPrefix().walk(negated_formula)[1]
     remainder_variables = extract_logic_free_variables(remainder)
     for t in extract_logic_free_variables(body) - free_variables:
         psi_t = add_existentials_except(body, free_variables | {t})
@@ -1041,8 +1044,8 @@ def comparison_conjunct_plan(consequent, remainder, conjunct, symbol_table):
     negated = isinstance(conjunct, Negation)
     existential = conjunct.formula if negated else conjunct
     free_variables = extract_logic_free_variables(existential)
-    body = _existential_body(existential)
-    formulas = body.formulas if isinstance(body, Conjunction) else (body,)
+    body = ExtractExistentialPrefix().walk(existential)[1]
+    formulas = extract_conjuncts(body)
     comparisons = tuple(f for f in formulas if is_comparison(f))
     psi_body = Conjunction(tuple(
         f for f in formulas if not is_comparison(f)
@@ -1101,8 +1104,7 @@ def _separated_existential_plan(
     if plans is None:
         return None
     plan = rap.NaturalJoin(plans[0], rap.Support(remainder_plan))
-    for comparison in comparisons:
-        plan = rap.Selection(plan, columns_comparison(comparison))
+    plan = select_comparisons(plan, comparisons)
     return rap.IndependentProjection(
         plan,
         tuple(str2columnstr_constant(v.name) for v in remainder_variables)
@@ -1136,12 +1138,6 @@ def _is_separator_variable(t, formula, symbol_table):
         ExistentialPredicate(t, formula), symbol_table
     )
     return t in separator_variables
-
-
-def _existential_body(formula):
-    while isinstance(formula, ExistentialPredicate):
-        formula = formula.body
-    return formula
 
 
 def _is_existential_conjunct(formula):
@@ -1272,7 +1268,11 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(
         rule_cnf, ignore_symbols=deterministic_symbols
     )
-    if cnf_is_usable and len(connected_components) > 1:
+    if (
+        cnf_is_usable
+        and len(connected_components) > 1
+        and not all(map(_is_negation, connected_components))
+    ):
         plan = components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
@@ -1285,7 +1285,12 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(
         rule_dnf, ignore_symbols=deterministic_symbols
     )
-    if len(connected_components) > 1:
+    if len(connected_components) > 1 and _union_has_the_same_columns(
+        Disjunction(tuple(connected_components))
+    ):
+        if any(map(_is_negation, connected_components)):
+            # The union of a negation is not planned.
+            return NonLiftable(rule)
         return components_plan(
             connected_components, rap.Union, symbol_table
         )
@@ -1315,14 +1320,16 @@ def dalvi_suciu_lift(rule, symbol_table):
 
 def different_free_variables_plan(rule, symbol_table):
     """Plan for a query with atoms of a tuple-independent relation `R`
-    with free variables `x` and `y` at the same position, which Dalvi and
-    Suciu, who replace the free variables by constants, lift as different
-    relations when `x ≠ y`. The atoms of `R` with `y` there are renamed
-    into an alias `R'` of `R` if, when `x ≠ y`, they are different tuples
-    from the other atoms of `R`; when `x = y`, `y` is replaced by `x`. The
-    answers of the two cases are different, and the plan is
+    with free variables at the same position, which Dalvi and Suciu, who
+    replace the free variables by constants, lift as different tuples when
+    the variables are different. The answers are split on the partitions
+    `Π` of these variables: the variables of a block are replaced by its
+    first one, the representative, `Q[Π]`, and the atoms of `R` with a
+    representative `r_j` there, but the first, renamed into an alias of
+    `R`, `ρ`, if they are different tuples from the other atoms of `R` when
+    the representatives are different. The plan is
 
-        σ_{x ≠ y} lift(Q[R'/R]) ∪ π_{y := x} lift(Q[x/y])
+        ∪_Π π_Π σ_{r_j ≠ r_l} lift(Q[Π][ρ])
     """
     free_variables = extract_logic_free_variables(rule)
     atoms = [
@@ -1332,37 +1339,74 @@ def different_free_variables_plan(rule, symbol_table):
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         )
     ]
-    for atom_x, atom_y in combinations(atoms, 2):
-        if atom_x.functor != atom_y.functor:
+    query = Implication(Symbol.fresh()(*free_variables), rule)
+    for functor, i in OrderedSet(
+        (atom.functor, i) for atom in atoms for i in range(len(atom.args))
+    ):
+        variables = list(OrderedSet(
+            atom.args[i] for atom in atoms
+            if atom.functor == functor and atom.args[i] in free_variables
+        ))
+        if not 2 <= len(variables) <= MAX_ANSWER_VARIABLES_AT_A_POSITION:
             continue
-        for i, (x, y) in enumerate(zip(atom_x.args, atom_y.args)):
-            if x == y or not {x, y} <= free_variables:
-                continue
-            relation = [a for a in atoms if a.functor == atom_x.functor]
-            renamed = [a for a in relation if a.args[i] == y]
-            if not _are_different_tuples_when_different(
-                Conjunction(tuple(renamed)), y,
-                Conjunction(tuple(a for a in relation if a not in renamed)),
-                {x}, symbol_table
-            ):
-                continue
-            alias = Symbol.fresh()
-            symbol_table[alias] = symbol_table[atom_x.functor]
-            different = dalvi_suciu_lift(ReplaceExpressionWalker({
-                a: a.apply(alias, a.args) for a in renamed
-            }).walk(rule), symbol_table)
-            query = Implication(Symbol.fresh()(*free_variables), rule)
-            same = ReplaceExpressionWalker({y: x}).walk(query)
-            return rap.Union(
-                rap.Selection(different, columns_comparison(NE(x, y))),
-                ExtendedProjection(
-                    dalvi_suciu_lift(same.antecedent, symbol_table),
-                    compute_projections_needed_to_reintroduce_head_terms(
-                        None, query, same
-                    )
-                )
-            )
+        plans = []
+        for blocks in _set_partitions(variables):
+            plan = _partition_plan(query, functor, i, blocks, symbol_table)
+            if plan is None:
+                break
+            plans.append(plan)
+        else:
+            return reduce(rap.Union, plans)
     return None
+
+
+def _set_partitions(items):
+    """The partitions of the list `items` into lists."""
+    if not items:
+        yield []
+        return
+    for blocks in _set_partitions(items[1:]):
+        yield [[items[0]]] + blocks
+        for j, block in enumerate(blocks):
+            yield blocks[:j] + [[items[0]] + block] + blocks[j + 1:]
+
+
+def _partition_plan(query, functor, i, blocks, symbol_table):
+    """The answers of `query` whose free variables of the partition
+    `blocks` are equal in a block and different across blocks."""
+    representatives = [block[0] for block in blocks]
+    same = ReplaceExpressionWalker({
+        v: block[0] for block in blocks for v in block[1:]
+    }).walk(query)
+    relation = [
+        atom for atom in ExtractRelationalAtoms().walk(same.antecedent)
+        if atom.functor == functor
+    ]
+    renaming = {}
+    for x in representatives[1:]:
+        renamed = [atom for atom in relation if atom.args[i] == x]
+        if not _are_different_tuples_when_different(
+            Conjunction(tuple(renamed)), x,
+            Conjunction(tuple(a for a in relation if a not in renamed)),
+            set(representatives) - {x}, symbol_table
+        ):
+            return None
+        alias = Symbol.fresh()
+        symbol_table[alias] = symbol_table[functor]
+        renaming.update({a: a.apply(alias, a.args) for a in renamed})
+    plan = select_comparisons(
+        dalvi_suciu_lift(
+            ReplaceExpressionWalker(renaming).walk(same.antecedent),
+            symbol_table
+        ),
+        [NE(x, y) for x, y in combinations(representatives, 2)]
+    )
+    projections = compute_projections_needed_to_reintroduce_head_terms(
+        None, query, same
+    )
+    if projections:
+        plan = ExtendedProjection(plan, projections)
+    return plan
 
 
 def _clauses_are_range_restricted(cnf):
@@ -1380,7 +1424,7 @@ def _clauses_are_range_restricted(cnf):
     that is a negation alone is one of a conjunction, whose negative
     components are differences, and is not a disjunction.
     """
-    clauses = cnf.formulas if isinstance(cnf, Conjunction) else (cnf,)
+    clauses = extract_conjuncts(cnf)
     for clause in clauses:
         free = extract_logic_free_variables(clause)
         matrix = clause
@@ -1441,6 +1485,9 @@ def symbol_or_deterministic_plan(rule, symbol_table):
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
         )
+        and _union_has_the_same_columns(
+            convert_to_pnf_with_dnf_matrix(rule)
+        )
     ):
         free_vars = extract_logic_free_variables(rule)
         rule = MakeExistentialsImplicit().walk(rule)
@@ -1449,6 +1496,24 @@ def symbol_or_deterministic_plan(rule, symbol_table):
         has_safe_plan = True
         res = rap.Support(rap.Projection(result, proj_cols))
     return has_safe_plan, res
+
+
+def _union_has_the_same_columns(formula):
+    """
+    Whether the disjuncts of *formula*, below its existential quantifiers,
+    all have its free variables, as the relations of a union need the
+    same columns: ``R(x, y) ∨ S(x)`` holds for any ``y`` when ``S(x)``
+    does, which the union of their plans cannot give.
+    """
+    free_variables = extract_logic_free_variables(formula)
+    while isinstance(formula, ExistentialPredicate):
+        formula = formula.body
+    if not isinstance(formula, Disjunction):
+        return True
+    return all(
+        free_variables <= extract_logic_free_variables(disjunct)
+        for disjunct in formula.formulas
+    )
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):
@@ -1487,14 +1552,14 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         .walk(rule)
     )
     if transformation == 'CNF':
-        fresh_symbols_expression = convert_to_cnf_existential_ucq(
-            fresh_symbols_expression
+        fresh_symbols_expression = _normal_form(
+            convert_to_cnf_existential_ucq, fresh_symbols_expression
         )
         minimize = minimize_ucq_in_cnf
         gcd = GuaranteeConjunction()
     elif transformation == 'DNF':
-        fresh_symbols_expression = convert_to_dnf_existential_ucq(
-            fresh_symbols_expression
+        fresh_symbols_expression = _normal_form(
+            convert_to_dnf_existential_ucq, fresh_symbols_expression
         )
         minimize = minimize_ucq_in_dnf
         gcd = GuaranteeDisjunction()
@@ -1511,6 +1576,19 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         pass
 
     return gcd.walk(final_expression)
+
+
+def _normal_form(convert, formula):
+    """`convert(formula)`, declining a formula outside FO∃¬, which the
+    conversions to normal forms do not support."""
+    try:
+        return convert(formula)
+    except NotInFONegE as error:
+        raise NonLiftableException(str(error), formula) from error
+
+
+def _is_negation(component):
+    return isinstance(RTO.walk(component), Negation)
 
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
@@ -1952,7 +2030,7 @@ def _choice_separators(disjuncts, quantified, symbol_table):
         [
             atom for atom in extract_logic_atoms(disjunct)
             if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
-            and atom in _conjuncts(disjunct)
+            and atom in extract_conjuncts(disjunct)
         ]
         for disjunct in disjuncts
     ]
@@ -2000,13 +2078,6 @@ def _renamings_are_safe(disjuncts, substitutions, renamings):
             ):
                 return False
     return True
-
-
-def _conjuncts(formula):
-    """The conjuncts of *formula*, or itself if not a conjunction."""
-    if isinstance(formula, Conjunction):
-        return formula.formulas
-    return (formula,)
 
 
 def _align_choice_atoms(atoms, quantified):
@@ -2204,6 +2275,11 @@ def _functions_of(atom, variables, symbol_table):
         atom.functor
     ).relation
     if isinstance(relation, Symbol):
+        if not isinstance(symbol_table[relation], Constant):
+            # A deterministic subquery, which is computed once.
+            symbol_table[relation] = RelationalAlgebraSolver().walk(
+                symbol_table[relation]
+            )
         relation = symbol_table[relation]
     relation = relation.value
     key = tuple(
@@ -2406,54 +2482,84 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
         plan for the logic expression.
     """
     formula_powerset = []
-    for formula in powerset(expression.formulas):
-        if len(formula) == 0:
+    for subset in powerset(range(len(expression.formulas))):
+        if len(subset) == 0:
             continue
 
-        formula = RTO.walk(convert_ucq_to_ccq(
-            Disjunction(tuple(formula)), transformation="DNF")
+        formula = RTO.walk(
+            convert_ucq_to_ccq(
+                Disjunction(tuple(expression.formulas[i] for i in subset)),
+                transformation="DNF",
+            )
         )
-        formula_powerset.append(formula)
-    formulas_weights = _formulas_weights(formula_powerset)
-    new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), weight)
-        for formula, weight in formulas_weights.items()
-        if weight != 0
-    ))
+        formula_powerset.append((frozenset(subset), formula))
+    formulas = dict(formula_powerset)
+    formulas_weights, _ = _formulas_weights(formula_powerset)
+    new_formulas, weights = zip(
+        *(
+            (dalvi_suciu_lift(formulas[subset], symbol_table), weight)
+            for subset, weight in formulas_weights.items()
+            if weight != 0
+        )
+    )
 
     return rap.WeightedNaturalJoin(
-        tuple(new_formulas),
-        tuple(Constant[int](w) for w in weights)
+        tuple(new_formulas), tuple(Constant[int](w) for w in weights)
     )
 
 
 def _formulas_weights(formula_powerset):
-    # Using list set instead of a dictionary
-    # due to a strange bug in dictionary lookups with Expressions
-    # as keys
-    formula_containments = [
-        set()
-        for formula in formula_powerset
+    """Möbius weights of the disjunctions of the clauses of a conjunction,
+    see :ref:`inclusion-exclusion`.
+
+    Parameters
+    ----------
+    formula_powerset : sequence of (frozenset, LogicExpression)
+        each non-empty set `S` of indices of clauses, with the
+        disjunction of these clauses.
+
+    Returns
+    -------
+    dict, dict
+        the weight of the representative set `S` of each class of
+        mutually contained disjunctions, and the representatives
+        strictly below it. `T ≼ S` when `T ⊆ S`, or when `is_contained`
+        finds that the disjunction of `T` implies that of `S`, closed
+        transitively: the order contains the inclusion of the subsets,
+        and is contained in the implication of the disjunctions.
+    """
+    subsets = [subset for subset, _ in formula_powerset]
+    formulas = [formula for _, formula in formula_powerset]
+    below = [
+        [
+            subsets[j] <= subsets[i] or is_contained(formulas[i], formulas[j])
+            for j in range(len(subsets))
+        ]
+        for i in range(len(subsets))
     ]
+    for k, i, j in product(range(len(subsets)), repeat=3):
+        below[i][j] = below[i][j] or (below[i][k] and below[k][j])
 
-    for i, f0 in enumerate(formula_powerset):
-        for j, f1 in enumerate(formula_powerset[i + 1:], start=i + 1):
-            for i0, c0, i1, c1 in ((i, f0, j, f1), (j, f1, i, f0)):
-                if (
-                    c0 not in formula_containments[i1] and
-                    is_contained(c0, c1)
-                ):
-                    formula_containments[i0] |= (
-                        {c1} | formula_containments[i1] - {c0}
-                    )
-
-    fcs = {
-        formula: containment
-        for formula, containment in
-        zip(formula_powerset, formula_containments)
+    representative = [
+        max(
+            (
+                subsets[j]
+                for j in range(len(subsets))
+                if below[i][j] and below[j][i]
+            ),
+            key=lambda subset: (len(subset), sorted(subset)),
+        )
+        for i in range(len(subsets))
+    ]
+    order = {
+        representative[i]: {
+            representative[j]
+            for j in range(len(subsets))
+            if below[i][j] and not below[j][i]
+        }
+        for i in range(len(subsets))
     }
-    formulas_weights = mobius_weights(fcs)
-    return formulas_weights
+    return mobius_weights(order), order
 
 
 def mobius_weights(formula_containments):

@@ -4,13 +4,13 @@ Saving and viewing of query results in the interactive REPL.
 ``.save PATH`` writes the last result as a table, or as a NIfTI image
 when PATH ends with ``.nii`` or ``.nii.gz``; ``.view PATH`` shows a NIfTI
 image, or the last result, in a browser: an HTML page of
-:mod:`~neurolang.utils.tui.brain_viewer`, whose controls change the
+:mod:`~neurolang_apps.utils.tui.brain_viewer`, whose controls change the
 threshold, the colormap and its symmetry live (see :data:`VIEW_HELP`).
 
 A NIfTI image is written on a grid of the engine, with its shape and
 affine: that of the engine's template, the MNI image its voxel indices
 refer to (the ``template`` of the engine
-:func:`~neurolang.utils.engine_registry.build_engine` returns), or that
+:func:`~neurolang_apps.utils.engine_registry.build_engine` returns), or that
 of an atlas whose voxel indices a sort names with ``grid`` (the engine's
 ``grids``). The sorts of the columns of the result, from the query that
 gave it (:mod:`~.provenance`), else their names, tell which columns are
@@ -35,6 +35,7 @@ from neurolang_apps.utils import engine_registry
 
 from . import brain_viewer
 from .commands import HELP_TOPICS, command
+from .provenance import COMPUTED
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 
@@ -369,7 +370,7 @@ def point_columns(
     Return the columns of *df* locating its voxels, from the *sorts*.
 
     They are the columns of a sort declaring a space (see
-    :class:`~neurolang.utils.engine_registry.Sort`), those of a sort of
+    :class:`~neurolang_apps.utils.engine_registry.Sort`), those of a sort of
     voxel indices first, then of millimetres: the columns of that sort
     in the *provenance* of *df*, the sort of each column as the query
     tells it, else the columns of unknown sort named as those of the
@@ -479,6 +480,14 @@ def _column_sort(df: pd.DataFrame, column, sorts: dict, provenance):
     return sorts.get(column_sort.sort) if column_sort else None
 
 
+def _is_computed(df: pd.DataFrame, column, provenance) -> bool:
+    """Whether the query computes *column* of *df* (see :data:`COMPUTED`)."""
+    if provenance is None or len(provenance) != len(df.columns):
+        return False
+    column_sort = provenance[list(df.columns).index(column)]
+    return column_sort is not None and column_sort.sort == COMPUTED
+
+
 def _measure_columns(
     df: pd.DataFrame, columns: list, sorts: dict, provenance=None
 ) -> list:
@@ -496,7 +505,10 @@ def _measure_columns(
     measures = []
     for c in columns:
         sort = _column_sort(df, c, sorts, provenance)
-        entity = c in entities if sort is None else sort.type != "float"
+        if _is_computed(df, c, provenance):
+            entity = False
+        else:
+            entity = c in entities if sort is None else sort.type != "float"
         if not entity and pd.api.types.is_numeric_dtype(df[c]):
             measures.append(c)
     return measures
@@ -617,7 +629,7 @@ def region_lookup(nl, atlases: list) -> dict:
 
     The regions are those of the *atlases* of *nl*, in the image of the
     grid of each (see
-    :func:`~neurolang.utils.engine_registry.atlas_label_values`); a name
+    :func:`~neurolang_apps.utils.engine_registry.atlas_label_values`); a name
     of several atlases is that of the first.
     """
     lookup = {}
@@ -925,6 +937,27 @@ def engine_grid(nl, name: str):
     return image
 
 
+NETWORK_MESSAGE = (
+    "The result holds pairs of regions or points, a network: "
+    ".view shows it, and .save writes it as CSV."
+)
+
+
+def image_columns(app, block) -> list:
+    """
+    Return the value columns a NIfTI image of the result *block* can hold,
+    without making it; None stands for a mask, whose voxels are 1.
+
+    Raise :class:`SaveError` when it cannot be an image: a network, or no
+    voxel columns (what :func:`result_image` refuses).
+    """
+    sorts = _engine_sorts(app.settings.engine_name)
+    if network_nodes(block.frame, sorts, block.sorts):
+        raise SaveError(NETWORK_MESSAGE)
+    point_columns(block.frame, sorts, block.sorts)
+    return value_columns(app, block, SaveRequest(Path("result.nii.gz")))
+
+
 def result_image(app, block, request: SaveRequest) -> SavedImage:
     """
     Convert the result *block* of *app* into a NIfTI image, as *request* asks.
@@ -940,10 +973,7 @@ def result_image(app, block, request: SaveRequest) -> SavedImage:
     if request.points is None and network_nodes(
         block.frame, sorts, block.sorts
     ):
-        raise SaveError(
-            "The result holds pairs of regions or points, a network: "
-            ".view shows it, and .save writes it as CSV."
-        )
+        raise SaveError(NETWORK_MESSAGE)
     if points.space == LABEL_SPACE:
         return regions_to_nifti(
             app._nl, block.frame, sorts, request._replace(points=points),

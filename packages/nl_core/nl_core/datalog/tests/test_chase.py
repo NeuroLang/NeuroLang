@@ -1,8 +1,9 @@
 import operator as op
+import random
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture, raises, skip
+from pytest import fixture, mark, raises, skip
 
 from nl_expr import expression_walker as ew
 from nl_expr import expressions
@@ -806,3 +807,125 @@ def test_nested_function_application(chase_class):
         C_(((2 ** 2 + 1 ** 2) // 2,)),
         C_(((2 ** 2 + 2 ** 2) // 2,)),
     }
+
+
+def test_rule_substitutions_keep_only_the_variables_of_the_head():
+    """
+    A rule's substitutions are projected on the variables of its head
+    before the rows already computed are removed: the variables of the
+    body alone (``x`` here) would make them as many as the combinations
+    of the body, tens of millions for the voxels of a Euclidean bound,
+    for a head of a few rows.
+    """
+    class Chase(ChaseNonRecursive, ChaseNamedRelationalAlgebraMixin,
+                ChaseGeneral):
+        compared = []
+
+        def eliminate_already_computed(self, consequent, instance,
+                                       substitutions):
+            Chase.compared.append(
+                (len(substitutions), set(substitutions.columns))
+            )
+            return super().eliminate_already_computed(
+                consequent, instance, substitutions
+            )
+
+    big, other, marker = S_('big'), S_('other'), S_('marker')
+    datalog = Datalog()
+    datalog.add_extensional_predicate_from_tuples(
+        big, {(n, n % 3) for n in range(300)}
+    )
+    datalog.add_extensional_predicate_from_tuples(
+        other, {(n, n % 2) for n in range(200)}
+    )
+    datalog.add_extensional_predicate_from_tuples(marker, {('m',)})
+    datalog.walk(Eb_((
+        Imp_(Q(y, z), Conjunction((big(x, y), marker(z)))),
+        Imp_(Q(y, z), Conjunction((other(x, y), marker(z)))),
+    )))
+    solution = Chase(datalog).build_chase_solution()
+    assert set(solution[Q].value) == {(n, 'm') for n in range(3)}
+    assert Chase.compared and all(
+        rows <= 3 and columns == {'y', 'z'}
+        for rows, columns in Chase.compared
+    )
+
+
+def test_aggregation_rules_keep_the_variables_they_aggregate():
+    from ..aggregation import (
+        AggregationApplication, BuiltinAggregationMixin,
+        ChaseAggregationMixin, DatalogWithAggregationMixin,
+    )
+
+    class AggregationDatalog(
+        TranslateToLogic, DatalogWithAggregationMixin,
+        BuiltinAggregationMixin, DatalogProgram,
+        ew.ExpressionBasicEvaluator,
+    ):
+        pass
+
+    class Chase(ChaseAggregationMixin, ChaseNonRecursive,
+                ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+        pass
+
+    pair = S_('pair')
+    datalog = AggregationDatalog()
+    datalog.add_extensional_predicate_from_tuples(
+        pair, {(1, 'a'), (1, 'b'), (2, 'a')}
+    )
+    datalog.walk(Imp_(
+        Q(y, AggregationApplication(S_('count'), (x,))),
+        Conjunction((pair(y, x),)),
+    ))
+    solution = Chase(datalog).build_chase_solution()
+    assert set(solution[Q].value) == {(1, 2), (2, 1)}
+
+
+E, F, P, R = S_('E'), S_('F'), S_('P'), S_('R')
+SEMI_NAIVE_PROGRAMS = {
+    'transitive closure': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(x, y), P(x, z) & E(z, y)),
+    ),
+    'mutual recursion': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(Q(x, y), P(x, z) & E(z, y)),
+        Imp_(P(x, y), Q(x, z) & E(z, y)),
+    ),
+    # R(0, 5) joins P(0, 4), derived late, with Q(4, 5), derived early,
+    # while Q still grows: binding both atoms to their deltas would lose it.
+    'two recursive atoms': (
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(x, y), P(x, z) & E(z, y)),
+        Imp_(Q(x, y), F(x, y)),
+        Imp_(Q(x, y), Q(x, z) & F(z, y)),
+        Imp_(R(x, y), P(x, z) & Q(z, y)),
+    ),
+}
+
+
+@mark.parametrize('seed', range(3))
+@mark.parametrize('program', SEMI_NAIVE_PROGRAMS)
+@mark.parametrize('cq_class', (
+    ChaseMGUMixin,
+    ChaseNamedRelationalAlgebraMixin,
+    ChaseRelationalAlgebraPlusCeriMixin,
+))
+def test_semi_naive_solution_is_the_naive_one(program, cq_class, seed):
+    rng = random.Random(seed)
+    edges = {(i, i + 1) for i in range(4)} | {
+        (rng.randrange(8), rng.randrange(8)) for _ in range(12)
+    }
+    solutions = []
+    for step_class in (ChaseNaive, ChaseSemiNaive):
+        class C(step_class, cq_class, ChaseGeneral):
+            pass
+
+        dl = Datalog()
+        dl.add_extensional_predicate_from_tuples(E, edges)
+        dl.add_extensional_predicate_from_tuples(
+            F, {(i, i + 1) for i in range(4, 14)}
+        )
+        dl.walk(Eb_(SEMI_NAIVE_PROGRAMS[program]))
+        solutions.append(C(dl).build_chase_solution())
+    assert solutions[0] == solutions[1]

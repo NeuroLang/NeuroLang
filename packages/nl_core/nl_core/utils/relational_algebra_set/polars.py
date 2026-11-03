@@ -1070,7 +1070,13 @@ class NamedRelationalAlgebraFrozenSet(
                 elif o_dtype == pl.Null and s_dtype != pl.Null:
                     oc = oc.with_columns(pl.col(col).cast(s_dtype))
                 elif s_dtype.is_numeric() and o_dtype.is_numeric():
-                    target = s_dtype if s_dtype != pl.Null else o_dtype
+                    # A float column with an integer one is float: as
+                    # integers, its values would be truncated.
+                    target = (
+                        pl.Float64
+                        if s_dtype.is_float() or o_dtype.is_float()
+                        else s_dtype
+                    )
                     if s_dtype != target:
                         sc = sc.with_columns(pl.col(col).cast(target))
                     if o_dtype != target:

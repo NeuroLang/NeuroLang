@@ -2,7 +2,7 @@
 Command-line interface for NeuroLang query execution.
 
 Provides a ``neurolang-query`` command that initializes a NeuroLang engine
-from the :mod:`engine registry <neurolang.utils.engine_registry>` and
+from the :mod:`engine registry <neurolang_apps.utils.engine_registry>` and
 executes Datalog queries from arguments, files, or standard input.
 
 Usage
@@ -472,6 +472,13 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         default="neurolang_data",
         help="Directory for cached data downloads (default: neurolang_data).",
+    )
+    parser.add_argument(
+        "--no-engine-cache",
+        action="store_true",
+        help="Find the tables the engine's build takes long to find, as the "
+        "studies activating the regions of its atlases, instead of reading "
+        "those kept in the data directory (and write none there).",
     )
     parser.add_argument(
         "--resolution",
@@ -992,10 +999,35 @@ def report_error(
     for note in sort_notes(exc, program, engine_name, squall):
         print(note, file=stream)
     if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+        for line in _origin_notes(exc):
+            print(line, file=stream)
         print(
             "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
             "traceback.", file=stream,
         )
+
+
+def _origin_notes(exc: BaseException) -> list:
+    """
+    Say where the unexpected error *exc* was raised and what caused it.
+
+    One line for the innermost frame of the traceback, as
+    ``  raised in text_embeddings.py:312 in encode_query``, and one for each
+    exception it was raised from or while handling, so that an error
+    reported without ``--debug`` (the browser has none) can be told apart.
+    """
+    notes = []
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        frames = traceback.extract_tb(exc.__traceback__)
+        if frames:
+            frame = frames[-1]
+            where = f"{Path(frame.filename).name}:{frame.lineno} in {frame.name}"
+            label = "raised in" if not notes else "caused by"
+            notes.append(f"  {label} {where}: {type(exc).__name__}: {exc}")
+        exc = exc.__cause__ or exc.__context__
+    return notes[:4]
 
 
 def _run_reporting_errors(action, program: str, args, nl=None):
@@ -1029,7 +1061,8 @@ def _dry_run_with_engine(args, **flags) -> None:
         print("Error: no query provided.", file=sys.stderr)
         sys.exit(1)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     execute = _execute_squall_program if args.squall else _execute_program
     _run_reporting_errors(
@@ -1170,7 +1203,7 @@ def _print_result(result, args, sort_by, column_names=None) -> None:
 def _export_session(args, nl, result, column_names, program):
     """
     Return the headless session of the REPL's ``.save`` and ``.view``
-    commands (:mod:`neurolang.utils.tui.nifti`) holding the *result* of
+    commands (:mod:`neurolang_apps.utils.tui.nifti`) holding the *result* of
     *program*: its engine, its result blocks with the sorts of their
     columns, and consoles on the standard error.
     """
@@ -1227,16 +1260,11 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
     try:
         from neurolang_apps.utils.tui import nifti
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] not in (
-            "prompt_toolkit", "rich"
-        ):
-            raise
-        print(
-            "Error: --save and --view need the optional dependencies of "
-            'the interactive mode. Install them with:\n    pip install '
-            '"neurolang[tui]"', file=sys.stderr,
+        _exit_missing(
+            exc, TUI_DEPENDENCIES,
+            "--save and --view need the optional dependencies of the "
+            "interactive mode", "tui",
         )
-        sys.exit(1)
     session = _export_session(args, nl, result, column_names, program)
     if not session.results:
         print("Error: the query gave no result to save.", file=sys.stderr)
@@ -1262,7 +1290,8 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
 def _run_query(args) -> None:
     """Build the engine and run the query of ``args``, printing its result."""
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
 
     if args.list_sets:
@@ -1332,9 +1361,22 @@ def _tui_settings(args, tui, argv=()):
 TUI_DEPENDENCIES = ("prompt_toolkit", "rich")
 
 
+def _exit_missing(exc, dependencies, needs, extra):
+    """Raise the ImportError *exc*, unless it is of one of the optional
+    *dependencies*: exit with status 1 and a message telling how to
+    install the *extra* which has them."""
+    if (exc.name or "").split(".")[0] not in dependencies:
+        raise exc
+    print(
+        f"Error: {needs}. Install {'them' if len(dependencies) > 1 else 'it'}"
+        f' with:\n    pip install "neurolang[{extra}]"', file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def _import_tui():
     """
-    Return the :mod:`neurolang.utils.tui` module of the interactive REPL.
+    Return the :mod:`neurolang_apps.utils.tui` module of the interactive REPL.
 
     If its optional dependencies are missing, exit with status 1 and a
     message telling how to install them.
@@ -1342,15 +1384,11 @@ def _import_tui():
     try:
         from neurolang_apps.utils import tui
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] not in TUI_DEPENDENCIES:
-            raise
-        print(
-            "Error: the interactive mode needs the optional dependencies "
-            f"{' and '.join(TUI_DEPENDENCIES)}. Install them with:\n"
-            '    pip install "neurolang[tui]"',
-            file=sys.stderr,
+        _exit_missing(
+            exc, TUI_DEPENDENCIES,
+            "the interactive mode needs the optional dependencies "
+            f"{' and '.join(TUI_DEPENDENCIES)}", "tui",
         )
-        sys.exit(1)
     return tui
 
 
@@ -1379,7 +1417,8 @@ def _run_interactive(args, argv=()) -> None:
 
     program = _program_argument(args)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     settings = _tui_settings(args, tui, argv)
     status = tui.main(nl, settings, initial_program=program)
@@ -1506,6 +1545,7 @@ def _run_ask(args) -> None:
     """
     try:
         from neurolang_apps.utils.llm import (
+            AgentResult,
             LLMConfigError,
             LLMError,
             load_config,
@@ -1513,13 +1553,10 @@ def _run_ask(args) -> None:
         )
         from neurolang_apps.utils.llm.feedback import feedback_client
     except ImportError as exc:
-        if (exc.name or "").split(".")[0] != "httpx":
-            raise
-        print(
-            "Error: --ask needs the optional dependency httpx. Install it "
-            'with:\n    pip install "neurolang[llm]"', file=sys.stderr,
+        _exit_missing(
+            exc, ("httpx",),
+            "--ask needs the optional dependency httpx", "llm",
         )
-        sys.exit(1)
     try:
         config = load_config(args.llm_config)
         provider = config.provider(args.llm_provider)
@@ -1528,7 +1565,8 @@ def _run_ask(args) -> None:
         sys.exit(1)
     language = _ask_language(args, config)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     kinds = query_highlight.probabilistic_kinds(nl.program_ir)
     client, on_step = _ask_reporting(
@@ -1543,9 +1581,8 @@ def _run_ask(args) -> None:
     )
     try:
         result = agent.run(args.ask)
-    except LLMError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    except LLMError as exc:  # a failure, shared too
+        result = AgentResult(language=language, error=str(exc))
     feedback = feedback_client(
         config, lambda text: print(text, file=sys.stderr)
     )

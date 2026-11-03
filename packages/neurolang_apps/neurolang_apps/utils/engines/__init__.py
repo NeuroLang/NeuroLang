@@ -11,7 +11,7 @@ Each engine's init script is a Python module that exports::
     ) -> None:
         ...
 
-The engine registry in :mod:`neurolang.utils.engine_registry` handles
+The engine registry in :mod:`neurolang_apps.utils.engine_registry` handles
 loading the YAML, calling init scripts, and building fully-configured
 :class:`~neurolang.frontend.NeurolangPDL` instances.
 """
