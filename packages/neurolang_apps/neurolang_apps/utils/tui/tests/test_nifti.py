@@ -1018,6 +1018,25 @@ class TestProvenanceUnits:
             ColumnSort("voxel", 1), ColumnSort("voxel", 2),
         )]
 
+    def test_column_sorts_through_a_resampling(self, tiny):
+        from neurolang_apps.utils.tui.provenance import (
+            ColumnSort,
+            column_sorts,
+        )
+
+        sorts = column_sorts(
+            tiny._nl, "tiny",
+            "measure(x, y, z, p) :- reports(s, x, y, z) & (p == 1)\n"
+            "rep(b, x, y, z, p) :- "
+            "RESAMPLE[boot](measure(x, y, z, p)) = b\n"
+            "ans(x, y, z, mean(p)) :- rep(b, x, y, z, p)",
+            squall=False,
+        )
+        assert list(sorts.values()) == [(
+            ColumnSort("voxel", 0), ColumnSort("voxel", 1),
+            ColumnSort("voxel", 2), None,
+        )]
+
     def test_unknown_column_sorts(self, tiny):
         from neurolang_apps.utils.tui.provenance import (
             COMPUTED,

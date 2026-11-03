@@ -82,6 +82,7 @@ from neurolang.frontend.datalog import (
 )
 from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.error_formatting import print_formatted_error
+from neurolang.frontend.resampling import is_resample_marker
 from neurolang.frontend.show_ra import ShowRAOptions
 from nl_expr.logic import ExistentialPredicate
 from nl_core.probabilistic.expressions import Condition
@@ -333,7 +334,12 @@ def _body_atoms(formula):
 
 
 def _subformulas(formula) -> tuple:
-    """Return the formulas of a conjunction, existential or condition."""
+    """
+    Return the formulas of a conjunction, existential or condition, or
+    the atom of a ``RESAMPLE[boot](atom) = b``.
+    """
+    if is_resample_marker(formula):
+        return (formula.args[1],)
     if isinstance(formula, ExistentialPredicate):
         return (formula.body,)
     if isinstance(formula, Condition):
