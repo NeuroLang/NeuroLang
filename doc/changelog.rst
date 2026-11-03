@@ -63,6 +63,11 @@ Unreleased
   each voxel, the studies of the result that report a peak there, which the
   brain tab shows.
 
+* The browser REPL has *Ask a question* in its examples: a form for the common
+  questions (the studies that mention a term, two terms, one and not the
+  other, a term a lot; their peaks; the terms of a study), the ones the
+  engine has the predicates of, which puts the Datalog query in the box.
+
 * The browser REPL has a *Stop* button while a query runs: the engine is
   restarted (its data are kept by the browser) and the rules defined in the
   session are run again; *Save session* and *Open session* keep the
