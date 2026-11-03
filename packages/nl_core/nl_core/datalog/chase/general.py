@@ -522,7 +522,26 @@ class ChaseSemiNaive:
     """
 
     def execute_chase(self, rules, instance_update, instance):
+        """
+        Run the chase of ``rules`` to their fixpoint.
+
+        A rule whose body has at most one atom of a predicate of ``rules``
+        has it bound to the tuples new since the previous iteration, its
+        delta, or found earlier in this one: its other results are already
+        in ``instance``. From the second iteration, it is not evaluated if
+        they are none. Other rules see the whole instance.
+        """
         continue_chase = not instance_update.is_empty()
+        functors = {rule.consequent.functor for rule in rules}
+        recursive_atoms = {
+            rule: [
+                predicate.functor
+                for predicate in extract_logic_predicates(rule.antecedent)
+                if isinstance(predicate, FunctionApplication)
+                and predicate.functor in functors
+            ]
+            for rule in rules
+        }
         iteration = 0
         while continue_chase:
             iteration += 1
@@ -533,19 +552,32 @@ class ChaseSemiNaive:
                     "Consider adding a depth bound or increasing max_iterations in config.ini."
                 )
             instance = instance | instance_update
+            delta = instance_update if iteration > 1 else MapInstance()
             instance_update = MapInstance()
             continue_chase = False
             for rule in rules:
+                atoms = recursive_atoms[rule]
+                restriction_instance = instance_update
+                if len(atoms) < 2:
+                    if iteration > 1 and not any(
+                        a in delta or a in instance_update for a in atoms
+                    ):
+                        continue
+                    restriction_instance = delta | instance_update
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     instance_update = self.per_rule_update(
-                        rule, instance, instance_update
+                        rule, instance, instance_update, restriction_instance
                     )
                 continue_chase |= not instance_update.is_empty()
         return instance
 
-    def per_rule_update(self, rule, instance, instance_update):
+    def per_rule_update(
+        self, rule, instance, instance_update, restriction_instance=None
+    ):
+        if restriction_instance is None:
+            restriction_instance = instance_update
         new_instance_update = self.chase_step(
-            instance, rule, restriction_instance=instance_update
+            instance, rule, restriction_instance=restriction_instance
         )
         instance_update = instance_update | new_instance_update
         return instance_update
