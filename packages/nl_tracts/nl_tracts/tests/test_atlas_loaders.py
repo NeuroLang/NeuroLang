@@ -217,13 +217,10 @@ def test_nilearn_destrieux(fetch_or_skip):
     assert by_name["R G_precentral"] == "right"
     assert set(by_name.values()) == {"left", "right", "none"}  # Background
     assert len(atlas.label_extent_relation()) == 3 * (len(rel) - 1)
-    # what the mapping leaves out is what it says it leaves out
+    # what the mapping leaves out is the medial wall, and only that
     stems = {n.split(" ", 1)[1] for n in atlas.unmapped_labels()["name"]}
-    assert stems <= {
-        "Lat_Fis-ant-Horizont", "Lat_Fis-ant-Vertical", "Lat_Fis-post",
-        "S_central", "S_parieto_occipital", "Medial_wall", "Unknown",
-    }
-    assert "G_precentral" not in stems
+    assert stems <= {"Medial_wall", "Unknown"}
+    assert "G_precentral" not in stems and "S_central" not in stems
 
 
 @pytest.mark.network

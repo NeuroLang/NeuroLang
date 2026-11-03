@@ -130,7 +130,13 @@ def test_hemisphere_token_regex_does_not_hit_entorhinal():
         ("ctx-lh-bankssts", {"bankssts", "temporal"}),
         ("Left-Thalamus-Proper", {"thalamus_proper", "subcortical"}),
         ("Left-Thalamus", {"thalamus_proper", "subcortical"}),
-        ("Right-Putamen", {"putamen", "subcortical"}),
+        ("Right-Putamen", {"putamen", "subcortical", "striatum"}),
+        ("Left-Pallidum", {"pallidum", "subcortical", "striatum"}),
+        ("Left-Caudate", {"caudate", "subcortical", "striatum"}),
+        ("Right-Hippocampus", {"hippocampus", "subcortical"}),
+        ("Left-Accumbens-area", {"accumbens_area", "subcortical"}),
+        ("Left-Amygdala", {"amygdala", "subcortical"}),
+        ("Right-VentralDC", {"ventraldc", "subcortical"}),
         ("Brain-Stem", {"brain_stem", "subcortical"}),
         ("Left-Cerebellum-Cortex", {"cerebellum_cortex", "cerebellum"}),
         ("Left-Lateral-Ventricle", {"lateral_ventricle", "ventricles"}),
@@ -190,10 +196,35 @@ def test_destrieux_and_desikan_share_terms():
             "precentral", "postcentral", "temporalpole"} <= d & a
 
 
-def test_destrieux_boundaries_are_left_unmapped_on_purpose():
+def test_destrieux_leaves_out_only_the_medial_wall_and_unknown():
     names = set(load_term_mapping("freesurfer_destrieux")["atlas_label_name"])
-    for stem in ("S_central", "Lat_Fis-post", "Medial_wall", "Unknown"):
+    for stem in ("Medial_wall", "Unknown"):
         assert not {f"L {stem}", f"ctx_lh_{stem}"} & names
+
+
+@pytest.mark.parametrize(
+    "stem,terms",
+    [
+        ("S_central", {"precentral", "postcentral", "frontal", "parietal"}),
+        ("S_parieto_occipital",
+         {"precuneus", "cuneus", "parietal", "occipital"}),
+        ("Lat_Fis-post",
+         {"superiortemporal", "supramarginal", "temporal", "parietal"}),
+        ("Lat_Fis-ant-Horizont",
+         {"parsorbitalis", "parstriangularis", "inferior_frontal_gyrus",
+          "frontal"}),
+        ("Lat_Fis-ant-Vertical",
+         {"parstriangularis", "parsopercularis", "inferior_frontal_gyrus",
+          "frontal"}),
+    ],
+)
+def test_destrieux_boundaries_have_the_terms_of_both_sides(stem, terms):
+    """A boundary structure straddles two regions: it has the terms of both."""
+    mapping = load_term_mapping("freesurfer_destrieux")
+    for name in (f"ctx_rh_{stem}", f"R {stem}"):
+        got = mapping[mapping.atlas_label_name == name]
+        assert set(got["term"]) == terms
+        assert set(got["hemi"]) == {"right"}
 
 
 def _freesurfer_lut():
@@ -239,11 +270,8 @@ def test_the_standard_aseg_aparc_and_a2009s_labels_are_all_mapped():
     mapped = set()
     for key in SHIPPED_MAPPINGS:
         mapped |= set(load_term_mapping(key)["atlas_label_name"])
-    # no term, on purpose: unknown, and the boundaries of Destrieux
-    left_out = re.compile(
-        r"Unknown|ctx-[lr]h-unknown|ctx_[lr]h_(Lat_Fis|S_central|"
-        r"S_parieto_occipital|Medial_wall)"
-    )
+    # no term, on purpose: unknown, and Destrieux's medial wall
+    left_out = re.compile(r"Unknown|ctx-[lr]h-unknown|ctx_[lr]h_Medial_wall")
     missing = sorted(
         by_id[i] for i in wanted
         if by_id[i] not in mapped and not left_out.search(by_id[i])
