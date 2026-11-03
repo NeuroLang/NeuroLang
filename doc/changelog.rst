@@ -60,6 +60,11 @@ Unreleased
   ``ans(...) :- result(...), `` to complete. (A result is not a relation of
   the session: ``ans`` cannot be used in a body.)
 
+* The browser REPL has a *Stop* button while a query runs: the engine is
+  restarted (its data are kept by the browser) and the rules defined in the
+  session are run again; *Save session* and *Open session* keep the
+  statements of a session in a file and give its rules back.
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at
