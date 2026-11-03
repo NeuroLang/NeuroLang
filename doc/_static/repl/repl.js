@@ -10,6 +10,7 @@ import { Editor } from "./editor.js";
 import { renderExamples, renderPredicates } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
+import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
 import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
@@ -133,7 +134,43 @@ function showGuide() {
     input.focus();
   });
   renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall);
+  showBuilder();
 }
+// The form of the common questions: those the engine has the predicates of, in Datalog.
+const builder = $("builder");
+function showBuilder() {
+  const templates = availableTemplates(guide.predicates.map((predicate) => predicate.name));
+  builder.hidden = $("mode").value === "squall" || !templates.length;
+  if (builder.hidden) return;
+  const select = $("builder-template");
+  const key = templates.map((template) => template.id).join();
+  if (select.dataset.key === key) return; // the fields keep what was typed in them
+  select.dataset.key = key;
+  select.replaceChildren(...templates.map((template) => new Option(template.label, template.id)));
+  showFields();
+}
+function showFields() {
+  const template = TEMPLATES.find((t) => t.id === $("builder-template").value);
+  $("builder-error").textContent = "";
+  $("builder-fields").replaceChildren(...template.fields.map((field) => Object.assign(document.createElement("input"), {
+    name: field.name, placeholder: field.placeholder, value: field.value ?? "", spellcheck: false, autocomplete: "off",
+    ariaLabel: field.label, title: field.label,
+  })));
+}
+$("builder-template").addEventListener("change", showFields);
+builder.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const template = TEMPLATES.find((t) => t.id === $("builder-template").value);
+  try {
+    const query = buildQuery(template, Object.fromEntries(new FormData(builder)));
+    editor.value = query;
+    hideSummary();
+    input.focus();
+    $("builder-error").textContent = "";
+  } catch (error) {
+    $("builder-error").textContent = error.message;
+  }
+});
 $("guide").addEventListener("toggle", showGuide);
 $("guide-filter").addEventListener("input", showGuide);
 

@@ -155,6 +155,9 @@
   .guide-item:hover, .guide-item:focus-visible { background: var(--hover); }
   .guide-kind { color: var(--muted); font-family: var(--sans); }
   #guide-filter { width: 100%; margin-bottom: .4rem; }
+  #builder { margin-bottom: .75rem; color: var(--text); }
+  #builder[hidden] { display: none; }
+  #builder-fields input { width: 9rem; }
   .rt-scroll { max-height: 32rem; overflow: auto; }
   .rt-table { border-collapse: collapse; min-width: 20rem; font: 13px ui-monospace, Menlo, monospace; }
   .rt-table th { position: sticky; top: 0; background: var(--raised); text-align: left; padding: 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -267,6 +270,13 @@
 
   <details id="guide">
     <summary>Examples and relations</summary>
+    <form id="builder" class="row" hidden>
+      <strong>Ask a question</strong>
+      <select id="builder-template" aria-label="Question"></select>
+      <span id="builder-fields" class="row"></span>
+      <button class="ghost">Put in the box</button>
+      <span id="builder-error" class="agent-bad" role="alert"></span>
+    </form>
     <div class="guide-cols">
       <div><h3>Examples <span class="note">click one to put it in the box</span></h3><ul id="guide-examples" class="guide-list"></ul></div>
       <div><h3>Relations and rules <span class="note">click one to add it at the cursor</span></h3>
