@@ -59,6 +59,9 @@ Unreleased
   made it is put in the box again, its answer renamed ``result``, with a new
   ``ans(...) :- result(...), `` to complete. (A result is not a relation of
   the session: ``ans`` cannot be used in a body.)
+  A result of studies also has *Map the studies*: the query that counts, for
+  each voxel, the studies of the result that report a peak there, which the
+  brain tab shows.
 
 * The browser REPL has a *Stop* button while a query runs: the engine is
   restarted (its data are kept by the browser) and the rules defined in the
