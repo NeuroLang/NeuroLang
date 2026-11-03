@@ -331,6 +331,55 @@ def test_answers_are_shared_when_on(app, shared):
     assert f"Shared as {2:032x}" in text and "unsure [comment]" in text
 
 
+def test_failures_are_shared(app, shared):
+    from neurolang_apps.utils.llm import LLMError
+
+    wrong = "```datalog\nans(s) :- mention(s, 'pain')\n```"
+    script(app, wrong, wrong)
+    app._run_line(".ask Which studies mention pain?")
+
+    class Failing:
+        def complete(self, *args, **kwargs):
+            raise LLMError("first: HTTP 401: bad key")
+
+    app.assistant.client = Failing()
+    app._run_line(".ask Which studies?")
+    assert app.failed and "HTTP 401: bad key" in output(app)
+    assert [record["valid"] for _, record in shared] == [False, False]
+    assert shared[0][1]["query"] == "ans(s) :- mention(s, 'pain')"
+    assert shared[1][1]["error"] == "first: HTTP 401: bad key"
+
+
+def test_rate_and_refine_on_grist(app, monkeypatch):
+    import httpx
+
+    from neurolang_apps.utils.llm.feedback import GristFeedbackClient
+
+    monkeypatch.setenv("GRIST_API_KEY", "k")
+    sent = []
+
+    def handle(request):
+        sent.append((request.method, json.loads(request.content)))
+        return httpx.Response(200, json={"records": [{"id": 3}]})
+    app.assistant._feedback = GristFeedbackClient(
+        "https://grist.test", "doc1", say=app.console.print,
+        transport=httpx.MockTransport(handle),
+    )
+    script(app, ASKED)
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line(".rate bad misses chronic pain")
+    app._run_line(".refine")
+    app._run_line("ans(s) :- mentions(s, 'fear')")
+    app._run_line(".refine submit fear")
+    assert not app.failed and "answer 3 rated incorrect" in output(app)
+    assert [method for method, _ in sent] == ["POST", "PATCH", "PATCH"]
+    assert [body["records"][0]["fields"] for _, body in sent[1:]] == [
+        {"verdict": "bad", "comment": "misses chronic pain"},
+        {"verdict": "bad", "comment": "fear",
+         "corrected_query": "ans(s) :- mentions(s, 'fear')"},
+    ]
+
+
 def test_rating_needs_sharing_on(app):
     script(app, ASKED)
     app._run_line(".ask Which studies mention pain?")
@@ -432,6 +481,106 @@ def test_feedback_end_to_end(app, tmp_path, monkeypatch):
     }]
 
 
+REACT_ANSWER = (
+    'Action: final_answer\nAction Input: {"query": '
+    '"ans(s) :- mentions(s, \'pain\')", "explanation": "pain"}'
+)
+
+
+@pytest.fixture
+def real_runs(app, monkeypatch):
+    """The programs the engine runs from now on, for real."""
+    runs = []
+    execute = app._nl.execute_datalog_program
+
+    def spy(program, *args, **kwargs):
+        runs.append(program)
+        return execute(program, *args, **kwargs)
+
+    monkeypatch.setattr(app._nl, "execute_datalog_program", spy)
+    return runs
+
+
+def test_react_shows_the_result_it_got_without_running_the_query_again(
+    app, real_runs
+):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    [block] = app.results
+    assert block.frame.values.tolist() == [[1]]
+    assert real_runs == []
+    assert "press Enter to see its result again" in output(app)
+    # Enter on the query as it is shows the result again, still without a run.
+    app._run_line(app.pending_input)
+    assert real_runs == []
+    assert "not run again" in output(app)
+    assert app.results[0].frame.values.tolist() == [[1]]
+
+
+def test_an_edited_query_is_run(app, real_runs):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    app._run_line("ans(s) :- mentions(s, 'fear')")
+    assert real_runs == ["ans(s) :- mentions(s, 'fear')"]
+    assert app.results[0].frame.values.tolist() == [[2]]
+
+
+def test_any_other_input_before_enter_means_the_query_is_run(app, real_runs):
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    app._run_line(".mode datalog")
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_a_result_too_large_to_keep_is_run_when_asked(
+    app, real_runs, monkeypatch
+):
+    from neurolang_apps.utils.llm import validation
+
+    monkeypatch.setattr(validation, "MAX_KEPT_CELLS", 0)
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    assert app.results == [] and app.agent_run is None
+    assert "edit it or press Enter to run it" in output(app)
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_rules_that_are_not_local_to_the_query_are_not_skipped(app, real_runs):
+    app.settings.scope_queries = False
+    script(app, REACT_ANSWER)
+    app._run_line(".ask --react Which studies mention pain?")
+    real_runs.clear()  # the agent's own run is not the one counted
+    assert app.results == [] and app.agent_run is None
+    app._run_line(app.pending_input)
+    assert real_runs == ["ans(s) :- mentions(s, 'pain')"]
+
+
+def test_ask_shows_the_summary_above_the_query_in_a_panel_of_its_own(app):
+    app.assistant._config.assistant.verify_rounds = 1
+    script(
+        app, *REACT_PAIN, "Every study of the database.",
+        "VERDICT: no\nIt is not about pain.",
+        *REACT_PAIN[1:], "Every study again.", "VERDICT: no\nStill not.",
+    )
+    app._run_line(".llm Which studies mention pain?")
+    text = output(app)
+    summary = text.index("Summary")  # the log of the steps has none
+    query = text.index("DATALOG query")
+    assert summary < text.index("Reads back as: Every study again.", summary)
+    assert text.index("Reads back as", summary) < query
+    # What the model said the query does is in the panel, not below the query.
+    assert summary < text.index("pain", summary) < query
+    # The warning of the check stays after the query it is about.
+    assert query < text.index("may not answer the question")
+    assert "Reads back as" not in text[query:]
+
+
 def test_ask_shows_the_query_read_back(app):
     app.assistant._config.assistant.verify_rounds = 1
     script(
@@ -444,3 +593,43 @@ def test_ask_shows_the_query_read_back(app):
     assert "→ verify()" in text
     assert "Reads back as: Every study again." in text
     assert "may not answer the question: Still not." in text
+
+
+def test_explain_reads_the_last_query_in_english(app):
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    client = script(app, "The studies that mention the term pain.")
+    app._run_line(".explain")
+    assert not app.failed
+    assert "Reads as: The studies that mention the term pain." in output(app)
+    request = client.requests[0]["messages"][1]["content"]
+    assert "ans(s) :- mentions(s, 'pain')" in request
+    assert "Datalog" in client.requests[0]["messages"][0]["content"]
+
+
+def test_explain_follows_the_language_of_the_query(app):
+    app.settings.squall = True
+    app._run_line(PAIN)
+    client = script(app, "Every study that mentions pain.")
+    app._run_line(".explain")
+    assert "SQUALL" in client.requests[0]["messages"][0]["content"]
+    assert "Reads as: Every study that mentions pain." in output(app)
+
+
+def test_explain_without_a_query_or_with_an_arg_says_the_usage(app):
+    app._run_line(".explain")
+    assert app.failed and "Run a query first" in output(app)
+    app._run_line(".explain ans(s) :- study(s)")
+    assert "Usage: .explain" in output(app)
+
+
+def test_explain_reports_provider_errors(app):
+    from neurolang_apps.utils.llm import LLMError
+
+    class Failing:
+        def complete(self, *args, **kwargs):
+            raise LLMError("first: HTTP 401: bad key")
+
+    app._run_line("ans(s) :- mentions(s, 'pain')")
+    app.assistant.client = Failing()
+    app._run_line(".explain")
+    assert app.failed and "HTTP 401: bad key" in output(app)

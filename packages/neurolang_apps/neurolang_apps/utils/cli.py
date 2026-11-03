@@ -470,6 +470,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory for cached data downloads (default: neurolang_data).",
     )
     parser.add_argument(
+        "--no-engine-cache",
+        action="store_true",
+        help="Find the tables the engine's build takes long to find, as the "
+        "studies activating the regions of its atlases, instead of reading "
+        "those kept in the data directory (and write none there).",
+    )
+    parser.add_argument(
         "--resolution",
         "-r",
         type=float,
@@ -958,10 +965,35 @@ def report_error(
     for note in sort_notes(exc, program, engine_name, squall):
         print(note, file=stream)
     if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+        for line in _origin_notes(exc):
+            print(line, file=stream)
         print(
             "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
             "traceback.", file=stream,
         )
+
+
+def _origin_notes(exc: BaseException) -> list:
+    """
+    Say where the unexpected error *exc* was raised and what caused it.
+
+    One line for the innermost frame of the traceback, as
+    ``  raised in text_embeddings.py:312 in encode_query``, and one for each
+    exception it was raised from or while handling, so that an error
+    reported without ``--debug`` (the browser has none) can be told apart.
+    """
+    notes = []
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        frames = traceback.extract_tb(exc.__traceback__)
+        if frames:
+            frame = frames[-1]
+            where = f"{Path(frame.filename).name}:{frame.lineno} in {frame.name}"
+            label = "raised in" if not notes else "caused by"
+            notes.append(f"  {label} {where}: {type(exc).__name__}: {exc}")
+        exc = exc.__cause__ or exc.__context__
+    return notes[:4]
 
 
 def _run_reporting_errors(action, program: str, args, nl=None):
@@ -995,7 +1027,8 @@ def _dry_run_with_engine(args, **flags) -> None:
         print("Error: no query provided.", file=sys.stderr)
         sys.exit(1)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     execute = _execute_squall_program if args.squall else _execute_program
     _run_reporting_errors(
@@ -1223,7 +1256,8 @@ def _save_and_view(result, args, column_names, nl, program) -> None:
 def _run_query(args) -> None:
     """Build the engine and run the query of ``args``, printing its result."""
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
 
     if args.list_sets:
@@ -1348,7 +1382,8 @@ def _run_interactive(args, argv=()) -> None:
 
     program = _program_argument(args)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     settings = _tui_settings(args, tui, argv)
     status = tui.main(nl, settings, initial_program=program)
@@ -1460,6 +1495,7 @@ def _run_ask(args) -> None:
     """
     try:
         from neurolang_apps.utils.llm import (
+            AgentResult,
             LLMConfigError,
             LLMError,
             load_config,
@@ -1479,7 +1515,8 @@ def _run_ask(args) -> None:
         sys.exit(1)
     language = _ask_language(args, config)
     nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
     )
     client, on_step = _ask_reporting(args, provider, config, language)
     assistant = config.assistant
@@ -1491,9 +1528,8 @@ def _run_ask(args) -> None:
     )
     try:
         result = agent.run(args.ask)
-    except LLMError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    except LLMError as exc:  # a failure, shared too
+        result = AgentResult(language=language, error=str(exc))
     feedback = feedback_client(
         config, lambda text: print(text, file=sys.stderr)
     )

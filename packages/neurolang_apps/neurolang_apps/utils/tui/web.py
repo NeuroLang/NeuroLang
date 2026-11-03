@@ -18,22 +18,31 @@ memory of the session, and the worker sends it to the provider and to
 no one else.
 """
 
+import csv
+import gzip
+import inspect
 import io
+import json
 import math
+import re
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, NamedTuple
 from unittest import mock
 
 import pandas as pd
 from rich.console import Console
 from rich.text import Text
 
+from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils.cli import _declared_columns
+from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
+
 from . import nifti
 from .app import InteractiveTuiApp, TuiSettings
-from .commands import QuitRepl
+from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
 
 # The most rows of a result sent to the page.
@@ -106,8 +115,10 @@ class Reply:
     *html* is its output, *viewers* the HTML pages of the brain viewer
     the submission made (``.view``), *tables* its results (see
     :func:`table_payload`), *failed* tells whether a statement of it
-    failed, and *prompt* is the query the assistant wrote, for the page
-    to put in its input.
+    failed, *prompt* is the query the assistant wrote, for the page
+    to put in its input, and *mode* the language of the REPL, ``datalog``
+    or ``squall``, which the assistant may have switched, and *predicates*
+    those of the engine and the session (see :meth:`WebRepl.predicates`).
     """
 
     html: str
@@ -115,6 +126,43 @@ class Reply:
     failed: bool = False
     tables: List[dict] = field(default_factory=list)
     prompt: str = ""
+    mode: str = "datalog"
+    predicates: List[dict] = field(default_factory=list)
+
+
+class Download(NamedTuple):
+    """A file the page offers to save: its *name*, *mime* type and *data*."""
+
+    name: str
+    mime: str
+    data: bytes
+
+
+# The files of a result: the separator of its text formats, the type of each.
+TEXT_FORMATS = {"csv": (",", "text/csv"), "tsv": ("\t", "text/tab-separated-values")}
+NIFTI_MIME = "application/gzip"
+
+
+def _file_stem(block: ResultBlock, index: int) -> str:
+    """Return the name of the files of the result *block*, the *index*-th."""
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", block.title).strip("-").lower()
+    return stem or f"result-{index + 1}"
+
+
+def _text(frame: pd.DataFrame, separator: str) -> str:
+    """Return all the rows of *frame* as delimited text, as the table's."""
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=separator, lineterminator="\n")
+    writer.writerow(frame.columns)
+    for row in frame.itertuples(index=False, name=None):
+        writer.writerow(
+            ["" if cell is None else cell for cell in map(_cell, row)]
+        )
+    return out.getvalue()
+
+
+# What the events of the assistant carry that the page does not show.
+_PRIVATE_EVENT_KEYS = ("messages", "tools", "temperature", "start")
 
 
 def _kind(column: pd.Series) -> str:
@@ -145,8 +193,37 @@ def _cell(value):
     return cell_text(value)
 
 
+# The commands that end a terminal session, which a page cannot end.
+TERMINAL_COMMANDS = (".quit", ".exit")
+
+# The sort of the studies of the engines whose studies are those of PubMed.
+STUDY_SORT = "study"
+# What the page shows of a study: its metadata, the DOI first.
+STUDY_FIELDS = ("doi", "title", "authors", "year", "journal")
+
+
+def study_records(metadata: pd.DataFrame) -> dict:
+    """
+    Return the records of the studies of *metadata*, a frame with an ``id``
+    column (the PubMed id) and some of :data:`STUDY_FIELDS`, by id. What a
+    study lacks is not in its record.
+    """
+    columns = [name for name in STUDY_FIELDS if name in metadata.columns]
+    records = {}
+    for row in metadata[["id", *columns]].itertuples(index=False, name=None):
+        cells = {
+            name: _cell(value) for name, value in zip(columns, row[1:])
+        }
+        records[int(row[0])] = {
+            name: value for name, value in cells.items()
+            if value not in (None, "")
+        }
+    return records
+
+
 def table_payload(
-    frame: pd.DataFrame, title: str = "", max_rows: int = MAX_ROWS
+    frame: pd.DataFrame, title: str = "", max_rows: int = MAX_ROWS,
+    sorts=None, studies=None,
 ) -> dict:
     """
     Return the result *frame* as JSON data for the page's table viewer.
@@ -154,9 +231,13 @@ def table_payload(
     The ``columns`` and their ``kinds`` (bool, int, float, str or other,
     for the sort), the first *max_rows* ``rows`` of cells, the ``total``
     number of rows, whether the rows are ``truncated`` and the ``title``.
+    With the *sorts* of the columns (the name of each, None if unknown),
+    ``sorts``; and if some columns are of studies, and the *studies* are
+    known (see :func:`study_records`), ``study_links``: those ``columns``,
+    and the ``records`` of the studies the rows hold, by id.
     """
     kept = frame.iloc[:max_rows]
-    return {
+    payload = {
         "title": title,
         "columns": [str(column) for column in frame.columns],
         "kinds": [_kind(frame[column]) for column in frame.columns],
@@ -165,6 +246,29 @@ def table_payload(
         "total": len(frame),
         "truncated": len(frame) > len(kept),
     }
+    if sorts is not None:
+        payload["sorts"] = list(sorts)
+        links = _study_links(kept, payload["sorts"], studies)
+        if links:
+            payload["study_links"] = links
+    return payload
+
+
+def _study_ids(frame: pd.DataFrame, columns: list) -> set:
+    """Return the values of the *columns* of *frame*, as the page has them."""
+    return {_cell(value) for i in columns for value in frame.iloc[:, i]}
+
+
+def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
+    """Return the ``study_links`` of the *frame*, or an empty dict."""
+    columns = [i for i, sort in enumerate(sorts) if sort == STUDY_SORT]
+    if not (columns and studies):
+        return {}
+    known = _study_ids(frame, columns) & studies.keys()
+    return {
+        "columns": columns,
+        "records": {str(study): studies[study] for study in known},
+    }
 
 
 class WebRepl:
@@ -172,15 +276,21 @@ class WebRepl:
 
     def __init__(
         self, nl, engine_name: str = "", resolution=None, width: int = 100,
-        max_rows: int = MAX_ROWS,
+        max_rows: int = MAX_ROWS, study_metadata=None,
     ):
         """
         Set up the REPL on *nl*, the engine *engine_name* at *resolution*.
 
         The output is laid out on *width* columns, and at most *max_rows*
-        rows of a result are sent to the page.
+        rows of a result are sent to the page. The *study_metadata* (see
+        :func:`study_records`) of the engine's studies, whose ids are
+        those of PubMed, let the page link the studies of a result.
         """
         self.max_rows = max_rows
+        self._studies = (
+            study_records(study_metadata) if study_metadata is not None
+            else None
+        )
         self._tables: list = []
         command = "neurolang-query -i"
         if engine_name:
@@ -235,6 +345,25 @@ class WebRepl:
             provider.name, "", provider.model, provider.base_url
         )
 
+    def set_event_sink(self, send) -> None:
+        """
+        Send the events of the assistant to *send*, as it works.
+
+        *send* is called with the JSON text of each event (see
+        :data:`~neurolang_apps.utils.tui.assistant.AGENT_EVENTS`) while a
+        submission is running, so that the page can show the steps before
+        the reply. The messages of the conversation are left out of them:
+        the page does not show them, and ``"type": "agent"`` tells the page
+        what the message is. ``None`` stops sending.
+        """
+        def forward(event: dict) -> None:
+            kept = {
+                k: v for k, v in event.items() if k not in _PRIVATE_EVENT_KEYS
+            }
+            send(json.dumps({"type": "agent", **kept}, default=str))
+
+        self.app.agent_events = forward if send else None
+
     def banner(self) -> str:
         """Return the HTML of the REPL's welcome: its command and banner."""
         self.console.print(
@@ -263,7 +392,9 @@ class WebRepl:
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
         return Reply(
-            self._output(), viewers, self.app.failed, self._tables, prompt
+            self._output(), viewers, self.app.failed, self._tables, prompt,
+            "squall" if self.app.settings.squall else "datalog",
+            self.predicates(),
         )
 
     def _print_block(self, block: ResultBlock) -> None:
@@ -272,7 +403,13 @@ class WebRepl:
             self.console.print(
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
-        table = table_payload(block.frame, block.title, self.max_rows)
+        sorts = [s.sort if s else None for s in block.sorts or ()]
+        table = table_payload(
+            block.frame, block.title, self.max_rows,
+            sorts if len(sorts) == len(block.frame.columns) else None,
+            self._studies,
+        )
+        table.update(self._downloads_of(block))
         self._tables.append(table)
         block.shown = len(block.frame)
         count = f"{table['total']} row{'s' * (table['total'] != 1)}"
@@ -280,6 +417,99 @@ class WebRepl:
             count += f" · the first {len(table['rows'])} are in the table"
         self.console.print(
             count, style="dim", markup=False, highlight=False
+        )
+
+    def examples(self) -> dict:
+        """Return the example queries of the engine, by language."""
+        return engine_examples(self.app.settings.engine_name)
+
+    def predicates(self) -> List[dict]:
+        """
+        Return the predicates of the engine and of the session, for the
+        page to list: ``name``, ``kind`` (stored, derived, session...),
+        ``signature`` as ``.predicates`` shows it, and the engine's
+        ``description``, if any, with its ``arguments``: the ``columns``,
+        ``sort`` and ``type`` of each.
+        """
+        engine = self.app.settings.engine_name
+        signatures = engine_registry.get_signatures(engine) if engine else {}
+        described = engine_registry.get_predicates(engine) if engine else {}
+        infos = listed(predicate_catalog(
+            self.app._nl, _declared_columns(engine),
+            self.app.loaded_relations, signatures,
+        ))
+        return [
+            {"name": info.name, "kind": info.kind,
+             "signature": info.signature(),
+             "description": described.get(info.name, {}).get("description", ""),
+             "arguments": [
+                 {"columns": list(argument["columns"]),
+                  "sort": argument["sort"], "type": argument["type"]}
+                 for argument in described.get(info.name, {}).get(
+                     "arguments", []
+                 )
+             ]}
+            for info in infos
+        ]
+
+    def commands(self) -> List[dict]:
+        """
+        Return the dot-commands the page can run, to document them: the
+        ``name``, ``usage`` and ``description``, the ``details`` of its
+        function's docstring and its help ``topic`` (``.help TOPIC`` tells
+        more), or an empty one.
+        """
+        return [
+            {"name": name, "usage": command.usage,
+             "description": command.help,
+             "details": inspect.getdoc(command.handler) or "",
+             "topic": name[1:] if name[1:] in HELP_TOPICS else ""}
+            for name, command in COMMANDS.items()
+            if name not in TERMINAL_COMMANDS
+        ]
+
+    def _downloads_of(self, block: ResultBlock) -> dict:
+        """
+        Return what the page may download of *block*: its ``block`` number
+        for :meth:`download`, and the value columns of its NIfTI image,
+        ``nifti`` (``None`` in the list is a mask), or else why it has
+        none, ``nifti_reason``.
+        """
+        index = next(
+            (i for i, b in enumerate(self.app.results) if b is block), 0
+        )
+        try:
+            columns = nifti.image_columns(self.app, block)
+            return {"block": index, "nifti": columns, "nifti_reason": ""}
+        except Exception as error:  # nothing that fails here may hide a result
+            reason = str(error) or "no NIfTI image can be made of this result"
+            return {"block": index, "nifti": None, "nifti_reason": reason}
+
+    def download(self, block: int, kind: str, value: str = "") -> Download:
+        """
+        Return the file of kind *kind* of the result *block*, the number the
+        table gave: ``csv`` or ``tsv`` with all its rows (the table holds
+        at most ``max_rows``), or a ``nifti`` image of the column *value*
+        (the default one when empty), gzipped. A
+        :class:`~.nifti.SaveError` tells why a result has no image.
+        """
+        try:
+            result = self.app.results[block]
+        except IndexError:
+            raise ValueError("There is no such result: run a query first.")
+        stem = _file_stem(result, block)
+        if kind in TEXT_FORMATS:
+            separator, mime = TEXT_FORMATS[kind]
+            text = _text(result.frame, separator)
+            return Download(f"{stem}.{kind}", mime, text.encode("utf-8"))
+        if kind != "nifti":
+            raise ValueError(f"Unknown kind of file {kind!r}.")
+        request = nifti.SaveRequest(Path(f"{stem}.nii.gz"), value or None)
+        saved = nifti.result_image(self.app, result, request)
+        suffix = f"-{saved.value}" if saved.value is not None else ""
+        return Download(
+            f"{stem}{suffix}.nii.gz", NIFTI_MIME,
+            gzip.compress(saved.image.to_bytes()),
         )
 
     def _output(self) -> str:

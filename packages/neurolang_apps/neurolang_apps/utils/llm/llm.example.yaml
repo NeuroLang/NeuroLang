@@ -115,3 +115,8 @@ feedback:
   enabled: false
   url: https://feedback.example.org   # a neurolang-feedback-server
   user: ""                            # optional: your name on the ratings
+  # Or rows of the table Answers of a Grist document, the API key in the
+  # environment variable api_key_env (doc/query_assistant.rst):
+  # url: https://grist.numerique.gouv.fr
+  # grist_doc: YOUR_DOC_ID
+  # api_key_env: GRIST_API_KEY

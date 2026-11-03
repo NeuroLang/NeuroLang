@@ -124,3 +124,20 @@ def test_function_of_a_probabilistic_atom_replaced_by_relation():
     assert new_formula == Conjunction((Selected(s), symbol(s, u)))
     result = RelationalAlgebraSolver().walk(relation).value
     assert set(result) == {(0, 1), (1, 2)}
+
+
+def test_function_of_a_probabilistic_atom_named_in_the_program():
+    """The function of u = f(s) is a symbol of the program, as the
+    functions the user adds to an engine are: the relation computes it."""
+    cpl = _program()
+    f = Symbol("f")
+    cpl.symbol_table[f] = Constant[Callable[[int], int]](lambda x: x + 10)
+    u = Symbol("u")
+    formula = Conjunction((Selected(s), EQ(u, f(s))))
+
+    new_formula, relations = replace_deterministic_negations(formula, cpl)
+
+    symbol, relation = next(iter(relations.items()))
+    assert new_formula == Conjunction((Selected(s), symbol(s, u)))
+    result = RelationalAlgebraSolver().walk(relation).value
+    assert set(result) == {(0, 10), (1, 11)}

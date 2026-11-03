@@ -977,7 +977,7 @@ class TestShowRewrittenFlag:
 
         build_engine_calls = []
 
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             build_engine_calls.append((name, str(data_dir), resolution))
             return nl
 
@@ -999,6 +999,26 @@ class TestShowRewrittenFlag:
         assert "rewritten program" in captured.out
         assert "Query completed" not in captured.err
 
+    @pytest.mark.parametrize("flags, use_cache", [
+        ([], True), (["--no-engine-cache"], False),
+    ])
+    def test_engine_cache_flag(self, monkeypatch, capsys, flags, use_cache):
+        """--no-engine-cache builds the engine without its kept tables."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang_apps.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,)], name="R")
+        calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
+            calls.append(use_cache)
+            return nl
+
+        monkeypatch.setattr(engine_registry, "build_engine", fake_build_engine)
+        main(["--engine", "neurosynth", *flags, "ans(x) :- R(x)."])
+        assert calls == [use_cache]
+
     def test_show_rewritten_datalog_builds_engine(self, monkeypatch, capsys):
         """--show-rewritten for classical Datalog also builds the engine."""
         from neurolang.frontend import NeurolangPDL
@@ -1009,7 +1029,7 @@ class TestShowRewrittenFlag:
 
         build_engine_calls = []
 
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             build_engine_calls.append((name, str(data_dir), resolution))
             return nl
 
@@ -1041,7 +1061,7 @@ class TestShowRAFlag:
     @staticmethod
     def _use_engine(monkeypatch, nl):
         """Make the CLI use ``nl`` as the engine it builds."""
-        def fake_build_engine(name, data_dir, resolution=None):
+        def fake_build_engine(name, data_dir, resolution=None, use_cache=True):
             return nl
 
         monkeypatch.setattr(
@@ -1503,6 +1523,20 @@ class TestErrorReporting:
         err = self.run_failing(capsys, "ans(x) :- item(x)")
         assert err.startswith("Internal error — ValueError: boom")
         assert "--debug" in err
+        assert "raised in test_cli.py:" in err
+        assert "in broken: ValueError: boom" in err
+
+    def test_internal_error_names_its_cause(self, capsys, monkeypatch):
+        def broken(*args, **kwargs):
+            try:
+                raise KeyError("inner")
+            except KeyError as error:
+                raise RuntimeError("outer") from error
+
+        monkeypatch.setattr("neurolang_apps.utils.cli._execute_program", broken)
+        err = self.run_failing(capsys, "ans(x) :- item(x)")
+        assert "caused by test_cli.py:" in err
+        assert "KeyError: 'inner'" in err
 
 
 # ---------------------------------------------------------------------------

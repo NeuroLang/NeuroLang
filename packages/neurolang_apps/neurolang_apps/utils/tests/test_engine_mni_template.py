@@ -129,7 +129,7 @@ def test_engine_resolution_is_the_default(tmp_path):
     def shape(engine, requested):
         captured = {}
 
-        def fake_mask(cfg, data_dir, res=None):
+        def fake_mask(cfg, data_dir, res=None, cache_dir=None):
             captured["cfg"] = cfg
             return None
 

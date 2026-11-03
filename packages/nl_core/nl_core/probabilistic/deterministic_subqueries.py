@@ -191,9 +191,11 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         optimised, and is marked to be materialised when the plan is
         evaluated. Its relations are the sets of the extensional
         database, rather than their symbols, which the lifted solver maps
-        to probabilistic sets.
+        to probabilistic sets; the functions the program knows by name
+        are their values.
         """
         column_names = tuple(str2columnstr_constant(v.name) for v in columns)
+        formula = ReplaceSymbolWalker(self.program.builtins()).walk(formula)
         plan = Projection(TranslateToNamedRA().walk(formula), column_names)
         plan = ReplaceSymbolWalker(self._relations()).walk(plan)
         plan = RelationalAlgebraOptimiser().walk(plan)

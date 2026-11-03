@@ -31,8 +31,19 @@ in the prompt, where it can be read, edited and run:
     │ making' reports.                                                       │
     ╰────────────────────────────────────────────────────────────────────────╯
     4 LLM calls
-    The query is in the prompt: edit it or press Enter to run it.
+    ... the 14926 rows of the result, as a query prints them ...
+    The query is in the prompt: edit it to run it again, or press Enter to see its result again.
     nl(neurosynth:SQ)> obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'decision making' reports.
+    The assistant ran this query: its result, not run again.
+
+The ReAct agent runs its final query to accept it (``run_query`` is how it
+tries one, ``final_answer`` runs the one it gives), and keeps the whole result:
+it is printed right after the query, in the terminal and in the page, and
+Enter on the query as it is shows it again, without running the query a
+second time. Any edit, or any other input first, runs the query as usual, and
+so does a result larger than 5 million cells, or ``.scope off``, which
+keeps a query's rules in the session. The ICL strategy does not run its query:
+Enter runs it.
 
 From the command line, ``--ask`` prints the query, and ``--run`` also
 runs it. ``--save PATH`` and ``--view`` run it too, and save its result
@@ -274,6 +285,11 @@ change the settings:
 
     nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
 
+``.explain`` reads the last query that ran, whoever wrote it, in English: the
+model is given the query, in its language, with the engine's predicates,
+and answers with a sentence or two, printed after ``Reads as:``. It takes
+no argument, and does not run the query again.
+
 .. note::
 
    The question, the description of the engine's predicates, some of
@@ -289,6 +305,16 @@ or any server speaking the OpenAI API at the address you give (it must
 accept calls from web pages). The key stays in the tab, or on the device if
 you ask, and is sent to the provider and nowhere else. ``.ask`` and ``.llm``
 work as in a terminal; the query they write is put in the input of the page.
+
+The section *Assistant steps*, under the question, shows the work of the
+assistant as it happens, one line per call to the model and per tool call of
+the ReAct agent with the queries it tries and what they gave back, as the
+terminal prints them; it is closed until you open it. A step appears when its
+model reply arrives (replies are not streamed word by word), the tool call
+before its result.
+
+The code box colours the query as the terminal does, with the same
+tokenizer (``query_highlight``), in Datalog and in SQUALL.
 
 .. _assistant-feedback:
 
@@ -315,7 +341,8 @@ whom. If the server cannot be reached, a warning is printed once and the
 assistant works as before.
 
 **What is sent.** For each answer of ``.ask``, ``.llm`` or
-``neurolang-query --ask``: the question; the query, its explanation, and
+``neurolang-query --ask``, including those without a valid query or that
+failed for an error of the provider: the question; the query, its explanation, and
 whether it is valid or why not; the steps of the agent (thought, tool,
 arguments, and the first 1000 characters of what the tool returned); the
 rows the agent saw when it ran the final query; the engine's name; the
@@ -342,6 +369,32 @@ private data.
 
 ``.help feedback`` recalls these commands. In the browser, the REPL does not
 share its answers.
+
+**In a Grist document.** Instead of a server, the answers can be rows of a
+`Grist <https://www.getgrist.com>`_ document:
+
+.. code-block:: yaml
+
+    feedback:
+      enabled: true
+      url: https://grist.numerique.gouv.fr   # the Grist instance
+      grist_doc: YOUR_DOC_ID                 # in the document's address
+      api_key_env: GRIST_API_KEY             # the default
+      user: Ada
+
+The API key (in Grist, *Profile settings*, *API*) is read from the
+environment variable ``api_key_env`` only; without it, a warning is printed
+once and nothing is shared. The document needs a table ``Answers`` with the
+columns ``time`` (date and time), ``question``, ``query``, ``valid``
+(toggle), ``error``, ``explanation``, ``engine``, ``provider``, ``model``,
+``strategy``, ``language``, ``rows``, ``steps`` (JSON text), ``seconds``,
+``calls``, ``tokens``, ``user`` and ``client_version``, plus the review
+columns ``verdict`` (choice: good, bad or unsure), ``comment`` and
+``corrected_query``. Each answer is a row, its id the row's number. Flag the
+rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
+``bad`` set the ``verdict``) and ``.refine submit`` (``bad`` and the
+``corrected_query``). The browser REPL never shares, so the key never
+reaches the page.
 
 **Running a server.** ``neurolang-feedback-server`` comes with
 ``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and

@@ -51,9 +51,14 @@ doc = [
     "numpydoc",
 ]
 
-# The project has no modules of its own: its wheel is empty.
+# The command serving the REPL in the browser on this machine, from the
+# checkout: ``uv run --extra apps neurolang-repl-serve``.
+[project.scripts]
+neurolang-repl-serve = "serve_repl:main"
+
+# The project's only package is that of the command, tools/serve_repl.
 [tool.hatch.build.targets.wheel]
-bypass-selection = true
+packages = ["tools/serve_repl"]
 
 [tool.uv.workspace]
 members = ["packages/*"]

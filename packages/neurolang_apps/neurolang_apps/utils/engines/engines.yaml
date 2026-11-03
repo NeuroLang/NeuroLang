@@ -94,6 +94,10 @@ engines:
       argument, close(q, s) :- similar_study(q, s), selected_study(s);
       inside another rule the text is not known and the query fails.
       Rank by similarity rather than with a fixed threshold.
+      Cognitive Atlas classes are named by cogat_term, their lower-case
+      label (the terms of mentions), both to find a class and to answer
+      with one, not by rdfs:label or skos:prefLabel; cogat_subclass_of(x,
+      c) holds for the classes x below c.
       A question asking how certain or significant an answer is (a
       confidence interval, an error bar, whether one probability is
       larger than another) resamples the studies: write the measure as a
@@ -575,8 +579,8 @@ engines:
         - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
         - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
         - "ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)"
-        - "ans(l) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), rdfs:label(x, l)"
-        - "ans(s) :- rdfs:label(c, 'Working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
+        - "ans(t) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t)"
+        - "ans(s) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
       squall:
         - "obtain every Study that mentions 'pain'."
         - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."

@@ -12,10 +12,18 @@ break the condition and builds an
 :class:`~neurolang.exceptions.UnboundVariablesError` naming them.
 """
 
+import inspect
 from operator import contains, eq
 
-from nl_expr.exceptions import UnboundVariablesError
-from nl_expr.expression_walker import ExpressionWalker, add_match
+from nl_expr.exceptions import (
+    UnboundVariablesError,
+    WrongArgumentsInPredicateError,
+)
+from nl_expr.expression_walker import (
+    ExpressionWalker,
+    add_match,
+    expression_iterator,
+)
 from nl_expr.expressions import Constant, FunctionApplication, Lambda, Symbol
 from nl_expr.logic import Conjunction, ExistentialPredicate, Negation
 from nl_expr.logic.expression_processing import extract_logic_free_variables
@@ -53,7 +61,14 @@ def check_range_restriction(rule, symbol_table=None, query=False):
     ------
     UnboundVariablesError
         If a variable of the body is not bound.
+    WrongArgumentsInPredicateError
+        If a function of the body is applied to arguments its signature
+        does not take.
     """
+    symbol_table = {} if symbol_table is None else symbol_table
+    for _, application in expression_iterator(rule.antecedent):
+        if isinstance(application, FunctionApplication):
+            _check_function_arguments(application, symbol_table)
     functor = rule.consequent.functor
     if functor.is_fresh and not query:
         return
@@ -170,6 +185,32 @@ def _function(functor, symbol_table):
     if isinstance(value, Constant) and callable(value.value):
         return value.value
     return None
+
+
+def _check_function_arguments(application, symbol_table):
+    """
+    Raise `WrongArgumentsInPredicateError` if *application* applies a
+    Python function to arguments its signature does not take.
+    """
+    function = _function(application.functor, symbol_table)
+    try:
+        signature = inspect.signature(function)
+    except (TypeError, ValueError):
+        return
+    try:
+        signature.bind(*application.args, **application.kwargs)
+    except TypeError:
+        functor = application.functor
+        name = getattr(functor, "name", None) or next(
+            (s.name for s, v in symbol_table.items() if v == functor),
+            function.__name__,
+        )
+        doc = inspect.getdoc(function)
+        purpose = f": {doc.splitlines()[0]}" if doc else ""
+        raise WrongArgumentsInPredicateError(
+            f"`{name}` is used with {len(application.args)} arguments but "
+            f"is the function {name}{signature}{purpose}"
+        ) from None
 
 
 def _classify(literal, symbol_table):

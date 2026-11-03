@@ -26,6 +26,32 @@ class RelationalAlgebraStringExpression(str):
 # tracks both regimes.
 _ANTI_JOIN_MIN_ROWS = 20
 
+
+def _copy_on_write() -> bool:
+    """Whether pandas copies frames on write: always from pandas 3."""
+    if int(pd.__version__.split(".")[0]) >= 3:
+        return True
+    try:
+        return pd.get_option("mode.copy_on_write") is True
+    except Exception:  # no such option before pandas 1.5
+        return False
+
+
+# With copy-on-write, a set shares the columns of the frame it is made
+# from, which cannot change it; without, it copies them.
+_COPY_ON_WRITE = _copy_on_write()
+
+# Operations on many rows go by chunks of this many rows, not to hold
+# arrays as long as the relation: the activations of the voxels by the
+# studies are tens of millions of rows.
+_CHUNK_ROWS = 1 << 22
+
+# The reductions computed a chunk at a time, and the reduction of their
+# partial results giving that of the whole.
+_COMBINED_REDUCTIONS = {
+    "sum": "sum", "max": "max", "min": "min", "size": "sum", "count": "sum"
+}
+
 # Python's reductions, which pandas runs per group in Python, and the
 # pandas reductions computing the same on columns of numbers.
 _BUILTIN_REDUCTIONS = {sum: "sum", max: "max", min: "min"}
@@ -73,7 +99,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 self._container = iterable._container
                 self._might_have_duplicates = iterable._might_have_duplicates
             elif isinstance(iterable, pd.DataFrame):
-                self._container = iterable.copy()
+                # A deep copy would also join the columns in one block: a
+                # second copy of the rows, gigabytes for those of a
+                # Euclidean bound.
+                self._container = iterable.copy(deep=not _COPY_ON_WRITE)
             else:
                 self._container = pd.DataFrame(iterable)
 
@@ -761,20 +790,46 @@ class NamedRelationalAlgebraFrozenSet(
         large_key = large._container[key]
         if small_key.dtype != large_key.dtype or not small_key.is_unique:
             return None
-        position = pd.Index(small_key).get_indexer(large_key)
+        taken = [
+            name for name in new_columns if name not in large.columns
+        ]
+        if not all(
+            isinstance(small._container[name].dtype, np.dtype)
+            for name in taken
+        ):
+            return None
+        index = pd.Index(small_key)
+        keys = large_key.to_numpy()
+        chunks = range(0, len(keys), _CHUNK_ROWS)
+        # The rows matched, then the columns taken, a chunk at a time: the
+        # positions of the rows matched are never whole.
+        found = np.empty(len(keys), dtype=bool)
+        for start in chunks:
+            stop = start + _CHUNK_ROWS
+            found[start:stop] = index.get_indexer(keys[start:stop]) >= 0
+        values = {
+            name: np.empty(int(found.sum()), small._container[name].dtype)
+            for name in taken
+        }
+        filled = 0
+        for start in chunks:
+            stop = start + _CHUNK_ROWS
+            position = index.get_indexer(keys[start:stop][found[start:stop]])
+            for name in taken:
+                values[name][filled:filled + len(position)] = (
+                    small._container[name].to_numpy()[position]
+                )
+            filled += len(position)
         rows = large._container
-        found = position >= 0
         if not found.all():
-            rows, position = rows[found], position[found]
+            rows = rows[found]
+        rows = rows.reset_index(drop=True)
         columns = {
-            name: rows[name] if name in large.columns
-            else pd.Series(
-                small._container[name].array.take(position), index=rows.index
-            )
+            name: rows[name] if name in large.columns else values[name]
             for name in new_columns
         }
         return self._light_init_same_structure(
-            pd.DataFrame(columns, copy=False).reset_index(drop=True),
+            pd.DataFrame(columns, copy=False),
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
@@ -1016,7 +1071,11 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
         new_containers = []
-        if len(aggs) > 0:
+        if self._by_chunks(group_columns, aggs, aggs_multi_column):
+            new_containers.append(self._aggregate_by_chunks(
+                group_columns, aggs
+            ))
+        elif len(aggs) > 0:
             new_containers.append(groups.agg(**aggs))
 
         for dst, fun in aggs_multi_column.items():
@@ -1042,6 +1101,42 @@ class NamedRelationalAlgebraFrozenSet(
             columns=list(new_container.columns),
         )
         return output
+
+    def _by_chunks(self, group_columns, aggs, aggs_multi_column):
+        """Whether the aggregation is computed a chunk of rows at a time:
+        a grouped one of many rows by reductions combining their partial
+        results (see ``_COMBINED_REDUCTIONS``)."""
+        return (
+            len(self._container) > _CHUNK_ROWS
+            and len(group_columns) > 0
+            and len(aggs) > 0
+            and not aggs_multi_column
+            and all(
+                isinstance(named.aggfunc, str)
+                and named.aggfunc in _COMBINED_REDUCTIONS
+                for named in aggs.values()
+            )
+        )
+
+    def _aggregate_by_chunks(self, group_columns, aggs):
+        """
+        Return the aggregation *aggs* grouped by *group_columns*, computed
+        a chunk of rows at a time and combined: grouping all the rows at
+        once makes arrays of group codes as long as the relation.
+        """
+        container = self._container
+        partials = pd.concat([
+            container.iloc[start:start + _CHUNK_ROWS]
+            .groupby(group_columns, dropna=False, sort=False)
+            .agg(**aggs)
+            for start in range(0, len(container), _CHUNK_ROWS)
+        ])
+        return partials.groupby(
+            level=list(range(len(group_columns))), dropna=False, sort=False
+        ).agg(**{
+            dst: pd.NamedAgg(dst, _COMBINED_REDUCTIONS[named.aggfunc])
+            for dst, named in aggs.items()
+        })
 
     @staticmethod
     def _apply_aggregation(groups, fun):

@@ -1019,12 +1019,36 @@ class TestProvenanceUnits:
         )]
 
     def test_unknown_column_sorts(self, tiny):
-        from neurolang_apps.utils.tui.provenance import column_sorts
+        from neurolang_apps.utils.tui.provenance import (
+            COMPUTED,
+            ColumnSort,
+            column_sorts,
+        )
 
         sorts = column_sorts(
             tiny._nl, "tiny", "ans(a, n) :- far(a), (n == 2)", squall=False,
         )
-        assert list(sorts.values()) == [(None, None)]
+        assert list(sorts.values()) == [(None, ColumnSort(COMPUTED, 0))]
+
+    def test_a_computed_column_is_the_value_whatever_its_name(self, tiny):
+        from neurolang_apps.utils.tui.provenance import column_sorts
+
+        sorts = column_sorts(
+            tiny._nl, "tiny",
+            "ans(i, j, k, study_id) :- weight(i, j, k, w) & "
+            "(study_id == w * 2)",
+            squall=False,
+        )
+        provenance = next(iter(sorts.values()))
+        df = pd.DataFrame(
+            {"i": [1], "j": [2], "k": [3], "study_id": [0.5]}
+        )
+        points = nifti.point_columns(df, self._sorts(), provenance)
+        assert nifti.value_column(
+            df, points, self._sorts(), provenance=provenance
+        ) == "study_id"
+        # without the query, the name says it is a study: a mask
+        assert nifti.value_column(df, points, self._sorts()) is None
 
     def test_points_from_the_column_sorts(self):
         from neurolang_apps.utils.tui.provenance import ColumnSort

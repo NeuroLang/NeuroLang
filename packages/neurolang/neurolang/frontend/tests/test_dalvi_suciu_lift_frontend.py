@@ -527,3 +527,36 @@ def test_function_of_a_variable_separates_the_query(solvers):
     assert result.iloc[0, 0] == pytest.approx(
         1 - (1 - 0.5 * 0.6) * (1 - 0.4 * 0.7)
     )
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
+    """
+    A function the engine knows by name, applied to the choice, and a
+    threshold on it, within PROB, are the same query as the deterministic
+    rule computing them: the same probabilities, and not an error for
+    functions that the probabilistic program did not know.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_symbol(
+        lambda term, study: {1: 0.9, 2: 0.8, 3: 0.2}[study],
+        name="query_similarity"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,)], name="selected_study"
+    )
+    nl.add_tuple_set([(1,), (2,), (3,)], name="study")
+    nl.add_tuple_set([(10, 1), (11, 2), (12, 3), (13, 3)], name="peak")
+    inline = nl.execute_datalog_program(
+        "ans(i, p) :- PROB[selected_study(s), peak(i, s), "
+        "(v == query_similarity('tom', s)), (v > 0.75)] = p"
+    )
+    in_a_rule = nl.execute_datalog_program(
+        "similar(s) :- study(s), (v == query_similarity('tom', s)), "
+        "(v > 0.75)\n"
+        "ans(i, p) :- PROB[selected_study(s), peak(i, s), similar(s)] = p"
+    )
+    assert dict(inline) == pytest.approx({10: 1 / 3, 11: 1 / 3})
+    assert dict(in_a_rule) == pytest.approx(dict(inline))

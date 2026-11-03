@@ -5,7 +5,9 @@ When the ``feedback`` section of the LLM configuration is ``enabled``,
 or the environment variable ``NEUROLANG_LLM_FEEDBACK_URL`` gives the
 address of a server, each answer of the assistant is posted to that
 :mod:`.feedback_server` (:meth:`FeedbackClient.share`), to be rated and
-corrected there or with ``.rate`` and ``.refine`` in the REPL.
+corrected there or with ``.rate`` and ``.refine`` in the REPL. With
+``grist_doc``, the answers are instead rows of the table ``Answers`` of
+that Grist document (:class:`GristFeedbackClient`).
 
 What is sent is :func:`answer_record`: the question, the query, its
 explanation, the steps of the agent (their observations cut), the rows
@@ -15,8 +17,10 @@ addresses and headers, and the paths of the configuration and the data
 are never sent; the home directory is written ``~`` in the texts.
 """
 
+import json
 import os
 import sys
+import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable
@@ -109,16 +113,27 @@ class FeedbackClient:
             base_url=url.rstrip("/"), timeout=10, transport=transport
         )
 
-    def _post(self, path: str, data: dict) -> str:
-        """Post *data* to *path* and return the id the server gives."""
+    def _headers(self) -> dict:
+        return {}
+
+    def _send(self, method, path, data, read=lambda reply: reply["id"]):
+        """Send *data* to *path* and return what *read* takes of the reply."""
         try:
-            response = self._http.post(path, json=data)
+            response = self._http.request(
+                method, path, json=data, headers=self._headers()
+            )
             response.raise_for_status()
-            return response.json()["id"]
-        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            return read(response.json())
+        except (httpx.HTTPError, ValueError, LookupError) as exc:
             raise FeedbackError(
                 f"The feedback server {self.url} failed: {exc}"
             ) from exc
+
+    def _share(self, record: dict) -> str:
+        return self._send("POST", "/api/answers", record)
+
+    def _rate(self, answer_id: str, data: dict) -> str:
+        return self._send("POST", f"/api/answers/{answer_id}/feedback", data)
 
     def share(self, question, result, provider, strategy, engine=""):
         """Post the answer and return its id, or None if it failed."""
@@ -130,7 +145,7 @@ class FeedbackClient:
                 "in the LLM configuration)."
             )
         try:
-            return self._post("/api/answers", answer_record(
+            return self._share(answer_record(
                 question, result, provider, strategy, engine, self.user
             ))
         except FeedbackError as exc:
@@ -151,8 +166,58 @@ class FeedbackClient:
                 corrected_query_checked=True,
                 corrected_rows=corrected_rows[:MAX_OBSERVATION],
             )
-        return self._post(
-            f"/api/answers/{answer_id}/feedback", _anonymous(data)
+        return self._rate(answer_id, _anonymous(data))
+
+
+class GristFeedbackClient(FeedbackClient):
+    """
+    The client of the Grist document *doc* at *url*: each answer is a row
+    of its table ``Answers``, whose id is the answer's; a rating sets the
+    row's ``verdict`` (good, bad or unsure), ``comment`` and
+    ``corrected_query``. The API key is in the environment variable
+    *api_key_env*.
+    """
+
+    VERDICTS = {"correct": "good", "incorrect": "bad"}
+
+    def __init__(
+        self, url: str, doc: str, api_key_env: str = "GRIST_API_KEY",
+        user: str = "", say: Callable = print, transport=None,
+    ):
+        super().__init__(url, user, say, transport)
+        self.url = f"{self.url.rstrip('/')}/{doc}"
+        self.records = f"/api/docs/{doc}/tables/Answers/records"
+        self.api_key_env = api_key_env
+
+    def _headers(self) -> dict:
+        key = os.environ.get(self.api_key_env)
+        if not key:
+            raise FeedbackError(
+                f"{self.api_key_env} is not set: no API key for the Grist "
+                f"document {self.url}"
+            )
+        return {"Authorization": f"Bearer {key}"}
+
+    def _share(self, record: dict) -> str:
+        record.update(steps=json.dumps(record["steps"]), time=time.time())
+        return self._send(
+            "POST", self.records, {"records": [{"fields": record}]},
+            lambda reply: str(reply["records"][0]["id"]),
+        )
+
+    def _rate(self, answer_id: str, data: dict) -> str:
+        if not str(answer_id).isdigit():
+            raise FeedbackError(f"{answer_id} is not a row of {self.url}")
+        fields = {
+            "verdict": self.VERDICTS.get(data["verdict"], data["verdict"]),
+            "comment": data["comment"],
+        }
+        if data.get("corrected_query"):
+            fields["corrected_query"] = data["corrected_query"]
+        return self._send(
+            "PATCH", self.records,
+            {"records": [{"id": int(answer_id), "fields": fields}]},
+            lambda reply: answer_id,
         )
 
 
@@ -162,6 +227,11 @@ def feedback_client(config, say: Callable = print, transport=None):
     :class:`~.config.LLMConfig`, or None when sharing is off.
     """
     settings = config.feedback
+    if settings.enabled and settings.grist_doc:
+        return GristFeedbackClient(
+            settings.url, settings.grist_doc, settings.api_key_env,
+            settings.user, say, transport,
+        )
     url = os.environ.get(FEEDBACK_URL_ENV) or (
         settings.url if settings.enabled else ""
     )

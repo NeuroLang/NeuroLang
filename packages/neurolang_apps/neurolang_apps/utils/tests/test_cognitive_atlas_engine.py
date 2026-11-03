@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,6 +8,9 @@ import pandas as pd
 import pytest
 
 from neurolang_apps.utils import engine_registry
+
+# Where the engines keep their cache: a directory of the run, not the working one.
+DATA_DIR = Path(tempfile.mkdtemp(prefix="neurolang-test-data-"))
 
 NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
 
@@ -35,7 +39,7 @@ def engine():
             patch.object(engine_registry, "_resolve_mask", return_value=mask), \
             patch.object(engine_registry, "_phase_atlases",
                          lambda *a, **k: None):
-        return engine_registry.build_engine("neurosynth", Path("unused"))
+        return engine_registry.build_engine("neurosynth", DATA_DIR)
 
 
 def run(nl, program):

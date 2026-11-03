@@ -120,12 +120,15 @@ class FeedbackConfig:
     """
     Sharing of the questions and answers with a feedback server
     (:mod:`.feedback`): off unless *enabled*, to the server at *url*,
-    signed with *user*, if given.
+    signed with *user*, if given; or, with *grist_doc*, to that document
+    of the Grist instance at *url*, with the API key in *api_key_env*.
     """
 
     enabled: bool = False
     url: str = ""
     user: str = ""
+    grist_doc: str = ""
+    api_key_env: str = "GRIST_API_KEY"
 
 
 @dataclass
