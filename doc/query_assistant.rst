@@ -399,7 +399,8 @@ rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
 ``corrected_query``).
 
 **Rating an answer in the browser.** After an answer of the assistant, and
-after a query typed in the page, the page asks "Was this what you wanted?":
+after a query typed in the page, the page asks "Did this query do what you
+wanted?", between the output and the result:
 *Yes* sends it as ``good``, *No* asks what was wrong and sends it as ``bad``.
 Nothing is sent unless it is rated. An answer is sent as the terminal shares
 it; a typed query with its first rows or its error, and an empty

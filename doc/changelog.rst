@@ -37,8 +37,9 @@ Unreleased
 
 **New features:**
 
-* The REPL in the browser asks "Was this what you wanted?" after a query
-  typed in the page too, not only after an answer of the assistant: a rating
+* The REPL in the browser asks "Did this query do what you wanted?" after a
+  query typed in the page too, not only after an answer of the assistant, in
+  a row between the output and the result: a rating
   sends the query with its first rows or its error, and the comment, to the
   same Grist table, with an empty question.
 * In the REPL in the browser, the examples and relations the page opens on a
