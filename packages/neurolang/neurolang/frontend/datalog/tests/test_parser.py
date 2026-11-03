@@ -1044,6 +1044,33 @@ def test_marg_body_conditional_pipe():
         assert isinstance(fml.antecedent.conditioning, Conjunction)
 
 
+@pytest.mark.parametrize("operator", ["PROB", "MARG"])
+def test_body_conditional_in_parentheses(operator):
+    """PROB[(a, (x < y)) // (b, c)] = p is PROB[a, (x < y) // b, c] = p, as
+    (a, (x < y)) // (b, c) is a rule's condition."""
+    bare = parser(
+        f"ans(x, y, p):-{operator}[a(x, s), a(y, s), (x < y) "
+        "// b(s), c(s)]=p"
+    )
+    for program in (
+        f"ans(x, y, p):-{operator}[(a(x, s), a(y, s), (x < y)) "
+        "// (b(s), c(s))]=p",
+        f"ans(x, y, p):-{operator}[(a(x, s), a(y, s), (x < y)) "
+        "// b(s), c(s)]=p",
+        f"ans(x, y, p):-{operator}[a(x, s), a(y, s), (x < y) "
+        "// (b(s), c(s))]=p",
+    ):
+        res = parser(program)
+        assert res.formulas[0].antecedent == bare.formulas[0].antecedent
+
+
+def test_marg_head_rule_conditional_in_parentheses():
+    """MARG[(a, b) // (c, d)] :- e is MARG[a, b // c, d] :- e."""
+    assert parser("MARG[(a(x), b(x)) // (c(x), d(x))]:-e(x)") == parser(
+        "MARG[a(x), b(x) // c(x), d(x)]:-e(x)"
+    )
+
+
 # ── MARG head rule ────────────────────────────────────────────────────────────
 
 def test_marg_head_rule_simple():

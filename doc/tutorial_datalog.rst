@@ -364,6 +364,9 @@ synonym):
 This computes the conditional probability
 :math:`P(\mathtt{active\_region}(r) \mid \mathtt{mentioned\_term}(\mathit{face}))`,
 i.e. the fraction of the studies mentioning *face* that activate ``r``.
+Either side of ``//`` may be a conjunction, in parentheses or not:
+``PROB[(a(x, s), (x < y)) // (b(s), c(s))] = p`` is
+``PROB[a(x, s), (x < y) // b(s), c(s)] = p``.
 
 5.3 MARG — Marginal Probability of a Conjunction
 --------------------------------------------------
