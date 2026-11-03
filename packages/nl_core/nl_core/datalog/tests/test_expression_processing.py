@@ -313,6 +313,45 @@ def test_stratification_defers_rules_on_deferred_heads():
     ]
 
 
+def test_stratification_reads_a_predicate_after_all_its_rules():
+    """
+    A predicate whose rules are at different depths is complete only after
+    its last rule: a rule that reads it waits for it, rather than going to
+    the stratum of the rule that completes it. There an aggregation, which
+    no chase can solve in a stratum with other rules, was left, and a
+    negation read the predicate before it was complete.
+    """
+    A = S_('A')  # noqa: N806
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+
+    code = DT.walk(B_([
+        T_(A(C_(1))),
+        Imp_(Q(x), A(x)),
+        Imp_(P(x), A(x)),  # P at depth 1
+        Imp_(P(x), Q(x)),  # and at depth 2
+        Imp_(R(x), P(x)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    strata, stratifiable = stratify(code, datalog)
+
+    assert stratifiable
+    stratum_of = {
+        rule: i for i, stratum in enumerate(strata) for rule in stratum
+    }
+    both_rules_of_p = code.formulas[2:4]
+    reading_rule = code.formulas[4]
+    assert all(
+        stratum_of[rule] < stratum_of[reading_rule]
+        for rule in both_rules_of_p
+    )
+
+
 def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')
@@ -346,11 +385,14 @@ def test_stratification_with_consequent_in_multiple_rules():
     strata, stratifyiable = stratify(code, datalog)
 
     assert stratifyiable
+    # q reads anc, which has a rule at the second stratum and a recursive
+    # one after O: q waits for the last rule of anc
     assert strata == [
         list(code.formulas[:4]),
         list(code.formulas[4:6]),
         list((code.formulas[6],)),
-        list(code.formulas[7:]),
+        list((code.formulas[8],)),
+        list((code.formulas[7],)),
     ]
 
 
