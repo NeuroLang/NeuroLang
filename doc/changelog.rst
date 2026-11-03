@@ -43,6 +43,13 @@ Unreleased
 
 **New features:**
 
+* ``.graph`` draws where the answer of the last query comes from: the data
+  of the engine, its random choices and probabilistic facts, the rules of
+  the query and of the engine, which are probabilistic, the probabilities
+  ``PROB[...]`` and their conditions, and the answer, from left to right,
+  with what each kind of node and edge means. The REPL in the browser shows
+  it in a *Graph* tab after each query, a query of the assistant's included.
+
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at

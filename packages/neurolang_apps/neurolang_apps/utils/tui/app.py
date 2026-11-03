@@ -296,6 +296,20 @@ class InteractiveTuiApp:
         self.last_query = (program, self.settings.squall)
         self.last_added_rules = {}
 
+    def show_graph(self, page: str) -> None:
+        """
+        Show the HTML *page* of the graph of a query (``.graph``): save
+        it, print its path and open it in a browser on a terminal.
+        """
+        from .nifti import _html_file, _open_in_browser
+
+        path = _html_file(page)
+        self.console.print(
+            f"Saved the graph to: {path}", style="green", markup=False,
+            highlight=False,
+        )
+        _open_in_browser(self.console, path)
+
     def print_block(self, block: ResultBlock) -> None:
         """
         Print the next page of *block* in the output format of the session.

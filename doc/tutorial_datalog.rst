@@ -1124,6 +1124,19 @@ mentioning reading activates both regions of a pair::
 
 Both work with ``--ask``, which then runs the query it writes.
 
+Where an answer comes from
+--------------------------
+
+In the interactive mode, ``.graph`` draws the last query, run or written by
+the assistant with ``.ask``, in a page opened in the browser; the REPL in
+the browser shows it in its *Graph* tab after each query. It reads from left
+to right: the data of the engine (its relations, its random choices, such as
+``selected_study``, and its probabilistic facts), the rules of the query and
+of the engine they go through, and the answer. A rule using a random choice
+is probabilistic, and ``PROB[...]`` turns it into the probability of each of
+its rows, given the condition after ``//``, which the dashed edges come
+from. Clicking a node shows its rules and what it depends on.
+
 Inspecting query plans
 ----------------------
 
