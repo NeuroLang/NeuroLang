@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from ..agent import (
@@ -7,6 +9,7 @@ from ..agent import (
     make_agent,
     parse_text_action,
     parse_verdict,
+    usage_summary,
 )
 from ..providers import LLMError, Reply
 from .fakes import ScriptedClient, assistant_config, provider
@@ -307,6 +310,36 @@ def test_react_answers_the_last_query_with_rows_when_out_of_steps(nl):
     result = react.run("Which studies?")
     assert result.valid and result.query == "ans(s) :- study(s)"
     assert "after 3 steps" in result.explanation
+    assert result.warning.startswith("Not verified: the assistant ran out")
+
+
+def test_a_query_the_check_did_not_read_is_read_back(nl):
+    react, _ = agent(nl, ReactAgent, [
+        answer(PAIN_DATALOG), "The studies that mention pain.",
+    ], language="datalog", read_back=True)
+    result = react.run("Which studies mention pain?")
+    assert result.back_translation == "The studies that mention pain."
+    assert result.calls == 2 and not result.warning
+    # Read by the check, it is not read again.
+    react, _ = agent(nl, ReactAgent, [
+        answer(PAIN_DATALOG), "Studies about pain.", "VERDICT: yes",
+    ], language="datalog", verify_rounds=1, read_back=True)
+    assert react.run("Which studies mention pain?").calls == 3
+
+
+def test_the_cost_and_usage_of_an_answer(nl):
+    react = ReactAgent(
+        nl, replace(provider(), price_per_mtok_in=1.0,
+                    price_per_mtok_out=10.0),
+        assistant_config(), "datalog",
+        client=ScriptedClient([answer(PAIN_DATALOG)]),
+    )
+    result = react.run("Which studies mention pain?")
+    assert result.cost == pytest.approx((10 * 1.0 + 5 * 10.0) / 1e6)
+    result.seconds = 2.4
+    assert usage_summary(result) == "1 LLM call, 15 tokens, 2 s, about $0.0001"
+    result.cost = None
+    assert usage_summary(result) == "1 LLM call, 15 tokens, 2 s"
 
 
 def test_final_answer_runs_the_query(nl):
@@ -469,6 +502,10 @@ def test_react_accepts_once_the_rejections_are_spent(nl):
     assert result.valid and result.query == ALL_STUDIES
     assert result.verified is False
     assert result.back_translation == "Every study."
+    assert result.warning == (
+        "Not verified: the check found that the query may not answer the "
+        "question: Still not about pain."
+    )
 
 
 def test_react_verification_off_or_failing(nl):

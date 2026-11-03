@@ -35,6 +35,10 @@ def test_example_configuration_is_valid():
     )
     assert config.providers["claude-code"].api == "command"
     assert config.assistant.strategy == "react"
+    # The OpenRouter providers have prices, the others none.
+    deepseek = config.providers["openrouter-deepseek"]
+    assert deepseek.cost({"input": 10**6, "output": 10**6}) > 0
+    assert config.providers["albert"].cost({"input": 1}) is None
 
 
 def test_lookup_order(tmp_path, monkeypatch):

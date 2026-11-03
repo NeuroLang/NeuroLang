@@ -55,6 +55,8 @@ PROVIDERS = {
         "base_url": "https://openrouter.ai/api/v1",
         "model": "anthropic/claude-sonnet-5.5", "tool_calling": "native",
         "headers": {"X-Title": "NeuroLang"},
+        # OpenRouter's prices of 2026-11-03, dollars per million tokens.
+        "prices": (2.0, 10.0),
     },
     "custom": {
         "label": "Other, OpenAI-compatible", "api": "openai",
@@ -115,11 +117,15 @@ def browser_config(
     base_url = (base_url or entry["base_url"]).strip()
     if not base_url:
         raise ValueError("This provider needs the address of its API.")
+    model = (model or entry["model"]).strip()
+    # The prices are those of the provider's model, not of another.
+    prices = entry.get("prices") if model == entry["model"] else None
+    price_in, price_out = prices or (None, None)
     provider = BrowserProvider(
-        name=provider_id, api=entry["api"],
-        model=(model or entry["model"]).strip(), base_url=base_url,
+        name=provider_id, api=entry["api"], model=model, base_url=base_url,
         headers=dict(entry["headers"]), tool_calling=entry["tool_calling"],
-        key=api_key.strip(),
+        key=api_key.strip(), price_per_mtok_in=price_in,
+        price_per_mtok_out=price_out,
     )
     return LLMConfig({provider_id: provider}, provider_id, AssistantConfig())
 

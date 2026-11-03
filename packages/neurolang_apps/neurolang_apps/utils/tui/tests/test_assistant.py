@@ -28,7 +28,7 @@ CONFIG = {
     },
     "assistant": {
         "strategy": "icl", "max_repairs": 1, "comment_rules": False,
-        "verify_rounds": 0,
+        "verify_rounds": 0, "read_back": False,
     },
 }
 PAIN = "obtain every Study that mentions 'pain'."
@@ -86,7 +86,7 @@ def test_ask_puts_the_query_in_the_prompt(app):
     assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
     text = output(app)
     assert "DATALOG query" in text and "Studies mentioning pain." in text
-    assert "1 LLM calls, 15 tokens" in text
+    assert "1 LLM call, 15 tokens, 0 s" in text
     system = client.requests[0]["messages"][0]["content"]
     assert "Datalog syntax" in system
 
@@ -572,12 +572,11 @@ def test_ask_shows_the_summary_above_the_query_in_a_panel_of_its_own(app):
     text = output(app)
     summary = text.index("Summary")  # the log of the steps has none
     query = text.index("DATALOG query")
-    assert summary < text.index("Reads back as: Every study again.", summary)
-    assert text.index("Reads back as", summary) < query
-    # What the model said the query does is in the panel, not below the query.
-    assert summary < text.index("pain", summary) < query
-    # The warning of the check stays after the query it is about.
-    assert query < text.index("may not answer the question")
+    reads = text.index("Reads back as: Every study again.", summary)
+    # What the model said the query does is in the panel, below its reading.
+    assert summary < reads < text.index("pain", reads) < query
+    # The query is not verified: a warning says it above the query.
+    assert reads < text.index("Not verified", summary) < query
     assert "Reads back as" not in text[query:]
 
 

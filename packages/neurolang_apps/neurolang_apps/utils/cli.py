@@ -1499,6 +1499,7 @@ def _run_ask(args) -> None:
             load_config,
             make_agent,
         )
+        from neurolang_apps.utils.llm.agent import usage_summary
         from neurolang_apps.utils.llm.feedback import feedback_client
     except ImportError as exc:
         _exit_missing(
@@ -1537,6 +1538,7 @@ def _run_ask(args) -> None:
     if answer:
         print(f"Shared as {answer}: rate it at {feedback.url}",
               file=sys.stderr)
+    print(usage_summary(result), file=sys.stderr)
     if not result.valid:
         print(f"Error: no valid query: {result.error}", file=sys.stderr)
         if result.query:
@@ -1545,6 +1547,12 @@ def _run_ask(args) -> None:
             )
             print(f"Last attempt:\n{query}", file=sys.stderr)
         sys.exit(1)
+    if result.back_translation:
+        print(f"-- reads back as: {result.back_translation}", file=sys.stderr)
+    if result.explanation:
+        print(f"-- {result.explanation}", file=sys.stderr)
+    if result.warning:
+        print(f"Warning: {result.warning}", file=sys.stderr)
     commented = result.commented and language == "datalog"
     print(query_highlight.highlight(
         result.commented if commented else result.query, language,
@@ -1555,15 +1563,6 @@ def _run_ask(args) -> None:
         print(query_highlight.highlight(
             result.commented, language, sys.stderr
         ), file=sys.stderr)
-    if result.explanation:
-        print(f"-- {result.explanation}", file=sys.stderr)
-    if result.back_translation:
-        print(f"-- reads back as: {result.back_translation}", file=sys.stderr)
-    if result.verified is False:
-        print(
-            "Warning: the check found that the query may not answer the "
-            f"question: {result.verification}", file=sys.stderr,
-        )
     if args.run or args.save or args.view:
         args.squall = language == "squall"
         execute = _execute_squall_program if args.squall else _execute_program

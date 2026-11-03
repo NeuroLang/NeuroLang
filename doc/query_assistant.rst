@@ -129,7 +129,17 @@ and text-to-SPARQL systems.
     its ``final_answer``, and corrects its query. ``verify_rounds`` (1 by
     default, 0 to turn the check off) is the number of answers the check
     may reject; after them, the answer is kept with a warning. The REPL
-    and ``neurolang-query --ask`` show the English reading of the query.
+    and ``neurolang-query --ask`` show the English reading of the query
+    above the query and its comments. A query the check did not read
+    (with ``verify_rounds: 0``, an ICL answer, or the last query that
+    gave rows when the agent runs out of steps) is read back in one more
+    request, unless ``read_back: false``. An answer rejected by the check,
+    or given when the agent ran out of steps, is marked *Not verified*:
+    in a yellow box in the REPL and the page, on the standard error with
+    ``--ask``. After each answer, the number of LLM calls, the tokens, the
+    time and, when the provider has ``price_per_mtok_in`` and
+    ``price_per_mtok_out`` (dollars per million tokens sent and received),
+    the approximate cost are shown.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
@@ -221,6 +231,8 @@ order:
         api_key_env: OPENROUTER_API_KEY
         model: anthropic/claude-sonnet-5.5
         tool_calling: native
+        price_per_mtok_in: 2.0        # dollars per million tokens, to
+        price_per_mtok_out: 10.0      # show the cost of each answer
       anthropic:
         api: anthropic
         base_url: https://api.anthropic.com/v1
@@ -245,6 +257,7 @@ order:
       preview_rows: 10
       verify_rounds: 1       # ReAct: answers back-translation may reject
       comment_rules: true    # a comment line on each rule of the query
+      read_back: true        # read back a query the check did not read
 
 The ``api`` of a provider is one of:
 

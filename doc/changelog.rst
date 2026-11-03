@@ -43,6 +43,13 @@ Unreleased
 
 **New features:**
 
+* The LLM assistant shows the English reading of its query above the query
+  and its rule comments, reading back, in one more request (``read_back``),
+  a query its check did not read; it marks an answer rejected by its check,
+  or given when it ran out of steps, as *Not verified*; and it shows the
+  calls, tokens, time and, with the new provider settings
+  ``price_per_mtok_in`` and ``price_per_mtok_out``, the approximate cost of
+  each answer, in the REPL, the page and ``neurolang-query --ask`` (#1064).
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
