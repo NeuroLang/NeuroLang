@@ -109,25 +109,49 @@ def test_hemisphere_token_regex_does_not_hit_entorhinal():
     assert HEMISPHERE_TOKEN.search("temporal_left")
 
 
-# The vocabulary is tract_querier's (data/freesurfer_queries.qry).
+# The vocabulary is tract_querier's (data/freesurfer_queries.qry): each
+# Desikan name is the cortex and the white matter under it, with ctx_<name>
+# and wm_<name> for either alone.
 @pytest.mark.parametrize(
     "name,terms",
     [
-        ("ctx-lh-precentral", {"precentral", "frontal"}),
-        ("ctx-rh-temporalpole", {"temporalpole", "temporal"}),
+        ("ctx-lh-precentral", {"precentral", "ctx_precentral", "frontal"}),
+        ("wm-lh-precentral", {"precentral", "wm_precentral", "frontal"}),
+        ("ctx-rh-temporalpole",
+         {"temporalpole", "ctx_temporalpole", "temporal", "temporal_frontal"}),
         ("ctx-lh-lateralorbitofrontal",
-         {"lateralorbitofrontal", "orbitofrontalgyrus", "frontal"}),
+         {"lateralorbitofrontal", "ctx_lateralorbitofrontal",
+          "orbitofrontalgyrus", "frontal"}),
         ("ctx-rh-rostralmiddlefrontal",
-         {"rostralmiddlefrontal", "middle_frontal_gyrus", "frontal"}),
+         {"rostralmiddlefrontal", "ctx_rostralmiddlefrontal",
+          "middle_frontal_gyrus", "middlefrontalgyrus", "frontal"}),
         ("ctx-lh-parsopercularis",
-         {"parsopercularis", "inferior_frontal_gyrus", "frontal"}),
+         {"parsopercularis", "ctx_parsopercularis", "inferior_frontal_gyrus",
+          "inferiorfrontalgyrus", "frontal"}),
+        ("ctx-lh-parsorbitalis",
+         {"parsorbitalis", "ctx_parsorbitalis", "inferior_frontal_gyrus",
+          "inferiorfrontalgyrus", "frontal", "frontal_frontal_section"}),
         ("ctx-lh-precuneus",
-         {"precuneus", "parietal", "superior_parietal_lobule"}),
+         {"precuneus", "ctx_precuneus", "parietal",
+          "superior_parietal_lobule"}),
         ("ctx-lh-supramarginal",
-         {"supramarginal", "parietal", "inferior_parietal_lobule"}),
-        ("ctx-lh-lingual", {"lingual", "occipital"}),
-        ("ctx-lh-isthmuscingulate", {"isthmuscingulate", "cingular"}),
-        ("ctx-lh-bankssts", {"bankssts", "temporal"}),
+         {"supramarginal", "ctx_supramarginal", "parietal",
+          "inferior_parietal_lobule"}),
+        ("ctx-lh-lingual", {"lingual", "ctx_lingual", "occipital"}),
+        ("ctx-lh-isthmuscingulate",
+         {"isthmuscingulate", "ctx_isthmuscingulate", "cingular",
+          "cingular_cortex"}),
+        ("wm-rh-isthmuscingulate",
+         {"isthmuscingulate", "wm_isthmuscingulate", "cingular"}),
+        ("ctx-lh-corpuscallosum",
+         {"corpuscallosum", "ctx_corpuscallosum", "cingular",
+          "cingular_cortex"}),
+        ("ctx-lh-Corpus_callosum", {"corpus_callosum", "ctx_corpus_callosum"}),
+        ("wm-rh-Corpus_callosum", {"corpus_callosum", "wm_corpus_callosum"}),
+        ("ctx-lh-bankssts", {"bankssts", "ctx_bankssts", "temporal"}),
+        ("Left-UnsegmentedWhiteMatter",
+         {"unsegmentedwhitematter", "centrum_semiovale"}),
+        ("Left-Cerebellum-Exterior", {"cerebellum_exterior", "cerebellum"}),
         ("Left-Thalamus-Proper", {"thalamus_proper", "subcortical"}),
         ("Left-Thalamus", {"thalamus_proper", "subcortical"}),
         ("Right-Putamen", {"putamen", "subcortical", "striatum"}),
@@ -165,13 +189,14 @@ def test_freesurfer_aseg_aparc_covers_the_desikan_atlas():
     assert len(desikan) == 34
     for hemi in ("lh", "rh"):
         assert {f"ctx-{hemi}-{n}" for n in desikan} <= names
+        assert {f"wm-{hemi}-{n}" for n in desikan} <= names
 
 
 def test_mapping_hemispheres_agree_with_the_names():
     mapping = load_term_mapping("freesurfer_aseg_aparc")
     starts = mapping.atlas_label_name.str.startswith
-    lh = mapping[starts(("Left-", "ctx-lh-"))]
-    rh = mapping[starts(("Right-", "ctx-rh-"))]
+    lh = mapping[starts(("Left-", "ctx-lh-", "wm-lh-"))]
+    rh = mapping[starts(("Right-", "ctx-rh-", "wm-rh-"))]
     assert set(lh["hemi"]) == {"left"} and set(rh["hemi"]) == {"right"}
 
 

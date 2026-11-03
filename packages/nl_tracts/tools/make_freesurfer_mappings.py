@@ -7,10 +7,13 @@ groups that file defines as unions of them (``frontal``, ``temporal``,
 ``middle_frontal_gyrus``, ``inferior_frontal_gyrus``,
 ``superior_parietal_lobule``, ``inferior_parietal_lobule``, ``subcortical``,
 ``cerebellum``, ``ventricles``, ``corpus_callosum``). The groups are those
-of the file, with one deliberate difference: ``subcortical`` is completed
-with the caudate, hippocampus and accumbens, which the file lacks
-(``striatum``, which it defines, is kept). ``tests/test_wmql_vocabulary.py``
-transpiles the file and states every difference.
+of the file, and so is the way each Desikan name is made, of the cortex and
+the white matter under it (``wm-lh-precentral``), with ``ctx_precentral`` and
+``wm_precentral`` for either alone. One deliberate difference:
+``subcortical`` is completed with the caudate, hippocampus and accumbens,
+which the file lacks (``striatum``, which it defines, is kept).
+``tests/test_wmql_vocabulary.py`` transpiles the file and states every
+difference.
 
 The Destrieux assignments are a draft by the author of the package, to be
 reviewed by an anatomist: the Destrieux parcellation has no one-to-one
@@ -36,7 +39,7 @@ GROUPS = {
     "orbitofrontalgyrus": "lateralorbitofrontal medialorbitofrontal",
     "cingular": (
         "caudalanteriorcingulate isthmuscingulate posteriorcingulate "
-        "rostralanteriorcingulate"
+        "rostralanteriorcingulate corpuscallosum"
     ),
     "temporal": (
         "entorhinal parahippocampal temporalpole fusiform superiortemporal "
@@ -47,7 +50,17 @@ GROUPS = {
     "superior_parietal_lobule": "postcentral precuneus superiorparietal",
     "inferior_parietal_lobule": "supramarginal inferiorparietal",
     "occipital": "lingual pericalcarine cuneus lateraloccipital",
+    "temporal_frontal": (
+        "entorhinal temporalpole fusiform superiortemporal middletemporal "
+        "inferiortemporal"
+    ),
+    "frontal_frontal_section": "medialorbitofrontal parsorbitalis",
 }
+# the file defines these twice, under two spellings
+GROUPS["middlefrontalgyrus"] = GROUPS["middle_frontal_gyrus"]
+GROUPS["inferiorfrontalgyrus"] = GROUPS["inferior_frontal_gyrus"]
+# groups of the cortical labels only (the file's ctx_* names)
+CORTEX_GROUPS = {"cingular_cortex": GROUPS["cingular"]}
 # frontal is the union of other groups and of these
 GROUPS["frontal"] = (
     "superiorfrontal frontalpole precentral paracentral "
@@ -67,8 +80,17 @@ DESIKAN = (
 ).split()
 
 
-def desikan_terms(name):
-    return [name] + [g for g, ms in GROUPS.items() if name in ms.split()]
+def desikan_terms(name, kind=None):
+    """The terms of a Desikan name; ``kind`` ``ctx`` or ``wm`` adds the term
+    of the cortex only (``ctx_precentral``) or of the white matter under it
+    (``wm_precentral``), which the file has besides ``precentral``, the two
+    together."""
+    terms = [name] + ([f"{kind}_{name}"] if kind else [])
+    terms += [g for g, ms in GROUPS.items() if name in ms.split()]
+    if kind == "ctx":
+        terms += [g for g, ms in CORTEX_GROUPS.items()
+                  if name in ms.split()]
+    return terms
 
 
 # --- aseg: (raw name stem with {H} for Left/Right, terms) ------------------
@@ -92,6 +114,11 @@ ASEG_SIDED = {  # stem -> terms; Left-<stem> / Right-<stem>
     "Hippocampus": ["hippocampus", SUBCORTICAL],
     "Amygdala": ["amygdala", SUBCORTICAL],
     "Accumbens-area": ["accumbens_area", SUBCORTICAL],
+    "Cerebellum-Exterior": ["cerebellum_exterior", "cerebellum"],
+    "Cerebral-Exterior": ["cerebral_exterior"],
+    "UnsegmentedWhiteMatter": [
+        "unsegmentedwhitematter", "centrum_semiovale"
+    ],
     "VentralDC": ["ventraldc", SUBCORTICAL],
     "vessel": ["vessel"],
     "choroid-plexus": ["choroid_plexus", SUBCORTICAL, "ventricles"],
@@ -123,13 +150,19 @@ def aseg_aparc_rows():
     for name, terms in ASEG_MIDLINE.items():
         rows += [(name, t, "none") for t in terms]
     for tag, hemi in (("lh", "left"), ("rh", "right")):
-        for name in DESIKAN:
+        for name in DESIKAN + ["corpuscallosum"]:
+            for prefix, kind in (("ctx", "ctx"), ("wm", "wm")):
+                rows += [
+                    (f"{prefix}-{tag}-{name}", t, hemi)
+                    for t in desikan_terms(name, kind)
+                ]
+        # the corpus callosum of aparc+aseg's extension: the file's
+        # corpus_callosum has these (and the unlateralised label 86)
+        for prefix, kind in (("ctx", "ctx"), ("wm", "wm")):
             rows += [
-                (f"ctx-{tag}-{name}", t, hemi)
-                for t in desikan_terms(name)
+                (f"{prefix}-{tag}-Corpus_callosum", t, hemi)
+                for t in ("corpus_callosum", f"{kind}_corpus_callosum")
             ]
-        rows += [(f"ctx-{tag}-corpuscallosum", t, hemi)
-                 for t in ("corpuscallosum", "cingular")]
     return rows
 
 

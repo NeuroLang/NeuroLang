@@ -1,9 +1,9 @@
 # nl_tracts: tractography for NeuroLang
 
-Status: **the atlas layer is implemented** (`spaces`, `terms`, `atlas`:
-sections 3.2, 4, 5, and `label_extent` of 6.1); the rest (tractogram,
-indexing, cache, frontend) is still a scaffold whose bodies raise
-`NotImplementedError`. Numbers below marked *measured* come from probes run
+Status: **the atlas layer and the WMQL transpiler are implemented**
+(`spaces`, `terms`, `atlas`: sections 3.2, 4, 5, and `label_extent` of 6.1;
+`wmql`: section 11); the rest (tractogram, indexing, cache, frontend) is
+still a scaffold whose bodies raise `NotImplementedError`. Numbers below marked *measured* come from probes run
 on this repository (NeuroLang `master` at the time of the split, pandas
 3.0.6, pandas backend, an Intel Mac); the rest are estimates to be checked
 in phase 1.
@@ -28,7 +28,8 @@ atlases.
 
 Non-goals: registration or resampling between spaces; tractography
 algorithms; visualisation; directional relations in the first phases (12);
-probabilistic atlases (4.4); a port of the WMQL language itself.
+probabilistic atlases (4.4); the directional terms of WMQL (12). (The
+other constructs of WMQL are a transpiler, section 11.)
 
 ## 2. Decisions taken
 
@@ -124,11 +125,18 @@ the groups that file defines as unions of them: `frontal`, `temporal`,
 `parietal`, `occipital`, `cingular`, `orbitofrontalgyrus`,
 `middle_frontal_gyrus`, `inferior_frontal_gyrus`,
 `superior_parietal_lobule`, `inferior_parietal_lobule`, `subcortical`,
-`cerebellum`, `ventricles`, `corpus_callosum`. Reusing it makes the
-standard bundle definitions of the phase-3 tutorial a transcription of
-tract_querier's queries (`UF.side` ...). The groups are copied as the file
-has them, odd parts included (`subcortical` has no caudate, hippocampus or
-accumbens), and the file's `.side` becomes `label.hemi`:
+`cerebellum`, `ventricles`, `corpus_callosum`, and `striatum`,
+`temporal_frontal`, `cingular_cortex`, `frontal_frontal_section`. Reusing it
+makes the standard bundle definitions of the phase-3 tutorial a
+transcription of tract_querier's queries (`UF.side` ...). Each Desikan name
+is made as the file makes it: **the cortex and the white matter under it**
+(`precentral` is `ctx-lh-precentral` and `wm-lh-precentral`), with
+`ctx_precentral` and `wm_precentral` for either alone. The groups are the
+file's, with **one deliberate difference**: `subcortical` is completed with
+the caudate, hippocampus and accumbens, which the file lacks (it has them
+in `striatum`, in the first case). The file's `.side` becomes `label.hemi`.
+`tests/test_wmql_vocabulary.py` transpiles the file (11.3) and states every
+difference between its label sets and the mapping's, exactly:
 
 ```
 % uncinate fasciculus, any atlas, either hemisphere
@@ -174,9 +182,11 @@ tables; edit that, not the TSVs):
 The Destrieux assignments are a **draft to be reviewed by an anatomist**:
 the parcellation has no one-to-one Desikan equivalent, so a label gets a
 Desikan name only where it is the obvious one, and a lobe otherwise. The
-boundaries (lateral fissure, central sulcus, parieto-occipital sulcus), the
-medial wall and `Unknown` have no term, on purpose, and are what
-`unmapped_labels` reports. Against a real FreeSurfer LUT (skipped if there
+boundary structures (lateral fissure, central sulcus, parieto-occipital
+sulcus) have the terms of **both** regions they separate (`S_central`:
+`precentral`, `postcentral`, `frontal`, `parietal`); only the medial wall
+and `Unknown` have none, on purpose, and are what `unmapped_labels` reports
+(15.13). Against a real FreeSurfer LUT (skipped if there
 is none) a test checks that every shipped FreeSurfer name exists and that
 the standard aseg, aparc and a2009s labels are all mapped, except those
 left out on purpose; against nilearn's Destrieux, that the unmapped labels
@@ -566,6 +576,7 @@ packages/nl_tracts/
     __init__.py         re-exports the public classes (core only)
     spaces.py           Space, SpaceMismatchError, check_same_space
     terms.py            term-mapping format, validation, shipped keys
+    wmql.py             WMQL -> Datalog transpiler (11); no NeuroLang
     atlas.py            Atlas, ProbabilisticAtlas, HemisphereRule, loaders
     tractogram.py       Tractogram
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
@@ -573,7 +584,9 @@ packages/nl_tracts/
     frontend.py         register(), RELATION_NAMES -- the only NeuroLang use
     mappings/           shipped term mappings (TSV): freesurfer_aseg_aparc,
                         freesurfer_destrieux
-    tests/              conftest.py: synthetic volumes, `network` marker
+    tests/              conftest.py: synthetic volumes, `network` marker;
+                        reference_tq.py: tract_querier's evaluator, loaded
+                        by path, as the oracle of wmql
 ```
 
 ### 9.2 `.importlinter`
@@ -581,7 +594,7 @@ packages/nl_tracts/
 * `root_packages` gains `nl_tracts`.
 * The layers contract becomes `neurolang_apps > nl_tracts > neurolang >
   nl_core > nl_expr`.
-* A new `forbidden` contract: `nl_tracts.{spaces, terms, atlas,
+* A new `forbidden` contract: `nl_tracts.{spaces, terms, wmql, atlas,
   tractogram, indexing, cache}` may import none of `neurolang`, `nl_core`, `nl_expr`,
   `lark`, `nilearn`. `frontend` is exempt, and is the only module that may
   import NeuroLang.
@@ -660,6 +673,13 @@ SHIPPED_MAPPINGS = ("freesurfer_aseg_aparc", "freesurfer_destrieux")
 def load_term_mapping(source) -> DataFrame   # DataFrame, path or shipped key
 def shipped_mapping_path(key) -> Traversable
 
+# wmql.py
+def transpile(source, atlas, include_folders=(), skip_unsupported=False)
+    -> Transpiled   # .text, .program(*names, components=...), .defined,
+                    # .saved, .skipped
+class QueryPredicates: tracts, labels, end0, end1     # predicate names | None
+class WMQLError(ValueError); class WMQLUnsupported(WMQLError, NotImplementedError)
+
 # tractogram.py
 class Tractogram:
     def __init__(self, id, points, offsets, space)
@@ -693,32 +713,75 @@ RELATION_NAMES: dict[str, tuple[str, ...]]
 def register(engine, store, only=None) -> None
 ```
 
-## 11. From tract_querier to Datalog
+## 11. From tract_querier to Datalog: `nl_tracts.wmql`
+
+**Implemented** (a transpiler, which turns text into text and imports
+nothing of NeuroLang; covered by the contract of 9.2). It is how the
+vocabulary of 3.2 was checked against tract_querier's, and what the
+standard bundles of the phase-3 tutorial will be transcribed with.
+
+```python
+transpile(source, atlas, include_folders=(), skip_unsupported=False)
+    -> Transpiled   # .text, .program(*names, components=...),
+                    # .defined, .saved, .skipped
+```
+
+### 11.1 Output
 
 In the reference every query value is a **triple** (`FiberQueryInfo`): the
 streamlines `tracts`, a set of `labels`, and two sets of streamlines
 `tracts_endpoints[0|1]` (those whose first / last point is in one of the
-labels). Binary operators combine the three components *componentwise*,
-with one twist: `and` / `*` **intersects** the streamlines and endpoint sets
-but **unions** the label sets. So a WMQL expression `E` compiles to four
-Datalog predicates, `E(s)`, `E_label(l)`, `E_end0(s)`, `E_end1(s)`, with
-`a`, `t` fixed to constants; the equivalence tests (13.2) translate each
-construct, run both, and compare.
+labels). A WMQL name `x` becomes four predicates over `traverses(a, t, s,
+l)` and `endpoint(a, t, s, e, l)`, with the atlas `a` a constant of the
+program (WMQL labels are the ids of an atlas, as `FreeSurfer.qry` has them):
+
+| Predicate | Component |
+|---|---|
+| `q_x(t, s)` | the streamlines |
+| `q_x__label(l)` | the labels |
+| `q_x__end0(t, s)`, `q_x__end1(t, s)` | streamlines whose first / last point is in the labels |
+
+`x.left` is `q_x_left`; the prefix keeps WMQL names (`label`, `endpoint`)
+apart from the relations; two names that would mangle alike raise. A
+component that is empty whatever the data (`not A` has no endpoints) is
+`None` and has no predicate: it propagates (an intersection with it is
+empty, a union is the other operand), so no rule is written for it.
+`Transpiled.program(*names, components=...)` slices the program to what
+the names need, e.g. only the label sets.
+
+### 11.2 Semantics, as `tract_querier` has them
+
+Read from `query_processor.py` and checked against it (13.2).
 
 | WMQL | Reference semantics (componentwise on the triple) | Datalog |
 |---|---|---|
-| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(s) :- traverses(a,t,s,7)`; `E_label(7)`; `E_end0(s) :- endpoint(a,t,s,0,7)`, same for 1 |
+| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(t,s) :- traverses(a,t,s,7)`; fact `E_label(7)`; `E_end0(t,s) :- endpoint(a,t,s,0,7)`, same for 1 |
 | `A or B`, `A + B` | union of tracts, labels, endpoints | two rules per predicate, same head |
-| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(s) :- A(s), B(s)`; `E_label(l) :- A_label(l)` and `E_label(l) :- B_label(l)`; `E_end0(s) :- A_end0(s), B_end0(s)` |
-| `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets | `E(s) :- A(s), ~B(s)`; `E_label(l) :- A_label(l), ~B_label(l)`; same for ends |
-| `not A`, `-A` (unary) | tracts traversing **some label outside A's label set** (labels of the data, `crossing_labels_tracts`, background included); labels = that complement; endpoints empty | `E_label(l) :- present(l), ~A_label(l)` with `present(l) :- traverses(a,t,s,l)`; `E(s) :- traverses(a,t,s,l), E_label(l)`. **Not** `~A(s)`: a streamline that traverses A *and* another label is in the result |
-| `only(A)`, `~A` | tracts of A whose **every** traversed label is in A's label set; labels as A; endpoints of A whose label is in A's labels | `outside(s) :- traverses(a,t,s,l), ~A_label(l)`; `E(s) :- A(s), ~outside(s)`; `E_end0(s) :- A_end0(s), endpoint(a,t,s,0,l), A_label(l)` |
-| `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(s) :- A_end0(s)`; `E(s) :- A_end1(s)` |
-| `both_endpoints_in(A)` | tracts = end0 ∩ end1 of A | `E(s) :- A_end0(s), A_end1(s)` |
-| `"pattern*"` (a string) | `fnmatch` over the *names of queries already evaluated*, union | not a relation construct (query names are Datalog predicates); the rule author lists them. Out of scope |
-| `X.side`, `X.opposite` | textual rewrite of the hemisphere of the label name | `label(a,l,n,h)` and `opposite_hemisphere(h,h2)` |
-| `anterior_of(...)` etc. | cardinal relations to a reference region | future work (12) |
-| `save(...)`, `for` loops, `import` | side effects and macros | out of scope |
+| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(t,s) :- A(t,s), B(t,s)`; `E_label(l)` from both; `E_end0(t,s) :- A_end0(t,s), B_end0(t,s)` |
+| `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets; `a not in b not in c` is sequential | `E(t,s) :- A(t,s), ~B(t,s)`; the same for labels and ends |
+| `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(l) :- traverses(a,t,s,l)`; `E_label(l) :- U(l), ~A_label(l)`; `E(t,s) :- traverses(a,t,s,l), E_label(l)`. **Not** `~A(t,s)` |
+| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- traverses(a,t,s,l), ~A_label(l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
+| `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(t,s) :- A_end0(t,s), endpoint(a,t,s,0,l), A_label(l)` |
+| `+A` | A | A |
+| `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(t,s) :- A_end0(t,s)`; `E(t,s) :- A_end1(t,s)` |
+| `both_endpoints_in(A)` | tracts = end0 ∩ end1 of A | `E(t,s) :- A_end0(t,s), A_end1(t,s)` |
+| `"pattern*"` | `fnmatch` over the names defined **so far**, union; no match: empty | resolved when transpiling, in order |
+| `x.side = e`, `.opposite` | the statement is repeated for `x.left` and `x.right`, `side` and `opposite` swapped | the same, at transpile time |
+| `for v in [a, b]` / `'p*'` | the body repeated with the **names** equal to `v` replaced (not attributes, not the names of targets) | expanded at transpile time |
+| `import f.qry` | the file's statements, in place | inlined, with `include_folders` |
+| `anterior_of(...)` etc. | cardinal relations to a reference region | `WMQLUnsupported`, naming the term and 12 |
+| `save(...)` | (does not work in the reference) | `WMQLUnsupported` |
+
+Rules of the language the transpiler reproduces: **everything is lower
+case** (names, attributes, strings, but not `or`/`and`); evaluation is
+**sequential** (a name must be defined before use); `|=` **overwrites**, it
+does not accumulate; `=` also saves the query for output, as does a bare
+name statement; `not in` binds *looser* than `and` and `or`
+(`a and b not in c` is `(a and b) not in c`), by a port of the reference's
+rewrite. A name defined again is **a new definition**: later statements read
+it, earlier ones keep reading the old one (the old predicates are renamed
+`q_x__v1`); the reference's evaluation is the same, and Datalog's union of
+same-head rules would not be.
 
 The traps, because they are the point of the oracle: (i) `not` and
 `only`/`~` act on **label sets**, with the labels present in the data as
@@ -728,9 +791,57 @@ difference; (ii) the label set of `A and B` is a **union**, so
 data's label universe includes the background (6.3), so both traps need
 `emit_background=True` to agree with the reference, and queries whose label
 set contains the background *and* that read the endpoint predicates are out
-of the equivalence scope (the endpoint relation has no background rows); (iv) `not` ignores the
-endpoint sets (they become empty) and `only` filters them: a translation
-that treats them uniformly is wrong.
+of the equivalence scope (the endpoint relation has no background rows);
+(iv) `not` and `~` give **empty endpoint sets**, `only` filters them: a
+translation that treats them alike is wrong (an earlier version of this
+section did, until the transpiler's tests were written against the
+reference).
+
+`skip_unsupported=True` leaves out the queries that use a directional
+term, and those that use them, and says which and why (`Transpiled.skipped`):
+`freesurfer_queries.qry` has four such bundles (`af`, `ec`, `ilf`, `uf`).
+
+### 11.3 What the transpiler found: the vocabulary against the file
+
+`tests/test_wmql_vocabulary.py` transpiles `freesurfer_queries.qry` (1516
+names) and evaluates its label sets with NeuroLang, over an atlas made of
+the colour LUT of FreeSurfer 6, against `label_term`. The first comparison,
+before the mapping was changed, showed **168 differences**, a few of them
+artifacts of comparing names without a side (settled below); the real ones
+were these, and the mapping was changed:
+
+* **White matter.** Each Desikan name of the file is the cortex *and* the
+  white matter under it (`bankssts.left |= ctx_bankssts.left or
+  wm_bankssts.left`: ids 1001 and 3001), with `ctx_` and `wm_` for either
+  alone. The mapping had the cortex only; it now has `wm-lh-*`/`wm-rh-*`
+  (the largest class: 90 of the 168 were only that), and the terms
+  `ctx_<name>` and
+  `wm_<name>`. Without it, a bundle transcribed from the file selects
+  different streamlines on a wmparc atlas.
+* **Terms the file's queries use and the mapping lacked**:
+  `centrum_semiovale` and `unsegmentedwhitematter` (5001, 5002),
+  `corpuscallosum` in `cingular`, `cingular_cortex`, `temporal_frontal`,
+  `frontal_frontal_section`, the aliases `middlefrontalgyrus` and
+  `inferiorfrontalgyrus`, `cerebellum_exterior`, `cerebral_exterior`, and
+  the `Corpus_callosum` labels of aparc+aseg's extension (1101, 2101, 3101,
+  4101).
+* **`striatum`** (putamen, pallidum, caudate), and `subcortical` completed
+  (3.2).
+
+What still differs is **13 names**, all stated in the test, in four
+classes: (1) the file's *unlateralised* names are single labels of an old LUT
+(`Amygdala` is id 218, not the two sides), while a sided term of ours without
+a side is the union of both: the sided names agree; (2) `corpus_callosum`:
+the file has id 86, which this LUT has since given to another label, and we
+add the five subdivisions of the modern aseg (251-255); (3) `subcortical`:
+completed, and the legacy thalamus id 9; and **`subcortical.left` of the file
+includes the brain stem**, which has no side, so a rule that transcribes
+`X.left` from a group with midline members must select `hemi` left *or
+none*; (4) `Left-Thalamus` is a legacy label in FreeSurfer 6 (9) and the
+thalamus proper in FreeSurfer 7 (10): ours maps the name to
+`thalamus_proper`, harmlessly for 6 (no volume has 9) and needed for 7.
+The ids of these differences are those of the LUT of FreeSurfer 6; the test
+skips on another.
 
 ## 12. Future work: directional relations
 
@@ -810,26 +921,44 @@ random walks plus hand-built edge cases.
 
 ### 13.2 Equivalence against tract_querier
 
-`tract_querier` is a **test-only** dependency, optional
-(`pytest.importorskip`), not a runtime one and not in the `dev` extra
-(whether it installs next to the repository's numpy and nibabel is to be
-checked in phase 1, 15.9).
+`tract_querier` is a **test-only**, optional reference, never a dependency.
+Its `query_processor.py` is loaded **by path** with `code_util` stubbed
+(`tests/reference_tq.py`): it needs only the standard library, whereas the
+package's `__init__` imports vtk and the tractography readers. Found through
+`TRACT_QUERIER_DIR` (the directory of the `tract_querier` package) or an
+installed copy, else the tests skip. (Installed from
+`github.com/demianw/tract_querier` into a throwaway environment; the
+data files are those the vocabulary test reads.)
+
+**The WMQL transpiler (done).** `EvaluateQueries` reads four dictionaries of
+a spatial indexing, so no tractogram or voxels are needed: the same random
+`crossing` and `endings` become the reference's dictionaries on one side and
+the relations `traverses` and `endpoint` (DataFrames to `NeurolangDL`) on
+the other. 50 tests: 41 programs of one expression each (every
+operator, `not`/`-`/`~`/`only`, the endpoint functions, nesting, labels that
+are absent from the data), and 9 for the sequential rules, overwriting, wildcards
+over the names so far, `.side`, `for`, redefinition, a statically empty
+query; each on 3 seeds x 2 tractograms; **every defined query, not only the
+saved ones, is compared on its four components**. Data conventions: the
+background is among the traversed labels, never the label of an endpoint
+(6.3, 11.2). The oracle found nothing wrong with the transpiler's design;
+writing it against the reference source is what corrected section 11 (`~A`
+has no endpoints). The tests are `slow` (3 minutes: each starts an engine).
+
+**The vocabulary (done)**: 11.3.
+
+**The indexing (phase 1, to do).**
 
 * The same synthetic atlas and tractogram go through
   `TractographySpatialIndexing` and through nl_tracts with
   `emit_background=True`, and the sets are compared exactly: `traverses`
   vs `crossing_tracts_labels`, `endpoint` vs `ending_tracts_labels` minus
   its label-0 entries (and, for a streamline whose end is in the
-  background, the absence of the row), for
-  several `crossing_threshold` values including 0, 2, 25, 50 and 100,
-  oblique and flipped affines, points outside the volume and exactly on
-  voxel boundaries.
+  background, the absence of the row), for several `crossing_threshold`
+  values including 0, 2, 25, 50 and 100, oblique and flipped affines,
+  points outside the volume and exactly on voxel boundaries.
 * `length_threshold`: the reference's ids are renumbered, so the test maps
   them back through the kept-index list (6.1, parity 7).
-* The WMQL constructs of section 11, each as a small query evaluated by
-  `EvaluateQueries` and by the Datalog translation; the label-set `not` and
-  `only` cases specifically, on data where a streamline traverses A and
-  another label.
 * Oracle-free brute force (Python loops, per streamline) on a tiny volume,
   to catch bugs shared by both implementations.
 * Fixtures stay in RAS+ (6.1, 5).
@@ -870,7 +999,8 @@ is an open item, 15.8). Each phase is one PR, merged on its
 own; the scaffold's smoke test stays.
 
 1. **Core**: `spaces`, `terms`, `atlas` (loaders, hemispheres, `label`,
-   `label_term`, `label_extent`) -- **done**, the atlas layer --;
+   `label_term`, `label_extent`) and `wmql`, the WMQL transpiler -- **done**
+   --;
    `tractogram`, `indexing` (`traverses`, `endpoint`), and the oracle tests.
    Re-measure the sizes of 7.2.
 2. **Relations, cache, frontend**: the atlas-independent relations,
@@ -917,11 +1047,11 @@ Recommendations in bold; none changes a decision of section 2.
    `plan_tests.py` has no test of its own. **Do the rest when the package
    does something worth publishing; add a test of `plan()`** (it is a pure
    function, five lines of table).
-9. **Installing tract_querier for the oracle tests.** Not checked here
-   (the reference was read, never run). **Vendor nothing**; test against an
-   installed copy, skipped if absent, and if it does not install next to
-   the repository's numpy, run the oracle in a dedicated CI job or compare
-   against golden outputs generated once and committed (small fixtures).
+9. **tract_querier for the oracle tests** (13.2): resolved. It is not a
+   dependency; its evaluator is loaded by path from a copy found through
+   `TRACT_QUERIER_DIR`, and the tests that need it skip without. **Open**:
+   CI has no copy, so the oracle runs on a developer machine; a dedicated job
+   that installs it from git and runs `--runslow` would put it in CI.
 10. **Term vocabulary governance.** The vocabulary is now tract_querier's
     (3.2), which fixes the names but not who adds a term. **A single
     curated vocabulary file listing the allowed terms, and a test that each
@@ -933,10 +1063,13 @@ Recommendations in bold; none changes a decision of section 2.
 12. **LPS/RAS+ files.** `from_file` converts to RAS+ with nibabel and the
     oracle compares in RAS+. **State it and test only RAS+ against the
     reference**; the conversion itself is nibabel's.
-13. **Destrieux mapping** (3.2) is a draft by a non-anatomist, with the
-    boundary structures left unmapped on purpose. **Review it**, and decide
-    whether the lateral fissure and the central sulcus should get terms
-    (`central_sulcus` is not in tract_querier's vocabulary).
+13. **Destrieux mapping** (3.2) is a draft by a non-anatomist. The
+    instruction "the medial wall should be excluded, all other labels too" was
+    read as: the medial wall (and `Unknown`) have no term and **every other
+    label has**, the boundary structures included, with the terms of both
+    regions they separate. The other reading, excluding more, was not
+    followed. **Veto it, or review the assignments** (`tools/
+    make_freesurfer_mappings.py`, `DESTRIEUX`).
 14. **`label_extent` under oblique affines** (6.1.1) is the box of the
     box, a superset. **Keep** (conservative; aligned atlases are exact), and
     tighten with a pass over the voxels if a use needs the exact extent of
@@ -950,9 +1083,24 @@ Recommendations in bold; none changes a decision of section 2.
     voxel by voxel), and the tests exercise it on two atlases. **Keep**;
     `RelationStore.add_index` (phase 1, indexing) is where an atlas meets a
     tractogram.
-16. **The vocabulary's oddities** are copied from the `.qry` on purpose
-    (3.2): `subcortical` without caudate, hippocampus and accumbens; the
-    `.qry` also defines `middlefrontalgyrus` and `middle_frontal_gyrus`
-    (likewise the inferior) with the same content, of which one is kept.
-    **Keep, and say so in the tutorial**; a better `subcortical` is a
-    vocabulary change, with the portability cost that implies.
+16. **`subcortical`** departs from tract_querier's on purpose (3.2) and the
+    transpiler states how (11.3). **Say so in the tutorial**; the bundles
+    that exclude `subcortical` (`not in subcortical.side`) now also exclude
+    the caudate, hippocampus and accumbens, a change of what they select on
+    a volume that has them. **Check the standard bundles before the
+    tutorial**, with the transpiler, on tractography.
+17. **`X.left` of a group with midline members** (11.3): the file's
+    `subcortical.left` includes the brain stem. A rule transcribed from it
+    must select `hemi` left or none; the transpiler's output, which works on
+    ids, is exact, but a hand-written rule over `label_term` and
+    `label.hemi` is not. **Keep; consider a helper relation**
+    `side(a, l, h)` that gives each midline label to both sides, once
+    transcribed bundles are tried.
+18. **`Left-Thalamus` is two things** (11.3, 4): the legacy label 9 in
+    FreeSurfer 6 and the thalamus proper (10) in 7. The mapping is keyed by
+    raw name and maps it to `thalamus_proper`. **Keep**, and give the mapping
+    a LUT-version key if a FreeSurfer 7 LUT is ever found to need otherwise.
+19. **Speed.** Evaluating 945 label rules takes about a minute (a rule costs
+    about 55 ms of compilation), which is why the vocabulary and oracle tests
+    are `slow`. **If it matters**, fold the constant label sets in the
+    transpiler (they are plain unions) instead of rules.

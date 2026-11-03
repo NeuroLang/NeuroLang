@@ -88,7 +88,9 @@ def test_label_term_relation_without_a_mapping_is_empty(volume):
 def test_shipped_mapping_by_key(volume):
     atlas = make(volume, term_mapping="freesurfer_aseg_aparc")
     terms = atlas.label_term_relation()
-    assert {"precentral", "frontal"} == set(terms[terms.l == 2]["term"])
+    assert {"precentral", "ctx_precentral", "frontal"} == set(
+        terms[terms.l == 2]["term"]
+    )
 
 
 def test_unmapped_labels_are_reported(volume):
