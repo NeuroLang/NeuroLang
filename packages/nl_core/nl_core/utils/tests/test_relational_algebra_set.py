@@ -1439,6 +1439,34 @@ def test_aggregate_builtins_run_as_pandas_reductions(monkeypatch):
     assert all(isinstance(function, str) for function in used), used
 
 
+@pytest.mark.parametrize("function", ["sum", "max", "min", "mean"])
+def test_aggregate_numpy_reductions_run_as_pandas_reductions(
+    monkeypatch, function
+):
+    """numpy's reductions, those of NeuroLang's aggregations, run per
+    group in Python from pandas 3: pandas' own reductions compute the
+    same on numbers."""
+    import numpy as np
+    from pandas.core.groupby import DataFrameGroupBy
+
+    used = []
+    agg = DataFrameGroupBy.agg
+
+    def recording(self, *args, **kwargs):
+        used.extend(named.aggfunc for named in kwargs.values())
+        return agg(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataFrameGroupBy, "agg", recording)
+    rows = [(g, v / 3) for g in range(3) for v in range(5)]
+    result = pandas.NamedRelationalAlgebraFrozenSet(("g", "v"), rows) \
+        .aggregate(["g"], {"v": getattr(np, function)}).as_pandas_dataframe()
+    assert used == [function]
+    assert dict(zip(result["g"], result["v"])) == pytest.approx({
+        g: getattr(np, function)([v for h, v in rows if h == g])
+        for g in range(3)
+    })
+
+
 def test_named_ra_union_of_integers_and_floats(ra_module):
     """The union of an integer column and a float column is a float
     column: the floats are not truncated, whatever the order of the
