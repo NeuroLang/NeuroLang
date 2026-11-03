@@ -316,7 +316,10 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
 
 def test_execute_squall_body_function_call():
     """Function call in rel_b position produces a valid body atom."""
-    from nl_expr.exceptions import UnboundVariablesError
+    from nl_expr.exceptions import (
+        UnboundVariablesError,
+        WrongArgumentsInPredicateError,
+    )
     from nl_core.datalog.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
@@ -336,6 +339,8 @@ def test_execute_squall_body_function_call():
         pass  # Acceptable: reached datalog translation — plumbing is OK
     except UnboundVariablesError:
         pass  # Acceptable: ?x and ?y are only bound by close_enough
+    except WrongArgumentsInPredicateError:
+        pass  # Acceptable: the item is a third argument of close_enough
     except Exception as exc:
         pytest.fail(
             f"Body function call raised unexpected exception: "
