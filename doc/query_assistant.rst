@@ -409,7 +409,11 @@ The document is the one of ``feedback.json`` next to the page (``url`` and
 ``doc``; without a ``doc``, the page does not ask), and must let anyone add
 rows, and do nothing else, in its access rules (*Access rules*, then the
 table ``Answers``: for *Everyone*, create only, no read, update or delete),
-so that a visitor can neither read nor change what others sent.
+so that a visitor can neither read nor change what others sent. Two rules
+for the table, in this order: the condition ``user.Access == OWNER`` gives
+all permissions, and a rule without a condition gives ``+C-RUD``. A visitor
+who reads, changes or deletes a row is then answered "Blocked by table ...
+access rules", and adding a row works.
 
 **Running a server.** ``neurolang-feedback-server`` comes with
 ``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and
