@@ -43,6 +43,14 @@ Unreleased
 
 **New features:**
 
+* The LLM assistant of the meta-analysis engines (``neurosynth``,
+  ``neurostore``) answers a question about the brain given a term, a text or
+  a seed with the base rate P(A), the conditional probability P(A | term) and
+  their ratio, the lift, with the numbers of studies, and ranks by the lift
+  rather than by P(A | term), which follows the size of a region; "which
+  studies…" gets the studies and their titles rather than a probability.
+  The rows of its answers come sorted by their last column of decimals,
+  largest first.
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
