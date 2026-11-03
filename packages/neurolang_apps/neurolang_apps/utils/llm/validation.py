@@ -57,12 +57,15 @@ class CheckResult:
     The outcome of checking a query.
 
     *message* is the formatted error when the query is not *ok*.
-    *datalog* is the Datalog translation of a SQUALL query.
+    *datalog* is the Datalog translation of a SQUALL query. *notes* tell
+    of its constants that match nothing (see
+    :func:`~neurolang_apps.utils.tui.constant_notes.constant_notes`).
     """
 
     ok: bool
     message: str = ""
     datalog: str = ""
+    notes: str = ""
 
 
 def _parse(text: str, language: str):
@@ -266,13 +269,17 @@ def squall_datalog(text: str) -> str:
     return output.getvalue().strip()
 
 
-def check_query(nl, text: str, language: str) -> CheckResult:
+def check_query(
+    nl, text: str, language: str, engine_name: str = ""
+) -> CheckResult:
     """
     Check that the query *text* in *language* can run on the engine *nl*.
 
     It is parsed, then dry-run: the program is rewritten for the
     engine, which finds the predicates that do not exist or are used
-    with the wrong number of arguments, but the chase is not run.
+    with the wrong number of arguments, but the chase is not run. The
+    constants matching no value of the sorts the engine *engine_name*
+    declares are noted.
     """
     text = text.strip()
     if not text:
@@ -296,7 +303,9 @@ def check_query(nl, text: str, language: str) -> CheckResult:
         problems += aggregation_errors(text)
     if problems:
         return CheckResult(False, "\n".join(problems), datalog)
-    return CheckResult(True, datalog=datalog)
+    return CheckResult(
+        True, datalog=datalog, notes=_notes(nl, engine_name, text, language)
+    )
 
 
 # The most cells (rows times columns) of a result kept whole, to show it
@@ -473,8 +482,24 @@ def run_preview(
         )
 
 
+def _notes(nl, engine_name, text, language) -> str:
+    """Return the notes on the constants of the query *text*, one a line."""
+    try:
+        from neurolang_apps.utils.tui.constant_notes import constant_notes
+    except ImportError:  # without the tui dependencies
+        return ""
+    return "\n".join(
+        f"Note: {note}" for note in constant_notes(
+            nl, engine_name, text, language == "squall"
+        )
+    )
+
+
 def _preview(nl, text, language, rows, engine_name) -> Preview:
-    """Run the query *text* and return its preview (see run_preview)."""
+    """
+    Run the query *text* and return its preview (see run_preview), after
+    the notes on its constants.
+    """
     try:
         result = _execute(nl, text.strip(), language, dry_run=False)
     except Exception as exc:
@@ -502,4 +527,6 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
                 + frame.head(rows).to_string(index=False)
             )
     kept = frames if sum(f.size for _, f in frames) <= MAX_KEPT_CELLS else None
-    return Preview(True, "\n".join(parts), total, first, kept)
+    notes = _notes(nl, engine_name, text, language)
+    shown = "\n".join(filter(None, [notes, *parts]))
+    return Preview(True, shown, total, first, kept)
