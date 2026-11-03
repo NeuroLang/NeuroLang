@@ -10,12 +10,13 @@ def use_backend(backend):
     Select ``backend`` and re-import NeuroLang so that it uses it.
 
     Many NeuroLang modules bind the relational algebra set classes of the
-    configured backend when they are imported, and
-    ``config.set_query_backend`` only reloads a few of them.  asv imports the
-    benchmark modules, and with them NeuroLang, before ``setup`` runs, so
-    every ``neurolang`` module except the configuration is dropped from
-    ``sys.modules`` and imported again on demand.  Each asv benchmark runs in
-    its own process, so this does not leak into other benchmarks.
+    configured backend when they are imported, and ``config.set_query_backend``
+    only reloads a few of them. asv imports the benchmark modules, and with
+    them NeuroLang, before ``setup`` runs, so every module of ``nl_core`` and
+    ``neurolang`` except the configuration is dropped from ``sys.modules`` and
+    imported again on demand; those of the expression engine, ``nl_expr``, do
+    not depend on the backend. Each asv benchmark runs in its own process, so
+    this does not leak into other benchmarks.
 
     Parameters
     ----------
@@ -42,7 +43,7 @@ def use_backend(backend):
     config["CHASE"]["sort_join_predicates"] = str(backend != "polars")
     stale = [
         name for name in sys.modules
-        if (name == "neurolang" or name.startswith("neurolang."))
+        if name.split(".")[0] in ("nl_core", "neurolang", "neurolang_apps")
         and not name.startswith("neurolang.config")
     ]
     for name in stale:

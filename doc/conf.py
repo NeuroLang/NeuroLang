@@ -10,7 +10,8 @@ from datetime import datetime
 
 # -- Path setup ---------------------------------------------------------------
 currentdir = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, os.path.abspath("../"))
+for package in ("nl_expr", "nl_core", "neurolang", "neurolang_apps"):
+    sys.path.insert(0, os.path.abspath(f"../packages/{package}"))
 sys.path.append(os.path.join(currentdir, "tools"))
 sys.path.append(os.path.abspath("sphinxext"))
 
@@ -84,16 +85,16 @@ intersphinx_mapping = {
 
 # -- HTML output --------------------------------------------------------------
 html_theme = "pydata_sphinx_theme"
-html_logo = "_static/logo.png"
-html_favicon = None
+html_logo = "_static/logo/svg/neurolang-lockup.svg"
+html_favicon = "_static/logo/favicon/favicon.svg"
 html_static_path = ["_static"]
 html_css_files = ["neurolang.css"]
 
 html_theme_options = {
     "logo": {
-        "text": "NeuroLang",
-        "image_light": "_static/logo.png",
-        "image_dark": "_static/logo.png",
+        "alt_text": "NeuroLang",
+        "image_light": "_static/logo/svg/neurolang-lockup.svg",
+        "image_dark": "_static/logo/svg/neurolang-lockup-dark.svg",
     },
     "icon_links": [
         {

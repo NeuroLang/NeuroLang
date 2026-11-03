@@ -770,6 +770,89 @@ studies.  The ``:~:`` operator can be used interchangeably:
 
     picked_study(s) :~: (1 / n) :- study(s), n_studies(n).
 
+10.6 Confidence Intervals by Resampling
+-----------------------------------------
+
+The Bayes factors of Part 9 are computed from one sample of studies.  How
+much they would change with another sample is answered by resampling the
+studies: a *resampling* of the choice ``selected_study`` is a set of
+replicates ``b``, each reweighting the studies as a bootstrap of them does.
+It is declared once, from Python or in the engine's YAML
+(:doc:`engine_configuration`):
+
+.. code-block:: python
+
+    nl.add_resampling(
+        "boot_studies", choice="selected_study", n=1000, scheme="bayesian"
+    )
+
+``RESAMPLE[boot_studies](pred(x)) = b`` in a rule body is then
+``pred(x)`` computed on replicate ``b``, for any ``pred`` defined over
+``PROB`` of the choice, including the arithmetic over the probabilities.
+The confidence interval is the percentiles of the replicates:
+
+.. code-block:: none
+
+    bf_rep(b, r, t, bf) :- RESAMPLE[boot_studies](bayes_factor(r, t, bf)) = b.
+
+    ans(t, bf, percentile(x, 2.5), percentile(x, 97.5)) :-
+        bayes_factor('right fusiform gyrus', t, bf),
+        bf_rep(b, 'right fusiform gyrus', t, x).
+
+The replicates of a resampling are the same in every query, so that two
+measures computed on them can be compared replicate by replicate, joining
+them on ``b``:
+
+.. code-block:: none
+
+    difference(b, d) :-
+        bf_rep(b, 'right fusiform gyrus', 'ffa', x),
+        bf_rep(b, 'right fusiform gyrus', 'visual word', y),
+        (d == log(x) - log(y)).
+    ans(percentile(d, 2.5), percentile(d, 97.5)) :- difference(b, d).
+
+The interval of a difference cannot be obtained from the intervals of the
+two measures, which are computed on the same studies and are correlated.
+
+**Schemes.**  ``scheme`` sets the weight of each study in a replicate:
+``"bayesian"``, the Bayesian bootstrap (Rubin, 1981, Ann. Stat.), weights
+of a uniform Dirichlet distribution, never zero, so that a rare term keeps
+a defined Bayes factor; ``"multinomial"``, the classical bootstrap, how
+many times the study is drawn among ``N`` draws with replacement;
+``"poisson"``, a Poisson(1) count.  ``seed`` fixes the draws.
+
+**How it is computed.**  If the choice ``C`` takes the outcome ``c`` with
+probability :math:`P(C = c)` and the replicate ``b`` with probability
+:math:`P_b(C = c) = w_{bc}\, P(C = c)`, then for any query ``q``, as the
+choice holds for exactly one outcome in every world,
+
+.. math::
+
+   P_b(q) = \sum_c P_b(C = c)\, P(q \mid C = c)
+          = \sum_c w_{bc}\, P(q \wedge C = c).
+
+:math:`P(q \wedge C = c)` is ``q`` with the outcome of the choice as one
+more answer variable, which the probabilistic solvers compute as any other
+query, and the sum over ``c`` is an aggregation joined with the resampling
+relation ``boot_studies(b, c, w)``.  Hence ``RESAMPLE`` is a rewriting of
+the rules ``pred`` depends on and needs no other solver:
+
+1. the rules below a ``PROB`` that depend on the choice take the outcome
+   ``c`` as their first argument, the same for all the atoms of a body,
+   since all the atoms of the choice hold for the same outcome;
+2. each ``PROB`` over them becomes :math:`P(q \wedge C = c)`, then its sum
+   weighted by each replicate; a conditional ``PROB[q // e]`` is the ratio
+   of two of them;
+3. the rules over these probabilities take the replicate ``b`` as their
+   first argument, the same for all the atoms of a body, so that the
+   probabilities a measure combines come from the same replicate.
+
+The rewritten rules are named after the resampling (``bayes_factor@boot_studies``)
+and are added to the program once, then reused by every ``RESAMPLE`` of the
+same predicate.  Each replicate recomputes the measure, so that a query over
+``n`` replicates costs about ``n`` times its rows: ask for one region or
+term rather than for every voxel.
+
 
 .. _appendix-a-datalog:
 
@@ -980,6 +1063,60 @@ append ``:desc`` for descending order)::
     neurolang-query --engine neurosynth \
         --sort "w:desc" \
         "ans(t, w) :- term_in_study_tfidf(s, t, w)"
+
+Saving and viewing the results
+------------------------------
+
+``--save PATH`` also writes the result in a file, and ``--view`` shows
+its brain image in the viewer of the interactive mode, as the REPL's
+``.save`` and ``.view`` do for its last result (see ``.help save`` and
+``.help view`` there for the details).  They need the ``tui`` extra
+(``pip install "neurolang[tui]"``).
+
+* ``--save out.csv`` or ``out.tsv`` (optionally ``.gz``) writes the table
+  of the result, sorted as ``--sort`` asks.
+* ``--save out.nii`` or ``out.nii.gz`` writes a NIfTI image on the grid of
+  the engine's template.  The voxels are the columns of the result of a
+  sort the engine declares as voxel indices, or as millimetres, such as
+  ``i, j, k``; the value of a voxel is its probability or its one other
+  numeric column, such as a count, else 1.  A SQUALL program of several
+  ``obtain`` statements gives a file per statement.
+* ``--view`` writes the viewer's HTML page, prints its path and opens it
+  in a browser when the standard error is a terminal.
+
+For instance, the map of the number of studies mentioning pain that
+report each voxel::
+
+    neurolang-query --engine neurosynth --save pain.nii.gz --view \
+        "n_pain(i, j, k, count(s)) :- reports(s, i, j, k), mentions(s, 'pain').
+         ans(i, j, k, n) :- n_pain(i, j, k, n)"
+
+A result on the regions of an atlas, a column of region labels such as
+``l`` of ``destrieux_activated(l, s)``, is painted region by region, on
+the atlas's grid, with the value of its rows; ``--view`` shows every
+region of the result.  The probability that a study mentioning language
+activates each Destrieux region::
+
+    neurolang-query --engine neurosynth --view \
+        "active(l, s) :- destrieux_activated(l, s), selected_study(s)
+         term_association(s, t) :- mentions(s, t), selected_study(s)
+         ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p"
+
+A result of pairs of regions, or of points (``x1, y1, z1, x2, y2, z2``),
+with a value is a network: ``--view`` draws a node at the centre of each
+region and an edge per pair, its thickness and colour the value, the
+strongest 5% by default, in the 3D render of the brain and on the
+slices, and lists the strongest edges.  The co-activation of the
+Schaefer regions by studies about reading, the probability that a study
+mentioning reading activates both regions of a pair::
+
+    neurolang-query --engine neurosynth --view \
+        "active(l, s) :- schaefer_activated(l, s), selected_study(s)
+         co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+         term_association(s, t) :- mentions(s, t), selected_study(s)
+         ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p"
+
+Both work with ``--ask``, which then runs the query it writes.
 
 Inspecting query plans
 ----------------------

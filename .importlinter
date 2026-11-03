@@ -1,0 +1,46 @@
+# The packages of NeuroLang, from the top: each imports only the packages
+# below it. Tests are checked as part of their package.
+#   neurolang_apps  the command line, terminal interface, engines, assistant
+#   neurolang       the language: parsers, frontends, regions, neuroimaging
+#   nl_core         relational algebra and its sets, Datalog, probabilistic
+#   nl_expr         the expression engine: expressions, walkers, types, logic
+
+[importlinter]
+root_packages =
+    nl_expr
+    nl_core
+    neurolang
+    neurolang_apps
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = NeuroLang packages: apps > language > core > expression engine
+type = layers
+layers =
+    neurolang_apps
+    neurolang
+    nl_core
+    nl_expr
+
+[importlinter:contract:engine-dependencies]
+name = The expression engine needs neither pandas nor the neuroimaging libraries
+type = forbidden
+source_modules =
+    nl_expr
+forbidden_modules =
+    pandas
+    polars
+    lark
+    nibabel
+    nilearn
+    rdflib
+
+[importlinter:contract:core-dependencies]
+name = The core needs neither the parsers nor the neuroimaging libraries
+type = forbidden
+source_modules =
+    nl_core
+forbidden_modules =
+    lark
+    nibabel
+    nilearn

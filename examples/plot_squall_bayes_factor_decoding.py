@@ -52,6 +52,12 @@ areas: ``Area FG1 (FusG) right``, ``Area FG2 (FusG) right``,
 ``Area FG3 (FusG) right``, and ``Area FG4 (FusG) right``.  These are unioned
 into a single ``'right fusiform gyrus'`` label for the decoding analysis.
 
+.. note::
+
+   This example fetches the atlas with
+   `siibra <https://siibra-python.readthedocs.io>`_, which NeuroLang does
+   not install: ``pip install siibra`` first.
+
 .. rubric:: The SQUALL program
 
 .. code-block:: text

@@ -11,15 +11,12 @@
         "polars": [""],
         "pyarrow": [""]
     },
-    "build_command": [
-        "python -m pip install build",
-        "python -m build --wheel -o {build_cache_dir} {build_dir}"
-    ],
+    "build_command": [],
     "install_command": [
-        "python -m pip install {wheel_file} --force-reinstall"
+        "python -m pip install --force-reinstall {build_dir}/packages/nl_expr {build_dir}/packages/nl_core {build_dir}/packages/neurolang"
     ],
     "uninstall_command": [
-        "return-code=any python -m pip uninstall -y {project}"
+        "return-code=any python -m pip uninstall -y nl-expr nl-core neurolang"
     ],
     "env_dir": ".asv/env",
     "results_dir": ".asv/results",

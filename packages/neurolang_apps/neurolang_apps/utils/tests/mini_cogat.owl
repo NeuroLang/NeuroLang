@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<rdf:RDF
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+  xmlns:owl="http://www.w3.org/2002/07/owl#"
+  xmlns:skos="http://www.w3.org/2004/02/skos/core#">
+
+  <owl:ObjectProperty rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#measures"/>
+
+  <owl:Class rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001">
+    <rdfs:label>Memory</rdfs:label>
+    <skos:definition>The retention of information.</skos:definition>
+  </owl:Class>
+  <owl:Class rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00587">
+    <rdfs:label>Working memory</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001"/>
+  </owl:Class>
+  <owl:Class rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00588">
+    <rdfs:label>Spatial working memory</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00587"/>
+  </owl:Class>
+  <owl:Class rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_01000">
+    <rdfs:label>Digit_span_task-backward</rdfs:label>
+    <rdfs:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#measures"/>
+        <owl:someValuesFrom rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00587"/>
+      </owl:Restriction>
+    </rdfs:subClassOf>
+  </owl:Class>
+</rdf:RDF>

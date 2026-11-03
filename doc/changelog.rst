@@ -17,6 +17,24 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**Performance:**
+
+* ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
+  instead of 55 s, and the memory of the engine instead of 18 GB, so that it
+  runs in the REPL in the browser with the full engine (``?engine=full``):
+  the chase projects a rule's substitutions on the variables of its head,
+  which the optimisers push into the joins, instead of computing, and
+  comparing with the rows already found, all the combinations of the body's
+  variables (45 M rows of activations for 11 k of the head). A relation made
+  from a data frame shares its columns, with copy-on-write, rather than
+  copying them in one block, 1.4 GB for the activations.
+* ``lift`` of a term (``lift('pain', i, j, k, l)``) runs in the REPL in the
+  browser with the full engine too: a look-up join (the probabilities of a
+  choice) and a grouped sum, maximum, minimum or count of many rows go a
+  chunk of 4 M rows at a time, which for the probability of each voxel over
+  45 M activations takes 0.5 GB instead of 1.2 GB and 0.2 GB instead of
+  1.9 GB, for a second more.
+
 **New features:**
 
 * The REPL has ``.doc PREDICATE``, which documents a predicate: its
@@ -29,6 +47,392 @@ Unreleased
   predicate), and the completion offers them once two characters are typed.
   :meth:`~neurolang.frontend.NeurolangPDL.load_ontology` records them in
   ``ontology_symbols``.
+* The LLM assistant can record its questions and answers in a Grist document
+  instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
+  the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to
+  be flagged good, bad or unsure in Grist or with ``.rate`` and ``.refine``.
+  The answers that failed for an error of the provider are shared too.
+* The browser REPL opens its examples on the first start, when the box is
+  empty; the assistant's *Ask* button is filled only once a key is in use, so
+  that *Run* is the only primary action; the empty gap above the examples is
+  gone; a result table is as wide as its columns, with the header over its
+  numbers; and the keyboard focus is visible on the lists and the sortable
+  headers.
+
+* The browser REPL: the query can be written while the engine loads, which
+  says how long it takes; a failed start says in plain words what to do, with
+  a *Try again* button; the Brain tab is shown only when there is a brain to
+  see; the log of a query is folded to the time it took; the result tabs are
+  a tab list for the keyboard and screen readers; the table's controls are
+  shorter and the page fits a phone; and the button for the assistant's key
+  opens the key form, tells when a key is in use, and says what *Ask* needs.
+
+* The browser REPL shows the probabilities of a result (a ``p`` or ``prob``
+  column of numbers between 0 and 1) as bars, the most probable rows first.
+
+* The browser REPL has a *Use in a query* button on a result: the query that
+  made it is put in the box again, its answer renamed ``result``, with a new
+  ``ans(...) :- result(...), `` to complete. (A result is not a relation of
+  the session: ``ans`` cannot be used in a body.)
+  A result of studies also has *Map the studies*: the query that counts, for
+  each voxel, the studies of the result that report a peak there, which the
+  brain tab shows.
+
+* The browser REPL has *Ask a question* in its examples: a form for the common
+  questions (the studies that mention a term, two terms, one and not the
+  other, a term a lot; their peaks; the terms of a study), the ones the
+  engine has the predicates of, which puts the Datalog query in the box.
+
+* ``.explain`` reads the last query that ran in English, with the assistant;
+  the browser REPL has an *Explain* button for it once an API key is in use.
+
+* In the browser REPL, the studies of a result are links: to their PubMed
+  record, to their DOI (the engine's metadata have it; the tooltip gives the
+  title, authors, year and journal) and, when Europe PMC knows it, to their
+  PubMed Central record. Europe PMC is asked for the PubMed ids of the studies
+  on the page, nothing else; if it cannot be reached the other links stay.
+  A table tells the sort of each of its columns (``sorts``) and, if some are
+  studies, their ``study_links``.
+
+* The browser REPL documents each relation and each command. In *Examples and
+  relations*, the button *ⓘ* of a relation tells what it holds (the engine's
+  description), its columns with their sort and type, and where it comes from,
+  and puts it in the box or the query for all its rows; there is a list of the
+  commands, each with what it does and its full help. One filter searches both
+  lists. ``WebRepl.predicates()`` gives the ``arguments`` of each relation and
+  ``WebRepl.commands()`` the commands.
+
+* The browser REPL has a *Stop* button while a query runs: the engine is
+  restarted (its data are kept by the browser) and the rules defined in the
+  session are run again; *Save session* and *Open session* keep the
+  statements of a session in a file and give its rules back.
+
+* ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
+  of a checkout on this machine: it builds the page's bundle the first time
+  (or with ``--rebuild``) and serves it uncached at
+  ``http://localhost:8766/_static/repl/index.html``. It is the command of the
+  workspace's root project, whose only package is :file:`tools/serve_repl`.
+* ``query_similarity`` works in the REPL in the browser. Without ``torch``,
+  SPECTER2's query encoder runs in numpy (``neurolang.utils.specter2_numpy``:
+  BERT's WordPiece tokenizer and the model with its ad-hoc query adapter),
+  giving the embeddings of ``torch`` to within float16 rounding, with the
+  same ranking of the studies. The page fetches the exported model (268 MB,
+  in parts under GitHub's 100 MB) and the embeddings of the studies (44 MB)
+  the first time a query needs them; a query then takes about 2 s.
+  ``text_embeddings.fetch_missing`` fetches the files the embeddings lack.
+
+**Internal:**
+
+* Helpers reused instead of repeated: the conjuncts of a formula and the
+  selection of a plan by comparisons in the probabilistic lifting, the
+  aggregate types of the magic sets, the pandas reductions table, the
+  Euclidean join's index type, the export, the insert, the ``extends`` and
+  the missing optional dependency of the apps; docstrings of the apps name
+  ``neurolang_apps``.
+
+**Bug fixes:**
+
+* The REPL in the browser could not start: its page and the script that builds
+  its bundle (``doc/make_repl_bundle.py``) imported modules from
+  ``neurolang.utils`` that the split into packages moved to
+  ``neurolang_apps.utils``.
+* The union of an instance known to be empty and one known not to be was
+  taken for empty, which could end a semi-naive chase before its fixpoint.
+
+**Performance:**
+
+* Recursive rules: from the second iteration on, the semi-naive chase joined
+  the whole relation again and re-evaluated the rules without a recursive
+  atom. A rule with one recursive atom now has it bound to the tuples new
+  since the previous iteration, and is skipped when there are none. A
+  transitive closure of 2.56 M tuples takes 21 s and 1.8 GB instead of 49 s
+  and 2.5 GB with pandas, and one of 10 M tuples 104 s instead of more than
+  120 s. Non-recursive queries are unchanged.
+
+* A probability over the choice of a study with a peak within a radius of
+  each voxel, ``PROB[brain_mask(i, j, k), (euclidean(i, j, k, i1, j1, k1) <
+  3), peak_reported(i1, j1, k1, s), selected_study(s)]``, takes 13 s and half
+  the memory, instead of 47 s and close to 10 GB, and now runs in a browser
+  tab. The natural join with a relation unique on the only common column, as
+  the probabilities of a choice are, is a look-up rather than a pandas merge;
+  Python's ``sum``, ``max``, ``min`` and ``len`` in an aggregation run as
+  pandas reductions on columns of numbers without missing values; groups are
+  not sorted; and the Euclidean join keeps no distances it is not asked for,
+  numbers its pairs of rows with 32-bit integers and does not copy its result.
+
+**New features:**
+
+* Confidence intervals by resampling the studies.
+  ``nl.add_resampling("boot_studies", choice="selected_study")``, or
+  ``resamplings`` in an engine's YAML, adds replicates of a probabilistic
+  choice, the Bayesian, classical or Poisson bootstrap of its outcomes.
+  ``RESAMPLE[boot_studies](pred(x)) = b`` is then ``pred(x)``, any rule
+  over ``PROB`` of the choice including the measures computed from the
+  probabilities, such as Bayes factors, on replicate ``b``, and
+  ``percentile(x, 2.5)`` and ``percentile(x, 97.5)`` over the replicates
+  give the interval. Every query sees the same replicates, so that two
+  measures are compared on the same ``b``. It rewrites the rules into
+  sums over the outcomes of the choice, weighted by each replicate, and
+  needs no other solver; on Neurosynth, the interval of the Bayes factor
+  of a term for a region takes 15 s. The ``neurosynth`` and
+  ``neurostore`` engines have ``boot_studies``, 500 and 200 replicates of
+  ``selected_study``, and the query assistant has examples and guidance
+  for questions on how certain an answer is. See the tutorial,
+  :doc:`tutorial_datalog`, section 10.6.
+* An engine is built from the tables it kept, instead of finding them again.
+  The studies activating the regions of its atlases took 48 s of the 58 s of
+  the ``neurosynth`` engine's build, and nilearn, imported to find the MNI
+  mask, the brain and cortex voxels and the atlases, more than a second
+  (several in a browser). They are now kept in the data directory, in 3.6 MB
+  of ``.npz``, ``.nii.gz`` and ``.json`` files that the terminal REPL and the
+  REPL in the browser both read, without importing nilearn or scikit-learn:
+  the build takes 6 s natively instead of 58 s and 8 s in Pyodide instead of
+  112 s, and the page starts in 23 s instead of 127 s. The documentation
+  workflow builds the engine for its bundle, so that the tables are in its
+  data zip, and stops if none was kept. ``python -m
+  neurolang_apps.utils.engine_cache ENGINE`` keeps them, lists them
+  (``--list``) and removes them (``--clear``), and ``neurolang-query
+  --no-engine-cache`` builds the engine without them. nilearn's file fetcher
+  returns the files already in the data directory without being imported.
+  The page says which step of its start it is in (importing NeuroLang,
+  loading the Neurosynth data, the atlases, the ontologies...) instead of
+  "Building the engine" for all of it: ``build_engine`` takes a ``progress``
+  function that is told each step before it starts.
+
+* The REPL in the browser shows the work of the AI assistant as it happens, in
+  a section of the page you can open: the model's calls, the tool calls of
+  the ReAct agent, its queries and what they gave back. The code box colours
+  the query as the terminal does, in Datalog and in SQUALL. Each result has a
+  Download menu: all its rows as CSV or TSV, and its NIfTI image, the file
+  ``.save`` writes, for each value column; the brain tab offers the images
+  too. In the terminal REPL and in the page, a *Summary* of the query the
+  assistant wrote, its explanation and the query read back in English, is
+  above the query, apart from it, instead of below it. The ReAct agent runs
+  its final query to accept it, and the result it got is shown right away,
+  in the terminal and in the page, instead of the query being run a second
+  time: Enter on the query as it is shows that result again, and an edited
+  query is run as usual. A result larger than 5 million cells, or a query with
+  ``.scope off``, is run when asked, as before. The *Docs* menu and a hint under the box link the keyword at the
+  cursor (``PROB``, ``AGGREGATE``, ``:-``…) to its section of the tutorial;
+  the examples and the relations of the engine, and the rules you define,
+  are listed, to put them in the box with a click; and *Copy link* shares the
+  query in the address (after the ``#``, which no server receives).
+
+* The example LLM configuration has the providers ``albert-deepseek``,
+  ``openrouter-gemma`` and ``openrouter-deepseek``: DeepSeek V4 Flash and
+  Gemma 4 31B on Albert and on OpenRouter.
+
+* The query assistant can share its questions and answers with a feedback
+  server, where people rate them correct, incorrect or unsure and correct
+  their query, to train models and grow the banks of examples. It is off
+  by default: ``feedback`` in ``llm.yaml`` or
+  ``NEUROLANG_LLM_FEEDBACK_URL`` turns it on. In the REPL, ``.rate`` and
+  ``.refine`` rate and correct the last answer. ``neurolang-feedback-server``
+  (no new dependency) collects them, shows a review page and exports
+  them as JSON lines or as a bank of examples. See
+  :ref:`assistant-feedback`.
+
+* The query assistant searches the studies by a description or a
+  Cognitive Atlas concept: the ``neurosynth`` and ``neurostore`` engines
+  share a bank of examples (``coordinate_meta_analysis.yaml``, which banks
+  now inherit through ``extends``) with questions answered with
+  ``similar_study``, ``p_a_given_similar``, ``uniformity_llm`` and the
+  new ``cogat_definition(term, definition)``; ``neurostore.yaml`` adds
+  questions on its LLM-extracted concepts and domains.  ``neurosynth``
+  gets ``study_title(study, title)``, from its metadata, as ``neurostore``
+  had.
+
+* The engine of the REPL in the browser leaves out the precomputed analyses
+  (``lift``, ``relative_risk``, ``uniformity``, ``ratios``): building them took
+  almost 4 GB, which Safari does not give a tab, and made the page loop on
+  "Building the engine". The page builds them with ``?engine=full``.
+* The page of the REPL in the browser has a computer, light or dark theme
+  switch, says when the browser stops its worker, shows how long a slow step
+  lasts, and reads ``bundle.json`` afresh, so that a new deploy is not met by
+  the name of the old wheel.
+* NeuroLang is split into four packages, in a `uv workspace
+  <https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ under
+  :file:`packages/`: ``nl-expr`` (the expression engine, imported as
+  ``nl_expr``), ``nl-core`` (relational algebra, Datalog and probabilistic
+  Datalog, ``nl_core``), ``neurolang`` (the languages, frontends and brain
+  regions) and ``neurolang-apps`` (the ``neurolang-query`` command line, its
+  interactive mode, the query assistant and the engines,
+  ``neurolang_apps``). ``neurolang[apps]`` installs them all; ``neurolang``
+  alone is the library without the applications. The modules keep their
+  names under ``neurolang``, which are the same modules:
+  ``neurolang.datalog`` is ``nl_core.datalog`` and ``python -m
+  neurolang.utils.cli`` still runs the command line. The tests of a package
+  use only that package and those before it, and CI runs the tests of the
+  packages a pull request changes, on every Python version, and those of the
+  packages built on them, on Python 3.12: a change to the terminal interface
+  no longer runs the tests of the engine. A clone installs with ``uv sync
+  --all-packages --all-extras --no-extra embeddings``, or ``uv pip install
+  -e ".[apps,dev,doc]"``; see :doc:`contributing`.
+
+* ``neurolang-apps`` depends on ``pyarrow``, which the ``neurostore``
+  engine needs to read the parquet files of its releases and which
+  NeuroLang never declared.
+
+**Bug fixes:**
+
+* A function of the engine, such as ``query_similarity``, and a threshold on
+  it within ``PROB[...]`` give the same probabilities as the deterministic
+  rule computing them, instead of an error: the program of the
+  probabilistic stratum has the engine's functions, and the deterministic
+  relation replacing the function of an atom resolves them.
+
+* Two aggregations with arguments in one head, such as
+  ``percentile(v, 2.5)`` and ``percentile(v, 97.5)``, gave the result of
+  the last one for both: their functions shared one global name.
+
+* A query whose head aggregates over probabilities, such as
+  ``ans(max(p)) :- p_term(t, p)``, failed with
+  ``NoValidChaseClassForStratumException``: it was solved by the
+  deterministic chase, which does not compute the probabilities.
+
+* A probability over a predicate of two rules, one of which binds a
+  variable of the head only through an atom both share, as
+  ``a(s, r) :- region(r), selected_study(s), activates(s, r)`` and
+  ``a(s, r) :- region(r), selected_study(s), mentions(s, 't1')``, failed
+  with ``NeuroLangTypeException``: the lifted plan was the union of the
+  relations of ``activates(s, r)`` and ``mentions(s, 't1')``, without the
+  same columns. Such a union is declined, see
+  :doc:`probabilistic_lifting`.
+
+
+v0.1a21 (2026-10-21)
+--------------------
+
+**New features:**
+
+* The page of the REPL in the browser is a small interface: a box to ask
+  the AI assistant, a box for the Datalog or SQUALL code with its history
+  in a dropdown, and the result as a table or in the brain viewer.
+* The REPL in the browser has the AI assistant (``.ask``, ``.llm``) with
+  the visitor's own API key, given in the page for Anthropic, OpenAI,
+  OpenRouter or any OpenAI-compatible server. The key stays in the tab
+  (or on the device, if asked), goes only from the page to the provider,
+  and the query the assistant writes is put in the input. The LLM clients
+  send their requests with the browser's ``XMLHttpRequest``
+  (``neurolang.utils.llm.browser``), and queries run inline where there
+  are no threads nor processes.
+* The coordinate meta-analysis engines (``neurosynth``, ``neurostore``)
+  have the peaks in MNI millimetres, ``peak_mni(x, y, z, study)``, the
+  Destrieux atlas of the cortex and the Tian atlas of the subcortex beside
+  Schaefer, and for each atlas ``{atlas}_activated(label, study)``: the
+  studies with a peak within 3 mm of a voxel of a region.  The LLM
+  assistant answers their questions with probabilistic query answering
+  (an engine's ``assistant_guidance`` goes into its prompt), with
+  Destrieux for the classical anatomy and Schaefer and Tian for the
+  functional anatomy; the neurosynth example bank is rewritten so, with
+  examples of the co-activation of regions and of points.
+
+* The LLM assistant writes the query it accepted with a comment line
+  explaining each rule, from one more request to the model (``%`` lines
+  in Datalog, which runs as it is; ``comment_rules: false`` turns it
+  off).  ``.llm --steps N``, ``.ask --steps N``, ``.llm steps N`` and
+  ``--steps N`` on the command line set the most steps of the ReAct
+  agent.
+
+* In the REPL, the rules of a submission with a query (``ans`` or
+  ``obtain``) are local to it: they are discarded after it, so that two
+  queries defining ``active`` do not join their rules.  ``.scope off``
+  keeps them in the session, as before.  Comments are shown in a lighter
+  grey.
+
+* ``.view`` and ``.save`` (and ``--view``, ``--save``) paint a result on
+  the regions of an atlas, ``ans(l, p)``, region by region: a sort of
+  region labels names its atlas with ``atlas`` in ``engines.yaml``.
+  ``.view`` shows a result of pairs of regions or points with a value,
+  such as their co-activation, as a network drawn by NiiVue's connectome
+  view, over the brain.
+
+* The page of the REPL in the browser has the logo, a header with links to
+  the documentation, the tutorial and the source, the command it runs to
+  copy, and a status that shows when it is busy; the choice of the
+  NeuroLang version is folded away.
+
+* The REPL in the browser shows a result as a table to sort by clicking
+  a column, to filter (``stroop`` keeps the rows with the word,
+  ``name:stroop`` those whose column ``name`` has it), to page through, to
+  copy and to download as CSV, instead of the text table of the terminal;
+  ``Ctrl+R`` searches the history of the inputs, which lasts between
+  visits, as in a shell (``Ctrl+R`` again for an older match, ``Ctrl+S``
+  for a newer one, ``Enter`` to take it, ``Esc`` to cancel), and Up and
+  Down browse it.  :class:`neurolang.utils.tui.web.WebRepl` returns a
+  result's rows as data (``Reply.tables``).
+  
+* An LLM query assistant writes a Datalog or SQUALL query from a
+  question in natural language: ``.ask QUESTION`` in the interactive
+  mode, which puts the query in the next prompt (``.llm QUESTION`` is
+  the shortcut for the ReAct agent writing Datalog), and
+  ``neurolang-query --ask QUESTION`` on the command line, where ``--run``
+  also runs the query and ``-v`` and ``-vv`` show the reasoning and tool
+  calls of its steps, and the messages sent to the model.  Two
+  strategies are offered: in-context learning, whose few-shot examples
+  are the closest to the question (BM25), with validation and repair on
+  the engine, and a ReAct agent that explores the engine with tools
+  (``search_values``, ``run_query``, ``check_query``…), by native tool
+  calls or a text protocol.  The providers, OpenRouter, Albert,
+  Anthropic, any OpenAI- or Anthropic-compatible server or a local
+  command, are set in a YAML file, their keys read from the environment
+  (``neurolang/utils/llm/llm.example.yaml``).  The queries are shown on
+  their lines, highlighted.  It needs the ``llm`` extra and is described
+  in :doc:`query_assistant`.  The benchmark that measures it is in
+  `neurolang-text2query-bench
+  <https://github.com/NeuroLang/neurolang-text2query-bench>`_.
+  
+* ``neurolang-query --save PATH`` writes the result as CSV or TSV, or as
+  a NIfTI image on the grid of the engine, and ``--view`` shows its image
+  in the viewer of the REPL, as ``.save`` and ``.view`` do (they need
+  the ``tui`` extra).
+
+* The interactive query REPL runs in the browser, with nothing to
+  install: https://neurolang.github.io/_static/repl/index.html runs
+  ``neurolang-query -i --engine neurosynth --resolution 2`` on Pyodide,
+  with the REPL's commands and output, and ``.view`` shows its viewer
+  below the output.  ``?ref=BRANCH`` in its address runs the NeuroLang
+  of that branch, tag or commit, read from GitHub (``&repo=OWNER/NAME``
+  for a fork).  It is :class:`neurolang.utils.tui.web.WebRepl`
+  driven by a page (:file:`doc/_static/repl/`), whose bundle, NeuroLang's
+  wheel and the data of the engine, :file:`doc/make_repl_bundle.py`
+  builds with the documentation.  To run in Pyodide, ``pysdd``, which has
+  no WebAssembly build, became optional, as the queries that lifted
+  inference solves do not need it, and queries run in the calling thread
+  where threads cannot start.
+
+* Engines in :file:`engines.yaml` can inherit from other engines with
+  ``extends`` and from ``abstract`` base entries, so settings common to
+  several engines are declared once.  ``neurosynth`` now extends a shared
+  ``coordinate_meta_analysis`` base.  See :doc:`engine_configuration`.
+  
+* A new ``neurostore`` engine, built on the same base, loads the NeuroStore
+  database (as fetched by NiMARE) with the predicates of ``neurosynth``,
+  TF-IDF computed from the abstracts (words and sequences of up to three
+  words), the titles, abstracts and LLM-extracted concepts and domains of
+  the studies, and SPECTER2 ``query_similarity`` over its abstracts
+  (a ``text_embeddings`` source can now be engine predicates,
+  ``source: {predicate: ...}``).  A ``brain_mask(i, j, k)`` predicate gives
+  the whole brain (MNI152 brain mask) next to ``cortical_mask``.
+* The ``neurosynth`` and ``neurostore`` engines define the lift, relative
+  risk and uniformity ratio of a term, Neurosynth's association and
+  uniformity tests, as predicates: ``uniformity('working memory', i, j, k, u)``,
+  ``lift``, ``relative_risk`` and ``ratios`` (over the whole brain, with a new
+  ``selected_voxel`` choice); see :ref:`tutorial-neurosynth-tests`.
+  With SPECTER2, ``uniformity_llm('a description', i, j, k, u)``, ``lift_llm``,
+  ``relative_risk_llm`` and ``ratios_llm`` do the same for a free text: the
+  studies of the term are the 5% closest to it (``study_similarity``,
+  ``similar_study``).
+* ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+  (``ontologies``, now loaded before ``datalog_init``) for open-world queries
+  over its concepts, tasks and contrasts, joined with the studies through
+  ``cogat_subclass_of``, ``cogat_measures`` and ``cogat_term``; see
+  :doc:`tutorial_cognitive_atlas`.
+* NeuroLang has a logo (:file:`doc/_static/logo/`): the brain written as
+  a probabilistic program. It heads the README and the documentation,
+  whose colours become those of the logo, and is the favicon of the
+  documentation, of the web application and of the ``.view`` viewer.
+
 * The ``.view`` viewer has the controls of NiiVue's display: the view
   (a slice, the three slices in a row, a column or a grid, with or
   without the 3D render, or the 3D render alone), the drag mode of the
@@ -52,6 +456,13 @@ Unreleased
   ratios of probabilities (lift, relative risk, and the ratio to the
   brain average), computed in the REPL of the ``neurosynth`` engine, see
   :ref:`tutorial-neurosynth-tests`.
+
+* Documentation: the mutual information of a term and the activation of a
+  voxel, a rule over the engine's ``p_term``, ``p_a`` and ``p_a_given_t``,
+  ranks the voxels as Neurosynth's association test does, which the lift
+  does not: for *prefrontal*, the Dice coefficient of its top 5% of the
+  brain with that of Neurosynth's map is 0.83, against 0.51 for the lift.
+  See :ref:`neurosynth-mutual-information`.
 
 * ``.view`` of a result with several value columns shows an overlay per
   column, each with its own threshold, colormap, symmetry, opacity and
@@ -161,7 +572,61 @@ Unreleased
   ``use_base_symbols`` and the ``atlases:`` section.  The
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
 
+* NeuroLang is layered as the packages it is to be split into: the
+  expression engine (expressions, walkers, types, logic, config), the core
+  (relational algebra and its sets, Datalog, probabilistic), the language
+  (parsers, frontends, regions) and the applications (command line,
+  terminal interface, engines).  Each layer imports only those below it,
+  which ``.importlinter`` checks in CI: ``import neurolang.expressions``
+  needs neither pandas nor the relational algebra sets, and the core
+  needs neither the frontends nor lark, nibabel or nilearn.
+  ``import neurolang`` imports the frontends when one is first used.
+  The FOL to Datalog translation moved from ``neurolang.logic.horn_clauses``
+  to :mod:`neurolang.datalog.horn_clauses`, and the Datalog pretty-printer
+  to :mod:`neurolang.datalog.pretty_printer`
+  (``neurolang.frontend.datalog.pretty_printer`` still imports it).
+  Modules that choose the classes of the relational algebra backend when
+  imported register with ``config.reload_on_backend_switch``, rather than
+  being listed in the configuration.  The tests of the core that ran
+  queries through a frontend moved to :file:`neurolang/frontend/tests`.
+
 **Bug fixes:**
+
+* The REPL block of :ref:`tutorial-neurosynth-tests` names the rules
+  restricted to the cortex with ``_cortex`` (``ratios_cortex``,
+  ``selected_voxel_cortex``, …): pasted in the ``neurosynth`` engine,
+  which now predefines ``selected_voxel``, ``p_a``, ``p_a_given_t`` and
+  ``ratios`` over the brain, it failed on its second definition of
+  ``selected_voxel`` and added its rules to those of the others.
+  
+* The badges of the README: the coverage badge, deployed to ``gh-pages``,
+  was deleted by each deployment of the benchmarks' dashboard there (and
+  deleted it in turn): it has its own branch, ``badges``. The Python badge
+  reads the versions from ``pyproject.toml``, as the release on PyPI
+  declares none, and the static "code style: flake8" badge, which nothing
+  checked, gives way to those of the documentation and spelling workflows.
+
+* A Euclidean distance bound to a point given by numbers,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, was
+  computed for every row (14 s on the peaks of neurosynth), and the
+  reserved ``EUCLIDEAN`` raised an error: the point is now ranged by a
+  stored relation of its own, so the points within the distance are
+  precomputed as for two relations (well under a second).
+
+* A probabilistic query with a variable occurring only in deterministic
+  relations, ``q(x, PROB) :- r(x, y) & selected(x)``, gave the sum of the
+  probabilities over the values of ``y`` rather than their probability,
+  e.g. 1.0 rather than 0.5 for an ``x`` of two rows of ``r``: those rows
+  are the same event.  The lifted plan of the deterministic subquery
+  ``∃y r(x, y)`` keeps its tuples with a probability of 1, and the small
+  dichotomy theorem solver leaves such a query to the lifted solver.
+  
+* A probabilistic query no longer fails with ``AttributeError: type object
+  'Unknown' has no attribute '__origin__'`` when the program has a
+  query-based probabilistic choice, such as ``selected_voxel(i, j, k) ^ (1 /
+  m) :- ...``, that the query does not use, or whose rule's body is empty:
+  the choice is then over no tuple, as a query-based probabilistic fact
+  over no tuple already was.
 
 * The REPL skips the ``%`` comment lines between statements, e.g. before
   a dot-command of a pasted block or in a piped batch, which it submitted
@@ -198,6 +663,19 @@ Unreleased
   within-language probabilistic queries, e.g. a conditional (MARG, ``//``)
   rule ``p``, which are solved after the magic predicates:
   ``both(i, a, b) :- p('math', i, a) & p('lang', i, b)`` failed.
+
+**Removed:**
+
+* The legacy web application, ``neurolang/utils/server`` (2.3 MB, with
+  ``papaya.js``), and the hatch build hook that built its frontend with
+  npm, ``hatch_build.py``; the wheel no longer ships it.
+* ``siibra`` and ``seaborn`` are no longer dependencies: NeuroLang never
+  imports them.  The example
+  :ref:`sphx_glr_auto_examples_plot_squall_bayes_factor_decoding.py` needs
+  ``pip install siibra``.
+* Unreferenced files: ``unused/neurosynth/cogat.v2.owl`` (1.4 MB), the
+  pictures of an old Datalog grammar in
+  ``neurolang/frontend/datalog/doc/`` (0.7 MB) and ``MANIFEST.in``.
 
 
 v0.0.1 (Alpha)

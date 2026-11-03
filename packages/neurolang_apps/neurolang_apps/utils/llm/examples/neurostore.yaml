@@ -1,0 +1,40 @@
+# Questions on the neurostore engine only, added after the bank of
+# coordinate_meta_analysis, which it shares with neurosynth. NeuroStore
+# comes with the titles and abstracts of its studies (study_title,
+# study_abstract) and with cognitive concepts and domains extracted from
+# their tasks by an LLM (study_concept, study_domain). The concepts come
+# in either case ('working memory', 'Working memory'), the domains are
+# capitalised ('Executive cognitive control'): search_values shows how a
+# value is stored. Every query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+examples:
+  - question: Which NeuroStore studies were annotated with the concept working memory? Give their titles.
+    datalog: |-
+      ans(s, title) :- study_concept(s, 'working memory'), study_title(s, title)
+
+  - question: Which cognitive domains do the studies about cancelling a planned response when a stop signal appears belong to?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      domain(s, dm) :- study_domain(s, dm), selected_study(s)
+      p_domain_given_close(q, dm, PROB) :- domain(s, dm) // close(q, s)
+      ans(dm, p) :- p_domain_given_close('a planned response must be cancelled when a stop signal appears', dm, p)
+
+  - question: Which studies are about working memory, by its Cognitive Atlas definition, without being annotated with it?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s), ~study_concept(s, 'working memory')
+      p_close(q, PROB) :- close(q, s)
+      ans(p) :- cogat_definition('working memory', d), p_close(d, p)
+
+  - question: Which voxels do the studies of the domain executive cognitive control activate?
+    datalog: |-
+      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      control(s) :- study_domain(s, 'Executive cognitive control'), selected_study(s)
+      ans(i, j, k, p) :- PROB[activation(i, j, k, s) // control(s)] = p
+
+  - question: Which cognitive concepts were extracted from the studies about holding information in mind over a delay?
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      concept(s, c) :- study_concept(s, c), selected_study(s)
+      p_concept_given_close(q, c, PROB) :- concept(s, c) // close(q, s)
+      ans(c, p) :- p_concept_given_close('holding information in mind over a delay', c, p)
+

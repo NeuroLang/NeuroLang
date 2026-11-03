@@ -163,8 +163,8 @@ WEIGHTED_PROBABILISTIC_FACTS_REPORT.md
 doc/SQUALL_REVIEW.md
 doc/sg_execution_times.rst
 docs/superpowers/
-neurolang/_version_scm.py
-neurolang/utils/server/neurolang-sparklis/
+# uv.lock is not kept: CI resolves the latest versions, as pip did.
+uv.lock
 
 # uv package manager
 uv.lock

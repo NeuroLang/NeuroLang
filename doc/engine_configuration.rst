@@ -4,10 +4,14 @@ Engine Configuration (engines.yaml)
 ===================================
 
 Engines are declaratively configured in
-``neurolang/utils/engines/engines.yaml`` and built by
+``packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml`` and built by
 :func:`~neurolang.utils.engine_registry.build_engine`.  Each engine entry
 may specify the following keys, all of them optional:
 
+- ``extends`` — name (or list of names) of engines whose configuration is
+  inherited, see `Sharing configuration between engines`_
+- ``abstract`` — when ``true`` the entry only serves as a base for other
+  engines: it is neither listed nor buildable
 - ``description`` — human-readable summary shown by ``--list-engines``
 - ``requires_mni_mask`` — whether the engine needs an MNI brain mask (it is
   downloaded, optionally resampled with ``--resolution``, and passed to the
@@ -27,13 +31,28 @@ may specify the following keys, all of them optional:
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
-  ``difumo``) as region predicates
+  ``tian``, ``difumo``) as region predicates ``name(label, region)``.  A
+  deterministic atlas with ``activated: {predicate_name, radius_mm,
+  peaks}`` also registers ``predicate_name(label, study)``: the studies
+  with a peak within ``radius_mm`` (3 by default) of a voxel of the
+  region, the peaks being the millimetre coordinates of the relation
+  ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
+  are measured in millimetres through the atlas's affine, so its grid need
+  not be the template's, and the pairs are kept in the data directory once
+  found (see :ref:`engine-cache`).  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
+  for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
+  downloaded from the authors' repository
 - ``datalog_init`` — inline Datalog rules that are loaded at engine startup
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
+- ``resamplings`` — replicates of a probabilistic choice for confidence
+  intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
+  seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
+  tutorial :doc:`tutorial_datalog`, section 10.6)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
@@ -49,6 +68,13 @@ may specify the following keys, all of them optional:
 - ``dimension_type_predicates`` — list of predicate names that SQUALL
   queries may use as dimension-type annotations; they are stripped from the
   rules before solving (defaults to ``probability`` and ``value``)
+- ``assistant_guidance`` — how the LLM query assistant (``.ask``,
+  ``neurolang-query --ask``) is to answer questions on the engine: added
+  to its system prompt.  The coordinate meta-analysis engines ask for
+  probabilistic answers over ``selected_study`` (counts for "how
+  many"), activation as a peak within 3 mm of a point in MNI
+  millimetres, the Destrieux atlas for the classical anatomy of the
+  cortex and the Schaefer and Tian atlases for the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
@@ -175,6 +201,25 @@ A column of unknown sort, such as one of a relation loaded with
 ``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
 X Y Z`` give the columns, on the template's grid (see ``.help save``).
 
+A sort of region labels may name, with ``atlas``, the atlas whose
+regions it labels, by its key under ``atlases``; it has one column and
+no ``space``::
+
+    destrieux_label:
+      columns: [label]
+      type: str
+      atlas: destrieux
+
+A result with a column of such a sort is then a result on the regions of
+the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
+atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),
+and ``.view`` shows a result with two such columns, pairs of regions and
+a value, as a network over the brain, a node at the centre of each
+region and an edge per pair (see ``.help view``).  The engine keeps the
+values labelling each region in the image of the atlas, by name, in
+``nl.atlas_labels`` (see
+:func:`~neurolang.utils.engine_registry.atlas_label_values`).
+
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
 offers the nouns, capitalised; after ``every Study that`` the verbs whose
 first entity is a study (``mentions``, ``reports``); after ``every Term
@@ -213,13 +258,21 @@ relation (see :doc:`tutorial_text_embeddings`)::
         function: query_similarity
         description: "Similarity between a query and a study abstract"
 
-``source`` is either ``pubmed`` (titles and abstracts fetched from the NCBI
-E-utilities) or a table of texts, local or remote::
+``source`` is ``pubmed`` (titles and abstracts fetched from the NCBI
+E-utilities), a table of texts, local or remote::
 
         source:
           file: https://example.org/documents.tsv
           id_column: id
           text_columns: [title, abstract]   # first column is the title
+
+or texts the engine already holds as predicates ``p(id, text)``, which is
+how the ``neurostore`` engine embeds the abstracts that come with its
+database, without any download::
+
+        source:
+          predicate: study_abstract
+          title_predicate: study_title      # optional
 
 ``model``, ``document_adapter`` and ``query_adapter`` default to the values
 above.  The engine build only reads the ids.  Texts are fetched and
@@ -227,6 +280,127 @@ embedded on the first query that uses the function, and cached under
 ``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
+
+.. _engine-cache:
+
+Starting an engine without finding its tables again
+---------------------------------------------------
+
+Most of the build of the ``neurosynth`` engine, 58 s natively and 112 s in a
+browser, finds what never changes for the same data: the studies activating
+the regions of the atlases (48 s natively), and, from nilearn, the MNI mask
+resampled to the grid of the engine, the voxels of the brain and of the cortex
+on it, and where the atlases are, for which nilearn and scikit-learn are
+imported, which takes more than a second and several in a browser.
+:func:`~neurolang_apps.utils.engine_registry.build_engine` keeps all of them in
+``DATA_DIR/ENGINE/engine_cache``, in files named by their kind and by what they
+depend on, and reads them when they are there. Then nilearn is not imported at
+all, the build takes 6 s natively and 8 s in a browser, and the page starts in
+23 s instead of 127 s. A change of the atlas, the peaks, the radius or the
+resolution makes other files; a file that is missing, damaged or cannot be
+written means only that the table is found again. The MNI mask is named by
+the resolution alone, so remove the files (``--clear``) if the template
+changes.
+
+The files hold arrays, an image and text, nothing of Python or of a version of
+numpy or pandas, so the terminal REPL and the REPL in the browser read the same
+ones, whichever implementation of Python wrote them. The engine itself cannot
+be kept: its expressions cannot be pickled, and a snapshot of the memory of
+Pyodide is 780 MB (270 MB compressed).
+
+``python -m neurolang_apps.utils.engine_cache ENGINE -d DATA_DIR -r MM`` builds
+the engine at the resolution it will be used with, so that the tables are
+kept; ``--list`` lists them and ``--clear`` removes them;
+``neurolang-query --no-engine-cache`` builds the engine without reading or
+writing them. The build of the browser's bundle (``doc/make_repl_bundle.py``,
+run by the documentation workflow) keeps them in the data zip, 3.6 MB, builds
+the engine from them and without them to check that the trimmed data suffices
+for both, and stops if it kept none.
+
+Sharing configuration between engines
+-------------------------------------
+
+Settings common to several engines live in an ``abstract`` engine that the
+concrete ones pull in with ``extends``.  The built-in ``neurosynth`` and
+``neurostore`` engines both extend ``coordinate_meta_analysis``, which
+provides the MNI mask, the base symbols, the Schaefer atlas, the sorts, the
+predicates and their Datalog rules, and the text embeddings; each engine
+adds its ``python_init`` and what is specific to its database::
+
+    engines:
+      coordinate_meta_analysis:
+        abstract: true
+        requires_mni_mask: true
+        use_base_symbols: true
+        datalog_init: |
+          study_with_peaks(s) :- peak_reported(i, j, k, s).
+        text_embeddings:
+          study_abstracts: {ids_from: study, source: pubmed,
+                            function: query_similarity}
+
+      neurostore:
+        extends: coordinate_meta_analysis
+        python_init: "neurolang.utils.engines.neurostore.init"
+        text_embeddings:
+          study_abstracts:
+            source: {predicate: study_abstract}   # replaces ``pubmed``
+
+With several bases (``extends: [a, b]``) later ones override earlier ones,
+and the engine's own entries override all of them.  Merging works per key:
+
+- ``datalog_init`` texts are concatenated, inherited rules first;
+- ``builtins``, ``downloads``, ``ontologies`` and
+  ``dimension_type_predicates`` are concatenated without duplicates;
+- mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
+  ``predicates``, ``text_embeddings``, ...) are merged recursively, so an
+  engine can change one parameter of an inherited entry; setting an entry
+  to ``null`` removes the inherited one;
+- every other value, lists included (``python_init``, ``description``,
+  ``hidden_predicates``, ...), is replaced.
+
+Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+
+The ``neurostore`` engine
+-------------------------
+
+``neurostore`` loads the NeuroStore database (the one behind Neurosynth
+Compose, which NiMARE fetches with ``fetch_neurostore``).  It downloads a
+release archive from ``neurostore.org``, verifies its checksum and caches it
+under ``<data_dir>/neurostore/<version>``; ``NEUROLANG_NEUROSTORE_RELEASE``
+selects the release (``latest``, ``nightly`` or e.g. ``2026-10``).  It has
+all the predicates of ``neurosynth``, with the same names and columns.
+Study ids are NeuroStore's alphanumeric strings.  NeuroStore ships no term
+table, so ``term_in_study_tfidf`` is computed from the study abstracts with
+scikit-learn (words and sequences of two or three, so that terms such as
+``working memory`` exist; English stop words, terms in at least 30 studies,
+values above ``1e-3``) and is not comparable with Neurosynth's
+curated-vocabulary values.  Peaks in spaces other than MNI or Talairach are
+dropped.  It adds ``study_title(study_id, title)``,
+``study_abstract(study_id, abstract)``, and
+``study_concept(study_id, concept)`` / ``study_domain(study_id, domain)``,
+the cognitive concepts and domains that an LLM extracted from the tasks of
+each study.
+
+Like ``neurosynth``, it defines the ``lift``, ``relative_risk``,
+``uniformity`` and ``ratios`` of a term (:doc:`tutorial_neurosynth_tests`).
+With SPECTER2 over its abstracts it also defines them for a free text,
+``uniformity_llm('a description', i, j, k, u)`` and the like.
+
+Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
+abstracts; precompute the embeddings with ``python -m
+neurolang.utils.text_embeddings --engine neurostore --data-dir
+neurolang_data``.
+
+The Cognitive Atlas
+-------------------
+
+Both ``neurosynth`` and ``neurostore`` load the Cognitive Atlas ontology
+with ``ontologies`` (see :doc:`tutorial_cognitive_atlas`), next to the
+``cognitive_task`` relation: its classes, labels, definitions and axioms are
+facts and constraints that queries use with the engine's data, in the
+open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
+``datalog_init``, the rules of an engine can use the ontology's predicates,
+as ``cogat_subclass_of`` and ``cogat_measures`` do.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

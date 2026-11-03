@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nl-core"
+dynamic = ["version"]
+description = "NeuroLang's core: relational algebra, Datalog and probabilistic Datalog"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["datalog", "probabilistic logic programming", "relational algebra"]
+dependencies = [
+    "nl-expr",
+    "numpy",
+    "scipy",
+    "pandas>=1.5",
+    "pysdd",
+    "rdflib>=6.0.0",
+]
+
+[project.optional-dependencies]
+ras-polars = [
+    "polars>=1.17",
+    "pyarrow",
+]
+dev = [
+    "pytest>=7.0",
+    "problog",
+]
+
+[tool.uv.sources]
+nl-expr = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["nl_core"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../.." }

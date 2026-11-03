@@ -1,19 +1,20 @@
-/* NeuroLang brand colour overrides for PyData Sphinx Theme */
+/* NeuroLang brand colour overrides for PyData Sphinx Theme: the colours
+   of the logo (_static/logo/README.md), its blue the primary colour. */
 
-/* Light mode */
-:root {
-    --pst-color-primary: #5C6BC0;
-    --pst-color-primary-highlight: #3949AB;
-    --pst-color-secondary: #26A69A;
-    --pst-color-accent: #26A69A;
+/* Light mode; on html[data-theme], as the theme declares its colours. */
+html[data-theme="light"] {
+    --pst-color-primary: #1A63C2;
+    --pst-color-primary-highlight: #0F1B33;
+    --pst-color-secondary: #0E7490;
+    --pst-color-accent: #0E7490;
 }
 
 /* Dark mode */
-[data-theme="dark"] {
-    --pst-color-primary: #7986CB;
-    --pst-color-primary-highlight: #5C6BC0;
-    --pst-color-secondary: #4DB6AC;
-    --pst-color-accent: #4DB6AC;
+html[data-theme="dark"] {
+    --pst-color-primary: #5AA3F6;
+    --pst-color-primary-highlight: #E8EEF9;
+    --pst-color-secondary: #4CC3DE;
+    --pst-color-accent: #4CC3DE;
 }
 
 /* Hero section on the landing page */
@@ -31,9 +32,18 @@
     margin-bottom: 0.5rem;
 }
 
+.nl-hero h1.nl-hero-logo {
+    margin-bottom: 1rem;
+}
+
+.nl-hero h1.nl-hero-logo img {
+    height: 13rem;
+    max-width: 100%;
+}
+
 .nl-hero .nl-tagline {
     font-size: 1.2rem;
-    color: var(--pst-color-secondary-text);
+    color: var(--pst-color-text-muted);
     margin-bottom: 1.5rem;
 }
 
