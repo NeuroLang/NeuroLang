@@ -540,15 +540,15 @@ def test_the_predicates_of_the_engine_say_what_their_columns_are(repl):
     ]
 
 
-def test_the_facts_of_an_ontology_are_not_listed(repl):
+def test_the_iris_of_an_ontology_are_not_listed(repl):
     nl = repl.app._nl
     nl.add_tuple_set([("a", "b")], name="rdfs:label")
     nl.add_tuple_set(
         [("a",)], name="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00137"
     )
     names = {p["name"] for p in repl.predicates()}
-    assert "person" in names
-    assert not any(":" in name for name in names)
+    assert {"person", "rdfs:label"} <= names
+    assert not any("://" in name for name in names)
 
 
 def test_the_commands_come_with_what_they_do(repl):

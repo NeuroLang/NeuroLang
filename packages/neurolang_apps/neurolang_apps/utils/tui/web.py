@@ -95,11 +95,11 @@ def lightweight_engines_yaml(directory) -> Path:
 
 def _from_an_ontology(name: str) -> bool:
     """
-    Whether the predicate *name* is that of a fact of an ontology: an IRI
-    (``http://...#CAO_00137``) or a prefixed name (``rdfs:label``). Only
-    these have a colon.
+    Whether the predicate *name* is the IRI of a class or a property of an
+    ontology, ``http://...#CAO_00137``: those of the vocabularies the engine
+    names with a prefix (``rdfs:label``) are few, and relations to query.
     """
-    return ":" in name
+    return "://" in name
 
 
 class _PrintedOn(io.TextIOBase):
@@ -435,8 +435,8 @@ class WebRepl:
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the
-        page to list, but for the facts of an ontology (``rdfs:label``, the
-        IRIs of its classes) that the engine does not declare: ``name``,
+        page to list, but for the IRIs of an ontology's own classes and
+        properties that the engine does not declare: ``name``,
         ``kind`` (stored, derived, session...),
         ``signature`` as ``.predicates`` shows it, and the engine's
         ``description``, if any, with its ``arguments``: the ``columns``,
