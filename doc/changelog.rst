@@ -37,6 +37,16 @@ Unreleased
 
 **New features:**
 
+* The REPL has ``.doc PREDICATE``, which documents a predicate: its
+  description (the engine's, or a note written with ``.doc PREDICATE TEXT``
+  for the session, which ``.clear`` forgets), the entities it relates, its
+  number of facts or its rules, and the ontology it comes from; ``.doc``
+  completes the names of the predicates.  The predicates of the ontologies
+  an engine loaded, many with a large ontology, are no longer listed by
+  ``.predicates``: ``.predicates ontologies`` lists them (``all`` lists every
+  predicate), and the completion offers them once two characters are typed.
+  :meth:`~neurolang.frontend.NeurolangPDL.load_ontology` records them in
+  ``ontology_symbols``.
 * The LLM assistant can record its questions and answers in a Grist document
   instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
   the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to

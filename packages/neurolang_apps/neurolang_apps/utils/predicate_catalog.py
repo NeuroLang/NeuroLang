@@ -28,7 +28,9 @@ class PredicateInfo(NamedTuple):
     *kind* tells where it comes from: ``stored`` (EDB relation),
     ``derived`` (IDB predicate of the engine), ``session`` (rule defined
     in the session), ``loaded`` (relation loaded with ``.load``),
-    ``probabilistic`` (probabilistic fact or choice) or ``function``.
+    ``probabilistic`` (probabilistic fact or choice), ``function`` or
+    ``ontology`` (a class, property or fact of a loaded ontology, see
+    :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`).
     *columns* are the names of its columns, or None when they are
     unknown, and *arity* its number of columns, or None when it is
     unknown. A *probabilistic* predicate has a probability column
@@ -73,7 +75,8 @@ class PredicateInfo(NamedTuple):
 
 # The kinds of predicates, in the order they are listed.
 KINDS = (
-    "session", "loaded", "stored", "derived", "probabilistic", "function"
+    "session", "loaded", "stored", "derived", "probabilistic", "function",
+    "ontology",
 )
 
 
@@ -194,6 +197,7 @@ class CatalogBuilder:
         self.loaded = loaded
         self.signatures = signatures or {}
         self.probabilistic = _probabilistic_symbols(self.program_ir)
+        self.ontology = getattr(nl, "ontology_symbols", None) or {}
         self.protected = getattr(self.program_ir, "protected_keywords", ())
 
     def info(self, symbol, value, session: bool):
@@ -208,6 +212,8 @@ class CatalogBuilder:
         info = self._info(symbol, value, session)
         if info is None:
             return None
+        if info.name in self.ontology and info.kind in ("stored", "derived"):
+            info = info._replace(kind="ontology")
         return info._replace(arguments=_declared_arguments(
             info.name, info.arity, self.signatures
         ))
@@ -278,10 +284,20 @@ def predicate_catalog(nl, columns=None, loaded=None, signatures=None) -> dict:
     return collect_catalog(builder, nl.program_ir.symbol_table)
 
 
-def listed(catalog: dict) -> list:
-    """Return the infos of *catalog* by kind, as :data:`KINDS`, and name."""
+def listed(catalog: dict, ontologies: bool = False) -> list:
+    """
+    Return the infos of *catalog* by kind, as :data:`KINDS`, and name.
+
+    The predicates of the ontologies, a thousand of them with the
+    classes of a large ontology, are left out unless *ontologies* is
+    True.
+    """
     def order(info):
         kind = KINDS.index(info.kind) if info.kind in KINDS else len(KINDS)
         return kind, info.name
 
-    return sorted(catalog.values(), key=order)
+    infos = (
+        info for info in catalog.values()
+        if ontologies or info.kind != "ontology"
+    )
+    return sorted(infos, key=order)
