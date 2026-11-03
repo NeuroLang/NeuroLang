@@ -199,3 +199,27 @@ ans(b, x) :- RESAMPLE[boot_studies](bayes_factor('r1', 't1', x)) = b.
     assert res == pytest.approx({
         (b,): x for (b, r, t), x in reps.items() if (r, t) == ("r1", "t1")
     })
+
+
+@pytest.mark.parametrize("scheme", ["bayesian", "multinomial", "poisson"])
+def test_replicate_sums_are_the_weighted_sums_of_the_outcomes(scheme):
+    nl = NeurolangPDL()
+    nl.add_tuple_set(MENTIONS, name="mentions")
+    nl.add_uniform_probabilistic_choice_over_set(
+        ACTIVATES, name="selected_activation"
+    )
+    nl.add_resampling("boot", "selected_activation", n=N, scheme=scheme)
+    got = rows(nl, """
+term_probability(t, PROB) :- selected_activation(s, r), mentions(s, t).
+rep(b, t, p) :- RESAMPLE[boot](term_probability(t, p)) = b.
+ans(b, t, p) :- rep(b, t, p).
+""")
+    expected = rows(nl, """
+per_outcome(s, r, t, PROB) :- selected_activation(s, r), mentions(s, t).
+weighted(b, s, r, t, x) :- boot(b, s, r, w), per_outcome(s, r, t, p), \
+(x == w * p).
+summed(b, t, sum(x)) :- weighted(b, s, r, t, x).
+ans(b, t, p) :- summed(b, t, p).
+""")
+    assert {b for b, _ in got} == set(range(N))
+    assert got == pytest.approx(expected)

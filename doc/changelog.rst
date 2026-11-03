@@ -19,6 +19,12 @@ Unreleased
 
 **Performance:**
 
+* ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
+  the replicates at once, as a product of matrices, instead of joining every
+  replicate with every outcome: the 500 replicates of the probability that
+  two Schaefer parcels are active given a term (``PROB[co_active(l1, l2) //
+  term_association(s, 'auditory')]``) take 13 s and 1 GB more than the
+  engine, instead of 43 GB, and run in the REPL in the browser.
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):
