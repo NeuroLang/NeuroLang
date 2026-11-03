@@ -66,9 +66,9 @@ export function imageButtons(payloads, download) {
   return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
 }
 
-// *followUp*(payload) gives the start of a query that goes on from the result, or
-// null, and *use*(text) puts it in the code box.
-export function renderTable(payload, { download = null, followUp = null, use = null } = {}) {
+// *followUps*(payload) gives the queries that go on from the result, each with a
+// *label*, a *title* and its *text*, which *use*(text) puts in the code box.
+export function renderTable(payload, { download = null, followUps = null, use = null } = {}) {
   const model = new TableModel(payload);
   let pageIndex = 0;
   let pageSize = PAGE_SIZES[0];
@@ -90,11 +90,8 @@ export function renderTable(payload, { download = null, followUp = null, use = n
   const range = element("span", { className: "rt-range" });
   const copy = element("button", { type: "button", className: "rt-copy", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
   const csv = element("button", { type: "button", textContent: "CSV", title: "Download the rows shown as CSV" });
-  const start = followUp && use ? followUp(payload) : null;
-  const goOn = start === null ? [] : [element("button", {
-    type: "button", textContent: "Use in a query", title: "Put this query in the box again with a new answer on its result",
-    onclick: () => use(start),
-  })];
+  const goOn = (followUps && use ? followUps(payload) : []).map(({ label, title, text }) =>
+    element("button", { type: "button", textContent: label, title, onclick: () => use(text) }));
   const head = element("tr");
   const body = element("tbody");
   const table = element("table", { className: "rt-table" }, element("thead", {}, head), body);
