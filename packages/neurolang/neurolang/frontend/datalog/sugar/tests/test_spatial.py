@@ -431,6 +431,16 @@ def test_unbounded_reserved_error_mentions_forms():
         )
 
 
+def test_reserved_distance_within_arithmetic_needs_a_bound():
+    """``2 * EUCLIDEAN(...)`` is unbounded too: the error says so, rather
+    than an AttributeError translating the rule."""
+    nl = _engine()
+    with pytest.raises(UnsupportedProgramError, match="euclidean"):
+        nl.execute_datalog_program(
+            f"{CLOSE} & (d == 2 * EUCLIDEAN(i, j, k, i1, j1, k1))"
+        )
+
+
 SQUALL_CLOSE = (
     "define as Close (?i; ?j; ?k; ?s) where Voxel (?i, ?j, ?k) "
     "and Peak_reported (?i1, ?j1, ?k1, ?s) and "
