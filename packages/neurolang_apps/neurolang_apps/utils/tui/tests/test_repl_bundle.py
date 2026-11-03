@@ -47,6 +47,26 @@ def test_the_wheels_leave_no_gitignore_that_would_hide_the_bundle(
     assert (tmp_path / "page.html").exists()
 
 
+def test_the_wheels_of_an_earlier_build_are_not_taken(
+    bundle, monkeypatch, tmp_path
+):
+    """Their version is that of the commit they were built from."""
+    def uv_build(command):
+        out = Path(command[command.index("--out-dir") + 1])
+        for name in bundle.PACKAGES:
+            (out / f"{name}-2-py3-none-any.whl").write_bytes(b"new")
+
+    monkeypatch.setattr(bundle.subprocess, "check_call", uv_build)
+    for name in bundle.PACKAGES:
+        (tmp_path / f"{name}-1-py3-none-any.whl").write_bytes(b"old")
+    assert bundle.build_wheels(tmp_path) == [
+        f"{name}-2-py3-none-any.whl" for name in bundle.PACKAGES
+    ]
+    assert sorted(path.name for path in tmp_path.glob("*.whl")) == sorted(
+        f"{name}-2-py3-none-any.whl" for name in bundle.PACKAGES
+    )
+
+
 def test_a_certificate_error_is_retried_with_the_system_certificates(
     bundle, monkeypatch, tmp_path
 ):

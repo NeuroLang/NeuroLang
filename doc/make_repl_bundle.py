@@ -74,7 +74,14 @@ PACKAGES = ("nl_expr", "nl_core", "neurolang", "neurolang_apps")
 
 def build_wheels(output: Path) -> list:
     """Build the wheels of NeuroLang's packages in *output* and return their
-    file names, in the order of ``PACKAGES``."""
+    file names, in the order of ``PACKAGES``.
+
+    The wheels of an earlier build are removed first: their version is
+    that of the commit they were built from, so they keep their names and
+    would be taken for the new ones."""
+    for name in PACKAGES:
+        for wheel in output.glob(f"{name}-*.whl"):
+            wheel.unlink()
     uv = shutil.which("uv")
     subprocess.check_call(
         [uv, "build", "--all-packages", "--wheel", "--out-dir", str(output),

@@ -154,6 +154,10 @@ Unreleased
 
 **Bug fixes:**
 
+* ``neurolang-repl-serve --rebuild`` serves the wheels it built, not those of
+  an earlier build: their versions follow the commits, so the old ones kept
+  their names next to the new ones and could be the ones the bundle named.
+  ``--clear`` removes the bundle built before, then builds it again.
 * The REPL in the browser could not start: its page and the script that builds
   its bundle (``doc/make_repl_bundle.py``) imported modules from
   ``neurolang.utils`` that the split into packages moved to

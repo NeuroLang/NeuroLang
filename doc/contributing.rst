@@ -125,8 +125,10 @@ Pyodide, from a static page.  To run that of your checkout on your machine:
 
 The first run builds the page's bundle (NeuroLang's wheels and the data of
 the ``neurosynth`` engine, a few minutes) in
-:file:`~/.cache/neurolang/repl-site`; later runs serve it at once, and
-``--rebuild`` builds it again from the checkout.  The page opens at
+:file:`~/.cache/neurolang/repl-site`; later runs serve it at once,
+``--rebuild`` builds it again from the checkout, and ``--clear`` removes the
+bundle built before and then builds it from nothing (the text embeddings
+below are kept).  The page opens at
 ``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
 from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--port`` changes the port, ``--no-browser`` does not open the page, and
