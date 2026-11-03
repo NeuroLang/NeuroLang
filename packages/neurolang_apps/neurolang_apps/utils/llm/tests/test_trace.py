@@ -114,6 +114,13 @@ def test_ask_verbose_prints_the_steps(ask, capsys):
     assert "[system]" not in err
 
 
+def test_ask_with_logic_prints_the_logic_notation(ask, capsys):
+    ask("--logic")
+    out, err = capsys.readouterr()
+    assert out.strip() == "ans(s) :- mentions(s, 'pain')"
+    assert "-- in logic notation:\nans(s) ← mentions(s, 'pain')" in err
+
+
 def test_ask_very_verbose_prints_the_messages(ask, capsys):
     ask("-vv")
     out, err = capsys.readouterr()

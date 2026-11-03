@@ -207,17 +207,18 @@ def _results(output):
 def test_inputs_restore_initial_settings():
     settings = TuiSettings(
         squall=True, output_format="csv", sort_by=[("x", False), ("y", True)],
-        show_ra=True, show_rewritten=True,
+        show_ra=True, show_rewritten=True, logic_notation=True,
     )
     assert initial_commands(settings) == [
         ".mode squall", ".format csv", ".sort x:desc y:asc", ".ra on",
-        ".rewritten on",
+        ".rewritten on", ".logic on",
     ]
 
 
 @pytest.mark.parametrize("text, replayable", [
     (".head", False), (".head 5", True), (".rewritten", False),
-    (".rewritten on", True), (".clear", True), (".drop p", True),
+    (".rewritten on", True), (".logic", False), (".logic on", True),
+    (".clear", True), (".drop p", True),
     (".all", False), (".datalog", False), (".quit", False),
 ])
 def test_replayable_commands(text, replayable):

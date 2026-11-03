@@ -38,7 +38,7 @@ _ANSI = re.compile(
 # Commands that change the session, replayed with --inputs; those of
 # _SETTERS only when they set something (with an argument).
 _STATE_COMMANDS = (".mode", ".load", ".drop", ".clear")
-_SETTERS = (".sort", ".format", ".ra", ".rewritten", ".head")
+_SETTERS = (".sort", ".format", ".ra", ".rewritten", ".logic", ".head")
 
 
 def _mode_name(squall: bool) -> str:
@@ -223,6 +223,8 @@ def initial_commands(settings) -> list:
         commands.append(".ra on")
     if settings.show_rewritten:
         commands.append(".rewritten on")
+    if settings.logic_notation:
+        commands.append(".logic on")
     return commands
 
 

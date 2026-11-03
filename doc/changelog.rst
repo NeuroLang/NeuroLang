@@ -152,6 +152,25 @@ Unreleased
 
 **New features:**
 
+* Queries can be shown in logic notation: ``head ← body`` with the
+  conjuncts aligned one per line, ``¬``, ``∨``, ``≠``, and the
+  probabilities ``PROB`` as ``P[A | B]`` or ``P[A]``, ``| B`` under ``[``
+  when too long for a line
+  (``nl_core.datalog.pretty_printer.LogicPrettyPrinter``). The rules
+  NeuroLang compiles ``PROB[A // B] = p`` and ``MARG[...] = p`` into are
+  folded back into their use, ``p = P[A | B]``, there and in ``.datalog``
+  (``fold_probabilities``). In the REPL,
+  ``.logic on`` shows the assistant's answers in it next to their Datalog
+  and lists the rules of ``.idb`` and ``.datalog`` in it, and ``.logic``
+  shows the last query so; ``neurolang-query --logic`` sets it, and
+  prints the ``--ask`` answer in it on the standard error. The
+  probabilistic choices and facts of the engine are highlighted in their
+  own colours, bold red and yellow, wherever queries are: at the prompt,
+  in the assistant's answers and steps, and in ``.idb`` and ``.datalog``,
+  which are now highlighted. The Datalog printer shows probabilistic
+  facts and choices as ``head :: p`` and ``head ^ p`` rather than their
+  internal form, and the negation of an atom as ``¬S(y)``, which the
+  Datalog parser reads, rather than ``¬(S(y))``.
 * Confidence intervals by resampling the studies.
   ``nl.add_resampling("boot_studies", choice="selected_study")``, or
   ``resamplings`` in an engine's YAML, adds replicates of a probabilistic

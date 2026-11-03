@@ -12,7 +12,9 @@ header of their file, are kept in the application's ``loaded_relations``
 to name the columns of the results and of ``.sets``. The other commands
 list the engines and the engine's sets and predicates, and show how the
 last query is rewritten (``.rewritten``) or translated from SQUALL to
-Datalog, and the Datalog rules of a predicate (``.datalog``).
+Datalog, the Datalog rules of a predicate (``.datalog``), and the last
+query in logic notation (``.logic``), in which ``.logic on`` lists the
+rules.
 """
 
 import re
@@ -25,13 +27,18 @@ from pathlib import Path
 import pandas as pd
 from rich import box
 from rich.table import Table
+from rich.text import Text
 
 from nl_core.datalog import Union as DatalogUnion
 from nl_core.datalog.basic_representation import UnionOfConjunctiveQueries
 from nl_core.datalog.expressions import AdornedSymbol
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Query, Symbol
-from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
+from nl_core.datalog.pretty_printer import (
+    DatalogPrettyPrinter,
+    LogicPrettyPrinter,
+    fold_probabilities,
+)
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
@@ -46,6 +53,7 @@ from neurolang_apps.utils.cli import (
     _show_squall_datalog,
 )
 
+from .assistant import logic_text, query_kinds, query_text
 from .commands import _switch, command
 from neurolang_apps.utils.predicate_catalog import (
     is_user_symbol,
@@ -102,6 +110,13 @@ def rule_text(rule) -> str:
     return re.sub(r"\s*\n\s*", " ", DatalogPrettyPrinter().walk(rule))
 
 
+def _printer(app):
+    """Return the printer of rules: in logic notation with ``.logic on``."""
+    if app.settings.logic_notation:
+        return LogicPrettyPrinter()
+    return DatalogPrettyPrinter()
+
+
 def _print_idb_table(app) -> None:
     """Print the session's predicates with their number of rules."""
     symbols = session_idb_symbols(app._nl)
@@ -134,9 +149,14 @@ def _print_rules(app, name: str) -> None:
         _warn(app, f"{name!r} is not an IDB predicate.")
         return
     width = len(str(len(value.formulas)))
+    logic, kinds = app.settings.logic_notation, query_kinds(app)
     for number, rule in enumerate(value.formulas, 1):
+        text = LogicPrettyPrinter().walk(rule) if logic else rule_text(rule)
         app.console.print(
-            f"{number:>{width}}  {rule_text(rule)}", markup=False,
+            Text(f"{number:>{width}}  ") + query_text(
+                text.replace("\n", "\n" + " " * (width + 2)), "datalog",
+                kinds=kinds,
+            ),
             highlight=False,
         )
 
@@ -678,23 +698,65 @@ def _print_datalog_of(app, name: str) -> None:
             _warn(app, f"{name!r} is not an IDB predicate.")
             return
         rules = value.formulas
-    printer = DatalogPrettyPrinter()
+    printer = _printer(app)
     app.console.print(
-        "\n\n".join(printer.walk(rule) for rule in rules), markup=False,
+        query_text(
+            "\n\n".join(printer.walk(rule) for rule in rules), "datalog",
+            kinds=query_kinds(app),
+        ),
         highlight=False, soft_wrap=True,
     )
 
 
 def _print_datalog_program(app, program: str) -> None:
-    """Print the rules and the query of the Datalog *program*."""
+    """
+    Print the rules and the query of the Datalog *program*.
+
+    The helper rules of ``PROB[...] = p`` are folded back into their use.
+    """
     printer = DatalogPrettyPrinter()
+    kinds = query_kinds(app)
     parsed = app._nl.datalog_parser(program)
-    for formula in getattr(parsed, "formulas", (parsed,)):
+    formulas = getattr(parsed, "formulas", (parsed,))
+    for formula in fold_probabilities(formulas):
         label = "query" if isinstance(formula, Query) else "rule"
         app.console.print(
-            f"── {label} ──\n{printer.walk(formula)}\n", markup=False,
-            highlight=False, soft_wrap=True,
+            f"── {label} ──\n",
+            query_text(printer.walk(formula), "datalog", kinds=kinds), "\n",
+            sep="", highlight=False, soft_wrap=True,
         )
+
+
+def _print_logic(app, program: str, squall: bool) -> None:
+    """Print the rules and queries of *program* in logic notation."""
+    text = logic_text(app, program, squall)
+    if text is None:
+        _warn(app, "The query cannot be shown in logic notation.")
+    else:
+        app.console.print(text, highlight=False, soft_wrap=True)
+
+
+@command(
+    ".logic", "Show the last query, or the assistant's last answer, in "
+    "logic notation, or toggle showing answers and rules in it",
+    ".logic [on|off]",
+)
+def cmd_logic(app, arg: str) -> None:
+    """
+    Print the last query in logic notation, or toggle the notation.
+
+    On, the assistant's queries are also shown in logic notation and
+    ``.idb`` and ``.datalog`` list rules in it. Without an argument, the
+    assistant's last answer is shown if it is newer than the last query.
+    """
+    if arg.strip():
+        _switch(app, arg, "logic_notation", "Logic notation")
+        return
+    answer = app.assistant.last_answer
+    if answer and answer["query"] and answer["ran"] is app.last_query:
+        _print_logic(app, answer["query"], app.settings.squall)
+    elif not _no_last_query(app):
+        _print_logic(app, *app.last_query)
 
 
 @command(
@@ -715,6 +777,9 @@ def cmd_datalog(app, arg: str) -> None:
     if _no_last_query(app):
         return
     program, squall = app.last_query
+    if app.settings.logic_notation:
+        _print_logic(app, program, squall)
+        return
     try:
         if squall:
             _show_squall_datalog(program)

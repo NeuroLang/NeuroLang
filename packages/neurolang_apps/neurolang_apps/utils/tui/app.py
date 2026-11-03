@@ -90,7 +90,9 @@ class TuiSettings:
     transcript. *llm_config* and *llm_provider* are the configuration
     file and the provider of the LLM assistant (``.ask``), by default
     those the configuration gives. With *scope_queries* (``.scope``),
-    the rules defined with a query are local to it.
+    the rules defined with a query are local to it. With
+    *logic_notation* (``.logic``), queries and rules are also shown in
+    logic notation.
     """
 
     engine_name: str = ""
@@ -100,6 +102,7 @@ class TuiSettings:
     show_ra: bool = False
     ra_options: ShowRAOptions = field(default_factory=ShowRAOptions)
     show_rewritten: bool = False
+    logic_notation: bool = False
     page_size: int = DEFAULT_PAGE_SIZE
     vi_mode: bool = False
     debug: bool = False
