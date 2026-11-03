@@ -2531,6 +2531,29 @@ def test_query_aggregating_probabilities_in_its_head():
     nl.execute_datalog_program("ans(max(x)) :- p(r, x)", dry_run=True)
 
 
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        # GH-1076: a rule whose body is only an equality is a fact.
+        ("ans(l) :- (l == 'c')", {("c",)}),
+        ("ans(l, m) :- (l == 'c') & (m == 'd')", {("c", "d")}),
+        ("nac(l) :- (l == 'a')\nans(s) :- nac(l) & act(l, s)", {(1,)}),
+        # Equalities that cannot be inlined are kept.
+        ("ans(v) :- act(v, y) & (v == 'a') & (v == 'b')", set()),
+        ("ans(v) :- (v == 'a') & (v == 'b')", set()),
+        ("ans(v) :- act(v, y) & (v == 'b') & (v != 'c')", {("b",)}),
+        ("ans(v, w) :- act(w, y) & (v == 'b') & (w == v)", {("b", "b")}),
+        ("ans(v) :- act(v, y) & (v == 'b') & ~bad(v)", {("b",)}),
+        ("ans(count(v)) :- act(v, y) & (v == 'b')", {(2,)}),
+    ],
+)
+def test_rules_with_equalities_to_constants(program, expected):
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a", 1), ("b", 2), ("b", 3)], name="act")
+    nl.add_tuple_set([("z",)], name="bad")
+    assert set(nl.execute_datalog_program(program)) == expected
+
 def test_query_the_lifted_solvers_decline_without_the_unate_check():
     """
     Without the unate check, the lifted solver raised a ValueError on a
