@@ -37,6 +37,11 @@ Unreleased
 
 **New features:**
 
+* The LLM assistant can record its questions and answers in a Grist document
+  instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
+  the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to
+  be flagged good, bad or unsure in Grist or with ``.rate`` and ``.refine``.
+  The answers that failed for an error of the provider are shared too.
 * The browser REPL opens its examples on the first start, when the box is
   empty; the assistant's *Ask* button is filled only once a key is in use, so
   that *Run* is the only primary action; the empty gap above the examples is

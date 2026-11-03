@@ -297,6 +297,27 @@ def test_unbound_variables_rejected():
     assert generated in dl.symbol_table
 
 
+def test_function_arguments_checked_against_its_signature():
+    dl = Datalog()
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    f = S_('f')
+    x = S_('x')
+
+    def shifted(a: int, shift: int = 1) -> int:
+        return a + shift
+
+    dl.symbol_table[f] = C_[Callable[[int, int], int]](shifted)
+    dl.walk(Imp_(Q(x), Conjunction((R(x), C_(lt)(f(x), C_(2))))))
+    dl.walk(Imp_(Q(x), Conjunction((R(x), C_(lt)(f(x, x), C_(2))))))
+    with pytest.raises(
+        exceptions.WrongArgumentsInPredicateError,
+        match=r"`f` is used with 3 arguments but is the function "
+        r"f\(a: int, shift: int = 1\) -> int",
+    ):
+        dl.walk(Imp_(Q(x), Conjunction((R(x), C_(lt)(f(x, x, x), C_(2))))))
+
+
 def test_infer_iterable_type():
     iterable = range(5)
     type_, it = DatalogProgram.infer_iterable_type(iterable)

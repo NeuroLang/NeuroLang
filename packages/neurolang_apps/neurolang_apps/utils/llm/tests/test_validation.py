@@ -3,6 +3,7 @@ import warnings
 import pytest
 
 from ..context import EngineContext
+from ..examples import Example
 from ..validation import (
     _undefined_predicates,
     arity_errors,
@@ -183,6 +184,33 @@ def test_describe_and_search(nl):
     assert "Unknown predicate 'nothing'" in context.search_values(
         "x", "nothing"
     )
+
+
+def test_describe_a_rule_computed_for_a_given_text(nl, monkeypatch):
+    def query_similarity(q: str, s: int) -> float:
+        return 1.0 / s
+
+    nl.add_symbol(query_similarity, name="query_similarity")
+    nl.execute_datalog_program(
+        "study_similarity(q, s, v) :- study(s) & "
+        "(v == query_similarity(q, s)) & (v > 0)\n"
+        "similar_study(q, s) :- study_similarity(q, s, v) & (v > 0.4)"
+    )
+    example = "ans(s) :- similar_study('fear', s)"
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.load_examples",
+        lambda name: [Example("Studies close to fear?", {"datalog": example})],
+    )
+    context = EngineContext(nl)
+    lines = context.describe("study_similarity").splitlines()
+    assert lines == [
+        "study_similarity(q, s, v) [rule]",
+        "Its rows are not listed: a query must give some of its arguments, "
+        "e.g. a text as a constant or a variable bound by another atom.",
+    ]
+    lines = context.describe("similar_study").splitlines()
+    assert lines[1].endswith("For example:") and lines[2] == example
+    assert "4 rows, e.g.:" in context.describe("mentions")
 
 
 def test_search_shows_the_closest_of_many_values(nl, monkeypatch):
