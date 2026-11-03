@@ -516,7 +516,7 @@ engines:
       probabilistic choice over studies.
     python_init: "neurolang_apps.utils.engines.neurosynth.init"
     python_init_options:
-      # The peaks of the 1,832 studies of UNKNOWN space (10.6% of them):
+      # The 53,878 peaks of UNKNOWN space (10.6% of them, 1,832 studies):
       # ``mni`` takes them as MNI, as Neurosynth and NiMARE do; ``tal``
       # converts them as Talairach; ``drop`` leaves them out.
       unknown_space: mni

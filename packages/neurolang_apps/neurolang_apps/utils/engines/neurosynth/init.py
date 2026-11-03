@@ -250,7 +250,7 @@ def _cortical_voxels(
     return np.argwhere(np.asanyarray(resampled.dataobj) > 0)
 
 
-UNKNOWN_SPACES = {"mni": "MNI", "tal": "TAL", "drop": None}
+UNKNOWN_SPACES = {"mni": "MNI", "tal": "TAL", "drop": ""}
 
 
 def process_peaks(

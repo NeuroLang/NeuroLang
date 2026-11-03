@@ -1030,3 +1030,17 @@ def test_neurosynth_takes_unknown_space_peaks_as_mni():
 
     config = engine_registry.get_engine_config("neurosynth")
     assert config["python_init_options"]["unknown_space"] == "mni"
+
+
+def test_python_init_is_given_the_python_init_options():
+    from neurolang_apps.utils import engine_registry
+
+    cfg = {
+        "python_init": NS_INIT,
+        "python_init_options": {"unknown_space": "drop"},
+    }
+    with patch(f"{NS_INIT}.init_engine") as init_engine:
+        engine_registry._phase_python_init("nl", cfg, "mask", DATA_DIR)
+    init_engine.assert_called_once_with(
+        "nl", "mask", DATA_DIR, unknown_space="drop"
+    )
