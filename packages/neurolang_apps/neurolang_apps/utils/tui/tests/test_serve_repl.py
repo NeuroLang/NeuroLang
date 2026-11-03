@@ -47,6 +47,26 @@ def test_the_bundle_is_built_once_unless_asked_again(
     assert built == [None, "emb"]
 
 
+def test_clear_removes_the_bundle_built_before_and_builds_it_again(
+    serve, monkeypatch, tmp_path
+):
+    built = []
+
+    def build(repl, embeddings):
+        built.append(sorted(path.name for path in repl.iterdir()))
+        (repl / "bundle.json").write_text("{}")
+
+    monkeypatch.setattr(serve, "build_bundle", build)
+    serve.prepare_site(tmp_path)
+    stale = tmp_path / "_static" / "repl" / "nl_core-0.1.dev1-py3-none-any.whl"
+    stale.write_bytes(b"wheel")
+    serve.prepare_site(tmp_path, clear=True)
+    assert built == [[], []]
+    assert not stale.exists()
+    assert (tmp_path / "_static" / "repl" / "index.html").is_file()
+    assert serve.parse_args(["--clear"]).clear
+
+
 def test_the_bundle_is_built_by_the_bundle_script(
     serve, monkeypatch, tmp_path
 ):

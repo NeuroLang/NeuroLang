@@ -4,13 +4,16 @@ Serve the REPL in the browser on this machine.
 The page (``doc/_static/repl``) is static: Python runs in the browser, on
 Pyodide. This script puts it, with the logo, in SITE, builds its bundle
 there with ``make_repl_bundle.py`` (NeuroLang's wheels and the engine's
-data; once, or again with ``--rebuild``), and serves SITE on this machine,
-telling the browser not to cache, so that a rebuild is seen on reload.
+data; once, or again with ``--rebuild``, or from nothing with ``--clear``,
+which first removes the bundle built before), and serves SITE on this
+machine, telling the browser not to cache, so that a rebuild is seen on
+reload.
 The browser still loads Pyodide from its CDN.
 
 Usage, from a checkout::
 
     uv run --extra apps neurolang-repl-serve [--port 8766] [--rebuild]
+        [--clear]
         [--embeddings DIR] [--site SITE] [--host 0.0.0.0] [--no-browser]
 
 the command of the workspace's root project, or ``python -m serve_repl``.
@@ -49,14 +52,22 @@ def build_bundle(repl: Path, embeddings) -> None:
     subprocess.check_call(command)
 
 
-def prepare_site(site: Path, rebuild: bool = False, embeddings=None) -> Path:
+def prepare_site(
+    site: Path, rebuild: bool = False, embeddings=None, clear: bool = False
+) -> Path:
     """
     Put the page and the logo in *site*, build the bundle if it is not
     there or *rebuild*, and return the path of the page.
 
     The page is copied each time, so that it is that of the checkout.
+    *clear* removes the page and the bundle built before (wheels, data of
+    the engine and its kept tables, embeddings files), then builds it
+    again; the text embeddings kept in *embeddings* stay.
     """
     repl = site / "_static" / "repl"
+    if clear:
+        shutil.rmtree(repl, ignore_errors=True)
+        rebuild = True
     repl.mkdir(parents=True, exist_ok=True)
     shutil.copytree(LOGO, site / "_static" / "logo", dirs_exist_ok=True)
     if rebuild or not (repl / "bundle.json").exists():
@@ -117,6 +128,11 @@ def parse_args(argv=None):
     parser.add_argument("--rebuild", action="store_true",
                         help="build the bundle again, from this checkout")
     parser.add_argument(
+        "--clear", action="store_true",
+        help="remove the bundle built before, then build it again (the "
+        "text embeddings in --embeddings are kept)",
+    )
+    parser.add_argument(
         "--embeddings", type=Path, default=DEFAULT_EMBEDDINGS,
         help="data directory keeping the text embeddings (default: "
         "%(default)s)",
@@ -127,7 +143,9 @@ def parse_args(argv=None):
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    page = prepare_site(args.site, args.rebuild, args.embeddings)
+    page = prepare_site(
+        args.site, args.rebuild, args.embeddings, clear=args.clear
+    )
     server = make_server(args.site, args.host, args.port)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     url = (f"http://{host}:{server.server_address[1]}/"
