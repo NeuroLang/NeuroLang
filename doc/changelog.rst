@@ -37,6 +37,11 @@ Unreleased
 
 **New features:**
 
+* The relations and rules list of the REPL in the browser leaves out the
+  facts of an ontology (``rdfs:label``, the IRIs of the classes such as
+  ``http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00137``), hundreds
+  of them, unless the engine declares them or the session defines them; they
+  can still be used in a query.
 * The LLM assistant can record its questions and answers in a Grist document
   instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
   the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to
