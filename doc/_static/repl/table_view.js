@@ -66,7 +66,9 @@ export function imageButtons(payloads, download) {
   return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
 }
 
-export function renderTable(payload, { download = null } = {}) {
+// *followUp*(payload) gives the start of a query that goes on from the result, or
+// null, and *use*(text) puts it in the code box.
+export function renderTable(payload, { download = null, followUp = null, use = null } = {}) {
   const model = new TableModel(payload);
   let pageIndex = 0;
   let pageSize = PAGE_SIZES[0];
@@ -88,11 +90,16 @@ export function renderTable(payload, { download = null } = {}) {
   const range = element("span", { className: "rt-range" });
   const copy = element("button", { type: "button", className: "rt-copy", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
   const csv = element("button", { type: "button", textContent: "CSV", title: "Download the rows shown as CSV" });
+  const start = followUp && use ? followUp(payload) : null;
+  const goOn = start === null ? [] : [element("button", {
+    type: "button", textContent: "Use in a query", title: "Put this query in the box again with a new answer on its result",
+    onclick: () => use(start),
+  })];
   const head = element("tr");
   const body = element("tbody");
   const table = element("table", { className: "rt-table" }, element("thead", {}, head), body);
   const root = element("section", { className: "rt" },
-    element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv,
+    element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv, ...goOn,
       ...(download && payload.block !== undefined ? [downloadMenu(payload, download)] : [])),
     element("div", { className: "rt-scroll" }, table));
 

@@ -55,6 +55,11 @@ Unreleased
 * The browser REPL shows the probabilities of a result (a ``p`` or ``prob``
   column of numbers between 0 and 1) as bars, the most probable rows first.
 
+* The browser REPL has a *Use in a query* button on a result: the query that
+  made it is put in the box again, its answer renamed ``result``, with a new
+  ``ans(...) :- result(...), `` to complete. (A result is not a relation of
+  the session: ``ans`` cannot be used in a body.)
+
 * ``uv run --extra apps neurolang-repl-serve`` serves the REPL in the browser
   of a checkout on this machine: it builds the page's bundle the first time
   (or with ``--rebuild``) and serves it uncached at
