@@ -239,7 +239,8 @@ def submit(text):
         {"html": reply.html, "viewers": reply.viewers,
          "failed": reply.failed, "tables": reply.tables,
          "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
-         "predicates": getattr(reply, "predicates", [])}
+         "predicates": getattr(reply, "predicates", []),
+         "ratable": getattr(reply, "ratable", False)}
     )
 
 # The providers of the AI assistant, for the page's form: none when this

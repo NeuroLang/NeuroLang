@@ -558,6 +558,7 @@ class TestRatingAnAnswer:
             usage=Counter(input=1, output=2),
         )
         repl.app.assistant.last_run = ("Who?", result, provider, "react")
+        repl._rated = "answer"
 
     def test_without_a_document_nothing_can_be_rated(self, repl):
         assert not repl.can_rate()
@@ -600,6 +601,55 @@ class TestRatingAnAnswer:
         )
         assert not repl.rate_answer("good")["ok"]
         assert not repl.rate_answer("meh")["ok"]
+
+
+class TestRatingAQuery:
+    """A query typed in the page is rated as the assistant's answers are."""
+
+    @staticmethod
+    def recording(repl):
+        import httpx
+
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            return httpx.Response(200, json={"records": [{"id": 4}]})
+
+        repl.set_feedback("https://grist.test", "doc1", httpx.MockTransport(handle))
+        return requests
+
+    @staticmethod
+    def fields(request):
+        return json.loads(request.content)["records"][0]["fields"]
+
+    def test_a_query_is_sent_with_its_rows(self, repl):
+        requests = self.recording(repl)
+        assert repl.submit("ans(x) :- person(x, n)").ratable
+        assert repl.rate_answer("good")["ok"]
+        fields = self.fields(requests[0])
+        assert fields["question"] == "" and fields["verdict"] == "good"
+        assert fields["query"] == "ans(x) :- person(x, n)"
+        assert fields["valid"] is True and fields["rows"].startswith("2 rows")
+
+    def test_a_failed_query_is_sent_with_its_error(self, repl):
+        requests = self.recording(repl)
+        reply = repl.submit("ans(x) <- person(x, n)")
+        assert reply.failed and reply.ratable
+        assert repl.rate_answer("bad", "it fails")["ok"]
+        fields = self.fields(requests[0])
+        assert fields["valid"] is False and "parse error" in fields["error"]
+        assert fields["comment"] == "it fails"
+
+    def test_a_dot_command_is_not_rated(self, repl):
+        self.recording(repl)
+        assert not repl.submit(".help").ratable
+        assert not repl.rate_answer("good")["ok"]
+
+    def test_a_question_without_an_answer_is_not_rated(self, repl):
+        self.recording(repl)
+        reply = repl.submit(".ask Who is there?")  # no key: no answer
+        assert reply.failed and not reply.ratable
 
 
 def test_the_iris_of_an_ontology_are_not_listed(repl):
