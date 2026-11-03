@@ -93,6 +93,15 @@ def lightweight_engines_yaml(directory) -> Path:
     return path
 
 
+def _from_an_ontology(name: str) -> bool:
+    """
+    Whether the predicate *name* is the IRI of a class or a property of an
+    ontology, ``http://...#CAO_00137``: those of the vocabularies the engine
+    names with a prefix (``rdfs:label``) are few, and relations to query.
+    """
+    return "://" in name
+
+
 class _PrintedOn(io.TextIOBase):
     """A file whose text is printed on a console, to be recorded with it."""
 
@@ -426,7 +435,9 @@ class WebRepl:
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the
-        page to list: ``name``, ``kind`` (stored, derived, session...),
+        page to list, but for the IRIs of an ontology's own classes and
+        properties that the engine does not declare: ``name``,
+        ``kind`` (stored, derived, session...),
         ``signature`` as ``.predicates`` shows it, and the engine's
         ``description``, if any, with its ``arguments``: the ``columns``,
         ``sort`` and ``type`` of each.
@@ -434,10 +445,14 @@ class WebRepl:
         engine = self.app.settings.engine_name
         signatures = engine_registry.get_signatures(engine) if engine else {}
         described = engine_registry.get_predicates(engine) if engine else {}
-        infos = listed(predicate_catalog(
-            self.app._nl, _declared_columns(engine),
-            self.app.loaded_relations, signatures,
-        ))
+        infos = [
+            info for info in listed(predicate_catalog(
+                self.app._nl, _declared_columns(engine),
+                self.app.loaded_relations, signatures,
+            ))
+            if info.kind == "session" or info.name in described
+            or not _from_an_ontology(info.name)
+        ]
         return [
             {"name": info.name, "kind": info.kind,
              "signature": info.signature(),
