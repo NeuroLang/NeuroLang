@@ -21,8 +21,7 @@ export function definesRules(text, mode = "datalog") {
 export function replayTexts(entries, finalMode, { clear = false } = {}) {
   const texts = clear ? [".clear"] : [];
   let mode = null; // the language the box was in is not known: the first statement says its own
-  for (const entry of entries) {
-    if (!definesRules(entry.text, entry.mode)) continue;
+  for (const entry of entries.filter(({ text, mode: language }) => definesRules(text, language))) {
     if (entry.mode !== mode) texts.push(`.mode ${entry.mode}`);
     mode = entry.mode;
     texts.push(entry.text);
@@ -54,9 +53,16 @@ export class Session {
   }
 }
 
-// The session of a saved file: its entries, the code box and the language, or
-// an Error saying what is wrong with the file.
-export function parseSession(text) {
+// The entry of a saved file, or an Error saying it is not one.
+function parseEntry(entry) {
+  if (typeof entry?.text !== "string" || entry.text.length > MAX_TEXT || !MODES.has(entry.mode)) {
+    throw new Error("This session has a statement that is not valid.");
+  }
+  return { text: entry.text, mode: entry.mode };
+}
+
+// The JSON of a saved file, or an Error saying it is not a saved session.
+function readSession(text) {
   let data;
   try {
     data = JSON.parse(text);
@@ -67,12 +73,13 @@ export function parseSession(text) {
     throw new Error("This file is not a saved NeuroLang session.");
   }
   if (data.entries.length > MAX_ENTRIES) throw new Error("This session has too many statements.");
-  const entries = data.entries.map((entry) => {
-    if (typeof entry?.text !== "string" || entry.text.length > MAX_TEXT || !MODES.has(entry.mode)) {
-      throw new Error("This session has a statement that is not valid.");
-    }
-    return { text: entry.text, mode: entry.mode };
-  });
+  return data;
+}
+
+// The session of a saved file: its entries, the code box and the language, or
+// an Error saying what is wrong with the file.
+export function parseSession(text) {
+  const data = readSession(text);
   const box = typeof data.box === "string" && data.box.length <= MAX_TEXT ? data.box : "";
-  return { entries, box, mode: MODES.has(data.mode) ? data.mode : "datalog" };
+  return { entries: data.entries.map(parseEntry), box, mode: MODES.has(data.mode) ? data.mode : "datalog" };
 }

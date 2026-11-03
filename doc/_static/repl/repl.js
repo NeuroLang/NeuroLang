@@ -290,68 +290,80 @@ function start({ restore = null } = {}) {
   worker.postMessage({ type: "start", repo, ref, full: params.get("engine") === "full" });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
-    if (data.type === "status") {
-      setStatus(data.message, "busy");
-    } else if (data.type === "error") {
-      fail(data.message);
-    } else if (data.type === "ready") {
-      setStatus("Ready.");
-      $("boot").hidden = true;
-      $("banner").replaceChildren(html(data.banner));
-      setProviders(data.providers ?? []);
-      guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
-      if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
-      showGuide();
-      if (restore) replay(restore);
-      else {
-        setBusy(false);
-        restoreShared();
-      }
-    } else if (data.type === "file") {
-      setBusy(false);
-      if (data.error) {
-        setStatus(`The file could not be made: ${data.error}`, "error");
-      } else {
-        saveFile(data);
-        setStatus("Ready.");
-      }
-    } else if (data.type === "agent") {
-      agentLog.apply(data);
-      showAgent();
-      if (data.event === "ask") hideSummary();
-      if (data.event === "done") showSummary(data);
-    } else if (data.type === "llm") {
-      if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
-    } else if (data.type === "reply" && replaying) {
-      replayStep(data);
-    } else if (data.type === "reply") {
-      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
-      if (!data.failed) session.add(lastRun, $("mode").value);
-      showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
-      if (data.predicates) guide.predicates = data.predicates;
-      if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
-      showGuide();
-      if (data.prompt) editor.value = data.prompt; // what the assistant wrote
-      else editor.refresh();
-      if (data.tables?.length) {
-        lastTables = data.tables;
-        // A result is a relation to go on from only if the query that made it is known.
-        const query = data.prompt || (lastRun.trim().startsWith(".") ? "" : lastRun);
-        const squall = $("mode").value === "squall";
-        show("table", ...data.tables.map((table) => renderTable(table, {
-          download: requestDownload,
-          pmc,
-          followUps: data.tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
-          use: goOn,
-        })));
-      }
-      if (data.viewers?.length) {
-        const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: data.viewers.at(-1), title: "NeuroLang brain viewer" });
-        show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
-      }
-      setBusy(false);
-    }
+    if (data.type === "reply" && replaying) replayStep(data);
+    else workerMessages[data.type]?.(data, restore);
   };
+}
+
+// What the page does with each kind of message of the worker; *restore* is what a stop gave to give back.
+const workerMessages = {
+  status: (data) => setStatus(data.message, "busy"),
+  error: (data) => fail(data.message),
+  ready: (data, restore) => {
+    setStatus("Ready.");
+    $("boot").hidden = true;
+    $("banner").replaceChildren(html(data.banner));
+    setProviders(data.providers ?? []);
+    guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    if (!input.value && !decodeShare(location.hash)) $("guide").open = true; // examples to start from
+    showGuide();
+    if (restore) return replay(restore);
+    setBusy(false);
+    restoreShared();
+  },
+  file: (data) => {
+    setBusy(false);
+    if (data.error) return setStatus(`The file could not be made: ${data.error}`, "error");
+    saveFile(data);
+    setStatus("Ready.");
+  },
+  agent: (data) => {
+    agentLog.apply(data);
+    showAgent();
+    if (data.event === "ask") hideSummary();
+    if (data.event === "done") showSummary(data);
+  },
+  llm: (data) => {
+    if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
+  },
+  reply: (data) => {
+    setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
+    if (!data.failed) session.add(lastRun, $("mode").value);
+    showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
+    applyReply(data);
+    if (data.tables?.length) showTables(data);
+    if (data.viewers?.length) showViewer(data.viewers.at(-1));
+    setBusy(false);
+  },
+};
+
+// What a reply changes in the page besides its output: the predicates, the language, and the box.
+function applyReply(data) {
+  if (data.predicates) guide.predicates = data.predicates;
+  if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
+  showGuide();
+  if (data.prompt) editor.value = data.prompt; // what the assistant wrote
+  else editor.refresh();
+}
+
+// The tables of a reply, each with the queries that go on from it when it is the only one.
+function showTables({ tables, prompt }) {
+  lastTables = tables;
+  // A result is a relation to go on from only if the query that made it is known.
+  const query = prompt || (lastRun.trim().startsWith(".") ? "" : lastRun);
+  const squall = $("mode").value === "squall";
+  show("table", ...tables.map((table) => renderTable(table, {
+    download: requestDownload,
+    pmc,
+    followUps: tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
+    use: goOn,
+  })));
+}
+
+// The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
+function showViewer(page) {
+  const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: page, title: "NeuroLang brain viewer" });
+  show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
 }
 
 // The log of a query that gave a table is folded to its last line, which says how long it took.

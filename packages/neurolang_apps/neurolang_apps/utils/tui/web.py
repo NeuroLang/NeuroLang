@@ -254,19 +254,20 @@ def table_payload(
     return payload
 
 
+def _study_ids(frame: pd.DataFrame, columns: list) -> set:
+    """Return the values of the *columns* of *frame*, as the page has them."""
+    return {_cell(value) for i in columns for value in frame.iloc[:, i]}
+
+
 def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
     """Return the ``study_links`` of the *frame*, or an empty dict."""
     columns = [i for i, sort in enumerate(sorts) if sort == STUDY_SORT]
-    if not columns or not studies:
+    if not (columns and studies):
         return {}
-    ids = {
-        _cell(value) for i in columns for value in frame.iloc[:, i]
-    }
+    known = _study_ids(frame, columns) & studies.keys()
     return {
         "columns": columns,
-        "records": {
-            str(study): studies[study] for study in ids if study in studies
-        },
+        "records": {str(study): studies[study] for study in known},
     }
 
 
