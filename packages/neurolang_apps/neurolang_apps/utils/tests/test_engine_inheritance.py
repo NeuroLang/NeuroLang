@@ -121,11 +121,11 @@ def test_engine_files_are_merged_into_their_engine(
         "assistant_examples: [{question: q2, datalog: c}]\n"
     )
     (tmp_path / "child" / "guidance.yaml").write_text(
-        "assistant_guidance: Answer with probabilities.\n"
+        "assistant_guidance: Answer on ${engines.base.description}.\n"
     )
     monkeypatch.setattr(engine_registry, "_ENGINES_YAML", yaml_path)
     cfg = get_engine_config("child")
-    assert cfg["assistant_guidance"] == "Answer with probabilities."
+    assert cfg["assistant_guidance"] == "Answer on base."
     assert cfg["examples"] == {"datalog": ["b"]}
     assert [e["question"] for e in cfg["assistant_examples"]] == ["q1", "q2"]
     assert cfg["description"] == "child" and "c(x) :- a(x)" in cfg[

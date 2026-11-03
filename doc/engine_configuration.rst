@@ -362,7 +362,8 @@ and the engine's own entries override all of them.  Merging works per key:
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
-  setting an entry to ``null`` removes the inherited one;
+  setting an entry to ``null`` removes the inherited one (a list cannot
+  replace a mapping, nor a mapping a list);
 - every other value, lists included (``python_init``, ``description``,
   ``hidden_predicates``, ...), is replaced.
 
