@@ -266,14 +266,14 @@
       <p id="summary-reads" class="note"></p>
       <p id="summary-warning" class="agent-bad" role="alert"></p>
     </section>
-    <section id="rate" hidden aria-label="Rate the assistant's answer">
+    <section id="rate" hidden aria-label="Rate the query">
       <span>Was this what you wanted?</span>
       <button id="rate-good" type="button" class="ghost">Yes</button>
       <button id="rate-bad" type="button" class="ghost">No</button>
       <input id="rate-comment" type="text" maxlength="500" placeholder="What was wrong? (optional)" aria-label="What was wrong?" hidden>
       <button id="rate-send" type="button" hidden>Send</button>
       <span id="rate-note" class="note" role="status"></span>
-      <span class="note">A rating sends the question, the query, the assistant's steps and the first rows of its result to the NeuroLang feedback table.</span>
+      <span class="note">A rating sends the query with its first rows or its error, and for an answer of the assistant the question and its steps, to the NeuroLang feedback table.</span>
     </section>
     <div class="editor">
       <pre id="mirror" aria-hidden="true"></pre>

@@ -398,12 +398,13 @@ rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
 ``bad`` set the ``verdict``) and ``.refine submit`` (``bad`` and the
 ``corrected_query``).
 
-**Rating an answer in the browser.** Under the summary of an answer of the
-assistant, the page asks "Was this what you wanted?": *Yes* sends it as
-``good``, *No* asks what was wrong and sends it as ``bad``. Nothing of an
-answer is sent unless it is rated; what is sent is what the terminal shares,
-as one new row of the table ``Answers`` with its ``verdict`` and
-``comment`` set. The page has no API key: Grist does not accept the
+**Rating an answer in the browser.** After an answer of the assistant, and
+after a query typed in the page, the page asks "Was this what you wanted?":
+*Yes* sends it as ``good``, *No* asks what was wrong and sends it as ``bad``.
+Nothing is sent unless it is rated. An answer is sent as the terminal shares
+it; a typed query with its first rows or its error, and an empty
+``question``. Either is one new row of the table ``Answers`` with its
+``verdict`` and ``comment`` set. The page has no API key: Grist does not accept the
 ``Authorization`` header of another origin, and a key in a page is public.
 The document is the one of ``feedback.json`` next to the page (``url`` and
 ``doc``; without a ``doc``, the page does not ask), and must let anyone add
