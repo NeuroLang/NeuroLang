@@ -1167,6 +1167,64 @@ parenthesised, as the syntax asks.
   ids (`streamline_extent` has the same streamlines as `traverses`), so the
   two cannot be compared there, and ours are the ones that are right.
 
+### 11.6 Performance
+
+*Measured* with `tools/bench_wmql.py`: the same synthetic indexing (100
+labels, about 8 labels per streamline, one tractogram, one atlas) goes to
+tract_querier's `EvaluateQueries` and, as the transpiled program, to
+NeuroLang (pandas backend, one machine, one run each). The reference's
+indexing (its dictionaries) is built beforehand and not timed, as is the
+building of the relations, which is a vectorised `np.unique` once cached
+(6.2, 7.3, not yet written); the table is the cost of *a query*.
+
+| Program (streamlines) | tract_querier | NeuroLang (load + compile + evaluate) | Ratio |
+|---|---|---|---|
+| `a and b not in c` (100k) | 0.001 s | 1.00 s (0.01 + 0.18 + 0.81) | ~750x |
+| `a and b not in c` (1M) | 0.018 s | 1.65 s (0.07 + 0.71 + 0.88) | ~90x |
+| `only(a or b)` (100k) | 0.011 s | 1.45 s | ~140x |
+| `only(a or b)` (1M) | 0.100 s | 8.12 s (0.09 + 0.13 + 7.89) | ~80x |
+| `not a` (100k / 1M) | 0.036 s / 0.384 s | 0.42 s / 2.70 s | 12x / 7x |
+| `anterior_of(a)` (100k / 1M) | 0.088 s / 0.521 s | 0.67 s / 3.62 s | 8x / 7x |
+| uncinate-like bundle (20k) | 0.025 s | 1.38 s | ~56x |
+| uncinate-like bundle (100k) | 0.109 s | 1.68 s | 15x |
+| uncinate-like bundle (1M, 7.7M `traverses` rows) | 0.945 s | **11.5 s** (0.06 + 0.18 + 11.30) | **12x** |
+
+Reading it:
+
+* **The Datalog route is slower for one query on one subject**, by one to
+  two orders of magnitude, and by 7x to 12x on the operations that scan
+  `traverses` at 1M streamlines. In absolute terms it is a second for the
+  simple set algebra and about ten seconds for a bundle with `only` and a
+  directional term at a million streamlines.
+* **There is a fixed cost of about a second per program** (compiling and
+  setting up the chase), which is why the small cases are the worst ratios
+  (reference sets of 10^4 elements are a millisecond), and why the ratio
+  *falls* with the size of the tractogram: from 56x to 15x to 12x for the
+  bundle at 20k, 100k and 1M, as the time grows about 7x for 10x the data
+  against about 9x for the reference.
+* **What costs at scale is the scans of `traverses`**: `only(a or b)`
+  (8 s at 1M) is an anti-join of all the 7.7M rows with the label set;
+  `not a` and the box of `anterior_of` are scans too. The set algebra on the
+  four components is cheap (0.9 s at 1M).
+* **What the table leaves out, in both directions.** tract_querier indexes
+  at every invocation (the cost of `compute_tract_label_indices`, a Python
+  loop over the streamlines; 9 s for the 1M dictionaries of this benchmark,
+  and more in the real one), and has nothing to cache between runs, nor any
+  way to run many subjects in one program; here the relations are built once
+  by numpy and cached as parquet (7.3). A *session* of many queries on one
+  tractogram pays the indexing once, and the query costs above each time.
+* **Not measured**: the polars backend (`--backend polars`) fails on these
+  programs, on a union of an `Int32` and an `Int64` column (an engine issue to
+  look at, 15.19), so the numbers are pandas'; real tractograms and atlases
+  (the data here is random); the memory (about 840 MB for a 3M-row join,
+  7.3); several runs, so no variance.
+* **Where the time could be cut, untested**: folding the label constants and
+  their unions into one rule each (the compile share, 0.1-0.7 s here, is
+  small, but 55 ms a rule becomes a minute for the vocabulary file, 11.3);
+  a per-streamline count of labels, `streamline_label_count(t, s, n)`, so
+  that `only` is a join on a count instead of an anti-join over all the
+  rows; the polars backend, once the typing issue is settled.
+
 ## 12. Directional terms
 
 **Implemented** as tract_querier has them (11.5): a streamline is selected by
@@ -1439,10 +1497,15 @@ Recommendations in bold; none changes a decision of section 2.
     FreeSurfer 6 and the thalamus proper (10) in 7. The mapping is keyed by
     raw name and maps it to `thalamus_proper`. **Keep**, and give the mapping
     a LUT-version key if a FreeSurfer 7 LUT is ever found to need otherwise.
-19. **Speed.** Evaluating 945 label rules takes about a minute (a rule costs
-    about 55 ms of compilation), which is why the vocabulary and oracle tests
-    are `slow`. **If it matters**, fold the constant label sets in the
-    transpiler (they are plain unions) instead of rules.
+19. **Speed** (11.6). A query is about a second of fixed cost plus the scans
+    of `traverses`: 1-12 s at a million streamlines, 7x to 90x the
+    reference's wall-clock for a single query, with the gap narrowing as the
+    data grows. Evaluating the 945 label rules of the vocabulary file takes
+    about a minute (a rule costs about 55 ms to compile), which is why the
+    vocabulary and oracle tests are `slow`. **Keep for now**; the levers are
+    in 11.6. **Open**: the polars backend fails on the transpiled programs
+    (a union of an `Int32` and an `Int64` column; the pandas backend accepts
+    the mix), which is worth a look in `nl_core` before relying on it.
 20. **`superior_of` and `inferior_of` are inverted in the reference** (11.5):
     they select the streamlines whose top is *below* the top of the box, and
     whose bottom is *above* its bottom, where the other four terms select
