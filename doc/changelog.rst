@@ -37,6 +37,12 @@ Unreleased
 
 **New features:**
 
+* The REPL in the browser asks whether an answer of the assistant was what
+  the visitor wanted, and sends it, rated good or bad with a comment, as a
+  row of a Grist document that anyone can add rows to (``feedback.json`` next
+  to the page names it; without a document the page does not ask). Nothing of
+  an answer is sent unless it is rated, and the page holds no key: Grist does
+  not accept one from a web page.
 * The LLM assistant can record its questions and answers in a Grist document
   instead of a feedback server (``grist_doc`` in the ``feedback`` settings,
   the API key in ``GRIST_API_KEY``), one row of the table ``Answers`` each, to

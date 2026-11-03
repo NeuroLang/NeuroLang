@@ -370,8 +370,8 @@ private data.
     it as the corrected query of the last answer. It is rated incorrect.
     A query that fails the check is not shared.
 
-``.help feedback`` recalls these commands. In the browser, the REPL does not
-share its answers.
+``.help feedback`` recalls these commands. In the browser, the REPL shares an
+answer only when its visitor rates it, in a Grist document (see below).
 
 **In a Grist document.** Instead of a server, the answers can be rows of a
 `Grist <https://www.getgrist.com>`_ document:
@@ -396,8 +396,20 @@ columns ``verdict`` (choice: good, bad or unsure), ``comment`` and
 ``corrected_query``. Each answer is a row, its id the row's number. Flag the
 rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
 ``bad`` set the ``verdict``) and ``.refine submit`` (``bad`` and the
-``corrected_query``). The browser REPL never shares, so the key never
-reaches the page.
+``corrected_query``).
+
+**Rating an answer in the browser.** Under the summary of an answer of the
+assistant, the page asks "Was this what you wanted?": *Yes* sends it as
+``good``, *No* asks what was wrong and sends it as ``bad``. Nothing of an
+answer is sent unless it is rated; what is sent is what the terminal shares,
+as one new row of the table ``Answers`` with its ``verdict`` and
+``comment`` set. The page has no API key: Grist does not accept the
+``Authorization`` header of another origin, and a key in a page is public.
+The document is the one of ``feedback.json`` next to the page (``url`` and
+``doc``; without a ``doc``, the page does not ask), and must let anyone add
+rows, and do nothing else, in its access rules (*Access rules*, then the
+table ``Answers``: for *Everyone*, create only, no read, update or delete),
+so that a visitor can neither read nor change what others sent.
 
 **Running a server.** ``neurolang-feedback-server`` comes with
 ``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and
