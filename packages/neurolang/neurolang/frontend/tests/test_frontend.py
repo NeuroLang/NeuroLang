@@ -865,6 +865,27 @@ def test_unbound_variables_in_aggregation_rule_rejected():
         )
 
 
+@ENGINES
+@pytest.mark.parametrize("program", [
+    "ans(s, t) :- title(s, t), ~regexp(t, 'default mode', 'i')",
+    "p(s) :- title(s, t), regexp(t, 'default mode')",
+])
+def test_function_with_wrong_arguments_rejected(engine_class, program):
+    nl = engine_class()
+    nl.add_tuple_set([(1, "a default mode network")], name="title")
+    with pytest.raises(WrongArgumentsInPredicateError) as exc_info:
+        nl.execute_datalog_program(program)
+    assert str(exc_info.value).startswith(
+        "`regexp` is used with "
+    )
+    assert "but is the function regexp(regexp: str) -> " in str(
+        exc_info.value
+    )
+    assert str(exc_info.value).endswith(
+        ": The regions whose symbol name matches the regular expression."
+    )
+
+
 @pytest.mark.parametrize("head", ["ans(i)", "ans(i, m)"])
 def test_unbound_variables_in_query_rejected(head):
     nl = _voxel_engine(frontend.NeurolangDL)
