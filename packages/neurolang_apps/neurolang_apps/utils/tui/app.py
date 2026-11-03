@@ -34,6 +34,7 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .constant_notes import constant_notes
 from .editing import session_options
 from .interrupt import call_interruptibly
 from .provenance import column_sorts
@@ -199,9 +200,18 @@ class InteractiveTuiApp:
         )
 
     def _execute_noting_warnings(self, program: str):
-        """Run *program* and print the warnings it raises as short notes."""
+        """
+        Run *program* and print the warnings it raises as short notes,
+        with those on its constants (see
+        :func:`~neurolang_apps.utils.tui.constant_notes.constant_notes`).
+        """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
+            for note in constant_notes(
+                self._nl, self.settings.engine_name, program,
+                self.settings.squall,
+            ):
+                warnings.warn(note)
             try:
                 return call_interruptibly(
                     lambda: self._execute(program), self._print_stuck_hint

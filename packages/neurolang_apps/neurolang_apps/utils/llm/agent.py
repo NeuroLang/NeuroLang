@@ -288,12 +288,17 @@ class Toolbox:
         return self.context.search_values(pattern, predicate, column), None
 
     def tool_check_query(self, query: str):
-        result = check_query(self.context.nl, query, self.language)
+        result = check_query(
+            self.context.nl, query, self.language,
+            self.context.engine_name if self.context.declared else "",
+        )
         if not result.ok:
             return f"The query fails:\n{result.message}", None
         text = "The query is valid."
         if result.datalog:
             text += f" Its Datalog translation:\n{result.datalog}"
+        if result.notes:
+            text += f"\n{result.notes}"
         return text, None
 
     def tool_run_query(self, query: str):
@@ -310,7 +315,10 @@ class Toolbox:
         return preview.text, None
 
     def tool_final_answer(self, query: str, explanation: str = ""):
-        result = check_query(self.context.nl, query, self.language)
+        result = check_query(
+            self.context.nl, query, self.language,
+            self.context.engine_name if self.context.declared else "",
+        )
         if not result.ok:
             return (
                 f"The answer is rejected: the query fails:\n{result.message}"
@@ -334,6 +342,8 @@ class Toolbox:
                 "search_values and its joins with run_query; if no rows is "
                 "the answer, call final_answer again with the same query."
             )
+            if result.notes:
+                message += f"\n{result.notes}"
             if self.queries_with_rows:
                 message += (
                     "\nYour query that gave rows was:\n"
