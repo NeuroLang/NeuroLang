@@ -13,6 +13,10 @@
 # appended to. API keys are never written here: api_key_env names the
 # environment variable holding the key (local servers need none).
 #
+# price_per_mtok_in / price_per_mtok_out (optional), in dollars per
+# million tokens sent and received, show the approximate cost of each
+# answer; those below are OpenRouter's of 2026-11-03.
+#
 # tool_calling selects how the ReAct agent calls its tools:
 #   native  the provider's tool calls (reliable on models trained for it)
 #   text    a Thought / Action / Observation protocol that any chat
@@ -26,6 +30,8 @@ providers:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     model: anthropic/claude-sonnet-5.5
+    price_per_mtok_in: 2.0
+    price_per_mtok_out: 10.0
     tool_calling: native
     headers:
       X-Title: NeuroLang
@@ -57,6 +63,8 @@ providers:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     model: google/gemma-4-31b-it
+    price_per_mtok_in: 0.2
+    price_per_mtok_out: 0.4
     tool_calling: text
     headers:
       X-Title: NeuroLang
@@ -66,6 +74,8 @@ providers:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     model: deepseek/deepseek-v4-flash-0731
+    price_per_mtok_in: 0.059
+    price_per_mtok_out: 0.3
     tool_calling: text
     max_tokens: 4096
     headers:
@@ -107,6 +117,8 @@ assistant:
   comment_rules: true  # one more request: a comment line on each rule
   verify_rounds: 1     # ReAct: final answers its back-translation check
                        # may reject (0: no check)
+  read_back: true      # one more request when the check did not read
+                       # the query back in English
 
 # Sharing the questions and the answers with a feedback server, where
 # they are rated and corrected to improve the assistant: off by default

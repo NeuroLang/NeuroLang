@@ -257,6 +257,8 @@ SECRET = "sk-test-0123456789"
 ASK = "```datalog\nans(x) :- person(x, n)\n```\nEveryone."
 # The reply to the second request of .ask, for the comment of each rule.
 COMMENTS = '["Everyone who has a name"]'
+# The reply to the third, reading the query back in English.
+READS = "Everyone with a name."
 
 
 def test_the_providers_of_the_page_are_listed_for_its_form():
@@ -303,7 +305,7 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
 
     repl.set_llm("anthropic", SECRET)
-    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS])
+    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS, READS])
     reply = repl.submit(".ask --icl Who is there?")
     assert not reply.failed
     assert reply.prompt.splitlines()[-1] == "ans(x) :- person(x, n)"
@@ -345,10 +347,11 @@ def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     assert sent[-1]["explanation"] == "Everyone."
     assert sent[-1]["back_translation"] == "Everyone with a name."
     assert sent[-1]["verified"] is True
+    assert sent[-1]["warning"] == "" and sent[-1]["cost"] is None
     assert all("messages" not in event for event in sent)
     repl.set_event_sink(None)
     sent.clear()
-    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS])
+    repl.app.assistant.client = ScriptedClient([ASK, COMMENTS, READS])
     repl.submit(".ask --icl Who is there?")
     assert sent == []
 
@@ -387,7 +390,7 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
 
     def handler(request):
         seen.append(request)
-        text = ASK if len(seen) == 1 else COMMENTS
+        text = [ASK, COMMENTS, READS][len(seen) - 1]
         return httpx.Response(200, json={
             "content": [{"type": "text", "text": text}],
             "usage": {"input_tokens": 1, "output_tokens": 1},
@@ -402,8 +405,9 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
     )
     repl.set_llm("anthropic", SECRET, model="claude-test")
     reply = repl.submit(".ask --icl Who is there?")
-    # The query, then the comments of its rules: both to the provider.
-    assert len(seen) == 2
+    # The query, the comments of its rules and its reading: all to the
+    # provider.
+    assert len(seen) == 3
     for request in seen:
         assert request.url.host == "api.anthropic.com"
         assert request.headers["x-api-key"] == SECRET

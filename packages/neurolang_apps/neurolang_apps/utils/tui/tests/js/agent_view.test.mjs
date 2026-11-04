@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AgentLog, callText, oneLine } from "../../../../../../../doc/_static/repl/agent_view.js";
+import { AgentLog, callText, oneLine, usageText } from "../../../../../../../doc/_static/repl/agent_view.js";
 
 const ask = { event: "ask", question: "Who?", provider: "p", model: "m", strategy: "react" };
 const reply = (call, text, toolCalls = [], tokens = 15) => ({
@@ -63,6 +63,12 @@ test("tokens and seconds add up and the end closes the run", () => {
   log.apply({ event: "done", valid: true, calls: 2, tokens: 50, seconds: 3 });
   assert.ok(!log.running);
   assert.equal(log.count, 0);
+});
+
+test("the usage of an answer tells its cost when it is known", () => {
+  const done = { calls: 1, tokens: 12345, seconds: 2.6 };
+  assert.equal(usageText(done), "1 LLM call, 12,345 tokens, 3 s");
+  assert.equal(usageText({ ...done, calls: 2, cost: 0.01234 }), "2 LLM calls, 12,345 tokens, 3 s, about $0.0123");
 });
 
 test("a new question starts the log again", () => {

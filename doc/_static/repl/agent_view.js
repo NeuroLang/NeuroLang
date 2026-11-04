@@ -117,6 +117,12 @@ function stepNode(step, { pending = false, renderQuery }) {
   return item;
 }
 
+// The calls, tokens, time and approximate cost, if known, of the *done* event.
+export function usageText({ calls, tokens, seconds, cost }) {
+  const usage = `${calls} LLM call${calls === 1 ? "" : "s"}, ${tokens.toLocaleString("en-US")} tokens, ${Math.round(seconds)} s`;
+  return cost == null ? usage : `${usage}, about $${cost.toFixed(4)}`;
+}
+
 // Show *log* in the list *list*; *renderQuery* gives the node of a query's text.
 export function renderAgentLog(log, list, { renderQuery = (text) => document.createTextNode(text), now = Date.now() } = {}) {
   const items = [];
@@ -133,8 +139,8 @@ export function renderAgentLog(log, list, { renderQuery = (text) => document.cre
     items.push(wait);
   }
   if (log.done) {
-    const { valid, calls, tokens, seconds, error } = log.done;
-    const summary = `${calls} LLM call${calls === 1 ? "" : "s"}, ${tokens.toLocaleString("en-US")} tokens, ${Math.round(seconds)} s`;
+    const { valid, error } = log.done;
+    const summary = usageText(log.done);
     items.push(element("li", valid ? "agent-done" : "agent-done agent-bad", valid ? `✓ query ready: ${summary}` : `✗ ${error || "no valid query"}: ${summary}`));
   }
   list.replaceChildren(...items);

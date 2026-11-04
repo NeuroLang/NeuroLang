@@ -4,7 +4,7 @@
 import { History } from "./history.js";
 import { LlmSettings } from "./llm_settings.js";
 import { imageButtons, renderTable } from "./table_view.js";
-import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
+import { AgentLog, renderAgentLog, tickWaiting, usageText } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
 import { renderCommands, renderExamples, renderPredicates } from "./guide.js";
@@ -44,17 +44,20 @@ let providers = []; // those of the AI assistant, from the worker
 const agentLog = new AgentLog();
 const live = $("live");
 const liveLog = $("live-log");
-// What the query the assistant wrote does, above the box it is in: the model's
-// explanation, and the query read back in English, with the check's doubts.
+// What the query the assistant wrote does, above the box it is in: the query
+// read back in English, the model's explanation, why it is not verified, if
+// it is not, and what the answer cost.
 const summary = $("summary");
 function hideSummary() {
   summary.hidden = true;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }) {
-  if (!valid || !(explanation || reads)) return hideSummary();
-  $("summary-text").textContent = explanation ?? "";
+function showSummary(done) {
+  const { valid, explanation, back_translation: reads, warning } = done;
+  if (!valid) return hideSummary();
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
-  $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
+  $("summary-text").textContent = explanation ?? "";
+  $("summary-warning").textContent = warning ?? "";
+  $("summary-usage").textContent = usageText(done);
   summary.hidden = false;
 }
 

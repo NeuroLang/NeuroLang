@@ -46,10 +46,11 @@ def provider(tool_calling="text", api="openai"):
 def assistant_config(**options):
     """
     Return assistant settings for the tests: without the request for the
-    comments of the rules, nor the verification of the ReAct answers,
-    unless *options* ask for them.
+    comments of the rules, the verification of the ReAct answers nor
+    their reading back, unless *options* ask for them.
     """
     return AssistantConfig(**{
         "max_steps": 4, "max_repairs": 2, "few_shot_k": 2,
-        "comment_rules": False, "verify_rounds": 0, **options,
+        "comment_rules": False, "verify_rounds": 0,
+        "read_back": False, **options,
     })

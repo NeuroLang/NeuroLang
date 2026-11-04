@@ -52,7 +52,9 @@ class ProviderConfig:
     whether the ReAct agent uses the provider's ``native`` tool calls or
     the ``text`` Thought/Action/Observation protocol, which any chat
     model can follow. *requests_per_minute* spaces the requests to the
-    provider's rate limit, if any.
+    provider's rate limit, if any. *price_per_mtok_in* and
+    *price_per_mtok_out*, in dollars per million tokens sent and
+    received, give the approximate cost of an answer.
     """
 
     name: str
@@ -65,6 +67,17 @@ class ProviderConfig:
     max_tokens: int = 2048
     command: tuple = ()
     requests_per_minute: Optional[float] = None
+    price_per_mtok_in: Optional[float] = None
+    price_per_mtok_out: Optional[float] = None
+
+    def cost(self, usage) -> Optional[float]:
+        """Return the cost of *usage* in dollars, None without prices."""
+        if self.price_per_mtok_in is None or self.price_per_mtok_out is None:
+            return None
+        return (
+            usage.get("input", 0) * self.price_per_mtok_in
+            + usage.get("output", 0) * self.price_per_mtok_out
+        ) / 1e6
 
     def api_key(self) -> Optional[str]:
         """Return the API key of the provider, read from the environment."""
@@ -97,7 +110,9 @@ class AssistantConfig:
     of final answers of the ReAct agent that its verification may reject:
     each final answer is translated back into English, without the
     question, and the model judges whether that answers the question; 0
-    turns the verification off.
+    turns the verification off. With *read_back*, an accepted query that
+    the verification did not read back in English is read back, in one
+    more request, to show what it does.
     """
 
     strategy: str = "react"
@@ -113,6 +128,7 @@ class AssistantConfig:
     query_memory_mb: float = 4096.0
     verify_rounds: int = 1
     comment_rules: bool = True
+    read_back: bool = True
 
 
 @dataclass(frozen=True)

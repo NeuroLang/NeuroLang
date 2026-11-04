@@ -233,7 +233,7 @@ def _step_printer(app, language: str):
 # answered and its tool is about to run), and for each step of the agent
 # ``step`` (thought, action, arguments, observation); ``done`` (valid,
 # query, explanation, error, calls, tokens, seconds, verified, back_translation,
-# verification) ends them.
+# verification, warning, cost) ends them.
 AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
 
 
@@ -261,7 +261,8 @@ def _done_event(result) -> dict:
         "calls": result.calls, "tokens": sum(result.usage.values()),
         "seconds": result.seconds, "verified": result.verified,
         "back_translation": result.back_translation,
-        "verification": result.verification,
+        "verification": result.verification, "warning": result.warning,
+        "cost": result.cost,
     }
 
 
@@ -288,17 +289,17 @@ def runnable_query(result) -> str:
 
 def _show_summary(app, result) -> None:
     """
-    Print what the query does, above it and apart from it: the
-    explanation the model gave and the query read back in English.
+    Print what the query does, above it and apart from it: the query
+    read back in English first, then the explanation the model gave.
     """
     summary = Text()
-    if result.explanation:
-        summary.append(result.explanation)
     if result.back_translation:
+        summary.append("Reads back as: ", style="bold")
+        summary.append(result.back_translation)
+    if result.explanation:
         if summary:
             summary.append("\n")
-        summary.append("Reads back as: ", style="dim")
-        summary.append(result.back_translation, style="dim italic")
+        summary.append(result.explanation, style="dim")
     if summary:
         app.console.print(Panel(
             summary, title="Summary", title_align="left",
@@ -306,28 +307,29 @@ def _show_summary(app, result) -> None:
         ))
 
 
-def _show_verification(app, result) -> None:
-    """Print the verdict of the check of the query, when it is against it."""
-    if result.back_translation and result.verified is False:
-        app.console.print(
-            "[yellow]The check found that the query may not answer the "
-            f"question: {escape(result.verification)}[/yellow]"
-        )
+def _show_warning(app, result) -> None:
+    """Print why the query is not verified, if it is not."""
+    if result.warning:
+        app.console.print(Panel(
+            Text(result.warning), border_style="yellow", style="yellow",
+        ))
 
 
 def _show_result(app, result) -> None:
     """
     Print the query of the agent's *result*, each rule under a comment
     line explaining it if the model wrote them, below a summary of what
-    it does, and put it in the prompt.
+    it does and a warning if it is not verified, and put it in the prompt.
     """
+    from neurolang_apps.utils.llm.agent import usage_summary
+
     if result.valid:
         _show_summary(app, result)
+        _show_warning(app, result)
         app.console.print(Panel(
             query_text(result.commented or result.query, result.language),
             title=f"{result.language.upper()} query", border_style="green",
         ))
-        _show_verification(app, result)
     else:
         app.failed = True
         app.console.print(
@@ -338,11 +340,7 @@ def _show_result(app, result) -> None:
                 query_text(result.query, result.language),
                 title="last attempt", border_style="red",
             ))
-    tokens = result.usage.get("input", 0) + result.usage.get("output", 0)
-    usage = f"{result.calls} LLM calls"
-    if tokens:
-        usage += f", {tokens} tokens"
-    app.err_console.print(f"[dim]{usage}[/dim]")
+    app.err_console.print(Text(usage_summary(result), style="dim"))
     if result.query:
         _switch_language(app, result.language)
         app.pending_input = runnable_query(result)

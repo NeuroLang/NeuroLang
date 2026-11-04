@@ -102,7 +102,9 @@ class AgentResult:
     query to accept it, and keeps the whole result, as ``(title, frame)``
     for each relation, in *frames* (None when it is boolean, or too large
     to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so that it need not
-    be run again to be shown.
+    be run again to be shown. *warning* says why an answer given is not
+    verified: its check rejected it, or the agent ran out of steps.
+    *cost* is that of the usage, in dollars, when the provider has prices.
     """
 
     query: str = ""
@@ -119,6 +121,20 @@ class AgentResult:
     verified: Optional[bool] = None
     verification: str = ""
     frames: Optional[list] = field(default=None, repr=False)
+    warning: str = ""
+    cost: Optional[float] = None
+
+
+def usage_summary(result: AgentResult) -> str:
+    """Return the calls, tokens, time and cost, if known, of *result*."""
+    tokens = result.usage.get("input", 0) + result.usage.get("output", 0)
+    summary = f"{result.calls} LLM call{'s' * (result.calls != 1)}"
+    if tokens:
+        summary += f", {tokens:,} tokens"
+    summary += f", {result.seconds:.0f} s"
+    if result.cost is not None:
+        summary += f", about ${result.cost:.4f}"
+    return summary
 
 
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
@@ -427,14 +443,15 @@ class Agent:
         result.steps.append(step)
         self.on_step(step)
 
-    def explain(self, query: str, rows: str = "") -> str:
+    def explain(self, query: str, rows: str = "", result=None) -> str:
         """
         Return *query* in English, as the check of an answer reads it back
         (see :func:`~.prompts.back_translation_request`); *rows* are the
-        first rows of its answer, if given.
+        first rows of its answer, if given. The request counts in the
+        usage of *result*, if given.
         """
         return self._complete(
-            AgentResult(language=self.language),
+            result or AgentResult(language=self.language),
             prompts.back_translation_request(
                 query, self.language, self.context.schema_summary(), rows,
                 self._engine_text(self.description, "description"),
@@ -447,13 +464,24 @@ class Agent:
 
         With the setting ``comment_rules``, the accepted query is also
         written with a comment line explaining each rule, in
-        ``commented`` (see :meth:`_comment`).
+        ``commented`` (see :meth:`_comment`). With ``read_back``, a query
+        its check did not read back in English is read back.
         """
         start = time.perf_counter()
         result = self._run(question)
         if result.valid and result.query and self.config.comment_rules:
             self._comment(result, question)
+        if result.valid and self.config.read_back and not (
+            result.back_translation
+        ):
+            try:
+                result.back_translation = self.explain(
+                    result.query, result=result
+                )
+            except LLMError:
+                pass
         result.seconds = time.perf_counter() - start
+        result.cost = self.provider.cost(result.usage)
         return result
 
     def _run(self, question: str) -> AgentResult:
@@ -629,6 +657,11 @@ class ReactAgent(Agent):
                     result, question, final[0], toolbox.answer_rows
                 )
             if rejection is None or rejections >= self.config.verify_rounds:
+                if rejection is not None:
+                    result.warning = (
+                        "Not verified: the check found that the query may "
+                        f"not answer the question: {result.verification}"
+                    )
                 result.query, result.explanation = final
                 result.frames = toolbox.answer_frames
                 result.valid = True
@@ -656,6 +689,10 @@ class ReactAgent(Agent):
             result.explanation = (
                 f"The last query that gave rows, after "
                 f"{self.config.max_steps} steps."
+            )
+            result.warning = (
+                "Not verified: the assistant ran out of steps before a "
+                "checked answer."
             )
             return result
         last = next(

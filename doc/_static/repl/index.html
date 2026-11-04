@@ -21,10 +21,10 @@
 <link rel="icon" href="../logo/favicon/favicon.ico" sizes="48x48">
 <link rel="apple-touch-icon" href="../logo/favicon/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; --bg: #0b1220; --panel: #0d1117; --raised: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #5aa3f6; --ok: #3fb950; --on-ok: #04120a; --on-accent: #04101f; --bad: #f85149;
+  :root { color-scheme: dark; --bg: #0b1220; --panel: #0d1117; --raised: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #5aa3f6; --ok: #3fb950; --on-ok: #04120a; --on-accent: #04101f; --bad: #f85149; --warn: #d29922;
     --hover: #21262d; --zebra: #11161d; --row-hover: #1c2430; --head: #7ee787; --term: #0d1117;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  :root[data-theme=light] { color-scheme: light; --bg: #f6f8fa; --panel: #ffffff; --raised: #ffffff; --border: #d0d7de; --text: #1f2328; --muted: #59636e; --accent: #0969da; --ok: #1a7f37; --on-ok: #ffffff; --bad: #cf222e;
+  :root[data-theme=light] { color-scheme: light; --bg: #f6f8fa; --panel: #ffffff; --raised: #ffffff; --border: #d0d7de; --text: #1f2328; --muted: #59636e; --accent: #0969da; --ok: #1a7f37; --on-ok: #ffffff; --bad: #cf222e; --warn: #9a6700;
     --hover: #eaeef2; --zebra: #f6f8fa; --row-hover: #ddf4ff; --head: #116329; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
@@ -79,7 +79,8 @@
   #summary strong { color: var(--tk-number); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
   #summary p { margin: .15rem 0 0; }
   #summary p:empty { display: none; }
-  #summary-reads { font-style: italic; }
+  #summary-text { color: var(--muted); }
+  #summary-warning { padding: .3rem .6rem; color: var(--warn); border: 1px solid var(--warn); border-radius: 6px; }
   #rate { margin: .75rem 0; padding: .5rem 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
   button.outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
   @media (pointer: coarse) { #rate button, #rate input { min-height: 44px; } }
@@ -264,9 +265,10 @@
     </div>
     <section id="summary" hidden aria-label="What the query does">
       <strong>Summary</strong>
+      <p id="summary-reads"></p>
       <p id="summary-text"></p>
-      <p id="summary-reads" class="note"></p>
-      <p id="summary-warning" class="agent-bad" role="alert"></p>
+      <p id="summary-warning" role="alert"></p>
+      <p id="summary-usage" class="note"></p>
     </section>
     <div class="editor">
       <pre id="mirror" aria-hidden="true"></pre>

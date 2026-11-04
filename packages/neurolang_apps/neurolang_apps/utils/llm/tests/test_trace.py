@@ -75,7 +75,7 @@ def ask(nl, tmp_path, monkeypatch):
         "  fake: {api: openai, base_url: 'http://llm.test/v1', "
         "model: m, tool_calling: text}\n"
         "assistant: {strategy: react, few_shot_k: 0, comment_rules: false,"
-        " verify_rounds: 0}\n"
+        " verify_rounds: 0, read_back: false}\n"
     )
     monkeypatch.setattr(
         engine_registry, "build_engine", lambda *args, **kwargs: nl
@@ -102,6 +102,18 @@ def test_ask_prints_a_line_per_step(ask, capsys):
     assert out.strip() == "ans(s) :- mentions(s, 'pain')"
     assert "  → search_values: Facts with values containing 'pain'" in err
     assert "thought" not in err
+
+
+def test_ask_warns_on_stderr_of_an_answer_out_of_steps(ask, capsys):
+    run = (
+        'Action: run_query\nAction Input: {"query": '
+        '"ans(s) :- mentions(s, \'pain\')"}'
+    )
+    ask("--steps", "1", replies=(run,))
+    out, err = capsys.readouterr()
+    assert out.strip() == "ans(s) :- mentions(s, 'pain')"
+    assert "Warning: Not verified: the assistant ran out of steps" in err
+    assert "1 LLM call, 15 tokens, " in err
 
 
 def test_ask_verbose_prints_the_steps(ask, capsys):
