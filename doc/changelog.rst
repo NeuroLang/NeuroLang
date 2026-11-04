@@ -43,12 +43,19 @@ Unreleased
 
 **New features:**
 
-* ``.graph`` draws where the answer of the last query comes from: the data
-  of the engine, its random choices and probabilistic facts, the rules of
-  the query and of the engine, which are probabilistic, the probabilities
-  ``PROB[...]`` and their conditions, and the answer, from left to right,
-  with what each kind of node and edge means. The REPL in the browser shows
-  it in a *Graph* tab after each query, a query of the assistant's included.
+* ``.graph`` draws where the answer of the last query comes from, and how:
+  the data of the engine, with their columns, its random choices and
+  probabilistic facts, the rules of the query and of the engine, which are
+  probabilistic, the probabilities ``PROB[...]`` and the answer, from left
+  to right. A rule lists the atoms of its body, each where the edge of the
+  relation it uses arrives, and says how it combines them: the variables
+  it joins them on, those it computes, keeps, or drops. A probability says
+  how it turns the random choices it depends on into a number for each
+  row (with one uniform choice, the share of the choices where its body
+  holds), and the answer shows the distribution of its probabilities. The
+  colour of an edge tells what goes through it: rows that hold for sure,
+  uncertain rows, or probabilities. The REPL in the browser shows it in a
+  *Graph* tab after each query, a query of the assistant's included.
 
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw

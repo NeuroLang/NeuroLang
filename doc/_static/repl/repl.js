@@ -417,6 +417,8 @@ function showViewer(page) {
   show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
 }
 
+let graphUrl = null; // the address of the page of the graph shown
+
 // The graph of the query a reply ran, in the graph tab, shown when the reply
 // has no table (.graph); a query that has no graph hides that of the last one.
 function showGraph({ graph, tables }) {
@@ -426,10 +428,16 @@ function showGraph({ graph, tables }) {
     return;
   }
   const page = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: graph, title: "Graph of the query" });
+  // The graph is often wider than the page: it can open in a tab of its own.
+  if (graphUrl) URL.revokeObjectURL(graphUrl);
+  graphUrl = URL.createObjectURL(new Blob([graph], { type: "text/html" }));
+  const open = Object.assign(document.createElement("a"), { href: graphUrl, target: "_blank", rel: "noopener", textContent: "Open the graph in a new tab" });
+  const nodes = [Object.assign(document.createElement("p"), { className: "note" }), page];
+  nodes[0].append(open);
   if (shown) {
-    $("graph").replaceChildren(page);
+    $("graph").replaceChildren(...nodes);
     $("tab-graph").hidden = false;
-  } else show("graph", page);
+  } else show("graph", ...nodes);
 }
 
 // The log of a query that gave a table is folded to its last line, which says how long it took.
