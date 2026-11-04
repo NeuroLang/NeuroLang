@@ -166,6 +166,14 @@ Unreleased
 
 **Bug fixes:**
 
+* The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
+  studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
+  were converted too, moving them by 7 mm (median).  They are now taken as
+  MNI, as Neurosynth and NiMARE do; the engine option ``unknown_space``
+  (``python_init_options`` in ``engines.yaml``) converts them as Talairach
+  (``tal``) or leaves them out (``drop``) (#1071).  The ``neurostore``
+  engine, which left out the peaks of any other space, now follows the
+  same option: they are taken as MNI by default.
 * In ``NeurolangPDL``, a rule whose body is only equalities to constants,
   ``p(l) :- (l == 'c')``, is the fact ``p('c')``: it raised an
   ``IndexError`` (#1076).  The equalities to constants that the rewrite
