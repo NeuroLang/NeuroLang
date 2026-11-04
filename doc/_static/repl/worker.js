@@ -240,7 +240,8 @@ def submit(text):
          "failed": reply.failed, "tables": reply.tables,
          "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
          "predicates": getattr(reply, "predicates", []),
-         "ratable": getattr(reply, "ratable", False)}
+         "ratable": getattr(reply, "ratable", False),
+         "graph": getattr(reply, "graph", "")}
     )
 
 # The providers of the AI assistant, for the page's form: none when this

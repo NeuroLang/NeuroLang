@@ -23,6 +23,7 @@ The REPL is organised in modules:
 - :mod:`.editing`: completion, highlighting, toolbar and editing modes,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
 - :mod:`.nifti`: saving results as CSV or NIfTI and viewing images,
+- :mod:`.query_graph`: the graph of a query, ``.graph``,
 - :mod:`.results`: paged display of query results,
 - :mod:`.session`: the session's scope, holding its rules and the
   relations loaded with ``.load``, and the session commands,
@@ -31,6 +32,9 @@ The REPL is organised in modules:
 """
 
 from . import nifti  # registers the .save and .view commands
+from . import query_graph  # registers .graph
 from .app import InteractiveTuiApp, TuiSettings, main
 
-__all__ = ["InteractiveTuiApp", "TuiSettings", "main", "nifti"]
+__all__ = [
+    "InteractiveTuiApp", "TuiSettings", "main", "nifti", "query_graph"
+]
