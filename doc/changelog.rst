@@ -166,6 +166,13 @@ Unreleased
 
 **Bug fixes:**
 
+* In ``NeurolangPDL``, a rule whose body is only equalities to constants,
+  ``p(l) :- (l == 'c')``, is the fact ``p('c')``: it raised an
+  ``IndexError`` (#1076).  The equalities to constants that the rewrite
+  inlines are now only those of a variable with one of them and found
+  elsewhere in atoms alone: ``(v == 'a') & (v == 'b')`` gave ``v = 'b'``,
+  ``(v == 'b') & (w == v)`` dropped the constraint on ``w`` and
+  ``(v == 'b') & (v != 'c')`` raised an ``UnboundVariablesError``.
 * ``.view`` (the Brain button of the REPL in the browser) of a result over
   ``RESAMPLE``, ``ans(l1, l2, mean(v)) :- rep(b, l1, l2, v)``, knows the
   sorts of its columns: those of the predicate resampled, here Schaefer
