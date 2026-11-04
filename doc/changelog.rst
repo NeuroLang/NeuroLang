@@ -173,6 +173,11 @@ Unreleased
   elsewhere in atoms alone: ``(v == 'a') & (v == 'b')`` gave ``v = 'b'``,
   ``(v == 'b') & (w == v)`` dropped the constraint on ``w`` and
   ``(v == 'b') & (v != 'c')`` raised an ``UnboundVariablesError``.
+* ``.view`` (the Brain button of the REPL in the browser) of a result over
+  ``RESAMPLE``, ``ans(l1, l2, mean(v)) :- rep(b, l1, l2, v)``, knows the
+  sorts of its columns: those of the predicate resampled, here Schaefer
+  parcel labels, and so draws it as a network rather than failing with "The
+  result has no voxel columns".
 * ``neurolang-repl-serve --rebuild`` serves the wheels it built, not those of
   an earlier build: their versions follow the commits, so the old ones kept
   their names next to the new ones and could be the ones the bundle named.
