@@ -171,7 +171,9 @@ Unreleased
   were converted too, moving them by 7 mm (median).  They are now taken as
   MNI, as Neurosynth and NiMARE do; the engine option ``unknown_space``
   (``python_init_options`` in ``engines.yaml``) converts them as Talairach
-  (``tal``) or leaves them out (``drop``) (#1071).
+  (``tal``) or leaves them out (``drop``) (#1071).  The ``neurostore``
+  engine, which left out the peaks of any other space, now follows the
+  same option: they are taken as MNI by default.
 * ``neurolang-repl-serve --rebuild`` serves the wheels it built, not those of
   an earlier build: their versions follow the commits, so the old ones kept
   their names next to the new ones and could be the ones the bundle named.

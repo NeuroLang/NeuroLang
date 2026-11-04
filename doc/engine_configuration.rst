@@ -26,11 +26,13 @@ may specify the following keys, all of them optional:
   which must define ``init_engine(nl, mask, data_dir)``; it registers
   extensional data (predicates, regions, atlases) into the engine
 - ``python_init_options`` — keyword arguments given to that
-  ``init_engine``.  The ``neurosynth`` engine has ``unknown_space``: the
-  peaks of the studies whose space is ``UNKNOWN`` (10.6% of the peaks) are
-  taken as MNI (``mni``, the default, as Neurosynth and NiMARE do),
-  converted as Talairach (``tal``) or left out (``drop``); only the
-  ``TAL`` peaks are converted to MNI otherwise
+  ``init_engine``.  The ``neurosynth`` and ``neurostore`` engines take
+  ``unknown_space``, set once in ``coordinate_meta_analysis``: the peaks
+  whose space is neither MNI nor Talairach (Neurosynth's ``UNKNOWN``,
+  10.6% of its peaks; NeuroStore's other or missing spaces) are taken as
+  MNI (``mni``, the default, as Neurosynth and NiMARE do), converted as
+  Talairach (``tal``) or left out (``drop``); only the Talairach peaks
+  are converted to MNI otherwise
 - ``downloads`` — list of ``{url, dest, extract}`` entries fetched into the
   data directory (``extract: true`` uncompresses an archive, a list of
   member names extracts only those members)

@@ -1025,10 +1025,11 @@ def test_process_peaks_rejects_an_unknown_option():
         )
 
 
-def test_neurosynth_takes_unknown_space_peaks_as_mni():
+@pytest.mark.parametrize("engine", ["neurosynth", "neurostore"])
+def test_unknown_space_peaks_are_taken_as_mni(engine):
     from neurolang_apps.utils import engine_registry
 
-    config = engine_registry.get_engine_config("neurosynth")
+    config = engine_registry.get_engine_config(engine)
     assert config["python_init_options"]["unknown_space"] == "mni"
 
 
