@@ -37,6 +37,11 @@ from nl_tracts.atlas import (
         ("THA-DA-lh", "left"),
         ("NAc shell lh", "left"),
         ("pPUT rh", "right"),
+        # Schaefer 2018, raw and as an engine of the apps names it
+        ("17Networks_LH_VisCent_ExStr_1", "left"),
+        ("7Networks_RH_Default_PFCm_2", "right"),
+        ("17Networks LH DefaultA pCunPCC 1", "left"),
+        ("17Networks RH SomMotA 3", "right"),
         # no hemisphere
         ("Brain-Stem", "none"),
         ("CC_Anterior", "none"),

@@ -222,6 +222,14 @@ def test_the_atlases_of_the_engine_index_tractograms(
         'ans(n, h) :- label("tian", l, n, h), tian(n, r)\n')) == {
         ("lAMY lh", "left"), ("aPUT rh", "right"),
         ("NAc shell lh", "left"), ("THA DA rh", "right")}
+    # Schaefer, without terms, with the hemispheres of its names
+    nl.execute_datalog_program('.index_tracts("t", "schaefer")\n')
+    assert rows(nl.execute_datalog_program(
+        'ans(n, h) :- label("schaefer", l, n, h), schaefer(n, r)\n')) == {
+        ("17Networks LH VisCent ExStr 1", "left"),
+        ("17Networks RH VisCent ExStr 1", "right"),
+        ("17Networks LH DefaultA pCunPCC 1", "left"),
+        ("17Networks RH DefaultA pCunPCC 1", "right")}
     # the terms of the vocabulary, of both atlases
     assert rows(nl.execute_datalog_program(
         'ans(x) :- traverses(x, "frontal", "left"), '
@@ -258,7 +266,8 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
         "orbitofrontalgyrus", "middle_frontal_gyrus",
         "inferior_frontal_gyrus", "temporal", "insula", "occipital",
         "parietal", "cingular", "amygdala", "putamen")} <= terms
-    for atlas in ("destrieux", "tian"):
+    nl.execute_datalog_program('.index_tracts("t", "schaefer")\n')
+    for atlas in ("destrieux", "tian", "schaefer"):
         assert rows(nl.execute_datalog_program(
             f'ans(n) :- label("{atlas}", l, n, h), {atlas}(n, r)\n'
         )) == rows(nl.execute_datalog_program(

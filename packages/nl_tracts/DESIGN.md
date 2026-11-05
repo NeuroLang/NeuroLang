@@ -309,7 +309,7 @@ A `HemisphereRule(pattern, hemi)` has a regular expression that must match
 the **whole** raw name, and `hemi` `left` or `right`; the rules are ordered
 and the first match wins; `infer_hemispheres(names, rules)` returns a Series
 of `left`, `right` or `none`. Defaults, `HEMISPHERE_RULES` (the first five
-are the brief's; the last two are what real atlases needed):
+are the brief's; the last three are what real atlases needed):
 
 | Convention | Left | Right | Seen in |
 |---|---|---|---|
@@ -320,6 +320,7 @@ are the brief's; the last two are what real atlases needed):
 | Suffix `.left`/`.right` | `.+\.left` | `.+\.right` | |
 | `L `/`R ` | `L .+` | `R .+` | nilearn's Destrieux |
 | Suffix `-lh`/`-rh` (or a space) | `.+[- ]lh` | `.+[- ]rh` | Tian's subcortex (`aHIP-lh`); as an engine of the apps names it (`aHIP lh`) |
+| `<n>Networks_LH_` (or spaces) | `\d+Networks[_ ]LH[_ ].+` | `\d+Networks[_ ]RH[_ ].+` | Schaefer 2018 (`17Networks_LH_VisCent_ExStr_1`; `17Networks LH ...` in an engine of the apps) |
 
 No match: `none`. `hemisphere_rules=()` infers nothing, and rules given
 *replace* the defaults. **Precedence** for the `hemi` of a label: the

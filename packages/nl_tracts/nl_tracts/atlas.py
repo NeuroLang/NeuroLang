@@ -65,7 +65,8 @@ def _rules(*pairs):
 #: ``rh.``, ``.left``/``.right``, the prefixes ``Left ``/``Right ``
 #: (Harvard-Oxford) and ``L ``/``R `` (nilearn's Destrieux), and the
 #: suffixes ``-lh``/``-rh`` (Tian's subcortex), `` lh``/`` rh`` as an engine
-#: of the apps names its regions.
+#: of the apps names its regions, and Schaefer's ``17Networks_LH_``/``_RH_``
+#: (``17Networks LH `` in an engine of the apps).
 HEMISPHERE_RULES: Sequence[HemisphereRule] = _rules(
     (r"Left[- ].+", r"Right[- ].+"),
     (r"ctx[-_]lh[-_].+", r"ctx[-_]rh[-_].+"),
@@ -74,6 +75,7 @@ HEMISPHERE_RULES: Sequence[HemisphereRule] = _rules(
     (r".+\.left", r".+\.right"),
     (r"L .+", r"R .+"),
     (r".+[- ]lh", r".+[- ]rh"),
+    (r"\d+Networks[_ ]LH[_ ].+", r"\d+Networks[_ ]RH[_ ].+"),
 )
 
 
