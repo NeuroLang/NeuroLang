@@ -50,6 +50,44 @@ and the rules can also be typed or pasted one by one, and other questions
 asked of the same relations (`ans(x) :- uncinate(x, "right")`). From
 Python, `nl_tracts.frontend.tracts_engine()` is the same engine.
 
+## Bundles and the studies of Neurosynth
+
+The engine `neurosynth_tracts` is `neurosynth` and `tracts` together (the
+extras `tracts` and `embeddings`): the ends of a bundle's streamlines,
+`endpoint_point(x, e, px, py, pz)` in mm, join the voxels of the parcels of
+its atlases, `schaefer_points(x, y, z, n)`, and the parcels the studies
+that activate them, `schaefer_activated(n, s)`.
+[`examples/uncinate_cogat.dl`](examples/uncinate_cogat.dl) asks which
+Cognitive Atlas concepts the studies of the parcels the uncinate connects
+are about:
+
+```
+uf_parcel(n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
+measuring(c) :- cogat_measures(c, x)
+cogat_concept(c, t) :- cogat_term(c, t),
+    cogat_subclass_of(c, <http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001>), ~measuring(c)
+concept_definition(t, d) :- cogat_concept(c, t), skos:definition(c, d)
+about(t, s) :- concept_definition(t, d), similar_study(d, s), selected_study(s)
+p_concept_given_uf(t, PROB) :- about(t, s) // uf_study(s)
+ans(t, p) :- p_concept_given_uf(t, p)
+```
+
+after the commands and the rules of the uncinate of `uncinate.dl`, the
+tractogram being also indexed by the Schaefer atlas of the engine
+(`.index_tracts("hcp842", "schaefer")`), which has no terms and leaves the
+uncinate unchanged. `similar_study(d, s)` keeps the 5 % of the studies
+closest to the definition `d` (SPECTER2), so a concept is about 5 % of the
+studies whatever it is, and ranking the concepts by `p` ranks them by the
+lift `p / 0.05`. The concepts are the classes below the root concept of the
+Cognitive Atlas that measure nothing: the ontology also puts a few
+contrasts there.
+
+```sh
+neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
+```
+
 ## The atlases of the engine
 
 The engine `tracts` has the atlases of the engine `neurosynth`, Destrieux,

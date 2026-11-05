@@ -685,6 +685,19 @@ engines:
     # finds the atlases of the engine, loaded after it
     python_init: "nl_tracts.frontend"
 
+  neurosynth_tracts:
+    extends: [neurosynth, tracts]
+    description: >
+      Neurosynth with tractography: the studies, terms, peaks and Cognitive
+      Atlas of neurosynth, the studies that activate each parcel of its
+      atlases (schaefer_activated(label, study)...), and the commands and
+      vocabulary of tractography of tracts (extra tracts of
+      neurolang-apps), whose streamlines end near the points of a parcel
+      (endpoint_point, schaefer_points). similar_study, the studies about
+      a text, needs the extra embeddings (SPECTER2). The uncinate
+      fasciculus and the concepts of the studies that activate its parcels
+      are nl_tracts/examples/uncinate_cogat.dl.
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:

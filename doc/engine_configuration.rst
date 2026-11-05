@@ -519,6 +519,27 @@ tract_querier is ``packages/nl_tracts/examples/uncinate.dl``::
    neurolang-query --engine tracts --file uncinate.dl
    neurolang-query --engine tracts -i --file uncinate.dl   # then .view
 
+The ``neurosynth_tracts`` engine
+--------------------------------
+
+``neurosynth_tracts`` is both, ``extends: [neurosynth, tracts]``: the
+studies, terms, peaks and Cognitive Atlas of ``neurosynth``, its atlases
+with the studies that activate their regions (``schaefer_activated(label,
+study)``...) and the centres of their voxels in millimetres
+(``schaefer_points(x, y, z, label)``...), and the commands, vocabulary and
+``.view`` of ``tracts``.  Their common base ``mni_atlases`` is merged once,
+and both ``python_init`` run, ``neurosynth``'s then ``nl_tracts.frontend``.
+It needs the extra ``tracts``, and ``embeddings`` for ``similar_study``
+(SPECTER2; without it a query that uses it fails with a message saying what
+to install).  The ends of the streamlines of a bundle, ``endpoint_point(x,
+e, x, y, z)``, join the points of the parcels within a distance, and the
+parcels the studies that activate them:
+``packages/nl_tracts/examples/uncinate_cogat.dl`` asks which Cognitive Atlas
+concepts the studies of the parcels the uncinate fasciculus connects are
+about::
+
+   neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
+
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the
 engine's symbol table.  The ``neurolang-query`` CLI and the web server will

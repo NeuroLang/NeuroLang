@@ -1,0 +1,71 @@
+% The Cognitive Atlas concepts most probably studied by the studies that
+% activate the cortical parcels the uncinate fasciculus connects: the
+% uncinate of uncinate.dl, its ends, the Schaefer parcels within 3 mm of
+% them, the Neurosynth studies with a peak within 3 mm of these parcels,
+% and the concepts whose definition the abstracts of these studies are
+% about.
+%
+% Run it with the engine of Neurosynth and tractography, which needs the
+% extras tracts and embeddings of neurolang-apps (SPECTER2, for
+% similar_study):
+%   neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
+%
+% The paths are read as written, relative to where the program runs (see
+% uncinate.dl): a wmparc of FreeSurfer in MNI152, e.g.
+% $FREESURFER_HOME/subjects/cvs_avg35_inMNI152/mri/wmparc.mgz with
+% $FREESURFER_HOME/FreeSurferColorLUT.txt, whose terms, the cortex of a
+% gyrus and the white matter under it, find the uncinate; and the
+% whole-brain tractogram of the HCP842 atlas of DIPY, whole_brain_MNI.trk,
+% without its streamlines of one point. The tractogram is also indexed by
+% the Schaefer atlas of the engine, which has no terms: the uncinate is the
+% same, and the ends of its streamlines are joined to the parcels by their
+% points in millimetres.
+
+.load_tract_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152", term_mapping="freesurfer_aseg_aparc")
+.load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
+.index_tracts("hcp842", "fs")
+.index_tracts("hcp842", "schaefer")
+
+% the uncinate, in hemisphere h, as in uncinate.dl
+uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
+uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
+uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
+uncinate(x, h) :-
+    uf_frontal(x, h),
+    endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
+    traverses(x, "insula", h),
+    ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),
+    ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
+    opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+
+% the Schaefer parcels n with a point within 3 mm of an end e of a
+% streamline of the left uncinate ("right" for the other)
+uf_parcel(n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+
+% the studies with a peak within 3 mm of one of these parcels
+uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
+
+% the concepts of the Cognitive Atlas: the classes c below its root concept,
+% named t, that measure nothing. The ontology also puts below it a few
+% contrasts (of the WAIS), most of which measure concepts; the tasks and
+% the other contrasts have their own roots
+measuring(c) :- cogat_measures(c, x)
+cogat_concept(c, t) :- cogat_term(c, t),
+    cogat_subclass_of(c, <http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001>), ~measuring(c)
+
+% the definition d of the concept t: that of its class, as a contrast may
+% have the name of a concept
+concept_definition(t, d) :- cogat_concept(c, t), skos:definition(c, d)
+
+% a study is about a concept t when its title and abstract are among the 5 %
+% closest to the definition of t (similar_study, SPECTER2)
+about(t, s) :- concept_definition(t, d), similar_study(d, s), selected_study(s)
+
+% the probability that a study of the uncinate's parcels is about t. As
+% similar_study keeps 5 % of the studies for every definition, P(about t) is
+% 5 % for every t, and ranking the concepts by p ranks them by the lift
+% p / P(about t) = p / 0.05.
+p_concept_given_uf(t, PROB) :- about(t, s) // uf_study(s)
+
+ans(t, p) :- p_concept_given_uf(t, p)

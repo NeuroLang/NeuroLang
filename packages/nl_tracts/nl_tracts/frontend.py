@@ -479,7 +479,7 @@ def tracts_engine(**kwargs) -> NeurolangPDL:
     return engine
 
 
-def init_engine(engine, mask=None, data_dir=None) -> None:
+def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     """Give an engine whose solver has :class:`TractsCommandsMixin` the
     vocabulary of tractography, three functions and two hooks.
 
@@ -503,8 +503,9 @@ def init_engine(engine, mask=None, data_dir=None) -> None:
     of the first atlas indexed (the tractograms are in its space), or None.
 
     It is the ``python_init`` of the engine ``tracts`` of the apps
-    (``engines.yaml``), hence its signature: ``mask`` and ``data_dir`` are
-    not used.
+    (``engines.yaml``), hence its signature: ``mask``, ``data_dir`` and the
+    ``options`` (the ``python_init_options`` of an engine extending
+    ``tracts`` and another, given to the inits of both) are not used.
     """
     state = engine.program_ir._tracts
     state.engine = engine

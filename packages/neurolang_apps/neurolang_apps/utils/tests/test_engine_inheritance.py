@@ -91,7 +91,8 @@ def test_unknown_base_and_cycle():
 
 def test_builtin_engines():
     assert list_engine_names() == [
-        "destrieux", "neurostore", "neurosynth", "tracts"
+        "destrieux", "neurostore", "neurosynth", "neurosynth_tracts",
+        "tracts",
     ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
