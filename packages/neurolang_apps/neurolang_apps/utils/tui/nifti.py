@@ -1654,13 +1654,14 @@ def _visits(lines, shape, affine: np.ndarray) -> np.ndarray:
 
 
 def streamline_background(nl):
-    """Return the background of the streamlines of the engine *nl*: its
-    ``streamline_background()``, else the MNI152 T1."""
+    """Return the background of the streamlines of the engine *nl* and
+    the name of its millimetres: its ``streamline_background()``, in
+    ``RAS``, else the MNI152 T1, in ``MNI``."""
     hook = getattr(nl, "streamline_background", None)
     background = hook() if callable(hook) else brain_viewer.mni_background()
     if background is None:
         raise SaveError("No background to draw the streamlines on.")
-    return background
+    return background, ("RAS" if callable(hook) else "MNI")
 
 
 def last_result_streamlines(app):
@@ -1694,7 +1695,7 @@ def last_result_streamlines(app):
             np.asarray(points, dtype=np.float32).reshape(-1, 3)
             for points in app._nl.streamline_points(shown)
         ]
-        background = streamline_background(app._nl)
+        background, space = streamline_background(app._nl)
         counts = _visits(lines, background.shape, background.affine)
         state = brain_viewer.streamlines_state(lines, len(ids))
     except Exception as exc:
@@ -1708,13 +1709,19 @@ def last_result_streamlines(app):
         f"Streamlines of the column {str(column)!r}: {len(lines)} of "
         f"{len(ids)} shown{subsampled}", style="green", markup=False,
     )
+    if space == "MNI":
+        app.console.print(
+            "The engine has no streamline_background(): they are drawn on "
+            "the MNI152 T1, where only streamlines in MNI space fall right.",
+            style="yellow", markup=False,
+        )
     path = _view_image_file(app, SavedImage(
         nib.Nifti1Image(counts, background.affine), "streamlines",
         int((counts > 0).sum()), 0, "background",
     ))
     return (
         [("streamlines", path)],
-        {"streamlines": state, "background": background},
+        {"streamlines": state, "background": background, "space": space},
     )
 
 

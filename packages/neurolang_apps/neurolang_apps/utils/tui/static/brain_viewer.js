@@ -156,7 +156,11 @@
       viewer.network = data.connectome;
       setUpEdgeThreshold(nv, data.connectome);
     }
+    $('space').textContent = data.space || 'MNI';
     if (data.streamlines) {
+      // Slices cut in mm, as the streamlines are: NiiVue otherwise
+      // straightens an oblique background (a subject's) under them.
+      nv.setSliceMM(true);
       nv.opts.meshXRay = NETWORK_XRAY;
       nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
       await loadStreamlines(nv, data.streamlines);

@@ -737,6 +737,7 @@ class TestStreamlines:
             "renderTile": True, "layout": "grid",
         }
         assert 'id="streamline-opacity"' in html
+        assert state["space"] == "MNI"
 
 
 _STREAMLINES_CHECK = _CHECK_HELPERS + """
@@ -750,6 +751,8 @@ brainViewer.ready.then(function () {
       return Math.round(v * 1000) / 1000;
     }),
     fiberColor: mesh.fiberColor,
+    sliceMM: nv.opts.isSliceMM,
+    space: document.getElementById('space').textContent,
     count: document.getElementById('streamline-count').textContent,
     shown: document.getElementById('streamlines').style.display
   };
@@ -773,7 +776,7 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
     html = brain_viewer.viewer_html(
         _image(np.ones((4, 4, 4), dtype=np.float32)), None,
         title="streamlines", threshold=0, cmap=None, symmetric=False,
-        streamlines=brain_viewer.streamlines_state(_LINES, 7),
+        streamlines=brain_viewer.streamlines_state(_LINES, 7), space="RAS",
     )
     result = _run_in_chrome(tmp_path, html, _STREAMLINES_CHECK)
     assert result["errors"] == [] and "failed" not in result, result
@@ -782,6 +785,10 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
         np.concatenate(_LINES).ravel().tolist(), abs=1e-3
     )
     assert result["fiberColor"] == "Local"
+    # the slices are cut in mm, as the streamlines are drawn: an oblique
+    # background is not straightened under them
+    assert result["sliceMM"] is True
+    assert result["space"] == "RAS"
     assert result["count"] == "3 of 7 streamlines shown"
     assert result["shown"] == "" and result["hidden"]
     assert result["opacity"] == 0.3

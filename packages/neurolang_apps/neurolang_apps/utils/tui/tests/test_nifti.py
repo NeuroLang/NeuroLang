@@ -1209,21 +1209,29 @@ class TestViewStreamlines:
         calls = []
         monkeypatch.setattr(
             nifti.brain_viewer, "viewer_html",
-            lambda img, background, **kw: calls.append(background) or "",
+            lambda img, background, **kw: calls.append((background, kw))
+            or "",
         )
-        self._view(tracts, "ans(s) :- tract(s)", [])
-        assert calls == [tracts._nl.template]
+        _, out = self._view(tracts, "ans(s) :- tract(s)", [])
+        assert calls[0][0] is tracts._nl.template
+        # their space, not MNI's: the cursor's mm are named so
+        assert calls[0][1]["space"] == "RAS"
+        assert "MNI152" not in out
 
     def test_the_mni_background_otherwise(self, tracts, monkeypatch):
         pytest.importorskip("nilearn")
         calls = []
         monkeypatch.setattr(
             nifti.brain_viewer, "viewer_html",
-            lambda img, background, **kw: calls.append(background) or "",
+            lambda img, background, **kw: calls.append((background, kw))
+            or "",
         )
         del tracts._nl.streamline_background
-        self._view(tracts, "ans(s) :- tract(s)", [])
-        assert calls[0].shape == (197, 233, 189)
+        _, out = self._view(tracts, "ans(s) :- tract(s)", [])
+        assert calls[0][0].shape == (197, 233, 189)
+        assert calls[0][1].get("space", "MNI") == "MNI"
+        # streamlines of a subject would be misplaced on it: say so
+        assert "drawn on the MNI152 T1" in out
 
     def test_a_sort_streamline_without_the_hook(self, tracts, view_calls):
         del tracts._nl.streamline_points

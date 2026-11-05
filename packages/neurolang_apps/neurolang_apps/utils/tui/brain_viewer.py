@@ -439,7 +439,7 @@ def _script_json(state: dict) -> str:
 
 def viewer_html(
     img, background, *, title: str, threshold, cmap, symmetric: bool,
-    connectome=None, streamlines=None,
+    connectome=None, streamlines=None, space: str = "MNI",
 ) -> str:
     """
     Return the HTML page of an interactive viewer of the image *img*.
@@ -456,12 +456,16 @@ def viewer_html(
     is drawn in the 3D render, which the page then starts with, beside
     the slices, and its strongest edges are listed. *streamlines*, of
     :func:`streamlines_state`, are drawn so too, coloured by their
-    direction, with a control of their visibility and opacity.
+    direction, with a control of their visibility and opacity, on
+    slices cut in millimetres, as they are drawn. *space* names the
+    millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
+    a subject.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
         symmetric=symmetric,
     )
+    state["space"] = space
     if streamlines is not None:
         state["streamlines"] = streamlines
     if connectome is not None:
