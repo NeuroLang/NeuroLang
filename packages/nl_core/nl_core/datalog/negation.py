@@ -16,7 +16,11 @@ from nl_expr.expressions import (
 from nl_expr.logic import Conjunction, Implication, Negation, Union
 from nl_expr.logic.transformations import NegationOfTruthValueMixin
 from nl_expr.type_system import Unknown
-from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
+from .basic_representation import (
+    DatalogProgram,
+    UnionOfConjunctiveQueries,
+    check_head_is_a_predicate,
+)
 from .expression_processing import extract_logic_free_variables
 from .range_restriction import check_range_restriction
 
@@ -57,6 +61,7 @@ class DatalogProgramNegationMixin(NegationOfTruthValueMixin):
         antecedent = self.walk(expression.antecedent)
         expression = Implication(consequent, antecedent)
 
+        check_head_is_a_predicate(original_expression.consequent, consequent)
         self._check_implication(consequent, antecedent)
 
         consequent_symbols = consequent._symbols - consequent.functor._symbols
