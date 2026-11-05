@@ -1,0 +1,93 @@
+% The vocabulary of tractography: rules over the relations of nl_tracts
+% (DESIGN.md, section 16), in which a bundle is a rule or two.
+%
+% Arguments:
+%   x     a streamline, one integer id; streamline(x, t, s) gives the
+%         tractogram t it is of and its position s in the file.
+%   e     an end of a streamline, 0 or 1: it identifies the end, the order
+%         of the points of a streamline being arbitrary.
+%   term  a term of the term mapping of the atlas (label_term), such as
+%         "temporal" or "insula": the names of tract_querier's queries.
+%   h     a hemisphere, "left", "right" or "none" (label's hemi).
+%   axis  0, 1, 2: x (left to right), y (posterior to anterior),
+%         z (inferior to superior), in mm, RAS+.
+% The atlas is not an argument: each predicate holds over every atlas
+% loaded (with one atlas, that atlas; with several, the union over them).
+%
+% The stored relations, which .index_tracts publishes: streamline(x, t, s),
+% streamline_label(a, x, l), endpoint_label(a, x, e, l),
+% label(a, l, name, hemi), label_term(a, l, term),
+% label_extent(a, l, axis, lo, hi), streamline_extent(x, axis, lo, hi),
+% endpoint_coord(x, e, axis, v), streamline_length(x, mm),
+% opposite_hemisphere(h1, h2); and the functions streamline_id(t, s),
+% subject_of(x), index_of(x).
+
+% term_label(a, l, term, h): the label l of atlas a has the term and is of
+% hemisphere h.
+term_label(a, l, term, h) :- label_term(a, l, term), label(a, l, _name, h)
+
+% traverses(x, term, h): the streamline x goes through a label of the term
+% of hemisphere h (at least crossing_threshold % of its points are in it).
+traverses(x, term, h) :- streamline_label(a, x, l), term_label(a, l, term, h)
+
+% endpoint_in(x, e, term, h): the end e of x is in a label of the term of
+% hemisphere h.
+endpoint_in(x, e, term, h) :- endpoint_label(a, x, e, l), term_label(a, l, term, h)
+
+% ends_in(x, term, h): an end of x is in a label of the term of hemisphere h.
+ends_in(x, term, h) :- endpoint_in(x, e, term, h)
+
+% in_hemisphere(x, h): x goes through a label of hemisphere h.
+in_hemisphere(x, h) :- streamline_label(a, x, l), label(a, l, _name, h)
+
+% leaves(x, term, h): x goes through the term of hemisphere h and through
+% a label that is not of it.
+leaves(x, term, h) :- traverses(x, term, h), streamline_label(a, x, l), ~term_label(a, l, term, h)
+
+% only_in(x, term, h): every label x goes through is of the term and of
+% hemisphere h. With .index_tracts(..., emit_background=1) the background
+% is a label x goes through, of no term, so that hardly any streamline is
+% only_in a term: leave it at its default, 0.
+only_in(x, term, h) :- traverses(x, term, h), ~leaves(x, term, h)
+
+% term_box_lo(term, h, axis, lo), term_box_hi(term, h, axis, hi): the box
+% of the term of hemisphere h, the union of the boxes of all its labels in
+% the atlas (whether a streamline goes through them or not), in mm.
+term_box_lo(term, h, axis, min(lo)) :- term_label(a, l, term, h), label_extent(a, l, axis, lo, _hi)
+term_box_hi(term, h, axis, max(hi)) :- term_label(a, l, term, h), label_extent(a, l, axis, _lo, hi)
+
+% The directions, anatomical: anterior_of(x, term, h) holds if a point of
+% x is beyond the anterior face of the box of the term of hemisphere h (the
+% box of x reaches past it, strictly); posterior_of(x, term, h),
+% superior_of(x, term, h), inferior_of(x, term, h), left_of(x, term, h) and
+% right_of(x, term, h) the same for the other faces. medial_of(x, term, h)
+% and lateral_of(x, term, h) are relative to the hemisphere h of the term:
+% medial of a left structure is to its right, lateral to its left; a term
+% of hemisphere "none" has neither.
+anterior_of(x, term, h) :- streamline_extent(x, 1, _lo, hi), term_box_hi(term, h, 1, b), (hi > b)
+posterior_of(x, term, h) :- streamline_extent(x, 1, lo, _hi), term_box_lo(term, h, 1, b), (lo < b)
+superior_of(x, term, h) :- streamline_extent(x, 2, _lo, hi), term_box_hi(term, h, 2, b), (hi > b)
+inferior_of(x, term, h) :- streamline_extent(x, 2, lo, _hi), term_box_lo(term, h, 2, b), (lo < b)
+right_of(x, term, h) :- streamline_extent(x, 0, _lo, hi), term_box_hi(term, h, 0, b), (hi > b)
+left_of(x, term, h) :- streamline_extent(x, 0, lo, _hi), term_box_lo(term, h, 0, b), (lo < b)
+medial_of(x, term, "left") :- right_of(x, term, "left")
+medial_of(x, term, "right") :- left_of(x, term, "right")
+lateral_of(x, term, "left") :- left_of(x, term, "left")
+lateral_of(x, term, "right") :- right_of(x, term, "right")
+
+% The same for an end: endpoint_anterior_of(x, e, term, h) holds if the end
+% e of x is beyond the anterior face of the box of the term of hemisphere h;
+% endpoint_posterior_of(x, e, term, h), endpoint_superior_of(x, e, term, h),
+% endpoint_inferior_of(x, e, term, h), endpoint_left_of(x, e, term, h),
+% endpoint_right_of(x, e, term, h), endpoint_medial_of(x, e, term, h) and
+% endpoint_lateral_of(x, e, term, h) likewise.
+endpoint_anterior_of(x, e, term, h) :- endpoint_coord(x, e, 1, v), term_box_hi(term, h, 1, b), (v > b)
+endpoint_posterior_of(x, e, term, h) :- endpoint_coord(x, e, 1, v), term_box_lo(term, h, 1, b), (v < b)
+endpoint_superior_of(x, e, term, h) :- endpoint_coord(x, e, 2, v), term_box_hi(term, h, 2, b), (v > b)
+endpoint_inferior_of(x, e, term, h) :- endpoint_coord(x, e, 2, v), term_box_lo(term, h, 2, b), (v < b)
+endpoint_right_of(x, e, term, h) :- endpoint_coord(x, e, 0, v), term_box_hi(term, h, 0, b), (v > b)
+endpoint_left_of(x, e, term, h) :- endpoint_coord(x, e, 0, v), term_box_lo(term, h, 0, b), (v < b)
+endpoint_medial_of(x, e, term, "left") :- endpoint_right_of(x, e, term, "left")
+endpoint_medial_of(x, e, term, "right") :- endpoint_left_of(x, e, term, "right")
+endpoint_lateral_of(x, e, term, "left") :- endpoint_left_of(x, e, term, "left")
+endpoint_lateral_of(x, e, term, "right") :- endpoint_right_of(x, e, term, "right")

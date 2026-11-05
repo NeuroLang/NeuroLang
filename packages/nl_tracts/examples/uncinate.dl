@@ -1,0 +1,51 @@
+% The uncinate fasciculus, in the vocabulary of tractography (nl_tracts,
+% DESIGN.md, section 16): the streamlines that join the frontal lobe (the
+% orbitofrontal, middle and inferior frontal gyri) to the temporal lobe in
+% front of the amygdala, by the insula, and stay out of the occipital,
+% parietal and cingulate regions, of the part of the brain behind the
+% putamen and of the other hemisphere. It is tract_querier's UF.side of
+% freesurfer_queries.qry.
+%
+% Run it with the engine of tractography:
+%   neurolang-query --engine tracts --file uncinate.dl
+%   neurolang-query --engine tracts -i --file uncinate.dl, then .view at the prompt
+%
+% The three commands build the relations from files. The paths are read as
+% written, relative to where the program runs:
+%   .load_tract_atlas(name, label image, colour LUT, ...): a wmparc of
+%       FreeSurfer, e.g. $FREESURFER_HOME/subjects/cvs_avg35_inMNI152/mri/
+%       wmparc.mgz with $FREESURFER_HOME/FreeSurferColorLUT.txt;
+%       term_mapping gives its labels the terms used below. A term is the
+%       cortex of a gyrus and the white matter under it, as in
+%       tract_querier: an aparc+aseg, which has the cortex only, misses
+%       the streamlines that end in the white matter (DESIGN.md, 16.5).
+%       The label image is also what .view draws the streamlines on.
+%   .load_tractogram(id, .trk, .tck or .vtk file, ...): in the space of the
+%       atlas (both tagged MNI152 here), e.g. the whole-brain tractogram
+%       of the HCP842 atlas of DIPY, whole_brain_MNI.trk, without its 37
+%       streamlines of one point, which nl_tracts refuses.
+%   .index_tracts(tractogram, atlas): the streamlines of each label
+%       (a label is traversed by at least 2 % of the points of a
+%       streamline: crossing_threshold=2.0) and their ends.
+
+.load_tract_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152", term_mapping="freesurfer_aseg_aparc")
+.load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
+.index_tracts("hcp842", "fs")
+
+% the frontal regions of the uncinate, in hemisphere h
+uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
+uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
+uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
+
+% through the insula, with one end e in the temporal lobe in front of the
+% amygdala, and none of the regions it must avoid
+uncinate(x, h) :-
+    uf_frontal(x, h),
+    endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
+    traverses(x, "insula", h),
+    ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),
+    ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
+    opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+
+% the left uncinate; "right" for the other
+ans(x) :- uncinate(x, "left")
