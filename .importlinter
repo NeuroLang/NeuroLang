@@ -60,6 +60,7 @@ source_modules =
     nl_tracts.tractogram
     nl_tracts.indexing
     nl_tracts.cache
+    nl_tracts.ids
 forbidden_modules =
     neurolang
     nl_core
