@@ -19,6 +19,12 @@ Unreleased
 
 **Performance:**
 
+* ``query_similarity(q, s)`` keeps the embeddings of the last 4,096 query
+  texts and computes one dot product per call: a rule over many texts,
+  ``cogat_definition(t, d), similar_study(d, s)`` over the 615 definitions
+  of the Cognitive Atlas concepts, embedded a text again for nearly every
+  row, as the rows come in any order and only the similarities of the last
+  16 texts were kept.
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
