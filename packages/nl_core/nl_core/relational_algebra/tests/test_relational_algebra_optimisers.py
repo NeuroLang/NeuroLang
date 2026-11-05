@@ -399,6 +399,43 @@ def test_push_in_optimiser():
     assert res == exp_res
 
 
+@pytest.mark.parametrize("left, right", [
+    (("a",), ("b",)),
+    (("a", "b"), ("b",)),
+    (("a", "b"), ("a", "b")),
+])
+def test_push_in_equality_of_columns_of_both_sides_of_a_join(left, right):
+    """
+    An equality of a column of each side of a join is pushed in by
+    renaming only when each column is of one side alone: a column of both
+    sides is joined on, and renaming it loses that join, or, when no
+    column is of one side alone, crashed with a ``KeyError``.
+    """
+    class Opt(PushInSelections, ExpressionWalker):
+        pass
+
+    def relation(columns, rows):
+        return NameColumns(
+            C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+                WrappedRelationalAlgebraSet(
+                    row[:len(columns)] for row in rows
+                )
+            ),
+            tuple(str2columnstr_constant(c) for c in columns),
+        )
+
+    a, b = str2columnstr_constant("a"), str2columnstr_constant("b")
+    exp = Selection(
+        NaturalJoin(
+            relation(left, [(0, 1), (1, 0)]),
+            relation(right, [(1, 1)] if len(right) == 1 else [(1, 1), (1, 0)])
+        ),
+        eq_(a, b)
+    )
+    solver = RelationalAlgebraSolver()
+    assert solver.walk(Opt().walk(exp)) == solver.walk(exp)
+
+
 def test_eliminate_trivial_projections_optimiser(r1):
     class Opt(EliminateTrivialProjections, ExpressionWalker):
         pass
