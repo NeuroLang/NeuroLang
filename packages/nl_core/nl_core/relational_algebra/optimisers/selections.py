@@ -386,7 +386,10 @@ class PushInSelections(ew.PatternWalker):
         lambda exp: (
             (
                 get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
+                (
+                    get_expression_columns(exp.relation.relation_left) -
+                    get_expression_columns(exp.relation.relation_right)
+                )
             ) and (
                 get_expression_columns(exp.formula) &
                 get_expression_columns(exp.relation.relation_right)
