@@ -37,6 +37,7 @@ from ...utils.relational_algebra_set import (
 from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
 from ..relational_algebra import (
     EVAL_OP_TO_STR,
+    Difference,
     FullOuterNaturalJoin,
     LeftNaturalJoin,
     ReplaceNull,
@@ -809,3 +810,25 @@ def test_replace_null_in_an_empty_relation():
     )
     assert result.value.is_empty()
     assert result.value.columns == (a, b)
+
+
+@pytest.mark.parametrize("operation", ["Difference", "Union", "Intersection"])
+def test_the_type_of_a_set_operation_follows_the_columns_of_its_result(
+    operation
+):
+    """The two named relations have their columns in different orders, and
+    those of the left one are not sorted: the type of the result is in the
+    order of its own columns."""
+    op = {"Difference": Difference, "Union": Union,
+          "Intersection": Intersection}[operation]
+    left = C_[AbstractSet[Tuple[int, str]]](NamedRelationalAlgebraFrozenSet(
+        ("x", "h"), [(1, "left"), (2, "right")]
+    ))
+    right = C_[AbstractSet[Tuple[str, int]]](NamedRelationalAlgebraFrozenSet(
+        ("h", "x"), [("right", 2)]
+    ))
+    result = RelationalAlgebraSolver().walk(op(left, right))
+    column_types = {"x": int, "h": str}
+    assert result.type == AbstractSet[Tuple[tuple(
+        column_types[c] for c in result.value.columns
+    )]]
