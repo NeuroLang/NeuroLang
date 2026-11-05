@@ -233,11 +233,11 @@ def test_the_atlases_of_the_engine_index_tractograms(
 def test_the_names_are_normalised_as_the_registry_does():
     """nl_tracts duplicates ``_label_name``, which it cannot import."""
     pytest.importorskip("nl_tracts")
-    from nl_tracts.frontend import ENGINE_ATLAS_MAPPINGS, engine_label_name
+    from nl_tracts.frontend import ATLAS_MAPPINGS, engine_label_name
     from nl_tracts.terms import load_term_mapping
 
     names = {n for labels in FAKE_LABELS.values() for n in labels}
-    for key in ENGINE_ATLAS_MAPPINGS.values():
+    for key in ATLAS_MAPPINGS.values():
         names |= set(load_term_mapping(key)["atlas_label_name"])
     for name in names:
         assert engine_label_name(name) == engine_registry._label_name(name)
@@ -265,3 +265,10 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
             f'ans(n) :- {atlas}(n, r)\n'))
     hemis = rows(nl.execute_datalog_program('ans(h) :- label(a, l, n, h)\n'))
     assert hemis == {("left",), ("right",)}
+    # nilearn's Destrieux, by the command, has the engine's names
+    nl.execute_datalog_program(
+        '.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")\n'
+        '.index_tracts("t", "d")\n')
+    assert rows(nl.execute_datalog_program(
+        'ans(n) :- label("d", l, n, h), destrieux(n, r)\n'
+    )) == rows(nl.execute_datalog_program('ans(n) :- destrieux(n, r)\n'))

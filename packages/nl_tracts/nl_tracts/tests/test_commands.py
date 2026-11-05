@@ -2,8 +2,13 @@
 ``.load_tract_atlas``, ``.load_tractogram`` and ``.index_tracts``, run by a
 NeurolangPDL with the solver of nl_tracts."""
 
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 import nibabel as nib
 import numpy as np
+import pandas as pd
 import pytest
 
 from nl_expr.exceptions import (
@@ -340,7 +345,8 @@ def test_the_labels_of_an_engine_atlas_have_its_names_terms_and_sides(files):
 
 def test_an_atlas_neither_loaded_nor_of_the_engine_is_an_error(files):
     nl = engine_with_atlases()
-    with pytest.raises(InvalidCommandExpression, match="schaefer"):
+    with pytest.raises(InvalidCommandExpression,
+                       match=r"'schaefer'.*\['destrieux', 'tian'\]"):
         nl.execute_datalog_program(
             f'.load_tractogram("t1", "{files}/a.tck", space="MNI152")\n'
             '.index_tracts("t1", "schaefer")\n')
@@ -353,3 +359,116 @@ def test_an_engine_atlas_is_in_mni152(files):
     with pytest.raises(InvalidCommandExpression, match="space"):
         nl.execute_datalog_program(
             tractogram_command(files) + '.index_tracts("t1", "destrieux")\n')
+
+
+# --- an atlas of nilearn, by the name of its fetcher -----------------------
+
+@pytest.fixture
+def fetchers(monkeypatch):
+    """nilearn's fetchers of Destrieux (a ``lut``) and Harvard-Oxford (a
+    list of ``labels``), giving the synthetic volume; the options they are
+    called with are recorded."""
+    datasets = pytest.importorskip("nilearn.datasets")
+    image = nib.Nifti1Image(synthetic_volume(), AFFINES["aligned"])
+    calls = []
+
+    def destrieux(**options):
+        calls.append(("destrieux_2009", options))
+        return SimpleNamespace(maps=image, labels=[], lut=pd.DataFrame({
+            "index": [0, 1, 2, 3, 4],
+            "name": ["Unknown", b"L G_and_S_frontomargin", "R Pole_temporal",
+                     "L Medial_wall", "R S_front_sup"]}))
+
+    def harvard_oxford(atlas_name, **options):
+        calls.append(("harvard_oxford", {"atlas_name": atlas_name,
+                                         **options}))
+        return SimpleNamespace(maps=image, labels=[
+            "Background", "Left Amygdala", "Right Putamen", "Brain-Stem",
+            "Left Thalamus"])
+
+    monkeypatch.setattr(datasets, "fetch_atlas_destrieux_2009", destrieux)
+    monkeypatch.setattr(datasets, "fetch_atlas_harvard_oxford",
+                        harvard_oxford)
+    return calls
+
+
+def test_an_atlas_of_nilearn_by_its_fetcher(files, fetchers):
+    nl = engine_with_atlases()
+    nl.execute_datalog_program(
+        '.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009", '
+        'lateralized=1)\n'
+        '.load_tract_atlas("ho", kind="nilearn", fetcher="harvard_oxford", '
+        'atlas_name="sub-maxprob-thr25-1mm", data_dir="/no/where")\n'
+        + index_engine_atlases(files)
+        + '.index_tracts("t1", "d")\n.index_tracts("t1", "ho")\n')
+    assert fetchers == [
+        ("destrieux_2009", {"lateralized": 1}),
+        ("harvard_oxford", {"atlas_name": "sub-maxprob-thr25-1mm",
+                            "data_dir": "/no/where"})]
+    labels = rows(nl.execute_datalog_program(
+        'ans(a, n, h) :- label(a, l, n, h)\n'))
+    # the names of the engine's Destrieux, which has no background
+    assert {(n, h) for a, n, h in labels if a == "d"} - {
+        ("Unknown", "none")} == {(n, h) for a, n, h in labels
+                                 if a == "destrieux"}
+    assert {(n, h) for a, n, h in labels if a == "ho"} == {
+        ("Background", "none"), ("Left Amygdala", "left"),
+        ("Right Putamen", "right"), ("Brain Stem", "none"),
+        ("Left Thalamus", "left")}
+    # the term mapping of the fetcher, as for the engine's atlas
+    terms = rows(nl.execute_datalog_program(
+        'ans(a, l, t) :- label_term(a, l, t)\n'))
+    assert {(l, t) for a, l, t in terms if a == "d"} == {
+        (l, t) for a, l, t in terms if a == "destrieux"}
+    assert not {t for a, _, t in terms if a == "ho"}  # no mapping of it
+
+
+@pytest.mark.parametrize(
+    "command,match",
+    [
+        ('.load_tract_atlas("d", kind="nilearn")\n', "fetcher"),
+        ('.load_tract_atlas("d", kind="nilearn", fetcher="nonsense")\n',
+         "fetch_atlas_nonsense"),
+        ('.load_tract_atlas("d", "a.nii", "b.txt", kind="nilearn", '
+         'fetcher="destrieux_2009")\n', "1 arguments"),
+        ('.load_tract_atlas("d", "a.nii", "b.txt", kind="other")\n',
+         "nilearn"),
+    ],
+)
+def test_an_atlas_of_nilearn_fails_with_a_message(fetchers, command, match):
+    with pytest.raises(InvalidCommandExpression, match=match):
+        tracts_engine().execute_datalog_program(command)
+
+
+def test_an_atlas_of_nilearn_without_nilearn(monkeypatch):
+    monkeypatch.setitem(sys.modules, "nilearn", None)
+    with pytest.raises(InvalidCommandExpression, match="needs nilearn"):
+        tracts_engine().execute_datalog_program(
+            '.load_tract_atlas("d", kind="nilearn", '
+            'fetcher="destrieux_2009")\n')
+
+
+@pytest.mark.slow
+@pytest.mark.network
+def test_the_real_destrieux_of_nilearn(files, tmp_path):
+    """If nilearn has it in its cache: every term of the uncinate in the
+    cortex, and the hemispheres of its names."""
+    datasets = pytest.importorskip("nilearn.datasets")
+    if not (Path(datasets.get_data_dirs()[0]) / "destrieux_2009").is_dir():
+        pytest.skip("nilearn's cache has no Destrieux")
+    nl = tracts_engine()
+    nl.execute_datalog_program(
+        '.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")\n'
+        f'.load_tractogram("t1", "{files}/a.tck", space="MNI152")\n'
+        '.index_tracts("t1", "d")\n')
+    terms = rows(nl.execute_datalog_program(
+        'ans(t) :- label_term("d", l, t)\n'))
+    assert {(t,) for t in (
+        "orbitofrontalgyrus", "middle_frontal_gyrus",
+        "inferior_frontal_gyrus", "temporal", "insula", "occipital",
+        "parietal", "cingular")} <= terms
+    names = rows(nl.execute_datalog_program(
+        'ans(n, h) :- label("d", l, n, h)\n'))
+    assert {h for _, h in names} == {"left", "right", "none"}
+    assert all(h == "none" or n[:2] == {"left": "L ", "right": "R "}[h]
+               for n, h in names)

@@ -39,12 +39,15 @@ from .tractogram import Tractogram
 from .vocabulary import predicates, prelude
 
 __all__ = [
-    "ENGINE_ATLAS_MAPPINGS",
+    "ATLAS_MAPPINGS",
     "RELATION_NAMES",
     "TractsCommandsMixin",
     "TractsSolver",
     "engine_atlas",
+    "engine_atlases",
     "engine_label_name",
+    "mni_atlas",
+    "nilearn_atlas",
     "init_engine",
     "register",
     "relation_frames",
@@ -117,20 +120,54 @@ ATLAS_KINDS = {
 }
 
 
-#: The shipped term mapping of each atlas an engine of the apps may load
-#: (``atlases:`` of its ``engines.yaml``), by the atlas's name there.
-ENGINE_ATLAS_MAPPINGS = {
+#: The shipped term mapping of the atlases of MNI152 that an engine of the
+#: apps may load (``atlases:`` of its ``engines.yaml``) or nilearn fetch
+#: (``.load_tract_atlas(..., kind="nilearn", fetcher=...)``), by the
+#: atlas's name there or by the fetcher's.
+ATLAS_MAPPINGS = {
     "destrieux": "freesurfer_destrieux",
+    "destrieux_2009": "freesurfer_destrieux",
     "tian": "tian_subcortex_s2",
 }
 
 
-def engine_label_name(name: str) -> str:
+def engine_label_name(name: Any) -> str:
     """A raw label name as an engine of the apps names its region: ``-``
     and ``_`` are spaces. It is ``_label_name`` of
     ``neurolang_apps.utils.engine_registry``, which nl_tracts does not
     import; a test of the apps checks that they agree."""
-    return name.replace("-", " ").replace("_", " ")
+    if isinstance(name, bytes):
+        name = name.decode("utf8")
+    return str(name).replace("-", " ").replace("_", " ")
+
+
+def mni_atlas(
+    name: str, bunch: Any, key: str, space: str = "MNI152",
+    term_mapping: Any = None, **kwargs: Any,
+) -> Atlas:
+    """An atlas of the object a nilearn fetcher returns
+    (:meth:`Atlas.from_nilearn`), its label names normalised as an engine
+    of the apps names its regions (:func:`engine_label_name`), and so are
+    the raw names of its term mapping: ``term_mapping``, else that of
+    ``key`` in :data:`ATLAS_MAPPINGS`, if any. Keyword arguments are
+    those of :class:`Atlas`."""
+    lut = getattr(bunch, "lut", None)
+    named = SimpleNamespace(
+        maps=bunch.maps,
+        lut=None if lut is None else pd.DataFrame({
+            "index": lut["index"],
+            "name": [engine_label_name(n) for n in lut["name"]],
+        }),
+        labels=[engine_label_name(n) for n in getattr(bunch, "labels", ())],
+    )
+    if term_mapping is None:
+        term_mapping = ATLAS_MAPPINGS.get(key)
+    if term_mapping is not None:
+        term_mapping = load_term_mapping(term_mapping)
+        term_mapping["atlas_label_name"] = term_mapping[
+            "atlas_label_name"].map(engine_label_name)
+    return Atlas.from_nilearn(
+        name, named, space, term_mapping=term_mapping, **kwargs)
 
 
 def engine_atlas(engine: Any, name: str) -> Optional[Atlas]:
@@ -139,11 +176,10 @@ def engine_atlas(engine: Any, name: str) -> Optional[Atlas]:
     Its label image is ``engine.grids[name]`` and its regions
     ``engine.atlas_labels[name]`` (a name -> the values of its voxels), so
     that its label names are those of the engine's relation of the atlas,
-    ``destrieux(name, region)``. Its space is ``MNI152``. Its term mapping
-    is :data:`ENGINE_ATLAS_MAPPINGS`'s, whose raw names are matched as the
-    engine normalises them (:func:`engine_label_name`).
+    ``destrieux(name, region)``. Its space is ``MNI152``, its term mapping
+    that of :data:`ATLAS_MAPPINGS` (:func:`mni_atlas`).
     """
-    values = (getattr(engine, "atlas_labels", None) or {}).get(name)
+    values = engine_atlases(engine).get(name)
     image = (getattr(engine, "grids", None) or {}).get(name)
     if not values or image is None:
         return None
@@ -151,14 +187,36 @@ def engine_atlas(engine: Any, name: str) -> Optional[Atlas]:
         [(v, n) for n, vs in values.items() for v in vs],
         columns=["index", "name"],
     )
-    mapping = None
-    if name in ENGINE_ATLAS_MAPPINGS:
-        mapping = load_term_mapping(ENGINE_ATLAS_MAPPINGS[name])
-        mapping["atlas_label_name"] = mapping["atlas_label_name"].map(
-            engine_label_name)
-    return Atlas.from_nilearn(
-        name, SimpleNamespace(maps=image, lut=lut), "MNI152",
-        term_mapping=mapping,
+    return mni_atlas(name, SimpleNamespace(maps=image, lut=lut), name)
+
+
+def engine_atlases(engine: Any) -> Dict[str, Any]:
+    """The atlases an engine of the apps loaded: name -> its regions."""
+    return getattr(engine, "atlas_labels", None) or {}
+
+
+def nilearn_atlas(
+    name: str, fetcher: str, space: str = "MNI152", term_mapping: Any = None,
+    background: int = 0, **options: Any,
+) -> Atlas:
+    """The atlas ``nilearn.datasets.fetch_atlas_<fetcher>(**options)``
+    fetches (``destrieux_2009``, ``harvard_oxford`` with ``atlas_name=...``,
+    ``schaefer_2018`` with ``n_rois=...``), by :func:`mni_atlas`: its label
+    names are those of an engine of the apps, and its term mapping, unless
+    given, that of the fetcher in :data:`ATLAS_MAPPINGS`. nilearn is
+    imported here only."""
+    try:
+        from nilearn import datasets
+    except ImportError as e:
+        raise ImportError(
+            'an atlas of kind="nilearn" needs nilearn (pip install nilearn)'
+        ) from e
+    fetch = getattr(datasets, f"fetch_atlas_{fetcher}", None)
+    if fetch is None:
+        raise ValueError(f"nilearn has no fetch_atlas_{fetcher}")
+    return mni_atlas(
+        name, fetch(**options), fetcher, space, term_mapping,
+        background=int(background),
     )
 
 
@@ -181,9 +239,9 @@ def _value(expression):
     )
 
 
-def _arguments(command, positional, options):
+def _arguments(command, positional, options, more=False):
     """The positional arguments, by name, and the keyword arguments,
-    with their defaults; anything else is an error."""
+    with their defaults; any other is an error, unless ``more``."""
     name = command.name.name
     args = [_value(a) for a in command.args]
     if len(args) != len(positional):
@@ -193,7 +251,7 @@ def _arguments(command, positional, options):
         )
     given = {_value(k): _value(v) for k, v in command.kwargs}
     unknown = set(given) - set(options)
-    if unknown:
+    if unknown and not more:
         raise InvalidCommandExpression(
             f".{name} has no option {sorted(unknown)}; "
             f"the options are {sorted(options)}"
@@ -209,6 +267,15 @@ class TractsCommandsMixin(PatternWalker):
         An atlas from a label image and a table: ``kind`` is
         ``freesurfer`` (a colour LUT), ``bids`` (a ``dseg.tsv``) or ``tsv``.
         ``term_mapping`` is the key of a shipped mapping or the path of one.
+    ``.load_tract_atlas(name, kind="nilearn", fetcher=..., space="MNI152",
+    term_mapping=..., background=0, ...)``
+        An atlas of nilearn, by the name of its fetcher:
+        ``fetcher="destrieux_2009"`` calls
+        ``nilearn.datasets.fetch_atlas_destrieux_2009`` with the other
+        options (``atlas_name="cort-maxprob-thr25-1mm"`` of
+        ``harvard_oxford``, ``n_rois=100`` of ``schaefer_2018``,
+        ``data_dir``...). Its label names are those of the atlases of the
+        engine (:func:`nilearn_atlas`).
     ``.load_tractogram(id, path, space=...)``
         A ``.trk``, ``.tck`` or ``.vtk``, taken to RAS+ mm.
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
@@ -245,27 +312,46 @@ class TractsCommandsMixin(PatternWalker):
 
     @add_match(Command(Symbol("load_tract_atlas"), ..., ...))
     def load_tract_atlas(self, command):
-        names, options = _arguments(
-            command, ("name", "image", "table"),
-            {"kind": "freesurfer", "space": "unspecified",
-             "term_mapping": None, "background": 0},
+        nilearn = any(
+            _value(k) == "kind" and _value(v) == "nilearn"
+            for k, v in command.kwargs
         )
+        options = {"kind": "freesurfer", "space": "unspecified",
+                   "term_mapping": None, "background": 0}
+        if nilearn:
+            names, options = _arguments(
+                command, ("name",),
+                {**options, "space": "MNI152", "fetcher": None}, more=True,
+            )
+        else:
+            names, options = _arguments(
+                command, ("name", "image", "table"), options)
         name = names["name"]
-        if options["kind"] not in ATLAS_KINDS:
+        if not nilearn and options["kind"] not in ATLAS_KINDS:
             raise InvalidCommandExpression(
                 f"atlas {name!r}: the kind is one of "
-                f"{', '.join(ATLAS_KINDS)}, not {options['kind']!r}"
+                f"{', '.join(ATLAS_KINDS)} or nilearn, not "
+                f"{options['kind']!r}"
+            )
+        if nilearn and not options["fetcher"]:
+            raise InvalidCommandExpression(
+                f'atlas {name!r}: kind="nilearn" needs fetcher=..., the '
+                "name of a nilearn fetcher, such as destrieux_2009"
             )
         if name in self._tracts.atlases:
             raise InvalidCommandExpression(
                 f"atlas {name!r} was already loaded")
         try:
-            atlas = ATLAS_KINDS[options["kind"]](
-                name, names["image"], names["table"], options["space"],
-                term_mapping=options["term_mapping"],
-                background=int(options["background"]),
-            )
-        except (OSError, ValueError, NotImplementedError) as e:
+            if nilearn:
+                options.pop("kind")
+                atlas = nilearn_atlas(name, **options)
+            else:
+                atlas = ATLAS_KINDS[options["kind"]](
+                    name, names["image"], names["table"], options["space"],
+                    term_mapping=options["term_mapping"],
+                    background=int(options["background"]),
+                )
+        except (OSError, ValueError, NotImplementedError, ImportError) as e:
             raise InvalidCommandExpression(
                 f"cannot load the atlas {name!r}: {e}"
             ) from e
@@ -308,10 +394,12 @@ class TractsCommandsMixin(PatternWalker):
         if atlas_name not in state.atlases:
             atlas = engine_atlas(state.engine, atlas_name)
             if atlas is None:
+                known = sorted(
+                    set(state.atlases) | set(engine_atlases(state.engine)))
                 raise InvalidCommandExpression(
                     f"atlas {atlas_name!r} was not loaded: .load_tract_atlas "
-                    "comes before .index_tracts, or it is an atlas of the "
-                    "engine"
+                    "comes before .index_tracts; the atlases loaded and "
+                    f"those of the engine are {known}"
                 )
             state.atlases[atlas_name] = atlas
         tractogram, atlas = state.tractograms[ident], state.atlases[atlas_name]
