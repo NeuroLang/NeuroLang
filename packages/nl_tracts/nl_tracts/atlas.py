@@ -253,6 +253,8 @@ class Atlas:
         self.space = space
         self.background = int(background)
         self.labels = _label_volume(labels)
+        #: the sorted ids of the labels of the volume (with the background)
+        self.present_labels = np.unique(self.labels)
         self.affine = self._checked_affine(affine)
         self._mapping = (
             pd.DataFrame({c: pd.Series(dtype=str) for c in TERM_COLUMNS})
@@ -294,7 +296,7 @@ class Atlas:
         if bad:
             raise ValueError(f"hemi must be left, right or none, not {bad}")
 
-        present = set(np.unique(self.labels).tolist())
+        present = set(self.present_labels.tolist())
         absent = ~ids.isin(present).to_numpy()
         if absent.any():
             dropped = dict(zip(ids[absent], names[absent]))

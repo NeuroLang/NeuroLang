@@ -158,3 +158,63 @@ def test_an_atlas_or_a_tractogram_cannot_be_added_twice():
         store.add_atlas(atlas())
     with pytest.raises(ValueError, match="t1"):
         store.add_tractogram(tractogram(), PARAMS)
+
+
+# the index
+def near_the_label(id="t1", seed=0):
+    """Streamlines around the first label of ``atlas()`` (x -8..-4, y
+    -17..-11, z -30..-22 mm), so that they have labels."""
+    rng = np.random.default_rng(seed)
+    lines = [
+        (rng.normal(size=(rng.integers(2, 20), 3)) * 3
+         + [-6, -14, -26]).astype(np.float32)
+        for _ in range(30)
+    ]
+    return Tractogram.from_streamlines(id, lines, "subject:1")
+
+
+def test_add_index_adds_traverses_and_endpoint():
+    store = RelationStore()
+    store.add_index(near_the_label(), atlas(), PARAMS)
+    assert set(store.relations) == {"traverses", "endpoint"}
+    assert store.relations["traverses"].columns.tolist() == [
+        "a", "t", "s", "l"]
+    assert set(store.relations["traverses"]["a"]) == {"fs"}
+
+
+def test_add_index_accumulates_atlases_and_tractograms():
+    store = RelationStore()
+    for a in ("one", "two"):
+        for t in ("a", "b"):
+            store.add_index(near_the_label(t), atlas(a), PARAMS)
+    frame = store.relations["traverses"]
+    assert set(zip(frame["a"], frame["t"])) == {
+        ("one", "a"), ("one", "b"), ("two", "a"), ("two", "b")}
+    with pytest.raises(ValueError, match="one.*a|already"):
+        store.add_index(near_the_label("a"), atlas("one"), PARAMS)
+
+
+def test_add_index_checks_the_spaces():
+    from nl_tracts.spaces import SpaceMismatchError
+
+    store = RelationStore()
+    with pytest.raises(SpaceMismatchError):
+        store.add_index(near_the_label(), atlas(space="MNI"), PARAMS)
+    assert store.relations == {}
+    with pytest.warns(UserWarning, match="spaces differ"):
+        store.add_index(
+            near_the_label(), atlas(space="MNI"), PARAMS,
+            allow_space_mismatch=True,
+        )
+    assert "traverses" in store.relations
+
+
+def test_build_relations_is_the_whole_store_for_one_pair():
+    from nl_tracts.indexing import build_relations
+
+    store = build_relations(near_the_label(), atlas(), PARAMS)
+    assert set(store.relations) == {
+        "atlas", "label", "label_term", "label_extent", "tractogram",
+        "streamline", "streamline_extent", "endpoint_coord",
+        "streamline_length", "traverses", "endpoint",
+    }

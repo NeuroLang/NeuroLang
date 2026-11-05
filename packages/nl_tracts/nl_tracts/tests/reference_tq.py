@@ -53,6 +53,29 @@ def load_reference():
     return module
 
 
+def load_indexing():
+    """tract_querier's ``tract_label_indices`` (numpy and scipy), loaded by
+    path; it imports ``.aabb``, which is registered beside it."""
+    path = reference_dir()
+    if path is None:
+        pytest.skip("tract_querier not found (set TRACT_QUERIER_DIR)")
+    name = "_tq_reference_idx"
+    package = types.ModuleType(name)
+    package.__path__ = []
+    modules = {name: package}
+    for part in ("aabb", "tract_label_indices"):
+        spec = importlib.util.spec_from_file_location(
+            f"{name}.{part}", os.path.join(path, f"{part}.py")
+        )
+        module = importlib.util.module_from_spec(spec)
+        modules[spec.name] = module
+        sys.modules.update(modules)
+        spec.loader.exec_module(module)
+    for key in modules:
+        sys.modules.pop(key, None)
+    return modules[f"{name}.tract_label_indices"]
+
+
 def load_aabb():
     """tract_querier's ``aabb.BoundingBox`` (numpy only), loaded by path."""
     path = reference_dir()

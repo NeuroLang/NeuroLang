@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Union
 import os
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -26,6 +28,11 @@ __all__ = [
     "traverses_relation",
     "points_to_voxels",
 ]
+
+
+#: The points of a chunk, at most (a streamline is never split): the
+#: temporaries of an indexing are of this size.
+CHUNK_POINTS = 1 << 22
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,40 @@ class IndexingParams:
     length_threshold: float = 0.0
     emit_background: bool = False
 
+    def __post_init__(self):
+        if not 0 <= self.crossing_threshold <= 100:
+            raise ValueError(
+                "crossing_threshold is a percentage, between 0 and 100, "
+                f"not {self.crossing_threshold}"
+            )
+        if self.length_threshold < 0:
+            raise ValueError(
+                f"length_threshold is in mm, not {self.length_threshold}"
+            )
+
+
+def _voxels(points: np.ndarray, inverse: np.ndarray, shape) -> tuple:
+    """Voxel indices of points by the inverse affine, and the number of
+    points that were outside the volume (and are clipped to its border).
+    The expression is the reference's, so that the rounding agrees to the
+    last bit."""
+    ijk = np.round(
+        np.dot(inverse[:3, :3], np.asarray(points, dtype=float).T).T
+        + inverse[:3, 3]
+    ).astype(np.int64)
+    limit = np.asarray(shape)
+    outside = int(((ijk < 0) | (ijk >= limit)).any(axis=1).sum())
+    return np.clip(ijk, 0, limit - 1), outside
+
+
+def _warn_outside(outside: int, total: int) -> None:
+    if outside:
+        warnings.warn(
+            f"{outside} of {total} tract points fall outside the image; "
+            "they are taken at its border",
+            stacklevel=3,
+        )
+
 
 def points_to_voxels(
     points: np.ndarray, affine: np.ndarray, shape: tuple
@@ -66,7 +107,9 @@ def points_to_voxels(
     numpy.ndarray
         ``(P, 3)`` int64.
     """
-    raise NotImplementedError
+    ijk, outside = _voxels(points, np.linalg.inv(affine), shape)
+    _warn_outside(outside, len(ijk))
+    return ijk
 
 
 def _kept_streamlines(
@@ -85,6 +128,102 @@ def _column_t(tractogram: Tractogram, n: int) -> np.ndarray:
     return np.full(n, tractogram.id, dtype=object)
 
 
+def _chunks(tractogram: Tractogram, ids: np.ndarray):
+    """``(ids, points, offsets)`` of groups of the streamlines ``ids`` of
+    at most ``CHUNK_POINTS`` points (more for one longer streamline): the
+    points of each group are gathered with no loop over the streamlines."""
+    lengths = tractogram.lengths_in_points()[ids]
+    ends = np.cumsum(lengths)
+    group = (ends - lengths) // CHUNK_POINTS
+    cuts = np.r_[0, np.flatnonzero(np.diff(group)) + 1, len(ids)]
+    all_points = tractogram.points
+    first = tractogram.offsets[ids]
+    for lo, hi in zip(cuts[:-1], cuts[1:]):
+        size = lengths[lo:hi]
+        local = np.r_[0, np.cumsum(size)]
+        # the ragged arange: the index of each point of each streamline
+        index = np.repeat(first[lo:hi] - local[:-1], size) + np.arange(
+            local[-1]
+        )
+        yield ids[lo:hi], all_points[index], local
+
+
+def _index(
+    tractogram: Tractogram, atlas: Atlas, params: IndexingParams
+) -> tuple:
+    """The ``traverses`` and ``endpoint`` relations, in one pass."""
+    ids = _kept_streamlines(tractogram, params)
+    inverse = np.linalg.inv(atlas.affine)
+    present = atlas.present_labels
+    n_labels = len(present)
+    threshold = params.crossing_threshold / 100.0
+    out = {"s": [], "l": [], "es": [], "e": [], "el": []}
+    outside = 0
+    for chunk_ids, points, offsets in _chunks(tractogram, ids):
+        ijk, n_out = _voxels(points, inverse, atlas.labels.shape)
+        outside += n_out
+        labels = atlas.labels[ijk[:, 0], ijk[:, 1], ijk[:, 2]]
+        n_points = np.diff(offsets)
+        k = len(chunk_ids)
+
+        # traverses: the points of each streamline by label, as a count of
+        # the key (streamline, rank of the label); bincount if it is small
+        key = (
+            np.repeat(np.arange(k, dtype=np.int64), n_points) * n_labels
+            + np.searchsorted(present, labels)
+        )
+        if k * n_labels <= 1 << 26:
+            counts = np.bincount(key, minlength=k * n_labels)
+            unique = np.flatnonzero(counts)
+            count = counts[unique]
+        else:
+            unique, count = np.unique(key, return_counts=True)
+        line, rank = unique // n_labels, unique % n_labels
+        # the denominator is all the points, the background's too; the
+        # expression is the reference's (count * 1. / total >= threshold)
+        keep = count / n_points[line] >= threshold
+        if not params.emit_background:
+            keep &= present[rank] != atlas.background
+        out["s"].append(chunk_ids[line[keep]])
+        out["l"].append(present[rank[keep]])
+
+        # endpoint: the label of the first and of the last point, none for
+        # the background
+        ends = np.stack(
+            [labels[offsets[:-1]], labels[offsets[1:] - 1]], axis=1
+        ).reshape(-1)
+        in_a_region = ends != atlas.background
+        out["es"].append(np.repeat(chunk_ids, 2)[in_a_region])
+        out["e"].append(np.tile(np.arange(2), k)[in_a_region])
+        out["el"].append(ends[in_a_region])
+    _warn_outside(outside, int(tractogram.lengths_in_points()[ids].sum()))
+
+    def column(name, dtype):
+        parts = out[name]
+        return (np.concatenate(parts) if parts else np.zeros(0)).astype(dtype)
+
+    traverses = pd.DataFrame(
+        {
+            "a": np.full(len(column("s", np.int32)), atlas.name, dtype=object),
+            "t": np.full(len(column("s", np.int32)), tractogram.id,
+                         dtype=object),
+            "s": column("s", np.int32),
+            "l": column("l", np.int32),
+        }
+    )
+    n_ends = len(column("es", np.int32))
+    endpoint = pd.DataFrame(
+        {
+            "a": np.full(n_ends, atlas.name, dtype=object),
+            "t": np.full(n_ends, tractogram.id, dtype=object),
+            "s": column("es", np.int32),
+            "e": column("e", np.int8),
+            "l": column("el", np.int32),
+        }
+    )
+    return traverses, endpoint
+
+
 def traverses_relation(
     tractogram: Tractogram, atlas: Atlas, params: IndexingParams
 ) -> pd.DataFrame:
@@ -92,9 +231,10 @@ def traverses_relation(
 
     ``(a, t, s, l)`` is a row iff at least ``crossing_threshold`` percent of
     the points of streamline ``s`` are in label ``l`` (the denominator
-    counts all the points, including those in the background).
+    counts all the points, including those in the background), and at least
+    one is. The background has a row only with ``emit_background``.
     """
-    raise NotImplementedError
+    return _index(tractogram, atlas, params)[0]
 
 
 def endpoint_relation(
@@ -106,7 +246,7 @@ def endpoint_relation(
     ``l`` the label of that point. An end in the background has no row
     (DESIGN.md, 6.3).
     """
-    raise NotImplementedError
+    return _index(tractogram, atlas, params)[1]
 
 
 def streamline_extent_relation(
@@ -191,6 +331,7 @@ class RelationStore:
     """
 
     relations: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    _indexed: set = field(default_factory=set, repr=False)
 
     def _append(self, name: str, frame: pd.DataFrame) -> None:
         if name in self.relations:
@@ -270,8 +411,52 @@ class RelationStore:
 
         Checks the spaces (:class:`~nl_tracts.spaces.SpaceMismatchError`),
         and reads or writes the parquet cache if ``cache_dir`` is given.
+
+        Raises
+        ------
+        ValueError
+            If this atlas and this tractogram were indexed already.
         """
-        raise NotImplementedError
+        atlas.check_same_space(tractogram, allow_space_mismatch)
+        pair = (atlas.name, tractogram.id)
+        if pair in self._indexed:
+            raise ValueError(
+                f"tractogram {tractogram.id!r} was already indexed by atlas "
+                f"{atlas.name!r}"
+            )
+        frames = None
+        if cache_dir is not None:
+            from .cache import cache_key, read_cached, write_cached
+
+            key = cache_key(tractogram, atlas, params)
+            cached = [
+                read_cached(cache_dir, key, name)
+                for name in ("traverses", "endpoint")
+            ]
+            if all(c is not None for c in cached):
+                frames = [
+                    _labelled(c, tractogram, atlas) for c in cached
+                ]
+        if frames is None:
+            frames = list(_index(tractogram, atlas, params))
+            if cache_dir is not None:
+                for name, frame in zip(("traverses", "endpoint"), frames):
+                    write_cached(
+                        cache_dir, key, name, frame.drop(columns=["a", "t"])
+                    )
+        self._append("traverses", frames[0])
+        self._append("endpoint", frames[1])
+        self._indexed.add(pair)
+
+
+def _labelled(
+    frame: pd.DataFrame, tractogram: Tractogram, atlas: Atlas
+) -> pd.DataFrame:
+    """A cached relation with its ``a`` and ``t`` columns."""
+    frame = frame.copy()
+    frame.insert(0, "t", np.full(len(frame), tractogram.id, dtype=object))
+    frame.insert(0, "a", np.full(len(frame), atlas.name, dtype=object))
+    return frame
 
 
 def build_relations(
@@ -286,4 +471,11 @@ def build_relations(
     The one-call form of ``RelationStore.add_atlas``, ``add_tractogram``
     and ``add_index``.
     """
-    raise NotImplementedError
+    store = RelationStore()
+    store.add_atlas(atlas)
+    store.add_tractogram(tractogram, params)
+    store.add_index(
+        tractogram, atlas, params, cache_dir=cache_dir,
+        allow_space_mismatch=allow_space_mismatch,
+    )
+    return store
