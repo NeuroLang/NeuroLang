@@ -1,4 +1,5 @@
 import logging
+import operator
 from collections import Counter
 from functools import reduce
 from itertools import chain, combinations, product
@@ -116,7 +117,7 @@ from .ranking import (
     rank_query,
     verify_that_the_query_is_ranked
 )
-from .shattering import EQ, NE, shatter_constants
+from .shattering import EQ, GT, LT, NE, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -149,6 +150,15 @@ MQU = MoveQuantifiersUp()
 PQD = PushQuantifiersDown()
 RTO = RemoveTrivialOperations()
 RUP = RemoveUniversalPredicates()
+
+
+# For an order comparison, the comparison `w ⊲ v` of `_extremum_conjunct`
+# when `v` is its first, or second, argument: `<` for the least value of
+# `v`, `>` for the greatest.
+ORDER_SIDES = {
+    operator.lt: (LT, GT), operator.le: (LT, GT),
+    operator.gt: (GT, LT), operator.ge: (GT, LT),
+}
 
 
 class ExtendedRAPToRAWalker(
@@ -525,12 +535,17 @@ def _lift_with_dependent_negations(rule, symbol_table, check):
         f for f in extract_conjuncts(antecedent) if is_comparison(f)
     )
     if comparisons:
-        # Comparisons of free variables select the answers of the rest.
+        # Comparisons of free variables select the answers of the rest,
+        # if the rest has them.
+        rest = RTO.walk(Conjunction(tuple(
+            f for f in extract_conjuncts(antecedent) if f not in comparisons
+        )))
+        if not extract_logic_free_variables(Conjunction(comparisons)) <= (
+            extract_logic_free_variables(rest)
+        ):
+            return NonLiftable(antecedent)
         plan = lift_with_dependent_negations(
-            Implication(consequent, RTO.walk(Conjunction(tuple(
-                f for f in extract_conjuncts(antecedent) if f not in comparisons
-            )))),
-            symbol_table, check
+            Implication(consequent, rest), symbol_table, check
         )
         return select_comparisons(plan, comparisons)
     if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
@@ -646,7 +661,54 @@ def projection_plan(rule, symbol_table):
     plan = _disjoint_projection_plan(rule, symbol_table)
     if plan is None:
         plan = _separator_projection_plan(rule, symbol_table)
+    if plan is None:
+        plan = _at_least_two_plan(rule, symbol_table)
     return plan
+
+
+def _at_least_two_plan(rule, symbol_table):
+    """Plan for `∃x ∃y (R(ū) ∧ R(ū[y/x]) ∧ x ≠ y)`, `x` being the only
+    quantified variable of `R(ū)`, or with `x < y` or `x > y`, equivalent
+    by the symmetry in `x` and `y`: there are two values of `x` for which
+    `R(ū)` holds, the complement, within `∃x R(ū)`, of there being one,
+    `∃x (R(ū) ∧ ¬∃w (R(ū[w/x]) ∧ w ≠ x))`, whose plan is subtracted."""
+    variables, body = _existential_variables_and_body(rule.antecedent, True)
+    conjuncts = extract_conjuncts(body)
+    comparisons = [f for f in conjuncts if is_comparison(f)]
+    if not (
+        len(conjuncts) == 3 and len(comparisons) == 1 and
+        comparisons[0].functor.value in STRICT_COMPARISONS and
+        set(comparisons[0].args) == variables and len(variables) == 2
+    ):
+        return None
+    x, y = comparisons[0].args
+    atom = next(
+        (f for f in conjuncts if x in extract_logic_free_variables(f) and
+         f not in comparisons), None
+    )
+    if not (
+        isinstance(atom, FunctionApplication) and
+        isinstance(atom.functor, Symbol) and
+        variables & set(atom.args) == {x} and
+        ReplaceExpressionWalker({x: y}).walk(atom) in conjuncts
+    ):
+        return None
+    w = Symbol.fresh()
+    plans = _lift_pure(
+        (
+            Implication(rule.consequent, ExistentialPredicate(x, atom)),
+            Implication(rule.consequent, ExistentialPredicate(x, Conjunction((
+                atom,
+                Negation(ExistentialPredicate(w, Conjunction((
+                    ReplaceExpressionWalker({x: w}).walk(atom), NE(w, x)
+                ))))
+            )))),
+        ),
+        symbol_table
+    )
+    if plans is None:
+        return None
+    return rap.Subtraction(*plans)
 
 
 def _projection_applies(antecedent, symbol_table):
@@ -732,13 +794,18 @@ def _projected_plan(
     )
 
 
-def _existential_variables_and_body(formula):
+def _existential_variables_and_body(formula, nested=False):
     """The variables quantified by `formula`, or by its conjuncts
-    (`FactorConjunctQuantifiers`), and the conjunction of their bodies."""
+    (`FactorConjunctQuantifiers`), and the conjunction of their bodies,
+    or, if `nested`, those of the conjuncts of the bodies too."""
     variables, body = ExtractExistentialPrefix().walk(
         FactorConjunctQuantifiers().walk(RTO.walk(formula))
     )
-    return set(variables), CollapseConjunctions().walk(body)
+    variables, body = set(variables), CollapseConjunctions().walk(body)
+    if nested and variables:
+        inner_variables, body = _existential_variables_and_body(body, True)
+        variables |= inner_variables
+    return variables, body
 
 
 def _split_choice_projection(antecedent, symbol_table):
@@ -800,13 +867,58 @@ def _split_exclusive_projection(antecedent, symbol_table):
     for atom, variable in ExcludingNegations().walk(body):
         if atom in conjuncts and variables & set(atom.args) == {variable}:
             return {variable}, variables - {variable}, conjuncts
+    variables, body = _existential_variables_and_body(antecedent, True)
+    conjuncts = extract_conjuncts(body)
+    for variable in sorted(variables, key=lambda v: v.name):
+        extremum = _extremum_conjunct(variable, variables, conjuncts)
+        if extremum is not None:
+            return {variable}, variables - {variable}, conjuncts + (extremum,)
     return None
+
+
+def _extremum_conjunct(variable, variables, conjuncts):
+    """`¬∃w (R(ū[w/v]) ∧ w < v)`, `v` being *variable*, if `R(ū)` is the
+    only conjunct with `v` but comparisons, `v` is its only variable of
+    `variables`, and `v` is the lesser side of every comparison with it,
+    or the same with `w > v` if it is the greater side, or None. The
+    least (greatest) value of `v` for which `R(ū)` holds satisfies
+    the comparisons of any other value, so the conjunct is implied.
+    """
+    sides = set()
+    others = []
+    for conjunct in conjuncts:
+        if variable not in extract_logic_free_variables(conjunct):
+            continue
+        if not is_comparison(conjunct):
+            others.append(conjunct)
+        elif conjunct.functor.value in ORDER_SIDES and variable in (
+            conjunct.args
+        ) and len(set(conjunct.args)) == 2:
+            sides.add(ORDER_SIDES[conjunct.functor.value][
+                conjunct.args.index(variable)
+            ])
+        else:
+            return None
+    if not (
+        len(sides) == 1 and len(others) == 1 and
+        isinstance(others[0], FunctionApplication) and
+        isinstance(others[0].functor, Symbol) and
+        variables & set(others[0].args) == {variable}
+    ):
+        return None
+    w = Symbol.fresh()
+    return Negation(ExistentialPredicate(w, Conjunction((
+        ReplaceExpressionWalker({variable: w}).walk(others[0]),
+        sides.pop()(w, variable)
+    ))))
 
 
 class ExcludingNegations(PatternWalker):
     """The atoms `R(ū[v/w])` and the variables `v` of the negated conjuncts
     `¬∃w (R(ū) ∧ w ≠ v)` of a conjunction: where such a conjunct holds,
-    `R(ū[a/v])` holds for no value `a` other than that of `v`."""
+    `R(ū[a/v])` holds for no value `a` other than that of `v`. With
+    `w < v`, or `w > v`, `v` is the least, or greatest, value for which
+    it holds: in both cases, for at most one value of `v`."""
 
     @add_match(Conjunction)
     def conjunction(self, conjunction):
@@ -817,7 +929,7 @@ class ExcludingNegations(PatternWalker):
     @add_match(
         Negation(ExistentialPredicate(Symbol, Conjunction((
             FunctionApplication(Symbol, ...),
-            FunctionApplication(NE, (Symbol, Symbol))
+            FunctionApplication(Constant, (Symbol, Symbol))
         )))),
         lambda negation: _excludes(
             negation.formula.head, *negation.formula.body.formulas
@@ -830,7 +942,7 @@ class ExcludingNegations(PatternWalker):
 
     @add_match(
         Negation(ExistentialPredicate(Symbol, Conjunction((
-            FunctionApplication(NE, (Symbol, Symbol)),
+            FunctionApplication(Constant, (Symbol, Symbol)),
             FunctionApplication(Symbol, ...)
         )))),
         lambda negation: _excludes(
@@ -849,6 +961,7 @@ class ExcludingNegations(PatternWalker):
 
 def _excludes(other, atom, inequality):
     return (
+        inequality.functor.value in STRICT_COMPARISONS and
         other in atom.args and other in inequality.args and
         len(set(inequality.args)) == 2
     )

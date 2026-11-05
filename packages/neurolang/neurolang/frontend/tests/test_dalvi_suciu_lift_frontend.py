@@ -560,3 +560,114 @@ def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
     )
     assert dict(inline) == pytest.approx({10: 1 / 3, 11: 1 / 3})
     assert dict(in_a_rule) == pytest.approx(dict(inline))
+
+
+def _solve_random(query, seed, solvers, facts=None):
+    """Probabilities of the answers of `query` on random tuple-independent
+    relations over a small domain, whose values collide, but those of
+    probability 0, which the lifted plans of differences can keep."""
+    import itertools
+    import random
+
+    from .. import NeurolangPDL
+
+    random.seed(seed)
+    nl = NeurolangPDL(**solvers)
+    for name, arity in dict(R=1, T=1, S=2, V=2).items():
+        tuples = [
+            (round(random.uniform(.1, .9), 2),) + t
+            for t in itertools.product(range(4), repeat=arity)
+            if random.random() < .7
+        ]
+        nl.add_probabilistic_facts_from_tuples(
+            (facts or {}).get(name, tuples), name=name
+        )
+    nl.execute_datalog_program(query)
+    result = nl.solve_all()
+    if "q" not in result:
+        return {}
+    return {
+        tuple(row[:-1]): row[-1]
+        for row in result["q"].as_pandas_dataframe().itertuples(index=False)
+        if abs(row[-1]) > 1e-12
+    }
+
+
+ORDER_AND_COUNT_QUERIES = [
+    "q(PROB) :- R(x), T(y), (x < y)",
+    "q(PROB) :- R(x), T(y), (x <= y)",
+    "q(PROB) :- R(x), T(y), (y > x)",
+    "q(PROB) :- R(x), T(y), (x >= y), (x != 1)",
+    "q(w, PROB) :- V(w, x), T(y), (x < y)",
+    "q(PROB) :- R(x), R(y), (x != y)",
+    "q(PROB) :- R(x), R(y), (x < y)",
+    "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
+]
+
+
+@pytest.mark.parametrize("seed", [0, 1, 7])
+@pytest.mark.parametrize("query", ORDER_AND_COUNT_QUERIES)
+def test_order_across_atoms_and_at_least_two(query, seed):
+    """
+    An order comparison between atoms is lifted by projecting on the
+    least, or greatest, value of a variable, and two values of a relation
+    as the complement of one, with the probabilities of weighted model
+    counting, ties included.
+    """
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    expected = _solve_random(query, seed, dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    ))
+    assert _solve_random(query, seed, LIFTED_ONLY) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        "q(PROB) :- R(x), T(y), (x < y)",
+        dict(R=[(.5, 1), (.4, 2)], T=[(.6, 2), (.7, 3)]),
+        .5 * (1 - .4 * .3) + .4 * .5 * .7
+    ),
+    ("q(PROB) :- R(x), T(y), (x < y)", dict(R=[(.5, 3)], T=[(.6, 2)]), None),
+    (
+        "q(PROB) :- R(x), R(y), (x != y)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        1 - .5 * .6 * .7 - (.5 * .6 * .7 + .5 * .4 * .7 + .5 * .6 * .3)
+    ),
+    ("q(PROB) :- R(x), R(y), (x != y)", dict(R=[(.5, 1)]), None),
+])
+def test_order_across_atoms_and_at_least_two_formulas(
+    query, facts, expected
+):
+    """
+    The probabilities are those of the formulas: for R(x) ∧ T(y) ∧ x < y
+    the sum, on the least value a of R, of p_R(a) ∏_{b<a} (1 - p_R(b))
+    (1 - ∏_{c>a} (1 - p_T(c))), and for two values of R
+    1 - ∏ (1 - p) - Σ_a p_a ∏_{b≠a} (1 - p_b).
+    Without the tuples needed, there is no answer.
+    """
+    result = _solve_random(query, 0, LIFTED_ONLY, facts)
+    if expected is None:
+        assert result == {}
+    else:
+        assert result == {(): pytest.approx(expected)}
+
+
+@pytest.mark.parametrize("query", [
+    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+    "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+])
+def test_order_across_atoms_declined(query):
+    """
+    The comparison of a variable of a join, or a chain of comparisons, is
+    declined: the plan of the projection of the join would select on the
+    value of z, which it does not have.
+    """
+    from nl_expr.exceptions import NonLiftableException
+
+    with pytest.raises(NonLiftableException):
+        _solve_random(query, 0, LIFTED_ONLY)
