@@ -887,14 +887,23 @@ def _cycle_through_an_aggregate_program():
     return dl
 
 
-def test_magic_rewrite_refuses_a_cycle_through_an_aggregation():
-    """The rewritten program would not be stratified: the frontend falls
-    back to the program as it is, which is."""
-    dl = _cycle_through_an_aggregate_program()
-    with raises(InvalidMagicSetError, match="aggregation"):
-        magic_rewrite(q(x), dl)
-    with raises(InvalidMagicSetError, match="aggregation"):
-        magic_rewrite(q(x), dl, seed_from_edb=False)
+def test_magic_rewrite_leaves_unbound_an_aggregation_in_a_cycle():
+    """Bound, Agg would be in a cycle of the rewritten program, which would
+    not be stratified: the rewrite leaves Agg unbound, computed whole, and
+    binds the rest."""
+    for seed_from_edb in (True, False):
+        dl = _cycle_through_an_aggregate_program()
+        goal, mr = magic_rewrite(q(x), dl, seed_from_edb=seed_from_edb)
+        magic = {
+            rule.consequent.functor.name for rule in mr.formulas
+            if rule.consequent.functor.name.startswith("magic_")
+        }
+        assert not any(name.startswith("magic_Agg^b") for name in magic)
+        assert any(name.startswith("magic_B^b") for name in magic)
+        dl = _cycle_through_an_aggregate_program()
+        dl.walk(mr)
+        solution = Chase(dl).build_chase_solution()
+        assert solution[goal].value == {(c,)}
 
 
 def test_the_program_without_the_rewrite_is_solved():

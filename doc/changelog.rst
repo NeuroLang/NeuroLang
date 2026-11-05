@@ -185,6 +185,13 @@ Unreleased
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.
 * A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* Magic sets leave unbound a predicate whose binding would put an
+  aggregation or a negation in a cycle of the rewritten program, and bind
+  the others: a query over the vocabulary of tractography, whose
+  ``term_box_hi`` aggregates, was not rewritten at all, and a function of a
+  variable it bound, as ``query_similarity`` in ``similar_study``, was
+  refused as unbound.
+
 * Magic sets rewrite a query without a constant when a rule binds the
   argument of another right of it, as ``d`` in ``ans(t, s) :-
   cogat_definition(t, d), close(d, s)``: a function of ``d`` in ``close``
