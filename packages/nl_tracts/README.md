@@ -51,3 +51,35 @@ label image of the atlas, in the browser. At the REPL's prompt the commands
 and the rules can also be typed or pasted one by one, and other questions
 asked of the same relations (`ans(x) :- uncinate(x, "right")`). From
 Python, `nl_tracts.frontend.tracts_engine()` is the same engine.
+
+## The atlases of the engine
+
+The engine `tracts` has the atlases of the engine `neurosynth`, Destrieux,
+Schaefer and Tian, in MNI152: a tractogram in MNI152 is indexed by them
+without loading an atlas, and their labels are named as their relations
+name them, so that `label("destrieux", l, n, h)` joins
+`destrieux(n, region)`:
+
+```
+.load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
+.index_tracts("hcp842", "destrieux")
+.index_tracts("hcp842", "tian")
+```
+
+Destrieux has the terms of `freesurfer_destrieux` (`frontal`, `insula`,
+`temporal`...), Tian those of the aseg structures (`amygdala`, `putamen`,
+`striatum`...), so the rules of the uncinate run unchanged over the two.
+Both are atlases of the grey matter; the uncinate, defined on the cortex
+and the white matter under it, is found far better with a `wmparc`
+(DESIGN.md, 16.4).
+
+An atlas of nilearn is loaded by the name of its fetcher, its other
+options going to it, in MNI152, its names as the engine's (nilearn's
+Destrieux has the terms of `freesurfer_destrieux`):
+
+```
+.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")
+.load_tract_atlas("ho", kind="nilearn", fetcher="harvard_oxford",
+                  atlas_name="cort-maxprob-thr25-1mm")
+```
+

@@ -341,13 +341,30 @@ Sharing configuration between engines
 Settings common to several engines live in an ``abstract`` engine that the
 concrete ones pull in with ``extends``.  The built-in ``neurosynth`` and
 ``neurostore`` engines both extend ``coordinate_meta_analysis``, which
-provides the MNI mask, the base symbols, the Schaefer atlas, the sorts, the
-predicates and their Datalog rules, and the text embeddings; each engine
-adds its ``python_init`` and what is specific to its database::
+provides the MNI mask, the base symbols, the sorts, the predicates and
+their Datalog rules, and the text embeddings; it extends ``mni_atlases``,
+the atlases Destrieux, Schaefer and Tian with the sorts, predicates and
+rules of their labels and regions, and adds to each atlas the studies that
+activate its regions (``activated``), which need the peaks.  The ``tracts``
+engine extends ``mni_atlases`` too, and so has the same atlases, loaded the
+same way.  Each engine adds its ``python_init`` and what is specific to its
+database::
 
     engines:
+      mni_atlases:
+        abstract: true
+        atlases:
+          destrieux: {predicate_name: destrieux}
+          tian: {predicate_name: tian, scale: 2}
+
       coordinate_meta_analysis:
         abstract: true
+        extends: mni_atlases
+        atlases:      # merged into those of mni_atlases, atlas by atlas
+          destrieux:
+            activated: {predicate_name: destrieux_activated, radius_mm: 3}
+          tian:
+            activated: {predicate_name: tian_activated, radius_mm: 3}
         requires_mni_mask: true
         use_base_symbols: true
         datalog_init: |
@@ -449,11 +466,17 @@ The ``tracts`` engine
 
 ``tracts`` is tractography, from the package ``nl_tracts`` (the extra
 ``tracts`` of ``neurolang-apps``; without it the engine fails to build,
-with a message that says so).  It downloads nothing and has no data of its
-own: a program loads its atlas and its tractograms with the commands
-``.load_tract_atlas``, ``.load_tractogram`` and ``.index_tracts``, which
-its ``solver_mixins`` entry, ``nl_tracts.frontend:TractsCommandsMixin``,
-adds to the solver, and asks where the streamlines go in the vocabulary of
+with a message that says so).  It extends ``mni_atlases``: its atlases are
+those of ``neurosynth`` (Destrieux, Schaefer, Tian, about 270 KB downloaded
+on the first build), without the studies that activate them and without
+the MNI mask.  A program loads its tractograms, and if it wants an atlas
+of its own, with the commands ``.load_tract_atlas``, ``.load_tractogram``
+and ``.index_tracts``, which its ``solver_mixins`` entry,
+``nl_tracts.frontend:TractsCommandsMixin``, adds to the solver;
+``.index_tracts(t, "destrieux")`` indexes a tractogram in MNI152 by an
+atlas of the engine, whose label names are those of its relation:
+``label("destrieux", l, name, h)`` joins ``destrieux(name, region)``.  It
+asks where the streamlines go in the vocabulary of
 tractography, Datalog rules that its ``python_init``
 (``nl_tracts.frontend``) gives the engine: ``traverses(x, term, h)``,
 ``endpoint_in(x, e, term, h)``, ``anterior_of(x, term, h)`` and the like

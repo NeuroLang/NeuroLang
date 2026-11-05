@@ -26,7 +26,14 @@
 %       streamlines of one point, which nl_tracts refuses.
 %   .index_tracts(tractogram, atlas): the streamlines of each label
 %       (a label is traversed by at least 2 % of the points of a
-%       streamline: crossing_threshold=2.0) and their ends.
+%       streamline: crossing_threshold=2.0) and their ends. The atlas may
+%       also be one of the engine, in MNI152: .index_tracts("hcp842",
+%       "destrieux") and .index_tracts("hcp842", "tian") instead of
+%       .load_tract_atlas give the rules below every term they use, but
+%       only the cortex of the gyri, which finds few uncinates
+%       (DESIGN.md, 16.4). An atlas of nilearn, by its fetcher, is
+%       another alternative to the files:
+%         .load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")
 
 .load_tract_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152", term_mapping="freesurfer_aseg_aparc")
 .load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
