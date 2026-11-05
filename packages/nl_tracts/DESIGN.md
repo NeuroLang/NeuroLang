@@ -3,13 +3,17 @@
 Status: **implemented, from files to the answer**: the atlas layer (`spaces`,
 `terms`, `atlas`: sections 3.2, 4, 5, and `label_extent` of 6.1), the tractogram
 and its relations (`Tractogram`, `streamline_extent`, `endpoint_coord`,
-`streamline_length`), the **voxel indexing** (`traverses`, `endpoint`: 6.2),
-the parquet cache and the `RelationStore` (7.3), the WMQL transpiler with the
+`streamline_length`), the **voxel indexing** (`streamline_label`,
+`endpoint_label`: 6.2), the parquet cache and the `RelationStore` (7.3), the
+streamlines identified by **one integer id `x`** (3.1), the WMQL transpiler with the
 directional terms (section 11), the **Datalog file** that a WMQL program is
 turned into (11.7), the commands that build the relations from files when it
 runs (8.2) and the `nl-tracts` command. Not done: the relations as a Python
 call for many atlases at once beyond what `RelationStore` does, the AAL and
-Schaefer mappings, the probabilistic variants (4.4, 12). Numbers below marked
+Schaefer mappings, the probabilistic variants (4.4, 12), and the
+**vocabulary of rules** over this schema (`traverses(x, term, h)` and the
+like, for which the names `traverses` and `endpoint` are kept free): the next
+PR. Numbers below marked
 *measured* come from probes run on this repository (NeuroLang `master` at the
 time of the split, pandas 3.0.6, pandas backend, an Intel Mac); the rest are
 estimates.
@@ -78,29 +82,52 @@ the engine keeps the dtypes).
 | Relation | Columns | Dtypes | Atlas-dependent | Rows |
 |---|---|---|---|---|
 | `tractogram(t)` | t | str | no | #tractograms |
-| `streamline(t, s)` | t, s | str, int32 | no | S per tractogram |
+| `streamline(x, t, s)` | x, t, s | int64, str, int32 | no | S per tractogram |
 | `atlas(a)` | a | str | - | #atlases |
 | `label(a, l, name, hemi)` | a, l, name, hemi | str, int32, str, str | yes | ~10^2 per atlas |
 | `label_term(a, l, term)` | a, l, term | str, int32, str | yes | ~10^2 per atlas |
 | `opposite_hemisphere(h1, h2)` | h1, h2 | str, str | no | 3 (left/right, right/left, none/none) |
-| `traverses(a, t, s, l)` | a, t, s, l | str, str, int32, int32 | yes | ~5-15 per streamline |
-| `endpoint(a, t, s, e, l)` | a, t, s, e, l | str, str, int32, int8, int32 | yes | 2 per streamline |
-| `streamline_extent(t, s, axis, lo, hi)` | t, s, axis, lo, hi | str, int32, int8, float32, float32 | no | 3 per streamline |
-| `endpoint_coord(t, s, e, axis, v)` | t, s, e, axis, v | str, int32, int8, int8, float32 | no | 6 per streamline |
+| `streamline_label(a, x, l)` | a, x, l | str, int64, int32 | yes | ~5-15 per streamline |
+| `endpoint_label(a, x, e, l)` | a, x, e, l | str, int64, int8, int32 | yes | 2 per streamline |
+| `streamline_extent(x, axis, lo, hi)` | x, axis, lo, hi | int64, int8, float32, float32 | no | 3 per streamline |
+| `endpoint_coord(x, e, axis, v)` | x, e, axis, v | int64, int8, int8, float32 | no | 6 per streamline |
 | `label_extent(a, l, axis, lo, hi)` | a, l, axis, lo, hi | str, int32, int8, float32, float32 | yes | 3 per label |
-| `streamline_length(t, s, mm)` | t, s, mm | str, int32, float32 | no | 1 per streamline |
+| `streamline_length(x, mm)` | x, mm | int64, float32 | no | 1 per streamline |
+
+**A streamline is one id, `x`.** `x = (index << 32) | s`, an int64, where
+`s` is the position of the streamline in its file and `index` the load order
+of its tractogram in the `RelationStore` (0 for the first, so that with one
+tractogram `x == s`); `nl_tracts.ids` has `encode` and `decode`, vectorised.
+`streamline(x, t, s)` is the **decoding relation**: a rule that needs the
+tractogram or the position joins it (`ans(t, s) :- q_uf_left(x),
+streamline(x, t, s)`); a rule that does not never carries them. The engine of
+the commands (`tracts_engine()`, 8.2) also has the functions
+`streamline_id(t, s)`, `subject_of(x)` (the `t` of `x`) and `index_of(x)`
+(its `s`), for a comparison in a rule body: `ans(t) :- streamline_label("fs",
+x, 1), (t == subject_of(x))`. Why one id rather than the pair `(t, s)`: a
+join on a streamline is on one integer column instead of a string and an
+integer, the string `t` is not repeated on every row of the large relations
+(`streamline_label` is 10^7 rows, 7.2), and the rules over streamlines are
+unary in them, which is what a vocabulary of rules over this schema
+(`traverses(x, term, h)`, the next PR) is written in. The subject is decoded
+when asked. `index` is the load order, not a hash of the id, so the ids of a
+tractogram depend on what was loaded before it in the same store: `x` is a
+key *within* one store (one engine), not across them; the parquet cache
+(7.3) is per tractogram and keeps the positions `s`, and the store makes `x`
+when it appends. (The relations were keyed by `(t, s)`, and the two
+streamline relations called `traverses` and `endpoint`, until this change.)
 
 Changes with respect to the brief, each of which is a refinement, not a
 deviation from a decision:
 
 * **`axis` is an int** (0, 1, 2 = x, y, z of the space's world axes, RAS+)
   rather than a string: 3 to 6 rows per streamline times 10^6-10^7
-  streamlines makes the column the largest after `traverses`. Constants
+  streamlines makes the column the largest after `streamline_label`. Constants
   are not a usability problem: the frontend does not need to define them;
   rules write `axis = 1` and the vocabulary is in the documentation.
-* **`streamline_length(t, s, mm)` is added.** tract_querier's
+* **`streamline_length(x, mm)` is added.** tract_querier's
   `length_threshold` is applied while indexing; for a query that is made of
-  rules (`long(t, s) :- streamline_length(t, s, d), d > 40`) the length has
+  rules (`long(x) :- streamline_length(x, d), (d > 40)`) the length has
   to be a relation. The *index* parameter `length_threshold` remains, to
   keep out of every relation the streamlines nobody will query (6.1).
 * **`label_extent` and `streamline_extent` are in world mm.** `label_extent`
@@ -147,15 +174,15 @@ difference between its label sets and the mapping's, exactly:
 
 ```
 % uncinate fasciculus, any atlas, either hemisphere
-uf(a, t, h, s) :-
-    traverses(a, t, s, l1), label_term(a, l1, "temporalpole"),
+uf(a, x, h) :-
+    streamline_label(a, x, l1), label_term(a, l1, "temporalpole"),
         label(a, l1, _n1, h),
-    traverses(a, t, s, l2), label_term(a, l2, "orbitofrontalgyrus"),
+    streamline_label(a, x, l2), label_term(a, l2, "orbitofrontalgyrus"),
         label(a, l2, _n2, h)
-% the same, with the two ends in opposite hemispheres
-callosal(a, t, s) :-
-    endpoint(a, t, s, 0, l1), label(a, l1, _n1, h1),
-    endpoint(a, t, s, 1, l2), label(a, l2, _n2, h2),
+% the two ends in opposite hemispheres
+callosal(a, x) :-
+    endpoint_label(a, x, 0, l1), label(a, l1, _n1, h1),
+    endpoint_label(a, x, 1, l2), label(a, l2, _n2, h2),
     opposite_hemisphere(h1, h2)
 ```
 
@@ -216,7 +243,7 @@ Ids that are in the table but not in the volume, and ids in the volume but
 not in the table, are reported with a warning that names them: the former
 are dropped from `label` (nilearn's Destrieux has two, the medial walls),
 the latter are kept with `name = "label_<id>"` and `hemi = "none"`, since
-`traverses` would otherwise refer to an unknown label. The background has a
+`streamline_label` would otherwise refer to an unknown label. The background has a
 row in `label` only if the table has one, and none in `label_extent`. Labels
 must be non-negative integers (a float volume with integral values is
 accepted, read through `dataobj`, never `get_fdata`); a 4D image is a
@@ -270,7 +297,7 @@ way; matching is case-sensitive; `Leftover`, `Rightmost_area` and
 A `ProbabilisticAtlas` (4D volume: one probability map per label) is a
 class in `atlas.py` whose constructor raises `NotImplementedError`. It will
 share the label table, hemisphere rules, term mapping and space tag with
-`Atlas`, and produce a *probabilistic* relation `traverses_p(a, t, s, l)`
+`Atlas`, and produce a *probabilistic* relation `streamline_label_p(a, x, l)`
 with the probability for `NeurolangPDL.add_probabilistic_facts_from_tuples`
 (first column = probability). Open design questions, deliberately not
 answered now: whether the probability of traversal is a function of the
@@ -326,8 +353,8 @@ have a test** (13.2):
 | 3 | `point_labels = img[ijk]`, labels used as indices of `np.bincount` | integer labels; **negative labels** are not supported by the reference (bincount fails); we raise a clear error |
 | 4 | Streamline `i` traverses `l` iff `count_l / n_points >= threshold / 100.`, `threshold` = **2.0** by default (the CLI's), and the denominator is **all** the points, label 0 included | `crossing_threshold`, default 2.0; the same float expression `count / n >= threshold / 100.` so that the comparison is bit-identical |
 | 5 | The result includes label **0** when >= threshold of the points are in the background | see 6.3 |
-| 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]`, label 0 included | `endpoint(a, t, s, e, l)`, `e` = 0 first, 1 last; **rows with the background label are never emitted** (6.3), so the equivalence tests drop label 0 from the reference's endpoints before comparing |
-| 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file; filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list. **The reference's `tract_bounding_boxes` and `tract_endpoints_pos` are computed on all the tracts, unfiltered, so its directional terms are misaligned with the renumbered ids when `length_threshold > 0`** (11.5): not comparable there |
+| 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]`, label 0 included | `endpoint_label(a, x, e, l)`, `e` = 0 first, 1 last; **rows with the background label are never emitted** (6.3), so the equivalence tests drop label 0 from the reference's endpoints before comparing |
+| 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file (and `x` encodes it, 3.1); filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list. **The reference's `tract_bounding_boxes` and `tract_endpoints_pos` are computed on all the tracts, unfiltered, so its directional terms are misaligned with the renumbered ids when `length_threshold > 0`** (11.5): not comparable there |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
 | 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
@@ -374,19 +401,21 @@ Given `P` points with a streamline id each (`np.repeat(arange(S), lengths)`):
    blocks of streamlines of at most `2^24` points to bound the temporary
    `(P, 3)` float64 and int64 arrays.
 2. `lab = labels[ijk[:, 0], ijk[:, 1], ijk[:, 2]]`.
-3. `traverses`: build `key = sid * (L + 1) + dense_label`, where
+3. `streamline_label`: build `key = sid * (L + 1) + dense_label`, where
    `dense_label` ranks the atlas's labels (the table order, background
    first) so that `L` is the number of labels, not the largest id;
    `np.unique(key, return_counts=True)` per chunk; divide the counts by
    `lengths[sid]`; keep `count / n >= threshold / 100.`; decode `sid` and
    label. If `S * (L + 1) < 2^28` a `np.bincount` over the same key is used
    instead of the sort. Complexity O(P log P), O(P) memory per chunk.
-4. `endpoint`: `lab[offsets[:-1]]` and `lab[offsets[1:] - 1]`: two fancy
+4. `endpoint_label`: `lab[offsets[:-1]]` and `lab[offsets[1:] - 1]`: two fancy
    indexings.
-5. Streamline extents: `np.minimum.reduceat` / `np.maximum.reduceat` over
+5. In the store, `x = (index << 32) | s` replaces the columns `t` and `s` of
+   each relation of a tractogram: one shift and one or over the column.
+6. Streamline extents: `np.minimum.reduceat` / `np.maximum.reduceat` over
    the points at `offsets[:-1]`, per axis; lengths: `np.add.reduceat` of the
    segment norms, with the last segment of each streamline masked out.
-6. `label_extent`: one `ndimage.find_objects` for all the labels, the
+7. `label_extent`: one `ndimage.find_objects` for all the labels, the
    `(L, 3)` starts and stops as arrays, the 8 corners of every box mapped by
    the affine in one product, min and max (6.1.1). The only Python loop is
    the unpacking of the slices `find_objects` returns, one per label.
@@ -400,19 +429,20 @@ The reference treats 0 as a label like any other: it counts in the
 denominators, can be traversed, and can be an endpoint label. nl_tracts:
 
 * Points in the background **always count in the denominator** (parity 4).
-* **`endpoint` never carries the background label** (decision of the
+* **`endpoint_label` never carries the background label** (decision of the
   maintainer, not a flag): an endpoint whose point is in the background has
   *no row* for that end. "This end is in no region" is the safe negation
-  `no_region(a, t, s, e) :- streamline(t, s), end_index(e), ~has_end(a, t, s, e)`
-  with `has_end(a, t, s, e) :- endpoint(a, t, s, e, l)`; `end_index(e)`
+  `no_region(a, x, e) :- atlas(a), streamline(x, t, s), end_index(e), ~has_end(a, x, e)`
+  with `has_end(a, x, e) :- endpoint_label(a, x, e, l)`; `end_index(e)`
   is `{0, 1}` (a two-row relation in the rule, or `e = 0`/`e = 1` written
   out).
-* `traverses` has rows for the background label **only if
+* `streamline_label` has rows for the background label **only if
   `IndexingParams.emit_background=True`**. Default is **False**: with 0
-  emitted, almost every streamline has a `(a, t, s, 0)` row and `traverses`
-  grows by a factor of 1.1-1.3 for facts no rule should use.
-  `emit_background=True` reproduces the reference's `traverses` and is what
-  the equivalence tests use; it has no effect on `endpoint`.
+  emitted, almost every streamline has a `(a, x, 0)` row and
+  `streamline_label` grows by a factor of 1.1-1.3 for facts no rule should
+  use. `emit_background=True` reproduces the reference's
+  `crossing_tracts_labels` and is what the equivalence tests use; it has no
+  effect on `endpoint_label`.
 * `label` has a row for the background only if the label table has one (the
   FreeSurfer LUT does: `0 Unknown`).
 * WMQL's `not`/`-` operate on the set of labels that appear in the data,
@@ -431,7 +461,7 @@ reasons it is not a CSR matrix:
 * a CSR (streamline x label) matrix is the natural *internal* structure of
   step 3 of 6.2 (`scipy.sparse.csr_array` from the unique keys) and may be
   used inside `traverses_relation`; it is not part of the API;
-* the three atlas-independent relations and `endpoint` are dense per
+* the three atlas-independent relations and `endpoint_label` are dense per
   streamline, and flat arrays are what they are.
 
 The core never builds tuples, sets or dicts per streamline.
@@ -443,10 +473,14 @@ per streamline on average:
 
 | Relation | Rows | Bytes/row | Memory |
 |---|---|---|---|
-| `traverses` | 10^7 | 10 (a) + 10 (t) + 4 + 4 = 28 | 280 MB |
-| `endpoint` | 2x10^6 | 10 + 10 + 4 + 1 + 4 = 29 | 58 MB |
-| `streamline_extent` | 3x10^6 | 10 + 4 + 1 + 4 + 4 = 23 | 69 MB |
-| `endpoint_coord` | 6x10^6 | 10 + 4 + 1 + 1 + 4 = 20 | 120 MB |
+| `streamline_label` | 10^7 | 10 (a) + 8 (x) + 4 = 22 | 220 MB |
+| `endpoint_label` | 2x10^6 | 10 + 8 + 1 + 4 = 23 | 46 MB |
+| `streamline_extent` | 3x10^6 | 8 + 1 + 4 + 4 = 17 | 51 MB |
+| `endpoint_coord` | 6x10^6 | 8 + 1 + 1 + 4 = 14 | 84 MB |
+| `streamline` | 10^6 | 8 + 10 (t) + 4 = 22 | 22 MB |
+
+(Computed from the dtypes; with `(t, s)` for a streamline, before the id `x`
+of 3.1, the four were 280, 58, 69 and 120 MB.)
 
 **String columns.** The `a` and `t` columns are pandas' default string
 dtype. *Measured* (pandas 3.0.6): a constant string column of 3x10^6 rows is
@@ -463,8 +497,10 @@ strings converts it. So the 841 MB figure is for `str`, and the engine runs
 joins and constant selections on it without trouble. **Decision: keep
 strings** for `a` and `t`: queries switch atlas by editing a literal
 (decision 2), and surrogate integer keys would need a lookup relation in
-every rule. At 10^8 rows the two columns are about 2 GB under either dtype
-and the integer alternative saves most of it: revisit then (15.3).
+every rule. Since streamlines are the id `x` (3.1), `t` is only in
+`tractogram` and `streamline`, one row per streamline, and not in the large
+relations; `a` is. At 10^8 rows the `a` column is about 1 GB under either
+dtype and an integer would save most of it: revisit then (15.3).
 `Categorical` is not used because the engine's behaviour on categorical
 columns is untested. The code does not choose the dtype: it builds
 DataFrames from Python strings and lets pandas decide, so that it behaves
@@ -474,32 +510,38 @@ dtype, not the identity of the objects.
 ### 7.3 On disk: parquet, keyed by content
 
 Only the **atlas-dependent relations that are expensive** are cached:
-`traverses` and `endpoint`. The others are `O(S)` numpy reductions that cost
-less than reading a file.
+`streamline_label` and `endpoint_label`. The others are `O(S)` numpy
+reductions that cost less than reading a file.
 
 ```
-<cache_dir>/<key>/traverses.parquet
-<cache_dir>/<key>/endpoint.parquet
+<cache_dir>/<key>/traverses.parquet       # streamline_label: s, l
+<cache_dir>/<key>/endpoint.parquet        # endpoint_label: s, e, l
 <cache_dir>/<key>/meta.json     # params, nl_tracts version, INDEXING_VERSION, row counts
 ```
+
+An entry is of one tractogram and one atlas, so it holds the position `s`,
+not `x`, which depends on the load order of the store (3.1): the store adds
+`a` and makes `x` when it reads it. (The files keep the names of the
+relations as they were when the cache was written; renaming them would only
+invalidate the caches.)
 
 `key = sha256(tractogram.content_hash() ‖ atlas.content_hash() ‖
 repr(params) ‖ INDEXING_VERSION)`, hex, first 32 characters.
 `Tractogram.content_hash` hashes the points (as float32 bytes), the offsets
 and the space tag; the `id` is **not** in it, so two runs of the same file
-under different ids share a cache entry and the `t` column is set when the
-entry is read. `Atlas.content_hash` hashes the volume, the affine, the label
-table, the background id and the space tag, not the atlas name, for the same
-reason. `INDEXING_VERSION` (in `cache.py`) is bumped whenever the semantics
+under different ids share a cache entry, and `x` is made from the load order
+when the entry is read. `Atlas.content_hash` hashes the volume, the affine,
+the label table, the background id and the space tag, not the atlas name, for
+the same reason. `INDEXING_VERSION` (in `cache.py`) is bumped whenever the semantics
 of 6 change. Files are written to a temporary name and renamed, so an
 interrupted run never leaves a half file that is later trusted; zstd,
 row groups of 10^6, dictionary encoding on the string columns (a column of
 one repeated string is a few bytes on disk).
 
 Reading is `pandas.read_parquet` with the dtypes of 3.1 restored (parquet
-stores `int32`/`int8`/`float32` natively); the `a` and `t` columns are
-read back in pandas' default string dtype (7.2), so the memory of 7.2 holds
-after a cache hit.
+stores `int32`/`int8`/`float32` natively); the `a` column is added back in
+pandas' default string dtype (7.2) and `x` made from `s`, so the memory of
+7.2 holds after a cache hit.
 
 ### 7.4 Chunking
 
@@ -528,8 +570,8 @@ points. Chunking is internal; the result is one DataFrame.
   26 ms** (`NeurolangPDL`, 10^6 rows with a string column: 94 ms).
 * The dtypes are preserved (`int32` stays `int32`), the row type is
   inferred from the first row (`Tuple[int, int, int, int]`).
-* A rule over 2x10^6-row `traverses` joined with `label_term`, with
-  negation, ran in **2.1 s, 436 MB** peak RSS; at 3x10^6 rows a join
+* A rule over a 2x10^6-row `traverses(a, t, s, l)` (now `streamline_label`)
+  joined with `label_term`, with negation, ran in **2.1 s, 436 MB** peak RSS; at 3x10^6 rows a join
   0.95-1.4 s.
 * The one `copy()` doubles the footprint momentarily. If it matters,
   the fix is in `RelationalAlgebraFrozenSet.__init__` (adopt the frame
@@ -555,6 +597,9 @@ tractograms must be concatenated *before* registration: that is the
 `RelationStore`'s job (`add_atlas`, `add_tractogram`, `add_index` accumulate
 into one frame per relation), and `register` is called once. Registering
 again replaces everything: there is no incremental add in phase 1 (15.5).
+`add_tractogram` gives the tractogram its index in the ids `x` (the number of
+tractograms added before it, kept in `RelationStore.tractograms`), so it comes
+before `add_index`, which raises otherwise.
 
 ```python
 store = RelationStore()
@@ -566,7 +611,8 @@ for atlas in atlases:
     store.add_index(tg, atlas, params, cache_dir="~/.cache/nl_tracts")
 nl = NeurolangDL()
 register(nl, store)
-nl.execute_datalog_program('ans(s) :- traverses("dk", "100307", s, l), ...')
+nl.execute_datalog_program(
+    'ans(s) :- streamline_label("dk", x, l), streamline(x, "100307", s), ...')
 ```
 
 #### The commands: the second hand-off path
@@ -596,6 +642,23 @@ file, an unknown `kind`, a command before the one it needs, a space mismatch
 (`allow_space_mismatch=1` overrides), a pair indexed twice, a
 `length_threshold` that differs from that of the tractogram's first index
 (its relations have those streamlines).
+
+The relations are those of 3.1: `streamline(x, t, s)`, `streamline_label(a,
+x, l)`, `endpoint_label(a, x, e, l)`, the geometry by `x`, and the catalogue.
+A tractogram enters the store at its first `.index_tracts`, so its index in
+`x` is the order of the first `.index_tracts` of each tractogram (with the
+commands of `nl_tracts.dl`, the order of the `--tractogram` options). The
+engine `tracts_engine()` also has three functions, typed by their annotations,
+over the tractograms its commands have indexed: `streamline_id(t, s)` (the
+`x`), `subject_of(x)` (the `t`) and `index_of(x)` (the `s`). They are for
+comparisons in a rule body, as other functions of the frontend are:
+
+```
+ans(t) :- streamline_label("fs", x, 1), (t == subject_of(x))
+```
+
+The join with `streamline(x, t, s)` gives the same, and is what the
+transpiler writes (11).
 
 Where the handler sits matters. The solver of `NeurolangPDL` is
 `RegionFrontendCPLogicSolver`, whose `CommandsMixin` has a catch-all that
@@ -629,6 +692,7 @@ packages/nl_tracts/
     cli.py              `nl-tracts dl` and `nl-tracts run`
     atlas.py            Atlas, ProbabilisticAtlas, HemisphereRule, loaders
     tractogram.py       Tractogram
+    ids.py              the id x of a streamline: encode, decode
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
     cache.py            parquet cache: cache_key, read_cached, write_cached
     frontend.py         register(), the commands, tracts_engine() -- the only
@@ -646,7 +710,7 @@ packages/nl_tracts/
 * The layers contract becomes `neurolang_apps > nl_tracts > neurolang >
   nl_core > nl_expr`.
 * A new `forbidden` contract: `nl_tracts.{spaces, terms, wmql, dl, atlas,
-  tractogram, indexing, cache}` may import none of `neurolang`, `nl_core`, `nl_expr`,
+  tractogram, indexing, cache, ids}` may import none of `neurolang`, `nl_core`, `nl_expr`,
   `lark`, `nilearn`. `frontend` is exempt, and is the only module that may
   import NeuroLang.
 
@@ -741,18 +805,24 @@ class Tractogram:
     from_file(id, path, space) / from_streamlines(id, streamlines, space)
     n_streamlines / lengths_in_points() / lengths_in_mm() / content_hash()
 
+# ids.py
+SHIFT = 32
+def encode(index, s) -> int64 | ndarray       # (index << 32) | s, vectorised
+def decode(x) -> (index, s)
+
 # indexing.py
 @dataclass(frozen=True) class IndexingParams:
     crossing_threshold: float = 2.0
     length_threshold: float = 0.0
     emit_background: bool = False
 def points_to_voxels(points, affine, shape) -> ndarray
-def traverses_relation(tractogram, atlas, params) -> DataFrame
-def endpoint_relation(tractogram, atlas, params) -> DataFrame
+# the rows of one tractogram, by (t, s); the store makes x
+def traverses_relation(tractogram, atlas, params) -> DataFrame   # a, t, s, l
+def endpoint_relation(tractogram, atlas, params) -> DataFrame    # a, t, s, e, l
 def streamline_extent_relation(tractogram, params) -> DataFrame
 def endpoint_coord_relation(tractogram, params) -> DataFrame
 def streamline_length_relation(tractogram, params) -> DataFrame
-class RelationStore:
+class RelationStore:    # relations (by x, 3.1), tractograms (ids, load order)
     add_atlas(atlas) / add_tractogram(tractogram, params) /
     add_index(tractogram, atlas, params, cache_dir=None, allow_space_mismatch=False)
 def build_relations(tractogram, atlas, params=IndexingParams(), cache_dir=None,
@@ -769,7 +839,8 @@ def register(engine, store, only=None) -> None
 def relation_frames(store) -> dict[str, DataFrame]       # + opposite_hemisphere
 class TractsCommandsMixin   # .load_tract_atlas, .load_tractogram, .index_tracts
 class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver)
-def tracts_engine(**kw) -> NeurolangPDL                  # solver_class=TractsSolver
+def tracts_engine(**kw) -> NeurolangPDL                  # solver_class=TractsSolver,
+                    # and the functions streamline_id(t, s), subject_of(x), index_of(x)
 
 # dl.py
 class AtlasSource(name, image, table, kind="freesurfer", space, term_mapping, background)
@@ -802,23 +873,25 @@ transpile(source, atlas, include_folders=(), skip_unsupported=False)
 In the reference every query value is a **triple** (`FiberQueryInfo`): the
 streamlines `tracts`, a set of `labels`, and two sets of streamlines
 `tracts_endpoints[0|1]` (those whose first / last point is in one of the
-labels). A WMQL name `x` becomes four predicates over `tractogram(t)`,
-`traverses(a, t, s, l)` and `endpoint(a, t, s, e, l)` and, for the directional
-terms, `label_extent(a, l, axis, lo, hi)`, `streamline_extent(t, s, axis,
-lo, hi)` and `endpoint_coord(t, s, e, axis, v)`, with the atlas `a` a
-constant of the program (WMQL labels are the ids of an atlas, as
-`FreeSurfer.qry` has them). **The label set carries the tractogram**, since
-the labels of a directional result are those its streamlines traverse, which
-depends on the data of each tractogram, as in the reference, where each run
-has one:
+labels). A WMQL name `b` becomes four predicates over `tractogram(t)`,
+`streamline(x, t, s)`, `streamline_label(a, x, l)` and `endpoint_label(a, x,
+e, l)` and, for the directional terms, `label_extent(a, l, axis, lo, hi)`,
+`streamline_extent(x, axis, lo, hi)` and `endpoint_coord(x, e, axis, v)`,
+with the atlas `a` a constant of the program (WMQL labels are the ids of an
+atlas, as `FreeSurfer.qry` has them). The streamlines are unary, by their id
+`x` (3.1), which belongs to one tractogram. **The label set carries the
+tractogram**, since the labels of a directional result are those its
+streamlines traverse, which depends on the data of each tractogram, as in
+the reference, where each run has one; a rule that relates a streamline to a
+label set reads its `t` from `streamline(x, t, s)`:
 
 | Predicate | Component |
 |---|---|
-| `q_x(t, s)` | the streamlines |
-| `q_x__label(t, l)` | the labels, for each tractogram |
-| `q_x__end0(t, s)`, `q_x__end1(t, s)` | streamlines whose first / last point is in the labels |
+| `q_b(x)` | the streamlines |
+| `q_b__label(t, l)` | the labels, for each tractogram |
+| `q_b__end0(x)`, `q_b__end1(x)` | streamlines whose first / last point is in the labels |
 
-`x.left` is `q_x_left`; the prefix keeps WMQL names (`label`, `endpoint`)
+`b.left` is `q_b_left`; the prefix keeps WMQL names (`label`, `streamline`)
 apart from the relations; two names that would mangle alike raise. A
 component that is empty whatever the data (`not A` has no endpoints) is
 `None` and has no predicate: it propagates (an intersection with it is
@@ -832,16 +905,16 @@ Read from `query_processor.py` and checked against it (13.2).
 
 | WMQL | Reference semantics (componentwise on the triple) | Datalog |
 |---|---|---|
-| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(t,s) :- traverses(a,t,s,7)`; `E_label(t,7) :- tractogram(t)`; `E_end0(t,s) :- endpoint(a,t,s,0,7)`, same for 1 |
+| `7` | tracts = those traversing 7; labels = {7}; end_e = those whose end e is in 7 | `E(x) :- streamline_label(a,x,7)`; `E_label(t,7) :- tractogram(t)`; `E_end0(x) :- endpoint_label(a,x,0,7)`, same for 1 |
 | `A or B`, `A + B` | union of tracts, labels, endpoints | two rules per predicate, same head |
-| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(t,s) :- A(t,s), B(t,s)`; `E_label(t,l)` from both; `E_end0(t,s) :- A_end0(t,s), B_end0(t,s)` |
-| `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets; `a not in b not in c` is sequential | `E(t,s) :- A(t,s), ~B(t,s)`; the same for labels and ends |
-| `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(t,l) :- traverses(a,t,s,l)`; `E_label(t,l) :- U(t,l), ~A_label(t,l)`; `E(t,s) :- traverses(a,t,s,l), E_label(t,l)`. **Not** `~A(t,s)` |
-| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(t,s) :- A(t,s), traverses(a,t,s,l), ~A_label(t,l)`; `E(t,s) :- A(t,s), ~outside(t,s)` |
-| `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(t,s) :- A_end0(t,s), endpoint(a,t,s,0,l), A_label(t,l)` |
+| `A and B`, `A * B` | tracts ∩, **labels ∪**, endpoints ∩ | `E(x) :- A(x), B(x)`; `E_label(t,l)` from both; `E_end0(x) :- A_end0(x), B_end0(x)` |
+| `A - B`, `A not in B` | set difference of the tracts, of the labels **and** of the endpoint sets; `a not in b not in c` is sequential | `E(x) :- A(x), ~B(x)`; the same for labels and ends |
+| `not A`, `-A` (unary) | tracts traversing **some label outside A's labels**, over the labels *present in the data*; labels = that complement; **endpoints empty** | `U(t,l) :- streamline_label(a,x,l), streamline(x,t,s)`; `E_label(t,l) :- U(t,l), ~A_label(t,l)`; `E(x) :- streamline_label(a,x,l), streamline(x,t,s), E_label(t,l)`. **Not** `~A(x)` |
+| `~A` (invert) | tracts of A whose **every** traversed label is in A's labels; labels as A; **endpoints empty** | `outside(x) :- A(x), streamline_label(a,x,l), streamline(x,t,s), ~A_label(t,l)`; `E(x) :- A(x), ~outside(x)` |
+| `only(A)` | the same tracts and labels as `~A`; the endpoint sets **kept**, filtered to those whose end label is in A's labels | as `~A`, and `E_end0(x) :- A_end0(x), endpoint_label(a,x,0,l), streamline(x,t,s), A_label(t,l)` |
 | `+A` | A | A |
-| `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(t,s) :- A_end0(t,s)`; `E(t,s) :- A_end1(t,s)` |
-| `both_endpoints_in(A)` | tracts = end0 ∩ end1 of A | `E(t,s) :- A_end0(t,s), A_end1(t,s)` |
+| `endpoints_in(A)` | tracts = end0 ∪ end1 of A; labels, endpoints as A | `E(x) :- A_end0(x)`; `E(x) :- A_end1(x)` |
+| `both_endpoints_in(A)` | tracts = end0 ∩ end1 of A | `E(x) :- A_end0(x), A_end1(x)` |
 | `"pattern*"` | `fnmatch` over the names defined **so far**, union; no match: empty | resolved when transpiling, in order |
 | `x.side = e`, `.opposite` | the statement is repeated for `x.left` and `x.right`, `side` and `opposite` swapped | the same, at transpile time |
 | `for v in [a, b]` / `'p*'` | the body repeated with the **names** equal to `v` replaced (not attributes, not the names of targets) | expanded at transpile time |
@@ -868,7 +941,7 @@ difference; (ii) the label set of `A and B` is a **union**, so
 data's label universe includes the background (6.3), so both traps need
 `emit_background=True` to agree with the reference, and queries whose label
 set contains the background *and* that read the endpoint predicates are out
-of the equivalence scope (the endpoint relation has no background rows);
+of the equivalence scope (`endpoint_label` has no background rows);
 (iv) `not` and `~` give **empty endpoint sets**, `only` filters them: a
 translation that treats them alike is wrong (an earlier version of this
 section did, until the transpiler's tests were written against the
@@ -997,38 +1070,42 @@ set operation is done by one of three functions that know it:
 | `A`, `B` | new `P`, rules `P :- A`; `P :- B` | new `P :- A, B` | new `P :- A, ~B` |
 
 A new predicate is named `qi_N` with `N` increasing, and the arguments of a
-component are `(t, s)` for streamlines and `(t, l)` for labels. The
-operations, each on the four components (11.2 has the semantics):
+component are `(x)` for streamlines and `(t, l)` for labels. The
+operations, each on the four components (11.2 has the semantics; `q` is an
+operand, and `streamline(x, t, s)` is written only where a streamline meets a
+label set):
 
 * `Name`, `Attribute(Name, attr)`: look `name` or `name.attr` up in
   `defined`; an unknown name is an error (or, if it was skipped, a skipped
   query that depends on a skipped one).
 * A string: the names of `defined` that `fnmatch` the pattern are united,
   in the order of `defined` (nothing matching: all four `None`).
-* A number `n`: four predicates, `traverses(a, t, s, n)`;
-  `tractogram(t)` gives `(t, n)` for the labels; `endpoint(a, t, s, 0, n)` and
-  `endpoint(a, t, s, 1, n)`. Other numbers than integers are an error.
+* A number `n`: four predicates, `streamline_label(a, x, n)`;
+  `tractogram(t)` gives `(t, n)` for the labels; `endpoint_label(a, x, 0, n)`
+  and `endpoint_label(a, x, 1, n)`. Other numbers than integers are an error.
 * `or`, `+`: `union` on the four components, folded left over the operands.
   `and`, `*`: `intersection` on the streamlines and the endpoint sets,
   **`union` on the labels**. `-` and `not in`: `difference` on all four.
-* `+x`: `x`.
-* `not x`, `-x` (**complement**): the *universe* `U(t, l) :- traverses(a, t,
-  s, l)` is emitted once (the labels the streamlines of each tractogram
-  traverse, the background included when it is a row of `traverses`); the
-  labels are `difference(U, x.labels)`; the streamlines are `C(t, s) :-
-  traverses(a, t, s, l), labels(t, l)`; the endpoint sets are `None`.
-* `~x` (**invert**): `outside(t, s) :- x.tracts(t, s), traverses(a, t, s,
-  l), ~x.labels(t, l)` (without the negation if `x.labels` is `None`: every
-  traversed label is outside), which starts from the streamlines of `x`, so
-  that the join and its result are of their size and not of all of
-  `traverses`; the streamlines are `difference(x.tracts, outside)`; the labels
-  are `x.labels`; the endpoint sets are `None`.
-* `only(x)`: as `~x` for the streamlines and the labels; **each endpoint set
-  is kept**, `E_end_i(t, s) :- x.end_i(t, s), endpoint(a, t, s, i, l),
-  x.labels(t, l)` (the end label must be in the labels), `None` if `x.end_i`
-  or `x.labels` is.
-* `endpoints_in(x)`: streamlines `union(x.end0, x.end1)`, labels and endpoint
-  sets of `x`. `both_endpoints_in(x)`: `intersection`.
+* `+q`: `q`.
+* `not q`, `-q` (**complement**): the *universe* `U(t, l) :-
+  streamline_label(a, x, l), streamline(x, t, s)` is emitted once (the labels
+  the streamlines of each tractogram traverse, the background included when it
+  is a row of `streamline_label`); the labels are `difference(U, q.labels)`;
+  the streamlines are `C(x) :- streamline_label(a, x, l), streamline(x, t, s),
+  labels(t, l)`; the endpoint sets are `None`.
+* `~q` (**invert**): `outside(x) :- q.tracts(x), streamline_label(a, x, l),
+  streamline(x, t, s), ~q.labels(t, l)` (without the negation, and so without
+  `streamline`, if `q.labels` is `None`: every traversed label is outside),
+  which starts from the streamlines of `q`, so that the join and its result
+  are of their size and not of all of `streamline_label`; the streamlines are
+  `difference(q.tracts, outside)`; the labels are `q.labels`; the endpoint
+  sets are `None`.
+* `only(q)`: as `~q` for the streamlines and the labels; **each endpoint set
+  is kept**, `E_end_i(x) :- q.end_i(x), endpoint_label(a, x, i, l),
+  streamline(x, t, s), q.labels(t, l)` (the end label must be in the labels),
+  `None` if `q.end_i` or `q.labels` is.
+* `endpoints_in(q)`: streamlines `union(q.end0, q.end1)`, labels and endpoint
+  sets of `q`. `both_endpoints_in(q)`: `intersection`.
 * A directional term: 11.5.
 * Anything else (`save`, an unknown function, a call with other than one
   argument, a comparison other than `not in`, another operator) is an error;
@@ -1046,17 +1123,17 @@ predicate of its own; the copies were extra steps for the engine, each a
 pass over a possibly large relation, and are now made only at the output.)
 
 **Naming (`finish`).** The mangled form of a name replaces `.` by `_`
-(`x.left` is `x_left`) and must be `[a-z0-9_]+`; two names with one mangled
-form (`x.left`, `x_left`) are an error. The last definition of a name is
+(`b.left` is `b_left`) and must be `[a-z0-9_]+`; two names with one mangled
+form (`b.left`, `b_left`) are an error. The last definition of a name is
 `q_<mangled>` (`q_<mangled>__label`, `__end0`, `__end1` for the other
 components); the earlier definitions are `q_<mangled>__v1`, `__v2`, ... .
-Each public predicate is an **alias rule** `q_x(t, s) :- qi_N(t, s)` for the
+Each public predicate is an **alias rule** `q_b(x) :- qi_N(x)` for the
 internal predicate of that component; the prefix `q_` keeps WMQL names
-(`label`, `endpoint`, `ans`) apart from the relations and the keywords of
+(`label`, `streamline`, `ans`) apart from the relations and the keywords of
 Datalog; the intermediate predicates are `qi_N`, which cannot collide with a
 `q_` name. The rules are kept as structures, with the extensional atoms
-(`traverses`, `endpoint`, `tractogram`, `label_extent`, `streamline_extent`,
-`endpoint_coord`) marked.
+(`streamline`, `streamline_label`, `endpoint_label`, `tractogram`,
+`label_extent`, `streamline_extent`, `endpoint_coord`) marked.
 
 **Output and slicing.** `Transpiled.text` is all the rules and the aliases of
 every version of every name. `Transpiled.program(*names, components=...)`
@@ -1066,7 +1143,7 @@ atoms of its body); the rules of the closure are written in their original
 order, then the aliases. So **a component is computed only if it is wanted or
 another wanted component needs it**: the streamlines of a bundle do not pay
 for the labels of its directional terms, a join of the streamlines with
-`traverses` (the difference between 3.8 s and 0.5 s for `anterior_of(a)` at a
+`streamline_label` (the difference between 3.8 s and 0.5 s for `anterior_of(a)` at a
 million streamlines, 11.6).
 
 **Properties of the output.** (1) *Non-recursive*: a rule only reads
@@ -1106,48 +1183,51 @@ left bundle (31 rules; 16 with `components=("tracts",)`):
 % (labels, ends) and tmp.right (streamlines, labels, ends)
 qi_2(t, 18) :- tractogram(t)
 qi_10(t, 5) :- tractogram(t)
-qi_11(t, s) :- endpoint("fs", t, s, 0, 5)
-qi_12(t, s) :- endpoint("fs", t, s, 1, 5)
-qi_13(t, s) :- traverses("fs", t, s, 6)
+qi_11(x) :- endpoint_label("fs", x, 0, 5)
+qi_12(x) :- endpoint_label("fs", x, 1, 5)
+qi_13(x) :- streamline_label("fs", x, 6)
 qi_14(t, 6) :- tractogram(t)
-qi_15(t, s) :- endpoint("fs", t, s, 0, 6)
-qi_16(t, s) :- endpoint("fs", t, s, 1, 6)
+qi_15(x) :- endpoint_label("fs", x, 0, 6)
+qi_16(x) :- endpoint_label("fs", x, 1, 6)
 % anterior_of(amy.left): the face of the box, per tractogram, then the tests
 qi_17(t, max(hi)) :- qi_2(t, l), label_extent("fs", l, 1, lo, hi)
-qi_18(t, s) :- streamline_extent(t, s, 1, lo, hi), qi_17(t, box), (hi > box)
-qi_19(t, s) :- endpoint_coord(t, s, 0, 1, v), qi_17(t, box), (v > box)
-qi_20(t, s) :- endpoint_coord(t, s, 1, 1, v), qi_17(t, box), (v > box)
-qi_21(t, l) :- qi_18(t, s), traverses("fs", t, s, l)
+qi_18(x) :- streamline_extent(x, 1, lo, hi), streamline(x, t, s), qi_17(t, box), (hi > box)
+qi_19(x) :- endpoint_coord(x, 0, 1, v), streamline(x, t, s), qi_17(t, box), (v > box)
+qi_20(x) :- endpoint_coord(x, 1, 1, v), streamline(x, t, s), qi_17(t, box), (v > box)
+qi_21(t, l) :- qi_18(x), streamline_label("fs", x, l), streamline(x, t, s)
 % tmp.left and anterior_of(...): labels united, the ends intersected
 qi_23(t, l) :- qi_10(t, l)
 qi_23(t, l) :- qi_21(t, l)
-qi_24(t, s) :- qi_11(t, s), qi_19(t, s)
-qi_25(t, s) :- qi_12(t, s), qi_20(t, s)
+qi_24(x) :- qi_11(x), qi_19(x)
+qi_25(x) :- qi_12(x), qi_20(x)
 % endpoints_in: the streamlines are the union of the two end sets
-qi_26(t, s) :- qi_24(t, s)
-qi_26(t, s) :- qi_25(t, s)
+qi_26(x) :- qi_24(x)
+qi_26(x) :- qi_25(x)
 % only(tmp.right): from its streamlines only; its ends filtered
-qi_27(t, s) :- qi_13(t, s), traverses("fs", t, s, l), ~qi_14(t, l)
-qi_28(t, s) :- qi_13(t, s), ~qi_27(t, s)
-qi_29(t, s) :- qi_15(t, s), endpoint("fs", t, s, 0, l), qi_14(t, l)
-qi_30(t, s) :- qi_16(t, s), endpoint("fs", t, s, 1, l), qi_14(t, l)
+qi_27(x) :- qi_13(x), streamline_label("fs", x, l), streamline(x, t, s), ~qi_14(t, l)
+qi_28(x) :- qi_13(x), ~qi_27(x)
+qi_29(x) :- qi_15(x), endpoint_label("fs", x, 0, l), streamline(x, t, s), qi_14(t, l)
+qi_30(x) :- qi_16(x), endpoint_label("fs", x, 1, l), streamline(x, t, s), qi_14(t, l)
 % not in: the difference of the four components
-qi_31(t, s) :- qi_26(t, s), ~qi_28(t, s)
+qi_31(x) :- qi_26(x), ~qi_28(x)
 qi_32(t, l) :- qi_23(t, l), ~qi_14(t, l)
-qi_33(t, s) :- qi_24(t, s), ~qi_29(t, s)
-qi_34(t, s) :- qi_25(t, s), ~qi_30(t, s)
+qi_33(x) :- qi_24(x), ~qi_29(x)
+qi_34(x) :- qi_25(x), ~qi_30(x)
 % the public names of uf.left: one alias per component
-q_uf_left(t, s) :- qi_31(t, s)
+q_uf_left(x) :- qi_31(x)
 q_uf_left__label(t, l) :- qi_32(t, l)
-q_uf_left__end0(t, s) :- qi_33(t, s)
-q_uf_left__end1(t, s) :- qi_34(t, s)
+q_uf_left__end0(x) :- qi_33(x)
+q_uf_left__end1(x) :- qi_34(x)
 ```
 
 (The `%` lines are added here to read it; the program has none. The numbers
 `qi_N` skip because the slice leaves out the rules `uf.left` does not need,
-such as the streamlines of `amy.left`.) `q_uf_left(t, s)` is the answer; a
-query that asks for the streamlines of one subject is `ans(s) :-
-q_uf_left("100307", s)`.
+such as the streamlines of `amy.left`.) `q_uf_left(x)` is the answer; a
+query that asks for the streamlines of one subject decodes `x`: `ans(s) :-
+q_uf_left(x), streamline(x, "100307", s)`. The streamlines are unary in `x`
+and the label sets are per tractogram, `(t, l)`; a rule that relates the two
+(the box of a directional term, the labels of its streamlines, the complement,
+`only`) reads `t` from `streamline(x, t, s)`, and no other rule does.
 
 ### 11.5 The directional terms
 
@@ -1199,14 +1279,15 @@ gives `superior_of` as `hi >` and `inferior_of` as `lo <`. Which is wanted is
 
 ```
 box(t, max(hi)) :- A_label(t, l), label_extent(a, l, k, lo, hi)   % min(lo) for a lo face
-T(t, s)         :- streamline_extent(t, s, k, lo, hi), box(t, v), (hi op v)     % lo op v for a lo face
-T_end0(t, s)    :- endpoint_coord(t, s, 0, k, w), box(t, v), (w op v)
-T_end1(t, s)    :- endpoint_coord(t, s, 1, k, w), box(t, v), (w op v)
-T_label(t, l)   :- T(t, s), traverses(a, t, s, l)
+T(x)          :- streamline_extent(x, k, lo, hi), streamline(x, t, s), box(t, v), (hi op v)   % lo op v for a lo face
+T_end0(x)     :- endpoint_coord(x, 0, k, w), streamline(x, t, s), box(t, v), (w op v)
+T_end1(x)     :- endpoint_coord(x, 1, k, w), streamline(x, t, s), box(t, v), (w op v)
+T_label(t, l) :- T(x), streamline_label(a, x, l), streamline(x, t, s)
 ```
 
 The aggregate is NeuroLang's head aggregation (`max`, `min`) over a join,
-grouped by `t`, so there is one box per tractogram; the comparisons are
+grouped by `t`, so there is one box per tractogram, which a streamline meets
+through `streamline(x, t, s)`; the comparisons are
 parenthesised, as the syntax asks.
 
 **Where it differs from the reference.**
@@ -1229,7 +1310,7 @@ parenthesised, as the syntax asks.
   `tract_endpoints_pos` are computed on **all** the tracts, while its other
   indices are renumbered after the length filter (6.1, parity 7), so its
   directional terms are misaligned when `length_threshold > 0`. Ours keep the
-  ids (`streamline_extent` has the same streamlines as `traverses`), so the
+  ids (`streamline_extent` has the same streamlines as `streamline_label`), so the
   two cannot be compared there, and ours are the ones that are right.
 
 ### 11.6 Performance
@@ -1242,22 +1323,35 @@ indexing (its dictionaries) is built beforehand and not timed, as is the
 building of the relations, which is a vectorised `np.unique` once cached
 (6.2, 7.3, not yet written); the table is the cost of *a query*. "All four"
 computes the four components, as the reference always does; "streamlines
-only" is what a user usually wants, and what slicing makes cheaper.
+only" is what a user usually wants, and what slicing makes cheaper. The last
+column is the same, measured the same day on the same machine with the
+relations keyed by `(t, s)`, before the id `x` of 3.1.
 
-| Program | tract_querier | NeuroLang, all four | NeuroLang, streamlines only | Ratio, streamlines only |
-|---|---|---|---|---|
-| **1M streamlines (7.7M `traverses` rows)** | | | | |
-| `a and b not in c` | 0.023 s | 1.75 s | 0.34 s | 15x |
-| `only(a or b)` | 0.109 s | 5.93 s | 4.94 s | 45x |
-| `not a` | 0.356 s | 2.82 s | 2.77 s | 8x |
-| `endpoints_in(a) and endpoints_in(b)` | 0.010 s | 0.60 s | 0.40 s | 40x |
-| `anterior_of(a)` | 0.533 s | 3.82 s | **0.51 s** | **1x** |
-| uncinate-like bundle (11.4) | 1.021 s | 9.27 s | 5.67 s | 5.6x |
-| **100k streamlines** | | | | |
-| `a and b not in c` | 0.001 s | 1.05 s | 0.17 s | ~170x |
-| `only(a or b)` | 0.009 s | 1.00 s | 0.58 s | 64x |
-| `anterior_of(a)` | 0.062 s | 0.57 s | 0.16 s | 2.6x |
-| uncinate-like bundle | 0.122 s | 1.54 s | 0.89 s | 7x |
+| Program | tract_querier | NeuroLang, all four | NeuroLang, streamlines only | Ratio, streamlines only | Streamlines only, by `(t, s)` |
+|---|---|---|---|---|---|
+| **1M streamlines (7.7M `streamline_label` rows)** | | | | | |
+| `a and b not in c` | 0.020 s | 0.75 s | 0.32 s | 16x | 0.31 s |
+| `only(a or b)` | 0.114 s | 5.04 s | 4.35 s | 38x | 4.75 s |
+| `not a` | 0.360 s | 4.78 s | 4.74 s | 13x | **2.47 s** |
+| `endpoints_in(a) and endpoints_in(b)` | 0.009 s | 0.47 s | 0.36 s | 40x | 0.39 s |
+| `anterior_of(a)` | 0.485 s | 3.73 s | **0.66 s** | **1.4x** | 0.46 s |
+| uncinate-like bundle (11.4) | 0.968 s | 8.73 s | 5.04 s | 5.2x | 5.18 s |
+| **100k streamlines** | | | | | |
+| `a and b not in c` | 0.001 s | 0.87 s | 0.13 s | ~130x | 0.15 s |
+| `only(a or b)` | 0.009 s | 0.82 s | 0.47 s | 52x | 0.54 s |
+| `anterior_of(a)` | 0.067 s | 0.53 s | 0.17 s | 2.5x | 0.16 s |
+| uncinate-like bundle | 0.109 s | 1.39 s | 0.77 s | 7x | 0.88 s |
+
+**The id `x`** (3.1) costs where a rule needs the tractogram of a streamline
+to meet a label set, which is a join with `streamline(x, t, s)` (one row per
+streamline): `not a` doubles at a million streamlines (2.5 s to 4.7 s), since
+its universe and its streamlines each join the 7.7M rows of
+`streamline_label` with `streamline`; the streamlines of `anterior_of(a)` go
+from 0.46 s to 0.66 s (the 1M rows of `streamline_extent` joined with
+`streamline`). Where no rule needs `t` (the set algebra, the constants, the
+ends) the joins are on one integer column, and those programs are the same
+or a little faster (`only(a or b)` 4.75 s to 4.35 s, the bundle 5.18 s to
+5.04 s); one run each, so differences of a tenth of a second are noise.
 
 What was changed after a first measurement (1M, all four components:
 `only(a or b)` 8.12 s, bundle 11.54 s, `anterior_of(a)` 3.62 s):
@@ -1280,17 +1374,17 @@ What was changed after a first measurement (1M, all four components:
 Reading it:
 
 * **For one query on one subject the Datalog route is slower**, from about
-  the same (`anterior_of(a)`, 1x) to a few tens of times at a million
+  the same (`anterior_of(a)`, 1.4x) to a few tens of times at a million
   streamlines, and by a hundred or more for the set algebra on a small
   tractogram, where the reference takes a millisecond. In absolute terms:
-  under half a second to about six seconds at a million streamlines.
+  under half a second to about five seconds at a million streamlines.
 * **There is a fixed cost of about a second per program** with all four
   components (compiling and setting up the chase), which is why the small
   cases have the worst ratios and why the ratio falls with the size.
-* **What costs at scale is each pass over `traverses`**: `only(a or b)`
-  (4.9 s), `not a` (2.8 s). Each reference to the relation selects the atlas
-  constant, drops that column and removes duplicates, which is of the order
-  of a second on 7.7M rows; a profile of the earlier version at 300k put the anti-join at
+* **What costs at scale is each pass over `streamline_label`**: `only(a or
+  b)` (4.4 s), `not a` (4.7 s, with the joins with `streamline` above). Each
+  reference to the relation selects the atlas constant, drops that column and
+  removes duplicates, which is of the order of a second on 7.7M rows; a profile of the earlier version at 300k put the anti-join at
   a third of the time, de-duplication at a fifth and the merges at a quarter.
   The set algebra on the four components is cheap.
 * **What the table leaves out, in both directions.** tract_querier indexes
@@ -1307,7 +1401,7 @@ Reading it:
 * **Considered, not done**: folding the label constants and their unions into
   one rule each (the compile share is 0.1-0.5 s in these programs; it matters
   for the vocabulary file, 11.3, which is a minute of compilation); a
-  per-streamline label count `streamline_label_count(t, s, n)` so that `only`
+  per-streamline label count `streamline_label_count(x, n)` so that `only`
   is a join on a count (the scans are the cost, not the anti-join alone, after
   the restriction).
 * **Not measured**: real tractograms and atlases (the data here is random);
@@ -1328,7 +1422,7 @@ worked example (11.4) it is:
 % Atlas 'fs' (freesurfer), space 'subject:100307'; 1 tractogram(s): 100307.
 % Other queries of the program: amy.left, amy.right, tmp.left, tmp.right, uf.right.
 
-% The relations (traverses, endpoint, label, streamline_extent, ...) are built from the files by these commands.
+% The relations (streamline, streamline_label, endpoint_label, label, ...) are built from the files by these commands.
 .load_tract_atlas("fs", "aparc+aseg.nii.gz", "FreeSurferColorLUT.txt", kind="freesurfer", space="subject:100307", term_mapping="freesurfer_aseg_aparc")
 .load_tractogram("100307", "tracts.trk", space="subject:100307")
 .index_tracts("100307", "fs", crossing_threshold=2.0, length_threshold=0.0, emit_background=1, cache="~/.cache/nl_tracts")
@@ -1337,19 +1431,19 @@ worked example (11.4) it is:
 % amy.left = 18
 qi_2(t, 18) :- tractogram(t)
 % tmp.left = 5
-qi_11(t, s) :- endpoint("fs", t, s, 0, 5)
-qi_12(t, s) :- endpoint("fs", t, s, 1, 5)
+qi_11(x) :- endpoint_label("fs", x, 0, 5)
+qi_12(x) :- endpoint_label("fs", x, 1, 5)
 % tmp.right = 6
-qi_13(t, s) :- traverses("fs", t, s, 6)
+qi_13(x) :- streamline_label("fs", x, 6)
 qi_14(t, 6) :- tractogram(t)
 % uf.left = endpoints_in(tmp.left and anterior_of(amy.left)) not in only(tmp.right)
 qi_17(t, max(hi)) :- qi_2(t, l), label_extent("fs", l, 1, lo, hi)
 ...
 % the names of the queries
-q_uf_left(t, s) :- qi_31(t, s)
+q_uf_left(x) :- qi_31(x)
 
 % The answer: the streamlines of uf.left.
-ans(t, s) :- q_uf_left(t, s)
+ans(t, s) :- q_uf_left(x), streamline(x, t, s)
 ```
 
 (`...` stands for the 9 rules left out here; the file has 16 rules for the
@@ -1364,7 +1458,9 @@ the answer's streamlines only (`components=("tracts",)`, so no label set is
 computed that the streamlines do not need), grouped under the WMQL statement
 they come from (`.side` and `for` expanded), as `%` comments: `%` comments are
 what the grammar of the frontend has (a `#` is a syntax error). (4) The
-**answer**, `ans(t, s) :- q_<name>(t, s)`.
+**answer**, `ans(t, s) :- q_<name>(x), streamline(x, t, s)`: the id `x` of
+each streamline decoded to its tractogram and its position in the file, which
+is what `nl-tracts run` prints.
 
 **One answer.** The frontend accepts one `ans(...)` rule per program (more is
 `UnsupportedProgramError`), and a constant in its head fails with an
@@ -1376,8 +1472,9 @@ sliced rules are those of the answer only: for the others, run `dl` again).
 
 **`emit_background`** is on in the file (`--no-background` turns it off):
 WMQL's `not` has the background in its universe and `only` reads it (6.3,
-11.2), so the file agrees with tract_querier only if `traverses` has the
-background rows. The cost is about 1.1 to 1.3 times the rows of `traverses`.
+11.2), so the file agrees with tract_querier only if `streamline_label` has
+the background rows. The cost is about 1.1 to 1.3 times the rows of
+`streamline_label`.
 
 `nl-tracts run FILE.dl [--format table|csv] [--limit N]` runs a file with
 `tracts_engine()` and prints the streamlines (`t`, `s`) sorted, and the number
@@ -1470,9 +1567,9 @@ random walks plus hand-built edge cases.
   round trip for `.trk` and `.tck` (written with nibabel in the test),
   lengths, hash independent of the id.
 * `indexing`: `points_to_voxels` including **half-integer coordinates**
-  (round half to even) and clipping with the warning; `traverses` at the
+  (round half to even) and clipping with the warning; `streamline_label` at the
   threshold boundary (exactly 2.00 %, just below, just above) and
-  denominators that include the background; `endpoint`; extents against a
+  denominators that include the background; `endpoint_label`; extents against a
   loop; chunking: the result for a tiny chunk size equals that for one
   chunk.
 * `cache`: key changes with each ingredient; round trip preserves dtypes;
@@ -1496,8 +1593,10 @@ data files are those the vocabulary test reads.)
 **The WMQL transpiler (done).** `EvaluateQueries` reads four dictionaries of
 a spatial indexing, so no tractogram or voxels are needed: the same random
 `crossing` and `endings` become the reference's dictionaries on one side and
-the relations `traverses` and `endpoint` (DataFrames to `NeurolangDL`) on
-the other. 74 tests: 41 programs of one expression each (every
+the relations `streamline_label` and `endpoint_label`, with `streamline(x,
+t, s)` (DataFrames to `NeurolangDL`), on the other, the two tractograms
+having the ids `x` of the first and of the second of a store (3.1), and the
+streamlines of the answers decoded by `streamline`. 75 tests: 41 programs of one expression each (every
 operator, `not`/`-`/`~`/`only`, the endpoint functions, nesting, labels that
 are absent from the data), 22 for the **directional terms** (each term;
 `medial_of` and `lateral_of` with both sides; the box of a union of labels;
@@ -1505,6 +1604,10 @@ inside `endpoints_in`, `only`, `not in`, `and`; `.side` with `.opposite`;
 two bundles shaped like the uncinate), the case of no label boxes, the
 vertical terms, and 9 for the sequential rules, overwriting, wildcards over
 the names so far, `.side`, `for`, redefinition, a statically empty query;
+and one whose label sets differ between the tractograms (the box, the
+complement and `only` of a set difference with `superior_of`, on one seed),
+the only case where a rule that forgot `streamline(x, t, s)` would give a
+different answer, since the other cases have the same label sets in both;
 each on 3 seeds x 2 tractograms, with random label boxes, streamline boxes
 and endpoint positions (multiples of 0.25, exact in float32); **every
 defined query, not only the saved ones, is compared on its four components,
@@ -1515,7 +1618,11 @@ labels the reference takes from its one tractography (`not`, the labels of a
 directional result) are comparable. The oracle found nothing wrong with the
 transpiler's design; writing it against the reference source is what
 corrected section 11 (`~A` has no endpoints). The tests were checked by
-mutation (the operator of `anterior_of`, the face of `medial_of`: red). The tests are `slow` (about 5 minutes: each starts an engine).
+mutation (the operator of `anterior_of`, the face of `medial_of`: red; with
+the ids `x`, the decoding join left out of the streamlines of a directional
+term, of the complement, of `only`'s scan and of its ends: red, each by the
+case of differing label sets only; and the shift of `nl_tracts.ids` made 31:
+red in `test_ids`, `test_relations`, `test_cache`, `test_commands`). The tests are `slow` (about 5 minutes: each starts an engine).
 
 **The vocabulary (done)**: 11.3.
 
@@ -1529,9 +1636,9 @@ against numpy over the points and the voxels of the label
 **The indexing (done)**: `tests/test_indexing.py`. The same volume, affine and
 streamlines go through `TractographySpatialIndexing` (loaded by path, with its
 relative `.aabb` import registered beside it) and through nl_tracts with
-`emit_background=True`, and the sets are compared exactly: `traverses` against
-`crossing_tracts_labels`, `endpoint` against `ending_tracts_labels` without its
-label-0 entries, on the four affines (aligned, flipped, permuted, oblique), at
+`emit_background=True`, and the sets are compared exactly:
+`traverses_relation` against `crossing_tracts_labels`, `endpoint_relation`
+against `ending_tracts_labels` without its label-0 entries, on the four affines (aligned, flipped, permuted, oblique), at
 thresholds of 0.5, 2, 25, 50 and 100, with points outside the volume. The
 length threshold is compared with the reference's ids mapped back through the
 kept-index list. Dedicated tests for what random data does not reach: the
@@ -1552,7 +1659,7 @@ and `test_commands.py`, 11.7 and 8.2.
 * A synthetic tractogram of 10^6 streamlines (marked `slow`, not in CI by
   default) checks the time and memory of 6.2 and 7.2.
 * Join, negation and `AGGREGATE` (count of labels per streamline) rules on a
-  10^6-row `traverses` through `NeurolangDL`, as in the probes of 8.1.
+  10^6-row `streamline_label` through `NeurolangDL`, as in the probes of 8.1.
 * A **no-per-row-Python** check: the build of every relation for 10^5
   streamlines under a profile that fails if `Tractogram`/`indexing` call a
   Python function per streamline (counts calls of the module's functions).
@@ -1586,14 +1693,16 @@ own; the scaffold's smoke test stays.
    `label_term`, `label_extent`), `wmql`, the WMQL transpiler with the
    directional terms, and `tractogram` with the geometry relations
    (`streamline_extent`, `endpoint_coord`, `streamline_length`), the store and
-   `register`, the voxel indexing (`traverses`, `endpoint`), the cache, the
-   commands, the Datalog file and the `nl-tracts` command -- **done**. Still to
+   `register`, the voxel indexing (`streamline_label`, `endpoint_label`), the
+   streamline ids `x`, the cache, the commands, the Datalog file and the
+   `nl-tracts` command -- **done**. Still to
    do: re-measure the sizes of 7.2 on a real tractogram.
 2. **Relations, cache, frontend**: **done** but for the mapping files for AAL
    and Schaefer (FreeSurfer aseg+aparc and Destrieux are shipped).
-3. **Examples and docs**: a tutorial of tract_querier's standard bundles
-   (uncinate, arcuate, corticospinal...) as Datalog rules over `label_term`;
-   docs page; CI wiring (9.3).
+3. **Examples and docs**: the vocabulary of rules over the schema of 3.1
+   (`traverses(x, term, h)` and the like), the next PR; a tutorial of
+   tract_querier's standard bundles (uncinate, arcuate, corticospinal...) as
+   Datalog rules over `label_term`; docs page; CI wiring (9.3).
 4. **The variants of the directional terms that are not tract_querier's**
    (12): strict and fractional.
 5. **Probabilistic atlases** (4.4), after the engine fix in 15.7.
@@ -1607,13 +1716,14 @@ Recommendations in bold; none changes a decision of section 2.
    **Hard dependency** (it is already one of `neurolang_apps`, and every
    engine call benefits from reading the cache); the alternative is a
    `cache` extra and an import inside `cache.py`.
-2. ~~Should `endpoint` carry label 0?~~ **Decided: never.** `emit_background`
-   governs `traverses` only; "no region at this end" is the negation of
+2. ~~Should `endpoint_label` carry label 0?~~ **Decided: never.**
+   `emit_background` governs `streamline_label` only; "no region at this end" is the negation of
    6.3.
-3. **String `a` and `t` columns at 10^8 rows.** About 2 GB for the two
-   (10 bytes a row each, pandas 3's `str` dtype, 7.2). **Keep strings until
-   measured**; the fallback is surrogate integer keys with a lookup
-   relation.
+3. **String `a` and `t` columns at 10^8 rows.** `t` is no longer in the
+   large relations (the id `x`, 3.1); `a` is, about 1 GB at 10^8 rows (10
+   bytes a row, pandas 3's `str` dtype, 7.2). **Keep strings until
+   measured**; the fallback is a surrogate integer key with a lookup
+   relation, as `streamline(x, t, s)` is for the tractogram.
 4. **The extra copy in `RelationalAlgebraFrozenSet.__init__`** for
    DataFrames. A change in `nl_core` (adopt without copying); **separate PR
    if the footprint matters**, not part of this package.
@@ -1688,8 +1798,8 @@ Recommendations in bold; none changes a decision of section 2.
     raw name and maps it to `thalamus_proper`. **Keep**, and give the mapping
     a LUT-version key if a FreeSurfer 7 LUT is ever found to need otherwise.
 19. **Speed** (11.6). One query is a fixed second plus a second or so per
-    pass over `traverses`: 0.5-6 s at a million streamlines for the
-    streamlines, 1x to 45x the reference's wall-clock, the gap narrowing as the
+    pass over `streamline_label`: 0.3-5 s at a million streamlines for the
+    streamlines, 1.4x to 40x the reference's wall-clock, the gap narrowing as the
     data grows. Evaluating the 945 label rules of the vocabulary file takes
     about a minute (a rule costs about 55 ms to compile), which is why the
     vocabulary and oracle tests are `slow`. **Keep for now**; the levers left
@@ -1711,12 +1821,15 @@ Recommendations in bold; none changes a decision of section 2.
     reference raises `TractQuerierLabelNotFound` (11.5). A silent drop is
     unlike an error. **Keep, and warn at run time** in the frontend if a label
     of an argument has no `label_extent` row (not possible in Datalog itself).
-23. **Label sets are per tractogram** (11.1): `q_x__label(t, l)`, so that a
+23. **Label sets are per tractogram** (11.1): `q_b__label(t, l)`, so that a
     program for many subjects is the program of each one, as the reference is.
-    It costs the `tractogram(t)` relation and one column. The alternative,
-    atlas-level labels, is the same for everything but a directional term
-    applied to a name whose label set depends on the data (`anterior_of(x)`
-    where `x = anterior_of(...)`), where it would mix the subjects.
+    It costs the `tractogram(t)` relation and one column, and, since the
+    streamlines are keyed by `x` (3.1), a join with `streamline(x, t, s)` in
+    each rule where a streamline meets a label set (11.6: `not a` 2.5 s to
+    4.7 s at a million streamlines). The alternative, atlas-level labels, is
+    the same for everything but a directional term, a complement or an `only`
+    applied to a name whose label set depends on the data (`anterior_of(y)`
+    where `y = anterior_of(...)`), where it would mix the subjects.
 24. **The geometry relations are float32** (3.1), the reference's float64: a
     tie in the reference can be a different answer here. Real coordinates in
     mm are not on a lattice, so ties are measure-zero. **Keep.**
