@@ -223,9 +223,8 @@ def rank_query(query, symbol_table):
 
 def _unordered_variables(query, symbol_table):
     """The variables which need no order: the free variables, constants,
-    and those of the atoms of probabilistic choices, which the lifting
-    projects disjointly, making them free, as a single tuple of a choice
-    is true."""
+    and those of the atoms of probabilistic choices, which are never
+    separator variables, nor is any variable of a formula with one."""
     return extract_logic_free_variables(query) | {
         arg for atom in extract_logic_atoms(query)
         if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
@@ -371,12 +370,22 @@ def _check_rankable(
         # Dalvi & Suciu rank Boolean queries; the answer variables are
         # constants, which this ranking does not shatter, and a choice
         # is not split.
-        raise NotRankedException("An answer variable, or one of a choice, to rank")
+        raise NotRankedException(
+            "An answer variable, or one of a choice, to rank"
+        )
+    split = [
+        set(atom.args) for atom in extract_logic_atoms(matrix)
+        if atom.functor in positions
+    ]
     for atom in extract_logic_atoms(matrix):
+        # A split atom with both variables of a comparison orders them.
         if (
             not isinstance(atom.functor, Symbol) and
             extract_logic_free_variables(atom) & variables and
-            not (is_comparison(atom) and set(atom.args) <= variables)
+            not (
+                is_comparison(atom) and set(atom.args) <= variables and
+                any(set(atom.args) <= args for args in split)
+            )
         ):
             raise NotRankedException(
                 "A comparison or a function of a variable to rank"

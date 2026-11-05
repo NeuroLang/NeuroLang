@@ -261,8 +261,8 @@ Ranking
    :math:`x_1` and :math:`x` is :math:`x_2`, and the atoms of
    :math:`R(x, y)` and :math:`R(y, x)` are exchanged. The ranked
    relations are computed on the data, each tuple keeping its probability
-   (``_ranked_relation``). A comparison of two ranked variables is true or
-   false in each order, and replaced by its truth value, the disjuncts of
+   (``_ranked_relation``). A comparison of two ranked variables of a split
+   atom is true or false in each order, and replaced by its truth value, the disjuncts of
    the orders it falsifies dropped (``RankAtoms``): with :math:`x < y`,
    :math:`\exists x, y\, R(x, y) \land R(y, x) \land x < y` is
    :math:`\exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2)`, whose
@@ -820,7 +820,8 @@ Answer variables as constants
    at a position where the atoms of the branch :math:`\{x, y\}`, of the
    same relation, have :math:`x` (``_are_different_tuples_when_different``).
    The chain :math:`\exists y, z\, R(x, y) \land R(y, z)` fails the
-   latter, :math:`R(x, z)` being an atom of both branches.
+   latter, :math:`R(x, y)` and :math:`R(x, z)` possibly being the same
+   tuple.
 
 Comparisons of answer variables
    A comparison of free variables, a conjunct of the query such as
@@ -1677,10 +1678,11 @@ Ranking
      (``_is_totally_ordered``), without NaN. Sets, ordered by inclusion,
      would leave the tuples of incomparable values in no ranked relation.
 
-   A comparison of two ranked variables has, in the disjunct of an
-   order, the truth value of the comparison of their ranks, the values of
-   the variables being in that order in every tuple of the ranked
-   relations: replacing it by it, and simplifying the truth values
+   A comparison of two ranked variables of a split atom
+   (``_check_rankable``) has, in the disjunct of an order, the truth
+   value of the comparison of their ranks, the values of the variables
+   being in that order in every tuple of the ranked relation of the
+   atom: replacing it by it, and simplifying the truth values
    (``SimplifyTruthValuesMixin``), is an equivalence, and so is dropping
    a false disjunct.
 
