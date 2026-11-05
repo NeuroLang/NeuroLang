@@ -556,11 +556,15 @@ def magic_rewrite(
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, sips
     )
-    # 2. Check that there is a constant in the code
-    if len(constant_predicates) == 0 and len(sips.seeding_edb_atoms) == 0:
-        # No constants present in the code, magic sets is not useful
+    # 2. Check that some predicate is bound: by a constant, or by the
+    # literals left of it in a rule, as ``d`` in ``q(t, d), p(d, s)``
+    if not any(
+        "b" in rule.consequent.functor.adornment
+        for rule in adorned_code.formulas
+    ):
+        # Nothing is bound, magic sets is not useful
         raise NoConstantPredicateFoundError(
-            "No predicate with constant argument found."
+            "No predicate with a bound argument found."
         )
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]

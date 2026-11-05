@@ -179,6 +179,11 @@ Unreleased
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.
 * A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* Magic sets rewrite a query without a constant when a rule binds the
+  argument of another right of it, as ``d`` in ``ans(t, s) :-
+  cogat_definition(t, d), close(d, s)``: a function of ``d`` in ``close``
+  was refused as unbound.
+
 * The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
   studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
   were converted too, moving them by 7 mm (median).  They are now taken as
