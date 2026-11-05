@@ -236,10 +236,12 @@ class TestEngineRegistry:
             )
 
     def test_datalog_init_in_config(self):
-        """Every engine with python_init should have inline datalog_init."""
+        """Every engine of this package with python_init should have
+        inline datalog_init; an engine of another package (tracts, of
+        nl_tracts) brings its rules with its python_init."""
         for name in engine_registry.list_engine_names():
             cfg = engine_registry.get_engine_config(name)
-            if "python_init" in cfg:
+            if cfg.get("python_init", "").startswith("neurolang_apps."):
                 code = cfg.get("datalog_init")
                 assert code, (
                     f"Engine {name!r} has python_init but no datalog_init"

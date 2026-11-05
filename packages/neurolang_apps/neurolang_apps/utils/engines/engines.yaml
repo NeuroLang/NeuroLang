@@ -617,6 +617,20 @@ engines:
           - label
           - region
 
+  tracts:
+    description: >
+      Tractography (the package nl_tracts, extra tracts of neurolang-apps):
+      the commands .load_tract_atlas, .load_tractogram and .index_tracts of
+      a program build the relations of an atlas and of a tractogram from
+      files, and the vocabulary of tractography, rules over them, says
+      where streamlines go: traverses(x, term, h), endpoint_in(x, e, term,
+      h), anterior_of(x, term, h)... A result of streamline ids x is drawn
+      by .view. No data is downloaded.
+    solver_mixins: ["nl_tracts.frontend:TractsCommandsMixin"]
+    # the vocabulary (nl_tracts/vocabulary.dl), the functions of the ids x
+    # and the hooks of .view, over what the commands load
+    python_init: "nl_tracts.frontend"
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:

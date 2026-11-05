@@ -1449,6 +1449,11 @@ def _solver_mixins(cfg, engine_name) -> list:
             problem = None if isinstance(mixin, type) else "is not a class"
         except (ImportError, AttributeError) as error:
             problem = f"cannot be loaded: {error}"
+            if isinstance(error, ModuleNotFoundError):
+                problem += (
+                    "; install the package that provides it (the "
+                    "engine's description, --list-engines, says which)"
+                )
         if not colon:
             problem = "is not of the form module:Class"
         if problem:
