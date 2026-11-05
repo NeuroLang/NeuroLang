@@ -34,7 +34,8 @@ def test_the_commands_come_first_then_the_rules_then_the_answer():
     rules = [i for i, x in enumerate(out) if re.match(r"q[i_]", x)]
     assert len(commands) == 3
     assert commands[-1] < rules[0]
-    assert out[-1] == "ans(t, s) :- q_uf_right(t, s)"  # the last saved name
+    # the last saved name, decoded to the tractogram and the position
+    assert out[-1] == "ans(t, s) :- q_uf_right(x), streamline(x, t, s)"
 
 
 def test_the_commands_load_the_atlas_and_the_tractogram_and_index():
@@ -84,9 +85,9 @@ def test_several_tractograms_are_loaded_and_indexed_each():
 
 def test_the_answer_is_chosen_by_name():
     assert lines(make(answer="uf.left"))[-1] == (
-        "ans(t, s) :- q_uf_left(t, s)")
+        "ans(t, s) :- q_uf_left(x), streamline(x, t, s)")
     assert lines(make(answer="amy.left"))[-1] == (
-        "ans(t, s) :- q_amy_left(t, s)")
+        "ans(t, s) :- q_amy_left(x), streamline(x, t, s)")
     with pytest.raises(WMQLError, match="nope"):
         make(answer="nope")
 
@@ -94,7 +95,7 @@ def test_the_answer_is_chosen_by_name():
 def test_a_program_that_saves_nothing_has_no_default_answer():
     with pytest.raises(ValueError, match="answer"):
         make("a |= 1\n")
-    assert "q_a(t, s)" in make("a |= 1\n", answer="a")
+    assert "q_a(x), streamline(x, t, s)" in make("a |= 1\n", answer="a")
 
 
 def test_each_statement_is_a_comment_over_the_rules_it_gives():
@@ -113,7 +114,8 @@ def test_each_statement_is_a_comment_over_the_rules_it_gives():
 def test_only_what_the_answer_needs_is_written():
     out = make("a = 1\nb = 2\nx = a or b\ny = 3\n", answer="x")
     assert "q_y" not in out
-    assert 'traverses("fs", t, s, 3)' not in out
+    assert 'streamline_label("fs", x, 3)' not in out
+    assert 'streamline_label("fs", x, 1)' in out
     # the streamlines only: no rule for the labels of a, b or x
     assert "__label" not in out
 

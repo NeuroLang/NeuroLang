@@ -582,10 +582,10 @@ class ProbabilisticAtlas:
     """Extension point for 4D (probability map) atlases. Not implemented.
 
     A probabilistic atlas holds, per voxel, a probability for each label.
-    It will produce *probabilistic* facts ``traverses_p(a, t, s, l)`` with
-    the probability of the streamline traversing the label, instead of the
-    boolean ``traverses``; it shares ``label``, ``label_term`` and the
-    loaders of :class:`Atlas`, and the engine side is
+    It will produce *probabilistic* facts ``streamline_label_p(a, x, l)``
+    with the probability of the streamline traversing the label, instead
+    of the boolean ``streamline_label``; it shares ``label``,
+    ``label_term`` and the loaders of :class:`Atlas`, and the engine side is
     ``add_probabilistic_facts_from_tuples`` (DESIGN.md, 4.4).
     """
 

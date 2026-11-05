@@ -78,15 +78,18 @@ def reference_index(n, data):
 
 
 def relations(n, data):
+    """The relations of one tractogram, the first of the store: x is s."""
     pairs, endings, boxes, tract_boxes, ends = data
     ss = np.arange(n)
     return {
-        "traverses": pd.DataFrame({
-            "a": "fs", "t": "t1", "s": pairs["s"].to_numpy(np.int32),
+        "streamline": pd.DataFrame({
+            "x": ss.astype(np.int64), "t": "t1", "s": ss.astype(np.int32)}),
+        "streamline_label": pd.DataFrame({
+            "a": "fs", "x": pairs["s"].to_numpy(np.int64),
             "l": pairs["l"].to_numpy(np.int32)}),
-        "endpoint": pd.DataFrame({
-            "a": "fs", "t": "t1",
-            "s": np.tile(ss, 2).astype(np.int32),
+        "endpoint_label": pd.DataFrame({
+            "a": "fs",
+            "x": np.tile(ss, 2).astype(np.int64),
             "e": np.repeat([0, 1], n).astype(np.int8),
             "l": np.r_[[endings[0][s] for s in ss],
                        [endings[1][s] for s in ss]].astype(np.int32)}),
@@ -98,12 +101,12 @@ def relations(n, data):
         ).astype({"l": np.int32, "axis": np.int8, "lo": np.float32,
                   "hi": np.float32}),
         "streamline_extent": pd.DataFrame({
-            "t": "t1", "s": np.repeat(ss, 3).astype(np.int32),
+            "x": np.repeat(ss, 3).astype(np.int64),
             "axis": np.tile(np.arange(3), n).astype(np.int8),
             "lo": tract_boxes[:, 0, :].reshape(-1).astype(np.float32),
             "hi": tract_boxes[:, 1, :].reshape(-1).astype(np.float32)}),
         "endpoint_coord": pd.DataFrame({
-            "t": "t1", "s": np.repeat(ss, 6).astype(np.int32),
+            "x": np.repeat(ss, 6).astype(np.int64),
             "e": np.tile(np.repeat([0, 1], 3), n).astype(np.int8),
             "axis": np.tile(np.arange(3), 2 * n).astype(np.int8),
             "v": ends.reshape(-1).astype(np.float32)}),
@@ -128,8 +131,8 @@ def main(sizes, backend="pandas"):
         data = synthetic(n)
         index, t_index = timed(lambda: reference_index(n, data))
         frames = relations(n, data)
-        rows = len(frames["traverses"])
-        print(f"\n{n} streamlines, {rows} traverses rows "
+        rows = len(frames["streamline_label"])
+        print(f"\n{n} streamlines, {rows} streamline_label rows "
               f"(reference indexing built in {t_index:.1f} s)")
         print(f"{'program':36s} {'tract_querier':>13s} {'load':>6s} "
               f"{'compile':>8s} {'evaluate':>9s} {'datalog':>8s} "

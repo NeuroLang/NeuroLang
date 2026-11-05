@@ -5,17 +5,19 @@ traverses), ``endings`` (the label at each end), and for the directional
 terms the boxes of the labels and of the streamlines and the positions of
 their endpoints. The reference reads them as dictionaries and arrays, one
 tractography at a time; the Datalog program reads them as the relations
-``traverses``, ``endpoint``, ``label_extent``, ``streamline_extent`` and
-``endpoint_coord``, for all the tractograms at once. Every query *defined* by
-a program, not only the saved ones, is compared, for each tractogram, on its
-four components: the streamlines, the label set, and the streamlines whose
-first / last point is in the labels.
+``streamline``, ``streamline_label``, ``endpoint_label``, ``label_extent``,
+``streamline_extent`` and ``endpoint_coord``, for all the tractograms at once,
+each streamline an id ``x = (index << 32) | s`` (the index of its tractogram
+in ``TRACTOGRAMS``). Every query *defined* by a program, not only the saved
+ones, is compared, for each tractogram, on its four components: the
+streamlines (``x`` decoded to ``t`` and ``s``), the label set, and the
+streamlines whose first / last point is in the labels.
 
 Data conventions (DESIGN.md, 6.3 and 11): the background, label 0, is among
 the traversed labels (``emit_background=True``) and is never the label of an
-endpoint, because ``endpoint`` has no background rows; the labels 1 to 7 have
-boxes, label 0 has none (the reference fails on a label without a box, so the
-directional arguments never have label 0); the coordinates are multiples of
+endpoint, because ``endpoint_label`` has no background rows; the labels 1 to 7
+have boxes, label 0 has none (the reference fails on a label without a box, so
+the directional arguments never have label 0); the coordinates are multiples of
 0.25, which a float32 holds exactly.
 """
 
@@ -77,45 +79,64 @@ def synthetic(seed, n=60):
     return crossing, endings, np.stack([low, high], axis=1), endpoints
 
 
+def streamline_ids(data):
+    """{x: (t, s)} of {t: synthetic(...)}: ``x = (index << 32) | s``, with
+    the index of ``t`` in the order of ``data``, as the store has it."""
+    return {
+        (index << 32) | s: (t, s)
+        for index, (t, (crossing, *_)) in enumerate(data.items())
+        for s in crossing
+    }
+
+
 def relations(data, boxes):
     """The relations of {t: synthetic(...)} and of the label boxes."""
-    traverses, endpoint, streamline, coord = [], [], [], []
+    label, endpoint, extent, coord = [], [], [], []
+    ids = {ts: x for x, ts in streamline_ids(data).items()}
     for t, (crossing, endings, tract_boxes, endpoints) in data.items():
         for s, labels in crossing.items():
-            traverses += [(ATLAS, t, s, label) for label in sorted(labels)]
+            label += [(ATLAS, ids[t, s], lab) for lab in sorted(labels)]
         for e in (0, 1):
             endpoint += [
-                (ATLAS, t, s, e, label) for s, label in endings[e].items()
-                if label != 0
+                (ATLAS, ids[t, s], e, lab) for s, lab in endings[e].items()
+                if lab != 0
             ]
             for s in range(len(crossing)):
                 for axis in range(3):
-                    coord.append((t, s, e, axis, endpoints[s, e, axis]))
+                    coord.append((ids[t, s], e, axis, endpoints[s, e, axis]))
         for s in range(len(crossing)):
             for axis in range(3):
-                streamline.append(
-                    (t, s, axis, tract_boxes[s, 0, axis],
+                extent.append(
+                    (ids[t, s], axis, tract_boxes[s, 0, axis],
                      tract_boxes[s, 1, axis])
                 )
-    extent = [
-        (ATLAS, label, axis, lo[axis], hi[axis])
-        for label, (lo, hi) in boxes.items() for axis in range(3)
+    boxes = [
+        (ATLAS, lab, axis, lo[axis], hi[axis])
+        for lab, (lo, hi) in boxes.items() for axis in range(3)
     ]
     return {
-        "traverses": pd.DataFrame(traverses, columns=list("atsl")),
-        "endpoint": pd.DataFrame(endpoint, columns=list("atsel")),
+        "streamline": pd.DataFrame(
+            [(x, t, s) for x, (t, s) in streamline_ids(data).items()],
+            columns=["x", "t", "s"],
+        ).astype({"x": np.int64, "s": np.int32}),
+        "streamline_label": pd.DataFrame(
+            label, columns=["a", "x", "l"]
+        ).astype({"x": np.int64, "l": np.int32}),
+        "endpoint_label": pd.DataFrame(
+            endpoint, columns=["a", "x", "e", "l"]
+        ).astype({"x": np.int64, "e": np.int8, "l": np.int32}),
         "tractogram": pd.DataFrame({"t": list(data)}),
         "label_extent": pd.DataFrame(
-            extent, columns=["a", "l", "axis", "lo", "hi"]
+            boxes, columns=["a", "l", "axis", "lo", "hi"]
         ).astype({"l": np.int32, "axis": np.int8, "lo": np.float32,
                   "hi": np.float32}),
         "streamline_extent": pd.DataFrame(
-            streamline, columns=["t", "s", "axis", "lo", "hi"]
-        ).astype({"s": np.int32, "axis": np.int8, "lo": np.float32,
+            extent, columns=["x", "axis", "lo", "hi"]
+        ).astype({"x": np.int64, "axis": np.int8, "lo": np.float32,
                   "hi": np.float32}),
         "endpoint_coord": pd.DataFrame(
-            coord, columns=["t", "s", "e", "axis", "v"]
-        ).astype({"s": np.int32, "e": np.int8, "axis": np.int8,
+            coord, columns=["x", "e", "axis", "v"]
+        ).astype({"x": np.int64, "e": np.int8, "axis": np.int8,
                   "v": np.float32}),
     }
 
@@ -134,9 +155,16 @@ def run_datalog(program, data, boxes):
     }
 
 
-def of(rows, t):
-    """The values of tractogram ``t`` in rows ``(t, value)``."""
+def labels_of(rows, t):
+    """The labels of tractogram ``t`` in rows ``(t, l)``."""
     return {r[1] for r in rows if r[0] == t}
+
+
+def streamlines_of(rows, t, ids):
+    """The streamlines ``s`` of tractogram ``t`` in rows ``(x,)``, by the
+    decoding ``ids`` ({x: (t, s)})."""
+    assert all(len(r) == 1 for r in rows)
+    return {ids[r[0]][1] for r in rows if ids[r[0]][0] == t}
 
 
 def check_program(reference, source, seeds=(0, 1, 2), boxes=True,
@@ -148,6 +176,7 @@ def check_program(reference, source, seeds=(0, 1, 2), boxes=True,
             t: synthetic(seed * 10 + i) for i, t in enumerate(TRACTOGRAMS)
         }
         solution = run_datalog(program.text, data, atlas_boxes)
+        ids = streamline_ids(data)
         for t, (crossing, endings, tract_boxes, endpoints) in data.items():
             expected = evaluate(
                 reference, source,
@@ -159,8 +188,11 @@ def check_program(reference, source, seeds=(0, 1, 2), boxes=True,
             )
             for name, q in program.defined.items():
                 got = tuple(
-                    of(solution.get(pred, set()), t) if pred else set()
-                    for pred in (q.tracts, q.labels, q.end0, q.end1)
+                    set() if pred is None
+                    else labels_of(solution.get(pred, set()), t)
+                    if kind == "labels"
+                    else streamlines_of(solution.get(pred, set()), t, ids)
+                    for kind, pred in vars(q).items()
                 )
                 assert got == expected[name], (name, seed, t)
 
@@ -253,6 +285,33 @@ DIRECTIONAL = [
 @pytest.mark.parametrize("expression", DIRECTIONAL)
 def test_directional_terms_against_the_reference(reference, expression):
     check_program(reference, BASE + SIDED + expression + "\n")
+
+
+def test_the_box_of_a_label_set_that_differs_by_tractogram(reference):
+    """The box of a directional term is per tractogram, and a streamline
+    meets the box of its own: ``y`` has, on seed 1, label sets that differ
+    between the two tractograms (and are not empty, where the reference
+    fails), so the boxes do. So do the complement and ``only`` of it, whose
+    streamlines and ends meet the labels of their own tractogram: the
+    other tests have the same label sets in both tractograms, where a rule
+    that forgets ``streamline(x, t, s)`` gives the same answer."""
+    source = (
+        BASE + "y = (1 or 2 or 3 or 4 or 5 or 6 or 7) - superior_of(c)\n"
+        "x = posterior_of(y) or anterior_of(y)\n"
+        "z = endpoints_in(inferior_of(y))\n"
+        "w = not y\n"
+        "v = only(y)\n"
+    )
+    labels = []
+    for i in range(len(TRACTOGRAMS)):  # the data check_program makes
+        crossing, endings, tract_boxes, endpoints = synthetic(10 + i)
+        labels.append(evaluate(
+            reference, source,
+            Indexing(crossing, endings, label_boxes(1), tract_boxes,
+                     endpoints),
+        )["y"][1])
+    assert all(labels) and labels[0] != labels[1], labels
+    check_program(reference, source, seeds=(1,))
 
 
 def test_directional_terms_with_no_label_boxes_select_nothing(reference):

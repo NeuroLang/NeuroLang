@@ -45,7 +45,8 @@ def test_dl_writes_the_file(dataset, capsys):
     out = dataset / "bundle.dl"
     assert main(dl_args(dataset, "-o", str(out))) == 0
     text = out.read_text()
-    assert ".load_tract_atlas(" in text and "ans(t, s) :- q_y(t, s)" in text
+    assert ".load_tract_atlas(" in text
+    assert "ans(t, s) :- q_y(x), streamline(x, t, s)" in text
     assert "bundle.qry" in text  # the title
     assert capsys.readouterr().out == ""
 
@@ -58,7 +59,7 @@ def test_dl_writes_to_stdout_by_default(dataset, capsys):
 @pytest.mark.parametrize(
     "extra,expected",
     [
-        (["--ans", "x"], "ans(t, s) :- q_x(t, s)"),
+        (["--ans", "x"], "ans(t, s) :- q_x(x), streamline(x, t, s)"),
         (["--crossing-threshold", "30"], "crossing_threshold=30.0"),
         (["--length-threshold", "12"], "length_threshold=12.0"),
         (["--no-background"], "emit_background=0"),
@@ -81,7 +82,8 @@ def test_dl_reads_the_program_from_stdin(dataset, capsys, monkeypatch):
     args = dl_args(dataset)
     args[1] = "-"
     assert main(args) == 0
-    assert "ans(t, s) :- q_a(t, s)" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "ans(t, s) :- q_a(x), streamline(x, t, s)" in out
 
 
 def test_dl_include_folders(dataset, capsys):
@@ -131,7 +133,7 @@ def test_run_csv_and_limit(dataset, capsys):
 def test_run_reports_a_failure(dataset, capsys):
     (dataset / "bad.dl").write_text(
         '.load_tractogram("t", "/no/file", space="s")\n'
-        "ans(t, s) :- streamline(t, s)\n"
+        "ans(t, s) :- streamline(x, t, s)\n"
     )
     assert main(["run", str(dataset / "bad.dl")]) == 1
     assert "nl-tracts: " in capsys.readouterr().err

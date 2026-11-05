@@ -26,6 +26,7 @@ from neurolang.frontend.probabilistic_frontend import (
 )
 
 from .atlas import Atlas
+from .ids import decode, encode
 from .indexing import IndexingParams, RelationStore
 from .spaces import SpaceMismatchError
 from .tractogram import Tractogram
@@ -42,17 +43,17 @@ __all__ = [
 #: The relations, with the names of their columns (DESIGN.md, 3).
 RELATION_NAMES = {
     "tractogram": ("t",),
-    "streamline": ("t", "s"),
+    "streamline": ("x", "t", "s"),
     "atlas": ("a",),
     "label": ("a", "l", "name", "hemi"),
     "label_term": ("a", "l", "term"),
     "opposite_hemisphere": ("h1", "h2"),
-    "traverses": ("a", "t", "s", "l"),
-    "endpoint": ("a", "t", "s", "e", "l"),
-    "streamline_extent": ("t", "s", "axis", "lo", "hi"),
-    "endpoint_coord": ("t", "s", "e", "axis", "v"),
+    "streamline_label": ("a", "x", "l"),
+    "endpoint_label": ("a", "x", "e", "l"),
+    "streamline_extent": ("x", "axis", "lo", "hi"),
+    "endpoint_coord": ("x", "e", "axis", "v"),
     "label_extent": ("a", "l", "axis", "lo", "hi"),
-    "streamline_length": ("t", "s", "mm"),
+    "streamline_length": ("x", "mm"),
 }
 
 
@@ -64,7 +65,7 @@ def register(
     """Add the relations of ``store`` to ``engine``.
 
     Each relation is passed as a DataFrame to ``engine.add_tuple_set``,
-    under its own name (``traverses``, ...), so that no Python tuple is
+    under its own name (``streamline_label``, ...), so that no Python tuple is
     built. Relations the store does not have are skipped;
     ``opposite_hemisphere`` is always added.
 
@@ -156,8 +157,9 @@ class TractsCommandsMixin(PatternWalker):
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
     allow_space_mismatch=0)``
-        Index the tractogram by the atlas: ``traverses`` and ``endpoint``,
-        with the relations of the tractogram and of the atlas. It is what
+        Index the tractogram by the atlas: ``streamline_label`` and
+        ``endpoint_label``, with the relations of the tractogram and of the
+        atlas. It is what
         publishes the relations to the program; to be repeated for another
         atlas or tractogram, whose rows are added to the same relations.
 
@@ -299,11 +301,39 @@ class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver):
 
 def tracts_engine(**kwargs) -> NeurolangPDL:
     """A ``NeurolangPDL`` that understands ``.load_tract_atlas``,
-    ``.load_tractogram`` and ``.index_tracts``.
+    ``.load_tractogram`` and ``.index_tracts``, and has the functions that
+    encode and decode the id ``x`` of a streamline (``nl_tracts.ids``),
+    over the tractograms its commands have indexed:
+
+    ``streamline_id(t, s)``
+        ``x`` of the streamline ``s`` of tractogram ``t``;
+    ``subject_of(x)``
+        the id ``t`` of its tractogram;
+    ``index_of(x)``
+        its position ``s`` in the tractogram's file.
+
+    They are for a comparison in a rule, ``(t == subject_of(x))``; the
+    relation ``streamline(x, t, s)`` does the same by a join.
 
     Parameters
     ----------
     **kwargs
         Those of ``NeurolangPDL``.
     """
-    return NeurolangPDL(solver_class=TractsSolver, **kwargs)
+    engine = NeurolangPDL(solver_class=TractsSolver, **kwargs)
+    tractograms = engine.program_ir._tracts.store.tractograms
+
+    def streamline_id(t: str, s: int) -> int:
+        if t not in tractograms:
+            raise ValueError(f"tractogram {t!r} was not indexed")
+        return int(encode(tractograms.index(t), s))
+
+    def subject_of(x: int) -> str:
+        return tractograms[int(decode(x)[0])]
+
+    def index_of(x: int) -> int:
+        return int(decode(x)[1])
+
+    for function in (streamline_id, subject_of, index_of):
+        engine.add_symbol(function, name=function.__name__)
+    return engine

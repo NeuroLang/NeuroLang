@@ -17,4 +17,7 @@ def test_core_imports_without_neurolang():
 def test_frontend_imports():
     from nl_tracts import frontend
 
-    assert "traverses" in frontend.RELATION_NAMES
+    assert "streamline_label" in frontend.RELATION_NAMES
+    # the names of a vocabulary of rules, not of stored relations
+    assert "traverses" not in frontend.RELATION_NAMES
+    assert "endpoint" not in frontend.RELATION_NAMES

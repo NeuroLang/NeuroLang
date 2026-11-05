@@ -1,8 +1,10 @@
 # nl_tracts
 
 Tractography for NeuroLang: tractograms and atlases enter an engine as
-extensional relations (`traverses`, `endpoint`, `label`, `label_term`,
-`streamline_extent`, ...) computed in bulk with numpy, and queries are written
+extensional relations (`streamline_label`, `endpoint_label`, `label`,
+`label_term`, `streamline_extent`, ...) computed in bulk with numpy, a
+streamline being one integer id `x` that `streamline(x, t, s)` decodes to its
+tractogram and its position in the file, and queries are written
 in WMQL (tract_querier's language) or in Datalog. See
 [DESIGN.md](DESIGN.md).
 

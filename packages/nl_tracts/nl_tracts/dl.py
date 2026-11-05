@@ -5,13 +5,15 @@ The file is for the NeuroLang frontend (``nl-tracts run``, or
 changed by hand:
 
 * the **commands** ``.load_tract_atlas``, ``.load_tractogram`` and
-  ``.index_tracts`` build the relations (``traverses``, ``endpoint``,
-  ``label``, ``streamline_extent``, ...) from the files of the atlas and of
-  the tractograms when it runs (``nl_tracts.frontend``);
+  ``.index_tracts`` build the relations (``streamline``,
+  ``streamline_label``, ``endpoint_label``, ``label``,
+  ``streamline_extent``, ...) from the files of the atlas and of the
+  tractograms when it runs (``nl_tracts.frontend``);
 * the **rules** of the WMQL program, each statement a ``%`` comment over the
   rules it gives, cut to what the answer needs (``nl_tracts.wmql``);
-* the **answer**, ``ans(t, s) :- q_<name>(t, s)``: the streamlines of the
-  query, for each tractogram.
+* the **answer**, ``ans(t, s) :- q_<name>(x), streamline(x, t, s)``: the
+  streamlines of the query, as the tractogram ``t`` and the position ``s``
+  in its file of each id ``x``.
 
 Text in, text out: this module imports nothing of NeuroLang.
 """
@@ -32,7 +34,8 @@ class AtlasSource:
     Attributes
     ----------
     name : str
-        The atlas's name, the first column of ``traverses`` and ``label``.
+        The atlas's name, the first column of ``streamline_label`` and
+        ``label``.
     image, table : path
         The label image and its table: a FreeSurfer colour LUT
         (``kind="freesurfer"``), a ``dseg.tsv`` (``"bids"``) or a TSV with
@@ -112,7 +115,7 @@ def datalog_file(
         Percent of its points that a streamline needs in a label to
         traverse it, and the minimum length in mm (6.1 of the design).
     emit_background : bool
-        Whether ``traverses`` has rows for the background. ``True``, as
+        Whether ``streamline_label`` has rows for the background. ``True``, as
         tract_querier's ``not`` and ``only`` read them (11.2).
     cache : str, optional
         A directory where the indexing is kept, and read from the next time.
@@ -164,8 +167,8 @@ def datalog_file(
         + (", ".join(n for n in program.saved if n != answer) or "none")
         + ".",
         "",
-        "% The relations (traverses, endpoint, label, streamline_extent, ...)"
-        " are built from the files by these commands.",
+        "% The relations (streamline, streamline_label, endpoint_label, "
+        "label, ...) are built from the files by these commands.",
     ]
     atlas_options = [
         f"kind={_string(atlas.kind)}", f"space={_string(atlas.space)}",
@@ -204,6 +207,6 @@ def datalog_file(
         ).rstrip(),
         "",
         f"% The answer: the streamlines of {answer}.",
-        f"ans(t, s) :- {predicate}(t, s)",
+        f"ans(t, s) :- {predicate}(x), streamline(x, t, s)",
     ]
     return "\n".join(out) + "\n"

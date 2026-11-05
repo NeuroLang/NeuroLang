@@ -134,10 +134,11 @@ def differences(qry, ours):
     # the label sets of a tractogram: one, and no streamlines
     nl.add_tuple_set(pd.DataFrame({"t": ["lut"]}), name="tractogram")
     for relation, columns in (
-        ("traverses", "atsl"), ("endpoint", "atsel"),
+        ("streamline", "xts"), ("streamline_label", "axl"),
+        ("endpoint_label", "axel"),
         ("label_extent", ["a", "l", "axis", "lo", "hi"]),
-        ("streamline_extent", ["t", "s", "axis", "lo", "hi"]),
-        ("endpoint_coord", ["t", "s", "e", "axis", "v"]),
+        ("streamline_extent", ["x", "axis", "lo", "hi"]),
+        ("endpoint_coord", ["x", "e", "axis", "v"]),
     ):  # not read by label sets; the program may mention them
         nl.add_tuple_set(
             pd.DataFrame({c: pd.Series(dtype="int64") for c in columns}),

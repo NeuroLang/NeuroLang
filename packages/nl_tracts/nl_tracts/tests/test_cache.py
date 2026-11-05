@@ -87,6 +87,7 @@ def test_add_index_writes_the_cache_and_a_second_store_reads_it(
 
     params = IndexingParams(crossing_threshold=3.0, emit_background=True)
     first = RelationStore()
+    first.add_tractogram(tractogram(), params)
     first.add_index(tractogram(), atlas(), params, cache_dir=tmp_path)
     key = cache_key(tractogram(), atlas(), params)
     assert (tmp_path / key / "traverses.parquet").is_file()
@@ -97,17 +98,20 @@ def test_add_index_writes_the_cache_and_a_second_store_reads_it(
 
     monkeypatch.setattr(indexing, "_index", no_indexing)
     second = RelationStore()
-    # the same file under another id and another atlas name
+    # the same file under another id and another atlas name, as the second
+    # tractogram of the store: its x are those of the first plus 2 ** 32
+    second.add_tractogram(tractogram("before", seed=1), params)
+    second.add_tractogram(tractogram("another"), params)
     second.add_index(
         tractogram("another"), atlas("other"), params, cache_dir=tmp_path
     )
-    for relation in ("traverses", "endpoint"):
+    for relation in ("streamline_label", "endpoint_label"):
         got = second.relations[relation]
-        want = first.relations[relation]
-        assert got["t"].unique().tolist() == ["another"]
+        want = first.relations[relation].copy()
         assert got["a"].unique().tolist() == ["other"]
+        want["x"] += 2 ** 32
         pd.testing.assert_frame_equal(
-            got.drop(columns=["a", "t"]), want.drop(columns=["a", "t"])
+            got.drop(columns=["a"]), want.drop(columns=["a"])
         )
         assert got.columns.tolist() == want.columns.tolist()
         assert got.dtypes.equals(want.dtypes)

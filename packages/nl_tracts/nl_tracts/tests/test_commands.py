@@ -82,7 +82,8 @@ def test_the_commands_build_the_relations(files):
     result = nl.execute_datalog_program(
         atlas_command(files) + tractogram_command(files)
         + '.index_tracts("t1", "fs", crossing_threshold=2.0)\n'
-        + 'ans(s, l) :- traverses("fs", "t1", s, l)\n'
+        + 'ans(s, l) :- streamline_label("fs", x, l), '
+        + 'streamline(x, "t1", s)\n'
     )
     traverses, _ = expected(files, crossing_threshold=2.0)
     assert rows(result) == {(s, l) for s, l in zip(traverses["s"],
@@ -101,8 +102,11 @@ def test_every_relation_of_the_schema_is_there(files):
     assert {
         "atlas", "label", "label_term", "label_extent", "tractogram",
         "streamline", "streamline_extent", "endpoint_coord",
-        "streamline_length", "traverses", "endpoint", "opposite_hemisphere",
+        "streamline_length", "streamline_label", "endpoint_label",
+        "opposite_hemisphere",
     } <= names
+    # the names of a vocabulary of rules, not of stored relations
+    assert not {"traverses", "endpoint"} & names
 
 
 def test_the_hemispheres_and_terms_of_the_atlas_are_queryable(files):
@@ -121,7 +125,8 @@ def test_the_parameters_reach_the_indexing(files):
         atlas_command(files) + tractogram_command(files)
         + '.index_tracts("t1", "fs", crossing_threshold=30.0, '
         + "emit_background=1)\n"
-        + 'ans(s, l) :- traverses("fs", "t1", s, l)\n'
+        + 'ans(s, l) :- streamline_label("fs", x, l), '
+        + 'streamline(x, "t1", s)\n'
     )
     traverses, _ = expected(
         files, crossing_threshold=30.0, emit_background=True)
@@ -138,13 +143,16 @@ def test_two_tractograms_and_the_length_threshold(files):
         + tractogram_command(files, "b", "t2")
         + '.index_tracts("t1", "fs", length_threshold=10.0)\n'
         + '.index_tracts("t2", "fs", length_threshold=10.0)\n'
-        + "ans(t, s) :- streamline(t, s)\n"
+        + "ans(x, t, s) :- streamline(x, t, s)\n"
     )
     got = rows(result)
-    for ident, name in (("t1", "a"), ("t2", "b")):
+    for index, (ident, name) in enumerate((("t1", "a"), ("t2", "b"))):
         tg = Tractogram.from_file(ident, files / f"{name}.tck", "s")
         kept = np.flatnonzero(tg.lengths_in_mm() >= 10.0)
-        assert {s for t, s in got if t == ident} == set(kept.tolist())
+        assert {s for x, t, s in got if t == ident} == set(kept.tolist())
+        # x is (index << 32) | s, the index the order of .index_tracts
+        assert {x for x, t, s in got if t == ident} == {
+            index * 2 ** 32 + s for s in kept.tolist()}
 
 
 def test_a_cache_directory_is_used(files, tmp_path):
@@ -152,7 +160,8 @@ def test_a_cache_directory_is_used(files, tmp_path):
     program = (
         atlas_command(files) + tractogram_command(files)
         + f'.index_tracts("t1", "fs", cache="{cache}")\n'
-        + 'ans(s, l) :- traverses("fs", "t1", s, l)\n'
+        + 'ans(s, l) :- streamline_label("fs", x, l), '
+        + 'streamline(x, "t1", s)\n'
     )
     first = rows(tracts_engine().execute_datalog_program(program))
     assert list(cache.glob("*/traverses.parquet"))
@@ -214,3 +223,40 @@ def test_a_pair_is_indexed_once_and_the_length_threshold_is_fixed(files):
     )
     with pytest.raises(InvalidCommandExpression, match="already"):
         nl.execute_datalog_program('.index_tracts("t1", "fs")\n')
+
+
+def two_tractograms(files):
+    return (
+        atlas_command(files)
+        + tractogram_command(files, "a", "t1")
+        + tractogram_command(files, "b", "t2")
+        + '.index_tracts("t1", "fs")\n'
+        + '.index_tracts("t2", "fs")\n'
+    )
+
+
+def test_subject_of_decodes_x_in_a_rule(files):
+    """The engine's functions read the tractograms its commands indexed."""
+    result = tracts_engine().execute_datalog_program(
+        two_tractograms(files)
+        + 'ans(t) :- streamline_label("fs", x, 1), (t == subject_of(x))\n'
+    )
+    want = {
+        ident for ident, name in (("t1", "a"), ("t2", "b"))
+        if (expected(files, ident, name)[0]["l"] == 1).any()
+    }
+    assert want == {"t1", "t2"}
+    assert rows(result) == {(t,) for t in want}
+
+
+def test_the_functions_agree_with_the_streamline_relation(files):
+    result = tracts_engine().execute_datalog_program(
+        two_tractograms(files)
+        + "ans(x, t, s, y, u, i) :- streamline(x, t, s), "
+        + "(y == streamline_id(t, s)), (u == subject_of(x)), "
+        + "(i == index_of(x))\n"
+    )
+    got = rows(result)
+    assert len(got) == 80
+    assert all(x == y and t == u and s == i for x, t, s, y, u, i in got)
+    assert (2 ** 32 + 3, "t2", 3, 2 ** 32 + 3, "t2", 3) in got

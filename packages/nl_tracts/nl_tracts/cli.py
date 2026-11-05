@@ -117,8 +117,8 @@ def _parser() -> argparse.ArgumentParser:
     dl.add_argument("--length-threshold", type=float, default=0.0,
                     metavar="MM", help="shorter streamlines are left out")
     dl.add_argument("--no-background", action="store_true",
-                    help="no traverses rows for the background (WMQL's not "
-                    "and only read them: the default has them)")
+                    help="no streamline_label rows for the background "
+                    "(WMQL's not and only read them: the default has them)")
     dl.add_argument("--cache", metavar="DIR",
                     help="keep the indexing here, and read it next time")
     dl.add_argument("--anatomical-vertical", action="store_true",

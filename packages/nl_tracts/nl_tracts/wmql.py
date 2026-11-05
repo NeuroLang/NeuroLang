@@ -6,19 +6,22 @@ and the streamlines whose first and last point are in the labels,
 ``end0`` and ``end1``. A WMQL name ``x`` becomes four Datalog predicates:
 
 ========================  ==========================================
-``q_x(t, s)``             the streamlines of tractogram ``t``
+``q_x(x)``                the streamlines, by their id ``x``
 ``q_x__label(t, l)``      the labels of the query, for each tractogram
-``q_x__end0(t, s)``       streamlines with the first point in labels
-``q_x__end1(t, s)``       streamlines with the last point in labels
+``q_x__end0(x)``          streamlines with the first point in labels
+``q_x__end1(x)``          streamlines with the last point in labels
 ========================  ==========================================
 
 over the relations of DESIGN.md, 3, with the atlas ``a`` fixed to a constant
 (labels in WMQL are the ids of an atlas, as ``FreeSurfer.qry`` has them):
-``tractogram(t)``, ``traverses(a, t, s, l)``, ``endpoint(a, t, s, e, l)``,
-and for the directional terms ``label_extent(a, l, axis, lo, hi)``,
-``streamline_extent(t, s, axis, lo, hi)`` and
-``endpoint_coord(t, s, e, axis, v)``. A component that is empty whatever the
-data is ``None`` and has no predicate.
+``tractogram(t)``, ``streamline(x, t, s)``, ``streamline_label(a, x, l)``,
+``endpoint_label(a, x, e, l)``, and for the directional terms
+``label_extent(a, l, axis, lo, hi)``, ``streamline_extent(x, axis, lo, hi)``
+and ``endpoint_coord(x, e, axis, v)``. A streamline ``x`` is of one
+tractogram, so the streamline components are unary; the label sets are per
+tractogram, as tract_querier's are per tractography, and a rule that relates
+the two reads ``t`` from ``streamline(x, t, s)``. A component that is empty
+whatever the data is ``None`` and has no predicate.
 
 The algorithm, in order (DESIGN.md, 11.4): parse the program as Python;
 lower-case it, inline the imports and rewrite ``not in`` to its WMQL
@@ -319,7 +322,7 @@ def _parse(source: str, filename: str = "<wmql>") -> ast.Module:
 
 # --- code generation ----------------------------------------------------
 
-_TS = ("t", "s")
+_X = ("x",)
 _TL = ("t", "l")
 
 # The directional terms, as tract_querier's ``process_relative_term`` has
@@ -392,6 +395,11 @@ class _Transpiler:
     def ext(self, pred, *args):
         return _Atom(pred, args, extensional=True)
 
+    def decoding(self):
+        """``streamline(x, t, s)``: the tractogram ``t`` of a streamline
+        ``x``, for a rule that relates it to a label set ``(t, l)``."""
+        return self.ext("streamline", "x", "t", "s")
+
     # set operations on one component (None is the empty set)
     def union(self, a, b, args):
         if a is None or a == b:
@@ -424,28 +432,28 @@ class _Transpiler:
     # operations on queries
     def q_union(self, a, b):
         return QueryPredicates(
-            self.union(a.tracts, b.tracts, _TS),
+            self.union(a.tracts, b.tracts, _X),
             self.union(a.labels, b.labels, _TL),
-            self.union(a.end0, b.end0, _TS),
-            self.union(a.end1, b.end1, _TS),
+            self.union(a.end0, b.end0, _X),
+            self.union(a.end1, b.end1, _X),
         )
 
     def q_intersection(self, a, b):
         # the streamlines and the endpoints are intersected, the labels
         # are united
         return QueryPredicates(
-            self.intersection(a.tracts, b.tracts, _TS),
+            self.intersection(a.tracts, b.tracts, _X),
             self.union(a.labels, b.labels, _TL),
-            self.intersection(a.end0, b.end0, _TS),
-            self.intersection(a.end1, b.end1, _TS),
+            self.intersection(a.end0, b.end0, _X),
+            self.intersection(a.end1, b.end1, _X),
         )
 
     def q_difference(self, a, b):
         return QueryPredicates(
-            self.difference(a.tracts, b.tracts, _TS),
+            self.difference(a.tracts, b.tracts, _X),
             self.difference(a.labels, b.labels, _TL),
-            self.difference(a.end0, b.end0, _TS),
-            self.difference(a.end1, b.end1, _TS),
+            self.difference(a.end0, b.end0, _X),
+            self.difference(a.end1, b.end1, _X),
         )
 
     def universe(self):
@@ -454,7 +462,8 @@ class _Transpiler:
             self._universe = self.fresh()
             self.emit(
                 self._universe, _TL,
-                self.ext("traverses", self.atlas, "t", "s", "l"),
+                self.ext("streamline_label", self.atlas, "x", "l"),
+                self.decoding(),
             )
         return self._universe
 
@@ -466,8 +475,9 @@ class _Transpiler:
         if labels is not None:
             tracts = self.fresh()
             self.emit(
-                tracts, _TS,
-                self.ext("traverses", self.atlas, "t", "s", "l"),
+                tracts, _X,
+                self.ext("streamline_label", self.atlas, "x", "l"),
+                self.decoding(),
                 self.atom(labels, _TL),
             )
         return QueryPredicates(tracts, labels, None, None)
@@ -478,15 +488,15 @@ class _Transpiler:
             return None
         outside = self.fresh()
         # of the streamlines of ``a`` only: a join that starts from them, and
-        # a result of their size, not of all the rows of ``traverses``
+        # a result of their size, not of all the rows of ``streamline_label``
         body = [
-            self.atom(a.tracts, _TS),
-            self.ext("traverses", self.atlas, "t", "s", "l"),
+            self.atom(a.tracts, _X),
+            self.ext("streamline_label", self.atlas, "x", "l"),
         ]
         if a.labels is not None:
-            body.append(self.atom(a.labels, _TL, True))
-        self.emit(outside, _TS, *body)
-        return self.difference(a.tracts, outside, _TS)
+            body += [self.decoding(), self.atom(a.labels, _TL, True)]
+        self.emit(outside, _X, *body)
+        return self.difference(a.tracts, outside, _X)
 
     def q_invert(self, a):
         """``~a``: the streamlines of ``a`` with all their labels in the
@@ -502,9 +512,10 @@ class _Transpiler:
                 return None
             p = self.fresh()
             self.emit(
-                p, _TS,
-                self.atom(end, _TS),
-                self.ext("endpoint", self.atlas, "t", "s", str(e), "l"),
+                p, _X,
+                self.atom(end, _X),
+                self.ext("endpoint_label", self.atlas, "x", str(e), "l"),
+                self.decoding(),
                 self.atom(a.labels, _TL),
             )
             return p
@@ -515,12 +526,12 @@ class _Transpiler:
 
     def q_endpoints_in(self, a):
         return QueryPredicates(
-            self.union(a.end0, a.end1, _TS), a.labels, a.end0, a.end1
+            self.union(a.end0, a.end1, _X), a.labels, a.end0, a.end1
         )
 
     def q_both_endpoints_in(self, a):
         return QueryPredicates(
-            self.intersection(a.end0, a.end1, _TS), a.labels, a.end0, a.end1
+            self.intersection(a.end0, a.end1, _X), a.labels, a.end0, a.end1
         )
 
     def q_directional(self, term: str, arg: QueryPredicates, side=None):
@@ -551,8 +562,9 @@ class _Transpiler:
 
         tracts = self.fresh()
         self.emit(
-            tracts, _TS,
-            self.ext("streamline_extent", "t", "s", str(axis), "lo", "hi"),
+            tracts, _X,
+            self.ext("streamline_extent", "x", str(axis), "lo", "hi"),
+            self.decoding(),
             self.atom(bound, ("t", "box")),
             _Comparison(edge, op, "box"),
         )
@@ -560,8 +572,9 @@ class _Transpiler:
         for e in (0, 1):
             p = self.fresh()
             self.emit(
-                p, _TS,
-                self.ext("endpoint_coord", "t", "s", str(e), str(axis), "v"),
+                p, _X,
+                self.ext("endpoint_coord", "x", str(e), str(axis), "v"),
+                self.decoding(),
                 self.atom(bound, ("t", "box")),
                 _Comparison("v", op, "box"),
             )
@@ -569,15 +582,16 @@ class _Transpiler:
         labels = self.fresh()
         self.emit(
             labels, _TL,
-            self.atom(tracts, _TS),
-            self.ext("traverses", self.atlas, "t", "s", "l"),
+            self.atom(tracts, _X),
+            self.ext("streamline_label", self.atlas, "x", "l"),
+            self.decoding(),
         )
         return QueryPredicates(tracts, labels, *ends)
 
     def q_label(self, value: int):
         t = self.fresh()
         self.emit(
-            t, _TS, self.ext("traverses", self.atlas, "t", "s", str(value))
+            t, _X, self.ext("streamline_label", self.atlas, "x", str(value))
         )
         labels = self.fresh()
         self.emit(labels, ("t", str(value)), self.ext("tractogram", "t"))
@@ -585,8 +599,9 @@ class _Transpiler:
         for e in (0, 1):
             p = self.fresh()
             self.emit(
-                p, _TS,
-                self.ext("endpoint", self.atlas, "t", "s", str(e), str(value)),
+                p, _X,
+                self.ext("endpoint_label", self.atlas, "x", str(e),
+                         str(value)),
             )
             ends.append(p)
         return QueryPredicates(t, labels, *ends)
@@ -840,7 +855,7 @@ class _Transpiler:
                 for kind, pred in vars(query).items():
                     if pred is None:
                         continue
-                    args = _TL if kind == "labels" else _TS
+                    args = _TL if kind == "labels" else _X
                     name_ = f"q_{base}{tag}{suffixes[kind]}"
                     rule = _Rule(
                         _Atom(name_, args), (_Atom(pred, args),)
@@ -881,7 +896,7 @@ def transpile(
         The WMQL program, as tract_querier reads it.
     atlas : str
         The atlas whose label ids the program uses: the constant in the
-        first column of ``traverses`` and ``endpoint``.
+        first column of ``streamline_label`` and ``endpoint_label``.
     include_folders : sequence of str
         Where ``import`` looks for files.
     skip_unsupported : bool

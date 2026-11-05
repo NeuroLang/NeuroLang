@@ -29,16 +29,19 @@ def test_a_label_is_a_set_of_one_label_and_the_streamlines_that_have_it():
     assert re.search(
         r"^q_a__label\(t, l\) :- qi_\d+\(t, l\)$", p.text, re.M
     )
+    # the streamlines, by their id x
     assert re.search(
-        r'^qi_\d+\(t, s\) :- traverses\("fs", t, s, 7\)$', p.text, re.M
+        r'^qi_\d+\(x\) :- streamline_label\("fs", x, 7\)$', p.text, re.M
     )
     assert re.search(
-        r'^qi_\d+\(t, s\) :- endpoint\("fs", t, s, 1, 7\)$', p.text, re.M
+        r'^qi_\d+\(x\) :- endpoint_label\("fs", x, 1, 7\)$', p.text, re.M
     )
+    assert re.search(r"^q_a\(x\) :- qi_\d+\(x\)$", p.text, re.M)
+    assert re.search(r"^q_a__end0\(x\) :- qi_\d+\(x\)$", p.text, re.M)
 
 
 def test_the_atlas_is_a_constant_of_the_program():
-    assert 'traverses("dk", ' in transpile("a = 1\n", atlas="dk").text
+    assert 'streamline_label("dk", ' in transpile("a = 1\n", atlas="dk").text
     with pytest.raises(WMQLError, match="quote"):
         transpile("a = 1\n", atlas='d"k')
 
@@ -70,7 +73,14 @@ def test_a_statically_empty_component_propagates():
 
 def test_the_complement_has_the_labels_of_the_data_as_universe():
     text = t(BASE + "x = not a\n").text
-    assert 'traverses("fs", t, s, l)' in text  # the universe
+    # the universe: the labels of the streamlines of each tractogram
+    assert re.search(
+        r'^qi_\d+\(t, l\) :- streamline_label\("fs", x, l\), '
+        r"streamline\(x, t, s\)$", text, re.M)
+    # the streamlines with a label of the complement, of their tractogram
+    assert re.search(
+        r'^qi_\d+\(x\) :- streamline_label\("fs", x, l\), '
+        r"streamline\(x, t, s\), qi_\d+\(t, l\)$", text, re.M)
     assert "~q_a__label(l)" in text.replace("qi_", "q_a__label") or \
         "~" in text
 
@@ -111,9 +121,10 @@ def test_the_program_of_a_name_has_only_the_rules_it_needs():
     text = p.program("c")
     assert "q_c(" in text and "q_a(" not in text.split("q_c")[0] or True
     assert "q_d" not in text
-    assert "traverses" in text
+    assert "streamline_label" in text
     only_labels = p.program("c", components=("labels",))
-    assert "traverses" not in only_labels and "endpoint" not in only_labels
+    assert "streamline_label" not in only_labels
+    assert "endpoint_label" not in only_labels
     assert "q_c__label" in only_labels
 
 
@@ -162,12 +173,13 @@ def test_a_directional_term_compares_the_streamlines_with_a_box(term):
     # the face of the box of the labels, per tractogram, by an aggregate
     assert re.search(r"^qi_\d+\(t, (max\(hi\)|min\(lo\))\) :- ", text, re.M)
     assert 'label_extent("fs", l, ' in text
-    assert "streamline_extent(t, s, " in text
-    assert "endpoint_coord(t, s, 0, " in text and \
-        "endpoint_coord(t, s, 1, " in text
+    assert "streamline_extent(x, " in text
+    assert "endpoint_coord(x, 0, " in text and \
+        "endpoint_coord(x, 1, " in text
     # the labels of the result are those its streamlines traverse
     assert re.search(
-        r'^qi_\d+\(t, l\) :- qi_\d+\(t, s\), traverses\("fs", t, s, l\)$',
+        r'^qi_\d+\(t, l\) :- qi_\d+\(x\), streamline_label\("fs", x, l\), '
+        r"streamline\(x, t, s\)$",
         text, re.M,
     )
 
@@ -194,11 +206,15 @@ def test_the_direction_table_is_the_references(call):
     assert re.search(
         rf'^qi_\d+\(t, {re.escape(aggregate)}\) :- \w+\(t, l\), '
         rf'label_extent\("fs", l, {axis}, lo, hi\)$', text, re.M)
-    assert f"streamline_extent(t, s, {axis}, lo, hi), " in text
-    assert f", ({edge} {op} box)" in text
+    # the box is per tractogram: t of the streamline, by streamline(x, t, s)
     assert re.search(
-        rf"endpoint_coord\(t, s, 0, {axis}, v\), .*\(v {op} box\)", text
-    )
+        rf"^qi_\d+\(x\) :- streamline_extent\(x, {axis}, lo, hi\), "
+        rf"streamline\(x, t, s\), qi_\d+\(t, box\), "
+        rf"\({edge} {re.escape(op)} box\)$", text, re.M)
+    assert re.search(
+        rf"^qi_\d+\(x\) :- endpoint_coord\(x, 0, {axis}, v\), "
+        rf"streamline\(x, t, s\), qi_\d+\(t, box\), "
+        rf"\(v {re.escape(op)} box\)$", text, re.M)
 
 
 def test_the_vertical_terms_can_be_anatomical():
@@ -220,7 +236,7 @@ def test_a_directional_term_does_not_read_the_streamlines_of_its_argument():
     the box need the label set, not the streamlines."""
     p = t("a = 1\nx = anterior_of(a)\n")
     needed = p.program("x", components=("tracts",))
-    assert 'traverses("fs", t, s, 1)' not in needed
+    assert 'streamline_label("fs", x, 1)' not in needed
     assert "label_extent" in needed and "tractogram(t)" in needed
 
 
@@ -302,7 +318,7 @@ def test_a_definition_adds_no_rule_of_its_own():
     rules = p.program("x", components=("tracts",)).strip().split("\n")
     # the streamlines of a and of b, their union (two rules), the name
     assert len(rules) == 5
-    assert re.fullmatch(r"q_x\(t, s\) :- qi_\d+\(t, s\)", rules[-1])
+    assert re.fullmatch(r"q_x\(x\) :- qi_\d+\(x\)", rules[-1])
 
 
 def test_a_name_defined_by_a_name_is_an_alias():
@@ -314,8 +330,8 @@ def test_a_name_defined_by_a_name_is_an_alias():
 
 def test_every_version_of_a_name_has_its_alias_in_the_whole_program():
     p = t("x = 1\ny = x\nx = 2\n")
-    assert re.search(r"^q_x__v1\(t, s\) :- qi_\d+\(t, s\)$", p.text, re.M)
-    assert re.search(r"^q_x\(t, s\) :- qi_\d+\(t, s\)$", p.text, re.M)
+    assert re.search(r"^q_x__v1\(x\) :- qi_\d+\(x\)$", p.text, re.M)
+    assert re.search(r"^q_x\(x\) :- qi_\d+\(x\)$", p.text, re.M)
 
 
 @pytest.mark.parametrize("source", ["x = only(a)", "x = ~a"])
@@ -325,13 +341,34 @@ def test_the_scan_of_only_and_invert_is_of_the_streamlines_of_the_argument(
     """``outside`` is the streamlines of the argument with a label outside
     its labels, not all the streamlines with a label outside: the same
     streamlines in the difference, without a pass over, and a result as
-    large as, all of ``traverses``."""
+    large as, all of ``streamline_label``."""
     text = t("a = 1\n" + source + "\n").text
     assert re.search(
-        r'^qi_\d+\(t, s\) :- qi_\d+\(t, s\), traverses\("fs", t, s, l\), '
-        r"~qi_\d+\(t, l\)$",
+        r'^qi_\d+\(x\) :- qi_\d+\(x\), streamline_label\("fs", x, l\), '
+        r"streamline\(x, t, s\), ~qi_\d+\(t, l\)$",
         text, re.M,
     )
+
+
+def test_only_keeps_an_end_whose_label_is_in_the_labels_of_its_tractogram():
+    text = t("a = 1\nx = only(a)\n").text
+    assert re.search(
+        r'^qi_\d+\(x\) :- qi_\d+\(x\), endpoint_label\("fs", x, 1, l\), '
+        r"streamline\(x, t, s\), qi_\d+\(t, l\)$",
+        text, re.M,
+    )
+
+
+def test_the_relations_are_keyed_by_x_and_traverses_is_not_one():
+    """``traverses`` and ``endpoint`` are names for a vocabulary of rules,
+    not relations the program reads; a streamline is one id ``x``."""
+    text = t(
+        BASE + "p.left = 4\n"
+        "x = only(not a or b) and endpoints_in(c)\n"
+        "y = anterior_of(x) or medial_of(p.left)\n"
+    ).text
+    assert "traverses(" not in text and "endpoint(" not in text
+    assert "(t, s)" not in text
 
 
 def test_the_scan_of_only_without_labels_is_still_restricted():

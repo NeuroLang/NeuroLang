@@ -6,7 +6,7 @@ function loops over streamlines in Python. The semantics are those of
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 import os
 
 import warnings
@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from .atlas import Atlas
+from .ids import encode
 from .tractogram import Tractogram
 
 __all__ = [
@@ -49,9 +50,10 @@ class IndexingParams:
         Streamlines shorter than this, in mm, are left out of *every*
         relation (their ids are not reused). 0 keeps all.
     emit_background : bool
-        If True, ``traverses`` also has rows for the atlas's background
-        label. Default False (DESIGN.md, 6.3). ``endpoint`` never has rows
-        for the background label, whatever this says.
+        If True, ``streamline_label`` (``traverses_relation``) also has rows
+        for the atlas's background label. Default False (DESIGN.md, 6.3).
+        ``endpoint_label`` never has rows for the background label, whatever
+        this says.
     """
 
     crossing_threshold: float = 2.0
@@ -227,7 +229,9 @@ def _index(
 def traverses_relation(
     tractogram: Tractogram, atlas: Atlas, params: IndexingParams
 ) -> pd.DataFrame:
-    """``traverses(a, t, s, l)``: columns ``a, t, s, l``.
+    """The rows of ``streamline_label`` of one tractogram, by the position
+    ``s`` of the streamline: columns ``a, t, s, l`` (the store replaces
+    ``t, s`` by the id ``x``).
 
     ``(a, t, s, l)`` is a row iff at least ``crossing_threshold`` percent of
     the points of streamline ``s`` are in label ``l`` (the denominator
@@ -240,7 +244,9 @@ def traverses_relation(
 def endpoint_relation(
     tractogram: Tractogram, atlas: Atlas, params: IndexingParams
 ) -> pd.DataFrame:
-    """``endpoint(a, t, s, e, l)``: columns ``a, t, s, e, l``.
+    """The rows of ``endpoint_label`` of one tractogram, by the position
+    ``s`` of the streamline: columns ``a, t, s, e, l`` (the store replaces
+    ``t, s`` by the id ``x``).
 
     ``e`` is 0 for the first and 1 for the last point of the streamline,
     ``l`` the label of that point. An end in the background has no row
@@ -252,7 +258,8 @@ def endpoint_relation(
 def streamline_extent_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
-    """``streamline_extent(t, s, axis, lo, hi)``: atlas-independent.
+    """``streamline_extent`` of one tractogram: columns ``t, s, axis, lo,
+    hi`` (``x, axis, lo, hi`` in the store); atlas-independent.
 
     The bounding box of the streamline's points in world mm; ``axis`` is
     0, 1, 2 for x, y, z. One ``reduceat`` per bound over all the points.
@@ -276,7 +283,8 @@ def streamline_extent_relation(
 def endpoint_coord_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
-    """``endpoint_coord(t, s, e, axis, v)``: atlas-independent.
+    """``endpoint_coord`` of one tractogram: columns ``t, s, e, axis, v``
+    (``x, e, axis, v`` in the store); atlas-independent.
 
     The coordinates of the first (``e`` 0) and the last (``e`` 1) point of
     each streamline, in world mm.
@@ -304,8 +312,9 @@ def endpoint_coord_relation(
 def streamline_length_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
-    """``streamline_length(t, s, mm)``: atlas-independent (an addition to
-    the schema, DESIGN.md, 3.1)."""
+    """``streamline_length`` of one tractogram: columns ``t, s, mm``
+    (``x, mm`` in the store); atlas-independent (an addition to the schema,
+    DESIGN.md, 3.1)."""
     ids = _kept_streamlines(tractogram, params)
     return pd.DataFrame(
         {
@@ -324,13 +333,20 @@ class RelationStore:
     rows of several atlases and tractograms are accumulated here, and
     handed over once, by :func:`nl_tracts.frontend.register`.
 
+    A streamline is ``x = (index << 32) | s`` in the relations
+    (:mod:`nl_tracts.ids`), ``index`` being the position of its tractogram
+    in ``tractograms``; ``streamline(x, t, s)`` decodes it.
+
     Attributes
     ----------
     relations : dict of str to pandas.DataFrame
         The relation name to its rows.
+    tractograms : list of str
+        The ids of the tractograms, in the order they were added.
     """
 
     relations: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    tractograms: List[str] = field(default_factory=list)
     _indexed: set = field(default_factory=set, repr=False)
 
     def _append(self, name: str, frame: pd.DataFrame) -> None:
@@ -363,18 +379,20 @@ class RelationStore:
     ) -> None:
         """Add ``tractogram``, ``streamline`` and the atlas-independent
         relations (``streamline_extent``, ``endpoint_coord``,
-        ``streamline_length``).
+        ``streamline_length``). The tractogram's index in the ids ``x`` of
+        its streamlines is the number of tractograms added before it.
 
         Raises
         ------
         ValueError
             If a tractogram of that id was added.
         """
-        known = self.relations.get("tractogram")
-        if known is not None and tractogram.id in set(known["t"]):
+        if tractogram.id in self.tractograms:
             raise ValueError(
                 f"tractogram {tractogram.id!r} was already added"
             )
+        index = len(self.tractograms)
+        self.tractograms.append(tractogram.id)
         ids = _kept_streamlines(tractogram, params)
         self._append(
             "tractogram",
@@ -384,20 +402,20 @@ class RelationStore:
             "streamline",
             pd.DataFrame(
                 {
+                    "x": encode(index, ids),
                     "t": _column_t(tractogram, len(ids)),
                     "s": ids.astype(np.int32),
                 }
             ),
         )
-        self._append(
-            "streamline_extent", streamline_extent_relation(tractogram, params)
-        )
-        self._append(
-            "endpoint_coord", endpoint_coord_relation(tractogram, params)
-        )
-        self._append(
-            "streamline_length", streamline_length_relation(tractogram, params)
-        )
+        for name, relation in (
+            ("streamline_extent", streamline_extent_relation),
+            ("endpoint_coord", endpoint_coord_relation),
+            ("streamline_length", streamline_length_relation),
+        ):
+            self._append(
+                name, _by_streamline(relation(tractogram, params), index)
+            )
 
     def add_index(
         self,
@@ -407,7 +425,9 @@ class RelationStore:
         cache_dir: Optional[Union[str, os.PathLike]] = None,
         allow_space_mismatch: bool = False,
     ) -> None:
-        """Add ``traverses`` and ``endpoint`` of ``tractogram`` by ``atlas``.
+        """Add ``streamline_label`` and ``endpoint_label`` of ``tractogram``
+        by ``atlas``: ``traverses_relation`` and ``endpoint_relation``, with
+        the streamlines as ids ``x``.
 
         Checks the spaces (:class:`~nl_tracts.spaces.SpaceMismatchError`),
         and reads or writes the parquet cache if ``cache_dir`` is given.
@@ -415,7 +435,9 @@ class RelationStore:
         Raises
         ------
         ValueError
-            If this atlas and this tractogram were indexed already.
+            If this atlas and this tractogram were indexed already, or if
+            the tractogram was not added (``add_tractogram``), which gives
+            it its index in ``x``.
         """
         atlas.check_same_space(tractogram, allow_space_mismatch)
         pair = (atlas.name, tractogram.id)
@@ -424,6 +446,12 @@ class RelationStore:
                 f"tractogram {tractogram.id!r} was already indexed by atlas "
                 f"{atlas.name!r}"
             )
+        if tractogram.id not in self.tractograms:
+            raise ValueError(
+                f"tractogram {tractogram.id!r} was not added: add_tractogram "
+                "comes before add_index"
+            )
+        index = self.tractograms.index(tractogram.id)
         frames = None
         if cache_dir is not None:
             from .cache import cache_key, read_cached, write_cached
@@ -444,9 +472,18 @@ class RelationStore:
                     write_cached(
                         cache_dir, key, name, frame.drop(columns=["a", "t"])
                     )
-        self._append("traverses", frames[0])
-        self._append("endpoint", frames[1])
+        self._append("streamline_label", _by_streamline(frames[0], index))
+        self._append("endpoint_label", _by_streamline(frames[1], index))
         self._indexed.add(pair)
+
+
+def _by_streamline(frame: pd.DataFrame, index: int) -> pd.DataFrame:
+    """``frame`` of one tractogram with the id ``x`` of each streamline in
+    place of its columns ``t`` and ``s``, where ``t`` was."""
+    at = frame.columns.get_loc("t")
+    out = frame.drop(columns=["t", "s"])
+    out.insert(at, "x", encode(index, frame["s"].to_numpy()))
+    return out
 
 
 def _labelled(

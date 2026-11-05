@@ -115,8 +115,10 @@ def test_a_directional_query_end_to_end(term, axis, face, op, edge):
     assert expected_tracts and expected_tracts != set(range(len(pts)))
 
     def got(pred):
+        # one tractogram, the first: x is s
         frame = solution[pred].as_pandas_dataframe()
-        return set(frame.iloc[:, 1])
+        assert frame.shape[1] == 1
+        return set(frame.iloc[:, 0])
 
     q = program.defined["x"]
     assert got(q.tracts) == expected_tracts
