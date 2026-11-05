@@ -260,3 +260,96 @@ def test_the_functions_agree_with_the_streamline_relation(files):
     assert len(got) == 80
     assert all(x == y and t == u and s == i for x, t, s, y, u, i in got)
     assert (2 ** 32 + 3, "t2", 3, 2 ** 32 + 3, "t2", 3) in got
+
+
+# --- an atlas the engine loaded (the atlases of an engine of the apps) -----
+
+# The names of the regions as the engine names them (its relation
+# destrieux(name, region)): nilearn's, with "-" and "_" as spaces.
+ENGINE_ATLASES = {
+    "destrieux": {
+        "L G and S frontomargin": [1], "R Pole temporal": [2],
+        "L Medial wall": [3], "R S front sup": [4],
+    },
+    "tian": {
+        "lAMY lh": [1], "aPUT rh": [2], "NAc shell lh": [3],
+        "THA DA rh": [4],
+    },
+}
+
+
+def engine_with_atlases():
+    """A tracts engine given atlases as the apps' registry gives them:
+    ``grids`` the label images, ``atlas_labels`` name -> values."""
+    nl = tracts_engine()
+    image = nib.Nifti1Image(synthetic_volume(), AFFINES["aligned"])
+    nl.grids = {"template": image, **{a: image for a in ENGINE_ATLASES}}
+    nl.atlas_labels = dict(ENGINE_ATLASES)
+    return nl
+
+
+def index_engine_atlases(files):
+    return (
+        f'.load_tractogram("t1", "{files}/a.tck", space="MNI152")\n'
+        '.index_tracts("t1", "destrieux")\n'
+        '.index_tracts("t1", "tian")\n'
+    )
+
+
+def test_an_atlas_of_the_engine_is_indexed_by_its_name(files):
+    nl = engine_with_atlases()
+    result = nl.execute_datalog_program(
+        index_engine_atlases(files)
+        + 'ans(s, l) :- streamline_label("destrieux", x, l), '
+        + 'streamline(x, "t1", s)\n'
+    )
+    traverses, _ = expected(files)  # the same volume, the same labels
+    assert rows(result) == {(s, l) for s, l in zip(traverses["s"],
+                                                   traverses["l"])}
+
+
+def test_the_labels_of_an_engine_atlas_have_its_names_terms_and_sides(files):
+    nl = engine_with_atlases()
+    nl.execute_datalog_program(index_engine_atlases(files))
+    labels = rows(nl.execute_datalog_program(
+        'ans(a, l, n, h) :- label(a, l, n, h)\n'))
+    assert {(a, n) for a, _, n, _ in labels} == {
+        (a, n) for a, names in ENGINE_ATLASES.items() for n in names}
+    assert {(n, h) for _, _, n, h in labels} == {
+        ("L G and S frontomargin", "left"), ("R Pole temporal", "right"),
+        ("L Medial wall", "left"), ("R S front sup", "right"),
+        ("lAMY lh", "left"), ("aPUT rh", "right"),
+        ("NAc shell lh", "left"), ("THA DA rh", "right"),
+    }
+    terms = rows(nl.execute_datalog_program(
+        'ans(n, t) :- label(a, l, n, h), label_term(a, l, t)\n'))
+    # the shipped mappings, keyed by the raw names, match the engine's
+    assert {("L G and S frontomargin", "frontal"),
+            ("R Pole temporal", "temporalpole"),
+            ("lAMY lh", "amygdala"), ("aPUT rh", "putamen"),
+            ("aPUT rh", "striatum"), ("NAc shell lh", "accumbens_area"),
+            ("THA DA rh", "thalamus_proper")} <= terms
+    assert "L Medial wall" not in {n for n, _ in terms}  # no term, on purpose
+    # label 1 of both atlases, which the streamlines cross
+    both = rows(nl.execute_datalog_program(
+        'ans(x) :- traverses(x, "amygdala", "left"), '
+        'traverses(x, "frontal", "left")\n'))
+    assert both and both == rows(nl.execute_datalog_program(
+        'ans(x) :- streamline_label("tian", x, 1)\n'))
+
+
+def test_an_atlas_neither_loaded_nor_of_the_engine_is_an_error(files):
+    nl = engine_with_atlases()
+    with pytest.raises(InvalidCommandExpression, match="schaefer"):
+        nl.execute_datalog_program(
+            f'.load_tractogram("t1", "{files}/a.tck", space="MNI152")\n'
+            '.index_tracts("t1", "schaefer")\n')
+    with pytest.raises(InvalidCommandExpression, match="template"):
+        nl.execute_datalog_program('.index_tracts("t1", "template")\n')
+
+
+def test_an_engine_atlas_is_in_mni152(files):
+    nl = engine_with_atlases()
+    with pytest.raises(InvalidCommandExpression, match="space"):
+        nl.execute_datalog_program(
+            tractogram_command(files) + '.index_tracts("t1", "destrieux")\n')

@@ -92,6 +92,7 @@ def test_the_shipped_keys():
     assert set(SHIPPED_MAPPINGS) == {
         "freesurfer_aseg_aparc",
         "freesurfer_destrieux",
+        "tian_subcortex_s2",
     }
 
 
@@ -302,3 +303,36 @@ def test_the_standard_aseg_aparc_and_a2009s_labels_are_all_mapped():
         if by_id[i] not in mapped and not left_out.search(by_id[i])
     )
     assert missing == []
+
+
+# The 32 regions of Tian's subcortex at scale 2, as its label file has them
+# (Tian_Subcortex_S2_3T_label.txt), and the structure of aseg they are part
+# of: their terms are those of the structure in freesurfer_aseg_aparc.
+TIAN_S2 = {
+    "aHIP": "Hippocampus", "pHIP": "Hippocampus",
+    "lAMY": "Amygdala", "mAMY": "Amygdala",
+    "THA-DP": "Thalamus", "THA-VP": "Thalamus",
+    "THA-VA": "Thalamus", "THA-DA": "Thalamus",
+    "NAc-shell": "Accumbens-area", "NAc-core": "Accumbens-area",
+    "pGP": "Pallidum", "aGP": "Pallidum",
+    "aPUT": "Putamen", "pPUT": "Putamen",
+    "aCAU": "Caudate", "pCAU": "Caudate",
+}
+
+
+def test_tian_has_the_terms_of_the_aseg_structures():
+    tian = load_term_mapping("tian_subcortex_s2")
+    aseg = load_term_mapping("freesurfer_aseg_aparc")
+    assert set(tian["atlas_label_name"]) == {
+        f"{region}-{h}" for region in TIAN_S2 for h in ("lh", "rh")
+    }
+    for region, structure in TIAN_S2.items():
+        for h, side in (("lh", "Left"), ("rh", "Right")):
+            rows = tian[tian.atlas_label_name == f"{region}-{h}"]
+            same = aseg[aseg.atlas_label_name == f"{side}-{structure}"]
+            assert set(rows["term"]) == set(same["term"]), region
+            assert set(rows["hemi"]) == set(same["hemi"]) == {
+                "left" if h == "lh" else "right"}
+    # the uncinate's subcortical terms are there
+    assert {"amygdala", "putamen", "striatum", "subcortical"} <= set(
+        tian["term"])

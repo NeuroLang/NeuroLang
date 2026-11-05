@@ -29,7 +29,9 @@ COLUMNS = ["atlas_label_name", "term", "hemi"]
 
 #: The mappings in ``nl_tracts/mappings``, by key (the file name without
 #: ``.tsv``).
-SHIPPED_MAPPINGS = ("freesurfer_aseg_aparc", "freesurfer_destrieux")
+SHIPPED_MAPPINGS = (
+    "freesurfer_aseg_aparc", "freesurfer_destrieux", "tian_subcortex_s2",
+)
 
 
 def shipped_mapping_path(key: str):

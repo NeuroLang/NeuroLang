@@ -15,6 +15,7 @@ The only module of nl_tracts that is written against NeuroLang. Two ways:
 """
 
 import warnings
+from types import SimpleNamespace
 from typing import Any, Dict, Iterable, Optional
 
 import nibabel as nib
@@ -33,13 +34,17 @@ from .atlas import Atlas
 from .ids import decode, encode
 from .indexing import IndexingParams, RelationStore
 from .spaces import SpaceMismatchError
+from .terms import load_term_mapping
 from .tractogram import Tractogram
 from .vocabulary import predicates, prelude
 
 __all__ = [
+    "ENGINE_ATLAS_MAPPINGS",
     "RELATION_NAMES",
     "TractsCommandsMixin",
     "TractsSolver",
+    "engine_atlas",
+    "engine_label_name",
     "init_engine",
     "register",
     "relation_frames",
@@ -112,10 +117,56 @@ ATLAS_KINDS = {
 }
 
 
+#: The shipped term mapping of each atlas an engine of the apps may load
+#: (``atlases:`` of its ``engines.yaml``), by the atlas's name there.
+ENGINE_ATLAS_MAPPINGS = {
+    "destrieux": "freesurfer_destrieux",
+    "tian": "tian_subcortex_s2",
+}
+
+
+def engine_label_name(name: str) -> str:
+    """A raw label name as an engine of the apps names its region: ``-``
+    and ``_`` are spaces. It is ``_label_name`` of
+    ``neurolang_apps.utils.engine_registry``, which nl_tracts does not
+    import; a test of the apps checks that they agree."""
+    return name.replace("-", " ").replace("_", " ")
+
+
+def engine_atlas(engine: Any, name: str) -> Optional[Atlas]:
+    """The atlas ``name`` an engine of the apps loaded, or None.
+
+    Its label image is ``engine.grids[name]`` and its regions
+    ``engine.atlas_labels[name]`` (a name -> the values of its voxels), so
+    that its label names are those of the engine's relation of the atlas,
+    ``destrieux(name, region)``. Its space is ``MNI152``. Its term mapping
+    is :data:`ENGINE_ATLAS_MAPPINGS`'s, whose raw names are matched as the
+    engine normalises them (:func:`engine_label_name`).
+    """
+    values = (getattr(engine, "atlas_labels", None) or {}).get(name)
+    image = (getattr(engine, "grids", None) or {}).get(name)
+    if not values or image is None:
+        return None
+    lut = pd.DataFrame(
+        [(v, n) for n, vs in values.items() for v in vs],
+        columns=["index", "name"],
+    )
+    mapping = None
+    if name in ENGINE_ATLAS_MAPPINGS:
+        mapping = load_term_mapping(ENGINE_ATLAS_MAPPINGS[name])
+        mapping["atlas_label_name"] = mapping["atlas_label_name"].map(
+            engine_label_name)
+    return Atlas.from_nilearn(
+        name, SimpleNamespace(maps=image, lut=lut), "MNI152",
+        term_mapping=mapping,
+    )
+
+
 class _State:
     """What the commands have built so far, on one solver."""
 
     def __init__(self):
+        self.engine = None  # whose atlases .index_tracts may index by
         self.store = RelationStore()
         self.atlases: Dict[str, Atlas] = {}
         self.tractograms: Dict[str, Tractogram] = {}
@@ -163,7 +214,8 @@ class TractsCommandsMixin(PatternWalker):
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
     allow_space_mismatch=0)``
-        Index the tractogram by the atlas: ``streamline_label`` and
+        Index the tractogram by the atlas, loaded by ``.load_tract_atlas``
+        or by the engine (:func:`engine_atlas`): ``streamline_label`` and
         ``endpoint_label``, with the relations of the tractogram and of the
         atlas. It is what
         publishes the relations to the program; to be repeated for another
@@ -254,10 +306,14 @@ class TractsCommandsMixin(PatternWalker):
                 "comes before .index_tracts"
             )
         if atlas_name not in state.atlases:
-            raise InvalidCommandExpression(
-                f"atlas {atlas_name!r} was not loaded: .load_tract_atlas "
-                "comes before .index_tracts"
-            )
+            atlas = engine_atlas(state.engine, atlas_name)
+            if atlas is None:
+                raise InvalidCommandExpression(
+                    f"atlas {atlas_name!r} was not loaded: .load_tract_atlas "
+                    "comes before .index_tracts, or it is an atlas of the "
+                    "engine"
+                )
+            state.atlases[atlas_name] = atlas
         tractogram, atlas = state.tractograms[ident], state.atlases[atlas_name]
         try:
             params = IndexingParams(
@@ -362,6 +418,7 @@ def init_engine(engine, mask=None, data_dir=None) -> None:
     not used.
     """
     state = engine.program_ir._tracts
+    state.engine = engine
     tractograms = state.store.tractograms
 
     def streamline_id(t: str, s: int) -> int:

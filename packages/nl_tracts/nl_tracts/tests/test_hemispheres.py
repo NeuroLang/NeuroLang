@@ -32,6 +32,11 @@ from nl_tracts.atlas import (
         ("R Medial_wall", "right"),
         ("Left Thalamus", "left"),
         ("Right Hippocampus", "right"),
+        # Tian's subcortex, raw and as an engine of the apps names it
+        ("aHIP-rh", "right"),
+        ("THA-DA-lh", "left"),
+        ("NAc shell lh", "left"),
+        ("pPUT rh", "right"),
         # no hemisphere
         ("Brain-Stem", "none"),
         ("CC_Anterior", "none"),

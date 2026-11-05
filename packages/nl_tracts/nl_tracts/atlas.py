@@ -62,8 +62,10 @@ def _rules(*pairs):
 #: The default, ordered rules; the first that matches wins (DESIGN.md, 4.3):
 #: FreeSurfer ``Left-``/``Right-``, ``ctx-lh-``/``ctx-rh-`` and a2009s
 #: ``ctx_lh_``/``ctx_rh_``, the suffixes ``_L``/``_R`` (AAL), ``lh.``/
-#: ``rh.``, ``.left``/``.right``, and the prefixes ``Left ``/``Right ``
-#: (Harvard-Oxford) and ``L ``/``R `` (nilearn's Destrieux).
+#: ``rh.``, ``.left``/``.right``, the prefixes ``Left ``/``Right ``
+#: (Harvard-Oxford) and ``L ``/``R `` (nilearn's Destrieux), and the
+#: suffixes ``-lh``/``-rh`` (Tian's subcortex), `` lh``/`` rh`` as an engine
+#: of the apps names its regions.
 HEMISPHERE_RULES: Sequence[HemisphereRule] = _rules(
     (r"Left[- ].+", r"Right[- ].+"),
     (r"ctx[-_]lh[-_].+", r"ctx[-_]rh[-_].+"),
@@ -71,6 +73,7 @@ HEMISPHERE_RULES: Sequence[HemisphereRule] = _rules(
     (r"lh\..+", r"rh\..+"),
     (r".+\.left", r".+\.right"),
     (r"L .+", r"R .+"),
+    (r".+[- ]lh", r".+[- ]rh"),
 )
 
 
