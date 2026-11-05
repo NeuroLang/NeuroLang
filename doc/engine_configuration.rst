@@ -25,6 +25,9 @@ may specify the following keys, all of them optional:
 - ``python_init`` — dotted path of a Python *module* (not of a function)
   which must define ``init_engine(nl, mask, data_dir)``; it registers
   extensional data (predicates, regions, atlases) into the engine
+- ``solver_mixins`` — classes, as ``"module:Class"`` strings, put before
+  the solver of the engine, e.g. to add Datalog commands ``.name(...)``
+  (the ``tracts`` engine, below)
 - ``python_init_options`` — keyword arguments given to that
   ``init_engine``.  The ``neurosynth`` and ``neurostore`` engines take
   ``unknown_space``, set once in ``coordinate_meta_analysis``: the peaks
@@ -440,6 +443,27 @@ facts and constraints that queries use with the engine's data, in the
 open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
 ``datalog_init``, the rules of an engine can use the ontology's predicates,
 as ``cogat_subclass_of`` and ``cogat_measures`` do.
+
+The ``tracts`` engine
+---------------------
+
+``tracts`` is tractography, from the package ``nl_tracts`` (the extra
+``tracts`` of ``neurolang-apps``; without it the engine fails to build,
+with a message that says so).  It downloads nothing and has no data of its
+own: a program loads its atlas and its tractograms with the commands
+``.load_tract_atlas``, ``.load_tractogram`` and ``.index_tracts``, which
+its ``solver_mixins`` entry, ``nl_tracts.frontend:TractsCommandsMixin``,
+adds to the solver, and asks where the streamlines go in the vocabulary of
+tractography, Datalog rules that its ``python_init``
+(``nl_tracts.frontend``) gives the engine: ``traverses(x, term, h)``,
+``endpoint_in(x, e, term, h)``, ``anterior_of(x, term, h)`` and the like
+(``packages/nl_tracts/DESIGN.md``, section 16).  The same ``init_engine``
+gives it the hooks with which ``.view`` draws a result of streamline ids
+``x`` on the label image of the atlas.  The uncinate fasciculus of
+tract_querier is ``packages/nl_tracts/examples/uncinate.dl``::
+
+   neurolang-query --engine tracts --file uncinate.dl
+   neurolang-query --engine tracts -i --file uncinate.dl   # then .view
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the
