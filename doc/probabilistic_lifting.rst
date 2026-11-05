@@ -983,19 +983,18 @@ Projection on a variable
       \sum_a p_R(a) \prod_{b < a} \big(1 - p_R(b)\big)
       \Big(1 - \prod_{c > a} \big(1 - p_T(c)\big)\Big).
 
-   Olteanu and Huang [Olteanu2009]_ show that conjunctive queries with
-   such inequalities between the variables of different atoms are
-   tractable, and compute them in one scan of the relations sorted on the
-   values compared, with running products; the plan here computes the
-   products :math:`\prod_{b < a}` with a join on :math:`b < a` instead, in
-   quadratic time, with the existing operators. The answer variables can
-   be in :math:`R(\bar u)`, e.g.
+   Olteanu and Huang [Olteanu2009]_ prove tractable a class of
+   conjunctive queries without self-joins with inequalities, which
+   includes this one, and compute them in one scan of the relations
+   sorted on the values compared, with running products; the plan here
+   computes the products :math:`\prod_{b < a}` with a join on
+   :math:`b < a` instead, in quadratic time, with the existing operators.
+   The answer variables can be in :math:`R(\bar u)`, e.g.
    :math:`\exists x\, \exists y\, (V(s, x) \land T(y) \land x < y)`.
-   When the atom with :math:`v` has another quantified variable and the
-   other side is not a single atom either, e.g.
-   :math:`R(x) \land S(x, y) \land T(z) \land y < z`, after the projection
-   on the greatest :math:`z` the comparison :math:`y < z` is nested within
-   the projection of :math:`x`, which plans without the values of
+   In :math:`R(x) \land S(x, y) \land T(z) \land y < z`, :math:`y` is in an
+   atom with another quantified variable, so the projection is on the
+   greatest :math:`z`; the comparison :math:`y < z` is then nested within
+   the projection on :math:`x`, whose plan does not have the values of
    :math:`z`, and the query is declined; so are chains such as
    :math:`x < y \land y < z`, the middle variable being on both sides.
 
