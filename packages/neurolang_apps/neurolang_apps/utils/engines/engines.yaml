@@ -7,9 +7,9 @@ engines:
   # concrete engines pull it in with ``extends`` (a name or a list of
   # names).  Mappings are merged key by key, ``datalog_init`` rules and
   # the ``builtins`` / ``downloads`` / ``ontologies`` /
-  # ``assistant_examples`` lists are concatenated, parent first, and any
-  # other value is overridden by the extending engine.  Set a mapping
-  # entry to ``null`` to drop it.
+  # ``assistant_examples`` / ``python_init`` lists are concatenated, parent
+  # first, and any other value is overridden by the extending engine.  Set
+  # a mapping entry to ``null`` to drop it.
 
   # The atlases of the MNI152 brain: the classical (gyral and sulcal)
   # anatomy of the cortex, Destrieux, and the functional anatomy, Schaefer

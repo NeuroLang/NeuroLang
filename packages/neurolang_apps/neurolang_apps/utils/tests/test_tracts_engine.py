@@ -60,7 +60,7 @@ def test_the_engine_is_declared():
     assert "tracts" in engine_registry.list_engine_names()
     cfg = engine_registry.get_engine_config("tracts")
     assert cfg["solver_mixins"] == ["nl_tracts.frontend:TractsCommandsMixin"]
-    assert cfg["python_init"] == "nl_tracts.frontend"
+    assert cfg["python_init"] == ["nl_tracts.frontend"]
     # the atlases of neurosynth, without the studies that activate them
     # (which need its peaks), and no MNI template
     assert not cfg.get("requires_mni_mask")

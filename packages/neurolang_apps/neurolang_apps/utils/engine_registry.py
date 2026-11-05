@@ -6,9 +6,11 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``), whose
-  ``init_engine`` is also given the keyword arguments of
-  ``python_init_options``;
+* **Python initialisation scripts** (``python_init``): a module name, or
+  a list of them, whose ``init_engine(nl, mask, data_dir, **options)``
+  run in order, each given all the keyword arguments of
+  ``python_init_options`` (an ``init_engine`` takes ``**options`` for
+  those of the others);
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -304,7 +306,10 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
+    "python_init",
 })
+# Keys whose value is a list, or a single item standing for a list of one.
+_LIST_KEYS = frozenset({"python_init"})
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
@@ -344,7 +349,10 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     * any other value replaces the inherited one.
     """
     configs = [
-        {k: v for k, v in c.items() if k not in _NON_INHERITED_KEYS}
+        {
+            k: [v] if k in _LIST_KEYS and isinstance(v, str) else v
+            for k, v in c.items() if k not in _NON_INHERITED_KEYS
+        }
         for c in configs
     ]
     merged = OmegaConf.to_container(OmegaConf.merge(*configs))
@@ -1449,13 +1457,13 @@ def _phase_base_symbols(nl, cfg, mask):
 
 
 def _phase_python_init(nl, cfg, mask, data_dir):
-    py_init = cfg.get("python_init")
-    if not py_init:
-        return
     import importlib
 
-    mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir, **cfg.get("python_init_options", {}))
+    py_init = cfg.get("python_init") or []
+    for module in [py_init] if isinstance(py_init, str) else py_init:
+        importlib.import_module(module).init_engine(
+            nl, mask, data_dir, **cfg.get("python_init_options", {})
+        )
 
 
 def _solver_mixins(cfg, engine_name) -> list:
