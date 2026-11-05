@@ -1,7 +1,34 @@
 # nl_tracts
 
 Tractography for NeuroLang: tractograms and atlases enter an engine as
-extensional relations (`traverses`, `endpoint`, `label`, ...) computed in bulk
-with numpy. Scaffold only: see [DESIGN.md](DESIGN.md).
+extensional relations (`traverses`, `endpoint`, `label`, `label_term`,
+`streamline_extent`, ...) computed in bulk with numpy, and queries are written
+in WMQL (tract_querier's language) or in Datalog. See
+[DESIGN.md](DESIGN.md).
 
-See the [NeuroLang repository](https://github.com/NeuroLang/NeuroLang).
+## From a WMQL query to an answer
+
+```sh
+# 1. a Datalog file from a WMQL program (the atlas, the tractograms)
+nl-tracts dl uf.qry \
+    --atlas fs freesurfer aparc+aseg.nii.gz FreeSurferColorLUT.txt \
+    --tractogram 100307 tracts.trk --space subject:100307 \
+    --term-mapping freesurfer_aseg_aparc --cache ~/.cache/nl_tracts \
+    --ans uf.left -o uf.dl
+
+# 2. read it, change it; then run it
+nl-tracts run uf.dl                 # or --format csv, --limit 20
+```
+
+The file has the commands that build the relations from the files
+(`.load_tract_atlas`, `.load_tractogram`, `.index_tracts`), the rules of the
+query with a `%` comment on each WMQL statement they come from, and
+`ans(t, s)`. To run it from Python:
+
+```python
+from nl_tracts.frontend import tracts_engine
+tracts_engine().execute_datalog_program(open("uf.dl").read())
+```
+
+The labels in a WMQL program are the ids of the atlas, as in tract_querier's
+`FreeSurfer.qry`.

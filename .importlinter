@@ -55,6 +55,7 @@ source_modules =
     nl_tracts.spaces
     nl_tracts.terms
     nl_tracts.wmql
+    nl_tracts.dl
     nl_tracts.atlas
     nl_tracts.tractogram
     nl_tracts.indexing

@@ -120,6 +120,8 @@ class _Comparison:
 class _Rule:
     head: _Atom
     body: Tuple[Union[_Atom, _Comparison], ...] = ()
+    # the statement of the program that the rule comes from, for the comments
+    origin: Optional[str] = field(default=None, compare=False)
 
     def render(self, rename) -> str:
         head = self.head.render(rename)
@@ -160,8 +162,14 @@ class Transpiled:
     _earlier: Tuple[_Rule, ...] = field(repr=False)
 
     @staticmethod
-    def _render(rules: Iterable[_Rule]) -> str:
-        return "\n".join(r.render(lambda p: p) for r in rules) + "\n"
+    def _render(rules: Iterable[_Rule], comments: bool = False) -> str:
+        out, last = [], None
+        for rule in rules:
+            if comments and rule.origin and rule.origin != last:
+                out.append(f"% {rule.origin}")
+            last = rule.origin
+            out.append(rule.render(lambda p: p))
+        return "\n".join(out) + "\n"
 
     @property
     def text(self) -> str:
@@ -177,6 +185,7 @@ class Transpiled:
         self,
         *names: str,
         components: Sequence[str] = ("tracts", "labels", "end0", "end1"),
+        comments: bool = False,
     ) -> str:
         """The program without the rules that ``names`` do not need.
 
@@ -189,6 +198,10 @@ class Transpiled:
             names are wanted; ``("labels",)`` leaves out the rules over the
             streamlines. A component is computed only if it is wanted or
             another wanted component needs it.
+        comments : bool
+            Put a ``%`` comment with the statement of the WMQL program
+            (``.side`` and ``for`` expanded) over the rules that come from
+            it, and one over the names.
         """
         names = names or self.saved
         aliases, stack = [], []
@@ -212,7 +225,10 @@ class Transpiled:
             for rule in by_head.get(pred, ()):
                 stack.extend(rule.dependencies())
         kept = [r for r in self._rules if r.head.pred in needed]
-        return self._render(kept + aliases)
+        text = self._render(kept, comments)
+        if comments and aliases:
+            text += "% the names of the queries\n"
+        return text + self._render(aliases)
 
 
 # --- preprocessing: a port of tract_querier's RewritePreprocess and
@@ -357,6 +373,7 @@ class _Transpiler:
         self.saved: List[str] = []
         self._count = 0
         self._universe = None
+        self._origin = None
 
     # predicates and rules
     def fresh(self) -> str:
@@ -364,7 +381,9 @@ class _Transpiler:
         return f"qi_{self._count}"
 
     def emit(self, pred, args, *body):
-        self.rules.append(_Rule(_Atom(pred, args), tuple(body)))
+        self.rules.append(
+            _Rule(_Atom(pred, args), tuple(body), origin=self._origin)
+        )
 
     @staticmethod
     def atom(pred, args, negated=False):
@@ -701,6 +720,8 @@ class _Transpiler:
 
     # statements
     def statement(self, node):
+        if isinstance(node, (ast.Assign, ast.AugAssign, ast.Expr)):
+            self._origin = " ".join(ast.unparse(node).split())
         if isinstance(node, ast.Assign):
             if len(node.targets) > 1:
                 raise WMQLError(f"invalid assignment in line {node.lineno}")
@@ -794,6 +815,7 @@ class _Transpiler:
 
     # the names of the predicates, once the definitions are known
     def finish(self) -> Transpiled:
+        self._origin = None
         mangled: Dict[str, str] = {}
         public: Dict[str, Dict[str, _Rule]] = {}
         earlier: List[_Rule] = []

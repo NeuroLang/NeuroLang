@@ -1,15 +1,18 @@
 # nl_tracts: tractography for NeuroLang
 
-Status: **the atlas layer and the WMQL transpiler are implemented**
-(`spaces`, `terms`, `atlas`: sections 3.2, 4, 5, and `label_extent` of 6.1;
-`wmql`: section 11, **directional terms included**) and **the geometry of a
-tractogram** (`Tractogram`, `streamline_extent`, `endpoint_coord`,
-`streamline_length`, `RelationStore.add_atlas`/`add_tractogram`, `register`);
-the voxel indexing (`traverses`, `endpoint`), the cache and `build_relations`
-are still a scaffold whose bodies raise `NotImplementedError`. Numbers below marked *measured* come from probes run
-on this repository (NeuroLang `master` at the time of the split, pandas
-3.0.6, pandas backend, an Intel Mac); the rest are estimates to be checked
-in phase 1.
+Status: **implemented, from files to the answer**: the atlas layer (`spaces`,
+`terms`, `atlas`: sections 3.2, 4, 5, and `label_extent` of 6.1), the tractogram
+and its relations (`Tractogram`, `streamline_extent`, `endpoint_coord`,
+`streamline_length`), the **voxel indexing** (`traverses`, `endpoint`: 6.2),
+the parquet cache and the `RelationStore` (7.3), the WMQL transpiler with the
+directional terms (section 11), the **Datalog file** that a WMQL program is
+turned into (11.7), the commands that build the relations from files when it
+runs (8.2) and the `nl-tracts` command. Not done: the relations as a Python
+call for many atlases at once beyond what `RelationStore` does, the AAL and
+Schaefer mappings, the probabilistic variants (4.4, 12). Numbers below marked
+*measured* come from probes run on this repository (NeuroLang `master` at the
+time of the split, pandas 3.0.6, pandas backend, an Intel Mac); the rest are
+estimates.
 
 Contents: 1 Goals · 2 Decisions taken · 3 Relations · 4 Atlases ·
 5 Spaces · 6 Indexing semantics · 7 Data formats and cache ·
@@ -329,6 +332,7 @@ have a test** (13.2):
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
 | 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
 | 11 | `tract_endpoints_pos` = first and last point | `endpoint_coord`, float32 (the reference holds float64; tests compare with `atol` 1e-4 mm) |
+| 12 | At a `crossing_threshold` of 0 every label up to the largest the streamline has is kept, whether or not a point is in it (`bincount` has a zero for it, and `0 >= 0`) | **not reproduced**: a label is traversed only if at least one point is in it; the tests of parity use thresholds above 0 |
 
 #### 6.1.1 `label_extent`: voxel edges, not centres
 
@@ -565,6 +569,46 @@ register(nl, store)
 nl.execute_datalog_program('ans(s) :- traverses("dk", "100307", s, l), ...')
 ```
 
+#### The commands: the second hand-off path
+
+A Datalog program can also build the relations itself, from files, with three
+commands that `TractsCommandsMixin` handles (`nl_tracts.frontend`):
+
+```
+.load_tract_atlas("fs", "aparc+aseg.nii.gz", "FreeSurferColorLUT.txt",
+                  kind="freesurfer", space="subject:1",
+                  term_mapping="freesurfer_aseg_aparc")
+.load_tractogram("100307", "tracts.trk", space="subject:1")
+.index_tracts("100307", "fs", crossing_threshold=2.0, length_threshold=0.0,
+              emit_background=1, cache="~/.cache/nl_tracts")
+```
+
+`kind` is `freesurfer` (a colour LUT), `bids` (a `dseg.tsv`) or `tsv`. The
+paths are read as they are written (relative to where the program runs).
+`.index_tracts` is the command that publishes the relations: it adds the
+atlas and the tractogram to a `RelationStore` that the solver keeps, indexes
+the pair (reading or writing the cache), and gives the program *all* the
+relations built so far (`add_extensional_predicate_from_tuples`, with
+positions for the column names, as `.load_csv` does), so the commands can be
+repeated for more atlases and tractograms. They fail with an
+`InvalidCommandExpression` that names the file or the rule broken: a missing
+file, an unknown `kind`, a command before the one it needs, a space mismatch
+(`allow_space_mismatch=1` overrides), a pair indexed twice, a
+`length_threshold` that differs from that of the tractogram's first index
+(its relations have those streamlines).
+
+Where the handler sits matters. The solver of `NeurolangPDL` is
+`RegionFrontendCPLogicSolver`, whose `CommandsMixin` has a catch-all that
+refuses every command it does not know; `TractsSolver` puts
+`TractsCommandsMixin` *before* it, and `tracts_engine()` is
+`NeurolangPDL(solver_class=TractsSolver)`, the hook `NeurolangPDL` has for
+that. The matches are exact (no catch-all of its own): any other command
+still reaches the refusal, which a test checks. The commands and the rules of
+a program are run by one `execute_datalog_program`. They are not in
+`neurolang-query --engine ...`: that registry is YAML-driven with data
+downloads, and a `tracts` engine in it is a follow-up (15.26); `nl-tracts run`
+is the way for now (11.7).
+
 ## 9. Packaging and layering
 
 ### 9.1 Layout
@@ -581,11 +625,14 @@ packages/nl_tracts/
     spaces.py           Space, SpaceMismatchError, check_same_space
     terms.py            term-mapping format, validation, shipped keys
     wmql.py             WMQL -> Datalog transpiler (11); no NeuroLang
+    dl.py               the Datalog file of a WMQL program (11.7); no NeuroLang
+    cli.py              `nl-tracts dl` and `nl-tracts run`
     atlas.py            Atlas, ProbabilisticAtlas, HemisphereRule, loaders
     tractogram.py       Tractogram
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
     cache.py            parquet cache: cache_key, read_cached, write_cached
-    frontend.py         register(), RELATION_NAMES -- the only NeuroLang use
+    frontend.py         register(), the commands, tracts_engine() -- the only
+                        module that imports NeuroLang (cli.py runs it)
     mappings/           shipped term mappings (TSV): freesurfer_aseg_aparc,
                         freesurfer_destrieux
     tests/              conftest.py: synthetic volumes, `network` marker;
@@ -598,7 +645,7 @@ packages/nl_tracts/
 * `root_packages` gains `nl_tracts`.
 * The layers contract becomes `neurolang_apps > nl_tracts > neurolang >
   nl_core > nl_expr`.
-* A new `forbidden` contract: `nl_tracts.{spaces, terms, wmql, atlas,
+* A new `forbidden` contract: `nl_tracts.{spaces, terms, wmql, dl, atlas,
   tractogram, indexing, cache}` may import none of `neurolang`, `nl_core`, `nl_expr`,
   `lark`, `nilearn`. `frontend` is exempt, and is the only module that may
   import NeuroLang.
@@ -719,6 +766,22 @@ def write_cached(cache_dir, key, relation, frame) -> None
 # frontend.py
 RELATION_NAMES: dict[str, tuple[str, ...]]
 def register(engine, store, only=None) -> None
+def relation_frames(store) -> dict[str, DataFrame]       # + opposite_hemisphere
+class TractsCommandsMixin   # .load_tract_atlas, .load_tractogram, .index_tracts
+class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver)
+def tracts_engine(**kw) -> NeurolangPDL                  # solver_class=TractsSolver
+
+# dl.py
+class AtlasSource(name, image, table, kind="freesurfer", space, term_mapping, background)
+class TractogramSource(id, path, space)
+def datalog_file(source, atlas, tractograms, answer=None, include_folders=(),
+                 crossing_threshold=2.0, length_threshold=0.0,
+                 emit_background=True, cache=None, anatomical_vertical=False,
+                 title=None) -> str
+
+# cli.py     (console script `nl-tracts`)
+def main(argv=None) -> int      # nl-tracts dl PROGRAM --atlas ... --tractogram ...
+                                # nl-tracts run FILE.dl [--format csv] [--limit N]
 ```
 
 ## 11. From tract_querier to Datalog: `nl_tracts.wmql`
@@ -1251,6 +1314,106 @@ Reading it:
   the memory (about 840 MB for a 3M-row join, 7.3); several runs, so no
   variance.
 
+### 11.7 The Datalog file: `nl-tracts dl` and `nl-tracts run`
+
+`nl-tracts dl PROGRAM.qry --atlas NAME KIND IMAGE TABLE --tractogram ID PATH
+[--tractogram ...] [--ans NAME] [-o FILE.dl]` writes, from a WMQL program, a
+file for the frontend that is meant to be **read and edited**
+(`nl_tracts.dl.datalog_file`, text in and text out). For the program of the
+worked example (11.4) it is:
+
+```
+% Datalog for the NeuroLang frontend, from the WMQL program uf.qry.
+% Run it: nl-tracts run <this file>   (the answer is ans(t, s): the streamlines s of tractogram t, for uf.left).
+% Atlas 'fs' (freesurfer), space 'subject:100307'; 1 tractogram(s): 100307.
+% Other queries of the program: amy.left, amy.right, tmp.left, tmp.right, uf.right.
+
+% The relations (traverses, endpoint, label, streamline_extent, ...) are built from the files by these commands.
+.load_tract_atlas("fs", "aparc+aseg.nii.gz", "FreeSurferColorLUT.txt", kind="freesurfer", space="subject:100307", term_mapping="freesurfer_aseg_aparc")
+.load_tractogram("100307", "tracts.trk", space="subject:100307")
+.index_tracts("100307", "fs", crossing_threshold=2.0, length_threshold=0.0, emit_background=1, cache="~/.cache/nl_tracts")
+
+% The query: the rules of each statement, cut to what the answer needs.
+% amy.left = 18
+qi_2(t, 18) :- tractogram(t)
+% tmp.left = 5
+qi_11(t, s) :- endpoint("fs", t, s, 0, 5)
+qi_12(t, s) :- endpoint("fs", t, s, 1, 5)
+% tmp.right = 6
+qi_13(t, s) :- traverses("fs", t, s, 6)
+qi_14(t, 6) :- tractogram(t)
+% uf.left = endpoints_in(tmp.left and anterior_of(amy.left)) not in only(tmp.right)
+qi_17(t, max(hi)) :- qi_2(t, l), label_extent("fs", l, 1, lo, hi)
+...
+% the names of the queries
+q_uf_left(t, s) :- qi_31(t, s)
+
+% The answer: the streamlines of uf.left.
+ans(t, s) :- q_uf_left(t, s)
+```
+
+(`...` stands for the 9 rules left out here; the file has 16 rules for the
+streamlines of this answer, `ans` excluded.)
+
+**Four parts.** (1) A header: the source, how to run it, the atlas, the other
+queries of the program. (2) The **commands** of 8.2, one atlas, one
+`.load_tractogram` and one `.index_tracts` for each tractogram, with the
+options the file was made with (`--crossing-threshold`, `--length-threshold`,
+`--cache`, `--space`, `--term-mapping`, `--background`). (3) The **rules** of
+the answer's streamlines only (`components=("tracts",)`, so no label set is
+computed that the streamlines do not need), grouped under the WMQL statement
+they come from (`.side` and `for` expanded), as `%` comments: `%` comments are
+what the grammar of the frontend has (a `#` is a syntax error). (4) The
+**answer**, `ans(t, s) :- q_<name>(t, s)`.
+
+**One answer.** The frontend accepts one `ans(...)` rule per program (more is
+`UnsupportedProgramError`), and a constant in its head fails with an
+`AttributeError` (a frontend bug, 15.27), so the file has one query: `--ans
+NAME`, by default the last query the program saves (`=`, or a name alone). To
+get another, make another file, or change the name in the last line (every
+query of the program is a predicate `q_<name>` of the whole program, and the
+sliced rules are those of the answer only: for the others, run `dl` again).
+
+**`emit_background`** is on in the file (`--no-background` turns it off):
+WMQL's `not` has the background in its universe and `only` reads it (6.3,
+11.2), so the file agrees with tract_querier only if `traverses` has the
+background rows. The cost is about 1.1 to 1.3 times the rows of `traverses`.
+
+`nl-tracts run FILE.dl [--format table|csv] [--limit N]` runs a file with
+`tracts_engine()` and prints the streamlines (`t`, `s`) sorted, and the number
+of rows on the standard error; errors are `nl-tracts: ...`, not tracebacks
+(exit 1 for the frontend, 2 for the WMQL or the arguments). The same, by hand:
+
+```python
+from nl_tracts.frontend import tracts_engine
+result = tracts_engine().execute_datalog_program(open("uf.dl").read())
+result.as_pandas_dataframe()
+```
+
+**The engine fix this needed.** `execute_datalog_program` rewrites a program
+with *Magic Sets* before it runs it, for the query `ans`. For a rule that has
+two literals read one after the other, both reading an aggregate (the box of
+`anterior_of`, in `both_endpoints_in(anterior_of(a)) ...`), the rewrite made
+the aggregate depend on a literal that reads it: a cycle through an
+aggregation, which no chase can solve (`NoValidChaseClassForStratum`, on
+`NeurolangDL` and `NeurolangPDL`). `magic_rewrite` now checks the rewritten
+program (`check_stratified`: no aggregation or negation in a cycle of its
+dependencies) and raises an `InvalidMagicSetError` if it would not be
+stratified, which the frontend answers by solving the query as written. Tests
+in `nl_core` (the reduced program) and in the frontend (both engines).
+
+**Tested end to end** (`tests/test_end_to_end.py`): an atlas image and a LUT,
+two tractograms written by nibabel, a WMQL program of six queries
+(complement, `only`, a directional `not in`, a nested bundle with
+`both_endpoints_in(anterior_of(...))`, the two vertical terms); `datalog_file`
+makes the file, a `NeurolangPDL` with the commands runs it, and
+tract_querier's own `TractographySpatialIndexing` and `EvaluateQueries`,
+loaded by path, give the same streamlines for each tractogram. One thing is
+fed to the reference from our side: its label boxes, those of `label_extent`
+(voxel edges) and not its own two corners, which differ by half a voxel
+(6.1.1) and would make the directional queries differ for that reason alone.
+`tests/test_cli.py` runs the command as a process, `dl` and then `run`.
+
 ## 12. Directional terms
 
 **Implemented** as tract_querier has them (11.5): a streamline is selected by
@@ -1363,21 +1526,26 @@ query run end to end, from a `Tractogram` and an `Atlas` to NeurolangDL,
 against numpy over the points and the voxels of the label
 (`test_frontend.py`).
 
-**The indexing (phase 1, to do).**
+**The indexing (done)**: `tests/test_indexing.py`. The same volume, affine and
+streamlines go through `TractographySpatialIndexing` (loaded by path, with its
+relative `.aabb` import registered beside it) and through nl_tracts with
+`emit_background=True`, and the sets are compared exactly: `traverses` against
+`crossing_tracts_labels`, `endpoint` against `ending_tracts_labels` without its
+label-0 entries, on the four affines (aligned, flipped, permuted, oblique), at
+thresholds of 0.5, 2, 25, 50 and 100, with points outside the volume. The
+length threshold is compared with the reference's ids mapped back through the
+kept-index list. Dedicated tests for what random data does not reach: the
+rounding of half-voxel coordinates to even (a mutation to round half up is
+caught only there), the clip and its one warning that counts the points, also
+when the indexing is in chunks, the background in the denominator and not in
+the rows, endpoints in the background never having a row, chunks giving the
+same relations, the dtypes. Mutations checked: `>` for `>=`, round half up, a
+point left out of the denominator. The cache: key, round trip, an atomic
+write, and a second store reading what the first wrote under another id and
+another atlas name.
 
-* The same synthetic atlas and tractogram go through
-  `TractographySpatialIndexing` and through nl_tracts with
-  `emit_background=True`, and the sets are compared exactly: `traverses`
-  vs `crossing_tracts_labels`, `endpoint` vs `ending_tracts_labels` minus
-  its label-0 entries (and, for a streamline whose end is in the
-  background, the absence of the row), for several `crossing_threshold`
-  values including 0, 2, 25, 50 and 100, oblique and flipped affines,
-  points outside the volume and exactly on voxel boundaries.
-* `length_threshold`: the reference's ids are renumbered, so the test maps
-  them back through the kept-index list (6.1, parity 7).
-* Oracle-free brute force (Python loops, per streamline) on a tiny volume,
-  to catch bugs shared by both implementations.
-* Fixtures stay in RAS+ (6.1, 5).
+**From files to the answer (done)**: `tests/test_end_to_end.py`, `test_cli.py`
+and `test_commands.py`, 11.7 and 8.2.
 
 ### 13.3 Scale and engine tests
 
@@ -1418,15 +1586,11 @@ own; the scaffold's smoke test stays.
    `label_term`, `label_extent`), `wmql`, the WMQL transpiler with the
    directional terms, and `tractogram` with the geometry relations
    (`streamline_extent`, `endpoint_coord`, `streamline_length`), the store and
-   `register` -- **done** --;
-   `indexing` (`traverses`, `endpoint`, and the cache), and the oracle tests
-   (13.2). Until then the bundles of the vocabulary file transpile but cannot
-   be run on a tractogram: their constants read `traverses` and `endpoint`.
-   Re-measure the sizes of 7.2.
-2. **Relations, cache, frontend**: the atlas-independent relations,
-   `RelationStore`, parquet cache, `register`, the mapping files for AAL and
-   Schaefer (FreeSurfer aseg+aparc and Destrieux are shipped), multi-atlas
-   tests.
+   `register`, the voxel indexing (`traverses`, `endpoint`), the cache, the
+   commands, the Datalog file and the `nl-tracts` command -- **done**. Still to
+   do: re-measure the sizes of 7.2 on a real tractogram.
+2. **Relations, cache, frontend**: **done** but for the mapping files for AAL
+   and Schaefer (FreeSurfer aseg+aparc and Destrieux are shipped).
 3. **Examples and docs**: a tutorial of tract_querier's standard bundles
    (uncinate, arcuate, corticospinal...) as Datalog rules over `label_term`;
    docs page; CI wiring (9.3).
@@ -1556,7 +1720,35 @@ Recommendations in bold; none changes a decision of section 2.
 24. **The geometry relations are float32** (3.1), the reference's float64: a
     tie in the reference can be a different answer here. Real coordinates in
     mm are not on a lattice, so ties are measure-zero. **Keep.**
-25. **The bundles of the vocabulary file cannot yet be run on a tractogram**:
-    they read `traverses` and `endpoint`, which are phase-1 voxel indexing,
-    still a scaffold. The directional terms alone (`anterior_of(a)` with the
-    label sets and `components=("tracts", "end0", "end1")`) run end to end.
+25. ~~The bundles of the vocabulary file cannot yet be run on a tractogram~~:
+    **closed**. The voxel indexing is done (6.2) and a WMQL program is a
+    Datalog file that runs (11.7). Not tried on the 1500 definitions of the
+    file at once (a minute of compilation, 11.6); a bundle of it is a program
+    of its own.
+26. **`neurolang-query --engine tracts`.** The commands are in a solver for
+    `NeurolangPDL(solver_class=...)` (8.2) and `nl-tracts run` uses it. The
+    `neurolang-query` registry is YAML-driven (downloads, a data directory,
+    `python_init`); an engine for it would be `apps > nl_tracts` code. **A
+    follow-up**, if a file is to be run from the apps' command.
+27. **Frontend bug found, not fixed**: a constant in the head of `ans`
+    (`ans("one", x) :- r(x, y)`) fails with `AttributeError: 'str' object has
+    no attribute 'expression'`, and a second `ans` rule is refused. The Datalog
+    file therefore has one answer, `ans(t, s)`. **Fix in `neurolang`** so that
+    one file can name several queries (`ans("uf.left", t, s)`).
+28. **Paths in the commands are read as written**, relative to where the
+    program runs. A file moved from the directory it was made in loses its
+    files. **Keep; write absolute paths** (`--atlas ... /abs/path`) for a
+    file that moves, or run it from its directory.
+29. **`.index_tracts` is the command that publishes the relations**, and a
+    tractogram's relations have the streamlines that its first index kept
+    (`length_threshold`): a second index of it with another threshold is an
+    error. **Keep**; the alternative is to put the threshold on
+    `.load_tractogram`, which the relations of the atlas do not need.
+30. **Magic Sets and aggregation** (11.7). The check refuses a cycle through
+    an aggregation or a negation in the rewritten program, and the query is
+    solved as written, so for such a program the rewrite is not applied and
+    its goal-directed pruning is lost. For these programs, which are already
+    cut to what the answer needs (11.4), that costs nothing measurable. A
+    rewrite that keeps the program stratified (the aggregate evaluated before
+    the magic predicates that depend on a literal that reads it) would keep
+    the pruning. **Keep.**
