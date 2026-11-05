@@ -403,18 +403,21 @@ and the engine's own entries override all of them.  Merging works per key:
 
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
-  ``dimension_type_predicates``, ``assistant_examples`` and
-  ``python_init`` (a single module is a list of one) are concatenated
-  without duplicates;
+  ``dimension_type_predicates``, ``assistant_examples``,
+  ``hidden_predicates``, ``solver_mixins`` and ``python_init`` (a single
+  module is a list of one) are concatenated without duplicates;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
   setting an entry to ``null`` removes the inherited one (a list cannot
   replace a mapping, nor a mapping a list);
-- every other value, lists included (``description``,
-  ``hidden_predicates``, ...), is replaced.
+- every other value is replaced (``description``, ``requires_mni_mask``,
+  ...).
 
-Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+A base reached by two paths (``extends: [a, b]`` where both ``a`` and
+``b`` extend ``c``) is merged once, where it is first reached: its rules
+are not defined twice.  Unknown bases and cyclic ``extends`` chains raise
+``ValueError``.
 
 Files of an engine
 ------------------

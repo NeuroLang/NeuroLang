@@ -306,7 +306,7 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
-    "python_init",
+    "python_init", "hidden_predicates",
 })
 # Keys whose value is a list, or a single item standing for a list of one.
 _LIST_KEYS = frozenset({"python_init"})
@@ -363,13 +363,40 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     return _without_nulls(merged)
 
 
-def resolve_engine_config(
+def _linearized(
     engines: Dict[str, Dict[str, Any]],
     name: str,
     _stack: Tuple[str, ...] = (),
+) -> List[str]:
+    """
+    Return *name* after its bases, depth first in the order of their
+    ``extends``, each engine once: a base two of them extend is merged
+    once, where it is first reached.
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    order = []
+    for base in _extends(engines[name]):
+        for engine in _linearized(engines, base, _stack + (name,)):
+            if engine not in order:
+                order.append(engine)
+    return order + [name]
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
 ) -> Dict[str, Any]:
     """
-    Return the configuration of *name* with all ``extends`` resolved.
+    Return the configuration of *name* with all ``extends`` resolved: the
+    configurations of its bases and its own, merged in the order of
+    :func:`_linearized`.
 
     Parameters
     ----------
@@ -385,19 +412,9 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    if name in _stack:
-        chain = " -> ".join(_stack + (name,))
-        raise ValueError(f"Cyclic engine inheritance: {chain}")
-    if name not in engines:
-        available = ", ".join(engines.keys())
-        raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
-        )
-    raw = engines[name] or {}
     return _merge_engine_configs(*(
-        resolve_engine_config(engines, base, _stack + (name,))
-        for base in _extends(raw)
-    ), raw)
+        engines[engine] or {} for engine in _linearized(engines, name)
+    ))
 
 
 @functools.lru_cache(maxsize=None)

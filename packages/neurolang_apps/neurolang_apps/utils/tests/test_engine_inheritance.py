@@ -177,3 +177,30 @@ def test_python_inits_run_in_order_with_the_options(init_modules):
     del init_modules[:]
     _phase_python_init(init_modules, {"python_init": "init_a"}, None, None)
     assert init_modules == [("init_a", {})]
+
+
+def test_a_base_reached_twice_is_merged_once():
+    engines = {
+        "root": {"abstract": True, "datalog_init": "r(x) :- s(x)\n",
+                 "atlases": {"a": {"n": 1}}},
+        "left": {"extends": "root", "datalog_init": "l(x) :- r(x)\n"},
+        "right": {"extends": "root", "datalog_init": "q(x) :- r(x)\n",
+                  "atlases": {"a": {"n": 2}}},
+        "both": {"extends": ["left", "right"]},
+    }
+    cfg = resolve_engine_config(engines, "both")
+    assert cfg["datalog_init"].splitlines() == [
+        "r(x) :- s(x)", "l(x) :- r(x)", "q(x) :- r(x)",
+    ]
+    assert cfg["atlases"] == {"a": {"n": 2}}
+
+
+def test_hidden_predicates_are_concatenated():
+    engines = {
+        "a": {"hidden_predicates": ["p", "q"]},
+        "b": {"hidden_predicates": ["q", "r"]},
+        "both": {"extends": ["a", "b"]},
+    }
+    assert resolve_engine_config(engines, "both")["hidden_predicates"] == [
+        "p", "q", "r"
+    ]
