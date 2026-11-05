@@ -18,7 +18,8 @@
 % streamline_label(a, x, l), endpoint_label(a, x, e, l),
 % label(a, l, name, hemi), label_term(a, l, term),
 % label_extent(a, l, axis, lo, hi), streamline_extent(x, axis, lo, hi),
-% endpoint_coord(x, e, axis, v), streamline_length(x, mm),
+% endpoint_coord(x, e, axis, v), endpoint_point(x, e, px, py, pz),
+% streamline_length(x, mm),
 % opposite_hemisphere(h1, h2); and the functions streamline_id(t, s),
 % subject_of(x), index_of(x).
 

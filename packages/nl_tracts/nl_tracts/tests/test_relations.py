@@ -9,6 +9,7 @@ from nl_tracts.indexing import (
     IndexingParams,
     RelationStore,
     endpoint_coord_relation,
+    endpoint_point_relation,
     endpoint_relation,
     streamline_extent_relation,
     streamline_length_relation,
@@ -61,6 +62,20 @@ def test_endpoint_coord_columns_dtypes_and_values():
         for axis in range(3):
             assert lookup[(s, 0, axis)] == line[0, axis]    # first point
             assert lookup[(s, 1, axis)] == line[-1, axis]   # last point
+
+
+def test_endpoint_point_is_endpoint_coord_one_row_per_end():
+    tg = tractogram()
+    rel = endpoint_point_relation(tg, PARAMS)
+    assert rel.columns.tolist() == ["t", "s", "e", "px", "py", "pz"]
+    assert rel.dtypes["e"] == np.int8
+    assert (rel.dtypes[["px", "py", "pz"]] == np.float32).all()
+    assert len(rel) == 2 * tg.n_streamlines
+    coord = endpoint_coord_relation(tg, PARAMS).pivot(
+        index=["s", "e"], columns="axis", values="v")
+    assert np.array_equal(
+        rel.set_index(["s", "e"])[["px", "py", "pz"]].to_numpy(),
+        coord.loc[list(zip(rel["s"], rel["e"]))].to_numpy())
 
 
 def test_streamline_length_columns_dtypes_and_values():
@@ -128,7 +143,7 @@ def test_add_atlas_and_add_tractogram_fill_the_relations():
     assert set(store.relations) == {
         "atlas", "label", "label_term", "label_extent",
         "tractogram", "streamline", "streamline_extent", "endpoint_coord",
-        "streamline_length",
+        "endpoint_point", "streamline_length",
     }
     assert store.relations["atlas"]["a"].tolist() == ["fs"]
     assert store.relations["tractogram"]["t"].tolist() == ["t1"]
@@ -144,6 +159,7 @@ def test_add_atlas_and_add_tractogram_fill_the_relations():
     for name, columns in (
         ("streamline_extent", ["x", "axis", "lo", "hi"]),
         ("endpoint_coord", ["x", "e", "axis", "v"]),
+        ("endpoint_point", ["x", "e", "px", "py", "pz"]),
         ("streamline_length", ["x", "mm"]),
     ):
         frame = store.relations[name]
@@ -280,6 +296,6 @@ def test_build_relations_is_the_whole_store_for_one_pair():
     store = build_relations(near_the_label(), atlas(), PARAMS)
     assert set(store.relations) == {
         "atlas", "label", "label_term", "label_extent", "tractogram",
-        "streamline", "streamline_extent", "endpoint_coord",
+        "streamline", "streamline_extent", "endpoint_coord", "endpoint_point",
         "streamline_length", "streamline_label", "endpoint_label",
     }

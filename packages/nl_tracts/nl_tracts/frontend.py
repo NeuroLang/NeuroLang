@@ -66,6 +66,7 @@ RELATION_NAMES = {
     "endpoint_label": ("a", "x", "e", "l"),
     "streamline_extent": ("x", "axis", "lo", "hi"),
     "endpoint_coord": ("x", "e", "axis", "v"),
+    "endpoint_point": ("x", "e", "px", "py", "pz"),
     "label_extent": ("a", "l", "axis", "lo", "hi"),
     "streamline_length": ("x", "mm"),
 }

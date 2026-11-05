@@ -23,6 +23,7 @@ __all__ = [
     "RelationStore",
     "build_relations",
     "endpoint_coord_relation",
+    "endpoint_point_relation",
     "endpoint_relation",
     "streamline_extent_relation",
     "streamline_length_relation",
@@ -309,6 +310,35 @@ def endpoint_coord_relation(
     )
 
 
+def endpoint_point_relation(
+    tractogram: Tractogram, params: IndexingParams
+) -> pd.DataFrame:
+    """``endpoint_point`` of one tractogram: columns ``t, s, e, px, py,
+    pz`` (``x, e, px, py, pz`` in the store); atlas-independent.
+
+    The points of ``endpoint_coord``, one row per end: a point that a
+    rule compares with another by ``EUCLIDEAN``, both ranged by stored
+    relations, as the engine needs to join them by distance with a tree.
+    """
+    ids = _kept_streamlines(tractogram, params)
+    ends = np.stack(
+        [
+            tractogram.points[tractogram.offsets[:-1]],
+            tractogram.points[tractogram.offsets[1:] - 1],
+        ],
+        axis=1,
+    )[ids].reshape(-1, 3).astype(np.float32)  # (2K, 3)
+    n = len(ids)
+    return pd.DataFrame(
+        {
+            "t": _column_t(tractogram, 2 * n),
+            "s": np.repeat(ids, 2).astype(np.int32),
+            "e": np.tile(np.arange(2), n).astype(np.int8),
+            "px": ends[:, 0], "py": ends[:, 1], "pz": ends[:, 2],
+        }
+    )
+
+
 def streamline_length_relation(
     tractogram: Tractogram, params: IndexingParams
 ) -> pd.DataFrame:
@@ -379,8 +409,9 @@ class RelationStore:
     ) -> None:
         """Add ``tractogram``, ``streamline`` and the atlas-independent
         relations (``streamline_extent``, ``endpoint_coord``,
-        ``streamline_length``). The tractogram's index in the ids ``x`` of
-        its streamlines is the number of tractograms added before it.
+        ``endpoint_point``, ``streamline_length``). The tractogram's index
+        in the ids ``x`` of its streamlines is the number of tractograms
+        added before it.
 
         Raises
         ------
@@ -411,6 +442,7 @@ class RelationStore:
         for name, relation in (
             ("streamline_extent", streamline_extent_relation),
             ("endpoint_coord", endpoint_coord_relation),
+            ("endpoint_point", endpoint_point_relation),
             ("streamline_length", streamline_length_relation),
         ):
             self._append(

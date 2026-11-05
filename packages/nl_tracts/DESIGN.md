@@ -96,8 +96,17 @@ the engine keeps the dtypes).
 | `endpoint_label(a, x, e, l)` | a, x, e, l | str, int64, int8, int32 | yes | 2 per streamline |
 | `streamline_extent(x, axis, lo, hi)` | x, axis, lo, hi | int64, int8, float32, float32 | no | 3 per streamline |
 | `endpoint_coord(x, e, axis, v)` | x, e, axis, v | int64, int8, int8, float32 | no | 6 per streamline |
+| `endpoint_point(x, e, px, py, pz)` | x, e, px, py, pz | int64, int8, float32 x 3 | no | 2 per streamline |
 | `label_extent(a, l, axis, lo, hi)` | a, l, axis, lo, hi | str, int32, int8, float32, float32 | yes | 3 per label |
 | `streamline_length(x, mm)` | x, mm | int64, float32 | no | 1 per streamline |
+
+`endpoint_point` has the points of `endpoint_coord`, one row per end: a
+rule that compares an end with the points of another stored relation by
+distance, `EUCLIDEAN(px, py, pz, mx, my, mz) <= r` (the voxels of an atlas
+in mm, `schaefer_points` of the engine `tracts`), has both sides ranged by
+stored relations, which the engine needs to find the pairs with a k-d tree
+instead of comparing every pair. `endpoint_coord` stays, one coordinate a
+row, for the directions of the vocabulary.
 
 **A streamline is one id, `x`.** `x = (index << 32) | s`, an int64, where
 `s` is the position of the streamline in its file and `index` the load order
@@ -866,6 +875,7 @@ def traverses_relation(tractogram, atlas, params) -> DataFrame   # a, t, s, l
 def endpoint_relation(tractogram, atlas, params) -> DataFrame    # a, t, s, e, l
 def streamline_extent_relation(tractogram, params) -> DataFrame
 def endpoint_coord_relation(tractogram, params) -> DataFrame
+def endpoint_point_relation(tractogram, params) -> DataFrame     # one row per end
 def streamline_length_relation(tractogram, params) -> DataFrame
 class RelationStore:    # relations (by x, 3.1), tractograms (ids, load order)
     add_atlas(atlas) / add_tractogram(tractogram, params) /
