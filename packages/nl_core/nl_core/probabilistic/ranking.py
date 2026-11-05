@@ -3,9 +3,10 @@ Ranking of queries, Dalvi & Suciu [1]_, section 4.1.
 
 A query is ranked when there is an order on its bound variables such that
 the variables of every atom follow it: its free variables, the answer
-variables, are constants, as in Dalvi & Suciu, and need no order. A query
-that is not ranked is rewritten into an equivalent ranked one, so that the
-lifting rules, which need it, can apply.
+variables, are constants, as in Dalvi & Suciu, and need no order, nor do
+those of the atoms of probabilistic choices. A query that is not ranked
+is rewritten into an equivalent ranked one, so that the lifting rules,
+which need it, can apply.
 
 .. [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference for
    unions of conjunctive queries. J. ACM 59, 1–87 (2012).
@@ -23,7 +24,7 @@ from nl_expr.expression_walker import (
     expression_iterator,
 )
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
-from nl_expr.logic import Disjunction, Negation
+from nl_expr.logic import FALSE, Disjunction, Negation
 from nl_expr.logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -31,13 +32,14 @@ from nl_expr.logic.expression_processing import (
 from nl_expr.logic.transformations import (
     LogicExpressionWalker,
     MakeExistentialsImplicit,
+    SimplifyTruthValuesMixin,
     convert_to_pnf_with_dnf_matrix,
 )
 from .expression_processing import is_comparison
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
-    ProbabilisticChoiceSet,
-    ProbabilisticFactSet
+    ProbabilisticFactSet,
+    is_atom_a_probabilistic_choice_relation
 )
 from .transforms import add_existentials_except
 from ..relational_algebra import (
@@ -51,9 +53,9 @@ from ..relational_algebra import (
 MAX_RANKED_VARIABLES = 2
 
 
-def verify_that_the_query_is_ranked(query):
+def verify_that_the_query_is_ranked(query, symbol_table=None):
     argument_precedence = defaultdict(set)
-    free_variables = extract_logic_free_variables(query)
+    free_variables = _unordered_variables(query, symbol_table or {})
     query = convert_to_pnf_with_dnf_matrix(query)
 
     for atom in extract_logic_atoms(query):
@@ -153,9 +155,12 @@ def rank_query(query, symbol_table):
     `S`, each atom `R(x̄)` becomes an atom of the relation of the tuples
     of `R` whose values at its ranked positions are in that order, with
     the variables of these positions, merged when equal, in increasing
-    order. The query is the disjunction of these queries, one per order.
-    Each tuple of `R` is in a single one of these relations, so a
-    tuple-independent relation gives tuple-independent relations.
+    order, and a comparison of two variables of `S` by its truth value
+    in that order. The query is the disjunction of these queries, one per
+    order, but those false. The variables of the atoms of probabilistic
+    choices, like the answer variables, are not ranked. Each tuple of `R`
+    is in a single one of these relations, so a tuple-independent
+    relation gives tuple-independent relations.
 
     Parameters
     ----------
@@ -174,10 +179,10 @@ def rank_query(query, symbol_table):
     Raises
     ------
     NotRankedException
-        if the query cannot be ranked so: a relation to split is a
-        probabilistic choice, which is a single block of exclusive tuples,
-        or occurs within a negation; a ranked position has a constant or a
-        comparison has a ranked variable; an answer variable is to rank;
+        if the query cannot be ranked so: a relation to split occurs
+        within a negation; a ranked position has a constant, a comparison
+        has a ranked variable and another term, or no order satisfies the
+        comparisons; an answer or a choice variable is to rank;
         the ranked columns are not all of numbers or all of strings,
         the types with a total order and an equality, or have NaN; or more
         than `MAX_RANKED_VARIABLES` variables are to rank.
@@ -190,11 +195,12 @@ def rank_query(query, symbol_table):
         atom for atom in extract_logic_atoms(matrix)
         if isinstance(atom.functor, Symbol)
     ]
+    unordered_variables = _unordered_variables(query, symbol_table)
     variables, positions = _ranked_variables_and_positions(
-        atoms, free_variables
+        atoms, unordered_variables
     )
     _check_rankable(
-        matrix, variables, positions, free_variables, symbol_table
+        matrix, variables, positions, unordered_variables, symbol_table
     )
     relations = {}
     disjuncts = []
@@ -203,21 +209,36 @@ def rank_query(query, symbol_table):
     canonical = [Symbol.fresh() for _ in variables]
     for order in _weak_orders(sorted(variables, key=lambda v: v.name)):
         substitution, ranks = _order_substitution(order, canonical)
-        disjuncts.append(
-            RankAtoms(positions, ranks, relations, symbol_table).walk(
-                ReplaceExpressionWalker(substitution).walk(matrix)
-            )
+        disjunct = RankAtoms(positions, ranks, relations, symbol_table).walk(
+            ReplaceExpressionWalker(substitution).walk(matrix)
         )
+        if disjunct != FALSE:
+            disjuncts.append(disjunct)
+    if not disjuncts:
+        raise NotRankedException("No order satisfies the comparisons")
     return add_existentials_except(
         Disjunction(tuple(disjuncts)), free_variables
     )
 
 
-class RankAtoms(LogicExpressionWalker):
+def _unordered_variables(query, symbol_table):
+    """The variables which need no order: the free variables, constants,
+    and those of the atoms of probabilistic choices, which the lifting
+    projects disjointly, making them free, as a single tuple of a choice
+    is true."""
+    return extract_logic_free_variables(query) | {
+        arg for atom in extract_logic_atoms(query)
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        for arg in atom.args if isinstance(arg, Symbol)
+    }
+
+
+class RankAtoms(SimplifyTruthValuesMixin, LogicExpressionWalker):
     """
     Replace each atom `R(x̄)` of a relation with ranked positions by an
     atom of the relation of the tuples of `R` whose values at these
-    positions are ordered as their variables are by `ranks`, see
+    positions are ordered as their variables are by `ranks`, and each
+    comparison of ranked variables by its truth value in this order, see
     `rank_query`.
     """
     def __init__(self, positions, ranks, relations, symbol_table):
@@ -251,6 +272,14 @@ class RankAtoms(LogicExpressionWalker):
             for rank in range(len(distinct))
         )
         return self.relations[key](*(others + increasing))
+
+    @add_match(FunctionApplication(Constant, (Symbol, Symbol)), is_comparison)
+    def ranked_comparison(self, comparison):
+        if not set(comparison.args) <= set(self.ranks):
+            return comparison
+        return Constant[bool](comparison.functor.value(
+            *(self.ranks[arg] for arg in comparison.args)
+        ))
 
 
 def _ranked_relation(symbol, arity, ranked, pattern, symbol_table):
@@ -340,12 +369,14 @@ def _check_rankable(
         )
     if variables & free_variables:
         # Dalvi & Suciu rank Boolean queries; the answer variables are
-        # constants, which this ranking does not shatter.
-        raise NotRankedException("An answer variable to rank")
+        # constants, which this ranking does not shatter, and a choice
+        # is not split.
+        raise NotRankedException("An answer variable, or one of a choice, to rank")
     for atom in extract_logic_atoms(matrix):
         if (
             not isinstance(atom.functor, Symbol) and
-            extract_logic_free_variables(atom) & variables
+            extract_logic_free_variables(atom) & variables and
+            not (is_comparison(atom) and set(atom.args) <= variables)
         ):
             raise NotRankedException(
                 "A comparison or a function of a variable to rank"
@@ -375,10 +406,6 @@ def _column_types(symbol, symbol_table):
     probability column, and the relation."""
     entry = symbol_table.get(symbol)
     offset = 0
-    if isinstance(entry, ProbabilisticChoiceSet):
-        raise NotRankedException(
-            "A probabilistic choice cannot be split into ranked relations"
-        )
     if isinstance(entry, ProbabilisticFactSet):
         offset = 1
     if isinstance(entry, (ProbabilisticFactSet, DeterministicFactSet)):
