@@ -48,6 +48,8 @@
   #edge-threshold { width: 7em; }
   #edge-slider { width: 180px; vertical-align: middle; }
   #edges { margin: 4px 0; padding-left: 28px; font-size: 13px; }
+  #streamlines { margin: 8px 0; color: #ccc; display: flex; gap: 18px; }
+  #streamlines label { display: inline-flex; gap: 6px; align-items: center; }
 </style>
 </head>
 <body>
@@ -135,6 +137,12 @@
   <br>
   Network: <span id="network-count"></span>
   <ol id="edges"></ol>
+</div>
+<div id="streamlines" style="display: none">
+  <label><input id="streamlines-visible" type="checkbox" checked>
+    <span id="streamline-count"></span></label>
+  <label>Opacity <input id="streamline-opacity" type="range" min="0"
+    max="1" step="0.05" value="1"></label>
 </div>
 <p id="message"></p>
 <script id="viewer-data" type="application/json">__DATA__</script>

@@ -691,3 +691,97 @@ def test_the_network_in_a_headless_browser(tmp_path):
         "meshes": 1, "nodes": 3, "edges": 2,
         "count": "3 nodes, 2 edges shown", "slider": "167",
     }
+
+
+# Three streamlines in the millimetres of the 4×4×4 grid of AFFINE.
+_LINES = [
+    np.array([[-3.0, -5.0, -7.0], [-1.0, -3.0, -5.0], [1.0, -1.0, -3.0]]),
+    np.array([[-3.0, -1.0, -3.0], [3.0, -1.0, -3.0]]),
+    np.array([[1.0, -5.0, -7.0], [1.0, 1.0, -7.0], [1.0, 1.0, -1.0]]),
+]
+
+
+class TestStreamlines:
+    """Check the streamlines the page draws."""
+
+    def test_shown_streamlines_are_evenly_subsampled(self):
+        assert brain_viewer.shown_streamlines(range(10), 4) == [0, 3, 6, 9]
+        assert brain_viewer.shown_streamlines([5, 7], 4) == [5, 7]
+
+    def test_the_default_cap(self, monkeypatch):
+        monkeypatch.setattr(brain_viewer, "MAX_STREAMLINES", 3)
+        assert brain_viewer.shown_streamlines(range(5)) == [0, 2, 4]
+
+    def test_trk_round_trip(self):
+        import io
+
+        trk = nib.streamlines.TrkFile.load(
+            io.BytesIO(brain_viewer.trk_bytes(_LINES))
+        )
+        assert len(trk.streamlines) == 3
+        for read, line in zip(trk.streamlines, _LINES):
+            assert np.allclose(read, line)
+
+    def test_the_page_holds_the_streamlines(self):
+        html = brain_viewer.viewer_html(
+            _image(np.ones((4, 4, 4), dtype=np.float32)), None,
+            title="streamlines", threshold=0, cmap=None, symmetric=False,
+            streamlines=brain_viewer.streamlines_state(_LINES, 7),
+        )
+        state = _state(html)
+        streamlines = state["streamlines"]
+        assert streamlines["shown"] == 3 and streamlines["total"] == 7
+        trk = _decode(streamlines["trk"], np.uint8).tobytes()
+        assert trk == brain_viewer.trk_bytes(_LINES)
+        assert state["initial"]["display"] == {
+            "renderTile": True, "layout": "grid",
+        }
+        assert 'id="streamline-opacity"' in html
+
+
+_STREAMLINES_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv, mesh = nv.meshes[0];
+  var out = {
+    meshes: nv.meshes.length,
+    offsets: Array.from(mesh.offsetPt0),
+    points: Array.from(mesh.pts).map(function (v) {
+      return Math.round(v * 1000) / 1000;
+    }),
+    fiberColor: mesh.fiberColor,
+    count: document.getElementById('streamline-count').textContent,
+    shown: document.getElementById('streamlines').style.display
+  };
+  var before = pixels();
+  set('streamlines-visible', false, 'change');
+  out.hidden = mesh.visible === false && changed(before, pixels());
+  set('streamlines-visible', true, 'change');
+  set('streamline-opacity', '0.3');
+  out.opacity = mesh.opacity;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_streamlines_in_a_headless_browser(tmp_path):
+    """Check NiiVue reads every streamline of the page, at its points,
+    coloured by direction, and the controls hide them and set their
+    opacity."""
+    html = brain_viewer.viewer_html(
+        _image(np.ones((4, 4, 4), dtype=np.float32)), None,
+        title="streamlines", threshold=0, cmap=None, symmetric=False,
+        streamlines=brain_viewer.streamlines_state(_LINES, 7),
+    )
+    result = _run_in_chrome(tmp_path, html, _STREAMLINES_CHECK)
+    assert result["errors"] == [] and "failed" not in result, result
+    assert result["meshes"] == 1 and result["offsets"] == [0, 3, 5, 8]
+    assert result["points"] == pytest.approx(
+        np.concatenate(_LINES).ravel().tolist(), abs=1e-3
+    )
+    assert result["fiberColor"] == "Local"
+    assert result["count"] == "3 of 7 streamlines shown"
+    assert result["shown"] == "" and result["hidden"]
+    assert result["opacity"] == 0.3

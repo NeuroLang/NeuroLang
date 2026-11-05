@@ -12,7 +12,8 @@
  * the crosshair, the gamma, NiiVue's colour bar, labels, orientation
  * cube and ruler, the radiological convention, the interpolation and
  * the clip plane; its hot keys V and C, on the views, change the view
- * and the clip plane. The colormaps of the page are given to NiiVue so
+ * and the clip plane. A network, or streamlines, are NiiVue meshes,
+ * drawn in the 3D render and on the slices near them. The colormaps of the page are given to NiiVue so
  * that it colours a value as the colour bars do:
  *
  * - one-sided, the colormap spans the threshold to the maximum, and the
@@ -155,6 +156,11 @@
       viewer.network = data.connectome;
       setUpEdgeThreshold(nv, data.connectome);
     }
+    if (data.streamlines) {
+      nv.opts.meshXRay = NETWORK_XRAY;
+      nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
+      await loadStreamlines(nv, data.streamlines);
+    }
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
@@ -272,6 +278,28 @@
       item.textContent = state.nodes[e.first].name + ' — ' +
         state.nodes[e.second].name + ': ' + format(e.value);
       list.appendChild(item);
+    });
+  }
+
+  // The streamlines, a .trk file NiiVue reads as a mesh of fibres,
+  // coloured by the direction of each segment, and the controls of their
+  // visibility and opacity.
+  async function loadStreamlines(nv, streamlines) {
+    var mesh = await niivue.NVMesh.loadFromUrl({
+      url: 'streamlines.trk', buffer: await inflate(streamlines.trk),
+      gl: nv.gl
+    });
+    nv.addMesh(mesh);
+    nv.setMeshProperty(mesh.id, 'fiberColor', 'Local');
+    viewer.streamlines = mesh;
+    $('streamlines').style.display = '';
+    $('streamline-count').textContent = streamlines.shown + ' of ' +
+      streamlines.total + ' streamlines shown';
+    $('streamlines-visible').addEventListener('change', function (e) {
+      nv.setMeshProperty(mesh.id, 'visible', e.target.checked);
+    });
+    $('streamline-opacity').addEventListener('input', function (e) {
+      nv.setMeshProperty(mesh.id, 'opacity', parseFloat(e.target.value));
     });
   }
 
