@@ -10,7 +10,8 @@ The only module of nl_tracts that is written against NeuroLang. Two ways:
   :class:`TractsCommandsMixin`, which :func:`tracts_engine` has in its solver,
   and :func:`init_engine` gives such an engine the vocabulary of rules over
   them (:mod:`nl_tracts.vocabulary`) and the hooks that ``.view`` of the
-  apps draws the streamlines with.
+  apps draws the streamlines with. ``neurolang-query --engine tracts`` is
+  this engine.
 """
 
 import warnings
@@ -501,8 +502,9 @@ def init_engine(engine, mask=None, data_dir=None) -> None:
     ``ids`` in mm (RAS+), and ``streamline_background()``, the label image
     of the first atlas indexed (the tractograms are in its space), or None.
 
-    Its signature is that of the ``python_init`` of an engine of the apps
-    (``engines.yaml``): ``mask`` and ``data_dir`` are not used.
+    It is the ``python_init`` of the engine ``tracts`` of the apps
+    (``engines.yaml``), hence its signature: ``mask`` and ``data_dir`` are
+    not used.
     """
     state = engine.program_ir._tracts
     state.engine = engine
