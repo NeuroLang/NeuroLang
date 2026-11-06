@@ -430,7 +430,7 @@ have a test** (13.2):
 | 6 | Endpoint labels are the labels of the first and of the last point, as `ending_tracts_labels[0|1]`, label 0 included | `endpoint_label(a, x, e, l)`, `e` = 0 first, 1 last; **rows with the background label are never emitted** (6.3), so the equivalence tests drop label 0 from the reference's endpoints before comparing |
 | 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file (and `x` encodes it, 3.1); filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list. **The reference's `tract_bounding_boxes` and `tract_endpoints_pos` are computed on all the tracts, unfiltered, so its directional terms are misaligned with the renumbered ids when `length_threshold > 0`**: not comparable there |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
-| 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender |
+| 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender; with `drop_short=True`, those of one point are kept in its arrays and are in no relation, as the streamlines under `length_threshold` (parity 7: the ids are not renumbered), and none still raises (15.37) |
 | 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
 | 11 | `tract_endpoints_pos` = first and last point | `endpoint_coord`, float32 (the reference holds float64; tests compare with `atol` 1e-4 mm) |
 | 12 | At a `crossing_threshold` of 0 every label up to the largest the streamline has is kept, whether or not a point is in it (`bincount` has a zero for it, and `0 >= 0`) | **not reproduced**: a label is traversed only if at least one point is in it; the tests of parity use thresholds above 0 |
@@ -625,6 +625,41 @@ chunks of streamlines (about 2^24 points) and concatenate, so the peak memory
 is the result plus a chunk, not the result plus several copies of the
 points. Chunking is internal; the result is one DataFrame.
 
+### 7.5 Downloaded atlases of tractography
+
+`nl_tracts.fetch` (standard library only, a module of the core) downloads
+two public atlases of F.-C. Yeh, whose bundles were labelled by experts:
+
+| | `hcp842` | `hcp1065` |
+|---|---|---|
+| Paper | Yeh et al. 2018, NeuroImage 178:57-68 | Yeh 2022, Nat Commun 13:4933 |
+| Archive | `Atlas_80_Bundles.zip`, 319,525,089 bytes, md5 `78331d527a10ec000d4f33bac472e099` | `hcp1065_avg_tracts_trk.zip`, 587,869,457 bytes, md5 `0b4530ea43ea22394f3fecd301e0b7c4` (measured: none is published) |
+| URL | `https://ndownloader.figshare.com/files/13638644`, then DIPY's mirror `https://workshop.dipy.org/services/data/files/13638644` | `https://github.com/data-others/atlas/releases/download/hcp1065/hcp1065_avg_tracts_trk.zip` (release `hcp1065` of 2024-09-25) |
+| Bundles | 78, `bundles/<stem>.trk` (79 files: `IF0F_R.trk` is a copy of `IFOF_R.trk`; `F_L_R` is both fornices) | 87, `<group>/<stem>.trk.gz` |
+| Whole brain | `whole_brain/whole_brain_MNI.trk`, 144,678 streamlines, 37 of one point | none |
+| Space | MNI152, ICBM 2009a (the zip's README) | MNI152, ICBM 2009a nonlinear asymmetric, 1 mm |
+| Licence | CC BY 4.0, "(c) Eleftherios Garyfallidis", the curation for DIPY's RecoBundles (figshare 10.6084/m9.figshare.7375883); cite Garyfallidis et al. 2017 (NeuroImage 170:283-297) and Yeh et al. 2018. Yeh's own distribution of HCP842 (brain.labsolver.org) is CC BY-SA 4.0 | CC BY-SA 4.0 (brain.labsolver.org/hcp_trk_atlas.html); cite Yeh 2022; data of the Human Connectome Project, whose terms ask for an acknowledgement |
+
+`fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
+md5=None) -> Path` keeps the archive in `<data_dir>/<atlas>/`, by default
+`~/.cache/nl_tracts`, and extracts next to it only what is asked:
+`<stem>.trk` of a bundle (a `.trk.gz` gunzipped, which nibabel would also
+read, so that every file extracted is a `.trk`) or the whole brain. The download is streamed to a temporary
+name, its md5 checked, then renamed; a URL that fails or gives another md5
+is followed by the next (figshare's redirection is to a signed URL valid
+for 10 seconds, so the one `urlopen` follows it). An extracted file present
+is returned without the archive; a missing one is extracted from the
+archive kept. `url=` replaces the URLs, its checksum then `md5=` (not
+checked if None); a `file://` URL is how the tests serve small archives.
+Bundles are named by the stem of their file, in any case; the full names
+are in `ATLASES[atlas]["bundles"]` (README). HCP1065's DSI Studio `.tt.gz`
+are not read by nibabel and are not used; its archive of `.trk.gz` is.
+Neither DIPY nor nilearn is imported.
+
+On this Mac (measured): the download of HCP842 from figshare and its md5,
+10 s; the extraction of the whole brain, 0.7 s, of a bundle, < 0.1 s; the
+loading of the whole brain, 1.7 s.
+
 ## 8. Handing the relations to the engine
 
 ### 8.1 Finding: `add_tuple_set` accepts a DataFrame, efficiently
@@ -704,6 +739,23 @@ commands that `TractsCommandsMixin` handles (`nl_tracts.frontend`):
               emit_background=1, cache="~/.cache/nl_tracts")
 ```
 
+A tractogram of the atlases of 7.5 is loaded by its kind, downloaded the
+first time, in `MNI152` unless `space` is given; `bundle` is the stem of a
+bundle, else it is the whole brain; `data_dir`, `url` and `md5` are those
+of `fetch_tractogram`, the data directory by default that of the engine,
+`<data_dir>/tracts` (the `--data-dir` of `neurolang-query`, which
+`init_engine` is given), or `~/.cache/nl_tracts` for an engine without one:
+
+```
+.load_tractogram("hcp842", kind="hcp842")
+.load_tractogram("uf_l", kind="hcp842", bundle="UF_L")
+.load_tractogram("af_l", kind="hcp1065", bundle="AF_L", data_dir="data")
+```
+
+Their streamlines of one point are in no relation (`drop_short=1`, the
+default of a kind; 15.37), with a warning; `drop_short=1` does the same for
+a file.
+
 `kind` is `freesurfer` (a colour LUT), `bids` (a `dseg.tsv`) or `tsv`. The
 paths are read as they are written (relative to where the program runs).
 An atlas of nilearn is loaded by the name of its fetcher, without files
@@ -781,6 +833,7 @@ packages/nl_tracts/
     ids.py              the id x of a streamline: encode, decode
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
     cache.py            parquet cache: cache_key, read_cached, write_cached
+    fetch.py            the atlases of Yeh, HCP842 and HCP1065: download (7.5)
     vocabulary.dl       the vocabulary of tractography, Datalog rules (16)
     vocabulary.py       prelude(), predicates(): reads it; no NeuroLang
     frontend.py         register(), the commands, init_engine(),
@@ -793,6 +846,7 @@ packages/nl_tracts/
                         by path, as the oracle of 6.1; uncinate_files.py:
                         an atlas and streamlines for the uncinate
   examples/uncinate.dl  the uncinate in the vocabulary (16.4)
+  examples/uncinate_hcp842.dl  its recall on the expert bundles UF_L, UF_R
 ```
 
 ### 9.2 `.importlinter`
@@ -801,7 +855,7 @@ packages/nl_tracts/
 * The layers contract becomes `neurolang_apps > nl_tracts > neurolang >
   nl_core > nl_expr`.
 * A new `forbidden` contract: `nl_tracts.{spaces, terms, atlas, tractogram,
-  indexing, cache, ids, vocabulary}` may import none of `neurolang`,
+  indexing, cache, ids, vocabulary, fetch}` may import none of `neurolang`,
   `nl_core`, `nl_expr`, `lark`, `nilearn`. `frontend` is exempt, and is
   the only module that may import NeuroLang.
 
@@ -880,8 +934,9 @@ def shipped_mapping_path(key) -> Traversable
 
 # tractogram.py
 class Tractogram:
-    def __init__(self, id, points, offsets, space)
-    from_file(id, path, space) / from_streamlines(id, streamlines, space)
+    def __init__(self, id, points, offsets, space, drop_short=False)
+    from_file(id, path, space, drop_short=False) /
+    from_streamlines(id, streamlines, space, drop_short=False)
     n_streamlines / lengths_in_points() / lengths_in_mm() / content_hash()
 
 # ids.py
@@ -912,6 +967,12 @@ def build_relations(tractogram, atlas, params=IndexingParams(), cache_dir=None,
 def cache_key(tractogram, atlas, params) -> str
 def read_cached(cache_dir, key, relation) -> DataFrame | None
 def write_cached(cache_dir, key, relation, frame) -> None
+
+# fetch.py
+ATLASES: dict   # hcp842, hcp1065: urls, md5, archive, whole_brain, bundles
+DEFAULT_DATA_DIR = "~/.cache/nl_tracts"
+def fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
+                     md5=None) -> Path               # a .trk, downloaded once
 
 # frontend.py
 RELATION_NAMES: dict[str, tuple[str, ...]]
@@ -1259,9 +1320,18 @@ Recommendations in bold; none changes a decision of section 2.
     does; a check that warns when the terms of a rule have no white matter
     labels in the atlas is possible.
 37. **Streamlines of one point** are refused (parity 9 of 6.1, as the
-    reference); DIPY's HCP842 whole brain has 37. **Open**: drop them at
-    load with a warning, keeping the positions `s` of the others (a gap in
-    the ids), rather than refuse the file.
+    reference); DIPY's HCP842 whole brain has 37. **Decided**: refused by
+    default; with `Tractogram(..., drop_short=True)` (`from_file`, the
+    option `drop_short=1` of `.load_tractogram`, the default of its kinds
+    `hcp842` and `hcp1065`) they stay in the arrays and are in no relation
+    (`_kept_streamlines`, as `length_threshold`), with a warning that says
+    how many: `s` is still the position in the file (144,641 ids of the
+    144,678 streamlines of `whole_brain_MNI.trk`, with gaps), so the ids
+    agree with another reader of the file, the hooks of `.view` and the
+    parquet cache need no change (`content_hash` is that of the file's
+    streamlines), and the cache key differs from no other. Pruning them
+    instead would have renumbered every streamline after the first one
+    dropped. A streamline of no point is still refused.
 38. **The cost of a predicate over all terms** (16.6): 17-26 s for the
     uncinate on 144k streamlines, 4.6 GB. **Open**: carry the constants of a
     rule into the vocabulary (Magic Sets through negation and aggregation,
@@ -1446,8 +1516,8 @@ statement and as one submission, then `.view`
 *On real data* (measured, not a test; this Mac, pandas backend). Atlas
 `cvs_avg35_inMNI152` of FreeSurfer, tractogram the whole brain of DIPY's
 HCP842 atlas (`whole_brain_MNI.trk`, MNI, 144,678 streamlines, of which 37
-have one point and are refused by `Tractogram`, parity 9 of 6.1: pruned
-first, 144,641 left), reference the expert bundles `UF_L.trk` (370) and
+have one point and are in no relation, 15.37: 144,641 left; it is
+`.load_tractogram("hcp842", kind="hcp842")`, 7.5), reference the expert bundles `UF_L.trk` (370) and
 `UF_R.trk` (328) of the same atlas. Every reference streamline is, within
 0.004 mm (the mean distance of 20 points along both, either orientation),
 a streamline of the whole brain, so the comparison is by streamline:
@@ -1471,7 +1541,13 @@ tract_querier, the cortex of a gyrus *and* the white matter under it
 atlas end in the white matter, short of the cortex. With `wmparc`, which
 has the white matter under each gyrus, recall is 98-99%; the precision of
 40-50% is against a curated bundle, from which an expert removed
-streamlines the definition keeps. Nothing was tuned: the default
+streamlines the definition keeps. The recall is a program,
+`examples/uncinate_hcp842.dl`: the expert bundles loaded as tractograms of
+their own (`kind="hcp842", bundle="UF_L"`), indexed by the same atlas, and
+the rule counted over them: 363 of 370 (left), 324 of 328 (right), 7 s.
+The precision is not: it needs each streamline of a bundle matched to one
+of the whole brain, within 0.004 mm but not equal point for point, which
+is no join of the relations. Nothing was tuned: the default
 `crossing_threshold` (2%), no length threshold. The example therefore
 loads a `wmparc`. The hemispheres of the labels of both atlases are those
 of the `.left` and `.right` names of `FreeSurfer.qry`, label by label, so
