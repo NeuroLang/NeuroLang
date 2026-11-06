@@ -26,4 +26,4 @@ jobs:
       - name: Check the layers
         run: lint-imports --config .importlinter
         env:
-          PYTHONPATH: packages/nl_expr:packages/nl_core:packages/neurolang:packages/neurolang_apps
+          PYTHONPATH: packages/nl_expr:packages/nl_core:packages/neurolang:packages/nl_tracts:packages/neurolang_apps
