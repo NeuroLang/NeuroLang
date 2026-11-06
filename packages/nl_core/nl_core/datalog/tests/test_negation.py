@@ -263,3 +263,12 @@ def test_negative_predicates_race_in_chase():
     solution_instance = dc.build_chase_solution()
 
     assert solution_instance["S"].value == {(4,), (5,)}
+
+
+def test_a_rule_cannot_define_a_function_of_the_engine():
+    x = S_('x')
+    with pytest.raises(
+        exceptions.NeuroLangException,
+        match="`gt` is a function of the engine",
+    ):
+        Datalog().walk(Implication(S_('gt')(x), S_('R')(x) & ~S_('T')(x)))
