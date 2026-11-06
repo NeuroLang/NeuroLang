@@ -21,12 +21,14 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 keywords = ["tractography", "diffusion MRI", "white matter", "datalog"]
-# The core (spaces, terms, atlas) needs numpy, scipy, nibabel and pandas.
+# The core (atlas, tractogram, indexing, cache) needs numpy, scipy, nibabel,
+# pandas and, for the parquet cache of pandas, pyarrow.
 dependencies = [
     "numpy",
     "scipy",
     "nibabel>=5.0.0",
     "pandas>=1.5",
+    "pyarrow",
 ]
 
 [project.optional-dependencies]
