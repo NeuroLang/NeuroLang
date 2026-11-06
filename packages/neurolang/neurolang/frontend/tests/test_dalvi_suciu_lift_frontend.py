@@ -468,6 +468,7 @@ def test_comparison_with_a_constant_of_a_bound_variable(
     ("x, y, w", "R(x), R(y), R(w), S(x, y), V(y, w)"),
     ("x, y, w", "R(x), R(y), R(w), S(x, y), V(y, w), T(y)"),
     ("x, y, w", "R(x), R(y), R(w), T(x), T(y), S(x, y)"),
+    ("x, y, w, z", "R(x), R(y), R(w), R(z), S(x, y), V(w, z)"),
 ])
 def test_answer_variables_at_the_same_position(head, body):
     """

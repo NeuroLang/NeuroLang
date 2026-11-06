@@ -131,9 +131,9 @@ from .transforms import (
 LOG = logging.getLogger(__name__)
 
 # The answers are split on the Bell(k) partitions of k answer variables,
-# 2, 5 and 15 for 2, 3 and 4, whose plans the optimiser of the relational
-# algebra takes too long for k = 4.
-MAX_ANSWER_VARIABLES_AT_A_POSITION = 3
+# 2, 5, 15 and 52 for 2, 3, 4 and 5, whose plan for k = 5 is deeper than
+# the recursion limit of the walkers.
+MAX_ANSWER_VARIABLES_AT_A_POSITION = 4
 
 
 __all__ = [

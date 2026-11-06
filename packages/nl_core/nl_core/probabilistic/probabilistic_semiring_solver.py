@@ -2,6 +2,7 @@ from nl_expr.expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ResolveSymbolMixin,
+    WalkExpressionsOnceMixin,
     add_match,
 )
 from nl_expr.expressions import Constant, Symbol
@@ -204,6 +205,7 @@ class ProbSemiringSolver(
 class ProbSemiringToRelationalAlgebraSolver(
     ProbSemiringSolverMixin,
     ResolveSymbolMixin,
+    WalkExpressionsOnceMixin,
     ExpressionWalker
 ):
     def __init__(self, *args, symbol_table=None, **kwargs):

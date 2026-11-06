@@ -783,10 +783,10 @@ Answer variables as constants
    (``_are_different_tuples_when_different``). A variable at that position
    in an atom of :math:`R` that is not free, as :math:`z` in :math:`A(x, s)
    \land A(y, s) \land A(z, s)`, prevents it. The number of branches is the
-   Bell number of :math:`k`, 2, 5 and 15 for 2, 3 and 4 variables; more
-   than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 3, variables at a position
-   are declined, the optimisation of the plan of 15 branches taking too
-   long.
+   Bell number of :math:`k`, 2, 5, 15 and 52 for 2, 3, 4 and 5
+   variables; more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 4,
+   variables at a position are declined, the plan of 52 branches being
+   deeper than the recursion limit of the walkers.
 
 Comparisons of answer variables
    A comparison of free variables, a conjunct of the query such as
@@ -1741,10 +1741,10 @@ Liftable queries that are declined
      no conjunct of the choice has :math:`x` for the projections of
      `Planning non-repeating queries`_, and the Dalvi–Suciu algorithm marks
      the query ``NonLiftable``;
-   * more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, three, answer
+   * more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, four, answer
      variables at the same position of atoms of a relation: "answer
      variables as constants" splits on all their equalities, and the
-     Bell number of the branches makes the planning too long.
+     plan of the Bell number of the branches is too deep.
 
 The tests of the rules of `Negations and comparisons sharing relations`_
 (``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare
