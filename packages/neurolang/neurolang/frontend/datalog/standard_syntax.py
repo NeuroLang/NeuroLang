@@ -20,6 +20,7 @@ from nl_expr.expressions import (
     Statement,
     Symbol,
 )
+from nl_expr.exceptions import NeuroLangFrontendException
 from nl_expr.logic import Disjunction, ExistentialPredicate
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
@@ -194,7 +195,7 @@ factor : exponent             -> sing_factor
 POW : "**"
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
-fact : constant_predicate
+fact : head_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
@@ -1217,6 +1218,16 @@ class DatalogTransformer(Transformer):
             return 0
 
     def fact(self, ast):
+        args = ast[0].args
+        if not all(isinstance(a, (Constant, ExternalSymbol)) for a in args):
+            written = ", ".join(
+                a.name if isinstance(a, Symbol) else repr(a.value)
+                for a in args
+            )
+            raise NeuroLangFrontendException(
+                f"{ast[0].functor.name}({written}) is read as a fact, which "
+                "has only constants: is a ',' or ':-' missing?"
+            )
         return Fact(ast[0])
 
     def constant_predicate(self, ast):

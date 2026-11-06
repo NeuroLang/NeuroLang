@@ -15,7 +15,7 @@ from nl_expr.expressions import (
     Statement,
     Symbol,
 )
-from nl_expr.exceptions import UnexpectedTokenError
+from nl_expr.exceptions import NeuroLangException, UnexpectedTokenError
 from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
@@ -24,6 +24,21 @@ from nl_core.probabilistic.expressions import (
 )
 from ..pretty_printer import DatalogPrettyPrinter
 from ..standard_syntax import ExternalSymbol, parser
+
+
+def test_rule_head_starting_with_a_constant():
+    res = parser("A('x', y) :- B(y)")
+    assert res == Union((
+        Implication(
+            Symbol('A')(Constant('x'), Symbol('y')),
+            Conjunction((Symbol('B')(Symbol('y')),)),
+        ),
+    ))
+
+
+def test_fact_with_a_variable_is_an_error():
+    with pytest.raises(NeuroLangException, match=r"A\(x\) is read as a fact"):
+        parser('A(x)')
 
 
 def test_facts():
