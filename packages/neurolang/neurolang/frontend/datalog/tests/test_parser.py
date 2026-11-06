@@ -3,7 +3,7 @@ from operator import add, eq, lt, mul, pow, sub, truediv
 import pytest
 
 
-from nl_expr.logic import ExistentialPredicate
+from nl_expr.logic import Disjunction, ExistentialPredicate
 
 from nl_core.datalog import Conjunction, Fact, Implication, Negation, Union
 from nl_expr.expressions import (
@@ -22,6 +22,7 @@ from nl_core.probabilistic.expressions import (
     ProbabilisticChoice,
     ProbabilisticFact,
 )
+from ..pretty_printer import DatalogPrettyPrinter
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -1015,33 +1016,129 @@ def test_marg_body_conditional_with_filter():
     assert res == expected
 
 
-# ── | separator (alias for //) ────────────────────────────────────────────────
+# ── | is a disjunction, // the only conditioning separator ─────────────────
 
-def test_prob_body_conditional_pipe():
-    """PROB[pred | cond] parses to same IR as PROB[pred // cond] (modulo fresh names)."""
-    # Both must parse, both produce Condition antecedents
-    res_pipe = parser("ans(x, p):-PROB[pred(x) | cond(x)]=p")
-    res_slash = parser("ans(x, p):-PROB[pred(x) // cond(x)]=p")
+@pytest.mark.parametrize("operator", ["PROB", "MARG"])
+def test_body_pipe_is_a_disjunction_not_a_condition(operator):
+    """PROB[pred(x) | cond(x)] = p is the probability of the disjunction
+    pred(x) | cond(x); a condition is written PROB[pred(x) // cond(x)]."""
+    pred = Symbol("pred")
+    cond = Symbol("cond")
+    x = Symbol("x")
+    res = parser(f"ans(x, p):-{operator}[pred(x) | cond(x)]=p")
 
-    for res in (res_pipe, res_slash):
-        fml = res.formulas[0]
-        assert isinstance(fml, Implication)
-        assert isinstance(fml.antecedent, Condition)
-        assert isinstance(fml.antecedent.conditioned, FunctionApplication)
-        assert isinstance(fml.antecedent.conditioning, Conjunction)
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    assert fml.antecedent == Disjunction((pred(x), cond(x)))
 
 
-def test_marg_body_conditional_pipe():
-    """MARG[pred | cond] parses to same IR as MARG[pred // cond] (modulo fresh names)."""
-    res_pipe = parser("ans(x, p):-MARG[pred(x) | cond(x)]=p")
-    res_slash = parser("ans(x, p):-MARG[pred(x) // cond(x)]=p")
+def test_disjunction():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    x = Symbol('x')
+    expected = Union((Implication(C(x), Disjunction((A(x), B(x)))),))
 
-    for res in (res_pipe, res_slash):
-        fml = res.formulas[0]
-        assert isinstance(fml, Implication)
-        assert isinstance(fml.antecedent, Condition)
-        assert isinstance(fml.antecedent.conditioned, FunctionApplication)
-        assert isinstance(fml.antecedent.conditioning, Conjunction)
+    assert parser('C(x) :- A(x) | B(x)') == expected
+    assert parser('C(x) :- A(x) \N{LOGICAL OR} B(x)') == expected
+    assert parser('C(x) :- (A(x) | B(x))') == expected
+    assert parser('ans(x) :- A(x) | B(x)') == Union((
+        Query(Symbol('ans')(x), Disjunction((A(x), B(x)))),
+    ))
+
+
+def test_disjunction_conjunction_binds_tighter():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    D = Symbol('D')
+    x = Symbol('x')
+
+    res = parser('C(x) :- A(x), B(x) | D(x)')
+    assert res == Union((Implication(
+        C(x), Disjunction((Conjunction((A(x), B(x))), D(x)))
+    ),))
+
+    res = parser('C(x) :- (A(x) | B(x)), D(x)')
+    assert res == Union((Implication(
+        C(x), Conjunction((Disjunction((A(x), B(x))), D(x)))
+    ),))
+
+    res = parser('C(x) :- (A(x), B(x)), D(x)')
+    assert res == Union((Implication(
+        C(x), Conjunction((A(x), B(x), D(x)))
+    ),))
+
+
+def test_disjunction_of_negations_comparisons_and_disjunctions():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    D = Symbol('D')
+    E = Symbol('E')
+    x = Symbol('x')
+    res = parser(
+        'C(x) :- A(x), '
+        '(~B(x) | (x < 3) | (D(x) \N{LOGICAL OR} ~(E(x))) | (D(x), E(x)))'
+    )
+
+    assert res == Union((Implication(
+        C(x),
+        Conjunction((
+            A(x),
+            Disjunction((
+                Negation(B(x)),
+                Constant(lt)(x, Constant(3)),
+                Disjunction((D(x), Negation(E(x)))),
+                Conjunction((D(x), E(x))),
+            )),
+        )),
+    ),))
+
+
+def test_negation_sign():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    x = Symbol('x')
+    expected = Union((
+        Implication(C(x), Conjunction((A(x), Negation(B(x))))),
+    ))
+
+    assert parser('C(x) :- A(x), \N{NOT SIGN}B(x)') == expected
+    assert parser('C(x) :- A(x), \N{NOT SIGN}(B(x))') == expected
+
+
+def test_disjunction_conditioned():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    D = Symbol('D')
+    x = Symbol('x')
+    res = parser('C(x) :- (A(x) | B(x)) // D(x)')
+
+    assert res == Union((Implication(
+        C(x), Condition(Disjunction((A(x), B(x))), D(x))
+    ),))
+
+
+def test_disjunction_in_a_condition_needs_parentheses():
+    with pytest.raises(UnexpectedTokenError):
+        parser('C(x) :- A(x) | B(x) // D(x)')
+
+
+def test_disjunction_pretty_printer_round_trip():
+    program = parser(
+        'C(x) :- A(x), (B(x, "a") | ~D(x) | (D(x), E(x, 1)))\n'
+        'F(x) :- A(x) | ~B(x, "b"), (E(x, 2) | E(x, 3))\n'
+        'ans(x) :- (A(x) | (B(x, "a") | D(x))), E(x, 1)\n'
+        'G(x) :- (A(x) | B(x, "a")) // D(x)\n'
+    )
+    printed = "\n".join(
+        DatalogPrettyPrinter().walk(rule) for rule in program.formulas
+    )
+
+    assert parser(printed) == program
 
 
 @pytest.mark.parametrize("operator", ["PROB", "MARG"])

@@ -20,7 +20,7 @@ from nl_expr.expressions import (
     Statement,
     Symbol,
 )
-from nl_expr.logic import ExistentialPredicate
+from nl_expr.logic import Disjunction, ExistentialPredicate
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
     PROB,
@@ -77,8 +77,7 @@ prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
 query : "ans" "(" [ arguments ] ")"
 
 condition : composite_predicate PROB_SEP composite_predicate
-?composite_predicate : "(" conjunction ")"
-                        | predicate
+?composite_predicate : predicate
 
 constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
@@ -90,17 +89,25 @@ SUCH_THAT_WORD : "st"
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
-?body : conjunction
+// "|" (or "\N{LOGICAL OR}") is a disjunction; "," binds tighter than it.
+?body : disjunction
+?disjunction : conjunction (OR_SYMBOL conjunction)*
+OR_SYMBOL : "|" | "\N{LOGICAL OR}"
 //conjunction : predicate ("," predicate)*
 conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
 AND_SYMBOL : "\N{LOGICAL AND}"
 
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
-predicate : id_application
+// After "((f(x)" a "," or ")" cannot tell a parenthesised body formula
+// from a parenthesised argument or tuple of a comparison (an LALR
+// reduce/reduce collision): the priority reads it as a body formula, so
+// write "(f(x) < 3)" rather than "((f(x)) < 3)".
+predicate.2 : id_application
           | negated_predicate
           | existential_predicate
           | "(" comparison ")"
+          | "(" disjunction ")"
           | logical_constant
           | prob_body_predicate
           | resample_body_predicate
@@ -111,10 +118,9 @@ predicate : id_application
 prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
                     | "PROB" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
 
-// Inside PROB[...] and MARG[...], a conjunction may be in parentheses, as in
+// Inside PROB[...] and MARG[...], a formula may be in parentheses, as in
 // a rule's condition: PROB[(a(x), (x < y)) // (b(x), c(x))] = p
-?bracketed_conjunction : conjunction
-                       | "(" conjunction ")"
+?bracketed_conjunction : disjunction
 
 // RESAMPLE[boot](pred(x)) = b  —  pred(x) on each replicate b of the resampling boot
 resample_body_predicate : "RESAMPLE" "[" cmd_identifier "]" "(" id_application ")" "=" argument
@@ -128,8 +134,8 @@ marg_body_predicate : "MARG" "[" bracketed_conjunction "]" "=" argument
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
 SUCC_INNER : /[a-zA-Z_*+.,()&@\\/ \t-]+/
 
-// Separator inside PROB/MARG for the conditional form: accepts both // and |
-PROB_SEP : "//" | "|"
+// Separator of the conditional form, in a rule body and inside PROB/MARG
+PROB_SEP : "//"
 
 // MARG head rule  —  declare a marginal probability rule
 marg_head_rule : "MARG" "[" bracketed_conjunction "]" IMPLICATION (condition | body)
@@ -314,7 +320,6 @@ class DatalogTransformer(Transformer):
     def prob_head_rule(self, ast):
         # PROB[pred] :- body              → [pred, IMPLICATION_token, body]
         # PROB[pred // cond] :- body      → [pred, SEP_token, cond, IMPLICATION_token, body]
-        # PROB[pred | cond] :- body       → same ast shape
         if len(ast) >= 4:
             # Conditional form: PROB[pred // cond] :- body
             pred = ast[0]
@@ -507,7 +512,7 @@ class DatalogTransformer(Transformer):
         """
         if isinstance(pred, FunctionApplication):
             return pred.args, pred, False
-        elif isinstance(pred, Conjunction):
+        elif isinstance(pred, (Conjunction, Disjunction)):
             return (), pred, True
         elif isinstance(pred, Negation):
             inner = pred.formula
@@ -523,6 +528,13 @@ class DatalogTransformer(Transformer):
                 return prob_vars, pred, False
             return None
         return None
+
+    @staticmethod
+    def _is_compound(subject):
+        """A disjunction, or a conjunction of several formulas."""
+        return isinstance(subject, Disjunction) or (
+            isinstance(subject, Conjunction) and len(subject.formulas) > 1
+        )
 
     @staticmethod
     def _filter_prob_vars_outside(prob_vars, outside_connect):
@@ -614,7 +626,7 @@ class DatalogTransformer(Transformer):
                     subject, cond_body, outside_connect
                 )
                 fresh_body = Condition(subject, cond_body)
-            elif is_marg and isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+            elif is_marg and self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
             elif is_marg:
@@ -642,7 +654,7 @@ class DatalogTransformer(Transformer):
                     if result_var not in head_args:
                         head_args.append(result_var)
                     continue
-            elif isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+            elif self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
             else:
@@ -823,7 +835,6 @@ class DatalogTransformer(Transformer):
     def prob_body_predicate(self, ast):
         # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
         # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
-        # PROB[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]   # ast[1] is the separator token
@@ -844,7 +855,6 @@ class DatalogTransformer(Transformer):
     def marg_body_predicate(self, ast):
         # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
         # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
-        # MARG[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]
@@ -890,10 +900,24 @@ class DatalogTransformer(Transformer):
                         and c.functor.name == "__SUCC__"):
                     # SUCC markers are no-ops — discard at conjunction level
                     continue
-                conj.append(c)
+                if isinstance(c, Conjunction):
+                    # A parenthesised conjunction: (a(x), b(x))
+                    conj.extend(c.formulas)
+                else:
+                    conj.append(c)
         if len(conj) == 0:
             return Constant(True)
+        if len(conj) == 1 and isinstance(conj[0], Disjunction):
+            # A parenthesised disjunction alone: (a(x) | b(x))
+            return conj[0]
         return Conjunction(conj)
+
+    def disjunction(self, ast):
+        return Disjunction(tuple(
+            c.formulas[0]
+            if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            for c in ast if isinstance(c, Expression)
+        ))
 
     def existential_predicate(self, ast):
         ast1 = ast[1].children
@@ -913,7 +937,11 @@ class DatalogTransformer(Transformer):
         return exp
 
     def negated_predicate(self, ast):
-        return Negation(ast[0])
+        formula = ast[-1]  # after the "¬" token, if any
+        if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+            # A formula in parentheses: ~(a(x))
+            formula = formula.formulas[0]
+        return Negation(formula)
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1].value])

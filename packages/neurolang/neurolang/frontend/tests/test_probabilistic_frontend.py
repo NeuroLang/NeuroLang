@@ -222,6 +222,65 @@ def test_show_ra_reports_unsolvable_query_error(show_ra, capsys):
     assert "── deterministic stratum ──" not in capsys.readouterr().out
 
 
+def test_disjunction_in_deterministic_rule_of_probabilistic_program():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="t")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.2, 2), (0.3, 3)], name="p"
+    )
+    res = nl.execute_datalog_program(
+        """
+        q(x) :- t(x, "a") | t(x, "b")
+        ans(x, PROB) :- q(x), p(x)
+        """
+    )
+
+    assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
+
+
+def test_disjunction_with_a_constant_in_the_query(capsys):
+    """Magic sets rewrite a disjunctive rule queried with a constant."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(1, "orbital"), (2, "middle"), (3, "superior"), (4, "middle")],
+        name="traverses",
+    )
+    nl.add_tuple_set([(2,), (3,)], name="temporal")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 2), (0.2, 4)], name="p")
+    res = nl.execute_datalog_program(
+        """
+        q(x, y) :- traverses(x, y), (temporal(x) | (y == "orbital"))
+        ans(x, PROB) :- q(x, "middle"), p(x)
+        """,
+        show_rewritten=True,
+    )
+
+    assert set(res.to_unnamed()) == {(2, 0.5)}
+    assert "magic_q" in capsys.readouterr().out
+
+
+def test_probability_of_a_disjunction():
+    """
+    PROB[p2(x) | p3(x)] is the probability of the disjunction, of two
+    independent facts even when they have the same probability, and
+    PROB[p2(x) // p3(x)] that of p2(x) given p3(x).
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (3,)], name="u")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 1), (0.2, 3)], name="p2")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 1), (0.5, 3)], name="p3")
+
+    res = nl.execute_datalog_program(
+        "ans(x, p) :- u(x), PROB[p2(x) | p3(x)] = p"
+    )
+    assert dict(res.to_unnamed()) == pytest.approx({1: 0.75, 3: 0.6})
+
+    res = nl.execute_datalog_program(
+        "ans(x, p) :- u(x), PROB[p2(x) // p3(x)] = p"
+    )
+    assert dict(res.to_unnamed()) == pytest.approx({1: 0.5, 3: 0.2})
+
+
 def test_show_rewritten_datalog_prints_all_rules(capsys):
     """--show-rewritten must print all reachable Datalog rules, not just the final query."""
     nl = NeurolangPDL()
