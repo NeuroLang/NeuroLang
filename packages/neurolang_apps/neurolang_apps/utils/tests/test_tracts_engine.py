@@ -281,3 +281,51 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
     assert rows(nl.execute_datalog_program(
         'ans(n) :- label("d", l, n, h), destrieux(n, r)\n'
     )) == rows(nl.execute_datalog_program('ans(n) :- destrieux(n, r)\n'))
+
+
+def test_the_points_of_the_atlases(offline_atlases, tmp_path):
+    """``schaefer_points(x, y, z, label)``: the centre of each labelled
+    voxel, in mm through the affine, with the name of its region."""
+    nl = engine_registry.build_engine("tracts", tmp_path / "data")
+    volume = fake_volume()
+    voxels = np.argwhere(volume)
+    centres = nib.affines.apply_affine(AFFINE, voxels)
+    for atlas, labels in FAKE_LABELS.items():
+        result = nl.execute_datalog_program(
+            f'ans(x, y, z, n) :- {atlas}_points(x, y, z, n)\n')
+        assert rows(result) == {
+            (*map(float, c), engine_registry._label_name(labels[v]))
+            for c, v in zip(centres, volume[tuple(voxels.T)])}
+        frame = result.as_pandas_dataframe()
+        assert all(frame.dtypes.iloc[:3] == np.float64)
+
+
+def test_the_parcels_near_the_ends_are_precomputed(
+    offline_atlases, tractogram, tmp_path, recwarn
+):
+    """``EUCLIDEAN(...) <= 3`` between the ends of the streamlines and the
+    points of an atlas, both stored, is joined by a tree, without the
+    warning of the comparison of every pair."""
+    nl = engine_registry.build_engine("tracts", tmp_path / "data")
+    near = rows(nl.execute_datalog_program(
+        f'.load_tractogram("t", "{tractogram}", space="MNI152")\n'
+        '.index_tracts("t", "schaefer")\n'
+        'near(x, e, n) :- endpoint_point(x, e, ex, ey, ez), '
+        'schaefer_points(mx, my, mz, n), '
+        '(EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)\n'
+        'ans(x, e, n) :- near(x, e, n)\n'))
+    assert not [w for w in recwarn if "cannot be precomputed" in str(
+        w.message)]
+    ends = rows(nl.execute_datalog_program(
+        'ans(x, e, px, py, pz) :- endpoint_point(x, e, px, py, pz)\n'))
+    points = rows(nl.execute_datalog_program(
+        'ans(x, y, z, n) :- schaefer_points(x, y, z, n)\n'))
+    assert near == {
+        (x, e, n) for x, e, *p in ends for *m, n in points
+        if np.linalg.norm(np.subtract(p, m)) <= 3}
+    # the first streamline ends in the parcels 1 and 2, the second in
+    # parcel 1 and outside the atlas
+    left, right = (engine_registry._label_name(n)
+                   for n in FAKE_LABELS["schaefer"][1:3])
+    assert {(x, n) for x, _, n in near} == {
+        (0, left), (0, right), (1, left)}

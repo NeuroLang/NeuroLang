@@ -22,23 +22,33 @@ engines:
     description: >
       The Destrieux, Schaefer and Tian atlases of the MNI152 brain, as
       relations of a label and its region.
+    # ``points``: the centres of the voxels of each region, in millimetres,
+    # a stored relation that EUCLIDEAN(...) <= r joins with a tree.
     atlases:
       schaefer:
         predicate_name: schaefer
         n_rois: 100
         resolution_mm: 2
         yeo_networks: 17
+        points: {predicate_name: schaefer_points}
       destrieux:
         predicate_name: destrieux
+        points: {predicate_name: destrieux_points}
       tian:
         predicate_name: tian
         scale: 2
+        points: {predicate_name: tian_points}
     datalog_init: |
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
     hidden_predicates: [schaefer_voxels]
     sorts:
+      mni:
+        columns: [x, y, z]
+        type: float
+        space: mm
+        description: "a point in MNI space, in millimetres, in 3D"
       atlas_voxel:
         columns: [i, j, k]
         type: int
@@ -101,6 +111,29 @@ engines:
         arguments:
           - label
           - atlas_voxel
+      schaefer_points:
+        description: >-
+          The centre of each voxel of the Schaefer atlas, in MNI
+          millimetres, and its parcel; EUCLIDEAN(x, y, z, x2, y2, z2) <= r
+          with the points of another stored relation finds those near
+          them
+        arguments:
+          - mni
+          - label
+      destrieux_points:
+        description: >-
+          The centre of each voxel of the Destrieux atlas, in MNI
+          millimetres, and its region (see schaefer_points)
+        arguments:
+          - mni
+          - destrieux_label
+      tian_points:
+        description: >-
+          The centre of each voxel of the Tian atlas, in MNI millimetres,
+          and its region (see schaefer_points)
+        arguments:
+          - mni
+          - tian_label
 
   coordinate_meta_analysis:
     abstract: true
@@ -245,11 +278,6 @@ engines:
         type: int
         space: voxel
         description: "a voxel of the MNI template grid, in 3D"
-      mni:
-        columns: [x, y, z]
-        type: float
-        space: mm
-        description: "a point in MNI space, in millimetres, in 3D"
       query:
         columns: [query]
         type: str
