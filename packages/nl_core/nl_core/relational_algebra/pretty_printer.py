@@ -23,6 +23,7 @@ from .relational_algebra import (
     GroupByAggregation,
     Intersection,
     LeftNaturalJoin,
+    Materialise,
     NameColumns,
     NaturalJoin,
     NaryNaturalJoin,
@@ -530,6 +531,10 @@ class PrettyPrinter:
         )
         return header, (expression.relation,)
 
+    def _format_materialise(self, expression):
+        """Format a Materialise node."""
+        return "materialise", (expression.relation,)
+
     def _format_constant_leaf(self, expression):
         """Format a Constant leaf, with its size when it is named."""
         name = self._lookup_name(expression)
@@ -569,6 +574,7 @@ class PrettyPrinter:
         (ReplaceNull, "_format_replace_null"),
         (ConcatenateConstantColumn, "_format_concatenate_constant_column"),
         (Destroy, "_format_destroy"),
+        (Materialise, "_format_materialise"),
         (Constant, "_format_constant_leaf"),
         (Symbol, "_format_symbol_leaf"),
     )
