@@ -51,7 +51,7 @@ class DatalogPrettyPrinter(PatternWalker):
     Uses the PatternWalker pattern-matching framework to recursively format
     each expression type. Strips type annotations, uses ``:-`` notation for
     rules/queries, and renames fresh variables to short names (``s₀``, ``s₁``,
-    …). Handles probabilistic ``Condition`` objects (``[A | B]``),
+    …). Handles probabilistic ``Condition`` objects (``(A) // (B)``),
     ``ExpressionBlock``, ``Union``, and all standard FOL/Datalog constructs.
 
     Parameters
@@ -135,13 +135,20 @@ class DatalogPrettyPrinter(PatternWalker):
         )
         return f"\u03bb({args_s}). {body_s}"
 
+    def _walk_operand(self, expr) -> str:
+        # A conjunction binds tighter than a disjunction: parenthesise a
+        # disjunction within a conjunction or a disjunction.
+        if isinstance(expr, Disjunction):
+            return f"({self.walk(expr)})"
+        return self.walk(expr)
+
     @add_match(Conjunction)
     def format_conjunction(self, expr: Conjunction) -> str:
-        return " \u2227 ".join(self.walk(f) for f in expr.formulas)
+        return " \u2227 ".join(self._walk_operand(f) for f in expr.formulas)
 
     @add_match(Disjunction)
     def format_disjunction(self, expr: Disjunction) -> str:
-        return " \u2228 ".join(self.walk(f) for f in expr.formulas)
+        return " \u2228 ".join(self._walk_operand(f) for f in expr.formulas)
 
     @add_match(Negation)
     def format_negation(self, expr: Negation) -> str:
@@ -163,9 +170,11 @@ class DatalogPrettyPrinter(PatternWalker):
 
     @add_match(Condition)
     def format_condition(self, expr: Condition) -> str:
-        cond_s = self.walk(expr.conditioned)
-        conding_s = self.walk(expr.conditioning)
-        return f"[{cond_s} | {conding_s}]"
+        return " // ".join(
+            f"({self.walk(f)})"
+            if isinstance(f, (Conjunction, Disjunction)) else self.walk(f)
+            for f in (expr.conditioned, expr.conditioning)
+        )
 
     @add_match(ExpressionBlock)
     def format_block(self, expr: ExpressionBlock) -> str:
@@ -201,5 +210,5 @@ class DatalogPrettyPrinter(PatternWalker):
         regular walker.
         """
         if isinstance(e, Conjunction):
-            return ",\n".join(self.walk(f) for f in e.formulas)
+            return ",\n".join(self._walk_operand(f) for f in e.formulas)
         return self.walk(e)

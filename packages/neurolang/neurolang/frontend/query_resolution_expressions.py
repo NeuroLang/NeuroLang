@@ -869,6 +869,14 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
             current_expression = current_expression & self.walk(formulas.pop())
         return current_expression
 
+    @add_match(lg.Disjunction)
+    def disjunction(self, expression: ir.Expression) -> Expression:
+        formulas = list(expression.formulas[::-1])
+        current_expression = self.walk(formulas.pop())
+        while len(formulas) > 0:
+            current_expression = current_expression | self.walk(formulas.pop())
+        return current_expression
+
     @add_match(dl.Negation)
     def negation(self, expression: ir.Expression) -> Expression:
         formula = self.walk(expression.formula)
