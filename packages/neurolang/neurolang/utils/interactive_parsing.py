@@ -55,6 +55,7 @@ TERMINALS_TO_CATEGORIES = {
     'MARG': CATEGORIES[7],
     'MINUS': CATEGORIES[3],
     'NEG_UNICODE': CATEGORIES[3],
+    'OR_SYMBOL': CATEGORIES[0],
     'PLUS': CATEGORIES[3],
     'POW': CATEGORIES[3],
     'PROB': CATEGORIES[7],
@@ -155,6 +156,11 @@ class LarkCompleter:
                 t_pattern = '<float>'
             elif (t_name == 'PROB_SEP'):
                 t_pattern = '//'
+            elif (t_name == 'OR_SYMBOL'):
+                # "|" is the separator of the alternatives of the pattern
+                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]][
+                    "values"].update({'|', '\N{LOGICAL OR}'})
+                continue
             elif (t_name == 'IDENTIFIER_REGEXP'):
                 # t_pattern = '<identifier regular expression>'
                 t_pattern = '<identifier_regexp>'

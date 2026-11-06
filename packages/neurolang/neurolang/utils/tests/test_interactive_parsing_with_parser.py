@@ -96,7 +96,7 @@ def test_interactive_rules():
     assert res == expected
 
     res = parser('A(x):-B()', interactive=True)
-    expected = {'Signs': {'values': {'∧', '∃', '(', '&', ',', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'∧', '|', '∨', '∃', '(', '&', ',', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'//', '~', '¬', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>', '<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -116,7 +116,7 @@ def test_interactive_rules():
     assert res == expected
 
     res = parser('A(x):-B(x, y)', interactive=True)
-    expected = {'Signs': {'values': {',', '(', '@', '∧', '∃', '&'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {',', '(', '@', '∧', '|', '∨', '∃', '&'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'//', '¬', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊤', 'False', '⊥'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -126,7 +126,7 @@ def test_interactive_rules():
     assert res == expected
 
     res = parser('A(x):-B(x, y), C(3, z)', interactive=True)
-    expected = {'Signs': {'values': {'@', ',', '∧', '&', '∃', '('}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'@', ',', '∧', '|', '∨', '&', '∃', '('}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'~', '¬', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'ans', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<text>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -136,7 +136,7 @@ def test_interactive_rules():
     assert res == expected
 
     res = parser('A(x):-~B(x)', interactive=True)
-    expected = {'Signs': {'values': {'&', ',', '@', '(', '∧', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'&', ',', '@', '(', '∧', '|', '∨', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '~', '-', '//'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊤', '⊥', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<text>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -146,13 +146,13 @@ def test_interactive_rules():
     assert res == expected
 
     res = parser('A(x):-B(x, ...)', interactive=True)
-    expected = {'Signs': {'values': {',', '∧', '@', '(', '∃', '&'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {',', '∧', '|', '∨', '@', '(', '∃', '&'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'~', '//', '-', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', '⊤', 'True', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-B(x, y), C(3, z), (', interactive=True)
-    expected = {'Signs': {'values': {'@', '(', '...'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
-                'Text': {'values': set()}, 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+    expected = {'Signs': {'values': {'@', '(', '...', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+                'Text': {'values': set()}, 'Operators': {'values': {'-', '~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', '⊤', 'True', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-B(x, y), C(3, z), (z', interactive=True)
@@ -244,7 +244,7 @@ def test_interactive_uri():
     assert res == expected
 
     res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)', interactive=True)
-    expected = {'Signs': {'values': {',', '∃', '&', '(', '∧', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {',', '∃', '&', '(', '∧', '|', '∨', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '//', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'True', 'False', '⊥'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<text>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -301,7 +301,7 @@ def test_interactive_probabilistic_fact():
     assert res == expected
 
     res = parser('B(x) :: exp(-d / 5.0) :- A(x, d)', interactive=True)
-    expected = {'Signs': {'values': {'∧', '&', ',', '∃', '(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'∧', '|', '∨', '&', ',', '∃', '(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'-', '~', '¬', '//'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'False', '⊥', '⊤', 'True'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<text>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -313,7 +313,7 @@ def test_interactive_probabilistic_fact():
 
     res = parser(
         'B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)', interactive=True)
-    expected = {'Signs': {'values': {'∧', '&', ',', '(', '∃', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'∧', '|', '∨', '&', ',', '(', '∃', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊤', '⊥', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<text>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -367,7 +367,7 @@ def test_interactive_existential():
     assert res == expected
 
     res = parser('C(x) :- B(x), exists(s1; A(s1))', interactive=True)
-    expected = {'Signs': {'values': {',', '@', '&', '∃', '(', '∧'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {',', '@', '&', '∃', '(', '∧', '|', '∨'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'-', '~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'ans', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -392,7 +392,7 @@ def test_interactive_existential():
     assert res == expected
 
     res = parser('C(x) :- B(x), ∃(s1 st A(s1))', interactive=True)
-    expected = {'Signs': {'values': {',', '&', '@', '∧', '(', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {',', '&', '@', '∧', '|', '∨', '(', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'ans', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊤', '⊥', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -404,7 +404,7 @@ def test_interactive_existential():
 
     res = parser(
         'C(x) :- B(x), exists(s1, s2; A(s1), A(s2))', interactive=True)
-    expected = {'Signs': {'values': {'(', ',', '@', '&', '∧', '∃'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
+    expected = {'Signs': {'values': {'(', ',', '@', '&', '∧', '|', '∨', '∃'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'ans', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊥', '⊤', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>', '<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -429,7 +429,7 @@ def test_interactive_query():
     assert res == expected
 
     res = parser('ans(x) :- B(x, y), C(3, y)', interactive=True)
-    expected = {'Signs': {'values': {'(', ',', '@', '∧', '∃', '&'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
+    expected = {'Signs': {'values': {'(', ',', '@', '∧', '|', '∨', '∃', '&'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '-', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'ans', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', '⊥', 'False', 'True'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<text>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -450,7 +450,7 @@ def test_interactive_prob_implicit():
     assert res == expected
 
     res = parser('B(x, PROB, y) :- C(x, y)', interactive=True)
-    expected = {'Signs': {'values': {',', '(', '∃', '@', '&', '∧'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
+    expected = {'Signs': {'values': {',', '(', '∃', '@', '&', '∧', '|', '∨'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'-', '¬', '~', '//'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'ans', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'True', '⊥', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<text>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
@@ -486,7 +486,7 @@ def test_interactive_prob_explicit():
     assert res == expected
 
     res = parser('B(x, PROB(x, y), y) :- C(x, y)', interactive=True)
-    expected = {'Signs': {'values': {'&', '@', ',', '∧', '(', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
+    expected = {'Signs': {'values': {'&', '@', ',', '∧', '|', '∨', '(', '∃'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '-', '//', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'ans', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', '⊤', 'True', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<text>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
@@ -622,6 +622,6 @@ def test_interactive_command_syntax():
 
 def test_interactive_constraint():
     res = parser('(x == y)', interactive=True)
-    expected = {'Signs': {'values': {'∧', '&', ','}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'∧', '|', '∨', '&', ','}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
                 'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'→', '-:'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
