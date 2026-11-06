@@ -694,3 +694,33 @@ def test_independentdisjointprojections_provenance_name():
     res = RelationalAlgebraProvenanceCountingSolver().walk(result)
 
     assert res.relation.value == expected
+
+
+def test_independent_union_keeps_equal_tuples():
+    """
+    The independent union of two relations holding the same tuple with the
+    same probability is the disjunction of two independent events, it
+    does not merge them: 1 - (1 - .5)(1 - .5) = .75.
+    """
+    pset_left = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "col1"), iterable=[(0.5, 1), (0.2, 2)]
+        ),
+        ColumnStr("_p_")
+    )
+    pset_right = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "col1"), iterable=[(0.5, 1), (0.5, 2)]
+        ),
+        ColumnStr("_p_")
+    )
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=("_p_", "col1"), iterable=[(0.75, 1), (0.6, 2)]
+    )
+
+    result = IndependentDisjointProjectionsAndUnionMixin().walk(
+        Union(pset_left, pset_right)
+    )
+    res = RelationalAlgebraProvenanceCountingSolver().walk(result)
+
+    assert res.relation.value == expected

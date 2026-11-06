@@ -43,6 +43,15 @@ Unreleased
 
 **New features:**
 
+* A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
+  which binds looser than ``,``; parentheses group: ``uncinate(x) :-
+  (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
+  than a predicate of several rules.  **Breaking:** ``|`` is no longer a
+  synonym of ``//`` for conditioning, ``PROB[a(x) | b(x)] = p`` is the
+  probability of the disjunction; write ``PROB[a(x) // b(x)] = p``.  A
+  comparison whose left operand is a function call in parentheses,
+  ``((f(x)) < 3)`` or ``((f(x), y) == (1, 2))``, now reads as a formula in
+  parentheses and fails to parse; write ``(f(x) < 3)``.
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
@@ -166,6 +175,22 @@ Unreleased
 
 **Bug fixes:**
 
+* The semi-naive chase merged, at every step and for every rule, the
+  relation of each predicate of the step's delta with that delta, even
+  the predicates the rule does not use, and inferred the type of the
+  merge by iterating over it: on some evaluation orders (they depend on
+  ``PYTHONHASHSEED``) a query over a whole-brain tractogram took minutes
+  and 45 GB instead of 3 s.  Only the negated predicates of a rule are
+  merged now.
+* The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
+  b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
+  event: two facts of probability 0.5 gave 0.5 instead of 0.75.
+* A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
+  schaefer(l, r), ...``, failed to parse: the parser read it as a fact
+  and stopped at the variable.  A fact is now parsed as a head and checked
+  to have only constants (``p(x)`` alone says that a ``,`` or ``:-`` may
+  be missing), so completion after ``A(3)`` also offers ``:-``.
 * The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
   studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
   were converted too, moving them by 7 mm (median).  They are now taken as
@@ -174,6 +199,12 @@ Unreleased
   (``tal``) or leaves them out (``drop``) (#1071).  The ``neurostore``
   engine, which left out the peaks of any other space, now follows the
   same option: they are taken as MNI by default.
+* The embeddings of the studies (``query_similarity``, ``similar_study``)
+  are kept whatever the order of the study ids: their cache was keyed on the
+  ids in the order of the ``study`` relation, which the fix above changed,
+  so every free-text query embedded the 14,371 abstracts again and, in the
+  query assistant, was stopped by its time limit before the embeddings
+  were saved.  The ids are now sorted; the cache is rebuilt once.
 * In ``NeurolangPDL``, a rule whose body is only equalities to constants,
   ``p(l) :- (l == 'c')``, is the fact ``p('c')``: it raised an
   ``IndexError`` (#1076).  The equalities to constants that the rewrite

@@ -211,7 +211,7 @@ def test_drop_removes_the_helpers_of_a_conditional(conditional):
 def test_datalog_of_a_squall_predicate(conditional):
     output = _command(conditional, ".datalog marg")
     assert "marg(s₀, PROB(s₀)) :-" in output
-    assert " | " in output
+    assert ") // (" in output
     assert "cond_num" not in output and "cond_den" not in output
 
 
