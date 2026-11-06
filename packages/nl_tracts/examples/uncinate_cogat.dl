@@ -38,10 +38,20 @@ uncinate(x, h) :-
     ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
     opposite_hemisphere(h, o), ~in_hemisphere(x, o)
 
-% the Schaefer parcels n with a point within 3 mm of an end e of a
-% streamline of the left uncinate ("right" for the other)
-uf_parcel(n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
-    schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+% the ends i of the streamlines of the left uncinate ("right" for the
+% other) with a point of the Schaefer parcel n within 3 mm; an end is the
+% integer i = 2 x + e, e being 0 or 1, the end e of the streamline x
+uf_end_near(i, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    schaefer_points(mx, my, mz, n),
+    (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3), (i == 2 * x + e)
+uf_parcel_ends(n, count(i)) :- uf_end_near(i, n)
+uf_ends(count(i)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    (i == 2 * x + e)
+
+% the parcels of the uncinate: those near at least 5 % of its ends. A parcel
+% near a handful of ends only (an insula next to the frontal ends) would
+% bring thousands of studies to the uncinate's, with little to do with it
+uf_parcel(n) :- uf_parcel_ends(n, c), uf_ends(t), (c >= 0.05 * t)
 
 % the studies with a peak within 3 mm of one of these parcels
 uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)

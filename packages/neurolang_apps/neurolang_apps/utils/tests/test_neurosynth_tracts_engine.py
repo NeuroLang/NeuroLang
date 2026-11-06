@@ -2,6 +2,7 @@
 on fake data (no download), and its example, uncinate_cogat.dl of
 nl_tracts."""
 
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -43,36 +44,68 @@ def test_the_engine_is_neurosynth_and_tracts():
             "schaefer_points"} <= set(predicates)
 
 
+# The frontal end of one more left uncinate, the only one near a parcel
+# of its own (3 of FAKE_LABELS), and the voxel of that parcel.
+LONE_END = (-20.0, 48.0, -4.0)
+LONE_VOXEL = (20, 74, 18)
+
+
 @pytest.fixture
 def files(tmp_path):
-    """The atlas, colour LUT and tractogram of the uncinate's tests of
-    nl_tracts."""
+    """The atlas and colour LUT of the uncinate's tests of nl_tracts, and
+    their streamlines with 21 more left uncinates (positions 16 to 36): 20
+    copies of the designed one, shifted by less than 1 mm, and one whose
+    frontal end is LONE_END."""
     pytest.importorskip("nl_tracts")
     from nl_tracts.tests import uncinate_files
 
     uncinate_files.write_files(tmp_path)
+    temporal, insula, frontal = uncinate_files.DESIGNED["uncinate"][0]
+    extra = [
+        [temporal, insula, (frontal[0] + 0.04 * k,) + frontal[1:]]
+        for k in range(20)
+    ] + [[temporal, insula, LONE_END]]
+    nib.streamlines.save(
+        nib.streamlines.Tractogram(
+            uncinate_files.streamlines()
+            + [uncinate_files.polyline(w) for w in extra],
+            affine_to_rasmm=np.eye(4),
+        ),
+        str(tmp_path / "tracts.trk"),
+    )
     return uncinate_files
+
+
+def expected(files, side):
+    """The uncinates of a side, the designed ones and the extra ones."""
+    return files.expected(side) | (
+        set(range(16, 37)) if side == "left" else set())
 
 
 @pytest.fixture
 def engine(tmp_path, files, monkeypatch):
-    """The engine on two studies, 1001 with a peak in front of the left
-    uncinate, 1002 of the right one, and atlases of the space of the
-    uncinate's files whose regions are its hemispheres, 1 the left one."""
+    """The engine on three studies, 1001 with a peak in front of the left
+    uncinate, 1002 of the right one and 1003 at LONE_END, and atlases of the
+    space of the uncinate's files whose regions are its hemispheres, 1 the
+    left one, but for the voxel of region 3, 6 mm away from region 1."""
     volume = np.zeros(files.SHAPE, dtype=np.int16)
     volume[:files.SHAPE[0] // 2] = 1
     volume[files.SHAPE[0] // 2 + 1:] = 2
+    i, j, k = LONE_VOXEL
+    volume[i - 3:i + 4, j - 3:j + 4, k - 3:k + 4] = 0
+    volume[LONE_VOXEL] = 3
     path = tmp_path / "hemispheres.nii.gz"
     nib.save(nib.Nifti1Image(volume, files.AFFINE), path)
     for name, labels in FAKE_LABELS.items():
         monkeypatch.setitem(
             engine_registry._ATLAS_REGISTRY[name], "fetch",
             lambda labels=labels, **kwargs: {
-                "maps": str(path), "labels": list(labels[:3])},
+                "maps": str(path), "labels": list(labels[:4])},
         )
     peaks = pd.DataFrame({
-        "id": [1001, 1002], "x": [-20.0, 20.0], "y": [40.0, 40.0],
-        "z": [-5.0, -5.0], "space": ["MNI", "MNI"],
+        "id": [1001, 1002, 1003], "x": [-20.0, 20.0, LONE_END[0]],
+        "y": [40.0, 40.0, LONE_END[1]], "z": [-5.0, -5.0, LONE_END[2]],
+        "space": ["MNI", "MNI", "MNI"],
     })
     terms = pd.DataFrame({
         "id": [StudyID(1001), StudyID(1002)],
@@ -134,18 +167,29 @@ def test_the_example_runs_to_the_studies(engine, files, tmp_path, side,
     """The example, its texts compared by a fake similarity (SPECTER2 is
     not there). Indexed by the Schaefer atlas too, which has no terms, the
     uncinate is that of uncinate.dl; its ends are in the parcel of its
-    hemisphere, which the study of that side activates."""
+    hemisphere, which the study of that side activates. On the left, the
+    parcel 3 near 1 of the 46 ends, fewer than 5 %, is not one of the
+    uncinate's, nor is 1003, which activates it only."""
     def query_similarity(q: str, s: int) -> float:
         return 1.
     engine.add_symbol(query_similarity, name="query_similarity")
     program = example(tmp_path, side)
-    # magic sets bind the definitions of similar_study, though the
-    # vocabulary of the uncinate is not rewritten whole
-    assert engine.execute_datalog_program(program).columns == ("t", "p")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        # magic sets bind the definitions of similar_study, though the
+        # vocabulary of the uncinate is not rewritten whole
+        result = engine.execute_datalog_program(program)
+    assert result.columns == ("t", "p")
+    # the pairs of points within 3 mm are computed with a tree
+    assert not [w for w in caught if "euclidean" in str(w.message)]
     assert {x for x, in rows(engine.execute_datalog_program(
-        f'ans(x) :- uncinate(x, "{side}")'))} == files.expected(side)
-    parcel = engine_registry._label_name(
-        FAKE_LABELS["schaefer"][1 if side == "left" else 2])
+        f'ans(x) :- uncinate(x, "{side}")'))} == expected(files, side)
+    names = [engine_registry._label_name(n) for n in FAKE_LABELS["schaefer"]]
+    parcel = names[1 if side == "left" else 2]
+    ends = rows(engine.execute_datalog_program(
+        "ans(n, c) :- uf_parcel_ends(n, c)"))
+    assert ends == ({(parcel, 45), (names[3], 1)} if side == "left" else
+                    {(parcel, 4)})
     assert rows(engine.execute_datalog_program(
         "ans(n) :- uf_parcel(n)")) == {(parcel,)}
     assert rows(engine.execute_datalog_program(

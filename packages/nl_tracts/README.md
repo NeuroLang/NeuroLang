@@ -56,14 +56,21 @@ The engine `neurosynth_tracts` is `neurosynth` and `tracts` together (the
 extras `tracts` and `embeddings`): the ends of a bundle's streamlines,
 `endpoint_point(x, e, px, py, pz)` in mm, join the voxels of the parcels of
 its atlases, `schaefer_points(x, y, z, n)`, and the parcels the studies
-that activate them, `schaefer_activated(n, s)`.
+that activate them, `schaefer_activated(n, s)`. The parcels of the uncinate
+are those near (3 mm) at least 5 % of its ends, an end being the integer
+`2 x + e`: a parcel near a few ends only would bring thousands of studies.
 [`examples/uncinate_cogat.dl`](examples/uncinate_cogat.dl) asks which
 Cognitive Atlas concepts the studies of the parcels the uncinate connects
 are about:
 
 ```
-uf_parcel(n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
-    schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+uf_end_near(i, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    schaefer_points(mx, my, mz, n),
+    (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3), (i == 2 * x + e)
+uf_parcel_ends(n, count(i)) :- uf_end_near(i, n)
+uf_ends(count(i)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+    (i == 2 * x + e)
+uf_parcel(n) :- uf_parcel_ends(n, c), uf_ends(t), (c >= 0.05 * t)
 uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
 measuring(c) :- cogat_measures(c, x)
 cogat_concept(c, t) :- cogat_term(c, t),
