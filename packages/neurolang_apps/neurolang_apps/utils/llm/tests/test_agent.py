@@ -377,6 +377,23 @@ def test_empty_final_answer_recalls_the_query_with_rows(nl):
     assert result.query == "ans(s) :- mentions(s, 'pain')"
 
 
+def test_repeated_call_is_not_run_again(nl):
+    search = 'Action: search_values\nAction Input: {"pattern": "pain"}'
+    replies = [
+        search, search,
+        f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    react.context.search_values = lambda *a: "mentions.c1: pain"
+    result = react.run("Which studies mention pain?")
+    assert result.valid
+    assert steps[1].observation == (
+        "You already called search_values with these arguments, which "
+        "gave:\nmentions.c1: pain\nDo not call it again: use that result "
+        "and take the next step."
+    )
+
+
 def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):
     from neurolang_apps.utils import engine_registry
 

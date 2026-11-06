@@ -7,8 +7,15 @@ assistant_guidance: >
   A question asking how many (combien) gets a count, not a
   probability: AGGREGATE[](mentions(s, 'pain') @ count(s)) = n over
   the stored relations, AGGREGATE[x] for each x, or over the rows of
-  a PROB rule when it counts those with a given probability.  Answer
-  every other question with probabilistic query answering over
+  a PROB rule when it counts those with a given probability.  A
+  question asking for a list (which studies, list the parcels of a
+  network, which terms a study mentions) gets the entities themselves,
+  without PROB: ans(s) :- mentions(s, 'pain'), or ans(s) :- study(s),
+  ~mentions(s, 'pain').
+  Answer the questions asking how likely, how often, what fraction or
+  probability, and those on the activations, co-activations or
+  co-occurring terms of a term, a topic or a region (which regions,
+  voxels or terms), with probabilistic query answering over
   selected_study, the uniform choice of a study: give the probability
   of what the question asks, PROB[...] = p, over rules of yours
   joining selected_study(s), as active(l, s) :-
@@ -19,10 +26,9 @@ assistant_guidance: >
   Bayes factor) when it asks for an association: the lift of A given B,
   how much B raises the chance of A, is P(A | B) / P(A), from PROB rules
   of yours (the rules lift and relative_risk are those of a term at
-  every voxel); a question asking
-  for a list (which studies, which regions) gets the probability of
-  each.  A study activates a point when one of its peaks is within
-  3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
+  every voxel), the probability of each region, voxel or term when
+  they are listed.  A study activates a point when one of its peaks is
+  within 3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
   <= 3), with the coordinates of the question as MNI millimetres,
   written as they are.  For the classical anatomy of the cortex
   (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated,

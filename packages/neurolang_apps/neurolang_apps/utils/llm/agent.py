@@ -289,8 +289,28 @@ class Toolbox:
         # whole result (see validation.Preview.frames).
         self.answer_rows = ""
         self.answer_frames = None
+        # The observations of the calls, by tool and arguments.
+        self.observations = {}
 
     def call(self, name: str, arguments: dict):
+        """
+        Run the tool *name* with *arguments*: (observation, final). A call
+        made already, but final_answer, is not run again: a model in a
+        loop is told so, with the result it had.
+        """
+        key = (name, json.dumps(arguments, sort_keys=True, default=str))
+        if key in self.observations and name != "final_answer":
+            return (
+                f"You already called {name} with these arguments, which "
+                f"gave:\n{truncate(self.observations[key], 500)}\n"
+                "Do not call it again: use that result and take the next "
+                "step."
+            ), None
+        observation, final = self._call(name, arguments)
+        self.observations[key] = observation
+        return observation, final
+
+    def _call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
         handler = getattr(self, f"tool_{name}", None)
         if handler is None:
