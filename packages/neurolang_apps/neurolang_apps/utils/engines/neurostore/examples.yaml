@@ -25,8 +25,8 @@ assistant_examples:
   - question: Which studies are about working memory, by its Cognitive Atlas definition, without being annotated with it?
     datalog: |-
       close(q, s) :- similar_study(q, s), selected_study(s), ~study_concept(s, 'working memory')
-      p_close(q, PROB) :- close(q, s)
-      ans(p) :- cogat_definition('working memory', d), p_close(d, p)
+      p_close(q, s, PROB) :- close(q, s)
+      ans(s, p) :- cogat_definition('working memory', d), p_close(d, s, p)
 
   - question: Which voxels do the studies of the domain executive cognitive control activate?
     datalog: |-

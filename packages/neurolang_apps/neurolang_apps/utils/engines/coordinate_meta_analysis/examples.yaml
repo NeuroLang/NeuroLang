@@ -50,7 +50,7 @@ assistant_examples:
   - question: Which studies mention pain?
     datalog: |-
       pain_study(s) :- mentions(s, 'pain'), selected_study(s)
-      ans(p) :- PROB[pain_study(s)] = p
+      ans(s, p) :- PROB[pain_study(s)] = p
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -62,17 +62,17 @@ assistant_examples:
       language_or_speech(s) :- mentions(s, 'language')
       language_or_speech(s) :- mentions(s, 'speech')
       chosen(s) :- language_or_speech(s), selected_study(s)
-      ans(p) :- PROB[chosen(s)] = p
+      ans(s, p) :- PROB[chosen(s)] = p
 
   - question: Which studies mention both pain and emotion?
     datalog: |-
       pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
-      ans(p) :- PROB[pain_and_emotion(s)] = p
+      ans(s, p) :- PROB[pain_and_emotion(s)] = p
 
   - question: Which studies do not mention pain?
     datalog: |-
       no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
-      ans(p) :- PROB[no_pain(s)] = p
+      ans(s, p) :- PROB[no_pain(s)] = p
 
   - question: Which terms co-occur with fear in a study?
     datalog: |-
@@ -89,7 +89,7 @@ assistant_examples:
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
       active(s) :- near(s), selected_study(s)
-      ans(p) :- PROB[active(s)] = p
+      ans(s, p) :- PROB[active(s)] = p
 
   - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
     datalog: |-
@@ -320,8 +320,8 @@ assistant_examples:
   - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
     datalog: |-
       close(q, s) :- similar_study(q, s), selected_study(s), ~mentions(s, 'fear')
-      p_close(q, PROB) :- close(q, s)
-      ans(p) :- cogat_definition('fear', d), p_close(d, p)
+      p_close(q, s, PROB) :- close(q, s)
+      ans(s, p) :- cogat_definition('fear', d), p_close(d, s, p)
 
   - question: How likely is a study about pain, by its Cognitive Atlas definition, to report an activation of the insula?
     datalog: |-

@@ -289,6 +289,21 @@ def test_examples_and_description_can_be_given(nl):
      "search_values", {"pattern": "pain"}),
     ('### Action: run_query\n- Action_Input: {"query": "ans(x) :- p(x)"}',
      "run_query", {"query": "ans(x) :- p(x)"}),
+    ('<Action: search_values>\n<Action Input: {"pattern": "SomMot"}>',
+     "search_values", {"pattern": "SomMot"}),
+    ('<Thought>Find it.</Thought>\n<Action>search_values</Action>\n'
+     '<Action Input>{"pattern": "SomMot"}</Action Input>',
+     "search_values", {"pattern": "SomMot"}),
+    ('<final_answer>\n{"query": "ans(x) :- p(x)", "explanation": "x"}\n'
+     '</final_answer>',
+     "final_answer", {"query": "ans(x) :- p(x)", "explanation": "x"}),
+    ('Observation: 2 rows\nFinal Answer: {"query": "ans(x) :- p(x)"}',
+     "final_answer", {"query": "ans(x) :- p(x)"}),
+    ('Action: describe_predicate\nAction Input: "tian"',
+     "describe_predicate", {"name": "tian"}),
+    ('Observation: The query is valid.\nAction: run_query\n'
+     'Action Input: {"query": "ans(x) :- p(x)"}\nObservation: 2 rows',
+     "run_query", {"query": "ans(x) :- p(x)"}),
 ])
 def test_parse_text_action_formatting_slips(text, name, arguments):
     action = parse_text_action(text, "datalog")
