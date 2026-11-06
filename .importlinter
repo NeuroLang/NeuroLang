@@ -55,11 +55,6 @@ source_modules =
     nl_tracts.spaces
     nl_tracts.terms
     nl_tracts.atlas
-    nl_tracts.tractogram
-    nl_tracts.indexing
-    nl_tracts.cache
-    nl_tracts.ids
-    nl_tracts.vocabulary
 forbidden_modules =
     neurolang
     nl_core
