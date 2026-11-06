@@ -292,6 +292,17 @@ class DatalogTransformer(Transformer):
 
         self.locals = locals
         self.globals = globals
+        # the variables written "_", each a fresh symbol
+        self.anonymous = set()
+
+    def _hide_anonymous(self, formula):
+        """``∃`` the anonymous variables of a formula: in a negation or a
+        disjunct, ``_`` is quantified there, ``~p(x, _)`` is ``~∃y p(x, y)``.
+        """
+        for v in extract_logic_free_variables(formula):
+            if v in self.anonymous:
+                formula = ExistentialPredicate(v, formula)
+        return formula
 
     def start(self, ast):
         return ast[0]
@@ -915,8 +926,10 @@ class DatalogTransformer(Transformer):
 
     def disjunction(self, ast):
         return Disjunction(tuple(
-            c.formulas[0]
-            if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            self._hide_anonymous(
+                c.formulas[0]
+                if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            )
             for c in ast if isinstance(c, Expression)
         ))
 
@@ -942,7 +955,7 @@ class DatalogTransformer(Transformer):
         if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
             # A formula in parentheses: ~(a(x))
             formula = formula.formulas[0]
-        return Negation(formula)
+        return Negation(self._hide_anonymous(formula))
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1].value])
@@ -1115,7 +1128,9 @@ class DatalogTransformer(Transformer):
         ast = ast[0]
         if isinstance(ast, Expression):
             if isinstance(ast, Symbol) and ast.name == "_":
-                return Symbol.fresh()
+                fresh = Symbol.fresh()
+                self.anonymous.add(fresh)
+                return fresh
             return ast
         else:
             return Symbol.fresh()

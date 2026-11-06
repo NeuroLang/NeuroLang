@@ -684,6 +684,25 @@ def test_neurolang_dl_datalog_code_disjunction_under_negation():
     assert set(res.to_unnamed()) == {(2,), (4,)}
 
 
+
+def test_neurolang_dl_datalog_code_anonymous_variable_negated():
+    """``~traverses(x, _)``: no label at all; ``_`` is quantified in the
+    negation (and in a disjunct), not a variable of the rule."""
+    neurolang = _tracts()
+    neurolang.add_tuple_set([(1,), (2,), (5,)], name="streamline")
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), ~traverses(x, _)
+    """
+    )
+    assert set(res.to_unnamed()) == {(5,)}
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), (temporal(x) | traverses(x, _))
+    """
+    )
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
 @pytest.mark.parametrize(
     "body", ['traverses(x, "orbital") | temporal(y)', 'temporal(x) | ~q(x)']
 )
