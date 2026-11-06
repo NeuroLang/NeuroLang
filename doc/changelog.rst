@@ -31,7 +31,7 @@ Unreleased
   Atlas concept take 4.5 s instead of 6.2 s, and the Destrieux regions
   given a study activating a salience parcel of either hemisphere (a union
   of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
-  the column-wise selection of #PRA. ``--show-ra`` draws these relations as
+  the column-wise selection of #1126. ``--show-ra`` draws these relations as
   trees.
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
