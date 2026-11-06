@@ -166,6 +166,13 @@ Unreleased
 
 **Bug fixes:**
 
+* The semi-naive chase merged, at every step and for every rule, the
+  relation of each predicate of the step's delta with that delta, even
+  the predicates the rule does not use, and inferred the type of the
+  merge by iterating over it: on some evaluation orders (they depend on
+  ``PYTHONHASHSEED``) a query over a whole-brain tractogram took minutes
+  and 45 GB instead of 3 s.  Only the negated predicates of a rule are
+  merged now.
 * A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
   schaefer(l, r), ...``, failed to parse: the parser read it as a fact
   and stopped at the variable.  A fact is now parsed as a head and checked
