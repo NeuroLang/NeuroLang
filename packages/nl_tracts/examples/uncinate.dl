@@ -39,15 +39,12 @@
 .load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
 .index_tracts("hcp842", "fs")
 
-% the frontal regions of the uncinate, in hemisphere h
-uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
-uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
-uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
-
-% through the insula, with one end e in the temporal lobe in front of the
-% amygdala, and none of the regions it must avoid
+% in hemisphere h: one of the frontal gyri (| is "or"), through the insula,
+% with one end e in the temporal lobe in front of the amygdala, and none of
+% the regions it must avoid
 uncinate(x, h) :-
-    uf_frontal(x, h),
+    (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
+     | traverses(x, "inferior_frontal_gyrus", h)),
     endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
     traverses(x, "insula", h),
     ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),

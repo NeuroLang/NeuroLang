@@ -1235,9 +1235,9 @@ Recommendations in bold; none changes a decision of section 2.
     subject: fine; of two spaces: not). **Keep** for one atlas, the usual
     case; if several are common, add variants with the atlas as first
     argument (`traverses_in(a, x, term, h)`), not a constant in the rules.
-32. **A set of terms is three rules** (`uf_frontal` of 16.4). Sugar for a
-    set, `traverses(x, t, h), t in {"orbitofrontalgyrus", ...}`, would make
-    it one; it is a change of the frontend's grammar. **Open.**
+32. **A set of terms is a disjunction** (16.4): `(traverses(x, "a", h) |
+    traverses(x, "b", h) | ...)`, `|` being "or" in a rule body (the
+    frontend translates it to rules). **Done.**
 33. **The term names are tract_querier's** (`orbitofrontalgyrus`,
     `middle_frontal_gyrus`, `cingular`...), so that a bundle of
     tract_querier is a transcription. They are not those of an anatomist,
@@ -1414,11 +1414,9 @@ UF.side = (((orbitofrontalgyrus.side or middle_frontal_gyrus.side or
 is, in `examples/uncinate.dl`,
 
 ```
-uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
-uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
-uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
 uncinate(x, h) :-
-    uf_frontal(x, h),
+    (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
+     | traverses(x, "inferior_frontal_gyrus", h)),
     endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
     traverses(x, "insula", h),
     ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),

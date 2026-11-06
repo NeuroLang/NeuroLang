@@ -22,11 +22,9 @@ The uncinate fasciculus, tract_querier's `UF.side`, is
 [`examples/uncinate.dl`](examples/uncinate.dl):
 
 ```
-uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
-uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
-uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
 uncinate(x, h) :-
-    uf_frontal(x, h),
+    (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
+     | traverses(x, "inferior_frontal_gyrus", h)),
     endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
     traverses(x, "insula", h),
     ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),
