@@ -184,6 +184,12 @@ def test_index_cache_reload_and_invalidation(index, tmp_path):
     np.testing.assert_array_equal(reloaded.matrix, index.matrix)
     assert reloaded.encoder.document_calls == 0
 
+    reordered = te.EmbeddingIndex(
+        [4, 2, 3, 1, 2], load_documents, FakeEncoder(), index.cache_path
+    )
+    np.testing.assert_array_equal(reordered.matrix, index.matrix)
+    assert reordered.encoder.document_calls == 0
+
     changed = te.EmbeddingIndex(
         [1, 2, 3], load_documents, FakeEncoder(), index.cache_path
     )
