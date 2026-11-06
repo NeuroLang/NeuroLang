@@ -100,8 +100,6 @@ and text-to-SPARQL systems.
     parsed, then dry-run; unknown predicates and wrong numbers of
     arguments are reported. When it fails, the formatted error is sent
     back to the model for a correction, up to ``max_repairs`` times.
-    With ``samples`` above 1, several queries are generated and the one
-    whose result most of them share is kept (self-consistency).
 
 ``react`` (ReAct agent)
     The model reasons and calls tools:
@@ -130,6 +128,15 @@ and text-to-SPARQL systems.
     default, 0 to turn the check off) is the number of answers the check
     may reject; after them, the answer is kept with a warning. The REPL
     and ``neurolang-query --ask`` show the English reading of the query.
+
+With ``samples`` above 1, either strategy answers that many times, at a
+temperature of at least 0.7, and the answer whose rows most of them give
+is kept (self-consistency). With ``fallback_provider: NAME``, a provider
+of the file, that provider answers once instead when no result is given
+by more than half of the answers, or when none is valid (a single sample
+asks it only when its answer fails): e.g. three DeepSeek answers, and
+Sonnet when they disagree. The fallback is a step of the answer, with
+the query the vote kept (``voted``), and its requests count in the usage.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
@@ -240,6 +247,7 @@ order:
       max_repairs: 3
       few_shot_k: 6
       samples: 1
+      # fallback_provider: anthropic
       temperature: 0.0
       timeout: 60
       preview_rows: 10

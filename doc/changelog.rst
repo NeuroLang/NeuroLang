@@ -43,6 +43,13 @@ Unreleased
 
 **New features:**
 
+* The query assistant votes with ReAct too: ``samples: N`` answers N
+  times and keeps the answer whose rows most of them give, and
+  ``fallback_provider: NAME`` asks another provider once when no result
+  has a majority (more than N/2 of the answers) or none is valid, e.g.
+  three DeepSeek answers and Sonnet when they disagree. The fallback is a
+  step of the answer, with the query the vote kept.
+
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
