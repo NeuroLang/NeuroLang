@@ -50,7 +50,16 @@ may specify the following keys, all of them optional:
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
   not be the template's, and the pairs are kept in the data directory once
-  found (see :ref:`engine-cache`).  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  found (see :ref:`engine-cache`).  With ``points: {predicate_name}`` a
+  deterministic atlas also registers ``predicate_name(x, y, z, label)``:
+  the centre of each voxel of each region, in millimetres through the
+  atlas's affine, a stored relation, so that a rule bounding the distance
+  of these points to those of another stored relation,
+  ``EUCLIDEAN(x, y, z, x2, y2, z2) <= r``, finds the pairs with a k-d
+  tree instead of comparing every pair; the engines extending
+  ``mni_atlases`` have ``schaefer_points``, ``destrieux_points`` and
+  ``tian_points`` (236,000 rows, 13 MB).
+  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
   downloaded from the authors' repository
@@ -354,8 +363,13 @@ database::
       mni_atlases:
         abstract: true
         atlases:
-          destrieux: {predicate_name: destrieux}
-          tian: {predicate_name: tian, scale: 2}
+          destrieux:
+            predicate_name: destrieux
+            points: {predicate_name: destrieux_points}
+          tian:
+            predicate_name: tian
+            scale: 2
+            points: {predicate_name: tian_points}
 
       coordinate_meta_analysis:
         abstract: true
@@ -482,7 +496,16 @@ tractography, Datalog rules that its ``python_init``
 ``endpoint_in(x, e, term, h)``, ``anterior_of(x, term, h)`` and the like
 (``packages/nl_tracts/DESIGN.md``, section 16).  The same ``init_engine``
 gives it the hooks with which ``.view`` draws a result of streamline ids
-``x`` on the label image of the atlas.  The uncinate fasciculus of
+``x`` on the label image of the atlas.  The ends of the streamlines are
+also points in millimetres, ``endpoint_point(x, e, px, py, pz)``, stored
+as the points of the atlases are, so that the parcels near the ends are
+found with a tree::
+
+   near(x, e, n) :- endpoint_point(x, e, ex, ey, ez),
+       schaefer_points(mx, my, mz, n),
+       (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+
+The uncinate fasciculus of
 tract_querier is ``packages/nl_tracts/examples/uncinate.dl``::
 
    neurolang-query --engine tracts --file uncinate.dl

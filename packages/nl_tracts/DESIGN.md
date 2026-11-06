@@ -103,10 +103,35 @@ the engine keeps the dtypes).
 `endpoint_point` has the points of `endpoint_coord`, one row per end: a
 rule that compares an end with the points of another stored relation by
 distance, `EUCLIDEAN(px, py, pz, mx, my, mz) <= r` (the voxels of an atlas
-in mm, `schaefer_points` of the engine `tracts`), has both sides ranged by
-stored relations, which the engine needs to find the pairs with a k-d tree
-instead of comparing every pair. `endpoint_coord` stays, one coordinate a
-row, for the directions of the vocabulary.
+in mm, `schaefer_points(x, y, z, label)` of the engine `tracts`), has both
+sides ranged by stored relations, which the engine needs to find the pairs
+with a k-d tree instead of comparing every pair. `endpoint_coord` stays, one
+coordinate a row, for the directions of the vocabulary.
+
+The points of the atlases are the option `points: {predicate_name: ...}` of
+an atlas of an engine of the apps (`engines.yaml`, `doc/
+engine_configuration.rst`): the centre of each labelled voxel through the
+image's affine, as floats, with the engine's name of its region. The
+engines extending `mni_atlases` have `schaefer_points`, `destrieux_points`
+and `tian_points` (132,032 + 95,328 + 8,562 rows, 13 MB as DataFrames; the
+neurosynth build, 12-13 s and 4.5-4.7 GB at its peak, does not change
+measurably, *measured*). The parcels of Schaefer near the ends:
+
+```
+near(x, e, n) :- endpoint_point(x, e, ex, ey, ez),
+    schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+```
+
+*Measured* on the HCP842 whole-brain tractogram (144,641 streamlines) in
+MNI152: 1.8 s for all the ends, 314,733 rows, no comparison of every pair.
+Of the ends of the uncinate of `examples/uncinate.dl` (indexed by the
+wmparc of `cvs_avg35_inMNI152`), 1,444 of 1,448 on the left and 1,575 of
+1,620 on the right are within 3 mm of a parcel (9 and 7 parcels: TempPole
+1, OFC 1, PFCv 1, Temp 1 ... on the left; TempPole 1, OFC 1, TempPar 1,
+PFCv 1 ... on the right), where `endpoint_label("schaefer", x, e, l)`
+gives a parcel to 1,319 and 1,323 of them (5 and 4 parcels): the distance
+also finds the ends that stop just outside a parcel, and the parcels
+next to the one an end is in.
 
 **A streamline is one id, `x`.** `x = (index << 32) | s`, an int64, where
 `s` is the position of the streamline in its file and `index` the load order
