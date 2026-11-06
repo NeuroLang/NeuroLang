@@ -166,6 +166,11 @@ Unreleased
 
 **Bug fixes:**
 
+* A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
+  schaefer(l, r), ...``, failed to parse: the parser read it as a fact
+  and stopped at the variable.  A fact is now parsed as a head and checked
+  to have only constants (``p(x)`` alone says that a ``,`` or ``:-`` may
+  be missing), so completion after ``A(3)`` also offers ``:-``.
 * The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
   studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
   were converted too, moving them by 7 mm (median).  They are now taken as

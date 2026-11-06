@@ -164,8 +164,8 @@ def test_unexpected_end_of_input():
 
 
 def test_expected_terminals_shown_as_literals():
-    out = _format_parse_error("ans(x) :- R(x) S(x)", "Datalog")
-    assert "Expected: one of '::', ':='" in out
+    out = _format_parse_error("ans(x) :- R(x) S", "Datalog")
+    assert "'::', ':='" in out
     assert "PROBA_OP" not in out
 
 
