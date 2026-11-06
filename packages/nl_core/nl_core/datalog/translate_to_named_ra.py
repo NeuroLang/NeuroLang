@@ -497,11 +497,16 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def process_negative_formulas(classified_formulas, output):
+        # Each negation subtracts the rows of the positive formulas, not of
+        # the previous difference, that match it: the result is the same,
+        # and the expression grows linearly with the negations instead of
+        # doubling with each (the previous difference was in both operands)
+        positive = output
         named_columns = classified_formulas["named_columns"]
         for neg_formula in classified_formulas["neg_formulas"]:
             neg_cols = TranslateToNamedRA.obtain_negative_columns(neg_formula)
             if named_columns > neg_cols:
-                neg_formula = NaturalJoin(output, neg_formula)
+                neg_formula = NaturalJoin(positive, neg_formula)
             elif named_columns != neg_cols:
                 raise NegativeFormulaNotSafeRangeException(neg_formula)
             output = Difference(output, neg_formula)

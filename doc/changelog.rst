@@ -19,6 +19,12 @@ Unreleased
 
 **Performance:**
 
+* A rule with many negated atoms compiles in a time linear in them: each
+  negation was joined with the difference of those before it, which put
+  that difference in both operands and doubled the relational algebra with
+  each negation (14 negations, as in the bundles of tract_querier
+  translated to the vocabulary of nl_tracts, took most of an hour; now a
+  second).
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
