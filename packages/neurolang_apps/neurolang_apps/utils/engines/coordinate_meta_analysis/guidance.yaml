@@ -25,7 +25,8 @@ assistant_guidance: >
   3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
   <= 3), with the coordinates of the question as MNI millimetres,
   written as they are.  For the classical anatomy of the cortex
-  (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated;
+  (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated,
+  as for brain areas or regions when the question names no atlas;
   for the functional anatomy, the Schaefer networks of the cortex,
   schaefer_activated, and the Tian atlas of the subcortex,
   tian_activated, which also holds the subcortical structures of
@@ -47,7 +48,9 @@ assistant_guidance: >
   Tian names abbreviate the structure and end with the hemisphere
   (lAMY rh, aHIP lh, NAc core rh): HIP hippocampus, AMY amygdala, THA
   thalamus, NAc nucleus accumbens, GP globus pallidus, PUT putamen,
-  CAU caudate.
+  CAU caudate; a structure is all its parts (aPUT and pPUT, aHIP and
+  pHIP, lAMY and mAMY, NAc core and shell, THA DA, DP, VA and VP), in
+  both hemispheres unless the question names one.
   Co-activation is the activation of regions or points by the same
   study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
   s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
