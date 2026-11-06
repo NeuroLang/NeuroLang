@@ -286,6 +286,7 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
 def test_the_points_of_the_atlases(offline_atlases, tmp_path):
     """``schaefer_points(x, y, z, label)``: the centre of each labelled
     voxel, in mm through the affine, with the name of its region."""
+    pytest.importorskip("nl_tracts")
     nl = engine_registry.build_engine("tracts", tmp_path / "data")
     volume = fake_volume()
     voxels = np.argwhere(volume)
