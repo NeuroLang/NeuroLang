@@ -19,6 +19,13 @@ Unreleased
 
 **Performance:**
 
+* A selection by a Python function of a single column, as
+  ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
+  (291,533 rows) in a probabilistic rule, applies the function to the column
+  instead of to every row: the probability of the Destrieux regions given a
+  study activating a salience parcel of one hemisphere takes 2.4 s instead
+  of 8.6 s, and of either hemisphere (a union of two rules) 12 s instead of
+  37 s.
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
