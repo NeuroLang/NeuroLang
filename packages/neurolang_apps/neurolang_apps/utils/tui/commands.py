@@ -151,6 +151,10 @@ def help_text(engine_name: str = "") -> str:
         f"  [green]{escape(f'{cmd.usage:<20}')}[/green] {escape(cmd.help)}"
         for cmd in COMMANDS.values()
     ]
+    lines.append(
+        "  [green].import(\"m.dl\")[/green]      "
+        "import a Datalog module, once (\"package:m.dl\": of a package)"
+    )
     lines.append(KEYS_HELP)
     lines += _example_lines(engine_name)
     return "\n".join(lines)

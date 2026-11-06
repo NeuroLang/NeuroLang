@@ -736,3 +736,52 @@ def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
     calls = _recording_execute(small_app)
     small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
     assert calls == ["ans(x) :-\n  P(x)"]
+
+
+@pytest.fixture
+def module(tmp_path):
+    """Return a Datalog module of a fact and a rule over ``P``."""
+    path = tmp_path / "lib" / "module.dl"
+    path.parent.mkdir()
+    path.write_text('side("left")\ntwice(x) :- P(x)\n')
+    return path
+
+
+def test_what_a_query_imports_stays_in_the_session(engine, module):
+    """The rules of a query are local to it; those of the modules it
+    imports are the session's, imported once."""
+    app = _app(engine)
+    app._execute_and_display(
+        f'.import("{module}")\nlocal(x) :- twice(x)\nans(x) :- local(x)'
+    )
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    symbols = {s.name for s in app._nl.symbol_table}
+    assert {"twice", "side"} <= symbols and "local" not in symbols
+    app._execute_and_display(f'.import("{module}")')
+    app._execute_and_display("ans(x) :- twice(x)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    assert len(app._nl.symbol_table["twice"].formulas) == 1
+
+
+def test_a_module_is_imported_again_after_clear(engine, module):
+    app = _app(engine)
+    app._execute_and_display(f'.import("{module}")')
+    app._handle_dot_command(".clear")
+    assert "twice" not in app._nl.symbol_table
+    app._execute_and_display(f'.import("{module}")')
+    assert "twice" in app._nl.symbol_table
+
+
+def test_the_initial_program_imports_beside_its_file(engine, module):
+    """The program of ``--file`` imports the modules beside the file."""
+    main = module.parent.parent / "main.dl"
+    main.write_text('.import("lib/module.dl")\nans(x) :- twice(x)\n')
+    app = _app(engine, program_file=str(main))
+    app._run_initial_program(main.read_text())
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+
+
+def test_help_tells_import():
+    from neurolang_apps.utils.tui.commands import help_text
+
+    assert ".import(" in help_text()

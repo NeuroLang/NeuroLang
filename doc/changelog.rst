@@ -43,6 +43,20 @@ Unreleased
 
 **New features:**
 
+* Datalog modules: ``.import("bundles/uf.dl")`` in a program runs the facts,
+  rules and commands of a Datalog file where it stands, as if written there,
+  so that a vocabulary or a set of definitions (the white-matter bundles of
+  a tractography package) is written once and imported by queries.  The
+  path is relative to the importing file (the program of
+  ``neurolang-query --file``, or a module importing another), else to the
+  working directory; ``.import("package:bundles/uf.dl")`` imports a module
+  shipped in a Python package.  A module is imported once (importing it
+  again does nothing), an import cycle is an error, and a module with a
+  query (``ans(...)``) is refused.  An error in a module names its file,
+  and its line if it does not parse.  From Python:
+  ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
+  define stays in the session although the query's own rules are local to
+  it, and ``.clear`` forgets the imports with their rules.
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
