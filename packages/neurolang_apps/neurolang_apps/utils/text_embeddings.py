@@ -560,7 +560,8 @@ class EmbeddingIndex:
 
     The embedding matrix is computed on first use (or by :meth:`build`)
     and saved as ``.npz``.  The cache is reused only if it was built with
-    the same encoder and the same document ids.
+    the same encoder and the same document ids, in any order: the ids are
+    kept sorted.
 
     Parameters
     ----------
@@ -580,7 +581,7 @@ class EmbeddingIndex:
 
     def __init__(self, ids, load_texts, encoder, cache_path=None):
         """Store the ids; embeddings are computed on first use."""
-        self.ids = list(dict.fromkeys(ids))
+        self.ids = sorted(set(ids))
         self._load_texts = load_texts
         self.encoder = encoder
         self.cache_path = None if cache_path is None else Path(cache_path)

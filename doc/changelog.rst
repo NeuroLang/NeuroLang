@@ -197,6 +197,11 @@ Unreleased
   cogat_definition(t, d), close(d, s)``: a function of ``d`` in ``close``
   was refused as unbound.
 
+* A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
+  schaefer(l, r), ...``, failed to parse: the parser read it as a fact
+  and stopped at the variable.  A fact is now parsed as a head and checked
+  to have only constants (``p(x)`` alone says that a ``,`` or ``:-`` may
+  be missing), so completion after ``A(3)`` also offers ``:-``.
 * The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
   studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
   were converted too, moving them by 7 mm (median).  They are now taken as
@@ -205,6 +210,12 @@ Unreleased
   (``tal``) or leaves them out (``drop``) (#1071).  The ``neurostore``
   engine, which left out the peaks of any other space, now follows the
   same option: they are taken as MNI by default.
+* The embeddings of the studies (``query_similarity``, ``similar_study``)
+  are kept whatever the order of the study ids: their cache was keyed on the
+  ids in the order of the ``study`` relation, which the fix above changed,
+  so every free-text query embedded the 14,371 abstracts again and, in the
+  query assistant, was stopped by its time limit before the embeddings
+  were saved.  The ids are now sorted; the cache is rebuilt once.
 * In ``NeurolangPDL``, a rule whose body is only equalities to constants,
   ``p(l) :- (l == 'c')``, is the fact ``p('c')``: it raised an
   ``IndexError`` (#1076).  The equalities to constants that the rewrite
