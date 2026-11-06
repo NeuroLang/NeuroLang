@@ -1,0 +1,36 @@
+% The uncinate of the vocabulary (uncinate.dl) against the expert-labelled
+% uncinates of the HCP842 atlas, UF_L and UF_R: how many of the
+% streamlines of the expert bundle the rule selects (its recall).
+%
+%   neurolang-query --engine tracts --file uncinate_hcp842.dl
+%
+% Each bundle is a tractogram of its own, downloaded with the whole brain
+% the first time (uncinate.dl). Its streamlines are near-identical to some
+% of the whole brain's (within 0.004 mm), not equal point for point, so
+% they are not matched here: the precision of the rule on the whole brain,
+% which needs that matching, is in DESIGN.md (16.4).
+
+.load_tract_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152", term_mapping="freesurfer_aseg_aparc")
+.load_tractogram("uf_l", kind="hcp842", bundle="UF_L")
+.load_tractogram("uf_r", kind="hcp842", bundle="UF_R")
+.index_tracts("uf_l", "fs")
+.index_tracts("uf_r", "fs")
+
+% the rule of uncinate.dl
+uncinate(x, h) :-
+    (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
+     | traverses(x, "inferior_frontal_gyrus", h)),
+    endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h),
+    traverses(x, "insula", h),
+    ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),
+    ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
+    opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+
+expert("uf_l", "left")
+expert("uf_r", "right")
+
+% the streamlines of each expert bundle, and those the rule selects
+in_bundle(t, count(x)) :- streamline(x, t, s), expert(t, h)
+selected(t, count(x)) :- streamline(x, t, s), expert(t, h), uncinate(x, h)
+
+ans(t, found, total) :- selected(t, found), in_bundle(t, total)

@@ -15,6 +15,7 @@ The only module of nl_tracts that is written against NeuroLang. Two ways:
 """
 
 import warnings
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Iterable, Optional
 
@@ -31,6 +32,7 @@ from neurolang.frontend.probabilistic_frontend import (
 )
 
 from .atlas import Atlas
+from .fetch import ATLASES, fetch_tractogram
 from .ids import decode, encode
 from .indexing import IndexingParams, RelationStore
 from .spaces import SpaceMismatchError
@@ -226,6 +228,7 @@ class _State:
 
     def __init__(self):
         self.engine = None  # whose atlases .index_tracts may index by
+        self.data_dir = None  # where the atlases of Yeh are downloaded
         self.store = RelationStore()
         self.atlases: Dict[str, Atlas] = {}
         self.tractograms: Dict[str, Tractogram] = {}
@@ -277,8 +280,16 @@ class TractsCommandsMixin(PatternWalker):
         ``harvard_oxford``, ``n_rois=100`` of ``schaefer_2018``,
         ``data_dir``...). Its label names are those of the atlases of the
         engine (:func:`nilearn_atlas`).
-    ``.load_tractogram(id, path, space=...)``
-        A ``.trk``, ``.tck`` or ``.vtk``, taken to RAS+ mm.
+    ``.load_tractogram(id, path, space=..., drop_short=0)``
+        A ``.trk``, ``.tck`` or ``.vtk``, taken to RAS+ mm; with
+        ``drop_short=1``, its streamlines of one point are in no relation.
+    ``.load_tractogram(id, kind="hcp842", bundle=None, space="MNI152",
+    data_dir=None, url=None, md5=None, drop_short=1)``
+        The whole brain or a bundle (``bundle="UF_L"``) of an atlas of
+        Yeh, ``hcp842`` or ``hcp1065`` (bundles only), downloaded the
+        first time into ``data_dir``, by default that of the engine
+        (:func:`init_engine`) or ``~/.cache/nl_tracts``
+        (:func:`nl_tracts.fetch.fetch_tractogram`).
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
     allow_space_mismatch=0)``
@@ -360,16 +371,38 @@ class TractsCommandsMixin(PatternWalker):
 
     @add_match(Command(Symbol("load_tractogram"), ..., ...))
     def load_tractogram(self, command):
-        names, options = _arguments(
-            command, ("id", "path"), {"space": "unspecified"}
+        kind = next(
+            (_value(v) for k, v in command.kwargs if _value(k) == "kind"),
+            None,
         )
+        if kind is None:
+            names, options = _arguments(
+                command, ("id", "path"),
+                {"space": "unspecified", "drop_short": 0},
+            )
+        elif kind in ATLASES:
+            names, options = _arguments(
+                command, ("id",),
+                {"kind": kind, "bundle": None, "space": "MNI152",
+                 "data_dir": self._tracts.data_dir, "url": None,
+                 "md5": None, "drop_short": 1},
+            )
+        else:
+            raise InvalidCommandExpression(
+                f"the kind of a tractogram is one of {', '.join(ATLASES)}, "
+                f"or none for a file, not {kind!r}"
+            )
         ident = names["id"]
         if ident in self._tracts.tractograms:
             raise InvalidCommandExpression(
                 f"tractogram {ident!r} was already loaded")
         try:
+            path = names.get("path") or fetch_tractogram(
+                kind, options["bundle"], options["data_dir"],
+                options["url"], options["md5"],
+            )
             tractogram = Tractogram.from_file(
-                ident, names["path"], options["space"]
+                ident, path, options["space"], bool(options["drop_short"])
             )
         except (OSError, ValueError, NotImplementedError) as e:
             raise InvalidCommandExpression(
@@ -503,11 +536,14 @@ def init_engine(engine, mask=None, data_dir=None) -> None:
     of the first atlas indexed (the tractograms are in its space), or None.
 
     It is the ``python_init`` of the engine ``tracts`` of the apps
-    (``engines.yaml``), hence its signature: ``mask`` and ``data_dir`` are
-    not used.
+    (``engines.yaml``), hence its signature: ``mask`` is not used, and the
+    atlases of ``.load_tractogram(..., kind="hcp842")`` are downloaded into
+    ``<data_dir>/tracts`` (an engine's directory of the apps), if given.
     """
     state = engine.program_ir._tracts
     state.engine = engine
+    if data_dir is not None:
+        state.data_dir = str(Path(data_dir) / "tracts")
     tractograms = state.store.tractograms
 
     def streamline_id(t: str, s: int) -> int:

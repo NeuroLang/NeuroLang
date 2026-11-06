@@ -21,12 +21,12 @@ def example(directory, side="left"):
         pytest.skip(f"{EXAMPLE} not found (an installed package)")
     text = EXAMPLE.read_text()
     for name, path in (
-        ('"wmparc.mgz"', directory / "labels.nii.gz"),
-        ('"FreeSurferColorLUT.txt"', directory / "lut.txt"),
-        ('"whole_brain_MNI.trk"', directory / "tracts.trk"),
+        ('"wmparc.mgz"', f'"{directory / "labels.nii.gz"}"'),
+        ('"FreeSurferColorLUT.txt"', f'"{directory / "lut.txt"}"'),
+        ('kind="hcp842")', f'"{directory / "tracts.trk"}", space="MNI152")'),
     ):
         assert name in text
-        text = text.replace(name, f'"{path}"')
+        text = text.replace(name, path)
     return text.replace('uncinate(x, "left")', f'uncinate(x, "{side}")')
 
 
