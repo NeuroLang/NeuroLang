@@ -8,6 +8,7 @@ follows the command name.
 """
 
 import difflib
+import re
 from typing import Callable, NamedTuple
 
 from rich.markup import escape
@@ -56,10 +57,26 @@ def unknown_command_message(name: str) -> str:
     return message + " Type .help for the list of commands."
 
 
+# A Datalog command of the engine, such as ``.load_csv(pairs, "t.csv")``.
+_ENGINE_COMMAND = re.compile(r"\.[A-Za-z_]\w*\(")
+
+
 def run_command(app, line: str) -> None:
-    """Run the dot-command on *line*, reporting unknown commands."""
+    """
+    Run the dot-command on *line*, reporting unknown commands.
+
+    A line ``.name(...)`` whose name is not a dot-command is a Datalog
+    command of the engine, run as a Datalog statement in either mode.
+    """
     name, _, arg = line.strip().partition(" ")
     cmd = COMMANDS.get(name.lower())
+    if cmd is None and _ENGINE_COMMAND.match(line.strip()):
+        squall, app.settings.squall = app.settings.squall, False
+        try:
+            app._execute_and_display(line.strip())
+        finally:
+            app.settings.squall = squall
+        return
     if cmd is None:
         app.failed = True
         app.console.print(
@@ -154,6 +171,11 @@ def help_text(engine_name: str = "") -> str:
     lines.append(
         "  [green].import(\"m.dl\")[/green]      "
         "import a Datalog module, once (\"package:m.dl\": of a package)"
+    )
+    lines.append(
+        "  [green].name(...)[/green]           "
+        "any other: a Datalog command of the engine, e.g. "
+        "[green].load_csv(p, \"t.csv\")[/green]"
     )
     lines.append(KEYS_HELP)
     lines += _example_lines(engine_name)

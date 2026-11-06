@@ -57,6 +57,15 @@ Unreleased
   ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
   define stays in the session although the query's own rules are local to
   it, and ``.clear`` forgets the imports with their rules.
+* A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
+  which binds looser than ``,``; parentheses group: ``uncinate(x) :-
+  (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
+  than a predicate of several rules.  **Breaking:** ``|`` is no longer a
+  synonym of ``//`` for conditioning, ``PROB[a(x) | b(x)] = p`` is the
+  probability of the disjunction; write ``PROB[a(x) // b(x)] = p``.  A
+  comparison whose left operand is a function call in parentheses,
+  ``((f(x)) < 3)`` or ``((f(x), y) == (1, 2))``, now reads as a formula in
+  parentheses and fails to parse; write ``(f(x) < 3)``.
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
@@ -184,6 +193,10 @@ Unreleased
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
   arities were checked.
+* The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
+  b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
+  event: two facts of probability 0.5 gave 0.5 instead of 0.75.
+* A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
 * A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
   schaefer(l, r), ...``, failed to parse: the parser read it as a fact
   and stopped at the variable.  A fact is now parsed as a head and checked

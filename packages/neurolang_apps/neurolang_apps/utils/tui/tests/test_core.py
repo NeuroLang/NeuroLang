@@ -785,3 +785,60 @@ def test_help_tells_import():
     from neurolang_apps.utils.tui.commands import help_text
 
     assert ".import(" in help_text()
+
+
+@pytest.fixture
+def greeting_engine():
+    """An engine whose solver has the command ``.greet``."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang.frontend.probabilistic_frontend import (
+        RegionFrontendCPLogicSolver,
+    )
+    from neurolang_apps.utils.tests.toy_commands import GreetingMixin
+
+    class Solver(GreetingMixin, RegionFrontendCPLogicSolver):
+        pass
+
+    return NeurolangPDL(solver_class=Solver)
+
+
+def test_a_command_of_the_engine_runs_at_the_prompt(greeting_engine):
+    """``.name(...)``, not a command of the REPL, is a command of the
+    engine's Datalog."""
+    app = _app(greeting_engine)
+    app._run_line('.greet("ada")')
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    assert "Unknown command" not in _output(app)
+
+
+def test_load_csv_runs_at_the_prompt(engine, tmp_path):
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(engine)
+    app._run_line(f'.load_csv(pairs, "{tmp_path}/t.csv")')
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+
+
+def test_an_unknown_command_of_the_engine_is_its_error(engine):
+    app = _app(engine)
+    app._run_line(".nope(1)")
+    out = _output(app)
+    assert "not supported" in out
+    assert "Unknown command" not in out
+    assert app.failed
+
+
+def test_a_dot_line_without_brackets_is_still_a_repl_command(engine):
+    app = _app(engine)
+    app._run_line(".nope")
+    assert "Unknown command .nope" in _output(app)
+
+
+def test_a_command_of_the_engine_runs_in_squall_mode(greeting_engine):
+    app = _app(greeting_engine, squall=True)
+    app._run_line('.greet("ada")')
+    assert app.settings.squall and not app.failed
+    app.settings.squall = False
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]

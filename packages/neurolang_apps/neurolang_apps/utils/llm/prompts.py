@@ -58,7 +58,8 @@ only one.
 - Variables are lower-case identifiers; numbers are written as is.
 - {strings}.
 - The body is a conjunction separated by `,`: `ans(s) :- study(s),
-  mentions(s, 'pain')`. Disjunction: several rules with the same head.
+  mentions(s, 'pain')`. Disjunction with `|`, looser than `,`:
+  `ans(s) :- (mentions(s, 'pain') | mentions(s, 'ache')), study(s)`.
 - Negation: `~mentions(s, 'pain')`; its variables must be bound by a
   positive atom of the body.
 - Comparisons and arithmetic in parentheses: `(w > 0.1)`, `(c != 0)`,
