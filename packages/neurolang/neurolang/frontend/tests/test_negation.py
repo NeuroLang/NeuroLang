@@ -45,3 +45,23 @@ def test_deterministic_segregation_query():
         ("c", "s3"),
     }
     assert_almost_equal(result, expected)
+
+
+def test_two_negations_over_columns_of_mixed_types():
+    """The plan subtracts named relations whose columns are in different
+    orders; the type of each difference must follow its own columns, or a
+    join after it unifies a string column with an integer one."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(1, "a", "left"), (2, "a", "left"), (2, "b", "left"),
+         (3, "a", "left")],
+        name="t",
+    )
+    nl.add_tuple_set(
+        [(1, "left"), (2, "left"), (3, "left"), (3, "right")], name="ih"
+    )
+    nl.add_tuple_set([("left", "right"), ("right", "left")], name="opp")
+    result = nl.execute_datalog_program(
+        'ans(x, h) :- t(x, "a", h), ~t(x, "b", h), opp(h, o), ~ih(x, o)'
+    )
+    assert set(result) == {(1, "left")}
