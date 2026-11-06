@@ -3,11 +3,13 @@ import pytest
 from ..agent import (
     IclAgent,
     ReactAgent,
+    Toolbox,
     extract_query,
     make_agent,
     parse_text_action,
     parse_verdict,
 )
+from ..context import EngineContext
 from ..providers import LLMError, Reply
 from .fakes import ScriptedClient, assistant_config, provider
 
@@ -533,3 +535,15 @@ def test_explain_translates_a_query_into_english(nl):
     messages = react.client.requests[0]["messages"]
     assert PAIN_DATALOG in messages[1]["content"]
     assert "# Predicates\n- mentions(" in messages[1]["content"]
+
+
+def test_describe_predicate_stops_a_rule_too_slow_to_sample(nl, monkeypatch):
+    import time
+
+    context = EngineContext(nl)
+    monkeypatch.setattr(
+        context, "describe", lambda name: time.sleep(30)
+    )
+    toolbox = Toolbox(context, "datalog", query_timeout=0.5)
+    observation, _ = toolbox.call("describe_predicate", {"name": "mentions"})
+    assert observation.startswith("Computing the rows of mentions takes too")
