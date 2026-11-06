@@ -43,6 +43,20 @@ Unreleased
 
 **New features:**
 
+* Datalog modules: ``.import("bundles/uf.dl")`` in a program runs the facts,
+  rules and commands of a Datalog file where it stands, as if written there,
+  so that a vocabulary or a set of definitions (the white-matter bundles of
+  a tractography package) is written once and imported by queries.  The
+  path is relative to the importing file (the program of
+  ``neurolang-query --file``, or a module importing another), else to the
+  working directory; ``.import("package:bundles/uf.dl")`` imports a module
+  shipped in a Python package.  A module is imported once (importing it
+  again does nothing), an import cycle is an error, and a module with a
+  query (``ans(...)``) is refused.  An error in a module names its file,
+  and its line if it does not parse.  From Python:
+  ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
+  define stays in the session although the query's own rules are local to
+  it, and ``.clear`` forgets the imports with their rules.
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
@@ -175,6 +189,10 @@ Unreleased
 
 **Bug fixes:**
 
+* Several probabilistic facts of a predicate written in a Datalog program
+  (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
+  its columns, and a query over them failed with an ``IndexError`` when its
+  arities were checked.
 * The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.

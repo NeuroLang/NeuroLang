@@ -725,13 +725,45 @@ Comparisons can be combined with conjunction in the same rule body.
 -----------------------------
 
 Commands use the ``.`` prefix and follow the Prolog convention.  The text
-Datalog frontend currently executes two commands, which load external data
-into a relation:
+Datalog frontend executes two commands which load external data into a
+relation:
 
 .. code-block:: none
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
+
+and ``.import``, which imports a *Datalog module*, a file of facts, rules
+and commands, as if its statements were written in its place:
+
+.. code-block:: none
+
+    .import("bundles/uncinate.dl")
+    .import("nl_tracts:bundles/freesurfer_queries.dl")
+    ans(x) :- uf(x, "left").
+
+* The path of a module is relative to the directory of the importing file:
+  the program run with ``neurolang-query --file``, or the module importing
+  another; otherwise it is relative to the working directory.
+  ``package:path`` is the file ``path`` shipped in the Python package
+  ``package``, found with :mod:`importlib.resources`, so that an engine or
+  a package can ship modules without their users knowing where it is
+  installed.
+* A module is imported once in a program (by its resolved path): importing
+  it again, from the program or from another module, does nothing.  The
+  imports belong to the scope they are made in: leaving a ``with
+  nl.scope:`` block, or ``.clear`` in the REPL, forgets them with the
+  rules they defined, and the module can be imported again.
+* A module imported while it is being imported is an import cycle, an error
+  naming the modules of the cycle.
+* A module defines; it does not query: a module with a query
+  (``ans(...) :- ...``) is refused.  An error in a module names its file,
+  with the line and column of a syntax error.
+
+From Python, ``nl.import_datalog_module("bundles/uncinate.dl")`` imports a
+module, and ``with nl.program_ir.importing_from("main.dl"):`` runs a
+program read from ``main.dl`` with its imports relative to the file's
+directory.
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend

@@ -8,12 +8,14 @@ symbols are committed to the session's scope only if the whole
 submission succeeds, and then tells what it defined, one line per
 predicate (:meth:`Submission.definitions`). The symbols of a submission
 that is not to be kept, such as the rules of a query, local to it, are
-discarded even when it succeeds.
+discarded even when it succeeds, but for what the modules it imported
+defined (``.import``).
 """
 
 from nl_core.datalog import Fact, Union as DatalogUnion
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Constant, Query
+from neurolang.commands import IMPORTED_MODULES
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
@@ -92,17 +94,18 @@ def submission_outline(nl, program: str, squall: bool) -> tuple:
     return isinstance(parsed, SquallProgram) and bool(parsed.queries), set()
 
 
-def _commit(scope, session) -> dict:
+def _commit(symbols, session) -> dict:
     """
-    Move the symbols of *scope* into the enclosing scope *session*.
+    Move the *symbols* of a scope, a mapping of symbols to their values,
+    into its enclosing scope *session*.
 
-    A symbol already in *session* gets the value it has in *scope*: a
-    rule added to a predicate gives *scope* the union of all its rules.
+    A symbol already in *session* gets the value it has in the scope: a
+    rule added to a predicate gives the scope the union of all its rules.
     Return the values the moved symbols had, looked up from *session*,
     by symbol; None for the symbols that were not defined.
     """
     previous = {}
-    for symbol, value in scope._symbols.items():
+    for symbol, value in symbols.items():
         previous[symbol] = session.get(symbol)
         if session._symbols.get(symbol) is not None:
             del session[symbol]
@@ -150,13 +153,36 @@ class Submission:
         """Commit the scope if the block succeeded, discard it otherwise."""
         self._program_ir.symbol_table = self.session
         if exc_type is None and self.keep:
-            self.previous = _commit(self.scope, self.session)
+            self.previous = _commit(self.scope._symbols, self.session)
         elif exc_type is None:
             self.previous = {
                 symbol: self.session.get(symbol)
                 for symbol in self.scope._symbols
             }
+            _commit(self._imported(), self.session)
         return False
+
+    def _imported(self) -> dict:
+        """
+        Return what the modules the submission imported defined, by
+        symbol, with the record of the imports.
+
+        A query keeps them although its rules are local to it: a module
+        is imported once in the session.
+        """
+        imported = self.scope._symbols.get(IMPORTED_MODULES)
+        if imported is None:
+            return {}
+        before = self.session.get(IMPORTED_MODULES)
+        before = dict(before.value) if before is not None else {}
+        symbols = {
+            symbol for path, defined in imported.value if path not in before
+            for symbol in defined
+        }
+        return {
+            symbol: value for symbol, value in self.scope._symbols.items()
+            if symbol in symbols or symbol == IMPORTED_MODULES
+        }
 
     def _copy_relations(self) -> None:
         """
