@@ -371,3 +371,17 @@ def test_add_extensional_preducate_from_tuples():
     q = dl.extensional_database()[Q]
     assert q.type == AbstractSet[Tuple[int, str]]
     assert q.value == rw
+
+
+def test_a_rule_cannot_define_a_function_of_the_engine():
+    class WithFunction(Datalog):
+        def function_left_of(self, a: int, b: int) -> bool:
+            return a < b
+
+    dl = WithFunction()
+    x = S_('x')
+    with pytest.raises(
+        exceptions.NeuroLangException,
+        match="`left_of` is a function of the engine",
+    ):
+        dl.walk(Imp_(S_('left_of')(x), S_('R')(x)))

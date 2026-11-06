@@ -1232,6 +1232,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             Difference: "__sub__",
         }.get(type(ra_op))
         new_relation = getattr(left.value, binary_op_fun_name)(right.value)
+        if isinstance(new_relation, NamedRelationalAlgebraFrozenSet):
+            type_ = _unsort_named_relation_type(type_, new_relation.columns)
         return self._build_relation_constant(new_relation, type_=type_)
 
 
@@ -1271,6 +1273,25 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
         for i, _ in sorted(enumerate(columns), key=lambda x: x[1])
     )
     return AbstractSet[Tuple[sorted_tuple_args]]
+
+
+def _unsort_named_relation_type(type_, columns):
+    """
+    Return the type `AbstractSet[Tuple[...]]` *type_* of a named relation,
+    whose tuple types are in the alphabetical order of its *columns* (as
+    :func:`_sort_typed_const_named_relation_tuple_type_args` gives them), in
+    the order of the *columns*. A type without tuple types is returned as
+    it is.
+    """
+    tuple_args = type_system.get_args(type_system.get_args(type_)[0])
+    if len(tuple_args) != len(columns):
+        return type_
+    position = {
+        column: i for i, column in enumerate(sorted(columns))
+    }
+    return AbstractSet[Tuple[tuple(
+        tuple_args[position[column]] for column in columns
+    )]]
 
 
 def _infer_relation_type(relation):
