@@ -83,6 +83,32 @@ def test_selection_general(R1):
     assert sol == r1_named.selection(lambda t: t.x > 5)
 
 
+def test_selection_by_a_function_of_one_column():
+    """A Python function of one column is applied to the column, not to
+    each row: a startswith on a relation of 300,000 rows took 4 s."""
+    selections = []
+
+    class Relation(NamedRelationalAlgebraFrozenSet):
+        def selection(self, select_criteria):
+            selections.append(select_criteria)
+            return super().selection(select_criteria)
+
+    def starts(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    relation = Relation(('l', 's'), [('ab', 1), ('ba', 2), ('ac', 3)])
+    s = Selection(
+        C_[AbstractSet[Tuple[str, int]]](relation),
+        C_(starts)(C_('a'), str2columnstr_constant('l'))
+    )
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == NamedRelationalAlgebraFrozenSet(
+        ('l', 's'), [('ab', 1), ('ac', 3)]
+    )
+    assert isinstance(selections[0], dict)
+
+
 def test_projections(R1):
     s = Projection(C_(R1), (C_(ColumnInt(0)),))
     sol = RelationalAlgebraSolver().walk(s).value
