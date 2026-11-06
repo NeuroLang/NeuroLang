@@ -705,8 +705,11 @@ Disjoint separator
    is in `Correctness of the plans`_. When the atoms of the disjuncts
    other than the choice atoms are deterministic, :math:`P[C(\bar a) \land
    D(\bar a)] = P[C(\bar a)]\,[D(\bar a)]`: the plan joins the choice with
-   the support of the deterministic union :math:`D`, in a single
-   projection, whatever the number of disjuncts. Otherwise the union is
+   the deterministic union :math:`D`, in a single projection, whatever the
+   number of disjuncts. :math:`D` is a fresh deterministic relation,
+   computed as a set (marked with ``Materialise``, as the deterministic
+   subqueries above) when the tuples of its relations are known as sets,
+   and otherwise as the support of its plan. Otherwise the union is
    lifted for every :math:`\bar a` by the other rules. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
@@ -1387,8 +1390,14 @@ Disjoint separator
    with :math:`D(\bar a)` true or false in every world, so its probability
    is :math:`P[C(\bar a)]` where :math:`D(\bar a)` holds and 0 elsewhere:
    the join of the choice with the support of :math:`D`. The choice atoms
-   are kept in :math:`D`, which is then range-restricted, and replaced in
-   its plan by their support, so that every label in :math:`D` is 0 or 1.
+   are kept in :math:`D`, which is then range-restricted. When the tuples
+   of its relations are known as sets, :math:`D` is computed as a set, the
+   choice atoms replaced by their tuples: the relational algebra plan of a
+   formula over sets gives the tuples where it holds, the same in every
+   world, so :math:`D` is a deterministic relation, each tuple labelled 1.
+   Otherwise (a ranked choice, for instance), the choice atoms are
+   replaced in the provenance plan of :math:`D` by their support, so that
+   every label in :math:`D` is 0 or 1.
    :math:`D` may have negations: the difference of provenance sets gives
    a tuple the label :math:`l\,(1 - r)`, :math:`l` and :math:`r` those of
    the two sides, and keeps the tuple. With the probability :math:`q` of

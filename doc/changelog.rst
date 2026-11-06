@@ -19,6 +19,20 @@ Unreleased
 
 **Performance:**
 
+* The deterministic rest of a query that the disjoint separator joins with
+  a probabilistic choice, as ``sub(t), mentions(s, t)`` in ``term_study(s)
+  :- sub(t), mentions(s, t), selected_study(s)``, is computed as a set with
+  the relational algebra, a union with a union and a projection, instead of
+  with the operations on probabilities (sums, and a union of independent
+  events through logarithms). The relational algebra optimiser flattens a
+  projection of nested joins before pushing the projection into them, so
+  that the joins are ordered by size; it joined the large relations first.
+  The voxels activated by the studies mentioning a subclass of a Cognitive
+  Atlas concept take 4.5 s instead of 6.2 s, and the Destrieux regions
+  given a study activating a salience parcel of either hemisphere (a union
+  of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
+  the column-wise selection of #1126. ``--show-ra`` draws these relations as
+  trees.
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
