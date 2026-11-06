@@ -19,6 +19,15 @@ Unreleased
 
 **Performance:**
 
+* Magic sets adorn first the body atoms holding a variable bound in the
+  head, as they do the atoms with a constant: a query constant for a head
+  variable, such as the text of ``p_a_given_similar('being socially
+  excluded', i, j, k, p)``, restricts ``activated`` to the studies similar
+  to it, as when the text is written into the rule, instead of joining the
+  50 M activations of every study in the probabilistic plan: 0.9 GB more
+  than the engine instead of 4.2 GB, and 23 s instead of 45 s, for the same
+  1,151,590 rows.
+
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that

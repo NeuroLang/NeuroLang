@@ -48,10 +48,14 @@ AGGREGATES = (AggregationApplication, ProbabilisticQuery)
 
 
 def order_conjunction_constant_atoms_first(
-    formulas: Tuple[Expression, ...],
+    formulas: Tuple[Expression, ...], bound: Set[Symbol] = frozenset(),
 ) -> Tuple[Expression, ...]:
     """
     Order a rule body so constant-bearing atoms are adorned first.
+
+    The variables ``bound`` by the adorned head count as constants: in
+    ``p(q, i) :- a(i, s), sim(q, s)`` adorned ``p^bf``, ``sim(q, s)`` is
+    adorned first and restricts ``a`` to its studies.
 
     Builtins, such as ``x > 0``, are not constant-bearing atoms: they
     bind nothing.
@@ -76,7 +80,7 @@ def order_conjunction_constant_atoms_first(
     constant_atoms = [
         f for f in formulas
         if isinstance(f.functor, Symbol)
-        and any(isinstance(arg, Constant) for arg in f.args)
+        and any(isinstance(arg, Constant) or arg in bound for arg in f.args)
     ]
     if not constant_atoms:
         return formulas
@@ -764,7 +768,12 @@ def adorn_code(
                 continue
             if isinstance(rule.antecedent, Conjunction):
                 formulas = order_conjunction_constant_atoms_first(
-                    rule.antecedent.formulas
+                    rule.antecedent.formulas, {
+                        arg for arg, a in zip(
+                            rule.consequent.args,
+                            getattr(consequent.functor, "adornment", ""),
+                        ) if a == "b"
+                    }
                 )
                 if formulas != rule.antecedent.formulas:
                     rule = rule.apply(
