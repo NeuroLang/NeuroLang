@@ -19,6 +19,12 @@ Unreleased
 
 **Performance:**
 
+* A rule with many negated atoms compiles in a time linear in them: each
+  negation was joined with the difference of those before it, which put
+  that difference in both operands and doubled the relational algebra with
+  each negation (14 negations, as in the bundles of tract_querier
+  translated to the vocabulary of nl_tracts, took most of an hour; now a
+  second).
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
@@ -175,6 +181,9 @@ Unreleased
 
 **Bug fixes:**
 
+* ``_`` in a negated atom or in a disjunct of a rule body is quantified
+  there: ``~traverses(x, _, h)`` is "no term", ``~∃t traverses(x, t, h)``,
+  instead of an error that the rule is not safe.
 * The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.
