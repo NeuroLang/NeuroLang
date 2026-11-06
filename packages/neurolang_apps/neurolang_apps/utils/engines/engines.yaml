@@ -7,9 +7,10 @@ engines:
   # concrete engines pull it in with ``extends`` (a name or a list of
   # names).  Mappings are merged key by key, ``datalog_init`` rules and
   # the ``builtins`` / ``downloads`` / ``ontologies`` /
-  # ``assistant_examples`` lists are concatenated, parent first, and any
-  # other value is overridden by the extending engine.  Set a mapping
-  # entry to ``null`` to drop it.
+  # ``assistant_examples`` / ``hidden_predicates`` / ``python_init`` lists
+  # are concatenated, parent first, and any other value is overridden by
+  # the extending engine.  Set a mapping entry to ``null`` to drop it.  A
+  # base reached twice is merged once.
 
   # The atlases of the MNI152 brain: the classical (gyral and sulcal)
   # anatomy of the cortex, Destrieux, and the functional anatomy, Schaefer
@@ -683,6 +684,19 @@ engines:
     # and the hooks of .view, over what the commands load; .index_tracts
     # finds the atlases of the engine, loaded after it
     python_init: "nl_tracts.frontend"
+
+  neurosynth_tracts:
+    extends: [neurosynth, tracts]
+    description: >
+      Neurosynth with tractography: the studies, terms, peaks and Cognitive
+      Atlas of neurosynth, the studies that activate each parcel of its
+      atlases (schaefer_activated(label, study)...), and the commands and
+      vocabulary of tractography of tracts (extra tracts of
+      neurolang-apps), whose streamlines end near the points of a parcel
+      (endpoint_point, schaefer_points). similar_study, the studies about
+      a text, needs the extra embeddings (SPECTER2). The uncinate
+      fasciculus and the concepts of the studies that activate its parcels
+      are nl_tracts/examples/uncinate_cogat.dl.
 
   # Example template usage (commented out — uncomment to enable):
   #

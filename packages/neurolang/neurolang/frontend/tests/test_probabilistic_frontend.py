@@ -438,6 +438,24 @@ def test_marg_query_several_constants():
     assert set(res) == {(1, .5, 1.)}
 
 
+def test_function_argument_bound_by_a_rule():
+    """
+    Check a function argument bound by a rule left of it, with no constant.
+
+    ``q`` of ``close(q, s)`` is bound by ``definition(t, q)``, a rule:
+    magic sets restrict ``close`` to its definitions. Without a constant
+    in the query they used not to rewrite it, and ``q`` was unbound.
+    """
+    nl = build_similarity_engine()
+    nl.add_tuple_set([("t1", "math"), ("t2", "lang")], name="topic_def")
+    res = nl.execute_datalog_program(
+        CLOSE
+        + "definition(t, q) :- topic_def(t, q)\n"
+        + "ans(t, s) :- definition(t, q), close(q, s)"
+    )
+    assert set(res) == {("t1", "a"), ("t1", "b"), ("t2", "c")}
+
+
 def test_marg_query_unbound_variable():
     """Check the error of a MARG query leaving a function argument free."""
     nl = build_similarity_engine()

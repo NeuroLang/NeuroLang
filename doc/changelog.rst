@@ -19,6 +19,12 @@ Unreleased
 
 **Performance:**
 
+* ``query_similarity(q, s)`` keeps the embeddings of the last 4,096 query
+  texts and computes one dot product per call: a rule over many texts,
+  ``cogat_definition(t, d), similar_study(d, s)`` over the 615 definitions
+  of the Cognitive Atlas concepts, embedded a text again for nearly every
+  row, as the rows come in any order and only the similarities of the last
+  16 texts were kept.
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
@@ -179,6 +185,18 @@ Unreleased
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.
 * A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* Magic sets leave unbound a predicate whose binding would put an
+  aggregation or a negation in a cycle of the rewritten program, and bind
+  the others: a query over the vocabulary of tractography, whose
+  ``term_box_hi`` aggregates, was not rewritten at all, and a function of a
+  variable it bound, as ``query_similarity`` in ``similar_study``, was
+  refused as unbound.
+
+* Magic sets rewrite a query without a constant when a rule binds the
+  argument of another right of it, as ``d`` in ``ans(t, s) :-
+  cogat_definition(t, d), close(d, s)``: a function of ``d`` in ``close``
+  was refused as unbound.
+
 * A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
   schaefer(l, r), ...``, failed to parse: the parser read it as a fact
   and stopped at the variable.  A fact is now parsed as a head and checked
