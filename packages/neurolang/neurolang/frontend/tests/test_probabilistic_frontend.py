@@ -2783,3 +2783,14 @@ def test_choice_joined_twice(solver, head, body):
         f"q({head}PROB) :- {body}", [(0,), (1,), (2,)],
     )
     assert got == pytest.approx(expected)
+
+
+def test_probabilistic_facts_of_a_program_text():
+    """Several probabilistic facts of a predicate written in the program
+    make a relation of known columns, whose arity a query checks."""
+    nl = NeurolangPDL()
+    result = nl.execute_datalog_program(
+        "0.5 :: p(1)\n0.2 :: p(2)\nq(x) :- p(x)\nans(x, PROB) :- q(x)"
+    )
+    rows = result.as_pandas_dataframe().itertuples(index=False, name=None)
+    assert set(rows) == {(1, 0.5), (2, 0.2)}

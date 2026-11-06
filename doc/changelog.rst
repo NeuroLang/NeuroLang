@@ -166,6 +166,10 @@ Unreleased
 
 **Bug fixes:**
 
+* Several probabilistic facts of a predicate written in a Datalog program
+  (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
+  its columns, and a query over them failed with an ``IndexError`` when its
+  arities were checked.
 * A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
   schaefer(l, r), ...``, failed to parse: the parser read it as a fact
   and stopped at the variable.  A fact is now parsed as a head and checked
