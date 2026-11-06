@@ -12,10 +12,7 @@
 assistant_examples:
   - question: Which Cognitive Atlas concepts are most probably studied by the studies that activate the cortical parcels connected by the left uncinate fasciculus?
     datalog: |-
-      uf_frontal(x, h) :- traverses(x, "orbitofrontalgyrus", h)
-      uf_frontal(x, h) :- traverses(x, "middle_frontal_gyrus", h)
-      uf_frontal(x, h) :- traverses(x, "inferior_frontal_gyrus", h)
-      uncinate(x, h) :- uf_frontal(x, h), endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h), ~traverses(x, "occipital", h), ~traverses(x, "parietal", h), ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h), opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+      uncinate(x, h) :- (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h) | traverses(x, "inferior_frontal_gyrus", h)), endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h), ~traverses(x, "occipital", h), ~traverses(x, "parietal", h), ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h), opposite_hemisphere(h, o), ~in_hemisphere(x, o)
       uf_end_near(i, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez), schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3), (i == 2 * x + e)
       uf_parcel_ends(n, count(i)) :- uf_end_near(i, n)
       uf_ends(count(i)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez), (i == 2 * x + e)
