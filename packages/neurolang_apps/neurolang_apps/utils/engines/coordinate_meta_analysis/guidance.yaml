@@ -16,7 +16,10 @@ assistant_guidance: >
   relations directly; and for a question about
   a term and the brain the conditional probability given the term,
   PROB[activation // term] = p, or a ratio of probabilities (lift,
-  Bayes factor) when it asks for an association; a question asking
+  Bayes factor) when it asks for an association: the lift of A given B,
+  how much B raises the chance of A, is P(A | B) / P(A), from PROB rules
+  of yours (the rules lift and relative_risk are those of a term at
+  every voxel); a question asking
   for a list (which studies, which regions) gets the probability of
   each.  A study activates a point when one of its peaks is within
   3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
@@ -29,18 +32,22 @@ assistant_guidance: >
   classical anatomy (hippocampus, amygdala, thalamus, nucleus
   accumbens, globus pallidus, putamen, caudate).  Find region names
   with search_values: Destrieux names start with the hemisphere (L,
-  R) and use G for gyrus and S for sulcus (L G temporal middle),
+  R), use G for gyrus and S for sulcus (L G temporal middle) and
+  abbreviate: ant, post, sup, inf, med, lat, transv (transverse), collat
+  (collateral), oc (occipital), temp (temporal), front, pariet, cingul,
+  Ins (insula), as in R S collat transv ant;
   Schaefer names the network and hemisphere (17Networks LH DefaultA
   PFCm 1), with the networks abbreviated: VisCent and VisPeri (visual),
   SomMot (somatomotor), DorsAttn (dorsal attention), SalVentAttn
   (salience, ventral attention), Limbic, Cont (frontoparietal
   control), Default (default mode), TempPar (temporoparietal); match
-  them with startswith('17Networks LH DorsAttn', l) on schaefer(l, r).
+  them in a rule of their own, label(l) :- schaefer(l, r),
+  startswith('17Networks LH DorsAttn', l), then joined with
+  schaefer_activated(l, s): startswith on schaefer_activated is slow.
   Tian names abbreviate the structure and end with the hemisphere
   (lAMY rh, aHIP lh, NAc core rh): HIP hippocampus, AMY amygdala, THA
   thalamus, NAc nucleus accumbens, GP globus pallidus, PUT putamen,
   CAU caudate.
-  Tian names end with the hemisphere (lAMY rh, aHIP lh).
   Co-activation is the activation of regions or points by the same
   study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
   s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
@@ -49,7 +56,9 @@ assistant_guidance: >
   "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
   A question about a topic given as a description, or about a
   Cognitive Atlas concept, uses the similarity of the study texts to
-  it: similar_study(q, s), the studies closest to the text q, with
+  it: similar_study(q, s), the studies closest to the text q, the
+  question's own words for the topic (no stored value holds them: do
+  not look for them with search_values), with
   their titles from study_title; p_a_given_similar, lift_llm and
   uniformity_llm for the brain.  A Cognitive Atlas definition reaches
   them from the queried rule itself, cogat_definition('working

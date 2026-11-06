@@ -102,6 +102,18 @@ def test_react_reply_cut_at_token_limit(nl):
     assert messages[-2] == {"role": "assistant", "content": "write it"}
 
 
+def test_react_empty_reply_is_asked_again(nl):
+    replies = [
+        "",
+        f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.calls == 2 and len(steps) == 1
+    assert react.client.requests[0] == react.client.requests[1]
+
+
 def test_icl_first_answer(nl):
     icl, steps = agent(nl, IclAgent, [fenced(PAIN_SQUALL)])
     result = icl.run("Which studies mention pain?")

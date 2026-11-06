@@ -440,13 +440,20 @@ class Agent:
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):
-        """Return the model's reply to *messages*, counting its usage."""
-        reply = self.client.complete(
-            messages, tools,
-            self.config.temperature if temperature is None else temperature,
-        )
-        result.calls += 1
-        result.usage.update(reply.usage)
+        """
+        Return the model's reply to *messages*, counting its usage. An
+        empty reply (all the tokens spent on reasoning, or a glitch of
+        the provider) is asked for again once.
+        """
+        for _ in range(2):
+            reply = self.client.complete(
+                messages, tools, self.config.temperature
+                if temperature is None else temperature,
+            )
+            result.calls += 1
+            result.usage.update(reply.usage)
+            if reply.text.strip() or reply.tool_calls:
+                break
         return reply
 
     def _step(self, result: AgentResult, step: AgentStep) -> None:
