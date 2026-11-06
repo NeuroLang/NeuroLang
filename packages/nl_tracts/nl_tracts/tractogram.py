@@ -74,7 +74,8 @@ class Tractogram:
             raise ValueError(
                 f"streamline {s} has {int(offsets[s + 1] - offsets[s])} "
                 "points: a streamline needs at least 2 points (prune the "
-                "short ones first, or drop_short=True)"
+                "short ones first"
+                + ("" if drop_short else ", or drop_short=True") + ")"
             )
         short = int((np.diff(offsets) < 2).sum())
         if short:

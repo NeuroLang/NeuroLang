@@ -643,8 +643,8 @@ two public atlases of F.-C. Yeh, whose bundles were labelled by experts:
 `fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
 md5=None) -> Path` keeps the archive in `<data_dir>/<atlas>/`, by default
 `~/.cache/nl_tracts`, and extracts next to it only what is asked:
-`<stem>.trk` of a bundle (a `.trk.gz` gunzipped, as nibabel does not read
-it by its name) or the whole brain. The download is streamed to a temporary
+`<stem>.trk` of a bundle (a `.trk.gz` gunzipped, which nibabel would also
+read, so that every file extracted is a `.trk`) or the whole brain. The download is streamed to a temporary
 name, its md5 checked, then renamed; a URL that fails or gives another md5
 is followed by the next (figshare's redirection is to a signed URL valid
 for 10 seconds, so the one `urlopen` follows it). An extracted file present
