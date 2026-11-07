@@ -8,8 +8,9 @@ symbols are committed to the session's scope only if the whole
 submission succeeds, and then tells what it defined, one line per
 predicate (:meth:`Submission.definitions`). The symbols of a submission
 that is not to be kept, such as the rules of a query, local to it, are
-discarded even when it succeeds, but for what the modules it imported
-defined (``.import``).
+discarded even when it succeeds, but for the relations its commands
+loaded (``.load_csv``, the commands of an engine) and what the modules
+it imported defined (``.import``).
 """
 
 from nl_core.datalog import Fact, Union as DatalogUnion
@@ -159,8 +160,23 @@ class Submission:
                 symbol: self.session.get(symbol)
                 for symbol in self.scope._symbols
             }
+            _commit(self._loaded(), self.session)
             _commit(self._imported(), self.session)
         return False
+
+    def _loaded(self) -> dict:
+        """
+        Return the relations the submission loaded, by symbol: those its
+        commands (``.load_csv``...) gave the engine, not its facts.
+
+        A query keeps them although its rules and facts are local to it:
+        a command has done what it does (read a file, and the state an
+        engine's command keeps), which discarding them would not undo.
+        """
+        return {
+            symbol: value for symbol, value in self.scope._symbols.items()
+            if relation_rows(value) is not None and symbol not in self._facts
+        }
 
     def _imported(self) -> dict:
         """

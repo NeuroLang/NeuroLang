@@ -842,3 +842,20 @@ def test_a_command_of_the_engine_runs_in_squall_mode(greeting_engine):
     app.settings.squall = False
     app._execute_and_display("ans(x) :- greeted(x)")
     assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+
+
+def test_what_the_commands_of_a_query_load_stays(greeting_engine, tmp_path):
+    """The rules and facts of a query are local to it; the relations its
+    commands loaded are the session's, as the state of the commands is."""
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(greeting_engine)
+    app._execute_and_display(
+        f'.greet("ada")\n.load_csv(pairs, "{tmp_path}/t.csv")\n'
+        'twice(x) :- greeted(x)\nans(x) :- twice(x)'
+    )
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    assert "twice" not in {s.name for s in app._nl.symbol_table}

@@ -193,6 +193,13 @@ Unreleased
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
   arities were checked.
+* The semi-naive chase merged, at every step and for every rule, the
+  relation of each predicate of the step's delta with that delta, even
+  the predicates the rule does not use, and inferred the type of the
+  merge by iterating over it: on some evaluation orders (they depend on
+  ``PYTHONHASHSEED``) a query over a whole-brain tractogram took minutes
+  and 45 GB instead of 3 s.  Only the negated predicates of a rule are
+  merged now.
 * The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.

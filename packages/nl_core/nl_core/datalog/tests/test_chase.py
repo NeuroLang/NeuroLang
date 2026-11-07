@@ -851,6 +851,36 @@ def test_rule_substitutions_keep_only_the_variables_of_the_head():
     )
 
 
+def test_symbol_table_merges_the_deltas_the_rule_uses_only():
+    """
+    In the semi-naive chase, the symbol table of a rule binds a positive
+    atom to its delta and a negated one to its relation and delta merged;
+    a predicate the rule does not use keeps its relation, not merged with
+    its delta: merging every predicate of the delta, at every step and for
+    every rule, cost as much as the relations (minutes and tens of GB on a
+    tractogram).
+    """
+    from nl_expr.logic import Negation
+    from ..wrapped_collections import WrappedRelationalAlgebraSet
+
+    def relation(*rows):
+        return C_[AbstractSet[Tuple[int]]](
+            WrappedRelationalAlgebraSet(rows), verify_type=False
+        )
+
+    p, q, r = S_('p'), S_('q'), S_('r')
+    instance = MapInstance({p: relation((1,)), q: relation((1,)),
+                            r: relation((5,))})
+    delta = MapInstance({p: relation((3,)), q: relation((2,)),
+                         r: relation((6,))})
+    table = ChaseNamedRelationalAlgebraMixin.ra_symbol_table(
+        (p(x), Negation(q(x))), instance, delta
+    )
+    assert set(table[p].value) == {(3,)}
+    assert set(table[q].value) == {(1,), (2,)}
+    assert set(table[r].value) == {(5,)}
+
+
 def test_aggregation_rules_keep_the_variables_they_aggregate():
     from ..aggregation import (
         AggregationApplication, BuiltinAggregationMixin,
