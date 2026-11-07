@@ -10,6 +10,7 @@ import operator as _operator
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import (
+    Command,
     Constant,
     Expression,
     ExpressionBlock,
@@ -195,6 +196,34 @@ class DatalogPrettyPrinter(PatternWalker):
             head_s = head_walked
         body_s = self._format_body(expr.body)
         return f"{head_s} :-\n{self._indent_body(body_s)}"
+
+    @add_match(Command(Symbol("document"), (Symbol, Constant, Constant), ()))
+    def format_documentation(self, command: Command) -> str:
+        """
+        Write the documentation of a predicate as the ``%%`` block of
+        Datalog: its signature, if it has arguments, then its
+        description.
+        """
+        name, description, arguments = command.args
+        lines = []
+        if arguments.value:
+            lines.append("{}({})".format(name.name, ", ".join(
+                f"{a}: {sort}" if sort else a
+                for a, sort in arguments.value
+            )))
+        lines.extend(description.value.split("\n"))
+        return "\n".join(
+            f"%% {line}" if line else "%%" for line in lines
+        )
+
+    @add_match(Command)
+    def format_command(self, command: Command) -> str:
+        args = [self._format_arg(a) for a in command.args]
+        args += [
+            f"{self._format_arg(k)}={self._format_arg(v)}"
+            for k, v in command.kwargs
+        ]
+        return f".{self.walk(command.name)}({', '.join(args)})"
 
     @add_match(Expression)
     def format_default(self, expr: Expression) -> str:

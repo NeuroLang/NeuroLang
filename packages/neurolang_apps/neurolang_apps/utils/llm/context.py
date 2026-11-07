@@ -21,7 +21,10 @@ from nl_expr.exceptions import UnboundVariablesError
 from nl_expr.expressions import Symbol
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import result_to_dataframe
-from neurolang_apps.utils.predicate_catalog import predicate_catalog
+from neurolang_apps.utils.predicate_catalog import (
+    predicate_catalog,
+    program_documentation,
+)
 
 from .examples import load_examples
 
@@ -65,6 +68,23 @@ def _description(info: dict) -> str:
     return " ".join(str(info.get("description", "")).split())
 
 
+def _sorted_columns(info) -> Optional[tuple]:
+    """
+    Return the columns of *info*, each of one column of a sort followed
+    by it, ``x: streamline``, unless named after it.
+    """
+    sorts = {}
+    for argument in info.arguments or ():
+        if len(argument.columns) == 1 and argument.columns[0] != argument.sort:
+            sorts[argument.columns[0]] = argument.sort
+    if not info.columns or not sorts:
+        return info.columns
+    return tuple(
+        f"{column}: {sorts[column]}" if column in sorts else column
+        for column in info.columns
+    )
+
+
 class EngineContext:
     """
     The predicates of an engine, as the LLM is told about them.
@@ -84,6 +104,10 @@ class EngineContext:
             engine_registry.get_signatures(engine_name)
             if self.declared else {}
         )
+        self.sorts = (
+            engine_registry.get_sorts(engine_name)
+            if engine_name in engine_registry.list_engine_names() else {}
+        )
 
     def catalog(self) -> dict:
         """
@@ -91,16 +115,26 @@ class EngineContext:
 
         The rules are of kind ``rule``, whether the engine or the
         session defines them, and the columns the configuration declares
-        replace the names of the variables of their head.
+        replace the names of the variables of their head, unless the
+        ``%%`` documentation of the predicate in the program names its
+        arguments: the documentation of a predicate wins over its
+        declaration.
         """
         catalog = predicate_catalog(
             self.nl, _declared_columns(self.declared), self.loaded,
             self.signatures,
         )
+        documented = {
+            name for name, documentation in program_documentation(
+                self.nl.program_ir
+            ).items() if documentation.arguments
+        }
         for name, info in catalog.items():
             if info.kind in RULE_KINDS:
                 info = info._replace(kind="rule")
             columns = self.declared.get(name, {}).get("columns")
+            if name in documented:
+                columns = None
             if columns and (info.arity is None or info.arity == len(columns)):
                 info = info._replace(
                     columns=tuple(columns), arity=len(columns)
@@ -124,14 +158,21 @@ class EngineContext:
         Return the line describing the predicate *info*.
 
         Columns whose names are unknown are named ``c0``, ``c1``…, as in
-        the rows of the predicate.
+        the rows of the predicate; a column holding an entity of a sort,
+        if not named after it, is followed by it: ``x: streamline``. The
+        description is the ``%%`` documentation of the predicate in the
+        program, or else the one the configuration declares.
         """
         if info.columns is None and info.arity and info.kind != "function":
             info = info._replace(
                 columns=tuple(f"c{i}" for i in range(info.arity))
             )
-        line = info._replace(arguments=None).signature()
-        description = _description(self.declared.get(info.name, {}))
+        line = info._replace(
+            arguments=None, columns=_sorted_columns(info)
+        ).signature()
+        description = " ".join(info.description.split()) or _description(
+            self.declared.get(info.name, {})
+        )
         if description:
             line += f" — {description}"
         notes = [info.kind]
@@ -153,7 +194,8 @@ class EngineContext:
         """
         Return the description of the engine's predicates for the LLM.
 
-        The relations and rules come first, one per line, by kind; the
+        The relations and rules come first, one per line, by kind, then
+        the sorts of their arguments the engine describes; the
         functions, usable in comparisons and arithmetic, are listed on
         the last line.
         """
@@ -174,12 +216,30 @@ class EngineContext:
                 f"- {count} classes named by IRI in <{namespace}>, not "
                 "listed: search_values finds their IRIs by label"
             )
+        lines += self._sort_lines(catalog)
         functions = sorted(
             name for name, info in catalog.items() if info.kind == "function"
         )
         if functions:
             lines.append("Functions: " + ", ".join(functions))
         return "\n".join(lines) or "(the engine defines no predicate)"
+
+    def _sort_lines(self, catalog: dict) -> list:
+        """
+        Return the lines describing the sorts of the arguments of the
+        predicates of *catalog* that the engine declares with a
+        description, after a title, or none.
+        """
+        used = {
+            argument.sort for info in catalog.values()
+            for argument in info.arguments or ()
+        }
+        lines = [
+            f"- {name}: {' '.join(self.sorts[name].description.split())}"
+            for name in sorted(used)
+            if name in self.sorts and self.sorts[name].description
+        ]
+        return ["Sorts of the arguments:"] + lines if lines else []
 
     def _stored_relation(self, name: str):
         """Return the relational set of the stored relation *name*, if any."""

@@ -1902,3 +1902,48 @@ class TestSortHints:
             debug=False, file=stream, engine_name="neurosynth",
         )
         assert _REPORTS_NOTE in stream.getvalue()
+
+
+class TestListDocumentedPredicates:
+    """--list-predicates lists the predicates a program documents."""
+
+    PROGRAM = (
+        "%% uncinate(x: streamline, h)\n"
+        "%% The uncinate fasciculus.\n"
+        "%% Second line.\n"
+        "uncinate(x, h) :- tract(x, h)\n"
+        "ans(x) :- uncinate(x, 'left')\n"
+    )
+
+    def test_program_file(self, tmp_path, capsys, monkeypatch):
+        from neurolang_apps.utils import cli
+
+        monkeypatch.setattr(
+            cli, "_list_predicates",
+            lambda engine, program="": print(f"engine={engine}\n{program}"),
+        )
+        path = tmp_path / "q.dl"
+        path.write_text(self.PROGRAM)
+        cli.main(["--list-predicates", "-e", "neurosynth", "-f", str(path)])
+        assert capsys.readouterr().out.startswith(
+            "engine=neurosynth\n%% uncinate"
+        )
+
+    def test_documented_predicates_are_listed(self, capsys):
+        from neurolang_apps.utils.cli import _list_documented_predicates
+
+        _list_documented_predicates(self.PROGRAM)
+        assert capsys.readouterr().out == (
+            "\nPredicates documented in the program:\n"
+            "\n  uncinate(x: streamline, h)\n"
+            "    The uncinate fasciculus.\n"
+            "    Second line.\n"
+        )
+
+    def test_nothing_without_documentation(self, capsys):
+        from neurolang_apps.utils.cli import _list_documented_predicates
+
+        _list_documented_predicates("ans(x) :- p(x)")
+        _list_documented_predicates("ans(x) :- p(x")
+        _list_documented_predicates("")
+        assert capsys.readouterr().out == ""

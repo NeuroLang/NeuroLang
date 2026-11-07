@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import AbstractSet, Dict, Tuple
+from typing import AbstractSet, Dict, NamedTuple, Tuple
 
 import nibabel
 import pandas as pd
@@ -15,6 +15,21 @@ from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Symbol
 from .regions import EmptyRegion, ExplicitVBR
 from .utils.nilearn_compat import fetch_files as _fetch_files
+
+# The documentation of the predicates of a scope (see
+# CommandsMixin.document).
+PREDICATE_DOCUMENTATION = Symbol("__predicate_documentation__")
+
+
+class PredicateDocumentation(NamedTuple):
+    """
+    The documentation of a predicate: its *description* and its
+    *arguments*, ``(name, sort)`` pairs, the sort ``""`` when not given,
+    or none.
+    """
+
+    description: str
+    arguments: Tuple[Tuple[str, str], ...] = ()
 
 
 class CommandsMixin(PatternWalker):
@@ -160,6 +175,69 @@ class CommandsMixin(PatternWalker):
         self.add_extensional_predicate_from_tuples(
             Symbol[AbstractSet[type_]](symbol.name), atlas_set, type_=type_
         )
+
+    @add_match(Command(Symbol("document"), ..., ...))
+    def document(self, command):
+        """
+        Process the `.document` command, which documents a predicate, as
+        a ``%%`` block before its rule or fact does.
+
+        Usage
+        -----
+        `.document(name, "description")` documents the predicate *name*;
+        a third argument, a tuple of ``(name, sort)`` pairs, names its
+        arguments. A predicate documented several times has its
+        descriptions one after the other, each once, and the arguments
+        given last. The documentation follows the scopes of the program,
+        as its rules do (see :meth:`predicate_documentation`).
+        """
+        if not 2 <= len(command.args) <= 3 or command.kwargs:
+            raise InvalidCommandExpression(
+                'The .document command takes the name of a predicate and '
+                'its description, as in .document(p, "description").'
+            )
+        name = _unwrap_expr(command.args[0])
+        description = str(_unwrap_expr(command.args[1])).strip()
+        arguments = (
+            tuple(_unwrap_expr(command.args[2]))
+            if len(command.args) == 3 else ()
+        )
+        documentation = self._documentation()
+        old = documentation.get(name, PredicateDocumentation(""))
+        if description and description not in old.description.split(
+            "\n\n"
+        ):
+            description = "\n\n".join(
+                d for d in (old.description, description) if d
+            )
+        else:
+            description = old.description
+        documentation[name] = PredicateDocumentation(
+            description, tuple(map(tuple, arguments)) or old.arguments
+        )
+        self.symbol_table[PREDICATE_DOCUMENTATION] = Constant[Tuple](
+            tuple(documentation.items()),
+            auto_infer_type=False, verify_type=False,
+        )
+
+    def _documentation(self):
+        """Return the documentation of the scope, of every predicate."""
+        documentation = self.symbol_table.get(PREDICATE_DOCUMENTATION)
+        return dict(documentation.value) if documentation is not None else {}
+
+    def predicate_documentation(self):
+        """
+        Return the :class:`PredicateDocumentation` of the predicates of
+        the scope, by name.
+
+        Only the predicates the program defines are documented: those of
+        a scope that was closed, or that were removed, are not.
+        """
+        return {
+            name: documentation
+            for name, documentation in self._documentation().items()
+            if Symbol(name) in self.symbol_table
+        }
 
     @add_match(Command)
     def _unknown_command(self, command):
