@@ -100,3 +100,24 @@ def test_document_command_needs_a_name_and_a_description():
         nl.program_ir.walk(
             Command(Symbol("document"), (Constant("r"),), ())
         )
+
+
+def test_imported_module_documents_its_predicates(tmp_path):
+    from ...commands import CommandsMixin
+
+    if not hasattr(CommandsMixin, "import_module"):
+        pytest.skip(".import is not available")
+    module = tmp_path / "tracts.dl"
+    module.write_text(
+        "%% A header, a comment.\n\n"
+        "%% tract(x: streamline)\n%% The tracts.\ntract(1)\n"
+    )
+    nl = NeurolangDL()
+    with nl.scope:
+        nl.execute_datalog_program(f'.import("{module}")')
+        assert nl.predicate_documentation() == {
+            "tract": PredicateDocumentation(
+                "The tracts.", (("x", "streamline"),)
+            )
+        }
+    assert nl.predicate_documentation() == {}
