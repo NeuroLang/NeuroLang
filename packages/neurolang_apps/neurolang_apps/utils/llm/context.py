@@ -153,7 +153,7 @@ class EngineContext:
             return [f"c{i}" for i in range(info.arity)]
         return None
 
-    def predicate_line(self, info, size=None) -> str:
+    def predicate_line(self, info, size=None, whole=False) -> str:
         """
         Return the line describing the predicate *info*.
 
@@ -161,7 +161,8 @@ class EngineContext:
         the rows of the predicate; a column holding an entity of a sort,
         if not named after it, is followed by it: ``x: streamline``. The
         description is the ``%%`` documentation of the predicate in the
-        program, or else the one the configuration declares.
+        program, its first paragraph unless *whole*, or else the one the
+        configuration declares.
         """
         if info.columns is None and info.arity and info.kind != "function":
             info = info._replace(
@@ -170,7 +171,10 @@ class EngineContext:
         line = info._replace(
             arguments=None, columns=_sorted_columns(info)
         ).signature()
-        description = " ".join(info.description.split()) or _description(
+        documented = info.description if whole else (
+            info.description.split("\n\n")[0]
+        )
+        description = " ".join(documented.split()) or _description(
             self.declared.get(info.name, {})
         )
         if description:
@@ -297,7 +301,7 @@ class EngineContext:
             close = difflib.get_close_matches(name, catalog, n=3)
             hint = f" Did you mean {', '.join(close)}?" if close else ""
             return f"Unknown predicate {name!r}.{hint}"
-        text = self.predicate_line(info, self._size(name))
+        text = self.predicate_line(info, self._size(name), whole=True)
         if info.kind == "function":
             return text
         try:

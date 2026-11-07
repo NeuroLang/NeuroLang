@@ -83,3 +83,17 @@ def test_schema_summary_describes_the_declared_sorts(nl, monkeypatch):
     at = lines.index("Sorts of the arguments:")
     assert lines[at + 1] == "- study: a study of the base"
     assert lines[at + 2].startswith("Functions: ")
+
+
+def test_the_summary_has_the_first_paragraph_describe_all(nl):
+    nl.execute_datalog_program(
+        "%% p(s: study)\n%% The studies.\n%%\n%% How they are found.\n"
+        "p(s) :- study(s)"
+    )
+    context = EngineContext(nl)
+    assert "- p(s: study) — The studies. [rule]" in (
+        context.schema_summary().splitlines()
+    )
+    assert context.describe("p").splitlines()[0] == (
+        "p(s: study) — The studies. How they are found. [rule]"
+    )

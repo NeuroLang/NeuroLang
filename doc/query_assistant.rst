@@ -89,7 +89,9 @@ and text-to-SPARQL systems.
     block (see :ref:`datalog-doc-comments`) is given with its
     description and the names and sorts of its arguments,
     ``uncinate(x: streamline, h: hemisphere) — The uncinate
-    fasciculus…``, which win over those of the configuration. The examples are those
+    fasciculus…``, which win over those of the configuration: the first
+    paragraph of the description in the prompt and ``list_predicates``,
+    all of it in ``describe_predicate``. The examples are those
     closest to the question, chosen by
     BM25 from a bank of checked examples, the ``assistant_examples`` of
     the engine's configuration, kept in
