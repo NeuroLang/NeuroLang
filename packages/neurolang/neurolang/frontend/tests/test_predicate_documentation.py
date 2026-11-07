@@ -57,6 +57,16 @@ def test_several_blocks_add_up_once_each():
     )
 
 
+def test_a_description_of_several_paragraphs_is_kept_once():
+    nl = NeurolangDL()
+    program = "%% First.\n%%\n%% Second.\na(1)"
+    nl.execute_datalog_program(program)
+    nl.execute_datalog_program(program)
+    assert nl.predicate_documentation()["a"].description == (
+        "First.\n\nSecond."
+    )
+
+
 def test_documentation_follows_the_scopes():
     nl = NeurolangDL()
     nl.execute_datalog_program("%% The a.\na(1)")

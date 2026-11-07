@@ -204,9 +204,7 @@ class CommandsMixin(PatternWalker):
         )
         documentation = self._documentation()
         old = documentation.get(name, PredicateDocumentation(""))
-        if description and description not in old.description.split(
-            "\n\n"
-        ):
+        if description and description not in old.description:
             description = "\n\n".join(
                 d for d in (old.description, description) if d
             )
