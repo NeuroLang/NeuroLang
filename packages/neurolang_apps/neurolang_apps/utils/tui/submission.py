@@ -8,7 +8,8 @@ symbols are committed to the session's scope only if the whole
 submission succeeds, and then tells what it defined, one line per
 predicate (:meth:`Submission.definitions`). The symbols of a submission
 that is not to be kept, such as the rules of a query, local to it, are
-discarded even when it succeeds.
+discarded even when it succeeds, but for the relations its commands
+loaded (``.load_csv``, the commands of an engine).
 """
 
 from nl_core.datalog import Fact, Union as DatalogUnion
@@ -92,17 +93,18 @@ def submission_outline(nl, program: str, squall: bool) -> tuple:
     return isinstance(parsed, SquallProgram) and bool(parsed.queries), set()
 
 
-def _commit(scope, session) -> dict:
+def _commit(symbols, session) -> dict:
     """
-    Move the symbols of *scope* into the enclosing scope *session*.
+    Move the *symbols* of a scope, a mapping of symbols to their values,
+    into its enclosing scope *session*.
 
-    A symbol already in *session* gets the value it has in *scope*: a
-    rule added to a predicate gives *scope* the union of all its rules.
+    A symbol already in *session* gets the value it has in the scope: a
+    rule added to a predicate gives the scope the union of all its rules.
     Return the values the moved symbols had, looked up from *session*,
     by symbol; None for the symbols that were not defined.
     """
     previous = {}
-    for symbol, value in scope._symbols.items():
+    for symbol, value in symbols.items():
         previous[symbol] = session.get(symbol)
         if session._symbols.get(symbol) is not None:
             del session[symbol]
@@ -150,13 +152,28 @@ class Submission:
         """Commit the scope if the block succeeded, discard it otherwise."""
         self._program_ir.symbol_table = self.session
         if exc_type is None and self.keep:
-            self.previous = _commit(self.scope, self.session)
+            self.previous = _commit(self.scope._symbols, self.session)
         elif exc_type is None:
             self.previous = {
                 symbol: self.session.get(symbol)
                 for symbol in self.scope._symbols
             }
+            _commit(self._loaded(), self.session)
         return False
+
+    def _loaded(self) -> dict:
+        """
+        Return the relations the submission loaded, by symbol: those its
+        commands (``.load_csv``...) gave the engine, not its facts.
+
+        A query keeps them although its rules and facts are local to it:
+        a command has done what it does (read a file, and the state an
+        engine's command keeps), which discarding them would not undo.
+        """
+        return {
+            symbol: value for symbol, value in self.scope._symbols.items()
+            if relation_rows(value) is not None and symbol not in self._facts
+        }
 
     def _copy_relations(self) -> None:
         """

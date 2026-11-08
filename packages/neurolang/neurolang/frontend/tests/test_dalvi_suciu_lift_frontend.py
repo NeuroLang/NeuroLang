@@ -573,7 +573,7 @@ def _solve_random(query, seed, solvers, facts=None):
 
     random.seed(seed)
     nl = NeurolangPDL(**solvers)
-    for name, arity in dict(R=1, T=1, S=2, V=2).items():
+    for name, arity in dict(R=1, T=1, S=2, V=2, U=1).items():
         tuples = [
             (round(random.uniform(.1, .9), 2),) + t
             for t in itertools.product(range(4), repeat=arity)
@@ -602,6 +602,8 @@ ORDER_AND_COUNT_QUERIES = [
     "q(PROB) :- R(x), R(y), (x != y)",
     "q(PROB) :- R(x), R(y), (x < y)",
     "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
+    "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
+    "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
 ]
 
 
@@ -659,13 +661,12 @@ def test_order_across_atoms_and_at_least_two_formulas(
 
 @pytest.mark.parametrize("query", [
     "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
-    "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
 ])
 def test_order_across_atoms_declined(query):
     """
-    The comparison of a variable of a join, or a chain of comparisons, is
-    declined: the plan of the projection of the join would select on the
-    value of z, which it does not have.
+    The comparison of a variable of a join is declined: the plan of the
+    projection of the join would select on the value of z, which it does
+    not have.
     """
     from nl_expr.exceptions import NonLiftableException
 
