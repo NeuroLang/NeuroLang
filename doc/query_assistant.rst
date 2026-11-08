@@ -85,7 +85,14 @@ and text-to-SPARQL systems.
     predicates of the engine and a few example questions with their
     queries. The predicates are given with their columns, their
     description in the engine configuration and their size (schema
-    linking). The examples are those closest to the question, chosen by
+    linking). A predicate documented in the program with a ``%%``
+    block (see :ref:`datalog-doc-comments`) is given with its
+    description and the names and sorts of its arguments,
+    ``uncinate(x: streamline, h: hemisphere) — The uncinate
+    fasciculus…``, which win over those of the configuration: the first
+    paragraph of the description in the prompt and ``list_predicates``,
+    all of it in ``describe_predicate``. The examples are those
+    closest to the question, chosen by
     BM25 from a bank of checked examples, the ``assistant_examples`` of
     the engine's configuration, kept in
     ``packages/neurolang_apps/neurolang_apps/utils/engines/<engine>/examples.yaml``
@@ -100,8 +107,6 @@ and text-to-SPARQL systems.
     parsed, then dry-run; unknown predicates and wrong numbers of
     arguments are reported. When it fails, the formatted error is sent
     back to the model for a correction, up to ``max_repairs`` times.
-    With ``samples`` above 1, several queries are generated and the one
-    whose result most of them share is kept (self-consistency).
 
 ``react`` (ReAct agent)
     The model reasons and calls tools:
@@ -130,6 +135,15 @@ and text-to-SPARQL systems.
     default, 0 to turn the check off) is the number of answers the check
     may reject; after them, the answer is kept with a warning. The REPL
     and ``neurolang-query --ask`` show the English reading of the query.
+
+With ``samples`` above 1, either strategy answers that many times, at a
+temperature of at least 0.7, and the answer whose rows most of them give
+is kept (self-consistency). With ``fallback_provider: NAME``, a provider
+of the file, that provider answers once instead when no result is given
+by more than half of the answers, or when none is valid (a single sample
+asks it only when its answer fails): e.g. three DeepSeek answers, and
+Sonnet when they disagree. The fallback is a step of the answer, with
+the query the vote kept (``voted``), and its requests count in the usage.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
@@ -177,7 +191,7 @@ know them from the engines' examples and guidance:
 .. code-block:: text
 
     $ neurolang-query --engine neurosynth --ask "Which studies are about the Cognitive Atlas concept response inhibition, with their titles?"
-    ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+    ans(s, title) :- cogat_definition('response inhibition', d), similar_study(d, s), study_title(s, title)
 
 The label must be the Cognitive Atlas one: ICL writes it from the
 question, and finds nothing for a concept the atlas does not have (it has
@@ -240,6 +254,7 @@ order:
       max_repairs: 3
       few_shot_k: 6
       samples: 1
+      # fallback_provider: anthropic
       temperature: 0.0
       timeout: 60
       preview_rows: 10

@@ -286,6 +286,25 @@ def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
     }
 
 
+def _arguments(info, described: dict) -> list:
+    """
+    Return the arguments of the predicate *info*, those of its ``%%``
+    documentation or else those the engine declares (*described*): the
+    ``columns``, ``sort`` and ``type`` of each.
+    """
+    if info.arguments:
+        return [
+            {"columns": list(argument.columns), "sort": argument.sort,
+             "type": argument.type}
+            for argument in info.arguments
+        ]
+    return [
+        {"columns": list(argument["columns"]),
+         "sort": argument["sort"], "type": argument["type"]}
+        for argument in described.get(info.name, {}).get("arguments", [])
+    ]
+
+
 class WebRepl:
     """A REPL on the engine *nl*, which a web page submits input to."""
 
@@ -537,9 +556,10 @@ class WebRepl:
         page to list, but for the IRIs of an ontology's own classes and
         properties that the engine does not declare: ``name``,
         ``kind`` (stored, derived, session...),
-        ``signature`` as ``.predicates`` shows it, and the engine's
+        ``signature`` as ``.predicates`` shows it, and its
         ``description``, if any, with its ``arguments``: the ``columns``,
-        ``sort`` and ``type`` of each.
+        ``sort`` and ``type`` of each. Those of the ``%%`` documentation
+        of the predicate in the program win over the engine's.
         """
         engine = self.app.settings.engine_name
         signatures = engine_registry.get_signatures(engine) if engine else {}
@@ -555,14 +575,10 @@ class WebRepl:
         return [
             {"name": info.name, "kind": info.kind,
              "signature": info.signature(),
-             "description": described.get(info.name, {}).get("description", ""),
-             "arguments": [
-                 {"columns": list(argument["columns"]),
-                  "sort": argument["sort"], "type": argument["type"]}
-                 for argument in described.get(info.name, {}).get(
-                     "arguments", []
-                 )
-             ]}
+             "description": info.description or described.get(
+                 info.name, {}
+             ).get("description", ""),
+             "arguments": _arguments(info, described)}
             for info in infos
         ]
 

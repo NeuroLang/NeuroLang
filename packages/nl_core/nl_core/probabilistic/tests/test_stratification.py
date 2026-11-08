@@ -55,6 +55,29 @@ def test_stratify_deterministic():
     assert "post_probabilistic" not in idbs
 
 
+def test_stratify_several_queries_together():
+    code = Union(
+        (
+            Fact(Q(a)),
+            Fact(R(b)),
+            Fact(S(a)),
+            Implication(P(x, y), Conjunction((Q(x), R(y)))),
+            Implication(Z(x), S(x)),
+        )
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    through_p = Implication(Query(y), Conjunction((P(x, y),)))
+    through_z = Implication(Symbol("Other")(x), Conjunction((Z(x),)))
+    alone = [
+        stratify_program(query, program)["deterministic"].formulas
+        for query in (through_p, through_z)
+    ]
+    together = stratify_program([through_p, through_z], program)
+    assert set(together["deterministic"].formulas) == set(alone[0] + alone[1])
+    assert len(together["deterministic"].formulas) == 2
+
+
 def test_stratify_deterministic_probabilistic():
     code = Union(
         (

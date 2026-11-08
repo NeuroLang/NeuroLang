@@ -6,7 +6,9 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``);
+* a **Python initialisation script** (``python_init``), whose
+  ``init_engine`` is also given the keyword arguments of
+  ``python_init_options``;
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -47,6 +49,10 @@ define:
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
   ``abstract: true`` only serve as bases and cannot be built or listed;
+* ``solver_mixins`` — classes, as ``"module:Class"`` strings, put
+  before the solver of the engine's :class:`NeurolangPDL` (the classes of
+  ``dimension_type_predicates`` after them), e.g. pattern-matching mixins
+  adding Datalog commands ``.name(...)``; inherited parent first;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
   ``f(query, doc) -> similarity``; see
@@ -297,7 +303,7 @@ def _resolve_relation_file(
 # duplicates dropped) when inherited; every other list is replaced.
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
-    "dimension_type_predicates", "assistant_examples",
+    "dimension_type_predicates", "assistant_examples", "solver_mixins",
 })
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
@@ -1428,7 +1434,30 @@ def _phase_python_init(nl, cfg, mask, data_dir):
     import importlib
 
     mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir)
+    mod.init_engine(nl, mask, data_dir, **cfg.get("python_init_options", {}))
+
+
+def _solver_mixins(cfg, engine_name) -> list:
+    """Return the classes named ``module:Class`` in ``solver_mixins``."""
+    import importlib
+
+    mixins = []
+    for entry in cfg.get("solver_mixins", []):
+        module_name, colon, class_name = entry.partition(":")
+        try:
+            mixin = getattr(importlib.import_module(module_name), class_name)
+            problem = None if isinstance(mixin, type) else "is not a class"
+        except (ImportError, AttributeError) as error:
+            problem = f"cannot be loaded: {error}"
+        if not colon:
+            problem = "is not of the form module:Class"
+        if problem:
+            raise ValueError(
+                f"Entry {entry!r} of solver_mixins of engine "
+                f"{engine_name!r} {problem}"
+            )
+        mixins.append(mixin)
+    return mixins
 
 
 def _phase_downloads(cfg, data_dir, engine_name):
@@ -1738,19 +1767,21 @@ def build_engine(
         tell("Reading the MNI template")
     mask = _resolve_mask(cfg, data_dir, resolution, cache_dir)
 
-    # Wire dimension_type_predicates from YAML
+    # The solver mixins of the YAML, then the dimension-type stripper, come
+    # before the base solver, whose catch-all refuses unknown commands.
+    mixins = _solver_mixins(cfg, name)
     dimension_predicates = cfg.get("dimension_type_predicates")
     if dimension_predicates is not None:
         from neurolang.frontend.datalog.squall import (
             make_dimension_type_stripper,
         )
-        Mixin = make_dimension_type_stripper(dimension_predicates)
-
+        mixins.append(make_dimension_type_stripper(dimension_predicates))
+    if mixins:
         from neurolang.frontend.probabilistic_frontend import (
             RegionFrontendCPLogicSolver as _BaseSolver,
         )
 
-        class _CustomSolver(Mixin, _BaseSolver):
+        class _CustomSolver(*mixins, _BaseSolver):
             pass
 
         _CustomSolver.__qualname__ = _BaseSolver.__qualname__

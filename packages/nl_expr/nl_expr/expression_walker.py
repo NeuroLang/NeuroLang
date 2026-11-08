@@ -35,6 +35,8 @@ __all__ = [
     "EntryPointPatternWalker",
     "IdentityWalker",
     "ExpressionWalker",
+    "WalkExpressionsOnceMixin",
+    "WalkSharedExpressionsOnceMixin",
     "ReplaceSymbolWalker",
     "ReplaceSymbolsByConstants",
     "ReplaceExpressionsByValues",
@@ -235,6 +237,68 @@ class ExpressionWalker(PatternWalker):
             changed |= new_arg[-1] is not sub_arg
         new_arg = type(arg)(new_arg)
         return new_arg, changed
+
+
+class WalkExpressionsOnceMixin(PatternWalker):
+    """Walk each expression object once during a walk.
+
+    An action that rewrites an expression walks the rewritten expression,
+    whose children have been walked already, and an expression can be
+    the argument of several others: a plan whose operations use their
+    operand twice is a DAG whose tree is exponentially larger. The result
+    of walking an expression is kept, by identity of the expression,
+    until the outermost walk ends, which makes the walk linear in the
+    number of distinct expressions. Only for walkers whose result of
+    walking an expression does not change during a walk.
+    """
+
+    def walk(self, expression):
+        walked = self.__dict__.get("_walked")
+        if walked is None:
+            self._walked = {}
+            self._kept = self._expressions_to_keep(expression)
+            try:
+                return self.walk(expression)
+            finally:
+                del self._walked, self._kept
+        key = id(expression)
+        if key in walked:
+            return walked[key][1]
+        result = super().walk(expression)
+        if self._kept is None or key in self._kept:
+            # The expression is kept to keep its id from being reused.
+            walked[key] = (expression, result)
+        return result
+
+    def _expressions_to_keep(self, expression):
+        """Ids of the expressions whose walks are kept, None for all."""
+        return None
+
+
+class WalkSharedExpressionsOnceMixin(WalkExpressionsOnceMixin):
+    """Walk once each expression that is the argument of several others
+    in the expression walked, keeping only their results: for solvers,
+    whose results are relations to free once used.
+    """
+
+    def _expressions_to_keep(self, expression):
+        seen = set()
+        shared = set()
+        to_visit = [expression]
+        while to_visit:
+            expression = to_visit.pop()
+            if id(expression) in seen:
+                shared.add(id(expression))
+                continue
+            seen.add(id(expression))
+            if isinstance(expression, Expression):
+                expression = expression.unapply()
+            if isinstance(expression, tuple):
+                to_visit.extend(
+                    arg for arg in expression
+                    if isinstance(arg, (Expression, tuple))
+                )
+        return shared
 
 
 class ChainedWalker:

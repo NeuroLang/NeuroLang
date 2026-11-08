@@ -181,3 +181,44 @@ def test_the_files_of_the_embeddings_have_plain_names(bundle):
         Path("neurosynth/embeddings/models/a--base+a--query.npz")
     )
     assert name == "neurosynth-a--base_a--query.npz"
+
+
+def test_the_downloads_are_kept_even_when_the_build_fails(
+    bundle, monkeypatch, tmp_path
+):
+    """A data host that is down (a 504) does not stop the next build, which
+    finds what this one downloaded; the engine's kept tables and its
+    embeddings are made by each build, not kept with the downloads."""
+    downloads = tmp_path / "downloads"
+    (downloads / "fsl").mkdir(parents=True)
+    (downloads / "fsl" / "atlas.nii.gz").write_bytes(b"atlas")
+    found = []
+
+    def build(data_dir, use_cache=True):
+        found.append(sorted(
+            str(p.relative_to(data_dir)) for p in data_dir.rglob("*")
+            if p.is_file()
+        ))
+        (data_dir / "peaks.tsv.gz").write_bytes(b"peaks")
+        for kept in ("engine_cache", "embeddings"):
+            (data_dir / "neurosynth" / kept).mkdir(parents=True)
+            (data_dir / "neurosynth" / kept / "table.npz").write_bytes(b"t")
+        raise requests.HTTPError("504 Gateway Time-out")
+
+    monkeypatch.setattr(bundle, "build_wheels", lambda output: [])
+    monkeypatch.setattr(bundle, "build_engine", build)
+    with pytest.raises(requests.HTTPError):
+        bundle.main(tmp_path / "out", downloads=downloads)
+    assert found == [["fsl/atlas.nii.gz"]]
+    assert sorted(
+        str(p.relative_to(downloads)) for p in downloads.rglob("*")
+        if p.is_file()
+    ) == ["fsl/atlas.nii.gz", "peaks.tsv.gz"]
+
+
+def test_the_downloads_directory_is_an_option(bundle, tmp_path):
+    args = bundle.parse_args([str(tmp_path), "emb", "--downloads", "dl"])
+    assert (args.output, args.embedded, args.downloads) == (
+        tmp_path, "emb", Path("dl")
+    )
+    assert bundle.parse_args([str(tmp_path)]).downloads is None

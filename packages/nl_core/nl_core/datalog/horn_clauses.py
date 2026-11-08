@@ -270,7 +270,9 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     if not is_safe_range(expression):
         raise NeuroLangTranslateToHornClauseException(
-            "Expression is not safe range: {}".format(expression)
+            "Expression is not safe range: {}. Each variable must occur "
+            "in a positive atom; in a disjunction, in a positive atom of "
+            "every disjunct".format(expression)
         )
     if not extract_logic_free_variables(head) <= range_restricted_variables(expression):
         raise NeuroLangTranslateToHornClauseException(
@@ -473,5 +475,5 @@ class Fol2DatalogMixin(PatternWalker):
                 imp.consequent, imp.antecedent
             )
         except NeuroLangException as e:
-            raise Fol2DatalogTranslationException from e
+            raise Fol2DatalogTranslationException(str(e)) from e
         return self.walk(program)

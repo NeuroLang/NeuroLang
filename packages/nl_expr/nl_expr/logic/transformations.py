@@ -123,7 +123,7 @@ class NegationOfTruthValueMixin(PatternWalker):
 class SimplifyTruthValuesMixin(NegationOfTruthValueMixin):
     """
     Simplify the truth values of a formula by the equivalences
-    ⊥ ∧ φ ≡ ⊥, ⊤ ∧ φ ≡ φ, ¬⊥ ≡ ⊤, ¬⊤ ≡ ⊥ and ∃x ⊥ ≡ ⊥.
+    ⊥ ∧ φ ≡ ⊥, ⊤ ∧ φ ≡ φ, ⊥ ∨ φ ≡ φ, ¬⊥ ≡ ⊤, ¬⊤ ≡ ⊥ and ∃x ⊥ ≡ ⊥.
     """
 
     @add_match(Conjunction, lambda conjunction: FALSE in conjunction.formulas)
@@ -136,6 +136,13 @@ class SimplifyTruthValuesMixin(NegationOfTruthValueMixin):
         if len(formulas) == 0:
             return TRUE
         return self.walk(Conjunction(formulas))
+
+    @add_match(Disjunction, lambda disjunction: FALSE in disjunction.formulas)
+    def false_disjunct(self, disjunction):
+        formulas = tuple(f for f in disjunction.formulas if f != FALSE)
+        if len(formulas) == 0:
+            return FALSE
+        return self.walk(Disjunction(formulas))
 
     @add_match(ExistentialPredicate)
     def existential(self, existential):

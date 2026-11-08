@@ -110,6 +110,72 @@ for an example.  The rewritten program can be inspected with
 ``neurolang-query --show-rewritten``.
 
 
+.. _several-queries:
+
+Several queries at once
+-----------------------
+
+The queries ``ans[name](...) :- ...`` of a program are solved together.
+Solving them one after the other computes what they share again for each of
+them. Solved together, each query is rewritten with magic sets for its own
+bindings, as it would be alone, and the rewritten rules of all of them are
+joined into one program, which is stratified and run once:
+
+* a predicate that two queries use is computed once. Its rules are the same
+  in both rewritings when the queries bind the same arguments, and are kept
+  once; and a predicate that they use without binding the same arguments, or
+  without binding any, has a rule set for each way of binding it;
+* the *magic* predicate that restricts a predicate holds the bindings of all
+  the queries that use it (``magic_path^bf_0(1)`` and ``magic_path^bf_0(3)``
+  for ``path(1, y)`` and ``path(3, y)``), as the seed of the recursion for
+  both: the transitive closure from 1 and from 3 is computed in one
+  fixpoint, over the nodes either reaches. This is sound, as magic sets only
+  restrict the facts a query needs, and each query reads a shared predicate
+  only through its own bindings, so that a query has the answer it has
+  alone; the tests check it, for aggregates over a predicate that another
+  query binds, and for probabilistic queries;
+* probabilistic queries of the program are stratified together: the
+  deterministic stratum is solved once, and the probabilistic queries over
+  it after it.
+
+The rewritten program of all the queries is shown by ``--show-rewritten``
+and ``--dry-run``, and the plans by ``--show-ra`` are those of each query.
+
+On a random graph of 3 000 nodes and 9 000 edges, with queries ``ans[q_i](y,
+w) :- near(i, y), reach(y, w)`` over a recursive ``reach``, the times of 1, 2,
+4 and 8 queries are 0.7 s, 0.8 s, 2.5 s and 4.9 s one after the other, and
+0.4 s, 0.6 s, 1.6 s and 2.7 s together (one run, with the pandas backend).
+
+This is the *multi-query optimisation* of databases, which finds the common
+subexpressions of a batch of queries and computes them once [Sellis1988]_,
+[Roy2000]_, applied to Datalog, where the sharing is that of the predicates
+(and of their bindings) that the queries have in common rather than that of
+subexpressions of their plans. Magic sets [Balbin1991]_ restrict a query to
+its bindings, as the demand of the query; the demand of several queries
+over a predicate is the union of theirs. The cost-based choice among the
+subexpressions to share [Roy2000]_, [KathuriaSudarshan]_ and the sharing of
+queries that bind a predicate with different adornments, which
+subsumptive tabling [Tekle2011]_ does by answering a call from the answers
+of a more general one, are not done: queries that bind a predicate differently have each their own rewriting
+of it.
+
+.. [Sellis1988] T. K. Sellis, *Multiple-query optimization*, ACM
+   Transactions on Database Systems 13(1), 1988.
+.. [Roy2000] P. Roy, S. Seshadri, S. Sudarshan, S. Bhobe, *Efficient and
+   extensible algorithms for multi query optimization*, SIGMOD 2000
+   (`arXiv:cs/9910021 <https://arxiv.org/abs/cs/9910021>`_).
+.. [KathuriaSudarshan] A. Kathuria, S. Sudarshan, *Efficient and provable
+   multi-query optimization*
+   (`arXiv:1512.02568 <https://arxiv.org/abs/1512.02568>`_).
+.. [Balbin1991] I. Balbin, G. S. Port, K. Ramamohanarao, K. Meenakshi,
+   *Efficient bottom-up computation of queries on stratified databases*,
+   Journal of Logic Programming 11(3-4), 1991.
+.. [Tekle2011] K. T. Tekle, Y. A. Liu, *More efficient Datalog queries:
+   subsumptive tabling beats magic sets*, SIGMOD 2011
+   (`doi:10.1145/1989323.1989393
+   <https://dl.acm.org/doi/10.1145/1989323.1989393>`_).
+
+
 Practical tips
 --------------
 

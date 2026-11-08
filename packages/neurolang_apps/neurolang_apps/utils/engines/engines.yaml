@@ -22,6 +22,13 @@ engines:
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, lcase]
+    python_init_options:
+      # Peaks whose coordinate space is neither MNI nor Talairach
+      # (Neurosynth's UNKNOWN: 53,878 peaks of 1,832 studies; NeuroStore's
+      # other or missing spaces): ``mni`` takes them as MNI, as Neurosynth
+      # and NiMARE do; ``tal`` converts them as Talairach; ``drop`` leaves
+      # them out. An engine extending this one can set its own value.
+      unknown_space: mni
     # Each atlas with ``activated`` also registers which studies activate
     # its regions: ``{atlas}_activated(label, study)`` when a peak of the
     # study (``peak_mni``, in millimetres) is within ``radius_mm`` of a
@@ -129,6 +136,8 @@ engines:
     # argument of the predicate their variable comes from in the query,
     # else of the sort they are named as.  ``atlas_voxel`` indexes the
     # grid of the 2 mm Schaefer atlas, not the template's.
+    # A sort named ``streamline`` holds streamline ids, which ``.view``
+    # draws with an engine giving their points (``streamline_points``).
     sorts:
       study:
         columns: [study_id]

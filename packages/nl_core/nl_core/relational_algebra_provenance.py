@@ -377,6 +377,15 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
                 prov_column_left,
             )
         columns_to_keep = union.relation_left.non_provenance_columns
+        # A column with a different value for each relation keeps a tuple
+        # with the same probability in both, two independent events.
+        dummy_col = str2columnstr_constant(Symbol.fresh().name)
+        relation_left = ConcatenateConstantColumn(
+            relation_left, dummy_col, Constant[int](0)
+        )
+        relation_right = ConcatenateConstantColumn(
+            relation_right, dummy_col, Constant[int](1)
+        )
         operation = IndependentProjection(
             ProvenanceAlgebraSet(
                 Union(relation_left, relation_right),

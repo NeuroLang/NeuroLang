@@ -15,6 +15,16 @@ class InvalidMagicSetError(ForbiddenExpressionError):
     pass
 
 
+class UnstratifiedMagicSetsRewriteError(InvalidMagicSetError):
+    """
+    The program of the Magic Sets rewrite has an aggregation, or a
+    negation, in a cycle of its dependencies: it would not be stratified,
+    though the program that was rewritten is. The magic predicate of a
+    predicate gets the bindings of the literals before it in the body, which
+    can depend on the aggregate that the predicate is read by.
+    """
+
+
 class BoundAggregationApplicationError(InvalidMagicSetError):
     """
     Magic Sets algorithm does not work if an argument which is an aggregate

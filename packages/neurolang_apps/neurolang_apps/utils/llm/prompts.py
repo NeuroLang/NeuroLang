@@ -58,12 +58,15 @@ only one.
 - Variables are lower-case identifiers; numbers are written as is.
 - {strings}.
 - The body is a conjunction separated by `,`: `ans(s) :- study(s),
-  mentions(s, 'pain')`. Disjunction: several rules with the same head.
+  mentions(s, 'pain')`. Disjunction with `|`, looser than `,`:
+  `ans(s) :- (mentions(s, 'pain') | mentions(s, 'ache')), study(s)`.
 - Negation: `~mentions(s, 'pain')`; its variables must be bound by a
   positive atom of the body.
 - Comparisons and arithmetic in parentheses: `(w > 0.1)`, `(c != 0)`,
   `(bf == (a / b))` binds bf.
 - Functions are called as predicates: `startswith('lh', n)`.
+- `.import('dir/module.dl')`, a line of its own, adds the rules of a
+  Datalog module; `'package:module.dl'` is one of a Python package.
 - A yes/no question is a query without variables: `ans() :- body`.
 - When the question names the kind of its answers (a country, a book),
   restrict them with their class: `ans(c) :- located(x, c), Country(c)`.
