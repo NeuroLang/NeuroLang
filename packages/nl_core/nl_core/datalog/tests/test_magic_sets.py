@@ -15,6 +15,7 @@ from ..chase import Chase
 from ..expression_processing import extract_logic_free_variables
 from ..exceptions import (
     BoundAggregationApplicationError,
+    InvalidMagicSetError,
     NegationInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
 )
@@ -824,3 +825,65 @@ def test_adorned_symbol_predicates_keep_their_own_rules():
 # magic sets pass to it.
 
 
+
+
+def _cycle_through_an_aggregate_program():
+    """A and B both read the aggregate Agg, and R is A then B: the magic
+    predicate of B gets its bindings from A, and the one of Agg from B, so
+    Agg would depend on A, which depends on Agg."""
+    t, s, v, l = S_("t"), S_("s"), S_("v"), S_("l")
+    A, B, R, Agg = S_("A"), S_("B"), S_("R"), S_("Agg")  # noqa: N806
+    S0, S1, E, Sel = S_("S0"), S_("S1"), S_("E"), S_("Sel")  # noqa: N806
+    code = Eb_(
+        [
+            Imp_(q(s), R(a, s)),
+            Imp_(R(t, s), A(t, s) & B(t, s)),
+            Imp_(A(t, s), S0(t, s) & Agg(t, v)),
+            Imp_(B(t, s), S1(t, s) & Agg(t, v)),
+            Imp_(Agg(t, AGG_COUNT(l)), E(t, l) & Sel(t, l)),
+        ]
+    )
+    edb = Eb_(
+        [
+            F_(S0(a, b)), F_(S0(a, c)), F_(S1(a, c)), F_(S1(a, d)),
+            F_(E(a, b)), F_(E(a, c)), F_(Sel(a, b)), F_(Sel(a, c)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    return dl
+
+
+def test_magic_rewrite_refuses_a_cycle_through_an_aggregation():
+    """The rewritten program would not be stratified: the frontend falls
+    back to the program as it is, which is."""
+    dl = _cycle_through_an_aggregate_program()
+    with raises(InvalidMagicSetError, match="aggregation"):
+        magic_rewrite(q(x), dl)
+    with raises(InvalidMagicSetError, match="aggregation"):
+        magic_rewrite(q(x), dl, seed_from_edb=False)
+
+
+def test_the_program_without_the_rewrite_is_solved():
+    dl = _cycle_through_an_aggregate_program()
+    solution = Chase(dl).build_chase_solution()
+    assert solution[S_("R")].value == {(a, c)}
+
+
+def test_magic_rewrite_keeps_an_aggregation_that_is_not_in_a_cycle():
+    """The recursion of anc is a cycle, and the aggregation reads it
+    from outside: that is fine, and is rewritten."""
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, AGG_COUNT(y)), anc(x, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    magic_rewrite(q(x), dl)  # does not raise

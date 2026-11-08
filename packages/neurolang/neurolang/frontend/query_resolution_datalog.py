@@ -16,6 +16,7 @@ from nl_expr.exceptions import (
 from nl_expr.exceptions import UnboundVariablesError
 from typing import (
     AbstractSet,
+    Any,
     Dict,
     Iterable,
     List,
@@ -61,7 +62,10 @@ from .datalog.squall_syntax_lark import (
     SquallProgram,
     WeightedChoiceDef,
 )
-from .datalog.standard_syntax import parser as datalog_parser
+from .datalog.standard_syntax import (
+    documentation_command,
+    parser as datalog_parser,
+)
 from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from nl_core.datalog import DatalogProgram
@@ -435,6 +439,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def import_datalog_module(self, path):
+        """
+        Import the Datalog module at *path*, as ``.import("path")`` in a
+        program does: its facts, rules and commands are added to the
+        program, once. ``"package:path/module.dl"`` is a module shipped
+        in the Python package ``package``.
+        """
+        self.program_ir.walk(
+            ir.Command(ir.Symbol("import"), (ir.Constant(str(path)),), ())
+        )
 
     def _rule_counts(self):
         """Return the number of rules of each predicate of the IDB."""
@@ -1304,6 +1319,43 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
         return fe.Symbol(self, name)
+
+    def predicate_documentation(self) -> Dict[str, Any]:
+        """
+        Return the documentation of the predicates of the program, by
+        name: the ``%%`` blocks of their rules and facts, a
+        :class:`~neurolang.commands.PredicateDocumentation` each, with
+        their ``description`` and ``arguments``, ``(name, sort)`` pairs.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangDL
+        >>> nl = NeurolangDL()
+        >>> nl.execute_datalog_program('''
+        ... %% p(x: number)
+        ... %% The numbers of p.
+        ... p(1)
+        ... ''')
+        >>> nl.predicate_documentation()["p"].arguments
+        (('x', 'number'),)
+        """
+        documentation = getattr(
+            self.program_ir, "predicate_documentation", None
+        )
+        return documentation() if documentation is not None else {}
+
+    def document_predicate(
+        self, name: str, description: str,
+        arguments: Iterable[Tuple[str, str]] = (),
+    ) -> None:
+        """
+        Document the predicate *name* with its *description* and its
+        *arguments*, ``(name, sort)`` pairs, as a ``%%`` block before its
+        rule does (see :meth:`predicate_documentation`).
+        """
+        self.program_ir.walk(
+            documentation_command(name, description, arguments)
+        )
 
     def predicate_parameter_names(
         self, predicate_name: Union[str, fe.Symbol, fe.Expression]

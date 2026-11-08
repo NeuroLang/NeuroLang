@@ -8,6 +8,7 @@ downloaded or resampled keeps ``import neurolang`` and the
 """
 
 
+import time
 from pathlib import Path
 
 
@@ -61,7 +62,10 @@ def fetch_files(*args, **kwargs):
     -----
     When every file is already in the data directory, and none is to be
     downloaded again, their paths are returned without importing nilearn,
-    as it would, which takes seconds.
+    as it would, which takes seconds. A download failing for a while (a
+    time-out, a lost connection, an error 5xx of the server) is tried again
+    after each of ``RETRY_WAITS`` seconds; the files fetched before are not
+    downloaded again.
 
     """
     files = list(args[1] if len(args) > 1 else kwargs.get("files", ()))
@@ -77,4 +81,30 @@ def fetch_files(*args, **kwargs):
     except ImportError:
         # nilearn >= 0.11: _fetch_files was moved and renamed
         from nilearn.datasets._utils import fetch_files as fetcher
+    for wait in RETRY_WAITS:
+        try:
+            return fetcher(*args, **kwargs)
+        except Exception as error:
+            if not _transient(error):
+                raise
+            time.sleep(wait)
     return fetcher(*args, **kwargs)
+
+
+# The seconds waited before each new try of a download that failed for a
+# while: a time-out or an error of the server (a 504 of a host).
+RETRY_WAITS = (2, 4, 8)
+
+
+def _transient(error):
+    """Whether the download that raised *error* may succeed if tried again:
+    a time-out, a lost connection or an error of the server, not a refused
+    certificate."""
+    import requests
+
+    if isinstance(error, requests.HTTPError):
+        response = error.response
+        return response is not None and response.status_code >= 500
+    return isinstance(
+        error, (requests.ConnectionError, requests.Timeout)
+    ) and not isinstance(error, requests.exceptions.SSLError)

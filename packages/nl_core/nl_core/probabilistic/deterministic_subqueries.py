@@ -194,14 +194,23 @@ class ReplaceDeterministicNegations(LogicExpressionWalker):
         to probabilistic sets; the functions the program knows by name
         are their values.
         """
-        column_names = tuple(str2columnstr_constant(v.name) for v in columns)
         formula = ReplaceSymbolWalker(self.program.builtins()).walk(formula)
-        plan = Projection(TranslateToNamedRA().walk(formula), column_names)
-        plan = ReplaceSymbolWalker(self._relations()).walk(plan)
-        plan = RelationalAlgebraOptimiser().walk(plan)
         symbol = Symbol.fresh()
-        self.relations[symbol] = Materialise(NumberColumns(plan, column_names))
+        self.relations[symbol] = materialised_relation(
+            formula, columns, self._relations()
+        )
         return symbol(*columns)
+
+
+def materialised_relation(formula, columns, relations):
+    """The relational algebra expression of `formula` on the variables
+    `columns`, numbered in that order, its relation symbols replaced by
+    the sets of `relations`, optimised and marked with `Materialise`."""
+    column_names = tuple(str2columnstr_constant(v.name) for v in columns)
+    plan = Projection(TranslateToNamedRA().walk(formula), column_names)
+    plan = ReplaceSymbolWalker(relations).walk(plan)
+    plan = RelationalAlgebraOptimiser().walk(plan)
+    return Materialise(NumberColumns(plan, column_names))
 
 
 def _is_atom(formula):

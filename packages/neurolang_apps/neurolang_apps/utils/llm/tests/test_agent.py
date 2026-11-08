@@ -102,6 +102,18 @@ def test_react_reply_cut_at_token_limit(nl):
     assert messages[-2] == {"role": "assistant", "content": "write it"}
 
 
+def test_react_empty_reply_is_asked_again(nl):
+    replies = [
+        "",
+        f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.calls == 2 and len(steps) == 1
+    assert react.client.requests[0] == react.client.requests[1]
+
+
 def test_icl_first_answer(nl):
     icl, steps = agent(nl, IclAgent, [fenced(PAIN_SQUALL)])
     result = icl.run("Which studies mention pain?")
@@ -289,6 +301,21 @@ def test_examples_and_description_can_be_given(nl):
      "search_values", {"pattern": "pain"}),
     ('### Action: run_query\n- Action_Input: {"query": "ans(x) :- p(x)"}',
      "run_query", {"query": "ans(x) :- p(x)"}),
+    ('<Action: search_values>\n<Action Input: {"pattern": "SomMot"}>',
+     "search_values", {"pattern": "SomMot"}),
+    ('<Thought>Find it.</Thought>\n<Action>search_values</Action>\n'
+     '<Action Input>{"pattern": "SomMot"}</Action Input>',
+     "search_values", {"pattern": "SomMot"}),
+    ('<final_answer>\n{"query": "ans(x) :- p(x)", "explanation": "x"}\n'
+     '</final_answer>',
+     "final_answer", {"query": "ans(x) :- p(x)", "explanation": "x"}),
+    ('Observation: 2 rows\nFinal Answer: {"query": "ans(x) :- p(x)"}',
+     "final_answer", {"query": "ans(x) :- p(x)"}),
+    ('Action: describe_predicate\nAction Input: "tian"',
+     "describe_predicate", {"name": "tian"}),
+    ('Observation: The query is valid.\nAction: run_query\n'
+     'Action Input: {"query": "ans(x) :- p(x)"}\nObservation: 2 rows',
+     "run_query", {"query": "ans(x) :- p(x)"}),
 ])
 def test_parse_text_action_formatting_slips(text, name, arguments):
     action = parse_text_action(text, "datalog")
@@ -348,6 +375,23 @@ def test_empty_final_answer_recalls_the_query_with_rows(nl):
     assert "Your query that gave rows was:\nans(s) :- mentions(s, 'pain')" \
         in steps[1].observation
     assert result.query == "ans(s) :- mentions(s, 'pain')"
+
+
+def test_repeated_call_is_not_run_again(nl):
+    search = 'Action: search_values\nAction Input: {"pattern": "pain"}'
+    replies = [
+        search, search,
+        f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    react.context.search_values = lambda *a: "mentions.c1: pain"
+    result = react.run("Which studies mention pain?")
+    assert result.valid
+    assert steps[1].observation == (
+        "You already called search_values with these arguments, which "
+        "gave:\nmentions.c1: pain\nDo not call it again: use that result "
+        "and take the next step."
+    )
 
 
 def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):

@@ -222,6 +222,65 @@ def test_show_ra_reports_unsolvable_query_error(show_ra, capsys):
     assert "── deterministic stratum ──" not in capsys.readouterr().out
 
 
+def test_disjunction_in_deterministic_rule_of_probabilistic_program():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="t")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.2, 2), (0.3, 3)], name="p"
+    )
+    res = nl.execute_datalog_program(
+        """
+        q(x) :- t(x, "a") | t(x, "b")
+        ans(x, PROB) :- q(x), p(x)
+        """
+    )
+
+    assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
+
+
+def test_disjunction_with_a_constant_in_the_query(capsys):
+    """Magic sets rewrite a disjunctive rule queried with a constant."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(1, "orbital"), (2, "middle"), (3, "superior"), (4, "middle")],
+        name="traverses",
+    )
+    nl.add_tuple_set([(2,), (3,)], name="temporal")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 2), (0.2, 4)], name="p")
+    res = nl.execute_datalog_program(
+        """
+        q(x, y) :- traverses(x, y), (temporal(x) | (y == "orbital"))
+        ans(x, PROB) :- q(x, "middle"), p(x)
+        """,
+        show_rewritten=True,
+    )
+
+    assert set(res.to_unnamed()) == {(2, 0.5)}
+    assert "magic_q" in capsys.readouterr().out
+
+
+def test_probability_of_a_disjunction():
+    """
+    PROB[p2(x) | p3(x)] is the probability of the disjunction, of two
+    independent facts even when they have the same probability, and
+    PROB[p2(x) // p3(x)] that of p2(x) given p3(x).
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (3,)], name="u")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 1), (0.2, 3)], name="p2")
+    nl.add_probabilistic_facts_from_tuples([(0.5, 1), (0.5, 3)], name="p3")
+
+    res = nl.execute_datalog_program(
+        "ans(x, p) :- u(x), PROB[p2(x) | p3(x)] = p"
+    )
+    assert dict(res.to_unnamed()) == pytest.approx({1: 0.75, 3: 0.6})
+
+    res = nl.execute_datalog_program(
+        "ans(x, p) :- u(x), PROB[p2(x) // p3(x)] = p"
+    )
+    assert dict(res.to_unnamed()) == pytest.approx({1: 0.5, 3: 0.2})
+
+
 def test_show_rewritten_datalog_prints_all_rules(capsys):
     """--show-rewritten must print all reachable Datalog rules, not just the final query."""
     nl = NeurolangPDL()
@@ -2655,3 +2714,142 @@ def test_uniformity_of_the_activations_given_a_term(seed):
     assert got.keys() == share.keys()
     for voxel, p in share.items():
         assert got[voxel] == pytest.approx(p / average)
+
+
+def _solvers_by_name():
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query,
+    )
+
+    return {
+        "default": {},
+        "lift": dict(
+            probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+            probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+        ),
+        "wmc": dict(
+            probabilistic_solvers=(wmc_solve_succ_query,),
+            probabilistic_marg_solvers=(wmc_solve_marg_query,),
+        ),
+    }
+
+
+def _possible_worlds(facts):
+    """Yield each world of the tuple-independent *facts*, with its
+    probability."""
+    items = [(n, t, p) for n, rows in facts.items() for p, *t in rows]
+    for kept in itertools.product((False, True), repeat=len(items)):
+        world = {n: set() for n in facts}
+        probability = 1.
+        for keep, (n, t, p) in zip(kept, items):
+            probability *= p if keep else 1 - p
+            if keep:
+                world[n].add(tuple(t))
+        yield world, probability
+
+
+def _solve_q(solvers, facts, query, choice=()):
+    nl = NeurolangPDL(**solvers)
+    for name, rows in facts.items():
+        nl.add_probabilistic_facts_from_tuples(rows, name=name)
+    if choice:
+        nl.add_uniform_probabilistic_choice_over_set(choice, name="C")
+    nl.execute_datalog_program(query)
+    return {
+        tuple(row[:-1]): row[-1]
+        for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
+            index=False
+        )
+    }
+
+
+@pytest.mark.parametrize("solver", ["default", "lift", "wmc"])
+@pytest.mark.parametrize("head, answers", [
+    ("x, z", lambda w, x, z: (x, z)),
+    ("x", lambda w, x, z: (x,)),
+    ("z", lambda w, x, z: (z,)),
+])
+def test_negated_atom_with_an_existential_variable(solver, head, answers):
+    """
+    ``V(x, z), U(z, w), ~W(z, w)`` with answer variables has, in every
+    solver, the probabilities of the enumeration of the possible worlds.
+    """
+    facts = {
+        "V": [(.3, 0, 0), (.6, 0, 1), (.8, 1, 1)],
+        "U": [(.5, 0, 0), (.7, 0, 1), (.4, 1, 1)],
+        "W": [(.2, 0, 0), (.9, 0, 1), (.6, 1, 1)],
+    }
+    expected = {}
+    for world, probability in _possible_worlds(facts):
+        for a in {
+            answers(world, x, z) for x, z in world["V"]
+            if any(
+                u == z and (u, w) not in world["W"] for u, w in world["U"]
+            )
+        }:
+            expected[a] = expected.get(a, 0) + probability
+    got = _solve_q(
+        _solvers_by_name()[solver], facts,
+        f"q({head}, PROB) :- V(x, z), U(z, w), ~W(z, w)",
+    )
+    assert got == pytest.approx(expected)
+
+
+def test_atom_with_more_arguments_than_columns_in_probabilistic_rule():
+    """
+    A probabilistic relation used with more arguments than its columns
+    is reported, as in a deterministic rule, instead of crashing in the
+    relational algebra.
+    """
+    from nl_expr.exceptions import PredicateArityError
+
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples([(.5, 0), (.4, 1)], name="U")
+    nl.add_probabilistic_facts_from_tuples([(.5, 0, 1)], name="V")
+    nl.execute_datalog_program("q(x, z, PROB) :- V(x, z), U(z, w)")
+    with pytest.raises(PredicateArityError):
+        nl.solve_all()
+
+
+@pytest.mark.parametrize("solver", ["default", "lift", "wmc"])
+@pytest.mark.parametrize("head, body", [
+    ("", "C(x), S(x, y), C(y)"),
+    ("", "C(y), C(x), S(x, y)"),
+    ("x, ", "C(x), S(x, y), C(y)"),
+    ("y, ", "C(x), S(x, y), C(y), R(y)"),
+])
+def test_choice_joined_twice(solver, head, body):
+    """
+    Two atoms of a choice in a conjunction are of the same outcome, the
+    equality of their variables: weighted model counting crashed on the
+    selection of this equality over the join.
+    """
+    facts = {
+        "S": [(.3, 0, 0), (.6, 0, 1), (.8, 1, 1), (.5, 2, 2), (.9, 2, 0)],
+        "R": [(.4, 0), (.7, 2)],
+    }
+    p_s = {(x, y): p for p, x, y in facts["S"]}
+    p_r = {(x,): p for p, x in facts["R"]}
+    expected = {}
+    for a in range(3):
+        p = p_s.get((a, a), 0) / 3 * (p_r.get((a,), 0) if "R" in body else 1)
+        if p > 0:
+            key = (a,) if head else ()
+            expected[key] = expected.get(key, 0) + p
+    got = _solve_q(
+        _solvers_by_name()[solver], facts,
+        f"q({head}PROB) :- {body}", [(0,), (1,), (2,)],
+    )
+    assert got == pytest.approx(expected)
+
+
+def test_probabilistic_facts_of_a_program_text():
+    """Several probabilistic facts of a predicate written in the program
+    make a relation of known columns, whose arity a query checks."""
+    nl = NeurolangPDL()
+    result = nl.execute_datalog_program(
+        "0.5 :: p(1)\n0.2 :: p(2)\nq(x) :- p(x)\nans(x, PROB) :- q(x)"
+    )
+    rows = result.as_pandas_dataframe().itertuples(index=False, name=None)
+    assert set(rows) == {(1, 0.5), (2, 0.2)}
