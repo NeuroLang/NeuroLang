@@ -77,6 +77,13 @@ Unreleased
 
 **New features:**
 
+* The query assistant votes with ReAct too: ``samples: N`` answers N
+  times and keeps the answer whose rows most of them give, and
+  ``fallback_provider: NAME`` asks another provider once when no result
+  has a majority (more than N/2 of the answers) or none is valid, e.g.
+  three DeepSeek answers and Sonnet when they disagree. The fallback is a
+  step of the answer, with the query the vote kept.
+
 * A block of ``%%`` lines right before a rule or a fact of the Datalog
   syntax documents its predicate, with an optional signature giving the
   names and the sorts of its arguments, ``%% uncinate(x: streamline, h:

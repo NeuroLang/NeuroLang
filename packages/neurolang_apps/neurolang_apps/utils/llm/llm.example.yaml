@@ -103,7 +103,9 @@ assistant:
   max_steps: 8         # ReAct: maximum number of tool calls
   max_repairs: 3       # ICL: rounds of reprompting with the query error
   few_shot_k: 6        # number of example questions in the prompt
-  samples: 1           # ICL: candidates voted on (self-consistency)
+  samples: 1           # answers voted on (self-consistency)
+  # fallback_provider: openrouter   # answers when no majority, more than
+                                    # half of the samples, gives the same rows
   temperature: 0.0
   timeout: 60          # seconds per LLM request
   preview_rows: 10     # rows of a result shown to the model

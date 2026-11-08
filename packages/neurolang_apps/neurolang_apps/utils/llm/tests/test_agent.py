@@ -164,6 +164,62 @@ def test_icl_self_consistency_votes_on_the_results(nl):
     assert all(r["temperature"] >= 0.7 for r in icl.client.requests)
 
 
+def react_answer(query):
+    return f'Action: final_answer\nAction Input: {{"query": "{query}"}}'
+
+
+def test_react_samples_vote_on_the_rows(nl):
+    replies = [
+        react_answer("ans(s) :- mentions(s, 'chronic pain')"),
+        react_answer(PAIN_DATALOG),
+        react_answer("ans(x) :- study(x), mentions(x, 'pain')"),
+    ]
+    react, steps = agent(
+        nl, ReactAgent, replies, language="datalog", samples=3
+    )
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.calls == 3 and result.usage["input"] == 30
+    assert all(r["temperature"] >= 0.7 for r in react.client.requests)
+    assert "fallback" not in [s.action for s in steps]
+
+
+def test_no_majority_asks_the_fallback_provider(nl):
+    replies = [
+        react_answer(PAIN_DATALOG),
+        react_answer("ans(s) :- mentions(s, 'chronic pain')"),
+        "no action",
+    ]
+    fallback = ScriptedClient([react_answer(PAIN_DATALOG)])
+    react, steps = agent(
+        nl, ReactAgent, replies, language="datalog", samples=3,
+        fallback_provider=provider(), max_steps=1,
+    )
+    react.fallback_client = fallback
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.calls == 4 and result.usage["input"] == 40
+    assert fallback.requests[0]["temperature"] == 0.0
+    step = next(s for s in steps if s.action == "fallback")
+    assert step.arguments == {"provider": "fake", "voted": PAIN_DATALOG}
+    assert step in result.steps
+
+
+def test_a_failed_request_asks_the_fallback_provider(nl):
+    react, steps = agent(
+        nl, ReactAgent, [], language="datalog",
+        fallback_provider=provider(),
+    )
+    react.client.complete = lambda *args: (_ for _ in ()).throw(
+        LLMError("fake: HTTP 503")
+    )
+    react.fallback_client = ScriptedClient([react_answer(PAIN_DATALOG)])
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert [s.action for s in steps] == ["fallback", "final_answer"]
+    assert steps[0].arguments["voted"] == ""
+
+
 def test_react_text_protocol(nl):
     replies = [
         'Thought: find the term\nAction: search_values\nAction Input: '

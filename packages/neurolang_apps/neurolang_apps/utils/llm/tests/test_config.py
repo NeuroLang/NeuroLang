@@ -94,6 +94,16 @@ def test_unknown_provider_lists_the_available_ones():
         parse_config({**PROVIDERS, "default_provider": "nope"})
 
 
+def test_fallback_provider_is_resolved():
+    config = parse_config(
+        {**PROVIDERS, "assistant": {"fallback_provider": "local"}}
+    )
+    assert config.assistant.fallback_provider == config.provider("local")
+    assert parse_config(PROVIDERS).assistant.fallback_provider is None
+    with pytest.raises(LLMConfigError, match="Unknown LLM provider 'nope'"):
+        parse_config({**PROVIDERS, "assistant": {"fallback_provider": "nope"}})
+
+
 def test_invalid_assistant_settings():
     with pytest.raises(LLMConfigError, match="Invalid strategy"):
         parse_config({**PROVIDERS, "assistant": {"strategy": "guess"}})
