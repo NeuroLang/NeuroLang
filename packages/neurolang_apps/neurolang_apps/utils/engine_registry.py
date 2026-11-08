@@ -1421,14 +1421,28 @@ def _phase_base_symbols(nl, cfg, mask):
         init_base_engine(nl, mask)
 
 
-def _phase_python_init(nl, cfg, mask, data_dir):
+def _phase_python_init(nl, cfg, mask, data_dir, use_cache=True):
+    """
+    Run the ``init_engine`` of the ``python_init`` module.
+
+    An init that takes a ``cache_dir`` is given the directory where the
+    tables of the engine are kept (see
+    :mod:`~neurolang_apps.utils.engine_cache`), or None without cache.
+    """
     py_init = cfg.get("python_init")
     if not py_init:
         return
     import importlib
+    import inspect
 
     mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir)
+    kwargs = {}
+    if "cache_dir" in inspect.signature(mod.init_engine).parameters:
+        kwargs["cache_dir"] = (
+            engine_cache.cache_dir(data_dir, py_init.split(".")[-2])
+            if use_cache else None
+        )
+    mod.init_engine(nl, mask, data_dir, **kwargs)
 
 
 def _phase_downloads(cfg, data_dir, engine_name):
@@ -1768,7 +1782,7 @@ def build_engine(
     _phase_base_symbols(nl, cfg, mask)
     if cfg.get("python_init"):
         tell(f"Loading the data of {name}")
-    _phase_python_init(nl, cfg, mask, data_dir)
+    _phase_python_init(nl, cfg, mask, data_dir, use_cache)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
     if cfg.get("atlases"):

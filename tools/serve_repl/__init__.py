@@ -11,10 +11,14 @@ The browser still loads Pyodide from its CDN.
 Usage, from a checkout::
 
     uv run --extra apps neurolang-repl-serve [--port 8766] [--rebuild]
-        [--embeddings DIR] [--site SITE] [--host 0.0.0.0] [--no-browser]
+        [--engine NAME ...] [--embeddings DIR] [--site SITE]
+        [--host 0.0.0.0] [--no-browser]
 
 the command of the workspace's root project, or ``python -m serve_repl``.
-It opens the page in the browser. The text embeddings of
+The page offers the engines ``neurosynth`` and ``neurostore`` (a select at
+its top, or ``?engine=neurostore``): the bundle has the data of both, unless
+``--engine`` names the ones to build, and is built again when it lacks one that
+is asked for. It opens the page in the browser. The text embeddings of
 ``query_similarity`` are kept in ``--embeddings`` (by default
 ``~/.cache/neurolang/repl-embeddings``): the bundle has them if they are
 there, or if torch is installed to make them (``--extra embeddings``),
@@ -23,6 +27,8 @@ which takes a while the first time; otherwise the page goes without.
 
 import argparse
 import http.server
+import importlib.util
+import json
 import shutil
 import socketserver
 import subprocess
@@ -40,27 +46,53 @@ DEFAULT_SITE = Path("~/.cache/neurolang/repl-site").expanduser()
 DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
 
 
-def build_bundle(repl: Path, embeddings) -> None:
+def bundle_engines() -> tuple:
+    """Return the engines the bundle script builds by default."""
+    spec = importlib.util.spec_from_file_location(
+        "make_repl_bundle", BUNDLE_SCRIPT
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ENGINES
+
+
+def built_engines(repl: Path) -> set:
+    """Return the engines of the bundle in *repl* (none if it is not there)."""
+    try:
+        bundle = json.loads((repl / "bundle.json").read_text())
+    except (OSError, ValueError):
+        return set()
+    return set(bundle.get("engines") or ["neurosynth"])
+
+
+def build_bundle(repl: Path, embeddings, engines=None) -> None:
     """Build the page's bundle in *repl*, with the text embeddings of the
-    data directory *embeddings* if given."""
+    data directory *embeddings* if given, and the data of the *engines*
+    (by default all those of the page)."""
     command = [sys.executable, str(BUNDLE_SCRIPT), str(repl)]
     if embeddings:
         command.append(str(embeddings))
+    for engine in engines or ():
+        command += ["--engine", engine]
     subprocess.check_call(command)
 
 
-def prepare_site(site: Path, rebuild: bool = False, embeddings=None) -> Path:
+def prepare_site(
+    site: Path, rebuild: bool = False, embeddings=None, engines=None
+) -> Path:
     """
     Put the page and the logo in *site*, build the bundle if it is not
-    there or *rebuild*, and return the path of the page.
+    there, lacks one of the *engines* (by default all of the page's) or
+    *rebuild*, and return the path of the page.
 
     The page is copied each time, so that it is that of the checkout.
     """
     repl = site / "_static" / "repl"
     repl.mkdir(parents=True, exist_ok=True)
     shutil.copytree(LOGO, site / "_static" / "logo", dirs_exist_ok=True)
-    if rebuild or not (repl / "bundle.json").exists():
-        build_bundle(repl, embeddings)
+    wanted = set(engines or bundle_engines())
+    if rebuild or not wanted <= built_engines(repl):
+        build_bundle(repl, embeddings, engines)
     for path in PAGE.iterdir():
         if path.is_file():
             shutil.copy(path, repl / path.name)
@@ -121,13 +153,20 @@ def parse_args(argv=None):
         help="data directory keeping the text embeddings (default: "
         "%(default)s)",
     )
+    parser.add_argument(
+        "--engine", action="append", choices=bundle_engines(), dest="engines",
+        help="an engine to put in the bundle (repeat for several; default: "
+        "all of them)",
+    )
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    page = prepare_site(args.site, args.rebuild, args.embeddings)
+    page = prepare_site(
+        args.site, args.rebuild, args.embeddings, args.engines
+    )
     server = make_server(args.site, args.host, args.port)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     url = (f"http://{host}:{server.server_address[1]}/"

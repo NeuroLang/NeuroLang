@@ -2,7 +2,8 @@
 //
 //     neurolang-query -i --engine neurosynth --resolution 2
 //
-// It loads Pyodide, gets NeuroLang, installs the Neurosynth data it ships,
+// It loads Pyodide, gets NeuroLang, installs the data of the engine the page
+// asks for (neurosynth or neurostore, see engines.js) that the bundle ships,
 // builds the engine, and answers the page's submissions with the HTML
 // that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //
@@ -13,9 +14,9 @@
 // puts them on Python's path, as it is pure Python.
 
 import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs";
+import { bundleEngines, dataParts, defaultEngine, joinParts } from "./engines.js";
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
-const ENGINE = "neurosynth";
 const RESOLUTION = 2;
 
 // Packages of Pyodide's distribution, and those installed from PyPI. The
@@ -25,6 +26,8 @@ const RESOLUTION = 2;
 const PYODIDE_PACKAGES = [
   "numpy", "scipy", "pandas", "scikit-learn", "matplotlib", "lxml",
   "requests", "joblib", "pyyaml", "packaging", "micropip",
+  // The tables of a NeuroStore release are Parquet.
+  "pyarrow",
 ];
 const PYPI_PACKAGES = [
   "lark", "typing_inspect", "rdflib", "nibabel", "rich",
@@ -113,14 +116,17 @@ async function installSource(pyodide, repo, ref) {
   return commit.sha;
 }
 
-async function start({ repo, ref, full }) {
+async function start({ repo, ref, full, engine }) {
   status("Loading Python…");
   const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
 
-  status("Loading numpy, scipy, pandas and scikit-learn…");
+  status("Loading numpy, scipy, pandas, scikit-learn and pyarrow…");
   await pyodide.loadPackage(PYODIDE_PACKAGES);
 
   const bundle = await (await fetch("bundle.json", { cache: "no-store" })).json();
+  const engines = bundleEngines(bundle);
+  const name = engines[engine] ? engine : defaultEngine(bundle);
+  const entry = engines[name];
   const micropip = pyodide.pyimport("micropip");
   status("Installing the packages NeuroLang needs…");
   for (const name of PYPI_PACKAGES) await micropip.install(name);
@@ -137,7 +143,13 @@ async function start({ repo, ref, full }) {
     source = `the wheels of this page (${bundle.wheels.join(", ")})`;
   }
 
-  const data = await download(bundle.data, "the Neurosynth data");
+  const parts = dataParts(entry);
+  const chunks = [];
+  for (const [number, url] of parts.entries()) {
+    const of = parts.length > 1 ? ` (${number + 1}/${parts.length})` : "";
+    chunks.push(await download(url, `the ${entry.label} data${of}`));
+  }
+  const data = joinParts(chunks);
   pyodide.FS.mkdirTree("/data");
   pyodide.unpackArchive(data, "zip", { extractDir: "/data" });
 
@@ -174,19 +186,20 @@ tells = {}
 if "progress" in inspect.signature(engine_registry.build_engine).parameters:
     tells = {"progress": say}
 nl = engine_registry.build_engine(
-    "${ENGINE}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
+    "${name}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
 )
 say("Starting the REPL")
 # The metadata of the studies (their DOIs, titles...) let the page link the
-# studies of a result; a version that predates them does not take them.
+# studies of a result; a version that predates them does not take them. They
+# are those of the studies of Neurosynth, whose ids are PubMed's.
 options = {}
-if "study_metadata" in inspect.signature(WebRepl).parameters:
+if "${name}" == "neurosynth" and "study_metadata" in inspect.signature(WebRepl).parameters:
     try:
         from neurolang.frontend.neurosynth_utils import fetch_study_metadata
         options["study_metadata"] = fetch_study_metadata(Path("/data"), verbose=0)
     except Exception:
         pass
-repl = WebRepl(nl, "${ENGINE}", ${RESOLUTION}, **options)
+repl = WebRepl(nl, "${name}", ${RESOLUTION}, **options)
 
 # The steps of the AI assistant go to the page as they happen, while this
 # worker is busy with the question: postMessage does not wait for it.
@@ -195,7 +208,7 @@ if hasattr(repl, "set_event_sink"):
 
 # The files of the text embeddings (the SPECTER2 query model and the
 # embeddings of the studies) are fetched when a query first needs them.
-FILES = json.loads(${JSON.stringify(JSON.stringify(bundle.files ?? {}))})
+FILES = json.loads(${JSON.stringify(JSON.stringify(entry.files ?? {}))})
 
 def fetch_missing(path):
     import js
