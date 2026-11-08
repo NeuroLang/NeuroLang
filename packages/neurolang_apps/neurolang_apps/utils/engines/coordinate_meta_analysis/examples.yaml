@@ -294,11 +294,11 @@ assistant_examples:
 
   - question: Which studies are about the visual word form area? Give their titles.
     datalog: |-
-      ans(s, title, v) :- similar_study('visual word form area', s), study_similarity('visual word form area', s, v), study_title(s, title)
+      ans(s, title) :- similar_study('visual word form area', s), study_title(s, title)
 
   - question: Which studies are about the Cognitive Atlas concept response inhibition, with their titles?
     datalog: |-
-      ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+      ans(s, title) :- cogat_definition('response inhibition', d), similar_study(d, s), study_title(s, title)
 
   - question: Which voxels do the studies about holding information in mind over a delay activate?
     datalog: |-
@@ -370,12 +370,11 @@ assistant_examples:
 
   - question: "Which studies are about people mentally rotating three-dimensional objects?"
     datalog: |-
-      ans(s, title, v) :- similar_study('people mentally rotating three-dimensional objects', s), study_similarity('people mentally rotating three-dimensional objects', s, v), study_title(s, title)
+      ans(s, title) :- similar_study('people mentally rotating three-dimensional objects', s), study_title(s, title)
 
   - question: "Which studies mention passive viewing?"
     datalog: |-
-      pv(s) :- mentions(s, 'passive viewing'), selected_study(s)
-      ans(s, p) :- PROB[pv(s)] = p
+      ans(s) :- mentions(s, 'passive viewing')
 
   - question: "What are the subclasses of lexicon in the Cognitive Atlas?"
     datalog: |-
@@ -404,7 +403,7 @@ assistant_examples:
 
   - question: "Which study titles describe watching strangers' faces while lying in the scanner?"
     datalog: |-
-      ans(s, title, v) :- similar_study('viewing unfamiliar faces while lying in the scanner', s), study_similarity('viewing unfamiliar faces while lying in the scanner', s, v), study_title(s, title)
+      ans(s, title) :- similar_study('viewing unfamiliar faces while lying in the scanner', s), study_title(s, title)
 
   - question: "Which Cognitive Atlas concepts are kinds of mental representation?"
     datalog: |-
@@ -430,8 +429,7 @@ assistant_examples:
     datalog: |-
       a_or_s(s) :- mentions(s, 'atrophy')
       a_or_s(s) :- mentions(s, 'somatosensory')
-      chosen(s) :- a_or_s(s), selected_study(s)
-      ans(s, p) :- PROB[chosen(s)] = p
+      ans(s) :- a_or_s(s)
 
   - question: "Which brain regions are activated by studies of tasting bitter drinks?"
     datalog: |-
@@ -441,10 +439,7 @@ assistant_examples:
 
   - question: "Which studies mention speech and activate left occipital pole?"
     datalog: |-
-      active(s) :- destrieux_activated('L Pole occipital', s), selected_study(s)
-      sp(s) :- mentions(s, 'speech'), selected_study(s)
-      both(s) :- active(s), sp(s)
-      ans(s, p) :- PROB[both(s)] = p
+      ans(s) :- mentions(s, 'speech'), destrieux_activated('L Pole occipital', s)
 
   - question: "How likely is it that a study mentions error?"
     datalog: |-
@@ -489,8 +484,7 @@ assistant_examples:
     datalog: |-
       hip(l) :- tian(l, r), startswith('aHIP', l)
       hip(l) :- tian(l, r), startswith('pHIP', l)
-      active(s) :- hip(l), tian_activated(l, s), selected_study(s)
-      ans(s, p) :- PROB[active(s)] = p
+      ans(s) :- hip(l), tian_activated(l, s)
 
   - question: "Which regions are co-activated with right lateral occipitotemporal sulcus across studies?"
     datalog: |-
@@ -500,8 +494,7 @@ assistant_examples:
 
   - question: "Which studies do not mention learning?"
     datalog: |-
-      no_learning(s) :- selected_study(s), ~mentions(s, 'learning')
-      ans(s, p) :- PROB[no_learning(s)] = p
+      ans(s) :- study(s), ~mentions(s, 'learning')
 
   - question: "What is the title of study 21932266?"
     datalog: |-
@@ -509,8 +502,7 @@ assistant_examples:
 
   - question: "Which studies do not mention feedback?"
     datalog: |-
-      no_feedback(s) :- selected_study(s), ~mentions(s, 'feedback')
-      ans(s, p) :- PROB[no_feedback(s)] = p
+      ans(s) :- study(s), ~mentions(s, 'feedback')
 
   - question: "Which parcels of the limbic network are activated by studies about naming?"
     datalog: |-
@@ -525,10 +517,9 @@ assistant_examples:
       gp_label(l) :- tian(l, r), startswith('aGP', l)
       gp_label(l) :- tian(l, r), startswith('pGP', l)
       tha_label(l) :- tian(l, r), startswith('THA', l)
-      gp(s) :- gp_label(l), tian_activated(l, s), selected_study(s)
-      tha(s) :- tha_label(l), tian_activated(l, s), selected_study(s)
-      both(s) :- gp(s), tha(s)
-      ans(s, p) :- PROB[both(s)] = p
+      gp(s) :- gp_label(l), tian_activated(l, s)
+      tha(s) :- tha_label(l), tian_activated(l, s)
+      ans(s) :- gp(s), tha(s)
 
   - question: "Which subcortical regions are co-activated with caudate?"
     datalog: |-
