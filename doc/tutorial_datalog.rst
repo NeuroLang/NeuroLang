@@ -182,6 +182,26 @@ query immediately and returns the result as a ``RelationalAlgebraFrozenSet``:
 If the program contains multiple rules without an ``ans`` rule, you can
 retrieve results later with ``nl.solve_all()``.
 
+A program can hold several queries, each with a name in brackets,
+``ans[name](...)``. The result is then a dictionary from the names to the
+answers:
+
+.. code-block:: python
+
+    prog = """
+        ans[left](x, y, z) :- activation(x, y, z, 'left hemisphere').
+        ans[tract](s) :- uncinate(s, 'left').
+        ans[network](r1, r2, p) :- coactivation(r1, r2, p).
+    """
+    results = nl.execute_datalog_program(prog)
+    results["left"], results["tract"], results["network"]
+
+The queries of a program have each a name: ``ans`` stands for the one
+without brackets, and two queries cannot share a name. A program with one
+query returns its answer, not a dictionary. The queries are solved
+together, which is faster than one after the other when they share
+predicates; see :ref:`several-queries`.
+
 2.4 Variables
 --------------
 
