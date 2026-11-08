@@ -23,11 +23,14 @@ examples:
 # query is checked against the engines by the tests
 # (NEUROLANG_TEST_DATA_DIR).
 #
-# As the engines' assistant_guidance asks, every question but a count
-# (how many) is answered with probabilistic query answering over
-# selected_study, the uniform choice of a study: a study is chosen at
-# random and the answer is the probability of what the question asks,
-# conditioned on the term it names. A study activates a point when one
+# As the engines' assistant_guidance asks, a question asking how many
+# gets a count, which studies their rows (ids and titles), and how
+# likely probabilistic query answering over selected_study, the uniform
+# choice of a study: a study is chosen at random and the answer is the
+# probability of what the question asks. Given a term, a text or a
+# seed, the brain gets the base rate P(A), the conditional probability
+# P(A | term) and the lift, their ratio, with the numbers of studies,
+# and a ranking is by the lift. A study activates a point when one
 # of its peaks is within 3 mm:
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
@@ -49,8 +52,7 @@ examples:
 assistant_examples:
   - question: Which studies mention pain?
     datalog: |-
-      pain_study(s) :- mentions(s, 'pain'), selected_study(s)
-      ans(p) :- PROB[pain_study(s)] = p
+      ans(s, title) :- mentions(s, 'pain'), study_title(s, title)
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -61,23 +63,26 @@ assistant_examples:
     datalog: |-
       language_or_speech(s) :- mentions(s, 'language')
       language_or_speech(s) :- mentions(s, 'speech')
-      chosen(s) :- language_or_speech(s), selected_study(s)
-      ans(p) :- PROB[chosen(s)] = p
+      ans(s, title) :- language_or_speech(s), study_title(s, title)
 
   - question: Which studies mention both pain and emotion?
     datalog: |-
-      pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
-      ans(p) :- PROB[pain_and_emotion(s)] = p
+      ans(s, title) :- mentions(s, 'pain'), mentions(s, 'emotion'), study_title(s, title)
 
   - question: Which studies do not mention pain?
     datalog: |-
-      no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
-      ans(p) :- PROB[no_pain(s)] = p
+      ans(s, title) :- study_title(s, title), ~mentions(s, 'pain')
 
   - question: Which terms co-occur with fear in a study?
     datalog: |-
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(t, p) :- PROB[term_association(s, t) // term_association(s, 'fear')] = p
+      base_rate(t, p) :- PROB[term_association(s, t)] = p
+      conditional(t, p) :- PROB[term_association(s, t) // term_association(s, 'fear')] = p
+      n_mentions(t, count(s)) :- mentions(s, t)
+      n_both(t, count(s)) :- mentions(s, t), mentions(s, 'fear')
+      n_fear(count(s)) :- mentions(s, 'fear')
+      n_total(count(s)) :- study(s)
+      ans(t, p_t, p_t_given_fear, lift, n_t, n_t_and_fear, n_fear, n) :- base_rate(t, p_t), conditional(t, p_t_given_fear), (lift == p_t_given_fear / p_t), n_mentions(t, n_t), n_both(t, n_t_and_fear), n_fear(n_fear), n_total(n), (t != 'fear')
 
   - question: Which voxels are activated by studies that mention pain?
     datalog: |-
@@ -88,39 +93,83 @@ assistant_examples:
   - question: Which studies report an activation within 3 mm of the left amygdala, MNI (-24, -4, -20)?
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
-      active(s) :- near(s), selected_study(s)
-      ans(p) :- PROB[active(s)] = p
+      ans(s, title) :- near(s), study_title(s, title)
 
   - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
       active(s) :- near(s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active(s) // term_association(s, 'fear')] = p
+      base_rate(p) :- PROB[active(s)] = p
+      conditional(p) :- PROB[active(s) // term_association(s, 'fear')] = p
+      n_active(count(s)) :- near(s)
+      n_both(count(s)) :- near(s), mentions(s, 'fear')
+      n_term(count(s)) :- mentions(s, 'fear')
+      n_total(count(s)) :- study(s)
+      ans(p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(p_a), conditional(p_a_given_t), (lift == p_a_given_t / p_a), n_active(n_a), n_both(n_a_and_t), n_term(n_t), n_total(n)
 
   - question: Which gyri and sulci are activated by studies about language?
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p
+      n_active(l, count(s)) :- destrieux_activated(l, s)
+      n_both(l, count(s)) :- destrieux_activated(l, s), mentions(s, 'language')
+      n_term(count(s)) :- mentions(s, 'language')
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(l, p_a), conditional(l, p_a_given_t), (lift == p_a_given_t / p_a), n_active(l, n_a), n_both(l, n_a_and_t), n_term(n_t), n_total(n)
 
   - question: Is the left superior temporal gyrus activated by studies on speech?
     datalog: |-
-      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      stg(s) :- destrieux_activated('L G temp sup Lateral', s)
+      active(s) :- stg(s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active('L G temp sup Lateral', s) // term_association(s, 'speech')] = p
+      base_rate(p) :- PROB[active(s)] = p
+      conditional(p) :- PROB[active(s) // term_association(s, 'speech')] = p
+      n_active(count(s)) :- stg(s)
+      n_both(count(s)) :- stg(s), mentions(s, 'speech')
+      n_term(count(s)) :- mentions(s, 'speech')
+      n_total(count(s)) :- study(s)
+      ans(p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(p_a), conditional(p_a_given_t), (lift == p_a_given_t / p_a), n_active(n_a), n_both(n_a_and_t), n_term(n_t), n_total(n)
 
   - question: Which subcortical regions are activated by studies about fear?
     datalog: |-
       active(l, s) :- tian_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'fear')] = p
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // term_association(s, 'fear')] = p
+      n_active(l, count(s)) :- tian_activated(l, s)
+      n_both(l, count(s)) :- tian_activated(l, s), mentions(s, 'fear')
+      n_term(count(s)) :- mentions(s, 'fear')
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(l, p_a), conditional(l, p_a_given_t), (lift == p_a_given_t / p_a), n_active(l, n_a), n_both(l, n_a_and_t), n_term(n_t), n_total(n)
+
+  - question: Which subcortical region is the most strongly associated with reward?
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
+      association(l, lift) :- base_rate(l, p_a), conditional(l, p_a_given_t), (lift == p_a_given_t / p_a)
+      beaten(l) :- association(l, x), association(l2, y), (y > x)
+      n_active(l, count(s)) :- tian_activated(l, s)
+      n_both(l, count(s)) :- tian_activated(l, s), mentions(s, 'reward')
+      n_term(count(s)) :- mentions(s, 'reward')
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- association(l, lift), ~beaten(l), base_rate(l, p_a), conditional(l, p_a_given_t), n_active(l, n_a), n_both(l, n_a_and_t), n_term(n_t), n_total(n)
 
   - question: Which parcels of the functional networks are activated by studies about the default mode?
     datalog: |-
       active(l, s) :- schaefer_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'default mode')] = p
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // term_association(s, 'default mode')] = p
+      n_active(l, count(s)) :- schaefer_activated(l, s)
+      n_both(l, count(s)) :- schaefer_activated(l, s), mentions(s, 'default mode')
+      n_term(count(s)) :- mentions(s, 'default mode')
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(l, p_a), conditional(l, p_a_given_t), (lift == p_a_given_t / p_a), n_active(l, n_a), n_both(l, n_a_and_t), n_term(n_t), n_total(n)
 
   - question: Which functional regions, cortical networks and subcortex, are activated by studies about reward?
     datalog: |-
@@ -128,7 +177,13 @@ assistant_examples:
       functional_region(l, s) :- tian_activated(l, s)
       active(l, s) :- functional_region(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
+      n_active(l, count(s)) :- functional_region(l, s)
+      n_both(l, count(s)) :- functional_region(l, s), mentions(s, 'reward')
+      n_term(count(s)) :- mentions(s, 'reward')
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_t, lift, n_a, n_a_and_t, n_t, n) :- base_rate(l, p_a), conditional(l, p_a_given_t), (lift == p_a_given_t / p_a), n_active(l, n_a), n_both(l, n_a_and_t), n_term(n_t), n_total(n)
 
   # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
   # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
@@ -228,7 +283,13 @@ assistant_examples:
       amygdala(s) :- tian_activated('mAMY lh', s)
       seed(s) :- amygdala(s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+      base_rate(l, p) :- PROB[active(l, s)] = p
+      conditional(l, p) :- PROB[active(l, s) // seed(s)] = p
+      n_active(l, count(s)) :- destrieux_activated(l, s)
+      n_both(l, count(s)) :- destrieux_activated(l, s), amygdala(s)
+      n_seed(count(s)) :- amygdala(s)
+      n_total(count(s)) :- study(s)
+      ans(l, p_a, p_a_given_seed, lift, n_a, n_a_and_seed, n_seed, n) :- base_rate(l, p_a), conditional(l, p_a_given_seed), (lift == p_a_given_seed / p_a), n_active(l, n_a), n_both(l, n_a_and_seed), n_seed(n_seed), n_total(n)
 
   - question: Which gyri and sulci are co-activated with the left superior temporal gyrus?
     datalog: |-
@@ -314,8 +375,10 @@ assistant_examples:
       amygdala_label(l) :- tian(l, r), startswith('mAMY', l)
       amygdala(s) :- amygdala_label(l), tian_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
+      base_rate(p) :- PROB[amygdala(s)] = p
       p_amygdala_given_close(q, PROB) :- amygdala(s) // close(q, s)
-      ans(p) :- cogat_definition('fear', d), p_amygdala_given_close(d, p)
+      lift_close(q, p_a, p, lift) :- p_amygdala_given_close(q, p), base_rate(p_a), (lift == p / p_a)
+      ans(p_a, p_a_given_text, lift) :- cogat_definition('fear', d), lift_close(d, p_a, p_a_given_text, lift)
 
   - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
     datalog: |-
@@ -340,10 +403,16 @@ assistant_examples:
     datalog: |-
       default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
       default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
-      default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+      default_study(s) :- default_label(l), schaefer_activated(l, s)
+      default_mode(s) :- default_study(s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
+      base_rate(p) :- PROB[default_mode(s)] = p
       p_default_given_close(q, PROB) :- default_mode(s) // close(q, s)
-      ans(p) :- p_default_given_close('recalling personal memories from the past', p)
+      n_active(count(s)) :- default_study(s)
+      n_both(count(s)) :- similar_study('recalling personal memories from the past', s), default_study(s)
+      n_close(count(s)) :- similar_study('recalling personal memories from the past', s)
+      n_total(count(s)) :- study(s)
+      ans(p_a, p_a_given_text, lift, n_a, n_a_and_text, n_text, n) :- p_default_given_close('recalling personal memories from the past', p_a_given_text), base_rate(p_a), (lift == p_a_given_text / p_a), n_active(n_a), n_both(n_a_and_text), n_close(n_text), n_total(n)
 
   - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear? Give their titles.
     datalog: |-

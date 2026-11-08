@@ -112,6 +112,16 @@ def test_a_preview_keeps_the_whole_result(nl):
     assert [(t, len(f)) for t, f in several.frames] == [("a", 3), ("b", 1)]
 
 
+def test_a_preview_is_ranked_by_its_last_column_of_decimals(nl):
+    nl.add_tuple_set(
+        [("a", 0.1, 3), ("b", 0.9, 1), ("c", 0.5, 2)], name="score"
+    )
+    preview = run_preview(nl, "ans(l, x, n) :- score(l, x, n)", "datalog")
+    [(_, frame)] = preview.frames
+    assert list(frame["l"]) == ["b", "c", "a"]
+    assert preview.text.splitlines()[2].split()[0] == "b"
+
+
 def test_the_whole_result_comes_back_from_the_child_process(forking, nl):
     preview = run_preview(
         nl, "ans(s, t) :- mentions(s, t)", "datalog", 2, timeout=30,

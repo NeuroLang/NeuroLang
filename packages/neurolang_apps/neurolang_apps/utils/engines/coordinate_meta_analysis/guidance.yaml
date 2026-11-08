@@ -7,18 +7,30 @@ assistant_guidance: >
   A question asking how many (combien) gets a count, not a
   probability: AGGREGATE[](mentions(s, 'pain') @ count(s)) = n over
   the stored relations, AGGREGATE[x] for each x, or over the rows of
-  a PROB rule when it counts those with a given probability.  Answer
-  every other question with probabilistic query answering over
-  selected_study, the uniform choice of a study: give the probability
-  of what the question asks, PROB[...] = p, over rules of yours
-  joining selected_study(s), as active(l, s) :-
-  destrieux_activated(l, s), selected_study(s), never over stored
-  relations directly; and for a question about
-  a term and the brain the conditional probability given the term,
-  PROB[activation // term] = p, or a ratio of probabilities (lift,
-  Bayes factor) when it asks for an association; a question asking
-  for a list (which studies, which regions) gets the probability of
-  each.  A study activates a point when one of its peaks is within
+  a PROB rule when it counts those with a given probability.  A
+  question asking which studies or terms hold gets their rows, not a
+  probability: ans(s, title) :- mentions(s, 'pain'), study_title(s,
+  title).  Answer a question about how likely something is with
+  probabilistic query answering over selected_study, the uniform
+  choice of a study: PROB[...] = p, over rules of yours joining
+  selected_study(s), as active(l, s) :- destrieux_activated(l, s),
+  selected_study(s), never over stored relations directly.  A
+  question about the brain given a term, a text or a seed (how
+  likely, which regions) gets, for each region or point, the base
+  rate P(A), PROB[active(l, s)] = p, the conditional probability
+  P(A | term), PROB[active(l, s) // term(s)] = p, and the lift, their
+  ratio, with the numbers of studies counted by AGGREGATE over the
+  stored relations: with A, with A and the term, with the term, and
+  n_total(count(s)) :- study(s); count(s) counts the rows of its
+  body, so count those of several regions (a network) over a rule of
+  the studies alone, n(count(s)) :- network_study(s).  P(A | term)
+  alone follows the size of the region.  Rank (which is the most, the best) by the lift, not
+  by P(A | term): the answer is shown sorted by its last column of
+  decimals, the lift before the counts; the single largest is kept with
+  a rule beaten(l) of the regions with a larger one.  Give a Bayes
+  factor when the question asks for one.  Say in the explanation
+  which quantities were computed.
+  A study activates a point when one of its peaks is within
   3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
   <= 3), with the coordinates of the question as MNI millimetres,
   written as they are.  For the classical anatomy of the cortex
@@ -45,7 +57,8 @@ assistant_guidance: >
   study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
   s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
   term if the question names one; for the regions or points
-  co-activated with a seed, PROB[active(l, s) // seed(s)] = p; for
+  co-activated with a seed, PROB[active(l, s) // seed(s)] = p, with
+  the base rate, the lift and the counts as for a term; for
   "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
   A question about a topic given as a description, or about a
   Cognitive Atlas concept, uses the similarity of the study texts to
@@ -57,6 +70,10 @@ assistant_guidance: >
   j, k, u), or with a rule of yours taking the text as its first
   argument, close(q, s) :- similar_study(q, s), selected_study(s);
   inside another rule the text is not known and the query fails.
+  So does a count of the studies of a text unless the text is
+  written in its rule, n_close(count(s)) :- similar_study('a
+  text', s): for a definition, give the probabilities alone, the
+  lift in a rule taking the text first, lift_close(q, p_a, p, lift).
   Rank by similarity rather than with a fixed threshold.
   Cognitive Atlas classes are named by cogat_term, their lower-case
   label (the terms of mentions), both to find a class and to answer

@@ -77,6 +77,15 @@ Unreleased
 
 **New features:**
 
+* The LLM assistant of the meta-analysis engines (``neurosynth``,
+  ``neurostore``) answers a question about the brain given a term, a text or
+  a seed with the base rate P(A), the conditional probability P(A | term) and
+  their ratio, the lift, with the numbers of studies, and ranks by the lift
+  rather than by P(A | term), which follows the size of a region; "which
+  studies…" gets the studies and their titles rather than a probability.
+  The rows of its answers come sorted by their last column of decimals,
+  largest first.
+  
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather

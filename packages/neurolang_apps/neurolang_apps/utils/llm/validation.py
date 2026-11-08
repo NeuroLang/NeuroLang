@@ -321,15 +321,26 @@ class Preview:
     frames: object = None
 
 
+def _ranked(frame):
+    """Return *frame* sorted by its last column of decimals, largest first."""
+    decimals = frame.select_dtypes("float").columns
+    if len(decimals) == 0:
+        return frame
+    return frame.sort_values(decimals[-1], ascending=False)
+
+
 def _frames(result, column_names: dict) -> list:
-    """Return ``(name, frame)`` for each relation of a query *result*."""
+    """
+    Return ``(name, frame)`` for each relation of a query *result*, ranked
+    by its last column of decimals (a probability, a lift).
+    """
     if isinstance(result, dict):
         return [
-            (key, result_to_dataframe(value, column_names.get(key)))
+            (key, _ranked(result_to_dataframe(value, column_names.get(key))))
             for key, value in result.items()
         ]
     names = next(iter(column_names.values()), None)
-    return [("", result_to_dataframe(result, names))]
+    return [("", _ranked(result_to_dataframe(result, names)))]
 
 
 class QueryTooLarge(Exception):
