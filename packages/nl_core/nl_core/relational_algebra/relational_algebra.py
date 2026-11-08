@@ -897,6 +897,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         compiled_formula = self._compile_function_application_to_sql_fun_exp(
             selection.formula
         )
+        if callable(compiled_formula):
+            fun, args = self._fa_2_lambda.walk(
+                self._rccsbs.walk(selection.formula)
+            )
+            if len(args) == 1:
+                # a function of one column is applied to the column
+                compiled_formula = {next(iter(args)): fun}
         selected_relation = relation.value.selection(compiled_formula)
         return self._build_relation_constant(selected_relation)
 
