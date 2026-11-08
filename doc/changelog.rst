@@ -33,6 +33,16 @@ Unreleased
   of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
   the column-wise selection of #1126. ``--show-ra`` draws these relations as
   trees.
+  
+* Magic sets adorn first the body atoms holding a variable bound in the
+  head, as they do the atoms with a constant: a query constant for a head
+  variable, such as the text of ``p_a_given_similar('being socially
+  excluded', i, j, k, p)``, restricts ``activated`` to the studies similar
+  to it, as when the text is written into the rule, instead of joining the
+  50 M activations of every study in the probabilistic plan: 0.9 GB more
+  than the engine instead of 4.2 GB, and 23 s instead of 45 s, for the same
+  1,151,590 rows.
+
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
@@ -168,6 +178,27 @@ Unreleased
 
 **Internal:**
 
+* Every pull request gives its reviewer the REPL in the browser of its
+  branch: the documentation's workflow uploads the site (the documentation
+  and the REPL) as the artifact ``repl-pr-NUMBER`` and keeps one comment of
+  the pull request up to date with the commit it was built from, the
+  artifact, whether the REPL's bundle is complete and how to run it:
+  ``uv run --extra apps neurolang-repl-serve --pr NUMBER`` (or ``--run-id
+  ID``), which downloads it with the GitHub CLI and serves it without
+  building anything, or ``gh run download`` and ``python3 -m http.server``.
+  A pull request from a fork has the artifact, without the comment.
+* The workflows of the tests, the layers, the spelling and the
+  documentation run on every pull request, whatever its base, so that a
+  pull request stacked on another one is checked (its tests are those of
+  the packages it changes with respect to the pull request below it); a
+  push to a pull request cancels its runs still going.
+* A REPL's bundle that could not be built fails the check *REPL bundle*
+  instead of passing unseen (the documentation is deployed all the same).
+  ``doc/make_repl_bundle.py --downloads DIR`` keeps what the engine
+  downloads in DIR, even when the build fails, and CI keeps that directory
+  from one build to the next; a download failing for a while (a time-out,
+  an error 5xx) is tried again after 2, 4 and 8 s
+  (``neurolang.utils.nilearn_compat.fetch_files``).
 * Helpers reused instead of repeated: the conjuncts of a formula and the
   selection of a plan by comparisons in the probabilistic lifting, the
   aggregate types of the magic sets, the pandas reductions table, the
@@ -189,6 +220,11 @@ Unreleased
 
 **Bug fixes:**
 
+* The Neurosynth data are downloaded from raw.githubusercontent.com:
+  github.com/neurosynth/neurosynth-data/raw/master/, which sends there,
+  answers 504 for that repository, so that the ``neurosynth`` engine could
+  not be built from nothing, nor the REPL's bundle, whose build passed
+  unseen and left the deployed page unable to start.
 * The semi-naive chase merged, at every step and for every rule, the
   relation of each predicate of the step's delta with that delta, even
   the predicates the rule does not use, and inferred the type of the

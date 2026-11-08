@@ -90,6 +90,7 @@ from .deterministic_subqueries import (
 )
 from .expression_processing import (
     STRICT_COMPARISONS,
+    NegatedChoicesAsOtherTuples,
     UnifyChoicesInNegations,
     is_builtin,
     is_comparison,
@@ -265,9 +266,11 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         # standardising apart makes unambiguous.
         flat_query_body, deterministic_relations = \
             replace_deterministic_negations(
-                AACN.walk(UnifyChoicesInNegations(
+                NegatedChoicesAsOtherTuples(
                     cpl_program.pchoice_pred_symbs
-                ).walk(standardise_apart(flat_query_body))), cpl_program
+                ).walk(AACN.walk(UnifyChoicesInNegations(
+                    cpl_program.pchoice_pred_symbs
+                ).walk(standardise_apart(flat_query_body)))), cpl_program
             )
         flat_query = Implication(query.consequent, flat_query_body)
         non_repeating = _non_repeating_query_plan(
@@ -782,9 +785,9 @@ def _projected_plan(
     quantified and the `projected` ones free, on the free variables of
     `formula`."""
     free_variables = extract_logic_free_variables(formula)
-    body = add_existentials_except(
+    body = PQD.walk(add_existentials_except(
         body, extract_logic_free_variables(body) - other_variables
-    )
+    ))
     plans = _lift_pure(
         (Implication(Symbol.fresh()(*(free_variables | projected)), body),),
         symbol_table
@@ -820,7 +823,7 @@ def _split_choice_projection(antecedent, symbol_table):
     a conjunct with variables of `X` and which occurs nowhere else, or
     None.
     """
-    variables, body = _existential_variables_and_body(antecedent)
+    variables, body = _existential_variables_and_body(antecedent, True)
     functors = [atom.functor for atom in extract_logic_atoms(body)]
     for atom in ExtractConjunctAtoms().walk(body):
         projected = variables & set(atom.args)
@@ -1171,7 +1174,9 @@ def comparison_conjunct_plan(consequent, remainder, conjunct, symbol_table):
     ))
     if _shares_a_choice_relation(psi_body, remainder, symbol_table):
         return None
-    remainder_variables = extract_logic_free_variables(remainder)
+    remainder_variables = (
+        extract_logic_free_variables(remainder) | free_variables
+    )
     for t in extract_logic_free_variables(body) - free_variables:
         if not all(
             extract_logic_free_variables(comparison) <= free_variables | {t}
@@ -1293,7 +1298,8 @@ def _lift_pure(rules, symbol_table):
 
 def _split_comparison_conjunct(antecedent):
     """Find an existential conjunct, possibly negated, with comparisons
-    and whose free variables are among those of the rest.
+    and whose free variables are among those of the rest, or, if it is
+    not negated, of its atoms other than comparisons.
 
     Returns
     -------
@@ -1307,11 +1313,20 @@ def _split_comparison_conjunct(antecedent):
         remainder = Conjunction(
             antecedent.formulas[:i] + antecedent.formulas[i + 1:]
         )
+        atoms = extract_logic_atoms(formula)
+        extra = (
+            extract_logic_free_variables(formula) -
+            extract_logic_free_variables(remainder)
+        )
         if (
             _is_existential_conjunct(formula) and
-            any(is_comparison(a) for a in extract_logic_atoms(formula)) and
-            extract_logic_free_variables(formula) <=
-            extract_logic_free_variables(remainder)
+            any(is_comparison(a) for a in atoms) and
+            (not extra or (
+                isinstance(formula, ExistentialPredicate) and
+                extra <= extract_logic_free_variables(Conjunction(tuple(
+                    a for a in atoms if not is_comparison(a)
+                )))
+            ))
         ):
             return remainder, formula
     return None

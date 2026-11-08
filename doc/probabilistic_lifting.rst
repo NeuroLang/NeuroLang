@@ -547,6 +547,30 @@ Deterministic builtins
    :math:`s_2 \neq s` becoming :math:`s \neq s`, is true, and is removed
    (:class:`~neurolang.probabilistic.expression_processing.UnifyChoicesInNegations`).
 
+   A negated atom of a choice :math:`C` of one column is another tuple of
+   :math:`C`, exactly one of its tuples being true:
+
+   .. math::
+
+      \lnot C(u) \equiv \exists f\, (C(f) \land f \neq u),
+
+   :math:`f` fresh, after the absorption, so that a contradicting
+   disjunct :math:`\lnot C(s)` is first removed
+   (:class:`~neurolang.probabilistic.expression_processing.NegatedChoicesAsOtherTuples`). The
+   query :math:`\exists x\, R(x) \land \lnot C(x)` becomes
+   :math:`\exists f\, (C(f) \land \exists x\, (R(x) \land x \neq f))`,
+   the disjoint projection on :math:`f` of a query that the comparison
+   rule lifts (see the projection on a variable, in `Negations and
+   comparisons sharing relations`_), with the probability
+
+   .. math::
+
+      1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b)).
+
+   A negated atom of a choice of several columns would give a
+   disjunction of comparisons, :math:`\bigvee_i f_i \neq u_i`, which the
+   comparison rule does not select, and is left as it is.
+
 Equalities within disjuncts
    The variables an equality makes the same are unified, in each disjunct
    of a union apart, as the equality holds in its disjunct only. A
@@ -870,7 +894,17 @@ Comparisons in an existential conjunct
    :math:`\psi`, and when each probabilistic atom of :math:`\psi(t)` has
    :math:`t` in a position where the atoms of the same relation in
    :math:`A` have a term that :math:`C` makes different from :math:`t`, so
-   that :math:`E` and :math:`A` concern different tuples.
+   that :math:`E` and :math:`A` concern different tuples. A positive
+   conjunct can have free variables that :math:`A` has not, if they are
+   in the atoms of :math:`\psi` (``_split_comparison_conjunct``), as
+   :math:`y` in :math:`C(f) \land \exists x\, (S(x, y) \land x \neq f)`:
+   :math:`E` is then projected on them too, and joined with :math:`L`.
+   Comparisons that are conjuncts of the query select the plan of the
+   rest, which must have their variables
+   (``_lift_with_dependent_negations``): a comparison with a variable
+   that only another conjunct of an enclosing conjunction has, as
+   :math:`x \neq f` in the separator projection of :math:`\exists x\,
+   (S(x, y) \land x \neq f)`, is left to the comparison rule.
 
 Free-variable shattering
    For :math:`A \land \lnot\exists t\,\psi(t)` where the shared atoms have a
@@ -926,7 +960,13 @@ Projection on a variable
    :math:`A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)`
    (``FactorQuantifiersMixin`` of :mod:`neurolang.logic.transformations`),
    which holds as the query is standardised apart: a closed conjunct, such as an
-   atom added by magic sets, does not prevent the projection. The
+   atom added by magic sets, does not prevent the projection. They are
+   gathered at any depth of conjunctions, as the existential of a
+   rewritten negated choice in :math:`\exists x\, (R(x) \land \exists f\,
+   (C(f) \land f \neq x))` (``_existential_variables_and_body``), and the
+   quantifiers of the variables not made free are pushed down again in
+   the body to lift (``PushQuantifiersDown``, in ``_projected_plan``):
+   :math:`\exists x\, (R(x) \land x \neq f) \land C(f)`. The
    projection is
 
    * *disjointly*, when a conjunct of :math:`\varphi` is an atom
@@ -998,8 +1038,12 @@ Projection on a variable
    atom with another quantified variable, so the projection is on the
    greatest :math:`z`; the comparison :math:`y < z` is then nested within
    the projection on :math:`x`, whose plan does not have the values of
-   :math:`z`, and the query is declined; so are chains such as
-   :math:`x < y \land y < z`, the middle variable being on both sides.
+   :math:`z`, and the query is declined. A chain such as
+   :math:`R(x) \land T(y) \land U(z) \land x < y \land y < z` is lifted
+   by applying the rule twice: the projection on the least :math:`x`
+   leaves :math:`\exists y\, \exists z\, (T(y) \land U(z) \land y < z)`
+   in its body, a query of the same form, whose quantifiers the
+   projection plan pushes back down (``PQD``).
 
    *At least two.* The query
    :math:`\exists x\, \exists y\, (R(\bar u) \land R(\bar u[y/x]) \land
@@ -1275,7 +1319,16 @@ Comparisons in an existential conjunct
    :math:`A\theta`, and by Lemma 1
    :math:`P[(A \land E)\theta] = P[A\theta]\,P[E\theta]` and
    :math:`P[(A \land \lnot E)\theta] = P[A\theta]\,(1 - P[E\theta])`, which
-   the join and ``Difference`` compute. Olteanu and Huang
+   the join and ``Difference`` compute. The free variables of :math:`E`
+   that :math:`A` has not are in the atoms of :math:`\psi`, not negated
+   (``_split_comparison_conjunct``): they are fixed by :math:`\theta` too,
+   :math:`E` is projected on them with the free variables of :math:`A`,
+   and the join gives :math:`P[A\theta]\,P[E\theta]` for each of their
+   values; a negated conjunct keeps its variables among those of
+   :math:`A`, as ``Difference`` needs. A comparison selecting a plan has
+   its variables among the columns of the plan
+   (``_lift_with_dependent_negations``): otherwise the plan would not
+   give them a value, and the query is declined. Olteanu and Huang
    [Olteanu2009]_ compute conjunctive queries with inequalities without
    self-joins on tuple-independent databases; this rule uses the
    inequalities instead to show that the tuples of a relation occurring
@@ -1542,6 +1595,28 @@ Rewriting of the choices
    (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
    every step of the rewriting is an equivalence.
 
+   *Negated atom of a choice.* In every world exactly one tuple
+   :math:`C(a)` of a choice is true: the probabilities of its tuples add
+   up to one, which
+   :func:`~neurolang.probabilistic.expression_processing.check_probabilistic_choice_set_probabilities_sum_to_one`
+   checks when the choice is added to the program, so there is no world
+   without a true tuple of :math:`C`. For a value :math:`u` of the term,
+   :math:`\lnot C(u)` holds if and only if :math:`a \neq u`, that is if
+   and only if :math:`\exists f\, (C(f) \land f \neq u)` holds, with
+   :math:`f = a`, the only value for which :math:`C(f)` holds. The fresh
+   :math:`f` captures no variable, and the rewriting is an equivalence in
+   every world. It adds no negation, so it applies once to each negated
+   choice atom (``NegatedChoicesAsOtherTuplesMixin`` matches the negation
+   of an atom of one argument, and leaves those of other relations
+   unchanged); the query
+   :math:`\exists x\, R(x) \land \lnot C(x)` is then planned by the
+   disjoint projection on :math:`f` (Lemma 2, and the projection on a
+   variable below) of :math:`C(f) \land \exists x\, (R(x) \land x \neq f)`,
+   whose second conjunct shares no relation with :math:`C(f)`, and is
+   independent of it by Lemma 1: :math:`\sum_a p_C(a)\, (1 - \prod_{b
+   \neq a} (1 - p_R(b)))`, equal to the closed form above as
+   :math:`\sum_a p_C(a) = 1`.
+
 Answer variables as constants
    For an answer, the free variables have values, and their equalities
    are those of exactly one partition :math:`\Pi` of :math:`x_1, \dots,
@@ -1743,13 +1818,11 @@ Liftable queries that are declined
    The rules are not complete. These queries, among others, are
    polynomial but declined, and left to weighted model counting:
 
-   * :math:`\mathit{ans}() \leftarrow R(x) \land \lnot C(x)`, with
-     :math:`C` a probabilistic choice, whose probability is
-     :math:`1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b))`, exactly one
-     tuple :math:`C(a)` being true: the atom of the choice is negated, so
-     no conjunct of the choice has :math:`x` for the projections of
-     `Planning non-repeating queries`_, and the Dalvi–Suciu algorithm marks
-     the query ``NonLiftable``;
+   * :math:`\mathit{ans}() \leftarrow S(x, y) \land \lnot C_2(x, y)`,
+     with :math:`C_2` a probabilistic choice of two columns: the
+     rewriting of the negated choice would give the disjunction
+     :math:`f \neq x \lor g \neq y`, which no rule selects (see
+     `Preparing the query`_);
    * more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, three, answer
      variables at the same position of atoms of a relation: "answer
      variables as constants" splits on all their equalities, and the
