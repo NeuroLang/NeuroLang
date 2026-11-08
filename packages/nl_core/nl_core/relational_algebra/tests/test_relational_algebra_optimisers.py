@@ -1753,3 +1753,29 @@ def test_constant_of_the_null_side_of_an_outer_join(
     expected = RelationalAlgebraSolver().walk(expression).value
     result = RelationalAlgebraSolver().walk(Opt().walk(expression)).value
     assert result == expected
+
+
+def test_projection_of_a_join_of_joins_is_ordered_as_one_join():
+    """
+    Check that a projection of nested joins gives one join ordered by size.
+
+    In ``π[l, s]((((D(l, s) ⋈ C(s)) ⋈ A(f, s)) ⋈ L(f))``, pushing the
+    projection into the outer join first hid its join operand, which was
+    then never flattened: the large ``D`` and ``A`` were joined before
+    the small ``L``.
+    """
+    d = _sized_constant(("l", "s"), 300)
+    c = _sized_constant(("s",), 140)
+    a = _sized_constant(("f", "s"), 290)
+    small = _sized_constant(("f",), 14)
+    tree = Projection(
+        NaturalJoin(NaturalJoin(NaturalJoin(d, c), a), small),
+        (str2columnstr_constant("l"), str2columnstr_constant("s")),
+    )
+
+    result = RelationalAlgebraOptimiser().walk(tree)
+
+    join = result.relation
+    assert isinstance(join, NaryNaturalJoin)
+    assert join.relations[0] is small
+    assert _same_result(tree, result)

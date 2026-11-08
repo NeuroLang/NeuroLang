@@ -317,7 +317,7 @@ def test_union_with_a_self_join_of_the_choice_in_a_rule():
 
 def test_disjoint_separator_plans_a_union_in_one_projection():
     """The union over the choice is one disjoint projection on the study,
-    of the choice joined with the support of the deterministic union."""
+    of the choice joined with the deterministic union."""
     plan = _plan_of(
         "a(s) :- mentions(s, 'language'), selected_study(s)\n"
         "a(s) :- mentions(s, 'speech'), selected_study(s)\n"
@@ -326,6 +326,8 @@ def test_disjoint_separator_plans_a_union_in_one_projection():
     )
     assert isinstance(plan, DisjointProjection)
     assert "Σ" not in repr(plan)
+    # The deterministic union is a relation computed as a set.
+    assert "∪" not in repr(plan)
 
 
 def test_integer_constant_of_a_deterministic_atom():
@@ -672,3 +674,65 @@ def test_order_across_atoms_declined(query):
 
     with pytest.raises(NonLiftableException):
         _solve_random(query, 0, LIFTED_ONLY)
+
+
+DETERMINISTIC_UNION_QUERIES = [
+    "seed(s) :- A(l, s), startswith('a', l), C(s)\n"
+    "seed(s) :- A(l, s), startswith('b', l), C(s)\n"
+    "active(l, s) :- B(l, s), C(s)\n"
+    "ans(l, p) :- PROB[active(l, s) // seed(s)] = p",
+    "seed(s) :- A(l, s), startswith('a', l), C(s)\n"
+    "seed(s) :- B(l, s), C(s), ~A(l, s)\n"
+    "ans(p) :- PROB[seed(s)] = p",
+    "seed(s, l) :- A(l, s), C(s)\n"
+    "seed(s, l) :- B(l, s), startswith('b', l), C(s)\n"
+    "ans(l, p) :- PROB[seed(s, l)] = p",
+]
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+@pytest.mark.parametrize("query", DETERMINISTIC_UNION_QUERIES)
+def test_union_of_rules_joining_a_choice_and_deterministic_atoms(
+    query, seed
+):
+    """
+    The deterministic union that a choice is joined with by the disjoint
+    separator is computed as a set, with the probabilities of weighted
+    model counting.
+    """
+    import itertools
+    import random
+
+    from .. import NeurolangPDL
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    def startswith(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    def solve(solvers):
+        random.seed(seed)
+        nl = NeurolangPDL(**solvers)
+        nl.add_symbol(startswith, name="startswith")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(s,) for s in range(6)], name="C"
+        )
+        for name in "AB":
+            labels = ("a1", "a2", "b1", "c1")
+            nl.add_tuple_set([
+                t for t in itertools.product(labels, range(6))
+                if random.random() < .4
+            ], name=name)
+        return {
+            tuple(row[:-1]): row[-1]
+            for row in nl.execute_datalog_program(query)
+        }
+
+    expected = solve(dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    ))
+    assert expected
+    assert solve(LIFTED_ONLY) == pytest.approx(expected)

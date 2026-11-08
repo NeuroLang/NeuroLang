@@ -19,6 +19,21 @@ Unreleased
 
 **Performance:**
 
+* The deterministic rest of a query that the disjoint separator joins with
+  a probabilistic choice, as ``sub(t), mentions(s, t)`` in ``term_study(s)
+  :- sub(t), mentions(s, t), selected_study(s)``, is computed as a set with
+  the relational algebra, a union with a union and a projection, instead of
+  with the operations on probabilities (sums, and a union of independent
+  events through logarithms). The relational algebra optimiser flattens a
+  projection of nested joins before pushing the projection into them, so
+  that the joins are ordered by size; it joined the large relations first.
+  The voxels activated by the studies mentioning a subclass of a Cognitive
+  Atlas concept take 4.5 s instead of 6.2 s, and the Destrieux regions
+  given a study activating a salience parcel of either hemisphere (a union
+  of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
+  the column-wise selection of #1126. ``--show-ra`` draws these relations as
+  trees.
+  
 * Magic sets adorn first the body atoms holding a variable bound in the
   head, as they do the atoms with a constant: a query constant for a head
   variable, such as the text of ``p_a_given_similar('being socially
