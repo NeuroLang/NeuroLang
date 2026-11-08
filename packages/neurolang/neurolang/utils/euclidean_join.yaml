@@ -1,0 +1,72 @@
+# Settings of the Euclidean join (neurolang.utils.euclidean_join), the
+# kernel of the EUCLIDEAN(...) < r bounds.
+#
+# ``defaults`` holds every setting; a profile only lists the settings it
+# changes. The ``default`` profile balances time and memory. The
+# ``memory`` profile, which the interactive REPL (terminal and browser)
+# switches to, spends time to save memory. Choose another profile with
+# ``neurolang.utils.euclidean_join_settings.use_profile``, or with the
+# environment variable NEUROLANG_EUCLIDEAN_JOIN_PROFILE, and read another
+# file of the same layout with NEUROLANG_EUCLIDEAN_JOIN_CONFIG.
+#
+# Two ways find the pairs of points within the radius. With integer
+# coordinates, or floats on a grid, a *stencil* looks up in an occupancy
+# grid the points at each integer offset within the radius of each point
+# of the smaller set: a look-up costs a few nanoseconds and a pair no more
+# memory than its two indices. Otherwise *k-d trees* are searched, which
+# return their pairs at about 200 ns and 100 bytes of temporaries each.
+defaults:
+  # --- Stencil ---------------------------------------------------------
+  # Largest number of cells of the cube enclosing the offsets of the
+  # stencil, (2 r + 1) ** dimensions: beyond it k-d trees are used.
+  stencil_max_cells: 1000000
+  # A stencil is always used up to this many look-ups ...
+  stencil_min_work: 20000000
+  # ... and up to this many look-ups per point of the larger set ...
+  stencil_work_per_point: 32
+  # ... and whenever the occupancy grid of the larger set has at most
+  # this many cells per point, however many look-ups: a look-up costs
+  # far less than a pair of a k-d tree.
+  stencil_grid_cells_per_point: 40
+  # Count the pairs of the stencil before storing them, which looks up
+  # twice but never holds the pairs twice.
+  stencil_count_first: false
+  # Occupancy grids are used up to this many cells per point of the larger
+  # set ...
+  grid_cells_per_point: 4
+  # ... or this many cells; sorted keys are searched otherwise.
+  grid_min_cells: 16777216
+  # --- Float coordinates on a grid --------------------------------------
+  # Steps of the grids floats can lie on, coarsest first: the points are
+  # then joined as integers, with a stencil.
+  grid_steps: [1, 0.5, 0.25, 0.1, 0.05, 0.01]
+  # Largest coordinate, in steps, of such a grid.
+  grid_max_coordinate: 10000
+  # Distance, in steps, within which an offset of the stencil is checked on
+  # the floats rather than trusted.
+  grid_tolerance: 0.0001
+  # --- k-d trees ----------------------------------------------------------
+  # Number of pairs a search of the trees is expected to return at a time.
+  kdtree_chunk_pairs: 4000000
+  # Number of points whose neighbours are counted to size those searches.
+  kdtree_sample: 1000
+  # --- Blocks ---------------------------------------------------------------
+  # Number of pairs processed at a time when the exact distances, or the
+  # distinct pairs of rows, are computed.
+  block_pairs: 1048576
+
+profiles:
+  default: {}
+  memory:
+    # The stencil needs no more memory than the pairs it finds, however
+    # many look-ups it makes: use it up to a billion look-ups (some
+    # seconds), where the k-d trees would be much slower. Beyond, a point
+    # of the smaller set with that many neighbours to look up is better
+    # searched by the trees, whose pairs it holds in small chunks.
+    stencil_min_work: 1000000000
+    stencil_work_per_point: 1000
+    stencil_count_first: true
+    # Occupancy grids of at most 4 M cells (16 MB).
+    grid_min_cells: 4194304
+    kdtree_chunk_pairs: 250000
+    block_pairs: 131072
