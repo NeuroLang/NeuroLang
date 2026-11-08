@@ -736,3 +736,77 @@ def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
     calls = _recording_execute(small_app)
     small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
     assert calls == ["ans(x) :-\n  P(x)"]
+
+
+@pytest.fixture
+def greeting_engine():
+    """An engine whose solver has the command ``.greet``."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang.frontend.probabilistic_frontend import (
+        RegionFrontendCPLogicSolver,
+    )
+    from neurolang_apps.utils.tests.toy_commands import GreetingMixin
+
+    class Solver(GreetingMixin, RegionFrontendCPLogicSolver):
+        pass
+
+    return NeurolangPDL(solver_class=Solver)
+
+
+def test_a_command_of_the_engine_runs_at_the_prompt(greeting_engine):
+    """``.name(...)``, not a command of the REPL, is a command of the
+    engine's Datalog."""
+    app = _app(greeting_engine)
+    app._run_line('.greet("ada")')
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    assert "Unknown command" not in _output(app)
+
+
+def test_load_csv_runs_at_the_prompt(engine, tmp_path):
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(engine)
+    app._run_line(f'.load_csv(pairs, "{tmp_path}/t.csv")')
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+
+
+def test_an_unknown_command_of_the_engine_is_its_error(engine):
+    app = _app(engine)
+    app._run_line(".nope(1)")
+    out = _output(app)
+    assert "not supported" in out
+    assert "Unknown command" not in out
+    assert app.failed
+
+
+def test_a_dot_line_without_brackets_is_still_a_repl_command(engine):
+    app = _app(engine)
+    app._run_line(".nope")
+    assert "Unknown command .nope" in _output(app)
+
+
+def test_a_command_of_the_engine_runs_in_squall_mode(greeting_engine):
+    app = _app(greeting_engine, squall=True)
+    app._run_line('.greet("ada")')
+    assert app.settings.squall and not app.failed
+    app.settings.squall = False
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+
+
+def test_what_the_commands_of_a_query_load_stays(greeting_engine, tmp_path):
+    """The rules and facts of a query are local to it; the relations its
+    commands loaded are the session's, as the state of the commands is."""
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(greeting_engine)
+    app._execute_and_display(
+        f'.greet("ada")\n.load_csv(pairs, "{tmp_path}/t.csv")\n'
+        'twice(x) :- greeted(x)\nans(x) :- twice(x)'
+    )
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    assert "twice" not in {s.name for s in app._nl.symbol_table}

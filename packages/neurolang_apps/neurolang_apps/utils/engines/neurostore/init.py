@@ -131,13 +131,18 @@ def fetch_neurostore_dir(data_dir: Path) -> Path:
 
 
 def _peaks_from_coordinates(coordinates: pd.DataFrame) -> pd.DataFrame:
-    """Shape NeuroStore coordinates like NeuroSynth's peak table."""
+    """
+    Shape NeuroStore coordinates like NeuroSynth's peak table.
+
+    A space other than MNI or Talairach (or none) becomes ``UNKNOWN``,
+    handled by :func:`process_peaks` as its *unknown_space* says.
+    """
     space = coordinates["space"]
-    keep = space.isin(_MNI_SPACES | _TALAIRACH_SPACES)
-    peaks = coordinates.loc[keep, ["x", "y", "z", "study_id"]].dropna()
+    peaks = coordinates[["x", "y", "z", "study_id"]].dropna()
     peaks = peaks.rename(columns={"study_id": "id"})
     peaks["space"] = space[peaks.index].map(
-        lambda s: "MNI" if s in _MNI_SPACES else "TAL"
+        lambda s: "MNI" if s in _MNI_SPACES
+        else "TAL" if s in _TALAIRACH_SPACES else "UNKNOWN"
     )
     return peaks
 
@@ -191,7 +196,8 @@ def _tfidf_terms(abstracts: pd.Series) -> pd.DataFrame:
 
 
 def init_engine(
-    nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path
+    nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path,
+    unknown_space: str = "mni",
 ) -> None:
     """Populate a fresh engine with NeuroStore data.
 
@@ -203,12 +209,17 @@ def init_engine(
         MNI template image for voxel-space coordinate mapping.
     data_dir :
         Directory under which downloaded data is cached.
+    unknown_space :
+        How the peaks of an unknown space are handled (``mni``, ``tal`` or
+        ``drop``, see :func:`process_peaks`); the engine's
+        ``python_init_options``.
 
     """
     release_dir = fetch_neurostore_dir(data_dir)
     coordinates = pd.read_parquet(release_dir / "coordinates.parquet")
     peak_data = process_peaks(
-        _peaks_from_coordinates(coordinates), mask, study_id_type=str
+        _peaks_from_coordinates(coordinates), mask, study_id_type=str,
+        unknown_space=unknown_space,
     )
     study_ids = peak_data["study_id"].drop_duplicates()
 

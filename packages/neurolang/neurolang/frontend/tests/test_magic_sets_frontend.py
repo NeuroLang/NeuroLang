@@ -337,3 +337,27 @@ def test_frontend_bound_rule_on_an_aggregate_of_a_shared_relation(program):
     }
     expected = len(similar & {0, 1, 3}) / len(similar)
     assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_aggregate_read_by_two_literals_one_after_the_other(frontend):
+    """
+    The magic predicate of the second literal gets its bindings from the
+    first, and the one of the aggregate from the second: the aggregate would
+    depend on a literal that reads it, and the rewritten program is not
+    stratified (once NoValidChaseClassForStratumException). The rewrite is
+    refused and the query is solved as it is written.
+    """
+    nl = frontend()
+    nl.add_tuple_set([("a", "b"), ("a", "c")], name="first")
+    nl.add_tuple_set([("a", "c"), ("a", "d")], name="second")
+    nl.add_tuple_set([("a", "b"), ("a", "c")], name="item")
+    nl.add_tuple_set([("a", "b"), ("a", "c")], name="chosen")
+    res = nl.execute_datalog_program(
+        "n(t, count(l)) :- item(t, l), chosen(t, l)\n"
+        "one(t, s) :- first(t, s), n(t, v)\n"
+        "two(t, s) :- second(t, s), n(t, v)\n"
+        "both(t, s) :- one(t, s), two(t, s)\n"
+        'ans(s) :- both("a", s)'
+    )
+    assert set(res.as_pandas_dataframe().s) == {"c"}

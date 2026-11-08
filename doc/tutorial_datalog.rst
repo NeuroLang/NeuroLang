@@ -141,6 +141,29 @@ Variables that appear in the head must also appear in the body (the
 *range-restriction* property).  Variables used only in the body are
 existentially quantified.
 
+A body may be a **disjunction**, written ``|`` (or ``∨``); ``,`` binds tighter
+than ``|``, and parentheses group:
+
+.. code-block:: none
+
+    uncinate(x, h) :-
+        (traverses(x, 'orbitofrontal_gyrus', h)
+         | traverses(x, 'middle_frontal_gyrus', h)
+         | traverses(x, 'inferior_frontal_gyrus', h)),
+        endpoint_in(x, e, 'temporal', h).
+
+stands for three rules, one per disjunct.  Each disjunct must bind the
+variables of the head, and those of its negated atoms.  ``a(x), b(x) | c(x)``
+is ``(a(x), b(x)) | c(x)``; a comparison in a disjunction keeps its
+parentheses: ``b(x), (a(x) | (x < 3))``.
+
+.. note::
+
+   ``|`` is a disjunction everywhere, also inside ``PROB[...]`` and
+   ``MARG[...]``: ``PROB[a(x) | b(x)] = p`` is the probability of
+   ``a(x) | b(x)``.  A conditional probability is written with ``//`` only.
+   Before, ``|`` was a synonym of ``//``.
+
 2.3 The Query Predicate — ``ans(...)``
 ----------------------------------------
 
@@ -354,8 +377,8 @@ The equivalent in the Bayes Factor program:
     term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
     joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt.
 
-A conditioning filter can be added with ``//`` (``|`` is accepted as a
-synonym):
+A conditioning filter can be added with ``//`` (``|`` is a disjunction,
+not a conditioning, see 2.2):
 
 .. code-block:: none
 

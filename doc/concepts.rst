@@ -221,7 +221,8 @@ builds an engine, it runs up to ten phases, in this order:
        use_base_symbols: true
 
 #. **Python init** (``python_init``) — imports the module and calls
-   ``init_engine(nl, mask, data_dir)``.  Use this for downloading data,
+   ``init_engine(nl, mask, data_dir, **python_init_options)``.  Use this
+   for downloading data,
    registering complex symbols, or loading neuroimaging atlases.  If
    ``use_base_symbols`` already covers your needs, this phase can be
    omitted entirely — see the ``destrieux`` engine entry for an example.

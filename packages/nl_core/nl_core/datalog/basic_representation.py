@@ -60,6 +60,19 @@ class UnionOfConjunctiveQueries:
     pass
 
 
+def check_head_is_a_predicate(head, walked_head):
+    """
+    Raise if the functor of the *head* of a rule, walked as
+    *walked_head*, is a function of the engine (a ``function_`` of the
+    solver, or a symbol given a callable), which a rule cannot define.
+    """
+    if not isinstance(walked_head.functor, Symbol):
+        raise NeuroLangException(
+            f"`{head.functor.name}` is a function of the engine: a rule "
+            "cannot define it; give the predicate another name"
+        )
+
+
 class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
@@ -170,6 +183,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         antecedent = self.walk(expression.antecedent)
         expression = Implication(consequent, antecedent)
 
+        check_head_is_a_predicate(original_expression.consequent, consequent)
         self._validate_implication_syntax(consequent, antecedent)
         check_range_restriction(expression, self.symbol_table)
 

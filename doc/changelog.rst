@@ -19,12 +19,45 @@ Unreleased
 
 **Performance:**
 
+* A selection by a Python function of a single column, as
+  ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
+  (291,533 rows) in a probabilistic rule, applies the function to the column
+  instead of to every row: the probability of the Destrieux regions given a
+  study activating a salience parcel of one hemisphere takes 2.4 s instead
+  of 8.6 s, and of either hemisphere (a union of two rules) 12 s instead of
+  37 s.
+  
+* The deterministic rest of a query that the disjoint separator joins with
+  a probabilistic choice, as ``sub(t), mentions(s, t)`` in ``term_study(s)
+  :- sub(t), mentions(s, t), selected_study(s)``, is computed as a set with
+  the relational algebra, a union with a union and a projection, instead of
+  with the operations on probabilities (sums, and a union of independent
+  events through logarithms). The relational algebra optimiser flattens a
+  projection of nested joins before pushing the projection into them, so
+  that the joins are ordered by size; it joined the large relations first.
+  The voxels activated by the studies mentioning a subclass of a Cognitive
+  Atlas concept take 4.5 s instead of 6.2 s, and the Destrieux regions
+  given a study activating a salience parcel of either hemisphere (a union
+  of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
+  the column-wise selection of #1126. ``--show-ra`` draws these relations as
+  trees.
+  
+* Magic sets adorn first the body atoms holding a variable bound in the
+  head, as they do the atoms with a constant: a query constant for a head
+  variable, such as the text of ``p_a_given_similar('being socially
+  excluded', i, j, k, p)``, restricts ``activated`` to the studies similar
+  to it, as when the text is written into the rule, instead of joining the
+  50 M activations of every study in the probabilistic plan: 0.9 GB more
+  than the engine instead of 4.2 GB, and 23 s instead of 45 s, for the same
+  1,151,590 rows.
+
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
   two Schaefer parcels are active given a term (``PROB[co_active(l1, l2) //
   term_association(s, 'auditory')]``) take 13 s and 1 GB more than the
   engine, instead of 43 GB, and run in the REPL in the browser.
+  
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):
@@ -34,6 +67,7 @@ Unreleased
   variables (45 M rows of activations for 11 k of the head). A relation made
   from a data frame shares its columns, with copy-on-write, rather than
   copying them in one block, 1.4 GB for the activations.
+  
 * ``lift`` of a term (``lift('pain', i, j, k, l)``) runs in the REPL in the
   browser with the full engine too: a look-up join (the probabilities of a
   choice) and a grouped sum, maximum, minimum or count of many rows go a
@@ -51,6 +85,16 @@ Unreleased
   studies…" gets the studies and their titles rather than a probability.
   The rows of its answers come sorted by their last column of decimals,
   largest first.
+  
+* A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
+  which binds looser than ``,``; parentheses group: ``uncinate(x) :-
+  (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
+  than a predicate of several rules.  **Breaking:** ``|`` is no longer a
+  synonym of ``//`` for conditioning, ``PROB[a(x) | b(x)] = p`` is the
+  probability of the disjunction; write ``PROB[a(x) // b(x)] = p``.  A
+  comparison whose left operand is a function call in parentheses,
+  ``((f(x)) < 3)`` or ``((f(x), y) == (1, 2))``, now reads as a formula in
+  parentheses and fails to parse; write ``(f(x) < 3)``.
 * The brain viewer of a network (``.view`` of a result of pairs of regions or
   points) thresholds its edges in the page: "Edges from" and its slider draw
   the network again with the edges above the value, the strongest 5% at
@@ -153,6 +197,27 @@ Unreleased
 
 **Internal:**
 
+* Every pull request gives its reviewer the REPL in the browser of its
+  branch: the documentation's workflow uploads the site (the documentation
+  and the REPL) as the artifact ``repl-pr-NUMBER`` and keeps one comment of
+  the pull request up to date with the commit it was built from, the
+  artifact, whether the REPL's bundle is complete and how to run it:
+  ``uv run --extra apps neurolang-repl-serve --pr NUMBER`` (or ``--run-id
+  ID``), which downloads it with the GitHub CLI and serves it without
+  building anything, or ``gh run download`` and ``python3 -m http.server``.
+  A pull request from a fork has the artifact, without the comment.
+* The workflows of the tests, the layers, the spelling and the
+  documentation run on every pull request, whatever its base, so that a
+  pull request stacked on another one is checked (its tests are those of
+  the packages it changes with respect to the pull request below it); a
+  push to a pull request cancels its runs still going.
+* A REPL's bundle that could not be built fails the check *REPL bundle*
+  instead of passing unseen (the documentation is deployed all the same).
+  ``doc/make_repl_bundle.py --downloads DIR`` keeps what the engine
+  downloads in DIR, even when the build fails, and CI keeps that directory
+  from one build to the next; a download failing for a while (a time-out,
+  an error 5xx) is tried again after 2, 4 and 8 s
+  (``neurolang.utils.nilearn_compat.fetch_files``).
 * Helpers reused instead of repeated: the conjuncts of a formula and the
   selection of a plan by comparisons in the probabilistic lifting, the
   aggregate types of the magic sets, the pandas reductions table, the
@@ -174,6 +239,53 @@ Unreleased
 
 **Bug fixes:**
 
+* The Neurosynth data are downloaded from raw.githubusercontent.com:
+  github.com/neurosynth/neurosynth-data/raw/master/, which sends there,
+  answers 504 for that repository, so that the ``neurosynth`` engine could
+  not be built from nothing, nor the REPL's bundle, whose build passed
+  unseen and left the deployed page unable to start.
+* The semi-naive chase merged, at every step and for every rule, the
+  relation of each predicate of the step's delta with that delta, even
+  the predicates the rule does not use, and inferred the type of the
+  merge by iterating over it: on some evaluation orders (they depend on
+  ``PYTHONHASHSEED``) a query over a whole-brain tractogram took minutes
+  and 45 GB instead of 3 s.  Only the negated predicates of a rule are
+  merged now.
+* The lifted probability of a union, as ``q(x) :- a(x)`` and ``q(x) :-
+  b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
+  event: two facts of probability 0.5 gave 0.5 instead of 0.75.
+* A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
+  schaefer(l, r), ...``, failed to parse: the parser read it as a fact
+  and stopped at the variable.  A fact is now parsed as a head and checked
+  to have only constants (``p(x)`` alone says that a ``,`` or ``:-`` may
+  be missing), so completion after ``A(3)`` also offers ``:-``.
+* The ``neurosynth`` engine converts only the peaks of Talairach (``TAL``)
+  studies to MNI: those of ``UNKNOWN`` space, 53,878 peaks of 1,832 studies,
+  were converted too, moving them by 7 mm (median).  They are now taken as
+  MNI, as Neurosynth and NiMARE do; the engine option ``unknown_space``
+  (``python_init_options`` in ``engines.yaml``) converts them as Talairach
+  (``tal``) or leaves them out (``drop``) (#1071).  The ``neurostore``
+  engine, which left out the peaks of any other space, now follows the
+  same option: they are taken as MNI by default.
+* The embeddings of the studies (``query_similarity``, ``similar_study``)
+  are kept whatever the order of the study ids: their cache was keyed on the
+  ids in the order of the ``study`` relation, which the fix above changed,
+  so every free-text query embedded the 14,371 abstracts again and, in the
+  query assistant, was stopped by its time limit before the embeddings
+  were saved.  The ids are now sorted; the cache is rebuilt once.
+* In ``NeurolangPDL``, a rule whose body is only equalities to constants,
+  ``p(l) :- (l == 'c')``, is the fact ``p('c')``: it raised an
+  ``IndexError`` (#1076).  The equalities to constants that the rewrite
+  inlines are now only those of a variable with one of them and found
+  elsewhere in atoms alone: ``(v == 'a') & (v == 'b')`` gave ``v = 'b'``,
+  ``(v == 'b') & (w == v)`` dropped the constraint on ``w`` and
+  ``(v == 'b') & (v != 'c')`` raised an ``UnboundVariablesError``.
+* ``.view`` (the Brain button of the REPL in the browser) of a result over
+  ``RESAMPLE``, ``ans(l1, l2, mean(v)) :- rep(b, l1, l2, v)``, knows the
+  sorts of its columns: those of the predicate resampled, here Schaefer
+  parcel labels, and so draws it as a network rather than failing with "The
+  result has no voxel columns".
 * ``neurolang-repl-serve --rebuild`` serves the wheels it built, not those of
   an earlier build: their versions follow the commits, so the old ones kept
   their names next to the new ones and could be the ones the bundle named.

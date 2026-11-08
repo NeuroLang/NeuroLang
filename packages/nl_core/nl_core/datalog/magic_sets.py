@@ -24,6 +24,7 @@ from .exceptions import (
     NegationInMagicSetsRewriteError,
     NonConjunctiveAntecedentInMagicSetsError,
     NoConstantPredicateFoundError,
+    UnstratifiedMagicSetsRewriteError,
 )
 from .expressions import (
     AdornedSymbol,
@@ -48,10 +49,14 @@ AGGREGATES = (AggregationApplication, ProbabilisticQuery)
 
 
 def order_conjunction_constant_atoms_first(
-    formulas: Tuple[Expression, ...],
+    formulas: Tuple[Expression, ...], bound: Set[Symbol] = frozenset(),
 ) -> Tuple[Expression, ...]:
     """
     Order a rule body so constant-bearing atoms are adorned first.
+
+    The variables ``bound`` by the adorned head count as constants: in
+    ``p(q, i) :- a(i, s), sim(q, s)`` adorned ``p^bf``, ``sim(q, s)`` is
+    adorned first and restricts ``a`` to its studies.
 
     Builtins, such as ``x > 0``, are not constant-bearing atoms: they
     bind nothing.
@@ -76,7 +81,7 @@ def order_conjunction_constant_atoms_first(
     constant_atoms = [
         f for f in formulas
         if isinstance(f.functor, Symbol)
-        and any(isinstance(arg, Constant) for arg in f.args)
+        and any(isinstance(arg, Constant) or arg in bound for arg in f.args)
     ]
     if not constant_atoms:
         return formulas
@@ -430,6 +435,101 @@ def _unwrap_negation(predicate):
     return predicate.formula, True
 
 
+def _literals(antecedent):
+    """The ``(atom, negated)`` of the literals of an antecedent."""
+    formulas = (
+        antecedent.formulas if isinstance(antecedent, Conjunction)
+        else (antecedent,)
+    )
+    for formula in formulas:
+        if isinstance(formula, Negation):
+            yield formula.formula, True
+        else:
+            yield formula, False
+
+
+def check_stratified(rules) -> None:
+    """Raise :class:`UnstratifiedMagicSetsRewriteError` if an aggregation or
+    a negation of the rules is in a cycle of their dependencies.
+
+    The dependencies are those of a rule's head on the predicates of its
+    body; the *strict* ones are those on a negated literal and, in a rule
+    that aggregates, on any literal. A strict dependency between two
+    predicates of one strongly connected component is the cycle.
+    """
+    edges = {}
+    strict = set()
+    for rule in rules:
+        if not isinstance(rule, Implication):
+            continue
+        head = rule.consequent.functor
+        aggregates = any(
+            isinstance(arg, AGGREGATES) for arg in rule.consequent.args
+        )
+        edges.setdefault(head, set())
+        for atom, negated in _literals(rule.antecedent):
+            functor = getattr(atom, "functor", None)
+            if not isinstance(functor, Symbol):
+                continue  # a comparison, a built-in function
+            edges[head].add(functor)
+            if negated or aggregates:
+                strict.add((head, functor))
+    component = _strongly_connected_components(edges)
+    for head, functor in strict:
+        if component.get(head) is not None and (
+            component.get(head) == component.get(functor)
+        ) and (head != functor or functor in edges.get(head, ())):
+            raise UnstratifiedMagicSetsRewriteError(
+                f"The rewrite would have {head} depend on {functor} through "
+                "a cycle, with an aggregation or a negation in it: the "
+                "rewritten program would not be stratified"
+            )
+
+
+def _strongly_connected_components(edges):
+    """``{node: index of its component}``, Tarjan's algorithm without
+    recursion; the nodes with no rule of their own are in no cycle."""
+    index, low, on_stack, stack = {}, {}, set(), []
+    component, count = {}, 0
+    for root in list(edges):
+        if root in index:
+            continue
+        work = [(root, iter(edges.get(root, ())))]
+        index[root] = low[root] = len(index)
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            node, successors = work[-1]
+            advanced = False
+            for succ in successors:
+                if succ not in edges:
+                    continue
+                if succ not in index:
+                    index[succ] = low[succ] = len(index)
+                    stack.append(succ)
+                    on_stack.add(succ)
+                    work.append((succ, iter(edges.get(succ, ()))))
+                    advanced = True
+                    break
+                if succ in on_stack:
+                    low[node] = min(low[node], index[succ])
+            if advanced:
+                continue
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[node])
+            if low[node] == index[node]:
+                while True:
+                    member = stack.pop()
+                    on_stack.discard(member)
+                    component[member] = count
+                    if member == node:
+                        break
+                count += 1
+    return component
+
+
 def magic_rewrite(
     query: Expression, datalog: DatalogProgram, seed_from_edb: bool = True
 ) -> Tuple[Symbol, Union]:
@@ -490,6 +590,8 @@ def magic_rewrite(
     # Ordered of the rules should be preserved, so the unadorned query should
     # be the last of the unadorned_code
     goal = unadorned_code[-1].consequent.functor
+    # 5. The rewrite must leave the program stratified
+    check_stratified(unadorned_code)
     return goal, Union(unadorned_code)
 
 
@@ -764,7 +866,12 @@ def adorn_code(
                 continue
             if isinstance(rule.antecedent, Conjunction):
                 formulas = order_conjunction_constant_atoms_first(
-                    rule.antecedent.formulas
+                    rule.antecedent.formulas, {
+                        arg for arg, a in zip(
+                            rule.consequent.args,
+                            getattr(consequent.functor, "adornment", ""),
+                        ) if a == "b"
+                    }
                 )
                 if formulas != rule.antecedent.formulas:
                     rule = rule.apply(
