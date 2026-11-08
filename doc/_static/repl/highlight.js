@@ -10,7 +10,7 @@ export const DATALOG_DEFAULTS = {
   datalog_keywords: ["AGGREGATE", "EXISTS", "MARG", "PROB", "SUCC", "ans", "exists", "False", "True", "lambda", "st"],
   datalog_operators: [
     ":-", "←", "-:", "→", "~", "¬", "//", "|", "::", ":~:", "^", ":=", "==", "!=", "<",
-    "<=", ">", ">=", "=", "&", "∧", "∃",
+    "<=", ">", ">=", "=", "&", "∧", "∃", "∨", "∀", "≠", "≤", "≥",
   ],
   squall_keywords: [],
 };

@@ -137,7 +137,7 @@ def test_helper_rules_of_probabilities_are_folded():
         "          ∧ p > 0.3"
     ]
     assert [DatalogPrettyPrinter().walk(f) for f in formulas] == [
-        "ans(t, p) :-\n    PROB[R(t, s) | S(s)] = p,\n    p > 0.3"
+        "ans(t, p) :-\n    PROB[R(t, s) // S(s)] = p,\n    p > 0.3"
     ]
 
 

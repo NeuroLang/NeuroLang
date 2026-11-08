@@ -115,11 +115,8 @@ class DatalogPrettyPrinter(PatternWalker):
 
     @add_match(ProbabilisticQuery(PROB, ...), lambda e: _of_formula(e))
     def format_probabilistic_query(self, expr: ProbabilisticQuery) -> str:
-        """Format the probability of a formula as ``PROB[A | B]``."""
-        body = expr.args[0]
-        if isinstance(body, Condition):
-            return f"PROB{self.walk(body)}"
-        return f"PROB[{self.walk(body)}]"
+        """Format the probability of a formula as ``PROB[A // B]``."""
+        return f"PROB[{self.walk(expr.args[0])}]"
 
     @add_match(FunctionApplication)
     def format_fa(self, expr: FunctionApplication) -> str:

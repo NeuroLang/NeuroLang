@@ -200,8 +200,8 @@ def test_datalog_folds_the_rules_of_a_probability(conditional):
     assert _command(conditional, ".datalog").splitlines() == [
         "── query ──",
         "ans(t, p) :-",
-        "    PROB[mentions(s, t) ∧ selected_study(s) | mentions(s, 'pain') ∧ "
-        "selected_study(s)] = p,",
+        "    PROB[(mentions(s, t) ∧ selected_study(s)) // (mentions(s, 'pain') "
+        "∧ selected_study(s))] = p,",
         "    p > 0.6",
         "",
     ]
