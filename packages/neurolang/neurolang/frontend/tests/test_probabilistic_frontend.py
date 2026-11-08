@@ -2604,7 +2604,7 @@ def test_query_aggregating_probabilities_in_its_head():
         ("ans(v) :- act(v, y) & (v == 'b') & (v != 'c')", {("b",)}),
         ("ans(v, w) :- act(w, y) & (v == 'b') & (w == v)", {("b", "b")}),
         ("ans(v) :- act(v, y) & (v == 'b') & ~bad(v)", {("b",)}),
-        ("ans(count(v)) :- act(v, y) & (v == 'b')", {(2,)}),
+        ("ans(count(v)) :- act(v, y) & (v == 'b')", {(1,)}),
     ],
 )
 def test_rules_with_equalities_to_constants(program, expected):

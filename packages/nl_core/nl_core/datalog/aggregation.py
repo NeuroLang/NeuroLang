@@ -32,7 +32,9 @@ from nl_expr.expressions import (
     Symbol,
 )
 from nl_expr.type_system import get_generic_type
-from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
+from ..utils.relational_algebra_set import (
+    RelationalAlgebraStringExpression, count_distinct
+)
 from . import (
     Implication,
     Union,
@@ -72,8 +74,7 @@ class BuiltinAggregationMixin:
     constant_sum = Constant(sum)
     constant_std = Constant(numpy.std)
 
-    def function_count(self, *iterables: typing.Iterable) -> int:
-        return len(next(iter(iterables)))
+    constant_count = Constant(count_distinct)
 
     def function_percentile(
         self, values: typing.Iterable, q: float

@@ -1575,3 +1575,22 @@ def test_an_aggregation_with_missing_values_is_not_by_chunks(monkeypatch):
         .aggregate(["g"], {"v": sum}).as_pandas_dataframe()
     sums = dict(zip(result["g"], result["v"]))
     assert np.isnan(sums[0]) and sums[1] == 9.0
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+@pytest.mark.parametrize("values", [["a", "b", "a"], [1, 2, 1]])
+def test_count_distinct_counts_values(backend, values):
+    from nl_core.utils.relational_algebra_set import count_distinct
+
+    module = pytest.importorskip(
+        f"nl_core.utils.relational_algebra_set.{backend}"
+    )
+    relation = module.NamedRelationalAlgebraFrozenSet(
+        ("g", "x", "y"), [(0, v, i) for i, v in enumerate(values)]
+    )
+    if backend == "pandas":
+        assert relation._reduction("x", count_distinct) == "nunique"
+    result = relation.aggregate(["g"], [("n", "x", count_distinct)])
+    assert _rows(result) == {(0, 2)}
+    result = relation.aggregate([], [("n", "x", count_distinct)])
+    assert _rows(result) == {(2,)}

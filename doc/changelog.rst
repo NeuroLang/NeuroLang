@@ -275,6 +275,13 @@ Unreleased
 
 **Bug fixes:**
 
+* ``count(s)`` counts the distinct values of ``s`` in each group, not the
+  rows of the rule's body (#1090): ``n(count(s)) :- schaefer_activated(l, s),
+  startswith('17Networks LH Default', l)`` is 11,160 studies, not 50,655,
+  one per parcel each activates. ``count(x, y)`` counts distinct pairs; the
+  other aggregations still take a value per row. In SQUALL too, and with
+  the polars backend, where an aggregation of several columns without
+  groups failed.
 * Several probabilistic facts of a predicate written in a Datalog program
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
