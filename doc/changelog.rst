@@ -19,6 +19,14 @@ Unreleased
 
 **Performance:**
 
+* A selection by a Python function of a single column, as
+  ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
+  (291,533 rows) in a probabilistic rule, applies the function to the column
+  instead of to every row: the probability of the Destrieux regions given a
+  study activating a salience parcel of one hemisphere takes 2.4 s instead
+  of 8.6 s, and of either hemisphere (a union of two rules) 12 s instead of
+  37 s.
+  
 * The deterministic rest of a query that the disjoint separator joins with
   a probabilistic choice, as ``sub(t), mentions(s, t)`` in ``term_study(s)
   :- sub(t), mentions(s, t), selected_study(s)``, is computed as a set with
@@ -49,6 +57,7 @@ Unreleased
   two Schaefer parcels are active given a term (``PROB[co_active(l1, l2) //
   term_association(s, 'auditory')]``) take 13 s and 1 GB more than the
   engine, instead of 43 GB, and run in the REPL in the browser.
+  
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):
@@ -58,6 +67,7 @@ Unreleased
   variables (45 M rows of activations for 11 k of the head). A relation made
   from a data frame shares its columns, with copy-on-write, rather than
   copying them in one block, 1.4 GB for the activations.
+  
 * ``lift`` of a term (``lift('pain', i, j, k, l)``) runs in the REPL in the
   browser with the full engine too: a look-up join (the probabilities of a
   choice) and a grouped sum, maximum, minimum or count of many rows go a
