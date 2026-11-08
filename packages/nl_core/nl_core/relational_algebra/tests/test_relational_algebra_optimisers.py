@@ -238,6 +238,19 @@ def test_push_and_infer_equijoins(r1, r2):
     assert res == theoretical_res
 
 
+def test_push_in_selection_of_columns_of_both_join_sides():
+    class Opt(PushInSelections, ExpressionWalker):
+        pass
+
+    r = Symbol('r')
+    a, b = str2columnstr_constant('a'), str2columnstr_constant('b')
+    exp = Selection(
+        NaturalJoin(NameColumns(r, (a, b)), NameColumns(r, (b, a))),
+        eq_(a, b)
+    )
+    assert Opt().walk(exp) == exp
+
+
 def test_push_in_optimiser():
     class Opt(PushInSelections, ExpressionWalker):
         pass

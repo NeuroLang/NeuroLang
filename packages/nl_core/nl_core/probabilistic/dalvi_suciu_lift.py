@@ -383,7 +383,9 @@ def _prepare_and_optimise_query(
     shattered_query_body = partially_rank_query(
         shattered_query_body, symbol_table
     )
-    if not verify_that_the_query_is_ranked(shattered_query_body):
+    if not verify_that_the_query_is_ranked(
+        shattered_query_body, symbol_table
+    ):
         shattered_query_body = rank_query(shattered_query_body, symbol_table)
     shattered_query = Implication(
         unified_query.consequent,
@@ -402,7 +404,7 @@ def _prepare_and_optimise_query(
         _verify_that_the_query_has_one_quantifier(flat_query)
         _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
-        convert_rule_to_ucq(shattered_query)
+        convert_rule_to_ucq(shattered_query), symbol_table
     ):
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
@@ -1464,8 +1466,14 @@ def different_free_variables_plan(rule, symbol_table):
     the representatives are different. The plan is
 
         ∪_Π π_Π σ_{r_j ≠ r_l} lift(Q[Π][ρ])
+
+    A single free variable `x` and a variable `y` of the existential
+    prefix at the position are split so too, `y` made free and then
+    projected, `ind-π_{-y} ∪_Π ...`, when the events of different values
+    of `y` have different tuples, see `_partition_plan`.
     """
     free_variables = extract_logic_free_variables(rule)
+    quantified, body = _existential_variables_and_body(rule)
     atoms = [
         atom for atom in ExtractRelationalAtoms().walk(rule)
         if not (
@@ -1473,24 +1481,41 @@ def different_free_variables_plan(rule, symbol_table):
             is_atom_a_probabilistic_choice_relation(atom, symbol_table)
         )
     ]
-    query = Implication(Symbol.fresh()(*free_variables), rule)
     for functor, i in OrderedSet(
         (atom.functor, i) for atom in atoms for i in range(len(atom.args))
     ):
-        variables = list(OrderedSet(
-            atom.args[i] for atom in atoms
-            if atom.functor == functor and atom.args[i] in free_variables
-        ))
-        if not 2 <= len(variables) <= MAX_ANSWER_VARIABLES_AT_A_POSITION:
+        terms = OrderedSet(
+            atom.args[i] for atom in atoms if atom.functor == functor
+        )
+        variables = [v for v in terms if v in free_variables]
+        bound = [v for v in terms if v in quantified]
+        if len(variables) == 1 and len(bound) == 1:
+            variables += bound
+            query = Implication(
+                Symbol.fresh()(*free_variables, *bound),
+                add_existentials_except(body, free_variables | set(bound))
+            )
+        elif 2 <= len(variables) <= MAX_ANSWER_VARIABLES_AT_A_POSITION:
+            bound = []
+            query = Implication(Symbol.fresh()(*free_variables), rule)
+        else:
             continue
         plans = []
         for blocks in _set_partitions(variables):
-            plan = _partition_plan(query, functor, i, blocks, symbol_table)
+            plan = _partition_plan(
+                query, functor, i, blocks, bound, symbol_table
+            )
             if plan is None:
                 break
             plans.append(plan)
         else:
-            return reduce(rap.Union, plans)
+            plan = reduce(rap.Union, plans)
+            if bound:
+                plan = rap.IndependentProjection(plan, tuple(
+                    str2columnstr_constant(v.name)
+                    for v in sorted(free_variables, key=lambda v: v.name)
+                ))
+            return plan
     return None
 
 
@@ -1505,13 +1530,25 @@ def _set_partitions(items):
             yield blocks[:j] + [[items[0]] + block] + blocks[j + 1:]
 
 
-def _partition_plan(query, functor, i, blocks, symbol_table):
+def _partition_plan(query, functor, i, blocks, bound, symbol_table):
     """The answers of `query` whose free variables of the partition
-    `blocks` are equal in a block and different across blocks."""
+    `blocks` are equal in a block and different across blocks, or None.
+    The events of different values of the `bound` variable `y` must have
+    different tuples: `y` is a separator variable when it is a block,
+    and, when it is in the block of `x`, the atoms with `y` have it at a
+    position where those with `x` for `y` have `x`."""
     representatives = [block[0] for block in blocks]
     same = ReplaceExpressionWalker({
         v: block[0] for block in blocks for v in block[1:]
     }).walk(query)
+    if any(
+        y not in representatives and not _are_different_tuples_when_different(
+            query.antecedent, y, same.antecedent, set(representatives),
+            symbol_table
+        )
+        for y in bound
+    ):
+        return None
     relation = [
         atom for atom in ExtractRelationalAtoms().walk(same.antecedent)
         if atom.functor == functor
@@ -1528,11 +1565,15 @@ def _partition_plan(query, functor, i, blocks, symbol_table):
         alias = Symbol.fresh()
         symbol_table[alias] = symbol_table[functor]
         renaming.update({a: a.apply(alias, a.args) for a in renamed})
+    renamed_query = ReplaceExpressionWalker(renaming).walk(same.antecedent)
+    if any(
+        y in representatives and
+        not _is_separator_variable(y, renamed_query, symbol_table)
+        for y in bound
+    ):
+        return None
     plan = select_comparisons(
-        dalvi_suciu_lift(
-            ReplaceExpressionWalker(renaming).walk(same.antecedent),
-            symbol_table
-        ),
+        dalvi_suciu_lift(renamed_query, symbol_table),
         [NE(x, y) for x, y in combinations(representatives, 2)]
     )
     projections = compute_projections_needed_to_reintroduce_head_terms(

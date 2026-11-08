@@ -508,6 +508,70 @@ def test_answer_variables_at_the_same_position(head, body):
     assert solve(**LIFTED_ONLY) == pytest.approx(expected)
 
 
+@pytest.mark.parametrize("head, body", [
+    # The variables of a choice need no order.
+    ("", "C(x, y), S(y, x)"),
+    ("", "C(x, y), S(y, x), R(x)"),
+    ("", "C(x, y), S(x, y), S(y, x)"),
+    # A comparison of the ranked variables decides their order.
+    ("", "S(x, y), S(y, x), (x < y)"),
+    ("", "S(x, y), S(y, x), (x > y)"),
+    ("", "S(x, y), S(y, x), (x != y)"),
+    ("", "S(x, y), S(y, x), V(y, x), (x < y)"),
+    # A bound variable at the position of an answer variable.
+    ("x", "S(x, y), S(y, x)"),
+    ("x", "S(x, y), S(y, x), R(y)"),
+    ("x", "S(x, y), S(y, x), V(x, y)"),
+    ("x, z", "S(x, y), S(y, x), V(z, y)"),
+    ("", "D(x), S(x, y), S(y, x)"),
+])
+def test_choices_comparisons_and_a_bound_variable_in_ranking(head, body):
+    """
+    Queries that were not ranked, or whose bound variable at the position
+    of an answer variable was not split from it, are lifted with the
+    probabilities weighted model counting gives.
+    """
+    from .. import NeurolangPDL
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    def solve(**solvers):
+        nl = NeurolangPDL(**solvers)
+        facts = {
+            "R": [(0.2, 0), (0.5, 1), (0.7, 2)],
+            "S": [
+                (0.3, 0, 1), (0.8, 1, 1), (0.6, 2, 0), (0.5, 1, 2),
+                (0.4, 1, 0), (0.9, 0, 2), (0.7, 2, 1), (0.2, 0, 0),
+            ],
+            "V": [(0.4, 1, 0), (0.7, 1, 1), (0.9, 2, 2), (0.2, 0, 2)],
+        }
+        for name, tuples in facts.items():
+            nl.add_probabilistic_facts_from_tuples(tuples, name=name)
+        nl.add_probabilistic_choice_from_tuples(
+            [(0.1, 0, 1), (0.3, 1, 0), (0.2, 2, 2), (0.4, 1, 2)], name="C"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(0,), (1,), (2,)], name="D"
+        )
+        nl.execute_datalog_program(
+            f"q({head + ', ' if head else ''}PROB) :- {body}"
+        )
+        return {
+            tuple(row[:-1]): row[-1]
+            for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
+                index=False
+            )
+        }
+
+    expected = solve(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    )
+    assert solve(**LIFTED_ONLY) == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
 def test_function_of_a_variable_separates_the_query(solvers):
     """

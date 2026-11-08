@@ -225,7 +225,12 @@ Ranking
    are constants for Dalvi and Suciu, and are not ordered: the query
    :math:`Q(x, y) = R(x) \land R(y) \land S(x, y) \land W(y, x)` is
    ranked, and lifted, its answers with :math:`x \neq y` and :math:`x = y`
-   apart (``different_free_variables_plan``). Atoms with a repeated variable,
+   apart (``different_free_variables_plan``). Nor are the variables of
+   the atoms of probabilistic choices (``_unordered_variables``): a
+   single tuple of a choice is true, and the disjoint projection on a
+   choice makes them free, so :math:`\exists x, y\, C(x, y) \land S(y,
+   x)`, with :math:`C` a choice, is ranked and lifted as
+   :math:`\sum_{a, b} p_C(a, b)\, p_S(b, a)`. Atoms with a repeated variable,
    such as :math:`R(x, x)`, are first replaced by atoms of a new relation
    holding the selected tuples. A query whose variables still occur in both
    orders, such as :math:`\exists x, y\, R(x, y) \land R(y, x)`, is then
@@ -256,12 +261,19 @@ Ranking
    :math:`x_1` and :math:`x` is :math:`x_2`, and the atoms of
    :math:`R(x, y)` and :math:`R(y, x)` are exchanged. The ranked
    relations are computed on the data, each tuple keeping its probability
-   (``_ranked_relation``).
+   (``_ranked_relation``). A comparison of two ranked variables of a split
+   atom is true or false in each order, and replaced by its truth value, the disjuncts of
+   the orders it falsifies dropped (``RankAtoms``): with :math:`x < y`,
+   :math:`\exists x, y\, R(x, y) \land R(y, x) \land x < y` is
+   :math:`\exists x_1, x_2\, R_<(x_1, x_2) \land R_>(x_1, x_2)`, whose
+   pairs are independent, lifted as :math:`1 - \prod_{a < b} (1 - p(a,
+   b)\, p(b, a))`.
 
    The query is declined, and left to the next solver, when a relation to
-   split is a probabilistic choice or occurs within a negation; when a
-   ranked position has a constant, or a comparison or a function has a
-   ranked variable; when an answer variable is at a ranked position, as
+   split occurs within a negation; when a ranked position has a constant,
+   or a comparison of a ranked variable with another term or a function
+   has a ranked variable, or no order satisfies the comparisons; when an
+   answer variable, or one of a choice, is at a ranked position, as
    in :math:`\exists y\, R(x, y) \land R(y, y)`, since the ranked relations
    do not shatter the constants it stands for; when the
    ranked columns are not all of real numbers or all of strings, the types
@@ -272,9 +284,8 @@ Ranking
    cycle such as :math:`R(x, y) \land R(y, z) \land R(z, x)` is not
    ranked, which the separator variable rule still checks. A bound and an
    answer variable in both orders, :math:`Q(x) = \exists y\, R(x, y) \land
-   R(y, x)`, need no ranking, but are not lifted: no rule splits
-   :math:`y \neq x`, when :math:`R(x, y)` and :math:`R(y, x)` are
-   different tuples, from :math:`y = x`, when they are the same.
+   R(y, x)`, need no ranking, and are split on :math:`y = x` and
+   :math:`y \neq x` by "answer variables as constants".
 
 
 Base cases
@@ -814,6 +825,30 @@ Answer variables as constants
    than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 3, variables at a position
    are declined, the optimisation of the plan of 15 branches taking too
    long.
+
+   A single free variable :math:`x` and a single variable :math:`y` of
+   the existential prefix of a conjunctive query at that position are
+   split so too: :math:`y` is made free, the branches are those of
+   :math:`\{x\}, \{y\}` and :math:`\{x, y\}`, and their union is
+   projected on the free variables of :math:`Q`. For :math:`Q(x) = \exists
+   y\, R(x, y) \land R(y, x)`, the plan is
+
+   .. math::
+
+      \mathrm{ind}\text{-}\pi_{x}\big(\sigma_{x \neq y}\,
+      \mathrm{lift}(R(x, y) \land R'(y, x)) \;\cup\;
+      \pi_{y := x}\, \mathrm{lift}(R(x, x))\big),
+
+   :math:`1 - (1 - p(x, x)) \prod_{y \neq x} (1 - p(x, y)\, p(y, x))`.
+   It applies when the events of different values of :math:`y` have
+   different tuples (``_partition_plan``): :math:`y` is a separator
+   variable of the branch :math:`\{x\}, \{y\}` once renamed
+   (``_is_separator_variable``), and every atom of :math:`Q` has :math:`y`
+   at a position where the atoms of the branch :math:`\{x, y\}`, of the
+   same relation, have :math:`x` (``_are_different_tuples_when_different``).
+   The chain :math:`\exists y, z\, R(x, y) \land R(y, z)` fails the
+   latter, :math:`R(x, y)` and :math:`R(x, z)` possibly being the same
+   tuple.
 
 Comparisons of answer variables
    A comparison of free variables, a conjunct of the query such as
@@ -1590,7 +1625,8 @@ Rewriting of the choices
    with itself is false, :math:`t \neq t \equiv \bot`
    (``StrictComparisonOfATermWithItselfMixin``), and the truth values are
    simplified by :math:`\bot \land \varphi \equiv \bot`,
-   :math:`\top \land \varphi \equiv \varphi`, :math:`\lnot\bot \equiv
+   :math:`\top \land \varphi \equiv \varphi`, :math:`\bot \lor \varphi
+   \equiv \varphi`, :math:`\lnot\bot \equiv
    \top` and :math:`\exists x\, \bot \equiv \bot`
    (``SimplifyTruthValuesMixin`` of :mod:`neurolang.logic.transformations`):
    every step of the rewriting is an equivalence.
@@ -1648,6 +1684,25 @@ Answer variables as constants
    partition into singletons the same free variables and fewer pairs of
    atoms of a relation with different free variables at a position, the
    renaming separating some and joining none.
+
+   With a bound variable :math:`y` made free, the union gives, for each
+   value :math:`x\theta` and each :math:`b`, the probability of the event
+   :math:`E_b` of :math:`Q[b/y]\theta`, as above, and
+   :math:`\exists y\, Q \equiv \bigvee_b E_b`. The events are mutually
+   independent by Lemma 1. For :math:`b, b' \neq x\theta` different,
+   :math:`y` being a separator variable of the renamed branch, every
+   probabilistic atom has :math:`y`, two atoms of a relation or an alias
+   at a common position, and the atoms of different aliases or of
+   :math:`R` have no tuple in common, as above: :math:`E_b` and
+   :math:`E_{b'}` share no tuple. For :math:`b = x\theta`, every
+   probabilistic atom of :math:`Q` has :math:`y` at a position where the
+   atoms of :math:`Q[x/y]` of its relation have :math:`x`, so its tuple
+   in :math:`E_{b'}` has :math:`b' \neq x\theta` where theirs have
+   :math:`x\theta`. The independent projection then computes
+   :math:`1 - \prod_b (1 - P[E_b])`. :math:`y` being in the existential
+   prefix (``_existential_variables_and_body``), making it free and
+   projecting it is the quantifier, and the branches, with one free
+   variable more and no bound variable split, terminate as above.
 
 Comparisons of answer variables
    A comparison :math:`C` of free variables is true or false for an
@@ -1791,13 +1846,23 @@ Ranking
      probabilities: a tuple-independent relation gives tuple-independent
      relations;
    * a probabilistic choice, a single block of exclusive tuples, is not
-     split: its parts would not be independent choices;
+     split: its parts would not be independent choices. Its variables are
+     not ordered (``_unordered_variables``), and declined at a ranked
+     position (``_check_rankable``);
    * the atoms split are positive: each disjunct then implies the query,
      even when no atom forces its order, while a negated
      :math:`\lnot R_<(x, y)` would hold whenever :math:`x > y`;
    * the order compared is total, with equality: real numbers or strings
      (``_is_totally_ordered``), without NaN. Sets, ordered by inclusion,
      would leave the tuples of incomparable values in no ranked relation.
+
+   A comparison of two ranked variables of a split atom
+   (``_check_rankable``) has, in the disjunct of an order, the truth
+   value of the comparison of their ranks, the values of the variables
+   being in that order in every tuple of the ranked relation of the
+   atom: replacing it by it, and simplifying the truth values
+   (``SimplifyTruthValuesMixin``), is an equivalence, and so is dropping
+   a false disjunct.
 
    The answer variables are not ordered (``verify_that_the_query_is_ranked``
    and ``_ranked_variables_and_positions`` leave out the free variables).
@@ -1809,7 +1874,14 @@ Ranking
    inclusion–exclusion is an identity, and
    ``different_free_variables_plan`` checks that the atoms renamed are
    different tuples. Ranking only lets them apply; a query whose answer
-   variables would need it is lifted by them or declined. An answer
+   variables would need it is lifted by them or declined. Nor are the
+   variables of the atoms of a choice: no rule projects them but the
+   disjoint projections on a choice (``_split_choice_projection``,
+   ``disjoint_separator``), sound by Lemma 2 whatever their order, which
+   make them free; they are never separator variables
+   (``extract_probabilistic_root_variables``), nor is any variable of a
+   formula with an atom of a choice, as a separator variable is in every
+   probabilistic atom. An answer
    variable at a ranked position is still declined
    (``_check_rankable``): splitting the relation by the order of its
    values would order the constants.

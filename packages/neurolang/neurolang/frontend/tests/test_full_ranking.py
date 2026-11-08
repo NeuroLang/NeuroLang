@@ -10,7 +10,6 @@ import itertools
 import pytest
 
 from nl_expr.exceptions import (
-    NonLiftableException,
     NotRankedException,
     UnsupportedSolverError,
 )
@@ -104,23 +103,21 @@ def test_symmetric_pair_is_lifted():
     _assert_close(_solve(nl, "q(PROB) :- R(x, y), R(y, x)"), expected)
 
 
-def test_answer_variable_in_both_orders_is_left_to_the_next_solver():
+def test_answer_variable_in_both_orders_is_lifted():
     """Dalvi & Suciu rank Boolean queries, the answer variables being
-    constants: q(x) :- R(x, y), R(y, x) needs no ranking, but no lifting
-    rule splits y = x from y ≠ x, when R(x, y) and R(y, x) are different
+    constants: q(x) :- R(x, y), R(y, x) needs no ranking, and is lifted
+    splitting y = x from y ≠ x, when R(x, y) and R(y, x) are different
     tuples."""
     values = ("a", "b", "c")
     program = "q(x, PROB) :- R(x, y), R(y, x)"
-    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
-    with pytest.raises(NonLiftableException):
-        _solve(nl, program)
     expected = _enumerated(
         {"R": R_FACTS},
         lambda w, a: any((a[0], y) in w["R"] and (y, a[0]) in w["R"]
                          for y in values),
         answers=tuple((v,) for v in values)
     )
-    _assert_close(_solve(_engine({"R": R_FACTS}), program), expected)
+    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
+    _assert_close(_solve(nl, program), expected)
 
 
 def test_symmetric_pair_with_another_relation_is_answered():
@@ -143,14 +140,7 @@ def test_symmetric_pair_with_another_relation_is_answered():
     _assert_close(_solve(_engine(relations), program), expected)
 
 
-@pytest.mark.parametrize("program, relations, holds, choices", (
-    pytest.param(
-        "q(PROB) :- C(x, y), R(y, x)",
-        {"R": {(1., 2.): 0.6, (2., 1.): 0.4, (1., 1.): 0.7}},
-        None,
-        {"C": {(1., 2.): 0.5, (2., 1.): 0.3, (1., 1.): 0.2}},
-        id="probabilistic choice",
-    ),
+@pytest.mark.parametrize("program, relations, holds", (
     pytest.param(
         "q(PROB) :- R(x, y), R(y, x)",
         {"R": {
@@ -159,7 +149,6 @@ def test_symmetric_pair_with_another_relation_is_answered():
         }},
         lambda w, _: any((x, y) in w["R"] and (y, x) in w["R"]
                          for x, y in w["R"]),
-        None,
         id="sets, not totally ordered",
     ),
     pytest.param(
@@ -172,24 +161,44 @@ def test_symmetric_pair_with_another_relation_is_answered():
             any(t[1] == z for t in w["R"])
             for z, v in w["R"]
         ),
-        None,
         id="too many variables to rank",
     ),
 ))
 def test_queries_not_ranked_are_left_to_the_next_solver(
-    program, relations, holds, choices
+    program, relations, holds
 ):
-    nl = _engine(relations, solvers=(dalvi_suciu_lift,), choices=choices)
+    nl = _engine(relations, solvers=(dalvi_suciu_lift,))
     with pytest.raises(NotRankedException):
         _solve(nl, program)
-    if holds is None:
-        # A single tuple c of the choice C is true, and the query holds if
-        # R has its reverse: the sum of P[c] P[R(c[1], c[0])].
-        expected = {(): 0.5 * 0.4 + 0.3 * 0.6 + 0.2 * 0.7}
-    else:
-        expected = _enumerated(relations, holds)
-    _assert_close(_solve(_engine(relations, choices=choices), program),
-                  expected)
+    _assert_close(
+        _solve(_engine(relations), program), _enumerated(relations, holds)
+    )
+
+
+def test_variables_of_a_choice_need_no_order():
+    """A single tuple c of the choice C is true, and the query holds if R
+    has its reverse: the sum of P[c] P[R(c[1], c[0])]."""
+    relations = {"R": {(1., 2.): 0.6, (2., 1.): 0.4, (1., 1.): 0.7}}
+    choices = {"C": {(1., 2.): 0.5, (2., 1.): 0.3, (1., 1.): 0.2}}
+    nl = _engine(relations, solvers=(dalvi_suciu_lift,), choices=choices)
+    _assert_close(
+        _solve(nl, "q(PROB) :- C(x, y), R(y, x)"),
+        {(): 0.5 * 0.4 + 0.3 * 0.6 + 0.2 * 0.7}
+    )
+
+
+@pytest.mark.parametrize("comparison", ("x < y", "x > y", "x != y"))
+def test_comparison_of_the_variables_to_rank_decides_the_order(comparison):
+    """R(x, y) ∧ R(y, x) ∧ x < y keeps the disjunct of the order x < y."""
+    program = f"q(PROB) :- R(x, y), R(y, x), ({comparison})"
+    expected = _enumerated(
+        {"R": R_FACTS},
+        lambda w, _: any(
+            (y, x) in w["R"] and x != y for x, y in w["R"]
+        )
+    )
+    nl = _engine({"R": R_FACTS}, solvers=(dalvi_suciu_lift,))
+    _assert_close(_solve(nl, program), expected)
 
 
 def test_negated_atom_to_rank_is_not_ranked():
