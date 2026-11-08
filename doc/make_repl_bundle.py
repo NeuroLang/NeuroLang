@@ -25,6 +25,7 @@ Usage::
 
     python doc/make_repl_bundle.py OUTPUT_DIR [EMBEDDINGS_DATA_DIR]
         [--downloads DIR]
+    python doc/make_repl_bundle.py OUTPUT_DIR --data-url URL
 
 Embedding the studies takes their abstracts from PubMed and a while:
 EMBEDDINGS_DATA_DIR keeps them: a data directory where they were embedded
@@ -36,6 +37,14 @@ what it downloads there between builds, as CI caches it: the files found in
 DIR are not downloaded again, and those downloaded are added to DIR (the
 engine's kept tables and embeddings are not), even when the build fails,
 so that a data host that is down does not stop a build that had them.
+
+``--data-url URL`` builds nothing: it points the ``bundle.json`` of the
+bundle already built in OUTPUT_DIR at the data zip and the files of the
+embeddings under URL, a directory (such as ``/_static/repl``, that of the
+main site, from a page of the same origin), and deletes them from
+OUTPUT_DIR. The page fetches them from its worker, which resolves URL as a
+link of its own: a pull request's preview on GitHub Pages loads the data
+of the main site rather than carry 300 MB of it.
 """
 
 import argparse
@@ -286,6 +295,28 @@ def main(output: Path, embedded=None, downloads=None) -> None:
           f"highlight.json in {output}")
 
 
+def link_data(output: Path, url: str) -> None:
+    """
+    Point the ``bundle.json`` of *output* at the data zip and the files of
+    the embeddings under the directory *url*, and delete them from
+    *output*.
+    """
+    path = output / "bundle.json"
+    bundle = json.loads(path.read_text())
+
+    def link(name):
+        name = name.rsplit("/", 1)[-1]
+        (output / name).unlink(missing_ok=True)
+        return f"{url.rstrip('/')}/{name}"
+
+    bundle["data"] = link(bundle["data"])
+    bundle["files"] = {
+        file: [link(part) for part in parts]
+        for file, parts in bundle.get("files", {}).items()
+    }
+    path.write_text(json.dumps(bundle) + "\n")
+
+
 def parse_args(argv=None):
     """Return the options of the command line *argv*."""
     parser = argparse.ArgumentParser(
@@ -294,9 +325,13 @@ def parse_args(argv=None):
     parser.add_argument("output", type=Path)
     parser.add_argument("embedded", nargs="?")
     parser.add_argument("--downloads", type=Path)
+    parser.add_argument("--data-url")
     return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.output, args.embedded, args.downloads)
+    if args.data_url:
+        link_data(args.output, args.data_url)
+    else:
+        main(args.output, args.embedded, args.downloads)

@@ -1,6 +1,7 @@
 """Tests for the script that builds the bundle of the REPL in the browser."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -222,3 +223,33 @@ def test_the_downloads_directory_is_an_option(bundle, tmp_path):
         tmp_path, "emb", Path("dl")
     )
     assert bundle.parse_args([str(tmp_path)]).downloads is None
+
+
+def test_the_data_can_be_linked_to_another_site(bundle, tmp_path):
+    """
+    A pull request's preview loads the data and the embeddings of the main
+    site: its bundle names them under the main site's directory, and they
+    are not deployed with it. The wheels stay, as the page's NeuroLang.
+    """
+    files = {"neurosynth/embeddings/model.npz": ["model.npz.0", "model.npz.1"]}
+    (tmp_path / "bundle.json").write_text(json.dumps(
+        {"wheels": ["nl-1.whl"], "data": bundle.DATA_ZIP, "files": files}
+    ))
+    for name in ("nl-1.whl", bundle.DATA_ZIP, "model.npz.0", "model.npz.1"):
+        (tmp_path / name).write_bytes(b"x")
+    args = bundle.parse_args([str(tmp_path), "--data-url", "/_static/repl/"])
+    assert args.data_url == "/_static/repl/"
+    assert bundle.parse_args([str(tmp_path)]).data_url is None
+
+    for _ in range(2):  # linking again changes nothing
+        bundle.link_data(tmp_path, args.data_url)
+        assert json.loads((tmp_path / "bundle.json").read_text()) == {
+            "wheels": ["nl-1.whl"],
+            "data": f"/_static/repl/{bundle.DATA_ZIP}",
+            "files": {"neurosynth/embeddings/model.npz": [
+                "/_static/repl/model.npz.0", "/_static/repl/model.npz.1",
+            ]},
+        }
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "bundle.json", "nl-1.whl"
+    ]

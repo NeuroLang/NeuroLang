@@ -135,11 +135,29 @@ from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
 
-The REPL of a pull request is built by its CI: the documentation's
-workflow uploads the site, the documentation with its REPL, as the artifact
-``repl-pr-NUMBER`` (kept 30 days), and a comment of the pull request tells
-the commit it was built from, whether the REPL's bundle is complete, and how
-to run it.  To run it, without building anything:
+The REPL of a pull request is built by its CI.  For a pull request from a
+branch of this repository, it is hosted on GitHub Pages, nothing to
+download: ``https://neurolang.github.io/NeuroLang/pr-NUMBER/`` opens its
+REPL, and ``https://neurolang.github.io/NeuroLang/pr-NUMBER/docs/`` is its
+documentation (Pages may take a minute to show a new build).  The hosted
+preview has the pull request's NeuroLang (its wheels) but not its data: the
+data zip and the text embeddings (300 MB) are loaded from the main site,
+``https://neurolang.github.io/_static/repl/``, that is master's data
+(``make_repl_bundle.py --data-url /_static/repl``).  A pull request that
+changes what the data is built from (``engines.yaml``, the ``neurosynth``
+engine's initialisation, ``neurosynth_utils.py``, ``specter2_numpy.py`` or
+``make_repl_bundle.py``) is told so in its comment: test its data with the
+artifact.  The REPL's *Docs* menu links to the main site's documentation.
+The preview is in :file:`pr-NUMBER/` of the branch ``gh-pages`` (beside the
+benchmarks' dashboard, in :file:`benchmarks/`), removed when the pull
+request is closed; that removal also squashes the history of ``gh-pages``
+into one commit when it exceeds 500 MB.
+
+The workflow also uploads the site, the documentation with its REPL and its
+own data, as the artifact ``repl-pr-NUMBER`` (kept 30 days), and a comment
+of the pull request gives the hosted links, the commit it was built from,
+whether the REPL's bundle is complete, and how to run the artifact, as for
+a pull request from a fork.  To run it, without building anything:
 
 .. code-block:: bash
 
@@ -177,10 +195,11 @@ Submitting a Pull Request
 CI runs on every pull request, also one whose base is the branch of another
 pull request (a stacked pull request): the tests are those of the packages
 it changes with respect to its base.  Every pull request gets the REPL in
-the browser of its branch: the artifact ``repl-pr-NUMBER`` and a comment
-telling how to run it (see `Running the REPL in the Browser Locally`_); a
-pull request from a fork gets the artifact only, the comment needing a
-token that a fork's runs do not have.
+the browser of its branch: hosted at
+``https://neurolang.github.io/NeuroLang/pr-NUMBER/``, the artifact
+``repl-pr-NUMBER``, and a comment telling both (see `Running the REPL in
+the Browser Locally`_); a pull request from a fork gets the artifact only,
+the hosting and the comment needing a token that a fork's runs do not have.
 
 **PR checklist:**
 

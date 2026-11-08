@@ -4,8 +4,9 @@ on:
   push:
     branches: [master]
   # Every pull request, whatever its base: a pull request stacked on the
-  # branch of another one is checked too.
+  # branch of another one is checked too. Closing one removes its preview.
   pull_request:
+    types: [opened, synchronize, reopened, closed]
 
 # A push to a pull request cancels its runs still going; each run of master
 # is a group of its own, never cancelled nor kept waiting.
@@ -16,18 +17,39 @@ concurrency:
 # A pull request's site, the documentation with its REPL in the browser, is
 # the artifact repl-pr-NUMBER, which the job repl tells of in a comment of the
 # pull request; that of master is the artifact documentation-html, deployed
-# to GitHub Pages.
+# to GitHub Pages (https://neurolang.github.io/).
+#
+# The site of a pull request from a branch of this repository is also hosted
+# on the GitHub Pages of this repository, the branch gh-pages: in pr-NUMBER/,
+# https://neurolang.github.io/NeuroLang/pr-NUMBER/, its REPL, with the
+# documentation in pr-NUMBER/docs/. Not its data (300 MB with the
+# embeddings): its REPL loads that of the main site, of the same origin
+# (make_repl_bundle.py --data-url). Every job that pushes to gh-pages (the
+# preview, its removal, the benchmarks' dashboard) is of the concurrency
+# group gh-pages: one at a time.
 env:
   ARTIFACT: ${{ github.event_name == 'pull_request' && format('repl-pr-{0}', github.event.pull_request.number) || 'documentation-html' }}
+  PREVIEW: pr-${{ github.event.pull_request.number }}
+  MAIN_SITE: https://neurolang.github.io
+  # The files the REPL's data and embeddings are built from: a pull request
+  # changing them has data that the main site's differ from.
+  DATA_INPUTS: >-
+    packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml
+    packages/neurolang_apps/neurolang_apps/utils/engines/neurosynth/init.py
+    packages/neurolang/neurolang/frontend/neurosynth_utils.py
+    packages/neurolang_apps/neurolang_apps/utils/specter2_numpy.py
+    doc/make_repl_bundle.py
 
 jobs:
   build-docs:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       complete: ${{ steps.check.outputs.complete }}
       artifact-url: ${{ steps.upload.outputs.artifact-url }}
+      data-changed: ${{ steps.preview.outputs.data-changed }}
 
     steps:
       - name: Checkout repository
@@ -121,6 +143,45 @@ jobs:
           path: doc/_build/html
           retention-days: 30
 
+      # The hosted preview: the site in docs/, its bundle linked to the data
+      # and embeddings of the main site, and an index opening the REPL.
+      # Whether the pull request changes what they are built from is
+      # compared with master, whose site is the main one.
+      - name: Prepare the hosted preview
+        id: preview
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.check.outputs.complete == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p preview/docs
+          cp -R doc/_build/html/. preview/docs/
+          uv run --no-sync python doc/make_repl_bundle.py preview/docs/_static/repl --data-url /_static/repl
+          cat > preview/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <title>NeuroLang's REPL</title>
+          <meta http-equiv="refresh" content="0; url=docs/_static/repl/index.html">
+          <script>location.replace("docs/_static/repl/index.html" + location.search + location.hash);</script>
+          </head>
+          <body><p><a href="docs/_static/repl/index.html">NeuroLang's REPL</a> (<a href="docs/">its documentation</a>)</p></body>
+          </html>
+          EOF
+          # shellcheck disable=SC2086  # the list of files
+          if git diff --quiet origin/master HEAD -- $DATA_INPUTS; then
+            echo "data-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "data-changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the hosted preview
+        if: steps.preview.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ env.PREVIEW }}
+          path: preview
+          retention-days: 1
+
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
@@ -131,14 +192,62 @@ jobs:
           publish_dir: ./doc/_build/html
           force_orphan: true
 
+  # Deploys the preview of a pull request from a branch of this repository
+  # to pr-NUMBER/ of gh-pages, with the token of the run: that of a pull
+  # request from a fork cannot push, and its job is skipped. keep_files:
+  # false empties only pr-NUMBER/ before copying.
+  preview:
+    name: Hosted preview
+    needs: build-docs
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.build-docs.outputs.complete == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    outputs:
+      data-reachable: ${{ steps.data.outputs.reachable }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: preview-${{ env.PREVIEW }}
+          path: preview
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_branch: gh-pages
+          publish_dir: preview
+          destination_dir: ${{ env.PREVIEW }}
+          keep_files: false
+          commit_message: "Preview of #${{ github.event.pull_request.number }}"
+
+      # Whether the main site has the data and the embeddings that the
+      # preview's REPL loads.
+      - name: Check the main site's data
+        id: data
+        run: |
+          reachable=true
+          for path in $(jq -r '.data, (.files // {} | .[] | .[])' preview/docs/_static/repl/bundle.json); do
+            if ! curl -sfIL -o /dev/null "$MAIN_SITE$path"; then
+              echo "::warning title=REPL data::$MAIN_SITE$path is not reachable: the hosted REPL cannot start."
+              reachable=false
+            fi
+          done
+          echo "reachable=$reachable" >> "$GITHUB_OUTPUT"
+
   # Tells whether the REPL's bundle was built, failing if not (the
-  # documentation is deployed all the same), and, on a pull request, how to
-  # run its REPL, in a comment of the pull request kept up to date: the
-  # comment with the marker below, which each run edits. The token of a pull
-  # request from a fork cannot comment: its REPL is the artifact only.
+  # documentation is deployed all the same), and, on a pull request, where
+  # its REPL is hosted and how to run it, in a comment of the pull request
+  # kept up to date: the comment with the marker below, which each run
+  # edits. The token of a pull request from a fork cannot comment: its REPL
+  # is the artifact only.
   repl:
     name: REPL bundle
-    needs: build-docs
+    needs: [build-docs, preview]
+    if: ${{ !cancelled() && needs.build-docs.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -154,6 +263,10 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ARTIFACT_URL: ${{ needs.build-docs.outputs.artifact-url }}
           COMPLETE: ${{ needs.build-docs.outputs.complete }}
+          DEPLOYED: ${{ needs.preview.result }}
+          DATA_CHANGED: ${{ needs.build-docs.outputs.data-changed }}
+          DATA_REACHABLE: ${{ needs.preview.outputs.data-reachable }}
+          HOSTED: https://neurolang.github.io/NeuroLang/${{ env.PREVIEW }}/
         run: |
           marker="<!-- neurolang-repl -->"
           if test "$COMPLETE" = true; then
@@ -161,13 +274,26 @@ jobs:
           else
             bundle=":warning: The REPL's bundle could not be built: the page will say that it cannot start (see the [run's log]($RUN_URL))."
           fi
+          if test "$DEPLOYED" = success; then
+            hosted="- **The REPL:** $HOSTED"$'\n'"- **The documentation:** ${HOSTED}docs/"$'\n\n'"Hosted on GitHub Pages, which may take a minute to show this build."
+            if test "$DATA_CHANGED" = true; then
+              hosted="$hosted"$'\n\n'":warning: This pull request changes the engine's data: the hosted REPL uses master's data. Run the artifact, below, to test the new data."
+            fi
+            if test "$DATA_REACHABLE" != true; then
+              hosted="$hosted"$'\n\n'":warning: The main site's data, which the hosted REPL loads from $MAIN_SITE/_static/repl/, is not reachable: the hosted REPL cannot start until master's documentation has it. Run the artifact, below."
+            fi
+          else
+            hosted="The REPL is not hosted for this build (see the [run's log]($RUN_URL)): run the artifact, below."
+          fi
           body=$(cat <<EOF
           $marker
           ### The REPL in the browser of this pull request
 
-          Built from $COMMIT by [run $RUN_ID]($RUN_URL): the documentation and its REPL, the artifact [\`$ARTIFACT\`]($ARTIFACT_URL) (kept 30 days). $bundle
+          $hosted
 
-          The page is static but must be served over HTTP. From a checkout of NeuroLang:
+          Built from $COMMIT by [run $RUN_ID]($RUN_URL): the documentation and its REPL, the artifact [\`$ARTIFACT\`]($ARTIFACT_URL) (kept 30 days), with its own data. $bundle
+
+          To run it locally, the page is static but must be served over HTTP. From a checkout of NeuroLang:
 
           \`\`\`bash
           uv run --extra apps neurolang-repl-serve --pr $PR
@@ -196,3 +322,56 @@ jobs:
         run: |
           echo "::error title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start. See the step Build the in-browser REPL's bundle of the job build-docs."
           exit 1
+
+  # Removes the preview of a closed pull request from gh-pages, with those
+  # of any other closed pull request (a removal whose run did not happen),
+  # and keeps the history of gh-pages from growing without bound: every
+  # preview is a commit of about 10 MB, so when the objects of gh-pages
+  # exceed MAX_MB, it is squashed into one commit of its current tree.
+  cleanup-preview:
+    name: Remove the hosted preview
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - name: Check out gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Remove the previews of closed pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MAX_MB: 500
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          open=$(gh pr list -R "$REPO" --state open --limit 1000 --json number --jq '.[].number')
+          for dir in pr-*/; do
+            number=${dir#pr-}
+            number=${number%/}
+            if ! grep -qx "$number" <<< "$open"; then
+              git rm -rq -- "pr-$number"
+            fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Remove the previews of closed pull requests"
+            git push origin HEAD:gh-pages
+          fi
+          size=$(git rev-list --objects --disk-usage HEAD)
+          echo "The history of gh-pages takes $((size / 1000000)) MB."
+          if test "$size" -gt $((MAX_MB * 1000000)); then
+            old=$(git rev-parse HEAD)
+            git checkout -q --orphan squashed
+            git commit -q -m "Squash gh-pages into its tree as of $old"
+            git push --force-with-lease="gh-pages:$old" origin HEAD:gh-pages
+          fi
