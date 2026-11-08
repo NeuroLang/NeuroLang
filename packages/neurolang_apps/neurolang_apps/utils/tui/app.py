@@ -14,6 +14,9 @@ from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 
 from neurolang.frontend.show_ra import ShowRAOptions
+from neurolang.utils.euclidean_join_settings import (
+    use_profile as use_join_profile,
+)
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import (
     _emit,
@@ -92,7 +95,10 @@ class TuiSettings:
     those the configuration gives. With *scope_queries* (``.scope``),
     the rules defined with a query are local to it. *program_file* is the
     file of the program run first, if any (``--file``): the modules it
-    imports are relative to its directory.
+    imports are relative to its directory. *join_profile* is the profile of
+    the settings of the Euclidean join (``euclidean_join.yaml``) the session
+    uses: ``memory`` by default, as a session holds its results and, in a
+    browser, has little memory.
     """
 
     engine_name: str = ""
@@ -112,6 +118,7 @@ class TuiSettings:
     llm_provider: Optional[str] = None
     scope_queries: bool = True
     program_file: Optional[str] = None
+    join_profile: str = "memory"
 
 
 class AgentRun(NamedTuple):
@@ -145,6 +152,10 @@ class InteractiveTuiApp:
         """
         self._nl = nl
         self.settings = settings or TuiSettings()
+        use_join_profile(
+            self.settings.join_profile,
+            overrides=self._engine_join_settings(),
+        )
         self.transcript = Transcript(self.settings)
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
@@ -177,6 +188,20 @@ class InteractiveTuiApp:
             self._history = FileHistory(self.settings.history_path)
         else:
             self._history = InMemoryHistory()
+
+    def _engine_join_settings(self) -> dict:
+        """
+        Return the settings of the Euclidean join the engine changes.
+
+        They are those of the ``euclidean_join`` key of the engine's
+        configuration, none for an engine that is not registered.
+        """
+        try:
+            return engine_registry.get_euclidean_join_settings(
+                self.settings.engine_name
+            )
+        except ValueError:
+            return {}
 
     def _tee_consoles(self, *consoles) -> None:
         """

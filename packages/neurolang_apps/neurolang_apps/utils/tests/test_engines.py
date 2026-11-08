@@ -1045,3 +1045,38 @@ def test_python_init_is_given_the_python_init_options():
     init_engine.assert_called_once_with(
         "nl", "mask", DATA_DIR, unknown_space="drop"
     )
+
+
+def test_engines_change_the_settings_of_the_euclidean_join(tmp_path):
+    """
+    The ``euclidean_join`` mapping of an engine is merged with those of the
+    engines it extends, and changes the settings of the Euclidean join when
+    the engine is built.
+    """
+    import dataclasses
+
+    from neurolang.utils.euclidean_join_settings import SETTINGS, profile
+    from neurolang_apps.utils import engine_registry
+
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n"
+        "  base:\n"
+        "    abstract: true\n"
+        "    euclidean_join: {kdtree_chunk_pairs: 11, block_pairs: 12}\n"
+        "  small:\n"
+        "    extends: base\n"
+        "    euclidean_join: {block_pairs: 13}\n"
+        "  plain: {}\n"
+    )
+    assert engine_registry.get_euclidean_join_settings("small", path) == {
+        "kdtree_chunk_pairs": 11, "block_pairs": 13,
+    }
+    assert engine_registry.get_euclidean_join_settings("plain", path) == {}
+    with profile("default"):
+        before = dataclasses.replace(SETTINGS)
+        engine_registry.build_engine("plain", tmp_path, yaml_path=path)
+        assert SETTINGS == before
+        engine_registry.build_engine("small", tmp_path, yaml_path=path)
+        assert SETTINGS.kdtree_chunk_pairs == 11
+        assert SETTINGS.block_pairs == 13

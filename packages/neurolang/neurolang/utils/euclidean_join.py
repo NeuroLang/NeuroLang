@@ -15,14 +15,19 @@ ones the ``euclidean`` built-in would select.
 When both sets have integer coordinates, the candidate neighbours of the
 smaller set are generated from an integer offset stencil and looked up in
 the larger one, which avoids building a k-d tree on the larger set.
-Floats lying on a grid (see :data:`GRID_STEPS`) are numbered by their
+Floats lying on a grid (see ``grid_steps``) are numbered by their
 position in it and joined in the same way, the pairs at an offset too
 close to the radius to be told from rounding errors being checked on the
-floats. Otherwise a k-d tree is built on the points of the larger set that lie
-within the radius of the bounding box of the smaller set, and searched in
-chunks of the smaller set, to hold few pairs at once. The stencil is used
-whenever the larger set is dense enough, as one of its look-ups costs much
-less than one of the pairs a k-d tree returns.
+floats. Otherwise a k-d tree is built on the points of the larger set that
+lie within the radius of the bounding box of the smaller set, and searched
+in chunks of the smaller set, to hold few pairs at once. The stencil is
+used whenever the larger set is dense enough, as one of its look-ups costs
+much less than one of the pairs a k-d tree returns.
+
+The thresholds that choose between these means, the sizes of the chunks
+and the other tunable values are the settings of
+:mod:`neurolang.utils.euclidean_join_settings`, read from
+``euclidean_join.yaml``; its ``memory`` profile trades time for memory.
 """
 
 import logging
@@ -36,34 +41,12 @@ import scipy.spatial
 
 from nl_expr.utils.various import log_performance
 
+from .euclidean_join_settings import SETTINGS
+
 LOG = logging.getLogger(__name__)
 
-#: Maximum number of cells of the cube enclosing the offset stencil.
-STENCIL_MAX_CELLS = 1_000_000
-#: Number of stencil look-ups always allowed before using a k-d tree.
-STENCIL_MIN_WORK = 20_000_000
-#: Number of stencil look-ups allowed per point of the larger set.
-STENCIL_WORK_PER_POINT = 32
-#: A stencil, whose look-ups are far cheaper than the pairs a k-d tree
-#: returns, is always used when the occupancy grid has at most this many
-#: cells per point of the larger set.
-STENCIL_GRID_CELLS_PER_POINT = 40
-#: Occupancy grids are used up to this many cells per point...
-GRID_CELLS_PER_POINT = 4
-#: ... or this many cells; sorted keys are searched otherwise.
-GRID_MIN_CELLS = 1 << 24
 #: Coordinate keys must be smaller than this to fit an int64.
 MAX_KEY = 1 << 62
-#: Steps of the grids that float coordinates can lie on, coarsest first.
-GRID_STEPS = (1, 0.5, 0.25, 0.1, 0.05, 0.01)
-#: Largest coordinate, in steps, of a grid whose points are joined as integers.
-GRID_MAX_COORDINATE = 1e4
-#: Distance, in steps, within which a stencil offset is checked on the floats.
-GRID_TOLERANCE = 1e-4
-#: Number of pairs a k-d tree search is expected to return at a time.
-KDTREE_CHUNK_PAIRS = 4_000_000
-#: Number of points whose neighbours are counted to size those searches.
-KDTREE_SAMPLE = 1_000
 
 
 def euclidean(*coordinates):
@@ -348,14 +331,42 @@ def _distinct_pairs(small, large, indices, columns, distance):
         rows = _join_columns(small, large, indices, columns, distance)
         keep = numpy.flatnonzero(~rows.duplicated().to_numpy())
         return tuple(index[keep] for index in indices)
-    keys = _take(large_codes, indices[1]).astype(numpy.int64)
-    keys *= n_small
-    keys += _take(small_codes, indices[0])
+    keys = numpy.empty(len(indices[0]), dtype=numpy.int64)
+    for block in _blocks(len(keys)):
+        keys[block] = _take(large_codes, indices[1][block])
+        keys[block] *= n_small
+        keys[block] += _take(small_codes, indices[0][block])
     keys.sort()
     first = numpy.ones(len(keys), dtype=bool)
     numpy.not_equal(keys[1:], keys[:-1], out=first[1:])
-    large_code, small_code = numpy.divmod(keys[first], n_small)
-    return _take(small_rows, small_code), _take(large_rows, large_code), None
+    distinct = keys[first]
+    del keys, first
+    index_type = _index_type(max(len(small[0]), len(large[0])))
+    small_rows_out = numpy.empty(len(distinct), dtype=index_type)
+    large_rows_out = numpy.empty(len(distinct), dtype=index_type)
+    for block in _blocks(len(distinct)):
+        large_code, small_code = numpy.divmod(distinct[block], n_small)
+        small_rows_out[block] = _take(small_rows, small_code)
+        large_rows_out[block] = _take(large_rows, large_code)
+    return small_rows_out, large_rows_out, None
+
+
+def _blocks(size):
+    """
+    Return the slices of ``block_pairs`` elements covering *size* elements.
+
+    Parameters
+    ----------
+    size : int
+        Number of elements.
+
+    Returns
+    -------
+    range-like of slice
+        The slices, in order.
+    """
+    block = SETTINGS.block_pairs
+    return [slice(start, start + block) for start in range(0, size, block)]
 
 
 def _value_codes(frame, columns):
@@ -524,7 +535,7 @@ def _integer_stencil(small, large, radius, compare):
         return None
     reach = int(math.floor(radius))
     n_dims = small.shape[1]
-    if (2 * reach + 1) ** n_dims > STENCIL_MAX_CELLS:
+    if (2 * reach + 1) ** n_dims > SETTINGS.stencil_max_cells:
         return None
     axis = numpy.arange(-reach, reach + 1)
     cube = numpy.stack(
@@ -534,11 +545,12 @@ def _integer_stencil(small, large, radius, compare):
     keep = compare(lengths, radius)
     work = len(small) * int(keep.sum())
     cells = _key_space(large, reach)[2]
-    dense = cells <= STENCIL_GRID_CELLS_PER_POINT * len(large) and (
+    dense = cells <= SETTINGS.stencil_grid_cells_per_point * len(large) and (
         _uses_grid(cells, len(large))
     )
     if not dense and work > max(
-        STENCIL_MIN_WORK, STENCIL_WORK_PER_POINT * len(large)
+        SETTINGS.stencil_min_work,
+        SETTINGS.stencil_work_per_point * len(large),
     ):
         return None
     return cube[keep], lengths[keep]
@@ -581,13 +593,56 @@ def _stencil_pairs(small, large, offsets, lengths, with_distances=True):
         ((small >= low + reach) & (small <= high - reach)).all(axis=1)
     ).astype(_index_type(len(small)))
     keys = (small[near] - low) @ strides
-    found = [
-        _found(lookup(keys + shift), near) for shift in offsets @ strides
-    ]
-    counts = [len(small_found) for small_found, _ in found]
-    small_index, large_index = _concatenate(found)
+    small_index, large_index, counts = _stencil_found(
+        lookup, keys, near, offsets @ strides, _index_type(len(large))
+    )
     distances = numpy.repeat(lengths, counts) if with_distances else None
     return small_index, large_index, distances
+
+
+def _stencil_found(lookup, keys, near, shifts, index_type):
+    """
+    Return the points of the look-ups of the keys shifted by each offset.
+
+    With the ``stencil_count_first`` setting, the points found are counted
+    before they are stored, so that they are held once rather than twice.
+
+    Parameters
+    ----------
+    lookup : callable
+        Position of each key in the larger set, -1 if missing.
+    keys : numpy.ndarray
+        Keys of the points of the smaller set, those in *near*.
+    near : numpy.ndarray
+        Index of each of the keys in the smaller set.
+    shifts : numpy.ndarray
+        Shift of the keys by each offset.
+    index_type : type
+        Integer type of the indices of the larger set.
+
+    Returns
+    -------
+    tuple
+        The indices of the points of the smaller and of the larger set,
+        pairwise, and the number of pairs of each offset.
+    """
+    if not SETTINGS.stencil_count_first:
+        found = [_found(lookup(keys + shift), near) for shift in shifts]
+        counts = [len(small_found) for small_found, _ in found]
+        return (*_concatenate(found), counts)
+    counts = [
+        int(numpy.count_nonzero(lookup(keys + shift) >= 0))
+        for shift in shifts
+    ]
+    small_index = numpy.empty(sum(counts), dtype=near.dtype)
+    large_index = numpy.empty(sum(counts), dtype=index_type)
+    end = 0
+    for shift, count in zip(shifts, counts):
+        small_index[end:end + count], large_index[end:end + count] = _found(
+            lookup(keys + shift), near
+        )
+        end += count
+    return small_index, large_index, counts
 
 
 def _grid_step(*point_sets):
@@ -602,15 +657,18 @@ def _grid_step(*point_sets):
     Returns
     -------
     float or None
-        The coarsest of :data:`GRID_STEPS` of which all the coordinates are
+        The coarsest of ``grid_steps`` of which all the coordinates are
         multiples, up to rounding errors, or None.
     """
-    for step in GRID_STEPS:
+    for step in SETTINGS.grid_steps:
         for points in point_sets:
             steps = points / step
             largest = numpy.abs(steps).max(initial=0)
             error = numpy.abs(steps - numpy.rint(steps)).max(initial=0)
-            if largest > GRID_MAX_COORDINATE or error > 1e-9 * max(1, largest):
+            if (
+                largest > SETTINGS.grid_max_coordinate
+                or error > 1e-9 * max(1, largest)
+            ):
                 break
         else:
             return step
@@ -657,12 +715,12 @@ def _grid_pairs(small, large, radius, compare, with_distances):
              for points in (small, large)]
     in_steps = radius / step
     stencil = _integer_stencil(
-        *cells, in_steps + GRID_TOLERANCE, numpy.less_equal
+        *cells, in_steps + SETTINGS.grid_tolerance, numpy.less_equal
     )
     if stencil is None:
         return None
     offsets, lengths = stencil
-    sure = lengths < in_steps - GRID_TOLERANCE
+    sure = lengths < in_steps - SETTINGS.grid_tolerance
     inner = _stencil_pairs(*cells, offsets[sure], lengths[sure], False)
     edge = _stencil_pairs(*cells, offsets[~sure], lengths[~sure], False)
     if inner is None or edge is None:
@@ -677,7 +735,7 @@ def _grid_pairs(small, large, radius, compare, with_distances):
     return small_index, large_index, distances
 
 
-def _exact_distances(small, large, small_index, large_index, block=1 << 20):
+def _exact_distances(small, large, small_index, large_index):
     """
     Return the distances of pairs of points, by blocks of pairs.
 
@@ -687,8 +745,6 @@ def _exact_distances(small, large, small_index, large_index, block=1 << 20):
         Point sets.
     small_index, large_index : numpy.ndarray
         Indices of the points of each pair.
-    block : int, optional
-        Number of pairs whose coordinates are held at once.
 
     Returns
     -------
@@ -696,8 +752,7 @@ def _exact_distances(small, large, small_index, large_index, block=1 << 20):
         The distance of each pair.
     """
     distances = numpy.empty(len(small_index))
-    for start in range(0, len(small_index), block):
-        rows = slice(start, start + block)
+    for rows in _blocks(len(small_index)):
         distances[rows] = euclidean_distance(
             *small[small_index[rows]].T, *large[large_index[rows]].T
         )
@@ -743,7 +798,9 @@ def _uses_grid(size, n_keys):
         Whether the keys are looked up in an occupancy grid rather than
         searched in sorted order.
     """
-    return size <= max(GRID_MIN_CELLS, GRID_CELLS_PER_POINT * n_keys)
+    return size <= max(
+        SETTINGS.grid_min_cells, SETTINGS.grid_cells_per_point * n_keys
+    )
 
 
 def _concatenate(chunks):
@@ -841,7 +898,7 @@ def _kdtree_pairs(small, large, radius, compare, with_distances=True):
     The trees are searched with a slightly larger radius, so that their
     rounding errors lose no pair, and the exact bound applied afterwards.
     The points of *small* are searched in chunks expected to return
-    :data:`KDTREE_CHUNK_PAIRS` pairs, so that the trees' pairs, which are
+    ``kdtree_chunk_pairs`` pairs, so that the trees' pairs, which are
     more than those within *radius* and several arrays each, are never all
     alive at once.
 
@@ -916,8 +973,8 @@ def _kdtree_chunk_size(tree, small, search_radius):
         The number of points, at least one, estimated from the neighbours
         of a sample of the points.
     """
-    sample = small[:: max(1, len(small) // KDTREE_SAMPLE)]
+    sample = small[:: max(1, len(small) // SETTINGS.kdtree_sample)]
     neighbours = tree.query_ball_point(
         sample, search_radius, return_length=True
     ).mean()
-    return max(1, int(KDTREE_CHUNK_PAIRS / max(neighbours, 1)))
+    return max(1, int(SETTINGS.kdtree_chunk_pairs / max(neighbours, 1)))

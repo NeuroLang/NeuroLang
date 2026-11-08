@@ -35,7 +35,16 @@ Unreleased
   (multiples of 1, 0.5, 0.25, 0.1, 0.05 or 0.01, as the millimetre
   coordinates of peaks and voxels are) are joined the same way, as integers,
   the pairs at the very radius being checked on the floats: they give the
-  same pairs and distances as before.
+  same pairs and distances as before. The thresholds, the sizes of the chunks
+  and the other tunable values of the join are in
+  ``neurolang/utils/euclidean_join.yaml``, read with OmegaConf (a dependency
+  of ``neurolang`` now) and changed by the ``euclidean_join`` key of an
+  engine (see :ref:`euclidean-join-settings`), with a ``memory`` profile, which the
+  interactive REPL, in a terminal and in a browser, uses: it uses the
+  stencil up to a billion look-ups, counts the pairs before storing them and
+  searches the k-d trees in small chunks. The distinct pairs are decoded in
+  blocks into 32-bit indices: a radius of 6 voxels peaks at 6.6 GB, and
+  at 6.0 GB in the memory profile, instead of 14.6 GB.
 
 * A selection by a Python function of a single column, as
   ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``

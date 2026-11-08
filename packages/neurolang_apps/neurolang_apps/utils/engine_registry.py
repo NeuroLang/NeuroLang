@@ -107,6 +107,7 @@ import numpy as np
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
+from neurolang.utils import euclidean_join_settings
 from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
@@ -800,6 +801,21 @@ def get_signatures(
         if arguments:
             signatures[pname] = arguments
     return signatures
+
+
+def get_euclidean_join_settings(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """
+    Return the settings of the Euclidean join an engine changes.
+
+    They are the ``euclidean_join`` mapping of the engine, merged with that
+    of the engines it extends: settings of
+    :class:`~neurolang.utils.euclidean_join_settings.JoinSettings`, as
+    ``kdtree_chunk_pairs``.
+    """
+    cfg = get_engine_config(name, yaml_path)
+    return dict(cfg.get("euclidean_join") or {})
 
 
 def get_hidden_predicates(
@@ -1757,6 +1773,7 @@ def build_engine(
     from neurolang.frontend import NeurolangPDL
 
     cfg = get_engine_config(name, yaml_path)
+    euclidean_join_settings.override(cfg.get("euclidean_join"))
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     cache_dir = (

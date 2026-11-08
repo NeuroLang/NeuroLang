@@ -51,6 +51,14 @@ may specify the following keys, all of them optional:
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
   downloaded from the authors' repository
+- ``euclidean_join`` — settings of the Euclidean join that finds the pairs
+  of points of a ``EUCLIDEAN(...) < r`` bound that differ from the profile
+  in use (``kdtree_chunk_pairs: 500000``): the thresholds, the sizes of the
+  chunks and the other values of
+  ``neurolang/utils/euclidean_join.yaml``, whose profiles (``default``,
+  and ``memory``, that of the interactive REPL) hold the others; see
+  :ref:`euclidean-join-settings`.  The mappings of an engine and of the
+  engines it extends are merged
 - ``datalog_init`` — inline Datalog rules that are loaded at engine startup
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
