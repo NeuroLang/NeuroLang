@@ -384,3 +384,46 @@ def test_k_d_tree_join_holds_little_more_than_its_result(monkeypatch):
     result, peak = _join_peak_memory(grid, peaks, 3)
     assert len(result) > 1_000_000
     assert peak < 1.8 * result.memory_usage(index=False).sum()
+
+
+@pytest.mark.parametrize("strict", [True, False])
+@pytest.mark.parametrize("step,radius", [(0.5, 1.5), (0.1, 0.3), (0.25, 1.0)])
+def test_float_grids_are_joined_with_a_stencil(
+    monkeypatch, strict, step, radius
+):
+    """
+    Float points on a grid, ties at the radius included, are joined as
+    integers, with the distances of the floats.
+    """
+    built = _count_kdtrees(monkeypatch)
+    rng = numpy.random.default_rng(3)
+    first = numpy.unique(rng.integers(-8, 9, size=(60, 3)), axis=0) * step
+    second = numpy.unique(rng.integers(-8, 9, size=(200, 3)), axis=0) * step
+    pairs = _found(first, second, radius, strict)
+    assert not built
+    assert pairs == _brute_force(first, second, radius, strict)
+    assert any(
+        euclidean_distance(*p[:3], *p[3:]) == radius for p in pairs
+    ) or strict
+
+
+def test_float_points_off_a_grid_are_joined_with_k_d_trees(monkeypatch):
+    built = _count_kdtrees(monkeypatch)
+    rng = numpy.random.default_rng(4)
+    first = rng.uniform(0, 5, size=(30, 3))
+    second = rng.uniform(0, 5, size=(80, 3))
+    assert _found(first, second, 1.5, True) == _brute_force(
+        first, second, 1.5, True
+    )
+    assert built
+
+
+def test_float_grid_distances_are_those_of_the_floats():
+    first = numpy.array([[0.1, 0.2, 0.3]])
+    second = numpy.array([[0.4, 0.6, 0.3], [0.1, 0.2, 0.6]])
+    first_index, second_index, distances = euclidean_pairs(
+        first, second, 0.6, False
+    )
+    assert len(distances) == 2
+    for i, j, dist in zip(first_index, second_index, distances):
+        assert dist == euclidean_distance(*first[i], *second[j])

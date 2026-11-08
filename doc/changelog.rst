@@ -31,7 +31,11 @@ Unreleased
   coordinates in 40. The k-d trees are searched in chunks of the smaller
   set, so that the pairs they return are never all alive at once; and the
   distances, the 64-bit indices of the points and a copy of the pairs are
-  no longer kept when they are not needed.
+  no longer kept when they are not needed. Float coordinates lying on a grid
+  (multiples of 1, 0.5, 0.25, 0.1, 0.05 or 0.01, as the millimetre
+  coordinates of peaks and voxels are) are joined the same way, as integers,
+  the pairs at the very radius being checked on the floats: they give the
+  same pairs and distances as before.
 
 * A selection by a Python function of a single column, as
   ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``

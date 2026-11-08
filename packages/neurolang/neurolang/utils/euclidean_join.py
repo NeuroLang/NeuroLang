@@ -15,7 +15,10 @@ ones the ``euclidean`` built-in would select.
 When both sets have integer coordinates, the candidate neighbours of the
 smaller set are generated from an integer offset stencil and looked up in
 the larger one, which avoids building a k-d tree on the larger set.
-Otherwise a k-d tree is built on the points of the larger set that lie
+Floats lying on a grid (see :data:`GRID_STEPS`) are numbered by their
+position in it and joined in the same way, the pairs at an offset too
+close to the radius to be told from rounding errors being checked on the
+floats. Otherwise a k-d tree is built on the points of the larger set that lie
 within the radius of the bounding box of the smaller set, and searched in
 chunks of the smaller set, to hold few pairs at once. The stencil is used
 whenever the larger set is dense enough, as one of its look-ups costs much
@@ -51,6 +54,12 @@ GRID_CELLS_PER_POINT = 4
 GRID_MIN_CELLS = 1 << 24
 #: Coordinate keys must be smaller than this to fit an int64.
 MAX_KEY = 1 << 62
+#: Steps of the grids that float coordinates can lie on, coarsest first.
+GRID_STEPS = (1, 0.5, 0.25, 0.1, 0.05, 0.01)
+#: Largest coordinate, in steps, of a grid whose points are joined as integers.
+GRID_MAX_COORDINATE = 1e4
+#: Distance, in steps, within which a stencil offset is checked on the floats.
+GRID_TOLERANCE = 1e-4
 #: Number of pairs a k-d tree search is expected to return at a time.
 KDTREE_CHUNK_PAIRS = 4_000_000
 #: Number of points whose neighbours are counted to size those searches.
@@ -481,6 +490,8 @@ def _pairs(small, large, radius, compare, with_distances=True):
     if stencil is not None:
         pairs = _stencil_pairs(small, large, *stencil, with_distances)
     if pairs is None:
+        pairs = _grid_pairs(small, large, radius, compare, with_distances)
+    if pairs is None:
         pairs = _kdtree_pairs(small, large, radius, compare, with_distances)
     return pairs
 
@@ -577,6 +588,120 @@ def _stencil_pairs(small, large, offsets, lengths, with_distances=True):
     small_index, large_index = _concatenate(found)
     distances = numpy.repeat(lengths, counts) if with_distances else None
     return small_index, large_index, distances
+
+
+def _grid_step(*point_sets):
+    """
+    Return the step of the grid the points of float sets lie on, if any.
+
+    Parameters
+    ----------
+    *point_sets : numpy.ndarray
+        Point sets.
+
+    Returns
+    -------
+    float or None
+        The coarsest of :data:`GRID_STEPS` of which all the coordinates are
+        multiples, up to rounding errors, or None.
+    """
+    for step in GRID_STEPS:
+        for points in point_sets:
+            steps = points / step
+            largest = numpy.abs(steps).max(initial=0)
+            error = numpy.abs(steps - numpy.rint(steps)).max(initial=0)
+            if largest > GRID_MAX_COORDINATE or error > 1e-9 * max(1, largest):
+                break
+        else:
+            return step
+    return None
+
+
+def _grid_pairs(small, large, radius, compare, with_distances):
+    """
+    Return the pairs of points of float grids within *radius*, as integers.
+
+    The points are numbered by their position in the grid, and their
+    neighbours looked up with a stencil of integer offsets. The pairs whose
+    offset is too close to *radius* to be told from the rounding errors of
+    the floats are checked on the floats.
+
+    Parameters
+    ----------
+    small, large : numpy.ndarray
+        Point sets, *small* being the smaller one; only *small* may
+        repeat points.
+    radius : float
+        Distance bound.
+    compare : callable
+        ``operator.lt`` or ``operator.le``.
+    with_distances : bool
+        Whether the distances are returned, rather than None.
+
+    Returns
+    -------
+    tuple of numpy.ndarray or None
+        Indices of the points of *small*, of *large*, pairwise, and their
+        distances, or None when the points are not on a grid, or a stencil
+        is not worth using.
+    """
+    if all(
+        numpy.issubdtype(points.dtype, numpy.integer)
+        for points in (small, large)
+    ):
+        return None
+    step = _grid_step(small, large)
+    if step is None or math.isinf(radius):
+        return None
+    cells = [numpy.rint(points / step).astype(numpy.int64)
+             for points in (small, large)]
+    in_steps = radius / step
+    stencil = _integer_stencil(
+        *cells, in_steps + GRID_TOLERANCE, numpy.less_equal
+    )
+    if stencil is None:
+        return None
+    offsets, lengths = stencil
+    sure = lengths < in_steps - GRID_TOLERANCE
+    inner = _stencil_pairs(*cells, offsets[sure], lengths[sure], False)
+    edge = _stencil_pairs(*cells, offsets[~sure], lengths[~sure], False)
+    if inner is None or edge is None:
+        return None
+    exact = _exact_distances(small, large, edge[0], edge[1])
+    keep = compare(exact, radius)
+    chunks = [inner[:2], (edge[0][keep], edge[1][keep])]
+    small_index, large_index = _concatenate(chunks)
+    distances = None
+    if with_distances:
+        distances = _exact_distances(small, large, small_index, large_index)
+    return small_index, large_index, distances
+
+
+def _exact_distances(small, large, small_index, large_index, block=1 << 20):
+    """
+    Return the distances of pairs of points, by blocks of pairs.
+
+    Parameters
+    ----------
+    small, large : numpy.ndarray
+        Point sets.
+    small_index, large_index : numpy.ndarray
+        Indices of the points of each pair.
+    block : int, optional
+        Number of pairs whose coordinates are held at once.
+
+    Returns
+    -------
+    numpy.ndarray
+        The distance of each pair.
+    """
+    distances = numpy.empty(len(small_index))
+    for start in range(0, len(small_index), block):
+        rows = slice(start, start + block)
+        distances[rows] = euclidean_distance(
+            *small[small_index[rows]].T, *large[large_index[rows]].T
+        )
+    return distances
 
 
 def _key_space(points, reach):
