@@ -1,0 +1,62 @@
+﻿neurolang.NeurolangDL
+=====================
+
+.. currentmodule:: neurolang
+
+.. autoclass:: NeurolangDL
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~NeurolangDL.__init__
+      ~NeurolangDL.add_atlas_set
+      ~NeurolangDL.add_constraint
+      ~NeurolangDL.add_region
+      ~NeurolangDL.add_region_set
+      ~NeurolangDL.add_symbol
+      ~NeurolangDL.add_tuple_set
+      ~NeurolangDL.all
+      ~NeurolangDL.compute_datalog_program_for_autocompletion
+      ~NeurolangDL.create_region
+      ~NeurolangDL.del_symbol
+      ~NeurolangDL.execute_datalog_program
+      ~NeurolangDL.execute_squall_program
+      ~NeurolangDL.exists
+      ~NeurolangDL.get_symbol
+      ~NeurolangDL.load_neurosynth_mni_peaks_reported
+      ~NeurolangDL.load_neurosynth_study_ids
+      ~NeurolangDL.load_neurosynth_term_study_associations
+      ~NeurolangDL.magic_sets_rewrite_program
+      ~NeurolangDL.make_implicit_regions_explicit
+      ~NeurolangDL.new_region_symbol
+      ~NeurolangDL.new_symbol
+      ~NeurolangDL.predicate_parameter_names
+      ~NeurolangDL.query
+      ~NeurolangDL.reset_program
+      ~NeurolangDL.solve_all
+      ~NeurolangDL.sphere
+   
+   
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~NeurolangDL.current_program
+      ~NeurolangDL.environment
+      ~NeurolangDL.functions
+      ~NeurolangDL.region_names
+      ~NeurolangDL.region_set_names
+      ~NeurolangDL.scope
+      ~NeurolangDL.symbol_table
+      ~NeurolangDL.symbols
+      ~NeurolangDL.types
+   
+   

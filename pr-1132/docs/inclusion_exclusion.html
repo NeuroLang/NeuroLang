@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Inclusion–exclusion with an incomplete containment test &#8212; NeuroLang 0.1a22.dev73+g5af0e7ed1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/neurolang.css?v=497e8255" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="_static/documentation_options.js?v=938eb139"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'inclusion_exclusion';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="icon" href="_static/favicon.svg"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Engine Configuration (engines.yaml)" href="engine_configuration.html" />
+    <link rel="prev" title="Lifted probabilistic inference" href="probabilistic_lifting.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1a22" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/neurolang-lockup.svg" class="logo__image only-light" alt="NeuroLang"/>
+    <img src="_static/neurolang-lockup-dark.svg" class="logo__image only-dark pst-js-only" alt="NeuroLang"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="#" aria-current="page">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#" aria-current="page">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#statement-of-the-problem">Statement of the problem</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-lemma">The lemma</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-proof">The proof</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-implementation-guarantees">What the implementation guarantees</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relation-to-the-literature">Relation to the literature</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Inclusion–exclusion with an incomplete containment test</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="inclusionexclusion-with-an-incomplete-containment-test">
+<span id="inclusion-exclusion"></span><h1>Inclusion–exclusion with an incomplete containment test<a class="headerlink" href="#inclusionexclusion-with-an-incomplete-containment-test" title="Link to this heading">#</a></h1>
+<p>This page proves that the inclusion–exclusion rule of the lifted solver
+(see <a class="reference internal" href="probabilistic_lifting.html#probabilistic-lifting"><span class="std std-ref">Lifted probabilistic inference</span></a>) computes the exact probability of a
+query, although the containment test it uses to cancel terms is not
+complete.</p>
+<nav class="contents local" id="contents">
+<ul class="simple">
+<li><p><a class="reference internal" href="#statement-of-the-problem" id="id8">Statement of the problem</a></p></li>
+<li><p><a class="reference internal" href="#the-lemma" id="id9">The lemma</a></p></li>
+<li><p><a class="reference internal" href="#the-proof" id="id10">The proof</a></p></li>
+<li><p><a class="reference internal" href="#what-the-implementation-guarantees" id="id11">What the implementation guarantees</a></p></li>
+<li><p><a class="reference internal" href="#relation-to-the-literature" id="id12">Relation to the literature</a></p></li>
+<li><p><a class="reference internal" href="#references" id="id13">References</a></p></li>
+</ul>
+</nav>
+<section id="statement-of-the-problem">
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Statement of the problem</a><a class="headerlink" href="#statement-of-the-problem" title="Link to this heading">#</a></h2>
+<p>For a conjunction <span class="math notranslate nohighlight">\(K_1 \land \dots \land K_n\)</span> of clauses with the same
+free variables,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">inclusion_exclusion_conjunction()</span></code>
+computes a weighted sum of the probabilities of the disjunctions
+<span class="math notranslate nohighlight">\(f(S) = \bigvee_{i \in S} K_i\)</span>, <span class="math notranslate nohighlight">\(S\)</span> a non-empty subset of
+<span class="math notranslate nohighlight">\(\{1, \dots, n\}\)</span>, lifting only the disjunctions whose weight is not
+0. The weights are the Möbius weights of an order <span class="math notranslate nohighlight">\(\preceq\)</span> between
+the disjunctions, which is built with
+<code class="xref py py-func docutils literal notranslate"><span class="pre">is_contained()</span></code>. This test is
+sound but not complete: it looks for a homomorphism between the
+disjunctions, and a negated atom <span class="math notranslate nohighlight">\(\lnot R(\bar x)\)</span> is matched only by
+the same negated atom, through the relation <span class="math notranslate nohighlight">\(\bar R\)</span> of
+<code class="docutils literal notranslate"><span class="pre">NegatedSymbol</span></code> (<code class="docutils literal notranslate"><span class="pre">negations_as_atoms</span></code>), so that an implication that
+holds because of a negation can be missed. The question is whether the
+weighted sum is then still the probability of the conjunction.</p>
+</section>
+<section id="the-lemma">
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">The lemma</a><a class="headerlink" href="#the-lemma" title="Link to this heading">#</a></h2>
+<p><strong>Lemma.</strong> Let <span class="math notranslate nohighlight">\(\preceq\)</span> be a partial order on the non-empty subsets
+of <span class="math notranslate nohighlight">\(\{1, \dots, n\}\)</span> such that</p>
+<p>(H1) <span class="math notranslate nohighlight">\(T \subseteq S\)</span> implies <span class="math notranslate nohighlight">\(T \preceq S\)</span>, and</p>
+<p>(H2) <span class="math notranslate nohighlight">\(T \preceq S\)</span> implies <span class="math notranslate nohighlight">\(f(T) \models f(S)\)</span>.</p>
+<p>Let <span class="math notranslate nohighlight">\(\mu\)</span> be defined by <span class="math notranslate nohighlight">\(\sum_{T \preceq S} \mu(T) = 1\)</span> for every
+<span class="math notranslate nohighlight">\(S\)</span>, and <span class="math notranslate nohighlight">\(w(S) = (-1)^{|S| + 1}\)</span>. Then for every probability
+measure,</p>
+<div class="math notranslate nohighlight">
+\[\sum_S \mu(S)\, P[f(S)] = \sum_S w(S)\, P[f(S)] =
+P[K_1 \land \dots \land K_n].\]</div>
+<p>A partial order is reflexive and transitive: transitivity is the third
+hypothesis, with (H1) and (H2).</p>
+</section>
+<section id="the-proof">
+<h2><a class="toc-backref" href="#id10" role="doc-backlink">The proof</a><a class="headerlink" href="#the-proof" title="Link to this heading">#</a></h2>
+<p>The second equality is the inclusion–exclusion principle. For the first,
+call <span class="math notranslate nohighlight">\(C\)</span> <em>closed</em> when <span class="math notranslate nohighlight">\(T \preceq C\)</span> implies
+<span class="math notranslate nohighlight">\(T \subseteq C\)</span>. For closed <span class="math notranslate nohighlight">\(C\)</span>,
+<span class="math notranslate nohighlight">\(\{T : T \preceq C\} = \{T : \emptyset \neq T \subseteq C\}\)</span> by (H1).</p>
+<p>Closed sets are stable under non-empty intersection: if
+<span class="math notranslate nohighlight">\(T \preceq U \cap V\)</span>, then <span class="math notranslate nohighlight">\(U \cap V \subseteq U\)</span> gives
+<span class="math notranslate nohighlight">\(U \cap V \preceq U\)</span> by (H1), so <span class="math notranslate nohighlight">\(T \preceq U\)</span> by transitivity
+and <span class="math notranslate nohighlight">\(T \subseteq U\)</span>; likewise for <span class="math notranslate nohighlight">\(V\)</span>. Every <span class="math notranslate nohighlight">\(S\)</span> thus has
+a smallest closed superset <span class="math notranslate nohighlight">\(c(S)\)</span>, and for closed <span class="math notranslate nohighlight">\(C\)</span>,
+<span class="math notranslate nohighlight">\(c(S) \subseteq C\)</span> if and only if <span class="math notranslate nohighlight">\(S \subseteq C\)</span>.</p>
+<p><span class="math notranslate nohighlight">\(c(S)\)</span> is reached by iterating
+<span class="math notranslate nohighlight">\(S \mapsto S \cup \bigcup \{T : T \preceq S\}\)</span>, which stays within
+every closed superset of <span class="math notranslate nohighlight">\(S\)</span>. Each step keeps the event: <span class="math notranslate nohighlight">\(T
+\preceq S\)</span> gives <span class="math notranslate nohighlight">\(f(T) \models f(S)\)</span> by (H2), so
+<span class="math notranslate nohighlight">\(f(S \cup T) \equiv f(S)\)</span>; hence
+<span class="math notranslate nohighlight">\(P[f(c(S))] = P[f(S)]\)</span>.</p>
+<p>For <span class="math notranslate nohighlight">\(\varphi \in \{\mu, w\}\)</span> and closed <span class="math notranslate nohighlight">\(C\)</span>, put</p>
+<div class="math notranslate nohighlight">
+\[F_\varphi(C) = \sum_{S : c(S) \subseteq C} \varphi(S) =
+\sum_{\emptyset \neq S \subseteq C} \varphi(S).\]</div>
+<p>For <span class="math notranslate nohighlight">\(w\)</span> this is the alternating sum, <span class="math notranslate nohighlight">\(F_w(C) = 1\)</span>; for
+<span class="math notranslate nohighlight">\(\mu\)</span> it is the recursion at <span class="math notranslate nohighlight">\(C\)</span> together with the first
+description of <span class="math notranslate nohighlight">\(\{T : T \preceq C\}\)</span>, <span class="math notranslate nohighlight">\(F_\mu(C) = 1\)</span>. Möbius
+inversion on the poset of closed sets ordered by inclusion gives</p>
+<div class="math notranslate nohighlight">
+\[\sum_{S : c(S) = C} \mu(S) = \sum_{S : c(S) = C} w(S)\]</div>
+<p>for every closed <span class="math notranslate nohighlight">\(C\)</span>. Grouping both sums of the lemma by
+<span class="math notranslate nohighlight">\(c(S)\)</span>, and using <span class="math notranslate nohighlight">\(P[f(c(S))] = P[f(S)]\)</span>, gives the claim.
+<span class="math notranslate nohighlight">\(\square\)</span></p>
+<p>Equivalently, with a bottom element <span class="math notranslate nohighlight">\(\hat 0\)</span> added,
+<span class="math notranslate nohighlight">\(w(S) = -\mu_B(\hat 0, S)\)</span> on the Boolean lattice of the subsets and
+<span class="math notranslate nohighlight">\(\mu(S) = -\mu_\preceq(\hat 0, S)\)</span> on the order <span class="math notranslate nohighlight">\(\preceq\)</span>;
+<span class="math notranslate nohighlight">\(S \mapsto c(S)\)</span> is a closure operator on both, with the same
+quotient <span class="math notranslate nohighlight">\(L\)</span>, as <span class="math notranslate nohighlight">\(\preceq\)</span> and <span class="math notranslate nohighlight">\(\subseteq\)</span> coincide on
+closed sets. Rota’s closure theorem <a class="reference internal" href="#rota1964" id="id1"><span>[Rota1964]</span></a> then gives
+<span class="math notranslate nohighlight">\(\sum_{c(S) = C} w(S) = -\mu_L(\hat 0, C) = \sum_{c(S) = C} \mu(S)\)</span>.
+Spiegel and O’Donnell <a class="reference internal" href="#spiegel1997" id="id2"><span>[Spiegel1997]</span></a> treat the Möbius function of
+incidence algebras at length.</p>
+<p>Completeness of the containment test is never used: a containment that is
+not found only makes the closure coarser, cancelling fewer terms, and never
+makes the sum wrong. A term that is not cancelled is lifted like the
+others; if the algorithm cannot lift it, it is marked <code class="docutils literal notranslate"><span class="pre">NonLiftable</span></code>, the
+plan is impure, and the query is declined unless another rule lifts it.</p>
+</section>
+<section id="what-the-implementation-guarantees">
+<h2><a class="toc-backref" href="#id11" role="doc-backlink">What the implementation guarantees</a><a class="headerlink" href="#what-the-implementation-guarantees" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">_formulas_weights</span></code> receives each non-empty set <span class="math notranslate nohighlight">\(S\)</span> of indices of
+clauses with the disjunctive normal form of <span class="math notranslate nohighlight">\(f(S)\)</span>, which
+<code class="docutils literal notranslate"><span class="pre">inclusion_exclusion_conjunction</span></code> computes with <code class="docutils literal notranslate"><span class="pre">convert_ucq_to_ccq</span></code>.
+It builds the relation <span class="math notranslate nohighlight">\(T \preceq S\)</span> when <span class="math notranslate nohighlight">\(T \subseteq S\)</span>, or
+when <code class="docutils literal notranslate"><span class="pre">is_contained(f(S),</span> <span class="pre">f(T))</span></code> holds, that is when the test finds that
+<span class="math notranslate nohighlight">\(f(T)\)</span> implies <span class="math notranslate nohighlight">\(f(S)\)</span>, both directions being recorded when both
+hold. It closes the relation transitively (Warshall’s algorithm on the
+<span class="math notranslate nohighlight">\(2^n - 1\)</span> sets), and merges the sets contained in each other into
+classes, each represented by one of its sets with the most clauses. The
+order between the representatives is passed to <code class="docutils literal notranslate"><span class="pre">mobius_weights</span></code>, whose
+<code class="docutils literal notranslate"><span class="pre">mobius_function</span></code> computes <span class="math notranslate nohighlight">\(\mu(S) = 1 - \sum_{T \prec S} \mu(T)\)</span>.
+<code class="docutils literal notranslate"><span class="pre">inclusion_exclusion_conjunction</span></code> lifts the formula of each
+representative whose weight is not 0, and <code class="docutils literal notranslate"><span class="pre">WeightedNaturalJoin</span></code> adds the
+probabilities of the answers, multiplied by the weights.</p>
+<ul class="simple">
+<li><p>(H2) holds: a subset gives a disjunction of fewer clauses, which implies
+the other; <code class="docutils literal notranslate"><span class="pre">is_contained</span></code> is sound; and implication is transitive.</p></li>
+<li><p>(H1) holds: every subset is recorded, whatever <code class="docutils literal notranslate"><span class="pre">is_contained</span></code> finds.</p></li>
+<li><p>Transitivity holds by the closure.</p></li>
+</ul>
+<p>On the sets, the relation is reflexive and transitive but need not be
+antisymmetric, when two sets are in the same class. The proof does not use
+antisymmetry: it uses the recursion only at closed sets, and the weights
+that the code gives, the weight of a class to its representative and 0 to
+its other sets, satisfy the recursion for every set, as the classes below a
+set are those below its representative. Within a class the disjunctions
+are equivalent by (H2), so lifting the representative alone gives the
+probability of each.</p>
+<p>For an answer <span class="math notranslate nohighlight">\(\theta\)</span> of the free variables, the lemma applies to
+the events <span class="math notranslate nohighlight">\(f(S)\theta\)</span>. The weighted join keeps the answers in the
+plans of all the terms it adds; an answer missing from the plan of a term
+<span class="math notranslate nohighlight">\(f(S)\)</span> has <span class="math notranslate nohighlight">\(P[f(S)\theta] = 0\)</span>, hence, <span class="math notranslate nohighlight">\(K_i\)</span> implying
+<span class="math notranslate nohighlight">\(f(S)\)</span> for <span class="math notranslate nohighlight">\(i \in S\)</span>, a clause of probability 0, and
+probability 0 for the conjunction.</p>
+</section>
+<section id="relation-to-the-literature">
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">Relation to the literature</a><a class="headerlink" href="#relation-to-the-literature" title="Link to this heading">#</a></h2>
+<p>Dalvi and Suciu <a class="reference internal" href="probabilistic_lifting.html#dalvi2012" id="id3"><span>[Dalvi2012]</span></a> cancel the terms of inclusion–exclusion with
+the Möbius function of the lattice of the disjunctions, ordered by
+implication: this is the case of the lemma where <span class="math notranslate nohighlight">\(\preceq\)</span> is the
+full implication order, and their identity
+<span class="math notranslate nohighlight">\(P(Q) = -\sum_{v &lt; \hat 1} \mu_L(v, \hat 1)\, P(d_v)\)</span> is the special
+case of the lemma for it.</p>
+<p>The “improved inclusion–exclusion identities” of Narushima <a class="reference internal" href="#narushima1982" id="id4"><span>[Narushima1982]</span></a>,
+Dohmen <a class="reference internal" href="#dohmen1999" id="id5"><span>[Dohmen1999]</span></a> and Chen and Qian <a class="reference internal" href="#chen2018" id="id6"><span>[Chen2018]</span></a> also use a closure
+operator on the lattice of the subsets, but they drop terms of the sum
+rather than reweighting them, and are not what the implementation does.</p>
+</section>
+<section id="references">
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">References</a><a class="headerlink" href="#references" title="Link to this heading">#</a></h2>
+<div role="list" class="citation-list">
+<div class="citation" id="chen2018" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id6">Chen2018</a><span class="fn-bracket">]</span></span>
+<p>Y. Chen and J. Qian. <em>Inclusion-exclusion by ordering-free
+cancellation</em>. arXiv:1801.04706, 2018.</p>
+</div>
+<div class="citation" id="dohmen1999" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id5">Dohmen1999</a><span class="fn-bracket">]</span></span>
+<p>K. Dohmen. <em>On sums over partially ordered sets</em>. The
+Electronic Journal of Combinatorics, 6, R34, 1999.</p>
+</div>
+<div class="citation" id="narushima1982" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id4">Narushima1982</a><span class="fn-bracket">]</span></span>
+<p>H. Narushima. <em>Principle of inclusion-exclusion on
+partially ordered sets</em>. Discrete Mathematics, 1982.
+doi:10.1016/0012-365X(82)90221-7.</p>
+</div>
+<div class="citation" id="rota1964" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">Rota1964</a><span class="fn-bracket">]</span></span>
+<p>G.-C. Rota. <em>On the foundations of combinatorial theory I.
+Theory of Möbius functions</em>. Zeitschrift für
+Wahrscheinlichkeitstheorie und verwandte Gebiete, 2, 340–368, 1964.</p>
+</div>
+<div class="citation" id="spiegel1997" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">Spiegel1997</a><span class="fn-bracket">]</span></span>
+<p>E. Spiegel and C. J. O’Donnell. <em>Incidence Algebras</em>.
+Monographs and Textbooks in Pure and Applied Mathematics 206. Marcel
+Dekker, 1997.</p>
+</div>
+</div>
+<p><a class="reference internal" href="probabilistic_lifting.html#dalvi2012" id="id7"><span>[Dalvi2012]</span></a> is listed in <a class="reference internal" href="probabilistic_lifting.html#probabilistic-lifting"><span class="std std-ref">Lifted probabilistic inference</span></a>.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="probabilistic_lifting.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Lifted probabilistic inference</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="engine_configuration.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Engine Configuration (engines.yaml)</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+ 
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2017–2026, Demian Wassermann and the NeuroLang contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+<div class="container neurolang-timestamp">
+    <p style="margin-top: -10px;">on </p>
+</div>
+  </body>
+</html>

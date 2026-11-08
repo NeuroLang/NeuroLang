@@ -1,0 +1,12 @@
+﻿neurolang.utils.engines.base
+============================
+
+.. automodule:: neurolang.utils.engines.base
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      init_base_engine
+   

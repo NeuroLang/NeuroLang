@@ -1,0 +1,17 @@
+﻿neurolang.utils.cli
+===================
+
+.. automodule:: neurolang.utils.cli
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      main
+      report_error
+      result_to_dataframe
+      sort_dataframe
+      squall_column_names
+      warning_note
+   

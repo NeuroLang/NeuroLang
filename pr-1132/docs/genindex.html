@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Index &#8212; NeuroLang 0.1a22.dev73+g5af0e7ed1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/neurolang.css?v=497e8255" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="_static/documentation_options.js?v=938eb139"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'genindex';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="icon" href="_static/favicon.svg"/>
+    <link rel="index" title="Index" href="#" />
+    <link rel="search" title="Search" href="search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1a22" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/neurolang-lockup.svg" class="logo__image only-light" alt="NeuroLang"/>
+    <img src="_static/neurolang-lockup-dark.svg" class="logo__image only-dark pst-js-only" alt="NeuroLang"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none"></div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+
+<h1 id="index">Index</h1>
+
+<div class="genindex-jumpbox">
+ <a href="#_"><strong>_</strong></a>
+ | <a href="#A"><strong>A</strong></a>
+ | <a href="#B"><strong>B</strong></a>
+ | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
+ | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#G"><strong>G</strong></a>
+ | <a href="#I"><strong>I</strong></a>
+ | <a href="#K"><strong>K</strong></a>
+ | <a href="#L"><strong>L</strong></a>
+ | <a href="#M"><strong>M</strong></a>
+ | <a href="#N"><strong>N</strong></a>
+ | <a href="#P"><strong>P</strong></a>
+ | <a href="#Q"><strong>Q</strong></a>
+ | <a href="#R"><strong>R</strong></a>
+ | <a href="#S"><strong>S</strong></a>
+ | <a href="#T"><strong>T</strong></a>
+ | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
+ | <a href="#W"><strong>W</strong></a>
+ 
+</div>
+<h2 id="_">_</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.__init__">__init__() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.__init__">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="A">A</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.add">add() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.add">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_atlas_set">add_atlas_set() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_atlas_set">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_constraint">add_constraint() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_constraint">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.add_entry_point_match">add_entry_point_match() (in module neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.add_match">add_match() (in module neurolang.expression_pattern_matching)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.add_match">(in module neurolang.expression_walker)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples">add_probabilistic_choice_from_tuples() (neurolang.NeurolangPDL method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples">add_probabilistic_facts_from_tuples() (neurolang.NeurolangPDL method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_region">add_region() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_region">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_region_set">add_region_set() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_region_set">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_resampling">add_resampling() (neurolang.NeurolangPDL method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_symbol">add_symbol() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_symbol">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.add_tuple_set">add_tuple_set() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_tuple_set">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set">add_uniform_probabilistic_choice_over_set() (neurolang.NeurolangPDL method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.all">all() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.all">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Conjunction.apply">apply() (neurolang.datalog.Conjunction class method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Fact.apply">(neurolang.datalog.Fact class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Implication.apply">(neurolang.datalog.Implication class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Negation.apply">(neurolang.datalog.Negation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Union.apply">(neurolang.datalog.Union class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.FunctionApplication.apply">(neurolang.expressions.FunctionApplication class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Projection.apply">(neurolang.expressions.Projection class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Statement.apply">(neurolang.expressions.Statement class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Symbol.apply">(neurolang.expressions.Symbol class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.BinaryRelationalAlgebraOperation.apply">(neurolang.relational_algebra.BinaryRelationalAlgebraOperation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ConcatenateConstantColumn.apply">(neurolang.relational_algebra.ConcatenateConstantColumn class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Destroy.apply">(neurolang.relational_algebra.Destroy class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Difference.apply">(neurolang.relational_algebra.Difference class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EquiJoin.apply">(neurolang.relational_algebra.EquiJoin class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ExtendedProjection.apply">(neurolang.relational_algebra.ExtendedProjection class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FullOuterNaturalJoin.apply">(neurolang.relational_algebra.FullOuterNaturalJoin class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FunctionApplicationListMember.apply">(neurolang.relational_algebra.FunctionApplicationListMember class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.GroupByAggregation.apply">(neurolang.relational_algebra.GroupByAggregation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Intersection.apply">(neurolang.relational_algebra.Intersection class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.LeftNaturalJoin.apply">(neurolang.relational_algebra.LeftNaturalJoin class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Materialise.apply">(neurolang.relational_algebra.Materialise class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NameColumns.apply">(neurolang.relational_algebra.NameColumns class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaryNaturalJoin.apply">(neurolang.relational_algebra.NaryNaturalJoin class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NAryRelationalAlgebraOperation.apply">(neurolang.relational_algebra.NAryRelationalAlgebraOperation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaturalJoin.apply">(neurolang.relational_algebra.NaturalJoin class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NumberColumns.apply">(neurolang.relational_algebra.NumberColumns class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Product.apply">(neurolang.relational_algebra.Product class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Projection.apply">(neurolang.relational_algebra.Projection class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOperation.apply">(neurolang.relational_algebra.RelationalAlgebraOperation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumn.apply">(neurolang.relational_algebra.RenameColumn class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumns.apply">(neurolang.relational_algebra.RenameColumns class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ReplaceNull.apply">(neurolang.relational_algebra.ReplaceNull class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Selection.apply">(neurolang.relational_algebra.Selection class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.UnaryRelationalAlgebraOperation.apply">(neurolang.relational_algebra.UnaryRelationalAlgebraOperation class method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Union.apply">(neurolang.relational_algebra.Union class method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="B">B</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.BinaryRelationalAlgebraOperation">BinaryRelationalAlgebraOperation (class in neurolang.relational_algebra)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="C">C</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.clear">clear() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.clear">(neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.clear">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ColumnInt">ColumnInt (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ColumnStr">ColumnStr (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.compute_datalog_program_for_autocompletion">compute_datalog_program_for_autocompletion() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ConcatenateConstantColumn">ConcatenateConstantColumn (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Conjunction">Conjunction (class in neurolang.datalog)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.constant_contains">constant_contains (neurolang.datalog.DatalogProgram attribute)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.constant_equals">constant_equals (neurolang.datalog.DatalogProgram attribute)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.create_region">create_region() (neurolang.NeurolangDL static method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.create_region">(neurolang.NeurolangPDL static method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.current_program">current_program (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.current_program">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram">DatalogProgram (class in neurolang.datalog)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.del_symbol">del_symbol() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.del_symbol">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Destroy">Destroy (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Difference">Difference (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.discard">discard() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.discard">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="E">E</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EliminateTrivialProjections">EliminateTrivialProjections (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.EntryPointPatternWalker">EntryPointPatternWalker (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.environment">environment (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.environment">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EquiJoin">EquiJoin (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.execute_datalog_program">execute_datalog_program() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.execute_datalog_program">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.execute_squall_program">execute_squall_program() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.execute_squall_program">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.exists">exists() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.exists">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.expression_iterator">expression_iterator() (in module neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionBasicEvaluator">ExpressionBasicEvaluator (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionWalker">ExpressionWalker (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ExtendedProjection">ExtendedProjection (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.extract_logic_free_variables">extract_logic_free_variables() (in module neurolang.datalog)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.extract_logic_predicates">extract_logic_predicates() (in module neurolang.datalog)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Fact">Fact (class in neurolang.datalog)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FullOuterNaturalJoin">FullOuterNaturalJoin (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.FunctionApplication">FunctionApplication (class in neurolang.expressions)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FunctionApplicationListMember">FunctionApplicationListMember (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.functions">functions (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.functions">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.get">get() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.get_symbol">get_symbol() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.get_symbol">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.GroupByAggregation">GroupByAggregation (class in neurolang.relational_algebra)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="I">I</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.IdentityWalker">IdentityWalker (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Implication">Implication (class in neurolang.datalog)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.infer_iterable_type">infer_iterable_type() (neurolang.datalog.DatalogProgram static method)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Intersection">Intersection (class in neurolang.relational_algebra)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.isdisjoint">isdisjoint() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.isdisjoint">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.isdisjoint">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.items">items() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="K">K</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.keys">keys() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="L">L</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.LeftNaturalJoin">LeftNaturalJoin (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.load_neurosynth_mni_peaks_reported">load_neurosynth_mni_peaks_reported() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.load_neurosynth_study_ids">load_neurosynth_study_ids() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.load_neurosynth_study_ids">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.load_neurosynth_term_study_associations">load_neurosynth_term_study_associations() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.load_neurosynth_term_study_associations">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.load_ontology">load_ontology() (neurolang.NeurolangPDL method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="M">M</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.make_implicit_regions_explicit">make_implicit_regions_explicit() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.make_implicit_regions_explicit">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.match">match() (neurolang.datalog.DatalogProgram method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.PatternMatcher.match">(neurolang.expression_pattern_matching.PatternMatcher method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.EntryPointPatternWalker.match">(neurolang.expression_walker.EntryPointPatternWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionBasicEvaluator.match">(neurolang.expression_walker.ExpressionBasicEvaluator method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionWalker.match">(neurolang.expression_walker.ExpressionWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.IdentityWalker.match">(neurolang.expression_walker.IdentityWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.PatternWalker.match">(neurolang.expression_walker.PatternWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceExpressionsByValues.match">(neurolang.expression_walker.ReplaceExpressionsByValues method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolsByConstants.match">(neurolang.expression_walker.ReplaceSymbolsByConstants method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolWalker.match">(neurolang.expression_walker.ReplaceSymbolWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.TypedSymbolTableEvaluator.match">(neurolang.expression_walker.TypedSymbolTableEvaluator method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EliminateTrivialProjections.match">(neurolang.relational_algebra.EliminateTrivialProjections method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.PushInSelections.match">(neurolang.relational_algebra.PushInSelections method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOptimiser.match">(neurolang.relational_algebra.RelationalAlgebraOptimiser method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSolver.match">(neurolang.relational_algebra.RelationalAlgebraSolver method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameOptimizations.match">(neurolang.relational_algebra.RenameOptimizations method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants.match">(neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Materialise">Materialise (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.might_have_duplicates">might_have_duplicates (neurolang.datalog.WrappedRelationalAlgebraSet property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.might_have_duplicates">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.might_have_duplicates">(neurolang.relational_algebra.RelationalAlgebraSet property)</a>
+</li>
+      </ul></li>
+      <li>
+    module
+
+      <ul>
+        <li><a href="gen_api/neurolang.datalog.html#module-neurolang.datalog">neurolang.datalog</a>
+</li>
+        <li><a href="gen_api/neurolang.exceptions.html#module-neurolang.exceptions">neurolang.exceptions</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#module-neurolang.expression_pattern_matching">neurolang.expression_pattern_matching</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#module-neurolang.expression_walker">neurolang.expression_walker</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#module-neurolang.expressions">neurolang.expressions</a>
+</li>
+        <li><a href="gen_api/neurolang.logic.html#module-neurolang.logic">neurolang.logic</a>
+</li>
+        <li><a href="gen_api/neurolang.probabilistic.html#module-neurolang.probabilistic">neurolang.probabilistic</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#module-neurolang.relational_algebra">neurolang.relational_algebra</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra_provenance.html#module-neurolang.relational_algebra_provenance">neurolang.relational_algebra_provenance</a>
+</li>
+        <li><a href="gen_api/neurolang.utils.cli.html#module-neurolang.utils.cli">neurolang.utils.cli</a>
+</li>
+        <li><a href="gen_api/neurolang.utils.engine_registry.html#module-neurolang.utils.engine_registry">neurolang.utils.engine_registry</a>
+</li>
+        <li><a href="gen_api/neurolang.utils.engines.base.html#module-neurolang.utils.engines.base">neurolang.utils.engines.base</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="N">N</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NameColumns">NameColumns (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet">NamedRelationalAlgebraFrozenSet (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaryNaturalJoin">NaryNaturalJoin (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NAryRelationalAlgebraOperation">NAryRelationalAlgebraOperation (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaturalJoin">NaturalJoin (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Negation">Negation (class in neurolang.datalog)</a>
+</li>
+      <li>
+    neurolang.datalog
+
+      <ul>
+        <li><a href="gen_api/neurolang.datalog.html#module-neurolang.datalog">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.exceptions
+
+      <ul>
+        <li><a href="gen_api/neurolang.exceptions.html#module-neurolang.exceptions">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.expression_pattern_matching
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#module-neurolang.expression_pattern_matching">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.expression_walker
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_walker.html#module-neurolang.expression_walker">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.expressions
+
+      <ul>
+        <li><a href="gen_api/neurolang.expressions.html#module-neurolang.expressions">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.logic
+
+      <ul>
+        <li><a href="gen_api/neurolang.logic.html#module-neurolang.logic">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    neurolang.probabilistic
+
+      <ul>
+        <li><a href="gen_api/neurolang.probabilistic.html#module-neurolang.probabilistic">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.relational_algebra
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#module-neurolang.relational_algebra">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.relational_algebra_provenance
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra_provenance.html#module-neurolang.relational_algebra_provenance">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.utils.cli
+
+      <ul>
+        <li><a href="gen_api/neurolang.utils.cli.html#module-neurolang.utils.cli">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.utils.engine_registry
+
+      <ul>
+        <li><a href="gen_api/neurolang.utils.engine_registry.html#module-neurolang.utils.engine_registry">module</a>
+</li>
+      </ul></li>
+      <li>
+    neurolang.utils.engines.base
+
+      <ul>
+        <li><a href="gen_api/neurolang.utils.engines.base.html#module-neurolang.utils.engines.base">module</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL">NeurolangDL (class in neurolang)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL">NeurolangPDL (class in neurolang)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.new_region_symbol">new_region_symbol() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.new_region_symbol">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.new_symbol">new_symbol() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.new_symbol">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NumberColumns">NumberColumns (class in neurolang.relational_algebra)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="P">P</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.pattern_match">pattern_match() (neurolang.datalog.DatalogProgram method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.PatternMatcher.pattern_match">(neurolang.expression_pattern_matching.PatternMatcher method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.EntryPointPatternWalker.pattern_match">(neurolang.expression_walker.EntryPointPatternWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionBasicEvaluator.pattern_match">(neurolang.expression_walker.ExpressionBasicEvaluator method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionWalker.pattern_match">(neurolang.expression_walker.ExpressionWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.IdentityWalker.pattern_match">(neurolang.expression_walker.IdentityWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.PatternWalker.pattern_match">(neurolang.expression_walker.PatternWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceExpressionsByValues.pattern_match">(neurolang.expression_walker.ReplaceExpressionsByValues method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolsByConstants.pattern_match">(neurolang.expression_walker.ReplaceSymbolsByConstants method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolWalker.pattern_match">(neurolang.expression_walker.ReplaceSymbolWalker method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.TypedSymbolTableEvaluator.pattern_match">(neurolang.expression_walker.TypedSymbolTableEvaluator method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EliminateTrivialProjections.pattern_match">(neurolang.relational_algebra.EliminateTrivialProjections method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.PushInSelections.pattern_match">(neurolang.relational_algebra.PushInSelections method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOptimiser.pattern_match">(neurolang.relational_algebra.RelationalAlgebraOptimiser method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSolver.pattern_match">(neurolang.relational_algebra.RelationalAlgebraSolver method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameOptimizations.pattern_match">(neurolang.relational_algebra.RenameOptimizations method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants.pattern_match">(neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.PatternMatcher">PatternMatcher (class in neurolang.expression_pattern_matching)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.patterns">patterns (neurolang.datalog.DatalogProgram property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.PatternMatcher.patterns">(neurolang.expression_pattern_matching.PatternMatcher property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.EntryPointPatternWalker.patterns">(neurolang.expression_walker.EntryPointPatternWalker property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionBasicEvaluator.patterns">(neurolang.expression_walker.ExpressionBasicEvaluator property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionWalker.patterns">(neurolang.expression_walker.ExpressionWalker property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.IdentityWalker.patterns">(neurolang.expression_walker.IdentityWalker property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.PatternWalker.patterns">(neurolang.expression_walker.PatternWalker property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceExpressionsByValues.patterns">(neurolang.expression_walker.ReplaceExpressionsByValues property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolsByConstants.patterns">(neurolang.expression_walker.ReplaceSymbolsByConstants property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolWalker.patterns">(neurolang.expression_walker.ReplaceSymbolWalker property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.TypedSymbolTableEvaluator.patterns">(neurolang.expression_walker.TypedSymbolTableEvaluator property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EliminateTrivialProjections.patterns">(neurolang.relational_algebra.EliminateTrivialProjections property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.PushInSelections.patterns">(neurolang.relational_algebra.PushInSelections property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOptimiser.patterns">(neurolang.relational_algebra.RelationalAlgebraOptimiser property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSolver.patterns">(neurolang.relational_algebra.RelationalAlgebraSolver property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameOptimizations.patterns">(neurolang.relational_algebra.RenameOptimizations property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants.patterns">(neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.PatternWalker">PatternWalker (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.pop">pop() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.pop">(neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.pop">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.popitem">popitem() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.predicate_parameter_names">predicate_parameter_names() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.predicate_parameter_names">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Product">Product (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Projection">Projection (class in neurolang.expressions)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Projection">(class in neurolang.relational_algebra)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.projection">projection() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.projection">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.projection">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants.push_computed_columns_up_outer">push_computed_columns_up_outer() (neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants method)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.PushInSelections">PushInSelections (class in neurolang.relational_algebra)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Q">Q</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.query">query() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.query">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="R">R</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.region_names">region_names (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.region_names">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.region_set_names">region_set_names (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.region_set_names">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraColumnInt">RelationalAlgebraColumnInt (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraColumnStr">RelationalAlgebraColumnStr (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOperation">RelationalAlgebraOperation (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOptimiser">RelationalAlgebraOptimiser (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet">RelationalAlgebraSet (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSolver">RelationalAlgebraSolver (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraStringExpression">RelationalAlgebraStringExpression (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.remove">remove() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.remove">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumn">RenameColumn (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumns">RenameColumns (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameOptimizations">RenameOptimizations (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceExpressionsByValues">ReplaceExpressionsByValues (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ReplaceNull">ReplaceNull (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolsByConstants">ReplaceSymbolsByConstants (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolWalker">ReplaceSymbolWalker (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.reset_program">reset_program() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.reset_program">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.row_count_estimate">row_count_estimate() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.row_count_estimate">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.row_count_estimate">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="S">S</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.scope">scope (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.scope">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Selection">Selection (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.selection">selection() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.selection">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.selection">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet.selection_columns">selection_columns() (neurolang.datalog.WrappedRelationalAlgebraSet method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet.selection_columns">(neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSet.selection_columns">(neurolang.relational_algebra.RelationalAlgebraSet method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.setdefault">setdefault() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants">SimplifyExtendedProjectionsWithConstants (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.solve_all">solve_all() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.solve_all">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.sphere">sphere() (neurolang.NeurolangDL method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.sphere">(neurolang.NeurolangPDL method)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Statement">Statement (class in neurolang.expressions)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Symbol">Symbol (class in neurolang.expressions)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.symbol_table">symbol_table (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.symbol_table">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.symbols">symbols (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.symbols">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="T">T</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Conjunction.type">type (neurolang.datalog.Conjunction property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.type">(neurolang.datalog.DatalogProgram attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Fact.type">(neurolang.datalog.Fact property)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Implication.type">(neurolang.datalog.Implication property)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Negation.type">(neurolang.datalog.Negation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Union.type">(neurolang.datalog.Union property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_pattern_matching.html#neurolang.expression_pattern_matching.PatternMatcher.type">(neurolang.expression_pattern_matching.PatternMatcher attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.EntryPointPatternWalker.type">(neurolang.expression_walker.EntryPointPatternWalker attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionBasicEvaluator.type">(neurolang.expression_walker.ExpressionBasicEvaluator attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ExpressionWalker.type">(neurolang.expression_walker.ExpressionWalker attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.IdentityWalker.type">(neurolang.expression_walker.IdentityWalker attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.PatternWalker.type">(neurolang.expression_walker.PatternWalker attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceExpressionsByValues.type">(neurolang.expression_walker.ReplaceExpressionsByValues attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolsByConstants.type">(neurolang.expression_walker.ReplaceSymbolsByConstants attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.ReplaceSymbolWalker.type">(neurolang.expression_walker.ReplaceSymbolWalker attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.TypedSymbolTableEvaluator.type">(neurolang.expression_walker.TypedSymbolTableEvaluator attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.FunctionApplication.type">(neurolang.expressions.FunctionApplication property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Projection.type">(neurolang.expressions.Projection property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Statement.type">(neurolang.expressions.Statement property)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Symbol.type">(neurolang.expressions.Symbol property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.BinaryRelationalAlgebraOperation.type">(neurolang.relational_algebra.BinaryRelationalAlgebraOperation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ConcatenateConstantColumn.type">(neurolang.relational_algebra.ConcatenateConstantColumn property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Destroy.type">(neurolang.relational_algebra.Destroy property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Difference.type">(neurolang.relational_algebra.Difference property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EliminateTrivialProjections.type">(neurolang.relational_algebra.EliminateTrivialProjections attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EquiJoin.type">(neurolang.relational_algebra.EquiJoin property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ExtendedProjection.type">(neurolang.relational_algebra.ExtendedProjection property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FullOuterNaturalJoin.type">(neurolang.relational_algebra.FullOuterNaturalJoin property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FunctionApplicationListMember.type">(neurolang.relational_algebra.FunctionApplicationListMember property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.GroupByAggregation.type">(neurolang.relational_algebra.GroupByAggregation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Intersection.type">(neurolang.relational_algebra.Intersection property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.LeftNaturalJoin.type">(neurolang.relational_algebra.LeftNaturalJoin property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Materialise.type">(neurolang.relational_algebra.Materialise property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NameColumns.type">(neurolang.relational_algebra.NameColumns property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaryNaturalJoin.type">(neurolang.relational_algebra.NaryNaturalJoin property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NAryRelationalAlgebraOperation.type">(neurolang.relational_algebra.NAryRelationalAlgebraOperation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaturalJoin.type">(neurolang.relational_algebra.NaturalJoin property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NumberColumns.type">(neurolang.relational_algebra.NumberColumns property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Product.type">(neurolang.relational_algebra.Product property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Projection.type">(neurolang.relational_algebra.Projection property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.PushInSelections.type">(neurolang.relational_algebra.PushInSelections attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOperation.type">(neurolang.relational_algebra.RelationalAlgebraOperation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOptimiser.type">(neurolang.relational_algebra.RelationalAlgebraOptimiser attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraSolver.type">(neurolang.relational_algebra.RelationalAlgebraSolver attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumn.type">(neurolang.relational_algebra.RenameColumn property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumns.type">(neurolang.relational_algebra.RenameColumns property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameOptimizations.type">(neurolang.relational_algebra.RenameOptimizations attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ReplaceNull.type">(neurolang.relational_algebra.ReplaceNull property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Selection.type">(neurolang.relational_algebra.Selection property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants.type">(neurolang.relational_algebra.SimplifyExtendedProjectionsWithConstants attribute)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.UnaryRelationalAlgebraOperation.type">(neurolang.relational_algebra.UnaryRelationalAlgebraOperation property)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Union.type">(neurolang.relational_algebra.Union property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable">TypedSymbolTable (class in neurolang.expressions)</a>
+</li>
+      <li><a href="gen_api/neurolang.expression_walker.html#neurolang.expression_walker.TypedSymbolTableEvaluator">TypedSymbolTableEvaluator (class in neurolang.expression_walker)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTableMixin">TypedSymbolTableMixin (class in neurolang.expressions)</a>
+</li>
+      <li><a href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL.types">types (neurolang.NeurolangDL property)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.NeurolangPDL.html#neurolang.NeurolangPDL.types">(neurolang.NeurolangPDL property)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="U">U</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Conjunction.unapply">unapply() (neurolang.datalog.Conjunction method)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Fact.unapply">(neurolang.datalog.Fact method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Implication.unapply">(neurolang.datalog.Implication method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Negation.unapply">(neurolang.datalog.Negation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Union.unapply">(neurolang.datalog.Union method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.FunctionApplication.unapply">(neurolang.expressions.FunctionApplication method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Projection.unapply">(neurolang.expressions.Projection method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Statement.unapply">(neurolang.expressions.Statement method)</a>
+</li>
+        <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Symbol.unapply">(neurolang.expressions.Symbol method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.BinaryRelationalAlgebraOperation.unapply">(neurolang.relational_algebra.BinaryRelationalAlgebraOperation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ConcatenateConstantColumn.unapply">(neurolang.relational_algebra.ConcatenateConstantColumn method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Destroy.unapply">(neurolang.relational_algebra.Destroy method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Difference.unapply">(neurolang.relational_algebra.Difference method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.EquiJoin.unapply">(neurolang.relational_algebra.EquiJoin method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ExtendedProjection.unapply">(neurolang.relational_algebra.ExtendedProjection method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FullOuterNaturalJoin.unapply">(neurolang.relational_algebra.FullOuterNaturalJoin method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.FunctionApplicationListMember.unapply">(neurolang.relational_algebra.FunctionApplicationListMember method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.GroupByAggregation.unapply">(neurolang.relational_algebra.GroupByAggregation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Intersection.unapply">(neurolang.relational_algebra.Intersection method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.LeftNaturalJoin.unapply">(neurolang.relational_algebra.LeftNaturalJoin method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Materialise.unapply">(neurolang.relational_algebra.Materialise method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NameColumns.unapply">(neurolang.relational_algebra.NameColumns method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaryNaturalJoin.unapply">(neurolang.relational_algebra.NaryNaturalJoin method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NAryRelationalAlgebraOperation.unapply">(neurolang.relational_algebra.NAryRelationalAlgebraOperation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NaturalJoin.unapply">(neurolang.relational_algebra.NaturalJoin method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.NumberColumns.unapply">(neurolang.relational_algebra.NumberColumns method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Product.unapply">(neurolang.relational_algebra.Product method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Projection.unapply">(neurolang.relational_algebra.Projection method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RelationalAlgebraOperation.unapply">(neurolang.relational_algebra.RelationalAlgebraOperation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumn.unapply">(neurolang.relational_algebra.RenameColumn method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.RenameColumns.unapply">(neurolang.relational_algebra.RenameColumns method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.ReplaceNull.unapply">(neurolang.relational_algebra.ReplaceNull method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Selection.unapply">(neurolang.relational_algebra.Selection method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.UnaryRelationalAlgebraOperation.unapply">(neurolang.relational_algebra.UnaryRelationalAlgebraOperation method)</a>
+</li>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Union.unapply">(neurolang.relational_algebra.Union method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.UnaryRelationalAlgebraOperation">UnaryRelationalAlgebraOperation (class in neurolang.relational_algebra)</a>
+</li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.Union">Union (class in neurolang.datalog)</a>
+
+      <ul>
+        <li><a href="gen_api/neurolang.relational_algebra.html#neurolang.relational_algebra.Union">(class in neurolang.relational_algebra)</a>
+</li>
+      </ul></li>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.DatalogProgram.union_of_cq">union_of_cq() (neurolang.datalog.DatalogProgram method)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.Unknown">Unknown (class in neurolang.expressions)</a>
+</li>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.update">update() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.expressions.html#neurolang.expressions.TypedSymbolTable.values">values() (neurolang.expressions.TypedSymbolTable method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="gen_api/neurolang.datalog.html#neurolang.datalog.WrappedRelationalAlgebraSet">WrappedRelationalAlgebraSet (class in neurolang.datalog)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+ 
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2017–2026, Demian Wassermann and the NeuroLang contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+<div class="container neurolang-timestamp">
+    <p style="margin-top: -10px;">on </p>
+</div>
+  </body>
+</html>

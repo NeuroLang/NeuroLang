@@ -1,0 +1,67 @@
+﻿neurolang.NeurolangPDL
+======================
+
+.. currentmodule:: neurolang
+
+.. autoclass:: NeurolangPDL
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~NeurolangPDL.__init__
+      ~NeurolangPDL.add_atlas_set
+      ~NeurolangPDL.add_constraint
+      ~NeurolangPDL.add_probabilistic_choice_from_tuples
+      ~NeurolangPDL.add_probabilistic_facts_from_tuples
+      ~NeurolangPDL.add_region
+      ~NeurolangPDL.add_region_set
+      ~NeurolangPDL.add_resampling
+      ~NeurolangPDL.add_symbol
+      ~NeurolangPDL.add_tuple_set
+      ~NeurolangPDL.add_uniform_probabilistic_choice_over_set
+      ~NeurolangPDL.all
+      ~NeurolangPDL.compute_datalog_program_for_autocompletion
+      ~NeurolangPDL.create_region
+      ~NeurolangPDL.del_symbol
+      ~NeurolangPDL.execute_datalog_program
+      ~NeurolangPDL.execute_squall_program
+      ~NeurolangPDL.exists
+      ~NeurolangPDL.get_symbol
+      ~NeurolangPDL.load_neurosynth_mni_peaks_reported
+      ~NeurolangPDL.load_neurosynth_study_ids
+      ~NeurolangPDL.load_neurosynth_term_study_associations
+      ~NeurolangPDL.load_ontology
+      ~NeurolangPDL.magic_sets_rewrite_program
+      ~NeurolangPDL.make_implicit_regions_explicit
+      ~NeurolangPDL.new_region_symbol
+      ~NeurolangPDL.new_symbol
+      ~NeurolangPDL.predicate_parameter_names
+      ~NeurolangPDL.query
+      ~NeurolangPDL.reset_program
+      ~NeurolangPDL.solve_all
+      ~NeurolangPDL.sphere
+   
+   
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~NeurolangPDL.current_program
+      ~NeurolangPDL.environment
+      ~NeurolangPDL.functions
+      ~NeurolangPDL.region_names
+      ~NeurolangPDL.region_set_names
+      ~NeurolangPDL.scope
+      ~NeurolangPDL.symbol_table
+      ~NeurolangPDL.symbols
+      ~NeurolangPDL.types
+   
+   

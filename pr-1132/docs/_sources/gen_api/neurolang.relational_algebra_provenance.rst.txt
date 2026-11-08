@@ -1,0 +1,38 @@
+﻿neurolang.relational\_algebra\_provenance
+=========================================
+
+.. automodule:: neurolang.relational_algebra_provenance
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      check_do_not_share_non_prov_col
+      is_provenance_operation
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BuildProvenanceAlgebraSetWalkIntoMixin
+      DisjointProjection
+      IndependentDisjointProjectionsAndUnionMixin
+      IndependentProjection
+      IndependentProjectionUniversal
+      LiftedPlanProjection
+      NaturalJoinInverse
+      ProvenanceAlgebraSet
+      ProvenanceColumnManipulationMixin
+      ProvenanceExtendedProjectionMixin
+      ProvenanceSelectionMixin
+      ProvenanceSetOperationsMixin
+      RelationalAlgebraProvenanceCountingSolver
+      RelationalAlgebraProvenanceCountingSolverMixin
+      RelationalAlgebraProvenanceExpressionSemringSolver
+      RelationalAlgebraProvenanceExpressionSemringSolverMixin
+      Subtraction
+      Support
+      WeightedNaturalJoin
+      WeightedNaturalJoinSolverMixin
+   

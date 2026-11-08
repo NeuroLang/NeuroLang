@@ -1,0 +1,6 @@
+﻿neurolang.relational\_algebra
+=============================
+
+.. automodule:: neurolang.relational_algebra
+
+   

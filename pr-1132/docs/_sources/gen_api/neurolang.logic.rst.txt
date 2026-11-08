@@ -1,0 +1,24 @@
+﻿neurolang.logic
+===============
+
+.. automodule:: neurolang.logic
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BinaryLogicOperator
+      Conjunction
+      Disjunction
+      ExistentialPredicate
+      Implication
+      LogicOperator
+      NaryLogicOperator
+      Negation
+      Predicate
+      Quantifier
+      UnaryLogicOperator
+      Union
+      UniversalPredicate
+   

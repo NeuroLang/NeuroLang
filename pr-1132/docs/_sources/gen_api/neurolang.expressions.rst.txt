@@ -1,0 +1,39 @@
+﻿neurolang.expressions
+=====================
+
+.. automodule:: neurolang.expressions
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      expressions_behave_as_objects
+      infer_type
+      op_bind
+      rop_bind
+      sure_is_not_pattern
+      sure_is_not_pattern_
+      type_validation_value
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Command
+      Constant
+      Definition
+      Expression
+      ExpressionBlock
+      ExpressionMeta
+      FunctionApplication
+      Lambda
+      NonConstant
+      ParametricTypeClassMeta
+      Projection
+      Query
+      Statement
+      Symbol
+      TypedSymbolTableMixin
+      c
+   

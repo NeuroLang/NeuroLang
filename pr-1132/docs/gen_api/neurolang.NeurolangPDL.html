@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>neurolang.NeurolangPDL &#8212; NeuroLang 0.1a22.dev73+g5af0e7ed1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/neurolang.css?v=497e8255" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../_static/documentation_options.js?v=938eb139"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'gen_api/neurolang.NeurolangPDL';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="icon" href="../_static/favicon.svg"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="neurolang.expressions" href="neurolang.expressions.html" />
+    <link rel="prev" title="neurolang.NeurolangDL" href="neurolang.NeurolangDL.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1a22" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/neurolang-lockup.svg" class="logo__image only-light" alt="NeuroLang"/>
+    <img src="../_static/neurolang-lockup-dark.svg" class="logo__image only-dark pst-js-only" alt="NeuroLang"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="../api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../authors.html">
+    People
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../authors.html">
+    People
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="neurolang.NeurolangDL.html">neurolang.NeurolangDL</a></li>
+<li class="toctree-l1 current active"><a aria-current="page" class="current reference internal" href="#">neurolang.NeurolangPDL</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="neurolang.expressions.html">neurolang.expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.expression_pattern_matching.html">neurolang.expression_pattern_matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.expression_walker.html">neurolang.expression_walker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.exceptions.html">neurolang.exceptions</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="neurolang.logic.html">neurolang.logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.datalog.html">neurolang.datalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.probabilistic.html">neurolang.probabilistic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.relational_algebra.html">neurolang.relational_algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.relational_algebra_provenance.html">neurolang.relational_algebra_provenance</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="neurolang.utils.cli.html">neurolang.utils.cli</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.utils.engine_registry.html">neurolang.utils.engine_registry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurolang.utils.engines.base.html">neurolang.utils.engines.base</a></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL</span></code></a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.__init__"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.__init__()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_atlas_set"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_atlas_set()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_constraint"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_constraint()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_probabilistic_choice_from_tuples()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_probabilistic_facts_from_tuples()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_region"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_region()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_region_set"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_region_set()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_resampling"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_resampling()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_symbol"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_symbol()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_tuple_set"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_tuple_set()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.add_uniform_probabilistic_choice_over_set()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.all"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.all()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.compute_datalog_program_for_autocompletion()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.create_region"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.create_region()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.current_program"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.current_program</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.del_symbol"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.del_symbol()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.environment"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.environment</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.execute_datalog_program"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.execute_datalog_program()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.execute_squall_program"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.execute_squall_program()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.exists"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.exists()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.functions"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.functions</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.get_symbol"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.get_symbol()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.load_neurosynth_mni_peaks_reported()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.load_neurosynth_study_ids"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.load_neurosynth_study_ids()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.load_neurosynth_term_study_associations"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.load_neurosynth_term_study_associations()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.load_ontology"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.load_ontology()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.make_implicit_regions_explicit"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.make_implicit_regions_explicit()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.new_region_symbol"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.new_region_symbol()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.new_symbol"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.new_symbol()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.predicate_parameter_names"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.predicate_parameter_names()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.query"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.query()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.region_names"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.region_names</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.region_set_names"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.region_set_names</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.reset_program"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.reset_program()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.scope"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.scope</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.solve_all"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.solve_all()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.sphere"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.sphere()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.symbol_table"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.symbol_table</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.symbols"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.symbols</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang.NeurolangPDL.types"><code class="docutils literal notranslate"><span class="pre">NeurolangPDL.types</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../api.html" class="nav-link">API Reference</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">neurolang.NeurolangPDL</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="neurolang-neurolangpdl">
+<h1>neurolang.NeurolangPDL<a class="headerlink" href="#neurolang-neurolangpdl" title="Link to this heading">#</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">neurolang.</span></span><span class="sig-name descname"><span class="pre">NeurolangPDL</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chase_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_core.datalog.chase.Chase'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probabilistic_solvers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(&lt;function</span> <span class="pre">solve_succ_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_succ_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_succ_query_sdd_direct&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probabilistic_marg_solvers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(&lt;function</span> <span class="pre">solve_marg_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_marg_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_marg_query&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_qbased_pfact_tuple_unicity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">solver_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL" title="Link to this definition">#</a></dt>
+<dd><p>Probabilistic Datalog frontend.</p>
+<p>Complements <code class="xref py py-class docutils literal notranslate"><span class="pre">QueryBuilderDatalog</span></code> with probabilistic
+capabilities:</p>
+<ol class="arabic simple">
+<li><p>add extensional probabilistic facts and choices;</p></li>
+<li><p>solve probabilistic queries.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>chase_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a><em>[</em><em>Chase</em><em>]</em>)</p></li>
+<li><p><strong>probabilistic_solvers</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.15)"><em>Callable</em></a><em>]</em>)</p></li>
+<li><p><strong>probabilistic_marg_solvers</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.15)"><em>Callable</em></a><em>]</em>)</p></li>
+<li><p><strong>solver_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#neurolang.NeurolangPDL" title="neurolang.NeurolangPDL">NeurolangPDL</a></p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chase_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_core.datalog.chase.Chase'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probabilistic_solvers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(&lt;function</span> <span class="pre">solve_succ_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_succ_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_succ_query_sdd_direct&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probabilistic_marg_solvers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(&lt;function</span> <span class="pre">solve_marg_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_marg_query&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;function</span> <span class="pre">solve_marg_query&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_qbased_pfact_tuple_unicity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">solver_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.__init__" title="Link to this definition">#</a></dt>
+<dd><p>Query builder with probabilistic capabilities</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>chase_class</strong><span class="classifier">Type[Chase], optional</span></dt><dd><p>used to compute deterministic solutions, by default Chase</p>
+</dd>
+<dt><strong>probabilistic_solvers</strong><span class="classifier">Tuple[Callable], optional</span></dt><dd><p>used to compute probabilistic solutions,
+the order of the elements indicates the priority
+of usage of the solver.
+by default (lifted_solve_succ_query, wmc_solve_succ_query)</p>
+</dd>
+<dt><strong>probabilistic_marg_solvers</strong><span class="classifier">Tuple[Callable], optional</span></dt><dd><p>used to compute probabilistic solutions,
+by default (lifted_solve_marg_query, wmc_solve_marg_query)</p>
+</dd>
+<dt><strong>solver_class</strong><span class="classifier">Type, optional</span></dt><dd><p>Custom solver class to use instead of RegionFrontendCPLogicSolver.
+Allows injecting custom mixins (e.g. with dimension_type_predicate_names
+tailored from engine YAML config).</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>NeurolangPDL</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>chase_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a><em>[</em><em>Chase</em><em>]</em>)</p></li>
+<li><p><strong>probabilistic_solvers</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.15)"><em>Callable</em></a><em>]</em>)</p></li>
+<li><p><strong>probabilistic_marg_solvers</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.15)"><em>Callable</em></a><em>]</em>)</p></li>
+<li><p><strong>solver_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#neurolang.NeurolangPDL" title="neurolang.frontend.probabilistic_frontend.NeurolangPDL"><em>NeurolangPDL</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Methods</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.__init__" title="neurolang.NeurolangPDL.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>([chase_class, ...])</p></td>
+<td><p>Query builder with probabilistic capabilities</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_atlas_set" title="neurolang.NeurolangPDL.add_atlas_set"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_atlas_set</span></code></a>(name, atlas_labels, spatial_image)</p></td>
+<td><p>Creates an atlas set: 1- for each region specified by a label and name in atlas_labels, creates associated ExplicitVBR and symbols Tuple[region_name: str, Region] 2- groups regions in an AbstractSet[Tuple[str, Region]] symbol with specified name</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_constraint" title="neurolang.NeurolangPDL.add_constraint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_constraint</span></code></a>(antecedent, consequent)</p></td>
+<td><p>Creates an right implication of the consequent by the antecedent and adds the rule to the current program:</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples" title="neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_probabilistic_choice_from_tuples</span></code></a>(iterable)</p></td>
+<td><p>Add probabilistic choice from tuples whose first element contains the probability label attached to that tuple.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples" title="neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_probabilistic_facts_from_tuples</span></code></a>(iterable)</p></td>
+<td><p>Add probabilistic facts from tuples whose first element contains the probability label attached to that tuple.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_region" title="neurolang.NeurolangPDL.add_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_region</span></code></a>(region[, name])</p></td>
+<td><p>Adds region fe.Symbol to symbol_table</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_region_set" title="neurolang.NeurolangPDL.add_region_set"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_region_set</span></code></a>(region_set[, name])</p></td>
+<td><p>Creates an AbstractSet fe.Symbol containing the elements specified in the iterable with a List[Tuple[Region]] format</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_resampling" title="neurolang.NeurolangPDL.add_resampling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_resampling</span></code></a>(name, choice[, n, scheme, seed])</p></td>
+<td><p>Add <em>n</em> replicates of the probabilistic choice <em>choice</em>, resampling its outcomes, for confidence intervals on the probabilities over it and on the measures derived from them.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_symbol" title="neurolang.NeurolangPDL.add_symbol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_symbol</span></code></a>(value[, name, type_])</p></td>
+<td><p>Creates a symbol with given value and adds it to the current symbol_table.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_tuple_set" title="neurolang.NeurolangPDL.add_tuple_set"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_tuple_set</span></code></a>(iterable[, type_, name])</p></td>
+<td><p>Creates an AbstractSet fe.Symbol containing the elements specified in the iterable with a List[Tuple[Any, ...]] format (see examples).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set" title="neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_uniform_probabilistic_choice_over_set</span></code></a>(...)</p></td>
+<td><p>Add uniform probabilistic choice over values in the iterable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.all" title="neurolang.NeurolangPDL.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all</span></code></a>(quantified_variable, body)</p></td>
+<td><p>Universal predicate on the body.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion" title="neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_datalog_program_for_autocompletion</span></code></a>(...)</p></td>
+<td><p>Computes a Datalog program in classical syntax.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.create_region" title="neurolang.NeurolangPDL.create_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_region</span></code></a>(spatial_image[, label, ...])</p></td>
+<td><p>Creates an ExplicitVBR out of the voxels of a dense spatial_image with specified label</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.del_symbol" title="neurolang.NeurolangPDL.del_symbol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">del_symbol</span></code></a>(name)</p></td>
+<td><p>Deletes the symbol with parameter name from the symbol_table</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.execute_datalog_program" title="neurolang.NeurolangPDL.execute_datalog_program"><code class="xref py py-obj docutils literal notranslate"><span class="pre">execute_datalog_program</span></code></a>(code[, ...])</p></td>
+<td><p>Execute a Datalog program in classical syntax.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.execute_squall_program" title="neurolang.NeurolangPDL.execute_squall_program"><code class="xref py py-obj docutils literal notranslate"><span class="pre">execute_squall_program</span></code></a>(code[, ...])</p></td>
+<td><p>Execute a SQUALL (controlled English) program.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.exists" title="neurolang.NeurolangPDL.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exists</span></code></a>(quantified_variable, body)</p></td>
+<td><p>Existential predicate on the body.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.get_symbol" title="neurolang.NeurolangPDL.get_symbol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_symbol</span></code></a>(symbol_name)</p></td>
+<td><p>Retrieves symbol via its name, either providing a fe.Expression with the correct name or the name itself</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported" title="neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_neurosynth_mni_peaks_reported</span></code></a>(data_dir)</p></td>
+<td><p>Load the coordinates for the peaks reported by studies in the Neurosynth dataset.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.load_neurosynth_study_ids" title="neurolang.NeurolangPDL.load_neurosynth_study_ids"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_neurosynth_study_ids</span></code></a>(data_dir[, name, ...])</p></td>
+<td><p>Load all study ids (PMIDs) that are part of the Neurosynth database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.load_neurosynth_term_study_associations" title="neurolang.NeurolangPDL.load_neurosynth_term_study_associations"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_neurosynth_term_study_associations</span></code></a>(data_dir)</p></td>
+<td><p>Load TF-IDF values for each (term, study) association within the Neurosynth database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.load_ontology" title="neurolang.NeurolangPDL.load_ontology"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_ontology</span></code></a>(paths[, ...])</p></td>
+<td><p>Loads and parses ontology stored at the specified paths, and store them into attributes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">magic_sets_rewrite_program</span></code>(query_expression)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.make_implicit_regions_explicit" title="neurolang.NeurolangPDL.make_implicit_regions_explicit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_implicit_regions_explicit</span></code></a>(affine, dim)</p></td>
+<td><p>Raises NotImplementedError for now</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.new_region_symbol" title="neurolang.NeurolangPDL.new_region_symbol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">new_region_symbol</span></code></a>([name])</p></td>
+<td><p>Returns symbol with type Region</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.new_symbol" title="neurolang.NeurolangPDL.new_symbol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">new_symbol</span></code></a>([type_, name])</p></td>
+<td><p>Creates a symbol and associated expression, optionally specifying it's type and/or name</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.predicate_parameter_names" title="neurolang.NeurolangPDL.predicate_parameter_names"><code class="xref py py-obj docutils literal notranslate"><span class="pre">predicate_parameter_names</span></code></a>(predicate_name)</p></td>
+<td><p>Get the names of the parameters for the given predicate</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.query" title="neurolang.NeurolangPDL.query"><code class="xref py py-obj docutils literal notranslate"><span class="pre">query</span></code></a>(*args[, show_rewritten, dry_run, show_ra])</p></td>
+<td><p>Performs an inferential query on the database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.reset_program" title="neurolang.NeurolangPDL.reset_program"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset_program</span></code></a>()</p></td>
+<td><p>Clears current symbol table</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.solve_all" title="neurolang.NeurolangPDL.solve_all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">solve_all</span></code></a>([show_ra])</p></td>
+<td><p>Returns a dictionary of &quot;predicate_name&quot;: &quot;Content&quot; for all elements in the solution of the Datalog program.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.sphere" title="neurolang.NeurolangPDL.sphere"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sphere</span></code></a>(center, radius[, name])</p></td>
+<td><p>Creates a Region symbol associated with the spherical volume described by its center and volume</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="rubric">Attributes</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.current_program" title="neurolang.NeurolangPDL.current_program"><code class="xref py py-obj docutils literal notranslate"><span class="pre">current_program</span></code></a></p></td>
+<td><p>Returns the list of Front End Expressions that have currently been declared in the program, or through the program's constraints</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.environment" title="neurolang.NeurolangPDL.environment"><code class="xref py py-obj docutils literal notranslate"><span class="pre">environment</span></code></a></p></td>
+<td><p>Dynamic context that can be used to create symbols to write a Datalog program.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.functions" title="neurolang.NeurolangPDL.functions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">functions</span></code></a></p></td>
+<td><p>Returns the list of symbols corresponding to callables</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.region_names" title="neurolang.NeurolangPDL.region_names"><code class="xref py py-obj docutils literal notranslate"><span class="pre">region_names</span></code></a></p></td>
+<td><p>Returns the list of symbol names with Region type</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.region_set_names" title="neurolang.NeurolangPDL.region_set_names"><code class="xref py py-obj docutils literal notranslate"><span class="pre">region_set_names</span></code></a></p></td>
+<td><p>Returns the list of symbol names with set_type</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.scope" title="neurolang.NeurolangPDL.scope"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scope</span></code></a></p></td>
+<td><p>Dynamic context that can be used to create symbols to write a Datalog program.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.symbol_table" title="neurolang.NeurolangPDL.symbol_table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">symbol_table</span></code></a></p></td>
+<td><p>Projector to the program_ir's symbol_table</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.symbols" title="neurolang.NeurolangPDL.symbols"><code class="xref py py-obj docutils literal notranslate"><span class="pre">symbols</span></code></a></p></td>
+<td><p>Iterator through the symbol's names</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#neurolang.NeurolangPDL.types" title="neurolang.NeurolangPDL.types"><code class="xref py py-obj docutils literal notranslate"><span class="pre">types</span></code></a></p></td>
+<td><p>Returns a list of the types of the symbols currently in the table (type can be Unknown)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_atlas_set">
+<span class="sig-name descname"><span class="pre">add_atlas_set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atlas_labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spatial_image</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_atlas_set" title="Link to this definition">#</a></dt>
+<dd><p>Creates an atlas set:
+1- for each region specified by a label and name in atlas_labels,
+creates associated ExplicitVBR and symbols
+Tuple[region_name: str, Region]
+2- groups regions in an AbstractSet[Tuple[str, Region]] symbol with
+specified name</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>name</strong><span class="classifier">str</span></dt><dd><p>name for the output atlas symbol</p>
+</dd>
+<dt><strong>atlas_labels</strong><span class="classifier">Dict[int, str]</span></dt><dd><p>specifies which voxels to select in the spatial_image,
+and the associated region name</p>
+</dd>
+<dt><strong>spatial_image</strong><span class="classifier">DataobjImage</span></dt><dd><p>contains the .dataobj array ofinterest</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>atlas_labels</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.15)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>spatial_image</strong> (<a class="reference external" href="https://nipy.org/nibabel/reference/nibabel.dataobj_images.html#nibabel.dataobj_images.DataobjImage" title="(in NiBabel v0.1.0.dev1+gabe5e8e0c)"><em>DataobjImage</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_constraint">
+<span class="sig-name descname"><span class="pre">add_constraint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">antecedent</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">consequent</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_constraint" title="Link to this definition">#</a></dt>
+<dd><p>Creates an right implication of the consequent by the antecedent
+and adds the rule to the current program:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>antecedent -&gt; consequent
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>antecedent</strong><span class="classifier">fe.Expression</span></dt><dd><p>see description, will be processed to a logic form before
+creating the right implication rule</p>
+</dd>
+<dt><strong>consequent</strong><span class="classifier">fe.Expression</span></dt><dd><p>see description, will be processed to a logic form before
+creating the right implication rule</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Expression</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>antecedent</strong> (<em>Expression</em>)</p></li>
+<li><p><strong>consequent</strong> (<em>Expression</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Expression</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderDatalog</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"l"</span><span class="p">)</span>
+<span class="go">l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">scope</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">nl</span><span class="o">.</span><span class="n">add_constraint</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">l2</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">y</span><span class="p">],</span> <span class="n">e</span><span class="o">.</span><span class="n">l2</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples">
+<span class="sig-name descname"><span class="pre">add_probabilistic_choice_from_tuples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">iterable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_probabilistic_choice_from_tuples" title="Link to this definition">#</a></dt>
+<dd><p>Add probabilistic choice from tuples whose first element
+contains the probability label attached to that tuple.
+In the tuple (p, a, b, …), p is the float probability
+of tuple (a, b, …) to be True and all remaining tuples to
+be False in any possible world.</p>
+<p>Note that, contrary to a list of probabilistic facts, this represents
+a choice among possible values for the predicate, meaning that tuples
+in the set are mutually exclusive.
+See example for details.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>iterable</strong><span class="classifier">Iterable[Tuple[Any, …]]</span></dt><dd><p>the first float number represents the probability
+of the tuple constituted of the remaining elements
+Note that the float probabilities must sum to 1.</p>
+</dd>
+<dt><strong>type_</strong><span class="classifier">Type, optional</span></dt><dd><p>type for resulting AbstractSet if None will be inferred
+from the data, by default ir.Unknown</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>name for the resulting fe.Symbol, if None
+will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>DistributionDoesNotSumToOneError</dt><dd><p>if float probabilities do not sum to 1.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>iterable</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em>, </em><em>...</em><em>]</em><em>]</em>)</p></li>
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Typing for the iterable is improper, true -but yet unsupported-
+typing should be Iterable[Tuple[float, Any, …]]
+See examples</p>
+</div>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="p">[(</span><span class="mf">0.8</span><span class="p">,</span> <span class="s1">'a'</span><span class="p">,</span> <span class="s1">'b'</span><span class="p">),</span> <span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="s1">'b'</span><span class="p">,</span> <span class="s1">'c'</span><span class="p">)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_probabilistic_choice_from_tuples</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"P"</span><span class="p">)</span>
+<span class="go">P: typing.AbstractSet[typing.Tuple[float, str, str]] =             [(0.8, 'a', 'b'), (0.2, 'b', 'c')]</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Adds the probabilistic choice:</dt><dd><p>P((a, b)) : 0.8  v  P((b, c)) : 0.2  &lt;-  T</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples">
+<span class="sig-name descname"><span class="pre">add_probabilistic_facts_from_tuples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">iterable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_probabilistic_facts_from_tuples" title="Link to this definition">#</a></dt>
+<dd><p>Add probabilistic facts from tuples whose first element
+contains the probability label attached to that tuple.
+In the tuple (p, a, b, …), p is the float probability
+of tuple (a, b, …) to be True in any possible world.</p>
+<p>Note that each tuple from the iterable is independent
+from the others, meaning that multiple tuples can be True
+in the same possible world, contrary to a probabilistic choice.
+See example for details.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>iterable</strong><span class="classifier">Iterable[Tuple[Any, …]]</span></dt><dd><p>the first float number represents the probability
+of the tuple constituted of the remaining elements</p>
+</dd>
+<dt><strong>type_</strong><span class="classifier">Type, optional</span></dt><dd><p>type for resulting AbstractSet if None will be inferred
+from the data, by default ir.Unknown</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>name for the resulting fe.Symbol, if None
+will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>iterable</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em>, </em><em>...</em><em>]</em><em>]</em>)</p></li>
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Typing for the iterable is improper, true -but yet unsupported
+in Python typing- typing should be Iterable[Tuple[float, Any, …]]
+See examples</p>
+</div>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="p">[(</span><span class="mf">0.8</span><span class="p">,</span> <span class="s1">'a'</span><span class="p">,</span> <span class="s1">'b'</span><span class="p">),</span> <span class="p">(</span><span class="mf">0.7</span><span class="p">,</span> <span class="s1">'b'</span><span class="p">,</span> <span class="s1">'c'</span><span class="p">)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_probabilistic_facts_from_tuples</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"P"</span><span class="p">)</span>
+<span class="go">P: typing.AbstractSet[typing.Tuple[float, str]] =             [(0.8, 'a', 'b'), (0.7, 'b', 'c')]</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Adds the probabilistic facts:</dt><dd><p>P((a, b)) : 0.8  &lt;-  T
+P((b, c)) : 0.7  &lt;-  T</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_region">
+<span class="sig-name descname"><span class="pre">add_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_region" title="Link to this definition">#</a></dt>
+<dd><p>Adds region fe.Symbol to symbol_table</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>region</strong><span class="classifier">fe.Expression</span></dt><dd><p>should be of the program_ir’s type</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>symbol’s name, if None will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>symbol added to the symbol_table</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>if region is not of program_ir’s type</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>region</strong> (<em>Expression</em>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_region_set">
+<span class="sig-name descname"><span class="pre">add_region_set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region_set</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_region_set" title="Link to this definition">#</a></dt>
+<dd><p>Creates an AbstractSet fe.Symbol containing the elements specified in
+the iterable with a List[Tuple[Region]] format</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>region_set</strong><span class="classifier">Iterable</span></dt><dd><p>Typically List[Tuple[Region]]</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>symbol’s name, if None will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>region_set</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_resampling">
+<span class="sig-name descname"><span class="pre">add_resampling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">choice</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scheme</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bayesian'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_resampling" title="Link to this definition">#</a></dt>
+<dd><p>Add <em>n</em> replicates of the probabilistic choice <em>choice</em>, resampling
+its outcomes, for confidence intervals on the probabilities over it
+and on the measures derived from them.</p>
+<p>The resampling is the relation <code class="docutils literal notranslate"><span class="pre">name(b,</span> <span class="pre">c...,</span> <span class="pre">w)</span></code>: in replicate
+<code class="docutils literal notranslate"><span class="pre">b</span></code> the outcome <code class="docutils literal notranslate"><span class="pre">c</span></code> has <code class="docutils literal notranslate"><span class="pre">w</span></code> times its probability in the
+choice.  <code class="docutils literal notranslate"><span class="pre">RESAMPLE[name](pred(x))</span> <span class="pre">=</span> <span class="pre">b</span></code> in a rule body is then
+<code class="docutils literal notranslate"><span class="pre">pred(x)</span></code> computed on replicate <code class="docutils literal notranslate"><span class="pre">b</span></code>; every query over the same
+resampling sees the same replicates.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>name</strong><span class="classifier">str</span></dt><dd><p>name of the resampling relation.</p>
+</dd>
+<dt><strong>choice</strong><span class="classifier">str</span></dt><dd><p>name of a probabilistic choice of the program.</p>
+</dd>
+<dt><strong>n</strong><span class="classifier">int, optional</span></dt><dd><p>number of replicates, by default 1000.</p>
+</dd>
+<dt><strong>scheme</strong><span class="classifier">str, optional</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">&quot;bayesian&quot;</span></code> (Dirichlet weights, the Bayesian bootstrap),
+<code class="docutils literal notranslate"><span class="pre">&quot;multinomial&quot;</span></code> (the classical bootstrap) or <code class="docutils literal notranslate"><span class="pre">&quot;poisson&quot;</span></code>,
+by default <code class="docutils literal notranslate"><span class="pre">&quot;bayesian&quot;</span></code>.</p>
+</dd>
+<dt><strong>seed</strong><span class="classifier">int, optional</span></dt><dd><p>seed of the random draws, by default 0.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>the resampling relation.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>choice</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>n</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>scheme</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>seed</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="s1">'a'</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">),</span> <span class="p">(</span><span class="s1">'b'</span><span class="p">,</span> <span class="s1">'x'</span><span class="p">)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"R"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_uniform_probabilistic_choice_over_set</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="p">[(</span><span class="s1">'a'</span><span class="p">,),</span> <span class="p">(</span><span class="s1">'b'</span><span class="p">,)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"C"</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_resampling</span><span class="p">(</span><span class="s2">"boot"</span><span class="p">,</span> <span class="s2">"C"</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">execute_datalog_program</span><span class="p">(</span><span class="s1">'''</span>
+<span class="gp">... </span><span class="s1">p(y, PROB) :- R(c, y) &amp; C(c)</span>
+<span class="gp">... </span><span class="s1">p_rep(b, y, p) :- RESAMPLE[boot](p(y, p)) = b</span>
+<span class="gp">... </span><span class="s1">ans(y, percentile(p, 2.5), percentile(p, 97.5)) :- p_rep(b, y, p)</span>
+<span class="gp">... </span><span class="s1">'''</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_symbol">
+<span class="sig-name descname"><span class="pre">add_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_symbol" title="Link to this definition">#</a></dt>
+<dd><p>Creates a symbol with given value and adds it to the
+current symbol_table.
+Can typically be used to decorate callables, or add an
+ir.Constant to the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>value</strong><span class="classifier">Union[fe.Expression, ir.Constant, Any]</span></dt><dd><p>value of the symbol to add. If not an fe.Expression,
+will be cast as an ir.Constant</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>overrides automatic naming of the symbol, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>created symbol</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> (<em>Expression</em><em> | </em><em>Constant</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@nl</span><span class="o">.</span><span class="n">add_symbol</span>
+<span class="gp">... </span><span class="k">def</span><span class="w"> </span><span class="nf">g</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">get_symbol</span><span class="p">(</span><span class="s2">"g"</span><span class="p">)</span>
+<span class="go">g: typing.Callable[[int], int] = &lt;function g at ...&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">get_symbol</span><span class="p">(</span><span class="s2">"x"</span><span class="p">)</span>
+<span class="go">x: &lt;class 'int'&gt; = 3</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_tuple_set">
+<span class="sig-name descname"><span class="pre">add_tuple_set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">iterable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_tuple_set" title="Link to this definition">#</a></dt>
+<dd><p>Creates an AbstractSet fe.Symbol containing the elements specified in
+the iterable with a List[Tuple[Any, …]] format (see examples).
+Typically used to create extensional facts from existing databases</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>iterable</strong><span class="classifier">Iterable</span></dt><dd><p>typically a list of tuples of values, other formats will
+be interpreted as the latter</p>
+</dd>
+<dt><strong>type_</strong><span class="classifier">Type, optional</span></dt><dd><p>type of elements for the tuples, if not specified
+will be inferred from the first element, by default Unknown</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>name for the AbstractSet symbol, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>iterable</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a>)</p></li>
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderDatalog</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"l1"</span><span class="p">)</span>
+<span class="go">l1: typing.AbstractSet[typing.Tuple[int, int]] =             [(1, 2), (3, 4)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"l2"</span><span class="p">)</span>
+<span class="go">l2: typing.AbstractSet[typing.Tuple[int, int, float]] =             [(1, 2, 3.0), (3, 4, nan)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="s2">"l3"</span><span class="p">)</span>
+<span class="go">l3: typing.AbstractSet[typing.Tuple[int]] =             [(1,), (2,), (3,)]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set">
+<span class="sig-name descname"><span class="pre">add_uniform_probabilistic_choice_over_set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">iterable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.add_uniform_probabilistic_choice_over_set" title="Link to this definition">#</a></dt>
+<dd><p>Add uniform probabilistic choice over values in the iterable.</p>
+<p>Every tuple in the iterable will be assigned the same probability to
+be True, with all remaining tuples False, in any possible world.</p>
+<p>Note that, contrary to a list of probabilistic facts, this represents
+a choice among possible values for the predicate, meaning that tuples
+in the set are mutually exclusive.</p>
+<p>See example for details.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>iterable</strong><span class="classifier">Iterable[Tuple[Any, …]]</span></dt><dd><p>typically List[Tuple[Any, …]], other types of Iterable
+will be cast as lists</p>
+</dd>
+<dt><strong>type_</strong><span class="classifier">Type, optional</span></dt><dd><p>type for resulting AbstractSet if None will be inferred
+from the data, by default ir.Unknown</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>name for the resulting fe.Symbol, if None
+will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>iterable</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em>, </em><em>...</em><em>]</em><em>]</em>)</p></li>
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><em>Type</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="p">[(</span><span class="s1">'a'</span><span class="p">,),</span> <span class="p">(</span><span class="s1">'b'</span><span class="p">,)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_uniform_probabilistic_choice_over_set</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"P"</span><span class="p">)</span>
+<span class="go">P: typing.AbstractSet[typing.Tuple[float, str]] =             [(0.5, 'a'), (0.5, 'b')]</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Adds the probabilistic choice:</dt><dd><p>P(a) : 0.5  v  P(b) : 0.5  &lt;-  T</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.all">
+<span class="sig-name descname"><span class="pre">all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">quantified_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">body</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.all" title="Link to this definition">#</a></dt>
+<dd><p>Universal predicate on the body. The predicate
+will be cosidered satisfied if all instances of
+<cite>quantified_variable</cite> satisfy <cite>body</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>quantified_variable</strong><span class="classifier">fe.Symbol</span></dt><dd><p>universally-quantified variable</p>
+</dd>
+<dt><strong>body: fe.Expression</strong></dt><dd><p>first order logic proposition which to be
+satisfied by the universal quatifier.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.All</dt><dd><p>representation of the universal predicate.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>quantified_variable</strong> (<em>Symbol</em>)</p></li>
+<li><p><strong>body</strong> (<em>Expression</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>All</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion">
+<span class="sig-name descname"><span class="pre">compute_datalog_program_for_autocompletion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">code</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocompletion_code</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.compute_datalog_program_for_autocompletion" title="Link to this definition">#</a></dt>
+<dd><p>Computes a Datalog program in classical syntax.
+Returns the next accepted tokens of the program.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>code</strong><span class="classifier">string</span></dt><dd><p>Datalog program.</p>
+</dd>
+<dt><strong>autocompletion_code</strong><span class="classifier">str</span></dt><dd><p>Datalog program for autocompletion.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>code</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.15)"><em>Dict</em></a></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderDatalog</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">prog_complete</span> <span class="o">=</span> <span class="s1">'''</span>
+<span class="gp">... </span><span class="s1">       l2(x, y) :- l(x, y), (x == y)</span>
+<span class="gp">... </span><span class="s1">       ans(x) :- l2(x, y)</span>
+<span class="gp">... </span><span class="s1">       '''</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">prog</span> <span class="o">=</span> <span class="s1">'''</span>
+<span class="gp">... </span><span class="s1">       l2(x, y) :- l(x, y), (x == y)</span>
+<span class="gp">... </span><span class="s1">       ans(x) :-</span>
+<span class="gp">... </span><span class="s1">       '''</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">environment</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">q</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">compute_datalog_program_for_autocompletion</span><span class="p">(</span><span class="n">prog_complete</span><span class="p">,</span> <span class="n">prog</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span>
+<span class="gp">... </span><span class="p">{</span>
+<span class="gp">... </span>    <span class="s1">'Signs'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'@'</span><span class="p">,</span> <span class="s1">'∃'</span><span class="p">,</span> <span class="s1">'('</span><span class="p">},</span> <span class="s1">'Numbers'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'Text'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'Operators'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'¬'</span><span class="p">,</span> <span class="s1">'~'</span><span class="p">},</span>
+<span class="gp">... </span>    <span class="s1">'Cmd_identifier'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'Functions'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'lambda'</span><span class="p">},</span> <span class="s1">'Identifier_regexp'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="s1">'Reserved words'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'exists'</span><span class="p">,</span> <span class="s1">'EXISTS'</span><span class="p">},</span> <span class="s1">'Boleans'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'⊤'</span><span class="p">,</span> <span class="s1">'⊥'</span><span class="p">,</span> <span class="s1">'False'</span><span class="p">,</span> <span class="s1">'True'</span><span class="p">},</span>
+<span class="gp">... </span>    <span class="s1">'Expression symbols'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'Python string'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="s1">'Strings'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'&lt;identifier regular expression&gt;'</span><span class="p">,</span> <span class="s1">'&lt;command identifier&gt;'</span><span class="p">},</span> <span class="s1">'commands'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="s1">'functions'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'base symbols'</span><span class="p">:</span> <span class="nb">set</span><span class="p">(),</span> <span class="s1">'query symbols'</span><span class="p">:</span> <span class="nb">set</span><span class="p">()</span>
+<span class="gp">... </span><span class="p">}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.create_region">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spatial_image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prebuild_tree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.create_region" title="Link to this definition">#</a></dt>
+<dd><p>Creates an ExplicitVBR out of the voxels of a dense spatial_image
+with specified label</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>spatial_image</strong><span class="classifier">DataobjImage</span></dt><dd><p>contains the .dataobj array of interest</p>
+</dd>
+<dt><strong>label</strong><span class="classifier">int, optional</span></dt><dd><p>selects which voxel to put in the output, by default 1</p>
+</dd>
+<dt><strong>prebuild_tree</strong><span class="classifier">bool, optional</span></dt><dd><p>see ExplicitVBR, by default False</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>ExplicitVBR</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spatial_image</strong> (<a class="reference external" href="https://nipy.org/nibabel/reference/nibabel.dataobj_images.html#nibabel.dataobj_images.DataobjImage" title="(in NiBabel v0.1.0.dev1+gabe5e8e0c)"><em>DataobjImage</em></a>)</p></li>
+<li><p><strong>label</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>prebuild_tree</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>ExplicitVBR</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.current_program">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_program</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Expression</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.current_program" title="Link to this definition">#</a></dt>
+<dd><p>Returns the list of Front End Expressions that have
+currently been declared in the program, or through
+the program’s constraints</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>List[fe.Expression]</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">P</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">add_uniform_probabilistic_choice_over_set</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="p">[(</span><span class="s2">"a"</span><span class="p">,),</span> <span class="p">(</span><span class="s2">"b"</span><span class="p">,),</span> <span class="p">(</span><span class="s2">"c"</span><span class="p">,)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"P"</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Q</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">add_uniform_probabilistic_choice_over_set</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="p">[(</span><span class="s2">"a"</span><span class="p">,),</span> <span class="p">(</span><span class="s2">"d"</span><span class="p">,),</span> <span class="p">(</span><span class="s2">"c"</span><span class="p">,)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Q"</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">scope</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">e</span><span class="o">.</span><span class="n">Z</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">PROB</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">]]</span> <span class="o">=</span> <span class="n">P</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">]</span> <span class="o">&amp;</span> <span class="n">Q</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">x</span><span class="p">]</span>
+<span class="gp">... </span>    <span class="n">cp</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">current_program</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cp</span>
+<span class="go">[</span>
+<span class="go">    Z(x, ( PROB(x) )) ← ( P(x) ) ∧ ( Q(x) )</span>
+<span class="go">]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.del_symbol">
+<span class="sig-name descname"><span class="pre">del_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.del_symbol" title="Link to this definition">#</a></dt>
+<dd><p>Deletes the symbol with parameter name
+from the symbol_table</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>name</strong><span class="classifier">str</span></dt><dd><p>Name of the symbol to delete</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>ValueError</dt><dd><p>if no symbol could be found with given name</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
+<span class="go">x: &lt;class 'int'&gt; = 3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">get_symbol</span><span class="p">(</span><span class="s2">"x"</span><span class="p">)</span>
+<span class="go">x: &lt;class 'int'&gt; = 3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">del_symbol</span><span class="p">(</span><span class="s2">"x"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">get_symbol</span><span class="p">(</span><span class="s2">"x"</span><span class="p">)</span>
+<span class="go">ValueError: Symbol x not defined</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.environment">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">environment</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">QuerySymbolsProxy</span></span><a class="headerlink" href="#neurolang.NeurolangPDL.environment" title="Link to this definition">#</a></dt>
+<dd><p>Dynamic context that can be used to create
+symbols to write a Datalog program.
+Contrary to a scope, symbols stay in the symbol_table
+when exiting the environment context</p>
+<dl class="field-list simple">
+<dt class="field-odd">Yields<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>QuerySymbolsProxy</dt><dd><p>in dynamic mode, can be used to create symbols on-the-fly</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">environment</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">e</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s2">"x"</span> <span class="ow">in</span> <span class="n">nl</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">symbols</span><span class="o">.</span><span class="n">x</span> <span class="o">==</span> <span class="mi">3</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.execute_datalog_program">
+<span class="sig-name descname"><span class="pre">execute_datalog_program</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">code</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_rewritten</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dry_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_ra</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.execute_datalog_program" title="Link to this definition">#</a></dt>
+<dd><p>Execute a Datalog program in classical syntax.
+If the program contains a query, in the form <cite>ans(x) :- R(x)</cite>,
+then this query is executed against the program and the result is
+returned. Otherwise returns None. The rules of the program stay in
+it after the query: a later rule of the same head is added to them,
+with a warning if its program has a query; run the query in
+<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">nl.scope:</span></code> to keep its rules local to it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>code</strong><span class="classifier">string</span></dt><dd><p>Datalog program.</p>
+</dd>
+<dt><strong>show_rewritten</strong><span class="classifier">bool</span></dt><dd><p>If True, print the Datalog program after magic-sets rewriting.</p>
+</dd>
+<dt><strong>dry_run</strong><span class="classifier">bool</span></dt><dd><p>If True, print the rewritten program and return None without
+running the chase.</p>
+</dd>
+<dt><strong>show_ra</strong><span class="classifier">bool or ShowRAOptions</span></dt><dd><p>If True, print the named relational algebra expression
+of each rule instead of evaluating it. A
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ShowRAOptions</span></code> selects
+how the plans are displayed.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>code</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>show_rewritten</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+<li><p><strong>dry_run</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None | <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)">bool</a> | <em>RelationalAlgebraFrozenSet</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderDatalog</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"l"</span><span class="p">)</span>
+<span class="go">l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">prog</span> <span class="o">=</span> <span class="s1">'''</span>
+<span class="gp">... </span><span class="s1">       l2(x, y) :- l(x, y), (x == y)</span>
+<span class="gp">... </span><span class="s1">       ans(x) :- l2(x, y)</span>
+<span class="gp">... </span><span class="s1">       '''</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">environment</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">q</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">execute_datalog_program</span><span class="p">(</span><span class="n">prog</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">q</span>
+<span class="gp">... </span><span class="n">q</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">AbstractSet</span><span class="p">[</span><span class="n">typing</span><span class="o">.</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">2</span><span class="p">,)]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.execute_squall_program">
+<span class="sig-name descname"><span class="pre">execute_squall_program</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">code</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_rewritten</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dry_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_ra</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.execute_squall_program" title="Link to this definition">#</a></dt>
+<dd><p>Execute a SQUALL (controlled English) program.</p>
+<p>Parses <em>code</em> as a SQUALL program, walks rule definitions into the
+engine, and executes <code class="docutils literal notranslate"><span class="pre">obtain</span></code> queries the same way
+<cite>execute_datalog_program</cite> handles <code class="docutils literal notranslate"><span class="pre">ans(x)</span> <span class="pre">:-</span> <span class="pre">R(x)</span></code> — by building a
+fresh helper implication and delegating to <cite>self.query</cite> (or
+<cite>self._execute_query</cite> for probabilistic engines).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>code</strong><span class="classifier">str</span></dt><dd><p>SQUALL program text.  May contain any mixture of
+<code class="docutils literal notranslate"><span class="pre">define</span> <span class="pre">as</span> <span class="pre">…</span></code> rule definitions and <code class="docutils literal notranslate"><span class="pre">obtain</span> <span class="pre">…</span></code> queries.</p>
+</dd>
+<dt><strong>show_rewritten</strong><span class="classifier">bool</span></dt><dd><p>If True, print the Datalog program after magic-sets rewriting.</p>
+</dd>
+<dt><strong>dry_run</strong><span class="classifier">bool</span></dt><dd><p>If True, print the rewritten program and return None without
+running the chase.</p>
+</dd>
+<dt><strong>show_ra</strong><span class="classifier">bool or ShowRAOptions</span></dt><dd><p>If True, print the named relational algebra expression
+of each rule instead of evaluating it. A
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ShowRAOptions</span></code> selects
+how the plans are displayed.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>None</dt><dd><p>When <em>code</em> contains only rule definitions (no <code class="docutils literal notranslate"><span class="pre">obtain</span></code>).</p>
+</dd>
+<dt>NamedRelationalAlgebraFrozenSet</dt><dd><p>When <em>code</em> contains exactly one <code class="docutils literal notranslate"><span class="pre">obtain</span></code> clause.</p>
+</dd>
+<dt>Dict[str, NamedRelationalAlgebraFrozenSet]</dt><dd><p>When <em>code</em> contains two or more <code class="docutils literal notranslate"><span class="pre">obtain</span></code> clauses, keyed
+<code class="docutils literal notranslate"><span class="pre">&quot;obtain_0&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;obtain_1&quot;</span></code>, … in declaration order.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>code</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+<li><p><strong>show_rewritten</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+<li><p><strong>dry_run</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None | <a class="reference internal" href="neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet" title="nl_core.utils.relational_algebra_set.pandas.NamedRelationalAlgebraFrozenSet"><em>NamedRelationalAlgebraFrozenSet</em></a> | <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.15)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)">str</a>, <a class="reference internal" href="neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet" title="nl_core.utils.relational_algebra_set.pandas.NamedRelationalAlgebraFrozenSet"><em>NamedRelationalAlgebraFrozenSet</em></a>]</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">neurolang.frontend</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeurolangPDL</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">NeurolangPDL</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="s2">"alice"</span><span class="p">,),</span> <span class="p">(</span><span class="s2">"bob"</span><span class="p">,)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"person"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">add_tuple_set</span><span class="p">([(</span><span class="s2">"alice"</span><span class="p">,)],</span> <span class="n">name</span><span class="o">=</span><span class="s2">"plays"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">execute_squall_program</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="s2">"define as Active every person that plays."</span>
+<span class="gp">... </span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">nl</span><span class="o">.</span><span class="n">execute_squall_program</span><span class="p">(</span><span class="s2">"obtain every Person that plays."</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">as_pandas_dataframe</span><span class="p">()</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<span class="go">['alice']</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.exists">
+<span class="sig-name descname"><span class="pre">exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">quantified_variable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">body</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.exists" title="Link to this definition">#</a></dt>
+<dd><p>Existential predicate on the body. The predicate
+will be cosidered satisfied if any instance of
+<cite>quantified_variable</cite> satisfies <cite>body</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>quantified_variable</strong><span class="classifier">fe.Symbol</span></dt><dd><p>existentially-quantified variable</p>
+</dd>
+<dt><strong>body: fe.Expression</strong></dt><dd><p>first order logic proposition which to be
+satisfied by the existential quatifier.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Exists</dt><dd><p>representation of the existential predicate.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>quantified_variable</strong> (<em>Symbol</em>)</p></li>
+<li><p><strong>body</strong> (<em>Expression</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Exists</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.functions">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">functions</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.functions" title="Link to this definition">#</a></dt>
+<dd><p>Returns the list of symbols corresponding to callables</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>List[str]</dt><dd><p>list of symbols of type leq Callable</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">x</span><span class="o">+</span><span class="mi">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">"f"</span><span class="p">)</span>
+<span class="go">f: typing.Callable[[int], int] = &lt;function f at ...&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s2">"f"</span> <span class="ow">in</span> <span class="n">nl</span><span class="o">.</span><span class="n">functions</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
+<span class="go">x: &lt;class 'int'&gt; = 3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s2">"x"</span> <span class="ow">in</span> <span class="n">nl</span><span class="o">.</span><span class="n">functions</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.get_symbol">
+<span class="sig-name descname"><span class="pre">get_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">symbol_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.get_symbol" title="Link to this definition">#</a></dt>
+<dd><p>Retrieves symbol via its name, either providing a
+fe.Expression with the correct name or the name itself</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>symbol_name</strong><span class="classifier">Union[str, fe.Expression]</span></dt><dd><p>name of the symbol to be retrieved. If of type fe.Expression,
+expression’s name is used as the name</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>symbol corresponding to the input name</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>ValueError</dt><dd><p>if no symbol could be found with given name</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>symbol_name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>Expression</em>)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">add_symbol</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">"x"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span><span class="o">.</span><span class="n">get_symbol</span><span class="p">(</span><span class="s2">"x"</span><span class="p">)</span>
+<span class="go">x: &lt;class 'int'&gt; = 3</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported">
+<span class="sig-name descname"><span class="pre">load_neurosynth_mni_peaks_reported</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_study_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.load_neurosynth_mni_peaks_reported" title="Link to this definition">#</a></dt>
+<dd><p>Load the coordinates for the peaks reported by studies in the
+Neurosynth dataset. Coordinates for the peaks are in MNI space.</p>
+<p>This loads a tuple of (id, int, int, int) values for each reported
+peak.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>name</strong><span class="classifier">str (optional)</span></dt><dd><p>Name of the symbol associated with the resulting set of (study id,
+voxel id) tuples. Randomly generated by default</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>fe.Symbol associated to the resulting set.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.15)"><em>Path</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>convert_study_ids</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.load_neurosynth_study_ids">
+<span class="sig-name descname"><span class="pre">load_neurosynth_study_ids</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_study_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.load_neurosynth_study_ids" title="Link to this definition">#</a></dt>
+<dd><p>Load all study ids (PMIDs) that are part of the Neurosynth database.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>data_dir</strong><span class="classifier">Path</span></dt><dd><p>the path for the directory where downloaded data should be saved.</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>the name for the symbol, randomly generated if None</p>
+</dd>
+<dt><strong>version</strong><span class="classifier">int, optional</span></dt><dd><p>the neurosynth data version, by default 7</p>
+</dd>
+<dt><strong>convert_study_ids</strong><span class="classifier">bool, optional</span></dt><dd><p>if True, cast study ids as <cite>StudyID</cite>, by default False</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>fe.Symbol associated to the resulting set.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.15)"><em>Path</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>convert_study_ids</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.load_neurosynth_term_study_associations">
+<span class="sig-name descname"><span class="pre">load_neurosynth_term_study_associations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert_study_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tfidf_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.load_neurosynth_term_study_associations" title="Link to this definition">#</a></dt>
+<dd><p>Load TF-IDF values for each (term, study) association within the
+Neurosynth database.</p>
+<p>This loads a tuple of (id, str, float) for each (term, study)
+association.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>data_dir</strong><span class="classifier">Path</span></dt><dd><p>the path for the directory where downloaded data should be saved.</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>the name for the symbol, randomly generated if None</p>
+</dd>
+<dt><strong>version</strong><span class="classifier">int, optional</span></dt><dd><p>the neurosynth data version, by default 7</p>
+</dd>
+<dt><strong>convert_study_ids</strong><span class="classifier">bool, optional</span></dt><dd><p>if True, cast study ids as <cite>StudyID</cite>, by default False</p>
+</dd>
+<dt><strong>tfidf_threshold</strong><span class="classifier">Optional[float], optional</span></dt><dd><p>the minimum tfidf value for the (term, study) associations,
+by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>fe.Symbol associated to the resulting set.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.15)"><em>Path</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>convert_study_ids</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+<li><p><strong>tfidf_threshold</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.load_ontology">
+<span class="sig-name descname"><span class="pre">load_ontology</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">paths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connector_symbol_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">individuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'local'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.load_ontology" title="Link to this definition">#</a></dt>
+<dd><p>Loads and parses ontology stored at the specified paths, and
+store them into attributes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>paths</strong><span class="classifier">typing.Union[str, List[str]]</span></dt><dd><p>where the ontology files are stored</p>
+</dd>
+<dt><strong>connector_symbol_name</strong><span class="classifier">str</span></dt><dd><p>name to be used in the connector_symbol.
+if None, the name is randomly generated</p>
+</dd>
+<dt><strong>format</strong><span class="classifier">str or list of str</span></dt><dd><p>rdflib format of the files (<code class="docutils literal notranslate"><span class="pre">xml</span></code>, <code class="docutils literal notranslate"><span class="pre">turtle</span></code>, <code class="docutils literal notranslate"><span class="pre">nt</span></code>…),
+guessed from their extensions when None.</p>
+</dd>
+<dt><strong>individuals</strong><span class="classifier">bool</span></dt><dd><p>also load every triple as a fact: <code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">p</span> <span class="pre">o</span></code> is <code class="docutils literal notranslate"><span class="pre">p(s,</span> <span class="pre">o)</span></code>
+and <code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">rdf:type</span> <span class="pre">C</span></code> is also <code class="docutils literal notranslate"><span class="pre">C(s)</span></code>, IRIs being the
+strings of their full IRI. The subclasses of the ontology
+apply to these facts: <code class="docutils literal notranslate"><span class="pre">Super(x)</span></code> holds for an instance of
+a subclass.</p>
+</dd>
+<dt><strong>names</strong><span class="classifier">str</span></dt><dd><p><code class="docutils literal notranslate"><span class="pre">local</span></code> names classes and properties by their local name
+(<code class="docutils literal notranslate"><span class="pre">Dean</span></code>, <code class="docutils literal notranslate"><span class="pre">rdf-schema:label</span></code>); <code class="docutils literal notranslate"><span class="pre">prefixed</span></code> by the
+prefixes the files declare (<code class="docutils literal notranslate"><span class="pre">pv:name</span></code>, <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>),
+else by their full IRI.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>Expression</dt><dd><p>the new connector_symbol, to be used in
+the query program.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>paths</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.make_implicit_regions_explicit">
+<span class="sig-name descname"><span class="pre">make_implicit_regions_explicit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">affine</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.make_implicit_regions_explicit" title="Link to this definition">#</a></dt>
+<dd><p>Raises NotImplementedError for now</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.new_region_symbol">
+<span class="sig-name descname"><span class="pre">new_region_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.new_region_symbol" title="Link to this definition">#</a></dt>
+<dd><p>Returns symbol with type Region</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>symbol’s name, if None will be fresh, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.new_symbol">
+<span class="sig-name descname"><span class="pre">new_symbol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type_</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'nl_expr.type_system.Unknown'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.new_symbol" title="Link to this definition">#</a></dt>
+<dd><p>Creates a symbol and associated expression, optionally
+specifying it’s type and/or name</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>type_</strong><span class="classifier">Union[Any, Tuple[Any, …], List[Any]], optional</span></dt><dd><p>type of the created symbol, by default Unknown
+if Iterable, will be cast to a Tuple</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">str, optional</span></dt><dd><p>name of the created symbol, by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Expression</dt><dd><p>associated to the created symbol</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>type_</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em>, </em><em>...</em><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.15)"><em>Any</em></a><em>]</em>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Expression</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.predicate_parameter_names">
+<span class="sig-name descname"><span class="pre">predicate_parameter_names</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.predicate_parameter_names" title="Link to this definition">#</a></dt>
+<dd><p>Get the names of the parameters for the given predicate</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>predicate_name</strong><span class="classifier">Union[str, fe.Symbol, fe.Expression]</span></dt><dd><p>predicate to obtain the names from</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>tuple[str]</dt><dd><p>parameter names</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>predicate_name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>Symbol</em><em> | </em><em>Expression</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.15)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.query">
+<span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_rewritten</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dry_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_ra</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.query" title="Link to this definition">#</a></dt>
+<dd><p>Performs an inferential query on the database.
+There are three modalities
+1. If there is only one argument, the query returns <cite>True</cite> or <cite>False</cite>
+depending on whether the query could be inferred.
+2. If there are two arguments and the first is a tuple of <cite>fe.Symbol</cite>,
+it returns the set of results meeting the query in the second argument.
+3. If the first argument is a predicate (e.g. <cite>Q(x)</cite>) it performs the
+query, adds it to the engine memory, and returns the
+corresponding symbol.
+See example for 3 modalities</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>show_rewritten</strong><span class="classifier">bool</span></dt><dd><p>If True, print the Datalog program after magic-sets rewriting.</p>
+</dd>
+<dt><strong>dry_run</strong><span class="classifier">bool</span></dt><dd><p>If True, print the rewritten program and return immediately
+without running the chase.</p>
+</dd>
+<dt><strong>show_ra</strong><span class="classifier">bool or ShowRAOptions</span></dt><dd><p>If True, print the named relational algebra expression
+of each rule instead of evaluating it. A
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ShowRAOptions</span></code> selects
+how the plans are displayed.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]</dt><dd><p>read the descrpition.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>show_rewritten</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+<li><p><strong>dry_run</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)">bool</a> | <em>RelationalAlgebraFrozenSet</em> | <em>Symbol</em></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Note: example ran with pandas backend
+&gt;&gt;&gt; p_ir = DatalogProgram()
+&gt;&gt;&gt; nl = QueryBuilderDatalog(program_ir=p_ir)
+&gt;&gt;&gt; nl.add_tuple_set([(1, 2), (2, 2)], name=”l”)
+l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+&gt;&gt;&gt; with nl.environment as e:
+…     e.l2[e.x, e.y] = e.l[e.x, e.y] &amp; (e.x == e.y)
+…     s1 = nl.query(e.l2[e.x, e.y])
+…     s2 = nl.query((e.x,), e.l2[e.x, e.y])
+…     s3 = nl.query(e.l3[e.x], e.l2[e.x, e.y])</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.region_names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">region_names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.region_names" title="Link to this definition">#</a></dt>
+<dd><p>Returns the list of symbol names with Region type</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>List[str]</dt><dd><p>list of symbol names from symbol_table</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.region_set_names">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">region_set_names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.region_set_names" title="Link to this definition">#</a></dt>
+<dd><p>Returns the list of symbol names with set_type</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>List[str]</dt><dd><p>list of symbol names from symbol_table</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.reset_program">
+<span class="sig-name descname"><span class="pre">reset_program</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.reset_program" title="Link to this definition">#</a></dt>
+<dd><p>Clears current symbol table</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.scope">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">scope</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">QuerySymbolsProxy</span></span><a class="headerlink" href="#neurolang.NeurolangPDL.scope" title="Link to this definition">#</a></dt>
+<dd><p>Dynamic context that can be used to create
+symbols to write a Datalog program.
+Contrary to an environment, symbols disappear from the symbol_table
+when exiting the scope context</p>
+<dl class="field-list simple">
+<dt class="field-odd">Yields<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>QuerySymbolsProxy</dt><dd><p>in dynamic mode, can be used to create symbols on-the-fly</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">p_ir</span> <span class="o">=</span> <span class="n">DatalogProgram</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nl</span> <span class="o">=</span> <span class="n">QueryBuilderBase</span><span class="p">(</span><span class="n">program_ir</span><span class="o">=</span><span class="n">p_ir</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">nl</span><span class="o">.</span><span class="n">scope</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">e</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s2">"x"</span> <span class="ow">in</span> <span class="n">nl</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.solve_all">
+<span class="sig-name descname"><span class="pre">solve_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">show_ra</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.solve_all" title="Link to this definition">#</a></dt>
+<dd><p>Returns a dictionary of “predicate_name”: “Content”
+for all elements in the solution of the Datalog program.
+Typically, probabilities are abstracted and processed similar
+to symbols, though of different nature (see examples)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>show_ra</strong><span class="classifier">bool or ShowRAOptions, optional</span></dt><dd><p>If True, print the named RA expression of each rule instead
+of evaluating it, and return an empty solution. A
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ShowRAOptions</span></code> selects how
+the plans are displayed.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>Dict[str, NamedRelationalAlgebraFrozenSet]</dt><dd><p>extensional and intentional facts that have been derived
+through the current program, optionally with probabilities</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.15)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)">str</a>, <a class="reference internal" href="neurolang.relational_algebra.html#neurolang.relational_algebra.NamedRelationalAlgebraFrozenSet" title="nl_core.utils.relational_algebra_set.pandas.NamedRelationalAlgebraFrozenSet"><em>NamedRelationalAlgebraFrozenSet</em></a>]</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Note: example ran with pandas backend
+&gt;&gt;&gt; nl = NeurolangPDL()
+&gt;&gt;&gt; P = nl.add_uniform_probabilistic_choice_over_set(
+…     [(“a”,), (“b”,), (“c”,)], name=”P”
+… )
+&gt;&gt;&gt; Q = nl.add_uniform_probabilistic_choice_over_set(
+…     [(“a”,), (“d”,), (“c”,)], name=”Q”
+… )
+&gt;&gt;&gt; with nl.scope as e:
+…     e.Z[e.PROB[e.x], e.x] = P[e.x] &amp; Q[e.x]
+…     solution = nl.solve_all()</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.sphere">
+<span class="sig-name descname"><span class="pre">sphere</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#neurolang.NeurolangPDL.sphere" title="Link to this definition">#</a></dt>
+<dd><p>Creates a Region symbol associated with the spherical
+volume described by its center and volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>center</strong><span class="classifier">Union[np.ndarray, Iterable[int]]</span></dt><dd><p>3D center of the sphere</p>
+</dd>
+<dt><strong>radius</strong><span class="classifier">int</span></dt><dd><p>radius of the sphere</p>
+</dd>
+<dt><strong>name</strong><span class="classifier">Optional[str], optional</span></dt><dd><p>name of the output symbol, if None will be fresh,
+by default None</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><dl class="simple">
+<dt>fe.Symbol</dt><dd><p>see description</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.5)"><em>ndarray</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.15)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>]</em>)</p></li>
+<li><p><strong>radius</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>)</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Symbol</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.symbol_table">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">symbol_table</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="neurolang.expressions.html#neurolang.expressions.TypedSymbolTable" title="nl_expr.typed_symbol_table.TypedSymbolTable"><span class="pre">TypedSymbolTable</span></a></span><a class="headerlink" href="#neurolang.NeurolangPDL.symbol_table" title="Link to this definition">#</a></dt>
+<dd><p>Projector to the program_ir’s symbol_table</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.symbols">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">symbols</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterator" title="(in Python v3.15)"><span class="pre">Iterator</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.symbols" title="Link to this definition">#</a></dt>
+<dd><p>Iterator through the symbol’s names</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="neurolang.NeurolangPDL.types">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">types</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.15)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Type" title="(in Python v3.15)"><span class="pre">Type</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#neurolang.NeurolangPDL.types" title="Link to this definition">#</a></dt>
+<dd><p>Returns a list of the types of the symbols currently
+in the table (type can be Unknown)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt>List[Union[fe.Expression, Type]]</dt><dd><p>List of types or Unknown if symbol has no known type</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="neurolang.NeurolangDL.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">neurolang.NeurolangDL</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="neurolang.expressions.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">neurolang.expressions</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+ 
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2017–2026, Demian Wassermann and the NeuroLang contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+<div class="container neurolang-timestamp">
+    <p style="margin-top: -10px;">on </p>
+</div>
+  </body>
+</html>

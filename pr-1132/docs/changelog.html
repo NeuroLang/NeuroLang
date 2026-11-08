@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Changelog &#8212; NeuroLang 0.1a22.dev73+g5af0e7ed1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/neurolang.css?v=497e8255" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="_static/documentation_options.js?v=938eb139"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'changelog';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="icon" href="_static/favicon.svg"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contributing to NeuroLang" href="contributing.html" />
+    <link rel="prev" title="NeuroLang for Logic Programmers" href="tutorial_logic_programming.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1a22" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/neurolang-lockup.svg" class="logo__image only-light" alt="NeuroLang"/>
+    <img src="_static/neurolang-lockup-dark.svg" class="logo__image only-dark pst-js-only" alt="NeuroLang"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="#" aria-current="page">
+    Changelog
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="probabilistic_lifting.html">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#" aria-current="page">
+    Changelog
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">Unreleased</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#v0-1a21-2026-10-21">v0.1a21 (2026-10-21)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#v0-0-1-alpha">v0.0.1 (Alpha)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-add-a-changelog-entry">How to add a changelog entry</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Changelog</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="changelog">
+<span id="id1"></span><h1>Changelog<a class="headerlink" href="#changelog" title="Link to this heading">#</a></h1>
+<p>All notable changes to NeuroLang are documented here.</p>
+<p>NeuroLang is in alpha.  Pre-release versions (<code class="docutils literal notranslate"><span class="pre">0.1aN</span></code>) are published on
+<a class="reference external" href="https://pypi.org/project/neurolang/#history">PyPI</a>; the <em>Unreleased</em>
+section below lists the changes on the current <code class="docutils literal notranslate"><span class="pre">master</span></code> branch that are
+not yet part of a numbered release.</p>
+<p>Contributors: when adding a change, add an entry under <em>Unreleased</em> using the
+format below, then move it to the appropriate version section when releasing.</p>
+<section id="unreleased">
+<h2>Unreleased<a class="headerlink" href="#unreleased" title="Link to this heading">#</a></h2>
+<p><strong>Performance:</strong></p>
+<ul class="simple">
+<li><p>Magic sets adorn first the body atoms holding a variable bound in the
+head, as they do the atoms with a constant: a query constant for a head
+variable, such as the text of <code class="docutils literal notranslate"><span class="pre">p_a_given_similar('being</span> <span class="pre">socially</span>
+<span class="pre">excluded',</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">p)</span></code>, restricts <code class="docutils literal notranslate"><span class="pre">activated</span></code> to the studies similar
+to it, as when the text is written into the rule, instead of joining the
+50 M activations of every study in the probabilistic plan: 0.9 GB more
+than the engine instead of 4.2 GB, and 23 s instead of 45 s, for the same
+1,151,590 rows.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RESAMPLE</span></code> sums the probabilities of the outcomes of the choice over all
+the replicates at once, as a product of matrices, instead of joining every
+replicate with every outcome: the 500 replicates of the probability that
+two Schaefer parcels are active given a term (<code class="docutils literal notranslate"><span class="pre">PROB[co_active(l1,</span> <span class="pre">l2)</span> <span class="pre">//</span>
+<span class="pre">term_association(s,</span> <span class="pre">'auditory')]</span></code>) take 13 s and 1 GB more than the
+engine, instead of 43 GB, and run in the REPL in the browser.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uniformity</span></code> of a term (<code class="docutils literal notranslate"><span class="pre">uniformity('pain',</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">u)</span></code>) takes 19 s
+instead of 55 s, and the memory of the engine instead of 18 GB, so that it
+runs in the REPL in the browser with the full engine (<code class="docutils literal notranslate"><span class="pre">?engine=full</span></code>):
+the chase projects a rule’s substitutions on the variables of its head,
+which the optimisers push into the joins, instead of computing, and
+comparing with the rows already found, all the combinations of the body’s
+variables (45 M rows of activations for 11 k of the head). A relation made
+from a data frame shares its columns, with copy-on-write, rather than
+copying them in one block, 1.4 GB for the activations.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lift</span></code> of a term (<code class="docutils literal notranslate"><span class="pre">lift('pain',</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">l)</span></code>) runs in the REPL in the
+browser with the full engine too: a look-up join (the probabilities of a
+choice) and a grouped sum, maximum, minimum or count of many rows go a
+chunk of 4 M rows at a time, which for the probability of each voxel over
+45 M activations takes 0.5 GB instead of 1.2 GB and 0.2 GB instead of
+1.9 GB, for a second more.</p></li>
+</ul>
+<p><strong>New features:</strong></p>
+<ul class="simple">
+<li><p>A rule body of the Datalog syntax may be a disjunction, <code class="docutils literal notranslate"><span class="pre">|</span></code> or <code class="docutils literal notranslate"><span class="pre">∨</span></code>,
+which binds looser than <code class="docutils literal notranslate"><span class="pre">,</span></code>; parentheses group: <code class="docutils literal notranslate"><span class="pre">uncinate(x)</span> <span class="pre">:-</span>
+<span class="pre">(traverses(x,</span> <span class="pre">'orbital')</span> <span class="pre">|</span> <span class="pre">traverses(x,</span> <span class="pre">'middle')),</span> <span class="pre">temporal(x)</span></code>, rather
+than a predicate of several rules.  <strong>Breaking:</strong> <code class="docutils literal notranslate"><span class="pre">|</span></code> is no longer a
+synonym of <code class="docutils literal notranslate"><span class="pre">//</span></code> for conditioning, <code class="docutils literal notranslate"><span class="pre">PROB[a(x)</span> <span class="pre">|</span> <span class="pre">b(x)]</span> <span class="pre">=</span> <span class="pre">p</span></code> is the
+probability of the disjunction; write <code class="docutils literal notranslate"><span class="pre">PROB[a(x)</span> <span class="pre">//</span> <span class="pre">b(x)]</span> <span class="pre">=</span> <span class="pre">p</span></code>.  A
+comparison whose left operand is a function call in parentheses,
+<code class="docutils literal notranslate"><span class="pre">((f(x))</span> <span class="pre">&lt;</span> <span class="pre">3)</span></code> or <code class="docutils literal notranslate"><span class="pre">((f(x),</span> <span class="pre">y)</span> <span class="pre">==</span> <span class="pre">(1,</span> <span class="pre">2))</span></code>, now reads as a formula in
+parentheses and fails to parse; write <code class="docutils literal notranslate"><span class="pre">(f(x)</span> <span class="pre">&lt;</span> <span class="pre">3)</span></code>.</p></li>
+<li><p>The brain viewer of a network (<code class="docutils literal notranslate"><span class="pre">.view</span></code> of a result of pairs of regions or
+points) thresholds its edges in the page: “Edges from” and its slider draw
+the network again with the edges above the value, the strongest 5% at
+first. An edge is thicker with its value from the threshold, where it is a
+fifth of the thickest, to the largest value, rather than in proportion to
+the value, which made edges of close values look alike.</p></li>
+<li><p>The REPL in the browser asks “Did this query do what you wanted?” after a
+query typed in the page too, not only after an answer of the assistant, in
+a row between the output and the result: a rating
+sends the query with its first rows or its error, and the comment, to the
+same Grist table, with an empty question.</p></li>
+<li><p>In the REPL in the browser, the examples and relations the page opens on a
+first visit close at the first run, so that the result is in view, and a
+query that fails without a result hides the last result, not to be taken
+for its own.</p></li>
+<li><p>The REPL in the browser asks whether an answer of the assistant was what
+the visitor wanted, and sends it, rated good or bad with a comment, as a
+row of a Grist document that anyone can add rows to (<code class="docutils literal notranslate"><span class="pre">feedback.json</span></code> next
+to the page names it; without a document the page does not ask). Nothing of
+an answer is sent unless it is rated, and the page holds no key: Grist does
+not accept one from a web page.</p></li>
+<li><p>The relations and rules list of the REPL in the browser leaves out the IRIs
+of an ontology’s classes and properties, such as
+<code class="docutils literal notranslate"><span class="pre">http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00137</span></code>, unless the
+engine declares them or the session defines them; they can still be used in
+a query. The relations named with a prefix, <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>, stay.</p></li>
+<li><p>The LLM assistant can record its questions and answers in a Grist document
+instead of a feedback server (<code class="docutils literal notranslate"><span class="pre">grist_doc</span></code> in the <code class="docutils literal notranslate"><span class="pre">feedback</span></code> settings,
+the API key in <code class="docutils literal notranslate"><span class="pre">GRIST_API_KEY</span></code>), one row of the table <code class="docutils literal notranslate"><span class="pre">Answers</span></code> each, to
+be flagged good, bad or unsure in Grist or with <code class="docutils literal notranslate"><span class="pre">.rate</span></code> and <code class="docutils literal notranslate"><span class="pre">.refine</span></code>.
+The answers that failed for an error of the provider are shared too.</p></li>
+<li><p>The browser REPL opens its examples on the first start, when the box is
+empty; the assistant’s <em>Ask</em> button is filled only once a key is in use, so
+that <em>Run</em> is the only primary action; the empty gap above the examples is
+gone; a result table is as wide as its columns, with the header over its
+numbers; and the keyboard focus is visible on the lists and the sortable
+headers.</p></li>
+<li><p>The browser REPL: the query can be written while the engine loads, which
+says how long it takes; a failed start says in plain words what to do, with
+a <em>Try again</em> button; the Brain tab is shown only when there is a brain to
+see; the log of a query is folded to the time it took; the result tabs are
+a tab list for the keyboard and screen readers; the table’s controls are
+shorter and the page fits a phone; and the button for the assistant’s key
+opens the key form, tells when a key is in use, and says what <em>Ask</em> needs.</p></li>
+<li><p>The browser REPL shows the probabilities of a result (a <code class="docutils literal notranslate"><span class="pre">p</span></code> or <code class="docutils literal notranslate"><span class="pre">prob</span></code>
+column of numbers between 0 and 1) as bars, the most probable rows first.</p></li>
+<li><p>The browser REPL has a <em>Use in a query</em> button on a result: the query that
+made it is put in the box again, its answer renamed <code class="docutils literal notranslate"><span class="pre">result</span></code>, with a new
+<code class="docutils literal notranslate"><span class="pre">ans(...)</span> <span class="pre">:-</span> <span class="pre">result(...),</span> <span class="pre">``</span> <span class="pre">to</span> <span class="pre">complete.</span> <span class="pre">(A</span> <span class="pre">result</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">a</span> <span class="pre">relation</span> <span class="pre">of</span>
+<span class="pre">the</span> <span class="pre">session:</span> <span class="pre">``ans</span></code> cannot be used in a body.)
+A result of studies also has <em>Map the studies</em>: the query that counts, for
+each voxel, the studies of the result that report a peak there, which the
+brain tab shows.</p></li>
+<li><p>The browser REPL has <em>Ask a question</em> in its examples: a form for the common
+questions (the studies that mention a term, two terms, one and not the
+other, a term a lot; their peaks; the terms of a study), the ones the
+engine has the predicates of, which puts the Datalog query in the box.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.explain</span></code> reads the last query that ran in English, with the assistant;
+the browser REPL has an <em>Explain</em> button for it once an API key is in use.</p></li>
+<li><p>In the browser REPL, the studies of a result are links: to their PubMed
+record, to their DOI (the engine’s metadata have it; the tooltip gives the
+title, authors, year and journal) and, when Europe PMC knows it, to their
+PubMed Central record. Europe PMC is asked for the PubMed ids of the studies
+on the page, nothing else; if it cannot be reached the other links stay.
+A table tells the sort of each of its columns (<code class="docutils literal notranslate"><span class="pre">sorts</span></code>) and, if some are
+studies, their <code class="docutils literal notranslate"><span class="pre">study_links</span></code>.</p></li>
+<li><p>The browser REPL documents each relation and each command. In <em>Examples and
+relations</em>, the button <em>ⓘ</em> of a relation tells what it holds (the engine’s
+description), its columns with their sort and type, and where it comes from,
+and puts it in the box or the query for all its rows; there is a list of the
+commands, each with what it does and its full help. One filter searches both
+lists. <code class="docutils literal notranslate"><span class="pre">WebRepl.predicates()</span></code> gives the <code class="docutils literal notranslate"><span class="pre">arguments</span></code> of each relation and
+<code class="docutils literal notranslate"><span class="pre">WebRepl.commands()</span></code> the commands.</p></li>
+<li><p>The browser REPL has a <em>Stop</em> button while a query runs: the engine is
+restarted (its data are kept by the browser) and the rules defined in the
+session are run again; <em>Save session</em> and <em>Open session</em> keep the
+statements of a session in a file and give its rules back.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">--extra</span> <span class="pre">apps</span> <span class="pre">neurolang-repl-serve</span></code> serves the REPL in the browser
+of a checkout on this machine: it builds the page’s bundle the first time
+(or with <code class="docutils literal notranslate"><span class="pre">--rebuild</span></code>) and serves it uncached at
+<code class="docutils literal notranslate"><span class="pre">http://localhost:8766/_static/repl/index.html</span></code>. It is the command of the
+workspace’s root project, whose only package is <code class="file docutils literal notranslate"><span class="pre">tools/serve_repl</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_similarity</span></code> works in the REPL in the browser. Without <code class="docutils literal notranslate"><span class="pre">torch</span></code>,
+SPECTER2’s query encoder runs in numpy (<code class="docutils literal notranslate"><span class="pre">neurolang.utils.specter2_numpy</span></code>:
+BERT’s WordPiece tokenizer and the model with its ad-hoc query adapter),
+giving the embeddings of <code class="docutils literal notranslate"><span class="pre">torch</span></code> to within float16 rounding, with the
+same ranking of the studies. The page fetches the exported model (268 MB,
+in parts under GitHub’s 100 MB) and the embeddings of the studies (44 MB)
+the first time a query needs them; a query then takes about 2 s.
+<code class="docutils literal notranslate"><span class="pre">text_embeddings.fetch_missing</span></code> fetches the files the embeddings lack.</p></li>
+</ul>
+<p><strong>Internal:</strong></p>
+<ul class="simple">
+<li><p>Every pull request gives its reviewer the REPL in the browser of its
+branch: the documentation’s workflow uploads the site (the documentation
+and the REPL) as the artifact <code class="docutils literal notranslate"><span class="pre">repl-pr-NUMBER</span></code> and keeps one comment of
+the pull request up to date with the commit it was built from, the
+artifact, whether the REPL’s bundle is complete and how to run it:
+<code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">--extra</span> <span class="pre">apps</span> <span class="pre">neurolang-repl-serve</span> <span class="pre">--pr</span> <span class="pre">NUMBER</span></code> (or <code class="docutils literal notranslate"><span class="pre">--run-id</span>
+<span class="pre">ID</span></code>), which downloads it with the GitHub CLI and serves it without
+building anything, or <code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">run</span> <span class="pre">download</span></code> and <code class="docutils literal notranslate"><span class="pre">python3</span> <span class="pre">-m</span> <span class="pre">http.server</span></code>.
+A pull request from a branch of this repository is also hosted on GitHub
+Pages: <code class="docutils literal notranslate"><span class="pre">https://neurolang.github.io/NeuroLang/pr-NUMBER/</span></code> opens its
+REPL, <code class="docutils literal notranslate"><span class="pre">…/pr-NUMBER/docs/</span></code> is its documentation, which the comment
+leads with. The preview loads the data and embeddings of the main site
+(<code class="docutils literal notranslate"><span class="pre">doc/make_repl_bundle.py</span> <span class="pre">--data-url</span> <span class="pre">URL</span></code> points a built bundle at
+them), and the comment tells when the pull request changes what they are
+built from, or when the main site lacks them. Closing the pull request
+removes its preview, and squashes the history of <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> past
+500 MB. The benchmarks’ dashboard moves to
+<code class="docutils literal notranslate"><span class="pre">https://neurolang.github.io/NeuroLang/benchmarks/</span></code>, its results with
+it, and every job pushing to <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> is of one concurrency group.
+A pull request from a fork has the artifact, without the comment.</p></li>
+<li><p>The workflows of the tests, the layers, the spelling and the
+documentation run on every pull request, whatever its base, so that a
+pull request stacked on another one is checked (its tests are those of
+the packages it changes with respect to the pull request below it); a
+push to a pull request cancels its runs still going.</p></li>
+<li><p>A REPL’s bundle that could not be built fails the check <em>REPL bundle</em>
+instead of passing unseen (the documentation is deployed all the same).
+<code class="docutils literal notranslate"><span class="pre">doc/make_repl_bundle.py</span> <span class="pre">--downloads</span> <span class="pre">DIR</span></code> keeps what the engine
+downloads in DIR, even when the build fails, and CI keeps that directory
+from one build to the next; a download failing for a while (a time-out,
+an error 5xx) is tried again after 2, 4 and 8 s
+(<code class="docutils literal notranslate"><span class="pre">neurolang.utils.nilearn_compat.fetch_files</span></code>).</p></li>
+<li><p>Helpers reused instead of repeated: the conjuncts of a formula and the
+selection of a plan by comparisons in the probabilistic lifting, the
+aggregate types of the magic sets, the pandas reductions table, the
+Euclidean join’s index type, the export, the insert, the <code class="docutils literal notranslate"><span class="pre">extends</span></code> and
+the missing optional dependency of the apps; docstrings of the apps name
+<code class="docutils literal notranslate"><span class="pre">neurolang_apps</span></code>.</p></li>
+<li><p>The engine configuration is composed with OmegaConf (<code class="docutils literal notranslate"><span class="pre">omegaconf&gt;=2.4</span></code>,
+a new dependency of <code class="docutils literal notranslate"><span class="pre">neurolang_apps</span></code>, pure Python, installed in the
+browser’s REPL too): the example queries, the query assistant’s bank of
+examples and its guidance of an engine are in
+<code class="docutils literal notranslate"><span class="pre">engines/&lt;engine&gt;/examples.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">engines/&lt;engine&gt;/guidance.yaml</span></code>,
+merged into its entry of <code class="docutils literal notranslate"><span class="pre">engines.yaml</span></code>; the banks
+<code class="docutils literal notranslate"><span class="pre">llm/examples/&lt;engine&gt;.yaml</span></code> become the engines’ <code class="docutils literal notranslate"><span class="pre">assistant_examples</span></code>,
+inherited through <code class="docutils literal notranslate"><span class="pre">extends</span></code> like <code class="docutils literal notranslate"><span class="pre">builtins</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">neurolang-feedback-server</span> <span class="pre">export</span> <span class="pre">--format</span> <span class="pre">examples</span></code> writes them under
+that key. <code class="docutils literal notranslate"><span class="pre">extends</span></code> merges mappings with <code class="docutils literal notranslate"><span class="pre">OmegaConf.merge</span></code>;
+<code class="docutils literal notranslate"><span class="pre">engine_bases</span></code> is removed. The resolved configuration of every engine
+is unchanged, and read 6 times faster after the first time.</p></li>
+</ul>
+<p><strong>Bug fixes:</strong></p>
+<ul class="simple">
+<li><p>The Neurosynth data are downloaded from raw.githubusercontent.com:
+github.com/neurosynth/neurosynth-data/raw/master/, which sends there,
+answers 504 for that repository, so that the <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine could
+not be built from nothing, nor the REPL’s bundle, whose build passed
+unseen and left the deployed page unable to start.</p></li>
+<li><p>The semi-naive chase merged, at every step and for every rule, the
+relation of each predicate of the step’s delta with that delta, even
+the predicates the rule does not use, and inferred the type of the
+merge by iterating over it: on some evaluation orders (they depend on
+<code class="docutils literal notranslate"><span class="pre">PYTHONHASHSEED</span></code>) a query over a whole-brain tractogram took minutes
+and 45 GB instead of 3 s.  Only the negated predicates of a rule are
+merged now.</p></li>
+<li><p>The lifted probability of a union, as <code class="docutils literal notranslate"><span class="pre">q(x)</span> <span class="pre">:-</span> <span class="pre">a(x)</span></code> and <code class="docutils literal notranslate"><span class="pre">q(x)</span> <span class="pre">:-</span>
+<span class="pre">b(x)</span></code>, merged a tuple of <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> with the same probability into one
+event: two facts of probability 0.5 gave 0.5 instead of 0.75.</p></li>
+<li><p>A negation written <code class="docutils literal notranslate"><span class="pre">¬a(x)</span></code> in the Datalog syntax failed to parse.</p></li>
+<li><p>A Datalog rule whose head starts with a constant, <code class="docutils literal notranslate"><span class="pre">n('VisCent',</span> <span class="pre">l)</span> <span class="pre">:-</span>
+<span class="pre">schaefer(l,</span> <span class="pre">r),</span> <span class="pre">...</span></code>, failed to parse: the parser read it as a fact
+and stopped at the variable.  A fact is now parsed as a head and checked
+to have only constants (<code class="docutils literal notranslate"><span class="pre">p(x)</span></code> alone says that a <code class="docutils literal notranslate"><span class="pre">,</span></code> or <code class="docutils literal notranslate"><span class="pre">:-</span></code> may
+be missing), so completion after <code class="docutils literal notranslate"><span class="pre">A(3)</span></code> also offers <code class="docutils literal notranslate"><span class="pre">:-</span></code>.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine converts only the peaks of Talairach (<code class="docutils literal notranslate"><span class="pre">TAL</span></code>)
+studies to MNI: those of <code class="docutils literal notranslate"><span class="pre">UNKNOWN</span></code> space, 53,878 peaks of 1,832 studies,
+were converted too, moving them by 7 mm (median).  They are now taken as
+MNI, as Neurosynth and NiMARE do; the engine option <code class="docutils literal notranslate"><span class="pre">unknown_space</span></code>
+(<code class="docutils literal notranslate"><span class="pre">python_init_options</span></code> in <code class="docutils literal notranslate"><span class="pre">engines.yaml</span></code>) converts them as Talairach
+(<code class="docutils literal notranslate"><span class="pre">tal</span></code>) or leaves them out (<code class="docutils literal notranslate"><span class="pre">drop</span></code>) (#1071).  The <code class="docutils literal notranslate"><span class="pre">neurostore</span></code>
+engine, which left out the peaks of any other space, now follows the
+same option: they are taken as MNI by default.</p></li>
+<li><p>The embeddings of the studies (<code class="docutils literal notranslate"><span class="pre">query_similarity</span></code>, <code class="docutils literal notranslate"><span class="pre">similar_study</span></code>)
+are kept whatever the order of the study ids: their cache was keyed on the
+ids in the order of the <code class="docutils literal notranslate"><span class="pre">study</span></code> relation, which the fix above changed,
+so every free-text query embedded the 14,371 abstracts again and, in the
+query assistant, was stopped by its time limit before the embeddings
+were saved.  The ids are now sorted; the cache is rebuilt once.</p></li>
+<li><p>In <code class="docutils literal notranslate"><span class="pre">NeurolangPDL</span></code>, a rule whose body is only equalities to constants,
+<code class="docutils literal notranslate"><span class="pre">p(l)</span> <span class="pre">:-</span> <span class="pre">(l</span> <span class="pre">==</span> <span class="pre">'c')</span></code>, is the fact <code class="docutils literal notranslate"><span class="pre">p('c')</span></code>: it raised an
+<code class="docutils literal notranslate"><span class="pre">IndexError</span></code> (#1076).  The equalities to constants that the rewrite
+inlines are now only those of a variable with one of them and found
+elsewhere in atoms alone: <code class="docutils literal notranslate"><span class="pre">(v</span> <span class="pre">==</span> <span class="pre">'a')</span> <span class="pre">&amp;</span> <span class="pre">(v</span> <span class="pre">==</span> <span class="pre">'b')</span></code> gave <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">'b'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">(v</span> <span class="pre">==</span> <span class="pre">'b')</span> <span class="pre">&amp;</span> <span class="pre">(w</span> <span class="pre">==</span> <span class="pre">v)</span></code> dropped the constraint on <code class="docutils literal notranslate"><span class="pre">w</span></code> and
+<code class="docutils literal notranslate"><span class="pre">(v</span> <span class="pre">==</span> <span class="pre">'b')</span> <span class="pre">&amp;</span> <span class="pre">(v</span> <span class="pre">!=</span> <span class="pre">'c')</span></code> raised an <code class="docutils literal notranslate"><span class="pre">UnboundVariablesError</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.view</span></code> (the Brain button of the REPL in the browser) of a result over
+<code class="docutils literal notranslate"><span class="pre">RESAMPLE</span></code>, <code class="docutils literal notranslate"><span class="pre">ans(l1,</span> <span class="pre">l2,</span> <span class="pre">mean(v))</span> <span class="pre">:-</span> <span class="pre">rep(b,</span> <span class="pre">l1,</span> <span class="pre">l2,</span> <span class="pre">v)</span></code>, knows the
+sorts of its columns: those of the predicate resampled, here Schaefer
+parcel labels, and so draws it as a network rather than failing with “The
+result has no voxel columns”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neurolang-repl-serve</span> <span class="pre">--rebuild</span></code> serves the wheels it built, not those of
+an earlier build: their versions follow the commits, so the old ones kept
+their names next to the new ones and could be the ones the bundle named.
+<code class="docutils literal notranslate"><span class="pre">--clear</span></code> removes the bundle built before, then builds it again.</p></li>
+<li><p>The REPL in the browser could not start: its page and the script that builds
+its bundle (<code class="docutils literal notranslate"><span class="pre">doc/make_repl_bundle.py</span></code>) imported modules from
+<code class="docutils literal notranslate"><span class="pre">neurolang.utils</span></code> that the split into packages moved to
+<code class="docutils literal notranslate"><span class="pre">neurolang_apps.utils</span></code>.</p></li>
+<li><p>The union of an instance known to be empty and one known not to be was
+taken for empty, which could end a semi-naive chase before its fixpoint.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PROB[...]</span></code> and <code class="docutils literal notranslate"><span class="pre">MARG[...]</span></code> accept their conjunctions in parentheses,
+as a rule’s condition does: <code class="docutils literal notranslate"><span class="pre">PROB[(a(x,</span> <span class="pre">s),</span> <span class="pre">(x</span> <span class="pre">&lt;</span> <span class="pre">y))</span> <span class="pre">//</span> <span class="pre">(b(s),</span> <span class="pre">c(s))]</span> <span class="pre">=</span> <span class="pre">p</span></code>
+was a syntax error.</p></li>
+</ul>
+<p><strong>Performance:</strong></p>
+<ul class="simple">
+<li><p>Recursive rules: from the second iteration on, the semi-naive chase joined
+the whole relation again and re-evaluated the rules without a recursive
+atom. A rule with one recursive atom now has it bound to the tuples new
+since the previous iteration, and is skipped when there are none. A
+transitive closure of 2.56 M tuples takes 21 s and 1.8 GB instead of 49 s
+and 2.5 GB with pandas, and one of 10 M tuples 104 s instead of more than
+120 s. Non-recursive queries are unchanged.</p></li>
+<li><p>A probability over the choice of a study with a peak within a radius of
+each voxel, <code class="docutils literal notranslate"><span class="pre">PROB[brain_mask(i,</span> <span class="pre">j,</span> <span class="pre">k),</span> <span class="pre">(euclidean(i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">i1,</span> <span class="pre">j1,</span> <span class="pre">k1)</span> <span class="pre">&lt;</span>
+<span class="pre">3),</span> <span class="pre">peak_reported(i1,</span> <span class="pre">j1,</span> <span class="pre">k1,</span> <span class="pre">s),</span> <span class="pre">selected_study(s)]</span></code>, takes 13 s and half
+the memory, instead of 47 s and close to 10 GB, and now runs in a browser
+tab. The natural join with a relation unique on the only common column, as
+the probabilities of a choice are, is a look-up rather than a pandas merge;
+Python’s <code class="docutils literal notranslate"><span class="pre">sum</span></code>, <code class="docutils literal notranslate"><span class="pre">max</span></code>, <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">len</span></code> in an aggregation run as
+pandas reductions on columns of numbers without missing values; groups are
+not sorted; and the Euclidean join keeps no distances it is not asked for,
+numbers its pairs of rows with 32-bit integers and does not copy its result.</p></li>
+</ul>
+<p><strong>New features:</strong></p>
+<ul class="simple">
+<li><p>Confidence intervals by resampling the studies.
+<code class="docutils literal notranslate"><span class="pre">nl.add_resampling(&quot;boot_studies&quot;,</span> <span class="pre">choice=&quot;selected_study&quot;)</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">resamplings</span></code> in an engine’s YAML, adds replicates of a probabilistic
+choice, the Bayesian, classical or Poisson bootstrap of its outcomes.
+<code class="docutils literal notranslate"><span class="pre">RESAMPLE[boot_studies](pred(x))</span> <span class="pre">=</span> <span class="pre">b</span></code> is then <code class="docutils literal notranslate"><span class="pre">pred(x)</span></code>, any rule
+over <code class="docutils literal notranslate"><span class="pre">PROB</span></code> of the choice including the measures computed from the
+probabilities, such as Bayes factors, on replicate <code class="docutils literal notranslate"><span class="pre">b</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">percentile(x,</span> <span class="pre">2.5)</span></code> and <code class="docutils literal notranslate"><span class="pre">percentile(x,</span> <span class="pre">97.5)</span></code> over the replicates
+give the interval. Every query sees the same replicates, so that two
+measures are compared on the same <code class="docutils literal notranslate"><span class="pre">b</span></code>. It rewrites the rules into
+sums over the outcomes of the choice, weighted by each replicate, and
+needs no other solver; on Neurosynth, the interval of the Bayes factor
+of a term for a region takes 15 s. The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> and
+<code class="docutils literal notranslate"><span class="pre">neurostore</span></code> engines have <code class="docutils literal notranslate"><span class="pre">boot_studies</span></code>, 500 and 200 replicates of
+<code class="docutils literal notranslate"><span class="pre">selected_study</span></code>, and the query assistant has examples and guidance
+for questions on how certain an answer is. See the tutorial,
+<a class="reference internal" href="tutorial_datalog.html"><span class="doc">Datalog: A Rule-Based Query Language for NeuroLang</span></a>, section 10.6.</p></li>
+<li><p>An engine is built from the tables it kept, instead of finding them again.
+The studies activating the regions of its atlases took 48 s of the 58 s of
+the <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine’s build, and nilearn, imported to find the MNI
+mask, the brain and cortex voxels and the atlases, more than a second
+(several in a browser). They are now kept in the data directory, in 3.6 MB
+of <code class="docutils literal notranslate"><span class="pre">.npz</span></code>, <code class="docutils literal notranslate"><span class="pre">.nii.gz</span></code> and <code class="docutils literal notranslate"><span class="pre">.json</span></code> files that the terminal REPL and the
+REPL in the browser both read, without importing nilearn or scikit-learn:
+the build takes 6 s natively instead of 58 s and 8 s in Pyodide instead of
+112 s, and the page starts in 23 s instead of 127 s. The documentation
+workflow builds the engine for its bundle, so that the tables are in its
+data zip, and stops if none was kept. <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span>
+<span class="pre">neurolang_apps.utils.engine_cache</span> <span class="pre">ENGINE</span></code> keeps them, lists them
+(<code class="docutils literal notranslate"><span class="pre">--list</span></code>) and removes them (<code class="docutils literal notranslate"><span class="pre">--clear</span></code>), and <code class="docutils literal notranslate"><span class="pre">neurolang-query</span>
+<span class="pre">--no-engine-cache</span></code> builds the engine without them. nilearn’s file fetcher
+returns the files already in the data directory without being imported.
+The page says which step of its start it is in (importing NeuroLang,
+loading the Neurosynth data, the atlases, the ontologies…) instead of
+“Building the engine” for all of it: <code class="docutils literal notranslate"><span class="pre">build_engine</span></code> takes a <code class="docutils literal notranslate"><span class="pre">progress</span></code>
+function that is told each step before it starts.</p></li>
+<li><p>The REPL in the browser shows the work of the AI assistant as it happens, in
+a section of the page you can open: the model’s calls, the tool calls of
+the ReAct agent, its queries and what they gave back. The code box colours
+the query as the terminal does, in Datalog and in SQUALL. Each result has a
+Download menu: all its rows as CSV or TSV, and its NIfTI image, the file
+<code class="docutils literal notranslate"><span class="pre">.save</span></code> writes, for each value column; the brain tab offers the images
+too. In the terminal REPL and in the page, a <em>Summary</em> of the query the
+assistant wrote, its explanation and the query read back in English, is
+above the query, apart from it, instead of below it. The ReAct agent runs
+its final query to accept it, and the result it got is shown right away,
+in the terminal and in the page, instead of the query being run a second
+time: Enter on the query as it is shows that result again, and an edited
+query is run as usual. A result larger than 5 million cells, or a query with
+<code class="docutils literal notranslate"><span class="pre">.scope</span> <span class="pre">off</span></code>, is run when asked, as before. The <em>Docs</em> menu and a hint under the box link the keyword at the
+cursor (<code class="docutils literal notranslate"><span class="pre">PROB</span></code>, <code class="docutils literal notranslate"><span class="pre">AGGREGATE</span></code>, <code class="docutils literal notranslate"><span class="pre">:-</span></code>…) to its section of the tutorial;
+the examples and the relations of the engine, and the rules you define,
+are listed, to put them in the box with a click; and <em>Copy link</em> shares the
+query in the address (after the <code class="docutils literal notranslate"><span class="pre">#</span></code>, which no server receives).</p></li>
+<li><p>The example LLM configuration has the providers <code class="docutils literal notranslate"><span class="pre">albert-deepseek</span></code>,
+<code class="docutils literal notranslate"><span class="pre">openrouter-gemma</span></code> and <code class="docutils literal notranslate"><span class="pre">openrouter-deepseek</span></code>: DeepSeek V4 Flash and
+Gemma 4 31B on Albert and on OpenRouter.</p></li>
+<li><p>The query assistant can share its questions and answers with a feedback
+server, where people rate them correct, incorrect or unsure and correct
+their query, to train models and grow the banks of examples. It is off
+by default: <code class="docutils literal notranslate"><span class="pre">feedback</span></code> in <code class="docutils literal notranslate"><span class="pre">llm.yaml</span></code> or
+<code class="docutils literal notranslate"><span class="pre">NEUROLANG_LLM_FEEDBACK_URL</span></code> turns it on. In the REPL, <code class="docutils literal notranslate"><span class="pre">.rate</span></code> and
+<code class="docutils literal notranslate"><span class="pre">.refine</span></code> rate and correct the last answer. <code class="docutils literal notranslate"><span class="pre">neurolang-feedback-server</span></code>
+(no new dependency) collects them, shows a review page and exports
+them as JSON lines or as a bank of examples. See
+<a class="reference internal" href="query_assistant.html#assistant-feedback"><span class="std std-ref">Rating and correcting the answers</span></a>.</p></li>
+<li><p>The query assistant searches the studies by a description or a
+Cognitive Atlas concept: the <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> and <code class="docutils literal notranslate"><span class="pre">neurostore</span></code> engines
+share a bank of examples (<code class="docutils literal notranslate"><span class="pre">coordinate_meta_analysis.yaml</span></code>, which banks
+now inherit through <code class="docutils literal notranslate"><span class="pre">extends</span></code>) with questions answered with
+<code class="docutils literal notranslate"><span class="pre">similar_study</span></code>, <code class="docutils literal notranslate"><span class="pre">p_a_given_similar</span></code>, <code class="docutils literal notranslate"><span class="pre">uniformity_llm</span></code> and the
+new <code class="docutils literal notranslate"><span class="pre">cogat_definition(term,</span> <span class="pre">definition)</span></code>; <code class="docutils literal notranslate"><span class="pre">neurostore.yaml</span></code> adds
+questions on its LLM-extracted concepts and domains.  <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code>
+gets <code class="docutils literal notranslate"><span class="pre">study_title(study,</span> <span class="pre">title)</span></code>, from its metadata, as <code class="docutils literal notranslate"><span class="pre">neurostore</span></code>
+had.</p></li>
+<li><p>The engine of the REPL in the browser leaves out the precomputed analyses
+(<code class="docutils literal notranslate"><span class="pre">lift</span></code>, <code class="docutils literal notranslate"><span class="pre">relative_risk</span></code>, <code class="docutils literal notranslate"><span class="pre">uniformity</span></code>, <code class="docutils literal notranslate"><span class="pre">ratios</span></code>): building them took
+almost 4 GB, which Safari does not give a tab, and made the page loop on
+“Building the engine”. The page builds them with <code class="docutils literal notranslate"><span class="pre">?engine=full</span></code>.</p></li>
+<li><p>The page of the REPL in the browser has a computer, light or dark theme
+switch, says when the browser stops its worker, shows how long a slow step
+lasts, and reads <code class="docutils literal notranslate"><span class="pre">bundle.json</span></code> afresh, so that a new deploy is not met by
+the name of the old wheel.</p></li>
+<li><p>NeuroLang is split into four packages, in a <a class="reference external" href="https://docs.astral.sh/uv/concepts/projects/workspaces/">uv workspace</a> under
+<code class="file docutils literal notranslate"><span class="pre">packages/</span></code>: <code class="docutils literal notranslate"><span class="pre">nl-expr</span></code> (the expression engine, imported as
+<code class="docutils literal notranslate"><span class="pre">nl_expr</span></code>), <code class="docutils literal notranslate"><span class="pre">nl-core</span></code> (relational algebra, Datalog and probabilistic
+Datalog, <code class="docutils literal notranslate"><span class="pre">nl_core</span></code>), <code class="docutils literal notranslate"><span class="pre">neurolang</span></code> (the languages, frontends and brain
+regions) and <code class="docutils literal notranslate"><span class="pre">neurolang-apps</span></code> (the <code class="docutils literal notranslate"><span class="pre">neurolang-query</span></code> command line, its
+interactive mode, the query assistant and the engines,
+<code class="docutils literal notranslate"><span class="pre">neurolang_apps</span></code>). <code class="docutils literal notranslate"><span class="pre">neurolang[apps]</span></code> installs them all; <code class="docutils literal notranslate"><span class="pre">neurolang</span></code>
+alone is the library without the applications. The modules keep their
+names under <code class="docutils literal notranslate"><span class="pre">neurolang</span></code>, which are the same modules:
+<code class="docutils literal notranslate"><span class="pre">neurolang.datalog</span></code> is <code class="docutils literal notranslate"><span class="pre">nl_core.datalog</span></code> and <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span>
+<span class="pre">neurolang.utils.cli</span></code> still runs the command line. The tests of a package
+use only that package and those before it, and CI runs the tests of the
+packages a pull request changes, on every Python version, and those of the
+packages built on them, on Python 3.12: a change to the terminal interface
+no longer runs the tests of the engine. A clone installs with <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span>
+<span class="pre">--all-packages</span> <span class="pre">--all-extras</span> <span class="pre">--no-extra</span> <span class="pre">embeddings</span></code>, or <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">pip</span> <span class="pre">install</span>
+<span class="pre">-e</span> <span class="pre">&quot;.[apps,dev,doc]&quot;</span></code>; see <a class="reference internal" href="contributing.html"><span class="doc">Contributing to NeuroLang</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neurolang-apps</span></code> depends on <code class="docutils literal notranslate"><span class="pre">pyarrow</span></code>, which the <code class="docutils literal notranslate"><span class="pre">neurostore</span></code>
+engine needs to read the parquet files of its releases and which
+NeuroLang never declared.</p></li>
+</ul>
+<p><strong>Bug fixes:</strong></p>
+<ul class="simple">
+<li><p>A function of the engine, such as <code class="docutils literal notranslate"><span class="pre">query_similarity</span></code>, and a threshold on
+it within <code class="docutils literal notranslate"><span class="pre">PROB[...]</span></code> give the same probabilities as the deterministic
+rule computing them, instead of an error: the program of the
+probabilistic stratum has the engine’s functions, and the deterministic
+relation replacing the function of an atom resolves them.</p></li>
+<li><p>Two aggregations with arguments in one head, such as
+<code class="docutils literal notranslate"><span class="pre">percentile(v,</span> <span class="pre">2.5)</span></code> and <code class="docutils literal notranslate"><span class="pre">percentile(v,</span> <span class="pre">97.5)</span></code>, gave the result of
+the last one for both: their functions shared one global name.</p></li>
+<li><p>A query whose head aggregates over probabilities, such as
+<code class="docutils literal notranslate"><span class="pre">ans(max(p))</span> <span class="pre">:-</span> <span class="pre">p_term(t,</span> <span class="pre">p)</span></code>, failed with
+<code class="docutils literal notranslate"><span class="pre">NoValidChaseClassForStratumException</span></code>: it was solved by the
+deterministic chase, which does not compute the probabilities.</p></li>
+<li><p>A probability over a predicate of two rules, one of which binds a
+variable of the head only through an atom both share, as
+<code class="docutils literal notranslate"><span class="pre">a(s,</span> <span class="pre">r)</span> <span class="pre">:-</span> <span class="pre">region(r),</span> <span class="pre">selected_study(s),</span> <span class="pre">activates(s,</span> <span class="pre">r)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">a(s,</span> <span class="pre">r)</span> <span class="pre">:-</span> <span class="pre">region(r),</span> <span class="pre">selected_study(s),</span> <span class="pre">mentions(s,</span> <span class="pre">'t1')</span></code>, failed
+with <code class="docutils literal notranslate"><span class="pre">NeuroLangTypeException</span></code>: the lifted plan was the union of the
+relations of <code class="docutils literal notranslate"><span class="pre">activates(s,</span> <span class="pre">r)</span></code> and <code class="docutils literal notranslate"><span class="pre">mentions(s,</span> <span class="pre">'t1')</span></code>, without the
+same columns. Such a union is declined, see
+<a class="reference internal" href="probabilistic_lifting.html"><span class="doc">Lifted probabilistic inference</span></a>.</p></li>
+</ul>
+</section>
+<section id="v0-1a21-2026-10-21">
+<h2>v0.1a21 (2026-10-21)<a class="headerlink" href="#v0-1a21-2026-10-21" title="Link to this heading">#</a></h2>
+<p><strong>New features:</strong></p>
+<ul class="simple">
+<li><p>The page of the REPL in the browser is a small interface: a box to ask
+the AI assistant, a box for the Datalog or SQUALL code with its history
+in a dropdown, and the result as a table or in the brain viewer.</p></li>
+<li><p>The REPL in the browser has the AI assistant (<code class="docutils literal notranslate"><span class="pre">.ask</span></code>, <code class="docutils literal notranslate"><span class="pre">.llm</span></code>) with
+the visitor’s own API key, given in the page for Anthropic, OpenAI,
+OpenRouter or any OpenAI-compatible server. The key stays in the tab
+(or on the device, if asked), goes only from the page to the provider,
+and the query the assistant writes is put in the input. The LLM clients
+send their requests with the browser’s <code class="docutils literal notranslate"><span class="pre">XMLHttpRequest</span></code>
+(<code class="docutils literal notranslate"><span class="pre">neurolang.utils.llm.browser</span></code>), and queries run inline where there
+are no threads nor processes.</p></li>
+<li><p>The coordinate meta-analysis engines (<code class="docutils literal notranslate"><span class="pre">neurosynth</span></code>, <code class="docutils literal notranslate"><span class="pre">neurostore</span></code>)
+have the peaks in MNI millimetres, <code class="docutils literal notranslate"><span class="pre">peak_mni(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">study)</span></code>, the
+Destrieux atlas of the cortex and the Tian atlas of the subcortex beside
+Schaefer, and for each atlas <code class="docutils literal notranslate"><span class="pre">{atlas}_activated(label,</span> <span class="pre">study)</span></code>: the
+studies with a peak within 3 mm of a voxel of a region.  The LLM
+assistant answers their questions with probabilistic query answering
+(an engine’s <code class="docutils literal notranslate"><span class="pre">assistant_guidance</span></code> goes into its prompt), with
+Destrieux for the classical anatomy and Schaefer and Tian for the
+functional anatomy; the neurosynth example bank is rewritten so, with
+examples of the co-activation of regions and of points.</p></li>
+<li><p>The LLM assistant writes the query it accepted with a comment line
+explaining each rule, from one more request to the model (<code class="docutils literal notranslate"><span class="pre">%</span></code> lines
+in Datalog, which runs as it is; <code class="docutils literal notranslate"><span class="pre">comment_rules:</span> <span class="pre">false</span></code> turns it
+off).  <code class="docutils literal notranslate"><span class="pre">.llm</span> <span class="pre">--steps</span> <span class="pre">N</span></code>, <code class="docutils literal notranslate"><span class="pre">.ask</span> <span class="pre">--steps</span> <span class="pre">N</span></code>, <code class="docutils literal notranslate"><span class="pre">.llm</span> <span class="pre">steps</span> <span class="pre">N</span></code> and
+<code class="docutils literal notranslate"><span class="pre">--steps</span> <span class="pre">N</span></code> on the command line set the most steps of the ReAct
+agent.</p></li>
+<li><p>In the REPL, the rules of a submission with a query (<code class="docutils literal notranslate"><span class="pre">ans</span></code> or
+<code class="docutils literal notranslate"><span class="pre">obtain</span></code>) are local to it: they are discarded after it, so that two
+queries defining <code class="docutils literal notranslate"><span class="pre">active</span></code> do not join their rules.  <code class="docutils literal notranslate"><span class="pre">.scope</span> <span class="pre">off</span></code>
+keeps them in the session, as before.  Comments are shown in a lighter
+grey.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.view</span></code> and <code class="docutils literal notranslate"><span class="pre">.save</span></code> (and <code class="docutils literal notranslate"><span class="pre">--view</span></code>, <code class="docutils literal notranslate"><span class="pre">--save</span></code>) paint a result on
+the regions of an atlas, <code class="docutils literal notranslate"><span class="pre">ans(l,</span> <span class="pre">p)</span></code>, region by region: a sort of
+region labels names its atlas with <code class="docutils literal notranslate"><span class="pre">atlas</span></code> in <code class="docutils literal notranslate"><span class="pre">engines.yaml</span></code>.
+<code class="docutils literal notranslate"><span class="pre">.view</span></code> shows a result of pairs of regions or points with a value,
+such as their co-activation, as a network drawn by NiiVue’s connectome
+view, over the brain.</p></li>
+<li><p>The page of the REPL in the browser has the logo, a header with links to
+the documentation, the tutorial and the source, the command it runs to
+copy, and a status that shows when it is busy; the choice of the
+NeuroLang version is folded away.</p></li>
+<li><p>The REPL in the browser shows a result as a table to sort by clicking
+a column, to filter (<code class="docutils literal notranslate"><span class="pre">stroop</span></code> keeps the rows with the word,
+<code class="docutils literal notranslate"><span class="pre">name:stroop</span></code> those whose column <code class="docutils literal notranslate"><span class="pre">name</span></code> has it), to page through, to
+copy and to download as CSV, instead of the text table of the terminal;
+<code class="docutils literal notranslate"><span class="pre">Ctrl+R</span></code> searches the history of the inputs, which lasts between
+visits, as in a shell (<code class="docutils literal notranslate"><span class="pre">Ctrl+R</span></code> again for an older match, <code class="docutils literal notranslate"><span class="pre">Ctrl+S</span></code>
+for a newer one, <code class="docutils literal notranslate"><span class="pre">Enter</span></code> to take it, <code class="docutils literal notranslate"><span class="pre">Esc</span></code> to cancel), and Up and
+Down browse it.  <code class="xref py py-class docutils literal notranslate"><span class="pre">neurolang.utils.tui.web.WebRepl</span></code> returns a
+result’s rows as data (<code class="docutils literal notranslate"><span class="pre">Reply.tables</span></code>).</p></li>
+<li><p>An LLM query assistant writes a Datalog or SQUALL query from a
+question in natural language: <code class="docutils literal notranslate"><span class="pre">.ask</span> <span class="pre">QUESTION</span></code> in the interactive
+mode, which puts the query in the next prompt (<code class="docutils literal notranslate"><span class="pre">.llm</span> <span class="pre">QUESTION</span></code> is
+the shortcut for the ReAct agent writing Datalog), and
+<code class="docutils literal notranslate"><span class="pre">neurolang-query</span> <span class="pre">--ask</span> <span class="pre">QUESTION</span></code> on the command line, where <code class="docutils literal notranslate"><span class="pre">--run</span></code>
+also runs the query and <code class="docutils literal notranslate"><span class="pre">-v</span></code> and <code class="docutils literal notranslate"><span class="pre">-vv</span></code> show the reasoning and tool
+calls of its steps, and the messages sent to the model.  Two
+strategies are offered: in-context learning, whose few-shot examples
+are the closest to the question (BM25), with validation and repair on
+the engine, and a ReAct agent that explores the engine with tools
+(<code class="docutils literal notranslate"><span class="pre">search_values</span></code>, <code class="docutils literal notranslate"><span class="pre">run_query</span></code>, <code class="docutils literal notranslate"><span class="pre">check_query</span></code>…), by native tool
+calls or a text protocol.  The providers, OpenRouter, Albert,
+Anthropic, any OpenAI- or Anthropic-compatible server or a local
+command, are set in a YAML file, their keys read from the environment
+(<code class="docutils literal notranslate"><span class="pre">neurolang/utils/llm/llm.example.yaml</span></code>).  The queries are shown on
+their lines, highlighted.  It needs the <code class="docutils literal notranslate"><span class="pre">llm</span></code> extra and is described
+in <a class="reference internal" href="query_assistant.html"><span class="doc">LLM Query Assistant</span></a>.  The benchmark that measures it is in
+<a class="reference external" href="https://github.com/NeuroLang/neurolang-text2query-bench">neurolang-text2query-bench</a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neurolang-query</span> <span class="pre">--save</span> <span class="pre">PATH</span></code> writes the result as CSV or TSV, or as
+a NIfTI image on the grid of the engine, and <code class="docutils literal notranslate"><span class="pre">--view</span></code> shows its image
+in the viewer of the REPL, as <code class="docutils literal notranslate"><span class="pre">.save</span></code> and <code class="docutils literal notranslate"><span class="pre">.view</span></code> do (they need
+the <code class="docutils literal notranslate"><span class="pre">tui</span></code> extra).</p></li>
+<li><p>The interactive query REPL runs in the browser, with nothing to
+install: <a class="reference external" href="https://neurolang.github.io/_static/repl/index.html">https://neurolang.github.io/_static/repl/index.html</a> runs
+<code class="docutils literal notranslate"><span class="pre">neurolang-query</span> <span class="pre">-i</span> <span class="pre">--engine</span> <span class="pre">neurosynth</span> <span class="pre">--resolution</span> <span class="pre">2</span></code> on Pyodide,
+with the REPL’s commands and output, and <code class="docutils literal notranslate"><span class="pre">.view</span></code> shows its viewer
+below the output.  <code class="docutils literal notranslate"><span class="pre">?ref=BRANCH</span></code> in its address runs the NeuroLang
+of that branch, tag or commit, read from GitHub (<code class="docutils literal notranslate"><span class="pre">&amp;repo=OWNER/NAME</span></code>
+for a fork).  It is <code class="xref py py-class docutils literal notranslate"><span class="pre">neurolang.utils.tui.web.WebRepl</span></code>
+driven by a page (<code class="file docutils literal notranslate"><span class="pre">doc/_static/repl/</span></code>), whose bundle, NeuroLang’s
+wheel and the data of the engine, <code class="file docutils literal notranslate"><span class="pre">doc/make_repl_bundle.py</span></code>
+builds with the documentation.  To run in Pyodide, <code class="docutils literal notranslate"><span class="pre">pysdd</span></code>, which has
+no WebAssembly build, became optional, as the queries that lifted
+inference solves do not need it, and queries run in the calling thread
+where threads cannot start.</p></li>
+<li><p>Engines in <code class="file docutils literal notranslate"><span class="pre">engines.yaml</span></code> can inherit from other engines with
+<code class="docutils literal notranslate"><span class="pre">extends</span></code> and from <code class="docutils literal notranslate"><span class="pre">abstract</span></code> base entries, so settings common to
+several engines are declared once.  <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> now extends a shared
+<code class="docutils literal notranslate"><span class="pre">coordinate_meta_analysis</span></code> base.  See <a class="reference internal" href="engine_configuration.html"><span class="doc">Engine Configuration (engines.yaml)</span></a>.</p></li>
+<li><p>A new <code class="docutils literal notranslate"><span class="pre">neurostore</span></code> engine, built on the same base, loads the NeuroStore
+database (as fetched by NiMARE) with the predicates of <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code>,
+TF-IDF computed from the abstracts (words and sequences of up to three
+words), the titles, abstracts and LLM-extracted concepts and domains of
+the studies, and SPECTER2 <code class="docutils literal notranslate"><span class="pre">query_similarity</span></code> over its abstracts
+(a <code class="docutils literal notranslate"><span class="pre">text_embeddings</span></code> source can now be engine predicates,
+<code class="docutils literal notranslate"><span class="pre">source:</span> <span class="pre">{predicate:</span> <span class="pre">...}</span></code>).  A <code class="docutils literal notranslate"><span class="pre">brain_mask(i,</span> <span class="pre">j,</span> <span class="pre">k)</span></code> predicate gives
+the whole brain (MNI152 brain mask) next to <code class="docutils literal notranslate"><span class="pre">cortical_mask</span></code>.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> and <code class="docutils literal notranslate"><span class="pre">neurostore</span></code> engines define the lift, relative
+risk and uniformity ratio of a term, Neurosynth’s association and
+uniformity tests, as predicates: <code class="docutils literal notranslate"><span class="pre">uniformity('working</span> <span class="pre">memory',</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">u)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">lift</span></code>, <code class="docutils literal notranslate"><span class="pre">relative_risk</span></code> and <code class="docutils literal notranslate"><span class="pre">ratios</span></code> (over the whole brain, with a new
+<code class="docutils literal notranslate"><span class="pre">selected_voxel</span></code> choice); see <a class="reference internal" href="tutorial_neurosynth_tests.html#tutorial-neurosynth-tests"><span class="std std-ref">Neurosynth’s Association and Uniformity Tests as Probability Ratios</span></a>.
+With SPECTER2, <code class="docutils literal notranslate"><span class="pre">uniformity_llm('a</span> <span class="pre">description',</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">u)</span></code>, <code class="docutils literal notranslate"><span class="pre">lift_llm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">relative_risk_llm</span></code> and <code class="docutils literal notranslate"><span class="pre">ratios_llm</span></code> do the same for a free text: the
+studies of the term are the 5% closest to it (<code class="docutils literal notranslate"><span class="pre">study_similarity</span></code>,
+<code class="docutils literal notranslate"><span class="pre">similar_study</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> and <code class="docutils literal notranslate"><span class="pre">neurostore</span></code> load the Cognitive Atlas ontology
+(<code class="docutils literal notranslate"><span class="pre">ontologies</span></code>, now loaded before <code class="docutils literal notranslate"><span class="pre">datalog_init</span></code>) for open-world queries
+over its concepts, tasks and contrasts, joined with the studies through
+<code class="docutils literal notranslate"><span class="pre">cogat_subclass_of</span></code>, <code class="docutils literal notranslate"><span class="pre">cogat_measures</span></code> and <code class="docutils literal notranslate"><span class="pre">cogat_term</span></code>; see
+<a class="reference internal" href="tutorial_cognitive_atlas.html"><span class="doc">Querying the Cognitive Atlas Ontology</span></a>.</p></li>
+<li><p>NeuroLang has a logo (<code class="file docutils literal notranslate"><span class="pre">doc/_static/logo/</span></code>): the brain written as
+a probabilistic program. It heads the README and the documentation,
+whose colours become those of the logo, and is the favicon of the
+documentation, of the web application and of the <code class="docutils literal notranslate"><span class="pre">.view</span></code> viewer.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">.view</span></code> viewer has the controls of NiiVue’s display: the view
+(a slice, the three slices in a row, a column or a grid, with or
+without the 3D render, or the 3D render alone), the drag mode of the
+right button (contrast, pan and zoom, measure, angle, 3D slicer), the
+crosshair’s colour, width and 3D drawing, the gamma of the background,
+NiiVue’s colour bars, labels, orientation cube and ruler, the
+radiological convention, the interpolation and a clip plane; the hot
+keys V and C keep the controls in step, and Reset restores them.</p></li>
+<li><p>Documentation: the REPL example of the Neurosynth tests
+(<a class="reference internal" href="tutorial_neurosynth_tests.html#tutorial-neurosynth-tests"><span class="std std-ref">Neurosynth’s Association and Uniformity Tests as Probability Ratios</span></a>) gives the term in the query,
+<code class="docutils literal notranslate"><span class="pre">ratios(&quot;vision&quot;,</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">...)</span></code>, rather than in a
+<code class="docutils literal notranslate"><span class="pre">term_of_interest</span></code> relation joined in every rule, with a <code class="docutils literal notranslate"><span class="pre">%</span></code>
+comment before each line.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">.view</span></code> viewer draws its slices with NiiVue (0.69.0, inlined in
+the page, which still needs no network but a browser with WebGL2): the
+order its overlays are drawn in can be changed with ▲ and ▼, and the
+mouse wheel scrolls through the slices.</p></li>
+<li><p>Documentation: Neurosynth’s association and uniformity tests written as
+ratios of probabilities (lift, relative risk, and the ratio to the
+brain average), computed in the REPL of the <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine, see
+<a class="reference internal" href="tutorial_neurosynth_tests.html#tutorial-neurosynth-tests"><span class="std std-ref">Neurosynth’s Association and Uniformity Tests as Probability Ratios</span></a>.</p></li>
+<li><p>Documentation: the mutual information of a term and the activation of a
+voxel, a rule over the engine’s <code class="docutils literal notranslate"><span class="pre">p_term</span></code>, <code class="docutils literal notranslate"><span class="pre">p_a</span></code> and <code class="docutils literal notranslate"><span class="pre">p_a_given_t</span></code>,
+ranks the voxels as Neurosynth’s association test does, which the lift
+does not: for <em>prefrontal</em>, the Dice coefficient of its top 5% of the
+brain with that of Neurosynth’s map is 0.83, against 0.51 for the lift.
+See <a class="reference internal" href="tutorial_neurosynth_tests.html#neurosynth-mutual-information"><span class="std std-ref">Ranking the voxels as Neurosynth does</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.view</span></code> of a result with several value columns shows an overlay per
+column, each with its own threshold, colormap, symmetry, opacity and
+visibility, a colour bar and its value at the cursor; <code class="docutils literal notranslate"><span class="pre">--fill</span> <span class="pre">V</span></code> sets
+the value of the voxels without one (default 0, hidden). An infinite
+value is drawn as the largest finite one.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine has a <code class="docutils literal notranslate"><span class="pre">cognitive_task(task_id,</span> <span class="pre">name,</span>
+<span class="pre">description)</span></code> relation: the tasks of the Cognitive Atlas, downloaded
+from its API (<code class="docutils literal notranslate"><span class="pre">cognitiveatlas.org/api/v-alpha/task</span></code>), with their
+descriptions, e.g.
+<code class="docutils literal notranslate"><span class="pre">ans(d)</span> <span class="pre">:-</span> <span class="pre">cognitive_task(t,</span> <span class="pre">&quot;stop</span> <span class="pre">signal</span> <span class="pre">task&quot;,</span> <span class="pre">d)</span></code>.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine has a <code class="docutils literal notranslate"><span class="pre">cortical_mask(i,</span> <span class="pre">j,</span> <span class="pre">k)</span></code> relation: the
+voxels of the MNI template grid in the cortex, labelled by the
+Harvard–Oxford cortical atlas (maximum probability, 25% threshold),
+resampled by nearest neighbour, for instance to restrict
+<code class="docutils literal notranslate"><span class="pre">voxel_given_term(t,</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">p)</span></code> to the cortex.</p></li>
+<li><p>Text embeddings work offline: SPECTER2, its tokenizer and its adapters
+are downloaded once into <code class="docutils literal notranslate"><span class="pre">{data_dir}/&lt;engine&gt;/embeddings/models/</span></code>
+(by the first query or by
+<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">neurolang.utils.text_embeddings</span></code>) and then loaded from
+there without network.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">.view</span></code> brain viewer of the interactive REPL starts with the
+<code class="docutils literal notranslate"><span class="pre">plasma</span></code> colormap and shows the top 5% of the voxels (threshold at the
+95th percentile of the nonzero values) unless <code class="docutils literal notranslate"><span class="pre">--cmap</span></code> or
+<code class="docutils literal notranslate"><span class="pre">--threshold</span></code> say otherwise.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">percentile(v,</span> <span class="pre">q)</span></code> aggregation: the <code class="docutils literal notranslate"><span class="pre">q</span></code>-th percentile of a column,
+ignoring NaN values, to keep for instance the top <code class="docutils literal notranslate"><span class="pre">p``%</span> <span class="pre">of</span> <span class="pre">a</span> <span class="pre">column</span>
+<span class="pre">with</span> <span class="pre">``v</span> <span class="pre">&gt;=</span> <span class="pre">percentile(v,</span> <span class="pre">100</span> <span class="pre">-</span> <span class="pre">p)</span></code>.  The built-in aggregations
+(<code class="docutils literal notranslate"><span class="pre">count</span></code>, <code class="docutils literal notranslate"><span class="pre">max</span></code>, <code class="docutils literal notranslate"><span class="pre">mean</span></code>, <code class="docutils literal notranslate"><span class="pre">sum</span></code>, <code class="docutils literal notranslate"><span class="pre">std</span></code>, <code class="docutils literal notranslate"><span class="pre">percentile</span></code>) are now
+also available in <code class="xref py py-class docutils literal notranslate"><span class="pre">NeurolangDL</span></code>.</p></li>
+<li><p>Semantic search over document texts with SPECTER2
+(<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.text_embeddings</span></code>).  Engines declare a
+<code class="docutils literal notranslate"><span class="pre">text_embeddings</span></code> section in <code class="docutils literal notranslate"><span class="pre">engines.yaml</span></code> to register a function
+<code class="docutils literal notranslate"><span class="pre">f(query,</span> <span class="pre">doc)</span></code> returning the cosine similarity between a document and
+a free-text query.  The <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine provides
+<code class="docutils literal notranslate"><span class="pre">query_similarity</span></code>, used as
+<code class="docutils literal notranslate"><span class="pre">study(s)</span> <span class="pre">&amp;</span> <span class="pre">(sim</span> <span class="pre">==</span> <span class="pre">query_similarity('visual</span> <span class="pre">word</span> <span class="pre">form</span> <span class="pre">reading',</span> <span class="pre">s))</span></code>,
+over PubMed titles and abstracts; see the new gallery example
+<a class="reference internal" href="auto_examples/plot_text_embeddings_forward_inference.html#sphx-glr-auto-examples-plot-text-embeddings-forward-inference-py"><span class="std std-ref">Forward Inference From a Free-Text Query.</span></a>.
+Requires <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">&quot;neurolang[embeddings]&quot;</span></code>.</p></li>
+<li><p>Declarative engine registry for the <code class="docutils literal notranslate"><span class="pre">neurolang-query</span></code> CLI.
+Engines are defined in YAML and initialised by pluggable Python modules
+under <code class="file docutils literal notranslate"><span class="pre">neurolang/utils/engines/</span></code>.  Includes <code class="docutils literal notranslate"><span class="pre">--list-engines</span></code> for
+discovery and <code class="docutils literal notranslate"><span class="pre">--list-predicates</span></code> showing declarative metadata without
+data download.  (<a class="reference internal" href="gen_api/neurolang.utils.engine_registry.html#module-neurolang.utils.engine_registry" title="neurolang.utils.engine_registry"><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.engine_registry</span></code></a>,
+<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.engines</span></code>)</p></li>
+<li><p>The existing NeuroSynth and Destrieux engines were refactored into the
+new declarative system.  Engine init code moved from
+<a class="reference internal" href="gen_api/neurolang.utils.cli.html#module-neurolang.utils.cli" title="neurolang.utils.cli"><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.cli</span></code></a> to <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.engines.neurosynth.init</span></code>
+and <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.utils.engines.destrieux.init</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neurolang-query</span> <span class="pre">--list-predicates</span></code> no longer requires downloading data;
+predicate metadata is read from the YAML engine config.</p></li>
+<li><p><strong>Datalog init</strong> — engines can declare inline Datalog rules that run after
+the Python init via the <code class="docutils literal notranslate"><span class="pre">datalog_init</span></code> YAML field.  Derived predicates can
+be defined without writing Python.</p></li>
+<li><p><strong>CSV/TSV relations</strong> — engines can load tabular data files as extensional
+predicates with the <code class="docutils literal notranslate"><span class="pre">relations</span></code> YAML field.  Supported formats:
+<code class="docutils literal notranslate"><span class="pre">.csv</span></code>, <code class="docutils literal notranslate"><span class="pre">.tsv</span></code>, <code class="docutils literal notranslate"><span class="pre">.csv.gz</span></code>, <code class="docutils literal notranslate"><span class="pre">.tsv.gz</span></code>.
+Relation entries may include an optional <code class="docutils literal notranslate"><span class="pre">description</span></code> field for
+predicate metadata shown by <code class="docutils literal notranslate"><span class="pre">--list-predicates</span></code>.  The <code class="docutils literal notranslate"><span class="pre">file</span></code> value
+may be a URL for automatic download.</p></li>
+<li><p><strong>Builtins</strong> — engines can declare <code class="docutils literal notranslate"><span class="pre">builtins:</span> <span class="pre">[exp,</span> <span class="pre">log,</span> <span class="pre">startswith]</span></code>
+in YAML to register known functions as callable symbols without Python.</p></li>
+<li><p><strong>Downloads</strong> — the <code class="docutils literal notranslate"><span class="pre">downloads</span></code> section fetches files from URLs
+(with optional archive extraction) before other init phases.</p></li>
+<li><p><strong>Probabilistic choices</strong> — engines can declare uniform probabilistic
+choices declaratively with <code class="docutils literal notranslate"><span class="pre">probabilistic_choice:</span></code> instead of calling
+<code class="docutils literal notranslate"><span class="pre">add_uniform_probabilistic_choice_over_set</span></code> in Python.</p></li>
+<li><p><strong>Ontology loading</strong> — the <code class="docutils literal notranslate"><span class="pre">ontologies</span></code> section loads OWL/RDF
+ontologies from URLs or local paths.</p></li>
+<li><p><strong>Atlases</strong> — engines can declare <code class="docutils literal notranslate"><span class="pre">atlases:</span></code> with nilearn atlas names
+(<code class="docutils literal notranslate"><span class="pre">destrieux</span></code>, <code class="docutils literal notranslate"><span class="pre">schaefer</span></code>, <code class="docutils literal notranslate"><span class="pre">difumo</span></code>) and parameters.  Atlas regions
+are loaded as <code class="docutils literal notranslate"><span class="pre">ExplicitVBR</span></code> predicates before Datalog init rules.</p></li>
+<li><p><strong>Declarative migration</strong> — <code class="docutils literal notranslate"><span class="pre">exp</span></code>, <code class="docutils literal notranslate"><span class="pre">log</span></code>, <code class="docutils literal notranslate"><span class="pre">startswith</span></code> symbols
+now come from YAML <code class="docutils literal notranslate"><span class="pre">builtins</span></code> rather than <code class="docutils literal notranslate"><span class="pre">base.py</span></code>; the
+<code class="docutils literal notranslate"><span class="pre">selected_study</span></code> choice for the neurosynth engine is now declared
+in the engine YAML instead of Python init code; the <code class="docutils literal notranslate"><span class="pre">destrieux</span></code>
+predicate is now declared in the YAML <code class="docutils literal notranslate"><span class="pre">atlases:</span></code> section.</p></li>
+<li><p><strong>Base symbols</strong> — engines can set <code class="docutils literal notranslate"><span class="pre">use_base_symbols:</span> <span class="pre">true</span></code> in YAML
+to register common neuroimaging symbols (<code class="docutils literal notranslate"><span class="pre">agg_count</span></code>,
+<code class="docutils literal notranslate"><span class="pre">agg_create_region</span></code>, <code class="docutils literal notranslate"><span class="pre">agg_create_region_overlay</span></code>,
+<code class="docutils literal notranslate"><span class="pre">principal_direction</span></code>, <code class="docutils literal notranslate"><span class="pre">region_union</span></code>) automatically, without a
+Python init script.  <code class="docutils literal notranslate"><span class="pre">region_union</span></code> was moved into
+<code class="xref py py-func docutils literal notranslate"><span class="pre">init_base_engine()</span></code> as part of this
+change.</p></li>
+<li><p><strong>YAML-only engines</strong> — the <code class="docutils literal notranslate"><span class="pre">destrieux</span></code> engine no longer needs a
+<code class="docutils literal notranslate"><span class="pre">python_init</span></code> module.  It is now fully declarative, using
+<code class="docutils literal notranslate"><span class="pre">use_base_symbols</span></code> and the <code class="docutils literal notranslate"><span class="pre">atlases:</span></code> section.  The
+<code class="file docutils literal notranslate"><span class="pre">neurolang/utils/engines/destrieux/init.py</span></code> module was removed.</p></li>
+<li><p>NeuroLang is layered as the packages it is to be split into: the
+expression engine (expressions, walkers, types, logic, config), the core
+(relational algebra and its sets, Datalog, probabilistic), the language
+(parsers, frontends, regions) and the applications (command line,
+terminal interface, engines).  Each layer imports only those below it,
+which <code class="docutils literal notranslate"><span class="pre">.importlinter</span></code> checks in CI: <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">neurolang.expressions</span></code>
+needs neither pandas nor the relational algebra sets, and the core
+needs neither the frontends nor lark, nibabel or nilearn.
+<code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">neurolang</span></code> imports the frontends when one is first used.
+The FOL to Datalog translation moved from <code class="docutils literal notranslate"><span class="pre">neurolang.logic.horn_clauses</span></code>
+to <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.datalog.horn_clauses</span></code>, and the Datalog pretty-printer
+to <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.datalog.pretty_printer</span></code>
+(<code class="docutils literal notranslate"><span class="pre">neurolang.frontend.datalog.pretty_printer</span></code> still imports it).
+Modules that choose the classes of the relational algebra backend when
+imported register with <code class="docutils literal notranslate"><span class="pre">config.reload_on_backend_switch</span></code>, rather than
+being listed in the configuration.  The tests of the core that ran
+queries through a frontend moved to <code class="file docutils literal notranslate"><span class="pre">neurolang/frontend/tests</span></code>.</p></li>
+</ul>
+<p><strong>Bug fixes:</strong></p>
+<ul class="simple">
+<li><p>The REPL block of <a class="reference internal" href="tutorial_neurosynth_tests.html#tutorial-neurosynth-tests"><span class="std std-ref">Neurosynth’s Association and Uniformity Tests as Probability Ratios</span></a> names the rules
+restricted to the cortex with <code class="docutils literal notranslate"><span class="pre">_cortex</span></code> (<code class="docutils literal notranslate"><span class="pre">ratios_cortex</span></code>,
+<code class="docutils literal notranslate"><span class="pre">selected_voxel_cortex</span></code>, …): pasted in the <code class="docutils literal notranslate"><span class="pre">neurosynth</span></code> engine,
+which now predefines <code class="docutils literal notranslate"><span class="pre">selected_voxel</span></code>, <code class="docutils literal notranslate"><span class="pre">p_a</span></code>, <code class="docutils literal notranslate"><span class="pre">p_a_given_t</span></code> and
+<code class="docutils literal notranslate"><span class="pre">ratios</span></code> over the brain, it failed on its second definition of
+<code class="docutils literal notranslate"><span class="pre">selected_voxel</span></code> and added its rules to those of the others.</p></li>
+<li><p>The badges of the README: the coverage badge, deployed to <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code>,
+was deleted by each deployment of the benchmarks’ dashboard there (and
+deleted it in turn): it has its own branch, <code class="docutils literal notranslate"><span class="pre">badges</span></code>. The Python badge
+reads the versions from <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>, as the release on PyPI
+declares none, and the static “code style: flake8” badge, which nothing
+checked, gives way to those of the documentation and spelling workflows.</p></li>
+<li><p>A Euclidean distance bound to a point given by numbers,
+<code class="docutils literal notranslate"><span class="pre">peak_mni(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">s),</span> <span class="pre">(euclidean(x,</span> <span class="pre">y,</span> <span class="pre">z,</span> <span class="pre">-24,</span> <span class="pre">-4,</span> <span class="pre">-20)</span> <span class="pre">&lt;=</span> <span class="pre">3)</span></code>, was
+computed for every row (14 s on the peaks of neurosynth), and the
+reserved <code class="docutils literal notranslate"><span class="pre">EUCLIDEAN</span></code> raised an error: the point is now ranged by a
+stored relation of its own, so the points within the distance are
+precomputed as for two relations (well under a second).</p></li>
+<li><p>A probabilistic query with a variable occurring only in deterministic
+relations, <code class="docutils literal notranslate"><span class="pre">q(x,</span> <span class="pre">PROB)</span> <span class="pre">:-</span> <span class="pre">r(x,</span> <span class="pre">y)</span> <span class="pre">&amp;</span> <span class="pre">selected(x)</span></code>, gave the sum of the
+probabilities over the values of <code class="docutils literal notranslate"><span class="pre">y</span></code> rather than their probability,
+e.g. 1.0 rather than 0.5 for an <code class="docutils literal notranslate"><span class="pre">x</span></code> of two rows of <code class="docutils literal notranslate"><span class="pre">r</span></code>: those rows
+are the same event.  The lifted plan of the deterministic subquery
+<code class="docutils literal notranslate"><span class="pre">∃y</span> <span class="pre">r(x,</span> <span class="pre">y)</span></code> keeps its tuples with a probability of 1, and the small
+dichotomy theorem solver leaves such a query to the lifted solver.</p></li>
+<li><p>A probabilistic query no longer fails with <code class="docutils literal notranslate"><span class="pre">AttributeError:</span> <span class="pre">type</span> <span class="pre">object</span>
+<span class="pre">'Unknown'</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">attribute</span> <span class="pre">'__origin__'</span></code> when the program has a
+query-based probabilistic choice, such as <code class="docutils literal notranslate"><span class="pre">selected_voxel(i,</span> <span class="pre">j,</span> <span class="pre">k)</span> <span class="pre">^</span> <span class="pre">(1</span> <span class="pre">/</span>
+<span class="pre">m)</span> <span class="pre">:-</span> <span class="pre">...</span></code>, that the query does not use, or whose rule’s body is empty:
+the choice is then over no tuple, as a query-based probabilistic fact
+over no tuple already was.</p></li>
+<li><p>The REPL skips the <code class="docutils literal notranslate"><span class="pre">%</span></code> comment lines between statements, e.g. before
+a dot-command of a pasted block or in a piped batch, which it submitted
+as programs that failed to parse; a comment line within a statement of
+several lines no longer ends it.</p></li>
+<li><p>Magic sets leave out of a magic rule the atoms sharing no variable with
+its bound arguments, whose product with the magic set was only
+projected out: the Neurosynth tests of <a class="reference internal" href="tutorial_neurosynth_tests.html#tutorial-neurosynth-tests"><span class="std std-ref">Neurosynth’s Association and Uniformity Tests as Probability Ratios</span></a>
+with the term in the query, <code class="docutils literal notranslate"><span class="pre">ratios(&quot;vision&quot;,</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">...)</span></code>, take
+13 s instead of 63 s.</p></li>
+<li><p>Magic sets pass the values of a stored relation with a constant to the
+rules after it in a query: <code class="docutils literal notranslate"><span class="pre">ans(i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">p)</span> <span class="pre">:-</span> <span class="pre">cognitive_task(_,</span>
+<span class="pre">&quot;color-word</span> <span class="pre">stroop</span> <span class="pre">task&quot;,</span> <span class="pre">d)</span> <span class="pre">&amp;</span> <span class="pre">voxel_given_sim(d,</span> <span class="pre">i,</span> <span class="pre">j,</span> <span class="pre">k,</span> <span class="pre">p)</span></code> gives
+the description of the task to the rules computing the similarities to
+it, which raised an <code class="docutils literal notranslate"><span class="pre">UnboundVariablesError</span></code>. A recursive component of
+a program is now a stratum of its own, before the rules depending on
+it, such as an aggregation, which raised a
+<code class="docutils literal notranslate"><span class="pre">NoValidChaseClassForStratumException</span></code>.</p></li>
+<li><p>Magic sets missed the initial magic fact of a constant when the same
+predicate, with the same adornment, was called with another constant in
+a rule rewritten earlier, e.g. <code class="docutils literal notranslate"><span class="pre">a(y)</span> <span class="pre">:-</span> <span class="pre">r(1,</span> <span class="pre">y)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">b(y)</span> <span class="pre">:-</span> <span class="pre">r(2,</span> <span class="pre">y)</span></code>, so one of the calls gave no rows.</p></li>
+<li><p>A rule variable defined by an equality over head variables, e.g.
+<code class="docutils literal notranslate"><span class="pre">sim</span></code> in <code class="docutils literal notranslate"><span class="pre">close(q,</span> <span class="pre">s)</span> <span class="pre">:-</span> <span class="pre">study(s)</span> <span class="pre">&amp;</span> <span class="pre">(sim</span> <span class="pre">==</span> <span class="pre">f(q,</span> <span class="pre">s))</span> <span class="pre">&amp;</span> <span class="pre">(sim</span> <span class="pre">&gt;</span> <span class="pre">.75)</span></code>,
+was rejected as unbound when the rule was defined, although a query
+constant, e.g. <code class="docutils literal notranslate"><span class="pre">ans(s)</span> <span class="pre">:-</span> <span class="pre">close('math',</span> <span class="pre">s)</span></code>, binds <code class="docutils literal notranslate"><span class="pre">q</span></code> through magic
+sets.</p></li>
+<li><p>The magic sets SIPS passed bindings from the predicates computed from
+within-language probabilistic queries, e.g. a conditional (MARG, <code class="docutils literal notranslate"><span class="pre">//</span></code>)
+rule <code class="docutils literal notranslate"><span class="pre">p</span></code>, which are solved after the magic predicates:
+<code class="docutils literal notranslate"><span class="pre">both(i,</span> <span class="pre">a,</span> <span class="pre">b)</span> <span class="pre">:-</span> <span class="pre">p('math',</span> <span class="pre">i,</span> <span class="pre">a)</span> <span class="pre">&amp;</span> <span class="pre">p('lang',</span> <span class="pre">i,</span> <span class="pre">b)</span></code> failed.</p></li>
+</ul>
+<p><strong>Removed:</strong></p>
+<ul class="simple">
+<li><p>The legacy web application, <code class="docutils literal notranslate"><span class="pre">neurolang/utils/server</span></code> (2.3 MB, with
+<code class="docutils literal notranslate"><span class="pre">papaya.js</span></code>), and the hatch build hook that built its frontend with
+npm, <code class="docutils literal notranslate"><span class="pre">hatch_build.py</span></code>; the wheel no longer ships it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">siibra</span></code> and <code class="docutils literal notranslate"><span class="pre">seaborn</span></code> are no longer dependencies: NeuroLang never
+imports them.  The example
+<a class="reference internal" href="auto_examples/plot_squall_bayes_factor_decoding.html#sphx-glr-auto-examples-plot-squall-bayes-factor-decoding-py"><span class="std std-ref">Bayes Factor Decoding of the Right Fusiform Gyrus in SQUALL Controlled English.</span></a> needs
+<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">siibra</span></code>.</p></li>
+<li><p>Unreferenced files: <code class="docutils literal notranslate"><span class="pre">unused/neurosynth/cogat.v2.owl</span></code> (1.4 MB), the
+pictures of an old Datalog grammar in
+<code class="docutils literal notranslate"><span class="pre">neurolang/frontend/datalog/doc/</span></code> (0.7 MB) and <code class="docutils literal notranslate"><span class="pre">MANIFEST.in</span></code>.</p></li>
+</ul>
+</section>
+<section id="v0-0-1-alpha">
+<h2>v0.0.1 (Alpha)<a class="headerlink" href="#v0-0-1-alpha" title="Link to this heading">#</a></h2>
+<p>Initial alpha release of NeuroLang.</p>
+<p><strong>New features:</strong></p>
+<ul class="simple">
+<li><p>Datalog-based logic programming frontend (<a class="reference internal" href="gen_api/neurolang.NeurolangDL.html#neurolang.NeurolangDL" title="neurolang.frontend.deterministic_frontend.NeurolangDL"><code class="xref py py-class docutils literal notranslate"><span class="pre">NeurolangDL</span></code></a>)</p></li>
+<li><p>Probabilistic extensions with independent probabilistic facts
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">NeurolangPDL</span></code>)</p></li>
+<li><p>Tuple-generating dependencies (TGDs) for open-world reasoning</p></li>
+<li><p>Aggregation support (<code class="docutils literal notranslate"><span class="pre">COUNT</span></code>, <code class="docutils literal notranslate"><span class="pre">MAX</span></code>, <code class="docutils literal notranslate"><span class="pre">SUM</span></code>, custom callables)</p></li>
+<li><p>Neuroimaging integration: nibabel image loading, Destrieux atlas, NeuroSynth</p></li>
+<li><p>Example gallery: Destrieux gyri, sulcal queries, NeuroSynth implementation</p></li>
+</ul>
+</section>
+<section id="how-to-add-a-changelog-entry">
+<h2>How to add a changelog entry<a class="headerlink" href="#how-to-add-a-changelog-entry" title="Link to this heading">#</a></h2>
+<p>Add entries under <strong>Unreleased</strong> in the following format:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="gh">Unreleased</span>
+<span class="gh">----------</span>
+
+<span class="gs">**New features:**</span>
+
+<span class="m">*</span> Short description of the feature (<span class="nv">`:class:`</span> or <span class="nv">`:func:`</span> link if applicable)
+
+<span class="gs">**Bug fixes:**</span>
+
+<span class="m">*</span> Short description of the bug and fix
+
+<span class="gs">**Breaking changes:**</span>
+
+<span class="m">*</span> What changed and how to migrate
+</pre></div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="tutorial_logic_programming.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">NeuroLang for Logic Programmers</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="contributing.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Contributing to NeuroLang</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+ 
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2017–2026, Demian Wassermann and the NeuroLang contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+<div class="container neurolang-timestamp">
+    <p style="margin-top: -10px;">on </p>
+</div>
+  </body>
+</html>

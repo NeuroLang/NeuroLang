@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Lifted probabilistic inference &#8212; NeuroLang 0.1a22.dev73+g5af0e7ed1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/neurolang.css?v=497e8255" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="_static/documentation_options.js?v=938eb139"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'probabilistic_lifting';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="icon" href="_static/favicon.svg"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Inclusion–exclusion with an incomplete containment test" href="inclusion_exclusion.html" />
+    <link rel="prev" title="Concepts" href="concepts.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1a22" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/neurolang-lockup.svg" class="logo__image only-light" alt="NeuroLang"/>
+    <img src="_static/neurolang-lockup-dark.svg" class="logo__image only-dark pst-js-only" alt="NeuroLang"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="#" aria-current="page">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="install.html">
+    Installing NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial.html">
+    Get Started with NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_squall.html">
+    SQUALL: Controlled English for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_datalog.html">
+    Datalog: A Rule-Based Query Language for NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_text_embeddings.html">
+    Semantic Search Over Study Abstracts
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_neurosynth_tests.html">
+    Neurosynth’s Association and Uniformity Tests as Probability Ratios
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_cognitive_atlas.html">
+    Querying the Cognitive Atlas Ontology
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="concepts.html">
+    Concepts
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#" aria-current="page">
+    Lifted probabilistic inference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="inclusion_exclusion.html">
+    Inclusion–exclusion with an incomplete containment test
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="engine_configuration.html">
+    Engine Configuration (engines.yaml)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="query_assistant.html">
+    LLM Query Assistant
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="performance.html">
+    Performance and Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="auto_examples/index.html">
+    Examples of the NeuroLang language environment.
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_logic_programming.html">
+    NeuroLang for Logic Programmers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="changelog.html">
+    Changelog
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="contributing.html">
+    Contributing to NeuroLang
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="authors.html">
+    People
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/NeuroLang/NeuroLang" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#solvers-and-their-order">Solvers and their order</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations-of-the-lifted-plans">Operations of the lifted plans</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#algorithms-from-the-literature">Algorithms from the literature</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#conjunctive-queries-summed-on-probabilistic-choices">Conjunctive queries summed on probabilistic choices</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-small-dichotomy-theorem">The small dichotomy theorem</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-dalvisuciu-algorithm">The Dalvi–Suciu algorithm</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#disjoint-projection-on-a-probabilistic-choice">Disjoint projection on a probabilistic choice</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#non-repeating-queries-with-negation">Non-repeating queries with negation</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#neurolang-s-additions">NeuroLang’s additions</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#preparing-the-query">Preparing the query</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#planning-non-repeating-queries">Planning non-repeating queries</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#extensions-of-the-dalvisuciu-algorithm">Extensions of the Dalvi–Suciu algorithm</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing relations</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#correctness-of-the-plans">Correctness of the plans</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#references">References</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Lifted probabilistic inference</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="lifted-probabilistic-inference">
+<span id="probabilistic-lifting"></span><h1>Lifted probabilistic inference<a class="headerlink" href="#lifted-probabilistic-inference" title="Link to this heading">#</a></h1>
+<p>This page lists the strategies NeuroLang uses to compute the probability
+of a query exactly by <em>lifted inference</em>, that is by translating the query
+into a plan of relational algebra operations on probabilities, without
+grounding the program into a propositional formula. It gives first the
+algorithms of the literature that NeuroLang implements, whose correctness
+is that of the papers cited, then NeuroLang’s own additions to them, each
+with the formula applied, when it applies and, in <a class="reference internal" href="#correctness-of-the-plans">Correctness of the
+plans</a>, its proof.</p>
+<nav class="contents local" id="contents">
+<ul class="simple">
+<li><p><a class="reference internal" href="#solvers-and-their-order" id="id35">Solvers and their order</a></p></li>
+<li><p><a class="reference internal" href="#operations-of-the-lifted-plans" id="id36">Operations of the lifted plans</a></p></li>
+<li><p><a class="reference internal" href="#algorithms-from-the-literature" id="id37">Algorithms from the literature</a></p>
+<ul>
+<li><p><a class="reference internal" href="#conjunctive-queries-summed-on-probabilistic-choices" id="id38">Conjunctive queries summed on probabilistic choices</a></p></li>
+<li><p><a class="reference internal" href="#the-small-dichotomy-theorem" id="id39">The small dichotomy theorem</a></p></li>
+<li><p><a class="reference internal" href="#the-dalvisuciu-algorithm" id="id40">The Dalvi–Suciu algorithm</a></p></li>
+<li><p><a class="reference internal" href="#disjoint-projection-on-a-probabilistic-choice" id="id41">Disjoint projection on a probabilistic choice</a></p></li>
+<li><p><a class="reference internal" href="#non-repeating-queries-with-negation" id="id42">Non-repeating queries with negation</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#neurolang-s-additions" id="id43">NeuroLang’s additions</a></p>
+<ul>
+<li><p><a class="reference internal" href="#preparing-the-query" id="id44">Preparing the query</a></p></li>
+<li><p><a class="reference internal" href="#planning-non-repeating-queries" id="id45">Planning non-repeating queries</a></p></li>
+<li><p><a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm" id="id46">Extensions of the Dalvi–Suciu algorithm</a></p></li>
+<li><p><a class="reference internal" href="#negations-and-comparisons-sharing-relations" id="id47">Negations and comparisons sharing relations</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#correctness-of-the-plans" id="id48">Correctness of the plans</a></p></li>
+<li><p><a class="reference internal" href="#references" id="id49">References</a></p></li>
+</ul>
+</nav>
+<section id="solvers-and-their-order">
+<h2><a class="toc-backref" href="#id35" role="doc-backlink">Solvers and their order</a><a class="headerlink" href="#solvers-and-their-order" title="Link to this heading">#</a></h2>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">NeurolangPDL</span></code> tries its solvers in order, and
+uses the first one which accepts the query:</p>
+<ol class="arabic simple">
+<li><p><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.small_dichotomy_theorem_based_solver</span></code>, for
+conjunctive queries without negation whose existential variables all
+occur in atoms of probabilistic choices, which it computes by a join
+and a disjoint sum on the head (see <a class="reference internal" href="#conjunctive-queries-summed-on-probabilistic-choices">Conjunctive queries summed on
+probabilistic choices</a>);</p></li>
+<li><p><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.dalvi_suciu_lift</span></code>, which first plans
+non-repeating queries with negation (see <a class="reference internal" href="#non-repeating-queries-with-negation">Non-repeating queries with
+negation</a> and <a class="reference internal" href="#planning-non-repeating-queries">Planning non-repeating queries</a>), and otherwise lifts
+unions of conjunctive queries with self-joins (see <a class="reference internal" href="#the-dalvisuciu-algorithm">The Dalvi–Suciu
+algorithm</a>), with NeuroLang’s additions (see <a class="reference internal" href="#neurolang-s-additions">NeuroLang’s
+additions</a>);</p></li>
+<li><p><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.weighted_model_counting</span></code>, which is not
+lifted: it compiles the provenance of the query into a sentential
+decision diagram (SDD) <a class="reference internal" href="#darwiche2011" id="id1"><span>[Darwiche2011]</span></a> with pysdd and computes its
+weighted model count <a class="reference internal" href="#chavira2008" id="id2"><span>[Chavira2008]</span></a>. It answers every query of the
+language but can be exponential in the size of the data.</p></li>
+</ol>
+<figure class="align-default" id="id34">
+<a class="reference internal image-reference" href="_images/lifting_pipeline.svg"><img alt="The three solvers in order. The first sums a conjunctive query on its probabilistic choices. The second prepares the query, plans non-repeating queries with negation, normalises and checks the query, lifts negations and comparisons sharing relations, and applies the rules of the Dalvi–Suciu algorithm in order. A query that neither lifted solver plans is solved by weighted model counting." src="_images/lifting_pipeline.svg" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">The lifting process. Each lifted solver either gives a plan, evaluated
+on the provenance semiring of probabilities, or declines the query,
+which is passed to the next solver. The steps of the second solver are
+described in <a class="reference internal" href="#preparing-the-query">Preparing the query</a>, <a class="reference internal" href="#planning-non-repeating-queries">Planning non-repeating queries</a>,
+<a class="reference internal" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing relations</a> and <a class="reference internal" href="#the-dalvisuciu-algorithm">The Dalvi–Suciu
+algorithm</a>.</span><a class="headerlink" href="#id34" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+<p>A lifted solver declines a query by raising an
+<code class="docutils literal notranslate"><span class="pre">UnsupportedSolverError</span></code>, such as <code class="docutils literal notranslate"><span class="pre">NonLiftableException</span></code>, and the next
+one is then tried. The Dalvi–Suciu solver turns the failures of the
+conversions to normal forms of a formula outside the fragment they support
+(<code class="docutils literal notranslate"><span class="pre">NotInFONegE</span></code>), and the splits into components it cannot plan, such as a
+union with a negated component, into <code class="docutils literal notranslate"><span class="pre">NonLiftableException</span></code>, so that
+declining never depends on <code class="docutils literal notranslate"><span class="pre">check_unate</span></code>. Other errors are not caught: a
+query body with a universal quantifier, given through the Python API, is
+rejected when the query is flattened
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">flatten_query()</span></code> raises
+<code class="docutils literal notranslate"><span class="pre">UnsupportedProgramError</span></code>), and weighted model counting is not tried
+either. Lifted plans are
+computed on the provenance semiring of probabilities
+(<a class="reference internal" href="gen_api/neurolang.relational_algebra_provenance.html#module-neurolang.relational_algebra_provenance" title="neurolang.relational_algebra_provenance"><code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.relational_algebra_provenance</span></code></a>), whose operations are
+listed in <a class="reference internal" href="#operations-of-the-lifted-plans">Operations of the lifted plans</a>. Conditional queries (<code class="docutils literal notranslate"><span class="pre">//</span></code>,
+<code class="docutils literal notranslate"><span class="pre">given</span></code>, <code class="docutils literal notranslate"><span class="pre">conditioned</span> <span class="pre">to</span></code>) are answered as the ratio of two such
+queries, the joint and the condition.</p>
+<p>The probabilistic semantics are those of CP-Logic <a class="reference internal" href="#vennekens2009" id="id3"><span>[Vennekens2009]</span></a>, and the
+overall approach is described in <a class="reference internal" href="tutorial_squall.html#zanitti2023" id="id4"><span>[Zanitti2023]</span></a>. Probabilistic facts are
+<em>tuple-independent</em> relations; probabilistic choices are relations with a
+single key-less block, where exactly one tuple is true, a special case of
+<em>block-independent disjoint</em> (BID) relations <a class="reference internal" href="#suciu2011" id="id5"><span>[Suciu2011]</span></a>.</p>
+</section>
+<section id="operations-of-the-lifted-plans">
+<h2><a class="toc-backref" href="#id36" role="doc-backlink">Operations of the lifted plans</a><a class="headerlink" href="#operations-of-the-lifted-plans" title="Link to this heading">#</a></h2>
+<p>Each operation computes the probability <span class="math notranslate nohighlight">\(p\)</span> of each tuple of its
+result from the probabilities of its inputs.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 35.0%" />
+<col style="width: 35.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Operation</p></th>
+<th class="head"><p>Probability</p></th>
+<th class="head"><p>Used for</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">NaturalJoin</span></code> (<span class="math notranslate nohighlight">\(\bowtie\)</span>)</p></td>
+<td><p><span class="math notranslate nohighlight">\(p_1 \, p_2\)</span></p></td>
+<td><p>independent conjunction</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Union</span></code></p></td>
+<td><p><span class="math notranslate nohighlight">\(1 - (1 - p_1)(1 - p_2)\)</span></p></td>
+<td><p>independent disjunction</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Difference</span></code></p></td>
+<td><p><span class="math notranslate nohighlight">\(p_1 \, (1 - p_2)\)</span></p></td>
+<td><p>independent negation, <span class="math notranslate nohighlight">\(A \land \lnot B\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Subtraction</span></code> (<span class="math notranslate nohighlight">\(-_P\)</span>)</p></td>
+<td><p><span class="math notranslate nohighlight">\(p_1 - p_2\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(P[A] - P[A \land B]\)</span>, for dependent <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(B\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">IndependentProjection</span></code> (ind-∃-π)</p></td>
+<td><p><span class="math notranslate nohighlight">\(1 - \prod_i (1 - p_i)\)</span></p></td>
+<td><p>existential quantifier on a separator variable</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">IndependentProjectionUniversal</span></code> (ind-∀-π)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\prod_i p_i\)</span></p></td>
+<td><p>not used by the implemented rules (see <a class="reference internal" href="#the-dalvisuciu-algorithm">The Dalvi–Suciu
+algorithm</a>, separator variable)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DisjointProjection</span></code> (disj-π)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\sum_i p_i\)</span></p></td>
+<td><p>projection of mutually exclusive tuples</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">WeightedNaturalJoin</span></code> (Σ)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\sum_j w_j \, p_j\)</span></p></td>
+<td><p>inclusion–exclusion with Möbius weights</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Support</span></code></p></td>
+<td><p><span class="math notranslate nohighlight">\(1\)</span></p></td>
+<td><p>the tuples of a plan, to give values to its variables</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="algorithms-from-the-literature">
+<h2><a class="toc-backref" href="#id37" role="doc-backlink">Algorithms from the literature</a><a class="headerlink" href="#algorithms-from-the-literature" title="Link to this heading">#</a></h2>
+<p>The algorithms of this section are published with their proofs, which
+apply to the queries they are stated for: NeuroLang implements them, at
+times with restrictions, which are given, so that a query they decline is
+not necessarily #P-hard. <a class="reference internal" href="#neurolang-s-additions">NeuroLang’s additions</a> extend them beyond these
+queries.</p>
+<section id="conjunctive-queries-summed-on-probabilistic-choices">
+<h3><a class="toc-backref" href="#id38" role="doc-backlink">Conjunctive queries summed on probabilistic choices</a><a class="headerlink" href="#conjunctive-queries-summed-on-probabilistic-choices" title="Link to this heading">#</a></h3>
+<p>The first solver,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">solve_succ_query()</span></code>,
+is a restriction of the disjoint projection of Suciu et al. (see
+<a class="reference internal" href="#disjoint-projection-on-a-probabilistic-choice">Disjoint projection on a probabilistic choice</a>), and not an
+implementation of the small dichotomy theorem, despite its name. It
+accepts a query whose body, once flattened and the atoms of each
+probabilistic choice made one (see <a class="reference internal" href="#preparing-the-query">Preparing the query</a>), is a
+conjunction without negation in which</p>
+<ul class="simple">
+<li><p>every existential variable of an atom of a probabilistic fact relation
+also occurs in an atom of a probabilistic choice
+(<code class="docutils literal notranslate"><span class="pre">_verify_fact_and_choice_e_quantification</span></code>);</p></li>
+<li><p>no existential variable occurs in deterministic atoms only
+(<code class="docutils literal notranslate"><span class="pre">_verify_deterministic_e_quantification</span></code>);</p></li>
+<li><p>the probabilistic atoms form a hierarchical query without self-joins
+(<code class="docutils literal notranslate"><span class="pre">is_hierarchical_without_self_joins</span></code>, see <a class="reference internal" href="#the-small-dichotomy-theorem">The small dichotomy
+theorem</a>), a further restriction which the plan below does not need.</p></li>
+</ul>
+<p>Its plan is the join of the atoms of the body, followed by the projection
+on the head, which the provenance solver computes as a sum of the
+probabilities of the tuples it merges
+(<code class="docutils literal notranslate"><span class="pre">RelationalAlgebraProvenanceCountingSolverMixin</span></code>):</p>
+<div class="math notranslate nohighlight">
+\[P[\exists \bar z\, Q] = \sum_{\bar a} P[Q[\bar a/\bar z]],\]</div>
+<p><span class="math notranslate nohighlight">\(\bar z\)</span> being the existential variables. This is the disjoint
+projection, exact because the merged tuples differ on the tuple of a
+choice and are mutually exclusive (see <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>). No
+completeness is claimed for the solver: the hierarchical query
+<span class="math notranslate nohighlight">\(\mathit{ans}(x) \leftarrow R(x, y) \land S(y)\)</span> of probabilistic
+facts, for instance, is declined, as <span class="math notranslate nohighlight">\(y\)</span> occurs in no choice, and
+is lifted by the next solver. Queries with negations or disjunctions are
+declined too.</p>
+</section>
+<section id="the-small-dichotomy-theorem">
+<h3><a class="toc-backref" href="#id39" role="doc-backlink">The small dichotomy theorem</a><a class="headerlink" href="#the-small-dichotomy-theorem" title="Link to this heading">#</a></h3>
+<p>For a conjunctive query in which no relation occurs twice, on
+tuple-independent relations, the small dichotomy theorem applies
+<a class="reference internal" href="#dalvi2007" id="id6"><span>[Dalvi2007]</span></a> <a class="reference internal" href="#fink2014" id="id7"><span>[Fink2014]</span></a>: writing <span class="math notranslate nohighlight">\(at(x)\)</span> for the atoms in which
+variable <span class="math notranslate nohighlight">\(x\)</span> occurs, the query can be computed in polynomial time if
+it is <em>hierarchical</em>, that is if for any two variables <span class="math notranslate nohighlight">\(x\)</span> and
+<span class="math notranslate nohighlight">\(y\)</span>,</p>
+<div class="math notranslate nohighlight">
+\[at(x) \subseteq at(y) \quad\text{or}\quad
+at(x) \supseteq at(y) \quad\text{or}\quad
+at(x) \cap at(y) = \emptyset,\]</div>
+<p>and is #P-hard otherwise. Each connected component of a hierarchical query
+has a variable occurring in all of its atoms, on which it is computed by
+the independent projection, and recursively: this is the separator
+variable rule of <a class="reference internal" href="#the-dalvisuciu-algorithm">The Dalvi–Suciu algorithm</a>, restricted to queries
+without self-joins, and the projection
+of the planner of <a class="reference internal" href="#planning-non-repeating-queries">Planning non-repeating queries</a>, which Fink and
+Olteanu’s extension of the theorem to negation (see <a class="reference internal" href="#non-repeating-queries-with-negation">Non-repeating
+queries with negation</a>) justifies.</p>
+</section>
+<section id="the-dalvisuciu-algorithm">
+<h3><a class="toc-backref" href="#id40" role="doc-backlink">The Dalvi–Suciu algorithm</a><a class="headerlink" href="#the-dalvisuciu-algorithm" title="Link to this heading">#</a></h3>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">dalvi_suciu_lift()</span></code>
+implements the algorithm of Dalvi and Suciu for unions of conjunctive
+queries on tuple-independent relations <a class="reference internal" href="#dalvi2012" id="id8"><span>[Dalvi2012]</span></a>. The query is first
+shattered and ranked, then its rules are tried in the order below, each
+one calling the algorithm on the subqueries it produces. A query to which
+no rule applies is marked <code class="docutils literal notranslate"><span class="pre">NonLiftable</span></code> and declined. Dalvi and Suciu
+prove their algorithm complete for unions of conjunctive queries on
+tuple-independent databases: a query on which it fails is #P-hard
+<a class="reference internal" href="#dalvi2012" id="id9"><span>[Dalvi2012]</span></a>. The implementation restricts some of its rules, ranking and
+inclusion–exclusion, so a query it declines is not necessarily #P-hard.
+NeuroLang’s additions are tried in between: independent negation,
+the disjoint separator and the guard on the clauses of the conjunctive
+normal form (see <a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm">Extensions of the Dalvi–Suciu algorithm</a>).</p>
+<dl>
+<dt>Shattering constants</dt><dd><p>An atom with a constant, such as <span class="math notranslate nohighlight">\(R(x, a)\)</span>, is replaced by an atom
+of a new relation holding the tuples of <span class="math notranslate nohighlight">\(R\)</span> selected on that
+constant, so that the remaining atoms of <span class="math notranslate nohighlight">\(R\)</span> refer to disjoint sets
+of tuples <a class="reference internal" href="#dalvi2012" id="id10"><span>[Dalvi2012]</span></a> (<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.shattering</span></code>).</p>
+</dd>
+<dt>Ranking</dt><dd><p>The query must be <em>ranked</em>: there is an order on the bound variables
+such that the arguments of every atom follow it <a class="reference internal" href="#dalvi2012" id="id11"><span>[Dalvi2012]</span></a>
+(<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.ranking</span></code>). The answer variables, free,
+are constants for Dalvi and Suciu, and are not ordered: the query
+<span class="math notranslate nohighlight">\(Q(x, y) = R(x) \land R(y) \land S(x, y) \land W(y, x)\)</span> is
+ranked, and lifted, its answers with <span class="math notranslate nohighlight">\(x \neq y\)</span> and <span class="math notranslate nohighlight">\(x = y\)</span>
+apart (<code class="docutils literal notranslate"><span class="pre">different_free_variables_plan</span></code>). Atoms with a repeated variable,
+such as <span class="math notranslate nohighlight">\(R(x, x)\)</span>, are first replaced by atoms of a new relation
+holding the selected tuples. A query whose variables still occur in both
+orders, such as <span class="math notranslate nohighlight">\(\exists x, y\, R(x, y) \land R(y, x)\)</span>, is then
+rewritten into an equivalent ranked query
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">rank_query()</span></code>), following Dalvi
+and Suciu’s Proposition 4.2. The variables to rank are those occurring in
+both orders or repeated, together with the variables at the same
+positions of the other atoms of their relations. For every weak order of
+them, each atom <span class="math notranslate nohighlight">\(R(\bar x)\)</span> becomes an atom of the relation of the
+tuples of <span class="math notranslate nohighlight">\(R\)</span> whose values at those positions are in that order,
+and the variables of each rank are the same in every order; the query is
+the disjunction of these queries, one per order. For
+<span class="math notranslate nohighlight">\(R(x, y) \land R(y, x)\)</span>, the orders <span class="math notranslate nohighlight">\(x &lt; y\)</span>, <span class="math notranslate nohighlight">\(x = y\)</span>
+and <span class="math notranslate nohighlight">\(y &lt; x\)</span> give</p>
+<div class="math notranslate nohighlight">
+\[\exists x_1, x_2\, R_&lt;(x_1, x_2) \land R_&gt;(x_1, x_2) \;\lor\;
+\exists x_1\, R_=(x_1) \;\lor\;
+\exists x_1, x_2\, R_&lt;(x_1, x_2) \land R_&gt;(x_1, x_2),\]</div>
+<p>with <span class="math notranslate nohighlight">\(R_&lt;(x_1, x_2)\)</span> standing for the tuple <span class="math notranslate nohighlight">\(R(x_1, x_2)\)</span>
+with <span class="math notranslate nohighlight">\(x_1 &lt; x_2\)</span>, <span class="math notranslate nohighlight">\(R_&gt;(x_1, x_2)\)</span> for the tuple
+<span class="math notranslate nohighlight">\(R(x_2, x_1)\)</span> with <span class="math notranslate nohighlight">\(x_1 &lt; x_2\)</span>, and <span class="math notranslate nohighlight">\(R_=(x_1)\)</span> for
+the tuple <span class="math notranslate nohighlight">\(R(x_1, x_1)\)</span>. The orders <span class="math notranslate nohighlight">\(x &lt; y\)</span> and
+<span class="math notranslate nohighlight">\(y &lt; x\)</span> give the same disjunct: in the first, <span class="math notranslate nohighlight">\(x\)</span> is
+<span class="math notranslate nohighlight">\(x_1\)</span> and <span class="math notranslate nohighlight">\(y\)</span> is <span class="math notranslate nohighlight">\(x_2\)</span>; in the second, <span class="math notranslate nohighlight">\(y\)</span> is
+<span class="math notranslate nohighlight">\(x_1\)</span> and <span class="math notranslate nohighlight">\(x\)</span> is <span class="math notranslate nohighlight">\(x_2\)</span>, and the atoms of
+<span class="math notranslate nohighlight">\(R(x, y)\)</span> and <span class="math notranslate nohighlight">\(R(y, x)\)</span> are exchanged. The ranked
+relations are computed on the data, each tuple keeping its probability
+(<code class="docutils literal notranslate"><span class="pre">_ranked_relation</span></code>).</p>
+<p>The query is declined, and left to the next solver, when a relation to
+split is a probabilistic choice or occurs within a negation; when a
+ranked position has a constant, or a comparison or a function has a
+ranked variable; when an answer variable is at a ranked position, as
+in <span class="math notranslate nohighlight">\(\exists y\, R(x, y) \land R(y, y)\)</span>, since the ranked relations
+do not shatter the constants it stands for; when the
+ranked columns are not all of real numbers or all of strings, the types
+with a total order and an equality, or contain NaN; or when more than
+<code class="docutils literal notranslate"><span class="pre">MAX_RANKED_VARIABLES</span></code>, two, variables are to rank, as the number of
+orders, 1, 3, 13, 75…, makes planning exponential. Only variables in
+both orders in two atoms are detected, as in the check of rankedness: a
+cycle such as <span class="math notranslate nohighlight">\(R(x, y) \land R(y, z) \land R(z, x)\)</span> is not
+ranked, which the separator variable rule still checks. A bound and an
+answer variable in both orders, <span class="math notranslate nohighlight">\(Q(x) = \exists y\, R(x, y) \land
+R(y, x)\)</span>, need no ranking, but are not lifted: no rule splits
+<span class="math notranslate nohighlight">\(y \neq x\)</span>, when <span class="math notranslate nohighlight">\(R(x, y)\)</span> and <span class="math notranslate nohighlight">\(R(y, x)\)</span> are
+different tuples, from <span class="math notranslate nohighlight">\(y = x\)</span>, when they are the same.</p>
+</dd>
+<dt>Base cases</dt><dd><p>A single atom is read from its relation; a subquery whose atoms are all
+deterministic is computed by ordinary relational algebra, with
+probability 1.</p>
+</dd>
+<dt>Minimisation</dt><dd><p>Redundant atoms and disjuncts are removed with the containment test of
+<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.containment</span></code>: a conjunctive query
+contains another when there is a homomorphism from the first into the
+second (Chandra and Merlin), and a union contains another when each
+disjunct of the second is contained in one of the first (Sagiv and
+Yannakakis). The base cases are then tried
+again.</p>
+</dd>
+<dt>Independent conjunction</dt><dd><p>With the query in conjunctive normal form, if its conjuncts split into
+components with no probabilistic relation in common, they are
+independent:</p>
+<div class="math notranslate nohighlight">
+\[P[Q_1 \land Q_2] = P[Q_1]\,P[Q_2].\]</div>
+</dd>
+<dt>Independent disjunction</dt><dd><p>With the query in disjunctive normal form, if its disjuncts split into
+components with no probabilistic relation in common:</p>
+<div class="math notranslate nohighlight">
+\[P[Q_1 \lor Q_2] = 1 - (1 - P[Q_1])(1 - P[Q_2]).\]</div>
+</dd>
+<dt>Separator variable</dt><dd><p>A variable <span class="math notranslate nohighlight">\(z\)</span> is a separator variable of <span class="math notranslate nohighlight">\(\exists z\,Q(z)\)</span>
+if it occurs in every atom and, for each relation, in the same position
+of all of its atoms. The events <span class="math notranslate nohighlight">\(Q(a)\)</span> for different values
+<span class="math notranslate nohighlight">\(a\)</span> then concern different tuples and are independent:</p>
+<div class="math notranslate nohighlight">
+\[P[\exists z\, Q(z)] = 1 - \prod_a (1 - P[Q(a)]).\]</div>
+<p>The plan algebra also has <code class="docutils literal notranslate"><span class="pre">IndependentProjectionUniversal</span></code>, the dual
+projection for a universally quantified separator variable
+<a class="reference internal" href="#suciu2020" id="id12"><span>[Suciu2020]</span></a>, but it is not one of the implemented rules: the
+algorithm’s conversions to normal forms
+(<code class="docutils literal notranslate"><span class="pre">convert_to_dnf_existential_ucq</span></code>, <code class="docutils literal notranslate"><span class="pre">convert_to_cnf_existential_ucq</span></code>)
+accept FO∃¬ formulas only, <code class="docutils literal notranslate"><span class="pre">convert_ucq_to_ccq</span></code> rewrites universals as
+<span class="math notranslate nohighlight">\(\lnot\exists\lnot\)</span> before them, and <code class="docutils literal notranslate"><span class="pre">separator_variable_plan</span></code>
+chooses the universal projection only when the prenex form of the query
+has no existential quantifier, as for <span class="math notranslate nohighlight">\(\lnot\exists y\, R(y)\)</span>,
+whose plan is then impure. No test of the lifting builds it. It would
+need the opposite convention for the support of a plan (see the
+probabilistic model in <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>).</p>
+</dd>
+<dt>Inclusion–exclusion</dt><dd><p>For a conjunction <span class="math notranslate nohighlight">\(Q_1 \land \dots \land Q_n\)</span> in conjunctive normal
+form,</p>
+<div class="math notranslate nohighlight">
+\[P\Big[\bigwedge_{i} Q_i\Big] =
+\sum_{\emptyset \neq S \subseteq \{1..n\}}
+(-1)^{|S|+1}\, P\Big[\bigvee_{i \in S} Q_i\Big].\]</div>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">inclusion_exclusion_conjunction()</span></code>
+converts each of the <span class="math notranslate nohighlight">\(2^n - 1\)</span> disjunctions
+<span class="math notranslate nohighlight">\(f(S) = \bigvee_{i \in S} Q_i\)</span> to disjunctive normal form, and
+orders them (<code class="docutils literal notranslate"><span class="pre">_formulas_weights</span></code>): <span class="math notranslate nohighlight">\(T \preceq S\)</span> when
+<span class="math notranslate nohighlight">\(T \subseteq S\)</span>, or when
+<code class="xref py py-func docutils literal notranslate"><span class="pre">is_contained()</span></code> finds that
+<span class="math notranslate nohighlight">\(f(T)\)</span> implies <span class="math notranslate nohighlight">\(f(S)\)</span>, the relation being then closed
+transitively. The test is sound but not complete: a negated atom
+<span class="math notranslate nohighlight">\(\lnot R(\bar x)\)</span> is matched only by the same negated atom,
+through the relation <span class="math notranslate nohighlight">\(\bar R\)</span> of <code class="docutils literal notranslate"><span class="pre">NegatedSymbol</span></code>
+(<code class="docutils literal notranslate"><span class="pre">negations_as_atoms</span></code>). The disjunctions contained in each other are
+one term, lifted once, and the weight of each term is
+<span class="math notranslate nohighlight">\(\mu(S) = 1 - \sum_{T \prec S} \mu(T)\)</span>
+(<code class="docutils literal notranslate"><span class="pre">mobius_weights</span></code>, <code class="docutils literal notranslate"><span class="pre">mobius_function</span></code>), so that a term whose weight
+is 0 is not lifted. These cancellations remove terms that may be
+#P-hard while the conjunction is not <a class="reference internal" href="#dalvi2012" id="id13"><span>[Dalvi2012]</span></a>; a term that is not
+cancelled and that the algorithm cannot lift is marked <code class="docutils literal notranslate"><span class="pre">NonLiftable</span></code>,
+which makes the plan impure (<code class="docutils literal notranslate"><span class="pre">is_pure_lifted_plan</span></code>), and the query is
+declined unless another rule lifts it. The rule is applied only when
+all the conjuncts have the same free variables
+(<code class="docutils literal notranslate"><span class="pre">_have_the_same_free_variables</span></code>).
+<a class="reference internal" href="inclusion_exclusion.html#inclusion-exclusion"><span class="std std-ref">Inclusion–exclusion with an incomplete containment test</span></a> proves that the plan is exact although the
+containment test is not complete.</p>
+</dd>
+</dl>
+</section>
+<section id="disjoint-projection-on-a-probabilistic-choice">
+<h3><a class="toc-backref" href="#id41" role="doc-backlink">Disjoint projection on a probabilistic choice</a><a class="headerlink" href="#disjoint-projection-on-a-probabilistic-choice" title="Link to this heading">#</a></h3>
+<p>Suciu et al. <a class="reference internal" href="#suciu2011" id="id14"><span>[Suciu2011]</span></a> (section 4.3.1) extend the algorithm to
+block-independent disjoint relations, of which a probabilistic choice is
+one block: the events of different tuples of a block are mutually
+exclusive, and for a conjunctive query with an atom <span class="math notranslate nohighlight">\(C(\bar z)\)</span> of
+a choice, <span class="math notranslate nohighlight">\(\bar z\)</span> being quantified,</p>
+<div class="math notranslate nohighlight">
+\[P[\exists \bar z\, Q] = \sum_{\bar a} P[Q[\bar a/\bar z]].\]</div>
+<p>NeuroLang applies it to unions of conjunctive queries as the disjoint
+separator (see <a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm">Extensions of the Dalvi–Suciu algorithm</a>).</p>
+</section>
+<section id="non-repeating-queries-with-negation">
+<h3><a class="toc-backref" href="#id42" role="doc-backlink">Non-repeating queries with negation</a><a class="headerlink" href="#non-repeating-queries-with-negation" title="Link to this heading">#</a></h3>
+<p>A query is <em>non-repeating</em> when none of its probabilistic relations
+occurs twice in it. Fink and Olteanu show that a non-repeating query
+without union, built from joins, projections and negations, on
+tuple-independent relations, can be computed in polynomial time if it is
+hierarchical, and is #P-hard otherwise <a class="reference internal" href="#fink2014" id="id15"><span>[Fink2014]</span></a> <a class="reference internal" href="#fink2016" id="id16"><span>[Fink2016]</span></a>. NeuroLang’s
+planner for these queries, which accepts more of them, is described in
+<a class="reference internal" href="#planning-non-repeating-queries">Planning non-repeating queries</a>.</p>
+</section>
+</section>
+<section id="neurolang-s-additions">
+<h2><a class="toc-backref" href="#id43" role="doc-backlink">NeuroLang’s additions</a><a class="headerlink" href="#neurolang-s-additions" title="Link to this heading">#</a></h2>
+<p>The rewritings and rules of this section are NeuroLang’s own: the
+references they cite give the techniques they build on, not their
+correctness, which is proved in <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>. They are
+sound, but not known to be complete: some tractable queries may still be
+declined, and left to weighted model counting.</p>
+<section id="preparing-the-query">
+<h3><a class="toc-backref" href="#id44" role="doc-backlink">Preparing the query</a><a class="headerlink" href="#preparing-the-query" title="Link to this heading">#</a></h3>
+<p>Before lifting, <code class="xref py py-func docutils literal notranslate"><span class="pre">solve_succ_query()</span></code>
+rewrites the query as follows.</p>
+<dl>
+<dt>Flattening</dt><dd><p>The rules the query depends on are unfolded into its body, giving a
+union of conjunctive queries in disjunctive normal form.</p>
+</dd>
+<dt>Absorption in negations</dt><dd><p>Conjuncts asserted outside a negation are removed from it, by the
+absorption law</p>
+<div class="math notranslate nohighlight">
+\[A \land \lnot(A \land B) \equiv A \land \lnot B, \qquad
+A \land \lnot\exists y\,(A \land B) \equiv A \land \lnot\exists y\, B
+\quad (y \text{ not free in } A).\]</div>
+<p>The law holds in every interpretation, hence in every possible world.
+It removes, for instance, a probabilistic atom repeated within a
+negation, which can make the query non-repeating, the class of queries
+with negation for which Fink and Olteanu characterise liftability
+<a class="reference internal" href="#fink2016" id="id17"><span>[Fink2016]</span></a>. A negated conjunction all of whose conjuncts are asserted
+is a contradiction and is left unchanged
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">AbsorbAssertedConjunctsInNegations</span></code>).</p>
+</dd>
+<dt>Contradicting disjuncts</dt><dd><p>A disjunct with a negated conjunct <span class="math notranslate nohighlight">\(\lnot A\)</span>, where <span class="math notranslate nohighlight">\(A\)</span> is
+one of its conjuncts or is asserted by the conjunction of which the
+disjunction is a conjunct, is removed:</p>
+<div class="math notranslate nohighlight">
+\[A \land (B \lor (C \land \lnot A)) \equiv A \land B, \qquad
+B \lor (A \land C \land \lnot A) \equiv B,\]</div>
+<p>also through the existentials of the disjunct which do not quantify a
+variable of <span class="math notranslate nohighlight">\(A\)</span>. A disjunction all of whose disjuncts are
+contradictions is left unchanged. The translation of a negated
+existential to rules gives such disjuncts:
+<span class="math notranslate nohighlight">\(\lnot\exists y\,(B \land A)\)</span>, with <span class="math notranslate nohighlight">\(y\)</span> not free in
+<span class="math notranslate nohighlight">\(A\)</span>, is <span class="math notranslate nohighlight">\(\lnot\exists y\, B \lor \lnot A\)</span>, so that</p>
+<div class="math notranslate nohighlight">
+\[A \land \lnot\exists y\,(B \land A) \equiv
+A \land (\lnot\exists y\, B \lor \lnot A) \equiv
+A \land \lnot\exists y\, B,\]</div>
+<p>which is the absorption in negations, after the translation. For
+instance, with a choice <span class="math notranslate nohighlight">\(C\)</span>, the query
+<span class="math notranslate nohighlight">\(T(s, t) \land C(s) \land \lnot\exists t_1\,
+(T(s, t_1) \land t_1 \neq t \land C(s))\)</span> is rewritten without the
+choice in the negation, and is lifted by the projection on the choice
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">RemoveContradictingDisjunctsMixin</span></code>,
+in <code class="xref py py-class docutils literal notranslate"><span class="pre">AbsorbAssertedConjuncts</span></code>).</p>
+</dd>
+<dt>Deterministic negations</dt><dd><p>A negated conjunct <span class="math notranslate nohighlight">\(\lnot N(\bar x)\)</span> whose atoms are all
+deterministic relations or comparisons is the same relation in every
+possible world. With <span class="math notranslate nohighlight">\(G(\bar x)\)</span> the deterministic conjuncts of
+the query whose variables are among <span class="math notranslate nohighlight">\(\bar x\)</span>, it is replaced by a
+fresh deterministic relation defined by a relational algebra
+expression,</p>
+<div class="math notranslate nohighlight">
+\[D(\bar x) := G(\bar x) \land \lnot N(\bar x), \qquad
+G \land \lnot N \equiv G \land D,\]</div>
+<p><span class="math notranslate nohighlight">\(G\)</span> being conjoined within the existentials of <span class="math notranslate nohighlight">\(N\)</span> so that
+they are range-restricted, as in
+<span class="math notranslate nohighlight">\(\lnot\exists t_1\,(T(t_1) \land M(s, t_1) \land t_1 \neq t)\)</span>.
+The negation is left unchanged when no non-empty <span class="math notranslate nohighlight">\(G\)</span> binds all of
+<span class="math notranslate nohighlight">\(\bar x\)</span>, for instance when <span class="math notranslate nohighlight">\(N\)</span> is closed
+(<code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.probabilistic.deterministic_subqueries</span></code>). The
+expression is not evaluated while planning: marked with
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Materialise</span></code>,
+it is a subexpression of the plan, computed as a set when the plan is
+evaluated.</p>
+</dd>
+<dt>Deterministic builtins</dt><dd><p>The lifting rules plan comparisons but no other builtin, such as
+<code class="docutils literal notranslate"><span class="pre">startswith</span></code>. The conjunction <span class="math notranslate nohighlight">\(B(\bar y)\)</span> of the builtins of a
+conjunction whose variables are among those of one of its deterministic
+atoms <span class="math notranslate nohighlight">\(R(\bar x)\)</span> is replaced with <span class="math notranslate nohighlight">\(R\)</span> by a fresh
+deterministic relation, defined as for the deterministic negations,</p>
+<div class="math notranslate nohighlight">
+\[D(\bar x) := R(\bar x) \land B(\bar y), \qquad
+R \land B \equiv D,\]</div>
+<p>so that <code class="docutils literal notranslate"><span class="pre">schaefer(l,</span> <span class="pre">r),</span> <span class="pre">startswith('17Networks</span> <span class="pre">LH</span> <span class="pre">Vis',</span> <span class="pre">l)</span></code> in a
+probabilistic rule is lifted as when a deterministic rule selects the
+labels, instead of being solved by weighted model counting.</p>
+<p>An equality <span class="math notranslate nohighlight">\(y = f(\bar x)\)</span> of a variable with a function of
+other variables, all of them in an atom <span class="math notranslate nohighlight">\(A\)</span>, deterministic or
+probabilistic, of the conjunction, is replaced by a fresh deterministic
+relation of the values of the function on the tuples of <span class="math notranslate nohighlight">\(A\)</span>, the
+support of <span class="math notranslate nohighlight">\(A\)</span> if it is probabilistic:</p>
+<div class="math notranslate nohighlight">
+\[F(\bar x, y) := \pi_{\bar x}(A) \land y = f(\bar x), \qquad
+A \land y = f(\bar x) \equiv A \land F(\bar x, y).\]</div>
+<p><span class="math notranslate nohighlight">\(F\)</span> is a function of <span class="math notranslate nohighlight">\(\bar x\)</span>, so that in <span class="math notranslate nohighlight">\(R(x)
+\land T(y) \land y = x + 1\)</span>, <span class="math notranslate nohighlight">\(y\)</span> separates the query (see the
+separator determined by a functional dependency, in <a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm">Extensions of the
+Dalvi–Suciu algorithm</a>).</p>
+<p>Two atoms of the same probabilistic choice relation are true together
+only if they are the same tuple, as exactly one tuple of the choice is
+true. Their arguments are therefore made equal
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">lift_optimization_for_choice_predicates()</span></code>).
+This holds for the atoms of a conjunction: the disjuncts of a
+disjunction are rewritten apart, and the atoms of a conjunction are not
+made equal to those within its disjunctions, since <span class="math notranslate nohighlight">\(C(s) \lor
+C(f)\)</span> does not need both to be true.</p>
+<p>An atom <span class="math notranslate nohighlight">\(C(\bar v)\)</span> within a negated existential of a
+conjunction which asserts <span class="math notranslate nohighlight">\(C(\bar u)\)</span> is made <span class="math notranslate nohighlight">\(C(\bar u)\)</span>,
+when the variables of <span class="math notranslate nohighlight">\(\bar v\)</span> that are not those of
+<span class="math notranslate nohighlight">\(\bar u\)</span> are quantified by the existential, which loses them:</p>
+<div class="math notranslate nohighlight">
+\[C(\bar u) \land \lnot\exists W\, (C(\bar v) \land \psi) \equiv
+C(\bar u) \land \lnot\exists W'\, (C(\bar u) \land \psi)
+[\bar u/\bar v],\]</div>
+<p>and the absorption in negations then removes <span class="math notranslate nohighlight">\(C(\bar u)\)</span> from the
+negation. For instance, <span class="math notranslate nohighlight">\(R(x) \land \lnot\exists t\, (R(t) \land
+S(x, t))\)</span> becomes <span class="math notranslate nohighlight">\(R(x) \land \lnot S(x, x)\)</span>. A negation in which
+the substitution makes a strict comparison of a term with itself, as
+<span class="math notranslate nohighlight">\(s_2 \neq s\)</span> becoming <span class="math notranslate nohighlight">\(s \neq s\)</span>, is true, and is removed
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">UnifyChoicesInNegations</span></code>).</p>
+</dd>
+<dt>Equalities within disjuncts</dt><dd><p>The variables an equality makes the same are unified, in each disjunct
+of a union apart, as the equality holds in its disjunct only. A
+disjunct keeps its equalities if unifying them would replace a variable
+of the query’s head, which every disjunct shares.</p>
+</dd>
+<dt>Checks</dt><dd><p>The query must have no built-in function, except comparisons within
+existential conjuncts (see <a class="reference internal" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing
+relations</a>) and comparisons of the answer variables, conjuncts of the
+query (see <a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm">Extensions of the Dalvi–Suciu algorithm</a>). Unless the <code class="docutils literal notranslate"><span class="pre">check_unate</span></code> option of
+<code class="docutils literal notranslate"><span class="pre">[PROBABILISTIC_SOLVER]</span></code> is turned off (see <a class="reference internal" href="performance.html"><span class="doc">Performance and Configuration</span></a>), it
+must also use a single kind of quantifier and be <em>unate</em>, each relation
+occurring only positively or only negatively.
+The negations and comparisons of <a class="reference internal" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing
+relations</a> are exempt from this check, as their rules check each
+query they lift. Turning the option off disables these soundness
+checks: the rules are then applied to queries for which they are not
+proved, and can give wrong probabilities instead of declining the query
+to weighted model counting.</p>
+</dd>
+<dt>Comparisons with a constant</dt><dd><p>Shattering moves a comparison of a variable with a constant, such as
+<span class="math notranslate nohighlight">\(y &gt; 1\)</span>, into the atoms of a tuple-independent relation with that
+variable, as it does for <span class="math notranslate nohighlight">\(y \neq 1\)</span>. Each comparison
+<span class="math notranslate nohighlight">\(R.i\ \theta\ c\)</span> of a column of <span class="math notranslate nohighlight">\(R\)</span> with a constant splits
+the tuples of <span class="math notranslate nohighlight">\(R\)</span> into those with <span class="math notranslate nohighlight">\(R.i\ \theta\ c\)</span> and those
+with its complement, <span class="math notranslate nohighlight">\(&lt;\)</span> and <span class="math notranslate nohighlight">\(\geq\)</span>, <span class="math notranslate nohighlight">\(\leq\)</span> and
+<span class="math notranslate nohighlight">\(&gt;\)</span>, <span class="math notranslate nohighlight">\(\neq\)</span> and <span class="math notranslate nohighlight">\(=\)</span>, and the relation is split by the
+product of these partitions and of that of its constants. An atom of
+<span class="math notranslate nohighlight">\(R\)</span> is replaced by the disjunction of the atoms of the sets
+compatible with its constants and with the comparisons of its
+variables in its conjunction, which are then removed: a comparison of a
+variable in no such atom is kept. A comparison outside the
+existentials of its variable’s atoms, as in <span class="math notranslate nohighlight">\(\exists y\,
+(\exists x\, (R(x) \land S(x, y)) \land y &gt; 1)\)</span> once the quantifiers
+are pushed down, is first moved into them, <span class="math notranslate nohighlight">\(C \land \exists x\,
+\psi \equiv \exists x\, (C \land \psi)\)</span>, <span class="math notranslate nohighlight">\(x\)</span> being renamed apart
+from the variables of <span class="math notranslate nohighlight">\(C\)</span>
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">FactorConjunctQuantifiers</span></code>,
+the conjunction being then flattened),
+unless the conjunction has a negation or a disjunction. The query
+<span class="math notranslate nohighlight">\(\exists x, y\, R(x) \land S_{&gt;1}(x, y)\)</span> is then lifted by the
+separator variable <span class="math notranslate nohighlight">\(x\)</span>. A comparison <span class="math notranslate nohighlight">\(c\ \theta\ y\)</span> is
+first written <span class="math notranslate nohighlight">\(y\ \theta'\ c\)</span>.</p>
+</dd>
+</dl>
+</section>
+<section id="planning-non-repeating-queries">
+<h3><a class="toc-backref" href="#id45" role="doc-backlink">Planning non-repeating queries</a><a class="headerlink" href="#planning-non-repeating-queries" title="Link to this heading">#</a></h3>
+<p>The planner of non-repeating queries with a negation accepts
+disjunctions, comparisons, constants, deterministic relations and
+probabilistic choices, which the theorem of <a class="reference internal" href="#non-repeating-queries-with-negation">Non-repeating queries with
+negation</a> does not cover: its plans are proved correct in <a class="reference internal" href="#correctness-of-the-plans">Correctness
+of the plans</a>, and it is not claimed to plan every tractable query.
+Before the Dalvi–Suciu algorithm,
+<code class="xref py py-func docutils literal notranslate"><span class="pre">non_repeating_plan()</span></code>
+plans the non-repeating queries with a negation in this way. The negations
+can be nested and can quantify variables, as in
+<span class="math notranslate nohighlight">\(\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land \lnot U(x,
+y))\)</span>, whose quantifiers are mixed once the negations are moved to the
+atoms, which the checks of the Dalvi–Suciu algorithm decline.</p>
+<p>The query is first rewritten with two equivalences, which hold in every
+possible world and keep it non-repeating:</p>
+<ul class="simple">
+<li><p>equalities with a quantified variable are eliminated in every
+subformula, <span class="math notranslate nohighlight">\(\exists v\, (v = e \land \varphi) \equiv
+\varphi[e/v]\)</span> for a variable or a constant <span class="math notranslate nohighlight">\(e\)</span>, as in
+<span class="math notranslate nohighlight">\(\lnot\exists u\, (W(s, u) \land u = t) \equiv \lnot W(s, t)\)</span>;</p></li>
+<li><p>a negated disjunction is the conjunction of the negated disjuncts,
+<span class="math notranslate nohighlight">\(\lnot(A \lor B) \equiv \lnot A \land \lnot B\)</span>, the disjuncts
+possibly having different free variables, as in
+<span class="math notranslate nohighlight">\(M(s, t) \land \lnot(K(s) \lor G(s, t))\)</span>.</p></li>
+</ul>
+<p>As the subformulas of a non-repeating query have different relations, they
+are independent, and the plan is built with the independent operations
+only:</p>
+<ul class="simple">
+<li><p>a conjunction is the join of its positive conjuncts, filtered by its
+comparisons, from which its negated conjuncts are removed with
+<code class="docutils literal notranslate"><span class="pre">Difference</span></code>, <span class="math notranslate nohighlight">\(P[A \land \lnot B] = P[A]\,(1 - P[B])\)</span>;</p></li>
+<li><p>a disjunction of formulas with the same free variables is their
+independent union;</p></li>
+<li><p><span class="math notranslate nohighlight">\(\exists \bar v\, (\varphi_1 \lor \varphi_2)\)</span> is planned as
+<span class="math notranslate nohighlight">\(\exists \bar v\, \varphi_1 \lor \exists \bar v\, \varphi_2\)</span>,
+each disjunct keeping the quantifiers of its variables. For instance, a
+negated predicate defined by two rules, <span class="math notranslate nohighlight">\(N(s) \leftarrow F(s)\)</span> and
+<span class="math notranslate nohighlight">\(N(s) \leftarrow M(s, t)\)</span>, flattens to
+<span class="math notranslate nohighlight">\(\lnot\exists t\, (F(s) \lor M(s, t))\)</span>, which is planned as
+<span class="math notranslate nohighlight">\(\lnot F(s) \land \lnot\exists t\, M(s, t)\)</span>;</p></li>
+<li><p><span class="math notranslate nohighlight">\(\exists \bar v\, \varphi\)</span> is first split into the groups of
+conjuncts of <span class="math notranslate nohighlight">\(\varphi\)</span> connected by the variables of
+<span class="math notranslate nohighlight">\(\bar v\)</span>, the other conjuncts being moved out of the quantifier.
+Each group is then projected on one of its variables <span class="math notranslate nohighlight">\(v\)</span> that
+occurs in every probabilistic atom of the group, including those within
+its negations: the events <span class="math notranslate nohighlight">\(\varphi(a)\)</span> for different values
+<span class="math notranslate nohighlight">\(a\)</span> concern different tuples, and the projection is independent,
+<span class="math notranslate nohighlight">\(1 - \prod_a (1 - P[\varphi(a)])\)</span>. When a probabilistic choice
+conjunct of the group has <span class="math notranslate nohighlight">\(v\)</span>, the events are mutually exclusive
+instead, and the projection is disjoint, <span class="math notranslate nohighlight">\(\sum_a P[\varphi(a)]\)</span>.
+If no variable of the group occurs in all of its probabilistic atoms, as
+in the #P-hard
+<span class="math notranslate nohighlight">\(\exists x\, R(x) \land \lnot\exists y\, (S(x, y) \land T(y))\)</span>,
+or if another condition fails, such as a comparison or a negation whose
+variables are not bound by the rest of its conjunction, or a choice atom
+with the variable that is not a conjunct of the group, no plan is given
+and the query is left to the Dalvi–Suciu algorithm.</p></li>
+</ul>
+<p>Deterministic relations do not count as repetitions, and do not need to
+have the projected variable.</p>
+<p>In Datalog, the rules of a predicate share their head variables, so the
+negation of a predicate defined by several rules always has disjuncts with
+the same free variables once the quantifiers are pushed into them;
+disjuncts with different free variables only arise in queries built with
+the Python API.</p>
+</section>
+<section id="extensions-of-the-dalvisuciu-algorithm">
+<h3><a class="toc-backref" href="#id46" role="doc-backlink">Extensions of the Dalvi–Suciu algorithm</a><a class="headerlink" href="#extensions-of-the-dalvisuciu-algorithm" title="Link to this heading">#</a></h3>
+<dl>
+<dt>Independent negation</dt><dd><p>With the query in conjunctive normal form, a negated component sharing
+no probabilistic relation with the rest is independent of it:</p>
+<div class="math notranslate nohighlight">
+\[P[Q_1 \land \lnot Q_2] = P[Q_1]\,(1 - P[Q_2]),\]</div>
+<p>computed with <code class="docutils literal notranslate"><span class="pre">Difference</span></code>: the query is liftable when its positive
+and negated parts are (see <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>). Fink and
+Olteanu study the converse, for queries with negation without repeated
+relations <a class="reference internal" href="#fink2014" id="id18"><span>[Fink2014]</span></a> <a class="reference internal" href="#fink2016" id="id19"><span>[Fink2016]</span></a>.</p>
+</dd>
+<dt>Disjoint separator</dt><dd><p>The counterpart, for probabilistic choices, of the separator variable
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">disjoint_separator()</span></code>).
+A choice cannot have a separator variable: the events of different
+values of its variables are exclusive, not independent. In the prenex
+form <span class="math notranslate nohighlight">\(\exists \bar y\, \bigvee_i Q_i\)</span> of a union, the atoms of a
+choice <span class="math notranslate nohighlight">\(C\)</span>, one in each disjunct, are made the same atom
+<span class="math notranslate nohighlight">\(C(\bar z)\)</span> by renaming the quantified variables of each disjunct
+into those of the first. The events <span class="math notranslate nohighlight">\(\bigvee_i Q_i(\bar a)\)</span> for
+different values <span class="math notranslate nohighlight">\(\bar a\)</span> of <span class="math notranslate nohighlight">\(\bar z\)</span> are then exclusive and</p>
+<div class="math notranslate nohighlight">
+\[P\Big[\exists \bar z\, \bigvee_i Q_i\Big] =
+\sum_{\bar a} P\Big[\bigvee_i Q_i(\bar a)\Big]\]</div>
+<p>This is the disjoint projection of Suciu et al. (see <a class="reference internal" href="#disjoint-projection-on-a-probabilistic-choice">Disjoint
+projection on a probabilistic choice</a>), applied here to a union of
+conjunctive queries, as the separator variable is to unions; its proof
+is in <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>. When the atoms of the disjuncts
+other than the choice atoms are deterministic, <span class="math notranslate nohighlight">\(P[C(\bar a) \land
+D(\bar a)] = P[C(\bar a)]\,[D(\bar a)]\)</span>: the plan joins the choice with
+the support of the deterministic union <span class="math notranslate nohighlight">\(D\)</span>, in a single
+projection, whatever the number of disjuncts. Otherwise the union is
+lifted for every <span class="math notranslate nohighlight">\(\bar a\)</span> by the other rules. The rule applies
+when every disjunct has an atom of the choice, at each position either
+a quantified variable or the same free variable or constant in all of
+them, and every free variable of the query. A free variable or a
+constant <span class="math notranslate nohighlight">\(u\)</span> of a choice atom, at a position where another
+disjunct has a quantified variable, is made one,
+<span class="math notranslate nohighlight">\(C(u) \equiv \exists f\, (C(f) \land f = u)\)</span>, <span class="math notranslate nohighlight">\(f\)</span> being
+fresh; with another atom <span class="math notranslate nohighlight">\(C(a)\)</span> of the choice in the disjunct,
+<span class="math notranslate nohighlight">\(C(a) \land C(f) \equiv C(a) \land a = f\)</span> and
+<span class="math notranslate nohighlight">\(\exists f\, (f = a \land \varphi) \equiv \varphi[a/f]\)</span> then give
+<span class="math notranslate nohighlight">\(C(a) \land a = u\)</span> (<code class="docutils literal notranslate"><span class="pre">ChoiceTermsAsEqualities</span></code>, one rule per
+equivalence). The equalities, as comparisons, are the same in every
+world and belong to the deterministic rest; a union with them and a
+rest which is not deterministic is declined. It is
+tried after the separator variables, a conjunctive query being the
+union of a single disjunct.</p>
+</dd>
+<dt>Clauses of the conjunctive normal form</dt><dd><p>The conjunctive normal form <span class="math notranslate nohighlight">\(K_1 \land \dots \land K_n\)</span> of a
+union is used to remove redundant atoms, to split it into independent
+components, and for inclusion–exclusion. The clauses are lifted apart,
+each into a relation of its free variables, and then joined. A clause
+that is a disjunction with a negated atom none of whose variables a
+positive atom of the same disjunct binds, such as <span class="math notranslate nohighlight">\(\exists s\,
+M(s, t) \lor \lnot L(t)\)</span>, is not safe range: its answers are not a
+finite set of values of <span class="math notranslate nohighlight">\(t\)</span>, though the conjunction it comes from
+is (another clause binds <span class="math notranslate nohighlight">\(t\)</span>). The conversion makes such clauses
+from safe rules when it factors out an atom they share, as in
+<span class="math notranslate nohighlight">\((M(s, t) \land C(s) \land \lnot L(t)) \lor (M(s', t) \land
+C(f) \land M(f, c))\)</span>. The normal form is then not used
+(<code class="docutils literal notranslate"><span class="pre">_clauses_are_range_restricted</span></code>): the rules that follow, the
+disjoint separator among them, apply to the union as it is, and a union
+none of them lifts is declined, which is sound. They also apply when
+the components of the normal form are not all lifted. A negation alone
+as a clause is not a disjunction, and is the difference of a
+conjunction.</p>
+</dd>
+<dt>Answer variables as constants</dt><dd><p>Dalvi and Suciu lift a query for each answer, its free variables being
+constants <a class="reference internal" href="#dalvi2012" id="id20"><span>[Dalvi2012]</span></a>. Two atoms of a tuple-independent relation with
+free variables <span class="math notranslate nohighlight">\(x\)</span> and <span class="math notranslate nohighlight">\(y\)</span> at the same position, such as
+<span class="math notranslate nohighlight">\(\exists s\, A(x, s) \land A(y, s)\)</span>, are then different tuples
+when <span class="math notranslate nohighlight">\(x \neq y\)</span>, and the same when <span class="math notranslate nohighlight">\(x = y\)</span>, which the
+algorithm, keeping the variables, cannot tell
+(<code class="docutils literal notranslate"><span class="pre">different_free_variables_plan</span></code>). When the other rules decline the
+query <span class="math notranslate nohighlight">\(Q\)</span>, its answers are split on the equalities among the free
+variables <span class="math notranslate nohighlight">\(x_1, \dots, x_k\)</span> at that position of the atoms of the
+relation <span class="math notranslate nohighlight">\(R\)</span>: one branch per partition <span class="math notranslate nohighlight">\(\Pi\)</span> of them into
+blocks (<code class="docutils literal notranslate"><span class="pre">_set_partitions</span></code>). In a branch, each variable is replaced by
+the first variable of its block, its representative,
+<span class="math notranslate nohighlight">\(Q[\Pi]\)</span>, and the atoms of <span class="math notranslate nohighlight">\(R\)</span> with a representative there,
+but the first, are renamed into those of an alias of <span class="math notranslate nohighlight">\(R\)</span> for each
+representative, <span class="math notranslate nohighlight">\(\rho\)</span>. For two variables, the partitions are
+<span class="math notranslate nohighlight">\(\{x\}, \{y\}\)</span> and <span class="math notranslate nohighlight">\(\{x, y\}\)</span>, and the plan is</p>
+<div class="math notranslate nohighlight">
+\[\sigma_{x \neq y}\, \mathrm{lift}(Q[R'/R]) \;\cup\;
+\pi_{y := x}\, \mathrm{lift}(Q[x/y]);\]</div>
+<p>in general, with <span class="math notranslate nohighlight">\(r_1, \dots, r_m\)</span> the representatives of
+<span class="math notranslate nohighlight">\(\Pi\)</span>, and the projection copying each into the variables of its
+block,</p>
+<div class="math notranslate nohighlight">
+\[\bigcup_{\Pi}\, \pi_{\Pi}\, \sigma_{\bigwedge_{j &lt; l} r_j \neq
+r_l}\, \mathrm{lift}(Q[\Pi][\rho]).\]</div>
+<p>The rule applies when, in every branch, every renamed atom is a
+different tuple from the other atoms of <span class="math notranslate nohighlight">\(R\)</span>, having its
+representative where they have another
+(<code class="docutils literal notranslate"><span class="pre">_are_different_tuples_when_different</span></code>). A variable at that position
+in an atom of <span class="math notranslate nohighlight">\(R\)</span> that is not free, as <span class="math notranslate nohighlight">\(z\)</span> in <span class="math notranslate nohighlight">\(A(x, s)
+\land A(y, s) \land A(z, s)\)</span>, prevents it. The number of branches is the
+Bell number of <span class="math notranslate nohighlight">\(k\)</span>, 2, 5 and 15 for 2, 3 and 4 variables; more
+than <code class="docutils literal notranslate"><span class="pre">MAX_ANSWER_VARIABLES_AT_A_POSITION</span></code>, 3, variables at a position
+are declined, the optimisation of the plan of 15 branches taking too
+long.</p>
+</dd>
+<dt>Comparisons of answer variables</dt><dd><p>A comparison of free variables, a conjunct of the query such as
+<span class="math notranslate nohighlight">\(l_1 &lt; l_2\)</span>, is a selection of the answers of the rest of the
+query, which is lifted without it.</p>
+</dd>
+<dt>Separator determined by a functional dependency</dt><dd><p>A deterministic atom <span class="math notranslate nohighlight">\(F(x, y)\)</span> whose relation is a function of
+<span class="math notranslate nohighlight">\(x\)</span>, <span class="math notranslate nohighlight">\(y\)</span> being the same for all the tuples with the same
+<span class="math notranslate nohighlight">\(x\)</span>, determines <span class="math notranslate nohighlight">\(y\)</span> from <span class="math notranslate nohighlight">\(x\)</span>: in a conjunctive query,
+an atom <span class="math notranslate nohighlight">\(R(x)\)</span> of a tuple-independent relation is then counted as
+having <span class="math notranslate nohighlight">\(y\)</span> when looking for a separator variable
+(<code class="docutils literal notranslate"><span class="pre">_determined_variables</span></code>). In</p>
+<div class="math notranslate nohighlight">
+\[\exists p\, \exists s\, \mathit{reliable\_peak}(p) \land
+\mathit{peak\_study}(p, s) \land \mathit{term\_in\_study}(t, s),\]</div>
+<p>each peak being reported by one study, <span class="math notranslate nohighlight">\(s\)</span> separates the query,
+which is otherwise the #P-hard query <span class="math notranslate nohighlight">\(H_0\)</span> with a deterministic
+middle relation. Olteanu, Huang and Koch lift such queries, without
+self-joins, under functional dependencies <a class="reference internal" href="#olteanu2009b" id="id21"><span>[Olteanu2009b]</span></a>. The
+dependency is checked on the data of the relation, a deterministic
+subquery being computed for it; it is followed
+through several deterministic atoms, and from several columns. An atom
+of a choice keeps its variables, its tuples being exclusive for all the
+values of <span class="math notranslate nohighlight">\(y\)</span>, as does an atom of a relation in several disjuncts
+of a union, and the variables are determined in conjunctions only, by
+atoms which are not negated.</p>
+</dd>
+<dt>Unions of plans with the same columns</dt><dd><p>A union of plans, of the disjuncts of a deterministic formula or of the
+connected components of a disjunctive normal form, is only planned when
+every disjunct has all the free variables of the union: the plans are
+relations of their free variables, and <span class="math notranslate nohighlight">\(A(s, r) \lor M(s)\)</span> holds
+for every <span class="math notranslate nohighlight">\(r\)</span> when <span class="math notranslate nohighlight">\(M(s)\)</span> does, which a union of the
+relations of <span class="math notranslate nohighlight">\((s, r)\)</span> and of <span class="math notranslate nohighlight">\((s)\)</span> cannot give. Such a
+disjunction comes from the conjunctive normal form of a safe union of
+rules, as <span class="math notranslate nohighlight">\((R(r) \land C(s) \land A(s, r)) \lor (R(r) \land C(s)
+\land M(s))\)</span>, factoring <span class="math notranslate nohighlight">\(R(r)\)</span> out of it
+(<code class="docutils literal notranslate"><span class="pre">_union_has_the_same_columns</span></code>). It is declined, which is sound: the
+other rules apply to the formula, or another solver does.</p>
+</dd>
+</dl>
+</section>
+<section id="negations-and-comparisons-sharing-relations">
+<h3><a class="toc-backref" href="#id47" role="doc-backlink">Negations and comparisons sharing relations</a><a class="headerlink" href="#negations-and-comparisons-sharing-relations" title="Link to this heading">#</a></h3>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">lift_with_dependent_negations()</span></code>
+extends the algorithm to conjunctions <span class="math notranslate nohighlight">\(A \land \lnot N\)</span> in which the
+negated conjunct <span class="math notranslate nohighlight">\(N\)</span> shares probabilistic relations with <span class="math notranslate nohighlight">\(A\)</span>,
+and to existential conjuncts with comparisons such as <span class="math notranslate nohighlight">\(t \neq x\)</span>.
+Such conjunctions fall outside unions of conjunctive queries, so the
+completeness result above does not apply to them.
+The rules below are tried in turn when the relations shared are
+tuple-independent; a conjunction sharing a probabilistic choice, which
+the rewriting of the choices in negations (see <a class="reference internal" href="#preparing-the-query">Preparing the query</a>)
+leaves, is declined. Every rule checks each query it lifts, and the lifted plans are
+sound (see <a class="reference internal" href="#correctness-of-the-plans">Correctness of the plans</a>), but the rules are not known to be
+complete: some liftable conjunctions of this kind may still be declined
+and left to weighted model counting.</p>
+<dl>
+<dt>Comparisons in an existential conjunct</dt><dd><p>For <span class="math notranslate nohighlight">\(A \land \exists t\,(\psi(t) \land C)\)</span>, or its negation, where
+<span class="math notranslate nohighlight">\(C\)</span> is a conjunction of comparisons between <span class="math notranslate nohighlight">\(t\)</span>, the free
+variables and constants, e.g.
+<span class="math notranslate nohighlight">\(P(x, y) \land \lnot\exists w\,(P(w, y) \land w \neq x)\)</span>. Following
+Olteanu and Huang <a class="reference internal" href="#olteanu2009" id="id22"><span>[Olteanu2009]</span></a>, with <span class="math notranslate nohighlight">\(L\)</span> the plan of <span class="math notranslate nohighlight">\(A\)</span>,
+the event <span class="math notranslate nohighlight">\(E = \exists t\,(\psi(t) \land C)\)</span> is computed as</p>
+<div class="math notranslate nohighlight">
+\[E = \text{ind-}\pi\;\sigma_C\big(\mathrm{lift}(\psi(t)) \bowtie
+\mathrm{support}(L)\big)\]</div>
+<p>and the plan is <span class="math notranslate nohighlight">\(L \bowtie E\)</span>, or <span class="math notranslate nohighlight">\(\mathrm{Difference}(L, E)\)</span>
+when negated. It applies when <span class="math notranslate nohighlight">\(t\)</span> is a separator variable of
+<span class="math notranslate nohighlight">\(\psi\)</span>, and when each probabilistic atom of <span class="math notranslate nohighlight">\(\psi(t)\)</span> has
+<span class="math notranslate nohighlight">\(t\)</span> in a position where the atoms of the same relation in
+<span class="math notranslate nohighlight">\(A\)</span> have a term that <span class="math notranslate nohighlight">\(C\)</span> makes different from <span class="math notranslate nohighlight">\(t\)</span>, so
+that <span class="math notranslate nohighlight">\(E\)</span> and <span class="math notranslate nohighlight">\(A\)</span> concern different tuples.</p>
+</dd>
+<dt>Free-variable shattering</dt><dd><p>For <span class="math notranslate nohighlight">\(A \land \lnot\exists t\,\psi(t)\)</span> where the shared atoms have a
+free variable <span class="math notranslate nohighlight">\(x\)</span> of <span class="math notranslate nohighlight">\(A\)</span> in the position of <span class="math notranslate nohighlight">\(t\)</span>, such
+as <span class="math notranslate nohighlight">\(R(x) \land \lnot\exists t\,(R(t) \land S(x, t))\)</span>. Splitting the
+existential on <span class="math notranslate nohighlight">\(t = x\)</span> and <span class="math notranslate nohighlight">\(t \neq x\)</span>, as shattering does
+<a class="reference internal" href="#dalvi2012" id="id23"><span>[Dalvi2012]</span></a>,</p>
+<div class="math notranslate nohighlight">
+\[\exists t\,\psi(t) \equiv \psi(x) \lor \exists t\,(t \neq x \land
+\psi(t)),\]</div>
+<p>gives the plan, with <span class="math notranslate nohighlight">\(L = \mathrm{lift}(A \land \lnot\psi(x))\)</span>,</p>
+<div class="math notranslate nohighlight">
+\[\mathrm{Difference}\Big(L,\ \text{ind-}\pi\;\sigma_{t \neq x}
+\big(\mathrm{lift}(\psi(t)) \bowtie \mathrm{support}(L)\big)\Big).\]</div>
+<p>It applies when <span class="math notranslate nohighlight">\(t\)</span> is a separator variable of <span class="math notranslate nohighlight">\(\psi\)</span>, and
+when, for <span class="math notranslate nohighlight">\(t \neq x\)</span>, each probabilistic atom of <span class="math notranslate nohighlight">\(\psi(t)\)</span> is
+a different tuple from the atoms of the same relation in <span class="math notranslate nohighlight">\(A\)</span> and
+<span class="math notranslate nohighlight">\(\psi(x)\)</span>, the second part being then independent of <span class="math notranslate nohighlight">\(L\)</span>.</p>
+</dd>
+<dt>Negation by subtraction</dt><dd><p>For any <span class="math notranslate nohighlight">\(A \land \lnot N\)</span>, as <span class="math notranslate nohighlight">\(A \land N\)</span> implies <span class="math notranslate nohighlight">\(A\)</span>,</p>
+<div class="math notranslate nohighlight">
+\[P[A \land \lnot N] = P[A] - P[A \land N],\]</div>
+<p>computed with <code class="docutils literal notranslate"><span class="pre">Subtraction</span></code> when both <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(A \land N\)</span>
+are liftable.</p>
+</dd>
+<dt>Existential shattering</dt><dd><p>For a positive existential conjunct <span class="math notranslate nohighlight">\(A \land \exists t\,\psi(t)\)</span>
+sharing relations with <span class="math notranslate nohighlight">\(A\)</span>, which the Dalvi–Suciu algorithm declines,</p>
+<div class="math notranslate nohighlight">
+\[P[A \land \exists t\,\psi(t)] = P[A] - P[A \land \lnot\exists t\,
+\psi(t)],\]</div>
+<p>the latter being planned by free-variable shattering.</p>
+</dd>
+<dt>Projection on a variable</dt><dd><p>When the rules above decline <span class="math notranslate nohighlight">\(\exists X\, \varphi\)</span>, it is planned
+by projecting the plan of <span class="math notranslate nohighlight">\(\varphi\)</span>, lifted with all the rules of
+this page, on variables of <span class="math notranslate nohighlight">\(X\)</span> made free
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">projection_plan()</span></code>).
+The quantifiers of the conjuncts of the query are first gathered,
+<span class="math notranslate nohighlight">\(A \land \exists X\, \psi \equiv \exists X\, (A \land \psi)\)</span>
+(<code class="docutils literal notranslate"><span class="pre">FactorQuantifiersMixin</span></code> of <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.logic.transformations</span></code>),
+which holds as the query is standardised apart: a closed conjunct, such as an
+atom added by magic sets, does not prevent the projection. The
+projection is</p>
+<ul>
+<li><p><em>disjointly</em>, when a conjunct of <span class="math notranslate nohighlight">\(\varphi\)</span> is an atom
+<span class="math notranslate nohighlight">\(C(\bar u)\)</span> of a probabilistic choice <span class="math notranslate nohighlight">\(C\)</span> with variables
+<span class="math notranslate nohighlight">\(X'\)</span> of <span class="math notranslate nohighlight">\(X\)</span>, and <span class="math notranslate nohighlight">\(C\)</span> occurs nowhere else:</p>
+<div class="math notranslate nohighlight">
+\[P[\exists X\, (C(\bar u) \land \varphi')] =
+\sum_a P[(C(\bar u) \land \exists (X - X')\, \varphi')[a/X']];\]</div>
+</li>
+<li><p><em>exclusively</em>, when <span class="math notranslate nohighlight">\(\varphi\)</span> has the conjuncts <span class="math notranslate nohighlight">\(R(\bar u)\)</span>,
+whose only variable of <span class="math notranslate nohighlight">\(X\)</span> is <span class="math notranslate nohighlight">\(v\)</span>, and
+<span class="math notranslate nohighlight">\(\lnot\exists w\, (R(\bar u[w/v]) \land w \neq v)\)</span>, or with
+<span class="math notranslate nohighlight">\(w &lt; v\)</span> or <span class="math notranslate nohighlight">\(w &gt; v\)</span>: the
+values of <span class="math notranslate nohighlight">\(v\)</span> for which <span class="math notranslate nohighlight">\(\varphi\)</span> holds are unique, and</p>
+<div class="math notranslate nohighlight">
+\[P[\exists X\, \varphi] = \sum_a P[(\exists (X - \{v\})\,
+\varphi)[a/v]];\]</div>
+</li>
+<li><p><em>independently</em>, when the conjuncts <span class="math notranslate nohighlight">\(\psi\)</span> of <span class="math notranslate nohighlight">\(\varphi\)</span>
+with variables of <span class="math notranslate nohighlight">\(X\)</span> share no probabilistic relation with the
+others, <span class="math notranslate nohighlight">\(A\)</span>, and a variable <span class="math notranslate nohighlight">\(v\)</span> of <span class="math notranslate nohighlight">\(X\)</span> is in all the
+probabilistic atoms of <span class="math notranslate nohighlight">\(\psi\)</span>, within its negations and
+existentials too, at a common position for any two atoms of a
+relation:</p>
+<div class="math notranslate nohighlight">
+\[P[\exists X\, (A \land \psi)] = P[A]\, \Big(1 - \prod_a \big(1 -
+P[(\exists (X - \{v\})\, \psi)[a/v]]\big)\Big).\]</div>
+</li>
+</ul>
+<p>An order comparison between atoms, as in
+<span class="math notranslate nohighlight">\(\exists x\, \exists y\, (R(x) \land T(y) \land x &lt; y)\)</span>, is
+projected exclusively on the least value of <span class="math notranslate nohighlight">\(x\)</span> for which
+<span class="math notranslate nohighlight">\(R(x)\)</span> holds (<code class="docutils literal notranslate"><span class="pre">_extremum_conjunct</span></code>): when <span class="math notranslate nohighlight">\(R(\bar u)\)</span> is
+the only conjunct of <span class="math notranslate nohighlight">\(\varphi\)</span> with <span class="math notranslate nohighlight">\(v\)</span> but comparisons,
+<span class="math notranslate nohighlight">\(v\)</span> is its only variable of <span class="math notranslate nohighlight">\(X\)</span>, and <span class="math notranslate nohighlight">\(v\)</span> is the
+lesser side of every comparison with it, <span class="math notranslate nohighlight">\(v &lt; t\)</span> or
+<span class="math notranslate nohighlight">\(v \leq t\)</span>,</p>
+<div class="math notranslate nohighlight">
+\[\exists X\, \varphi \equiv \exists X\, \big(\varphi \land
+\lnot\exists w\, (R(\bar u[w/v]) \land w &lt; v)\big),\]</div>
+<p>and the same with <span class="math notranslate nohighlight">\(w &gt; v\)</span>, the greatest value, when it is the
+greater side of every comparison. The comparison rule then lifts the
+query with <span class="math notranslate nohighlight">\(v\)</span> free, and, for tuple-independent <span class="math notranslate nohighlight">\(R\)</span> and
+<span class="math notranslate nohighlight">\(T\)</span>,</p>
+<div class="math notranslate nohighlight">
+\[P[\exists x\, \exists y\, (R(x) \land T(y) \land x &lt; y)] =
+\sum_a p_R(a) \prod_{b &lt; a} \big(1 - p_R(b)\big)
+\Big(1 - \prod_{c &gt; a} \big(1 - p_T(c)\big)\Big).\]</div>
+<p>Olteanu and Huang <a class="reference internal" href="#olteanu2009" id="id24"><span>[Olteanu2009]</span></a> prove tractable a class of
+conjunctive queries without self-joins with inequalities, which
+includes this one, and compute them in one scan of the relations
+sorted on the values compared, with running products; the plan here
+computes the products <span class="math notranslate nohighlight">\(\prod_{b &lt; a}\)</span> with a join on
+<span class="math notranslate nohighlight">\(b &lt; a\)</span> instead, in quadratic time, with the existing operators.
+The answer variables can be in <span class="math notranslate nohighlight">\(R(\bar u)\)</span>, e.g.
+<span class="math notranslate nohighlight">\(\exists x\, \exists y\, (V(s, x) \land T(y) \land x &lt; y)\)</span>.
+In <span class="math notranslate nohighlight">\(R(x) \land S(x, y) \land T(z) \land y &lt; z\)</span>, <span class="math notranslate nohighlight">\(y\)</span> is in an
+atom with another quantified variable, so the projection is on the
+greatest <span class="math notranslate nohighlight">\(z\)</span>; the comparison <span class="math notranslate nohighlight">\(y &lt; z\)</span> is then nested within
+the projection on <span class="math notranslate nohighlight">\(x\)</span>, whose plan does not have the values of
+<span class="math notranslate nohighlight">\(z\)</span>, and the query is declined; so are chains such as
+<span class="math notranslate nohighlight">\(x &lt; y \land y &lt; z\)</span>, the middle variable being on both sides.</p>
+<p><em>At least two.</em> The query
+<span class="math notranslate nohighlight">\(\exists x\, \exists y\, (R(\bar u) \land R(\bar u[y/x]) \land
+x \neq y)\)</span>, <span class="math notranslate nohighlight">\(x\)</span> being the only quantified variable of
+<span class="math notranslate nohighlight">\(R(\bar u)\)</span>, or with <span class="math notranslate nohighlight">\(x &lt; y\)</span> or <span class="math notranslate nohighlight">\(x &gt; y\)</span>, equivalent by
+the symmetry in <span class="math notranslate nohighlight">\(x\)</span> and <span class="math notranslate nohighlight">\(y\)</span>, holds when <span class="math notranslate nohighlight">\(R(\bar u)\)</span>
+holds for at least two values of <span class="math notranslate nohighlight">\(x\)</span>, a <code class="docutils literal notranslate"><span class="pre">HAVING</span> <span class="pre">COUNT(*)</span> <span class="pre">&gt;=</span> <span class="pre">2</span></code>
+query of Ré and Suciu <a class="reference internal" href="#re2009" id="id25"><span>[Re2009]</span></a>. It is the complement, within
+<span class="math notranslate nohighlight">\(\exists x\, R(\bar u)\)</span>, of exactly one value
+(<code class="docutils literal notranslate"><span class="pre">_at_least_two_plan</span></code>):</p>
+<div class="math notranslate nohighlight">
+\[P[Q] = P[\exists x\, R(\bar u)] - P[\exists x\, (R(\bar u) \land
+\lnot\exists w\, (R(\bar u[w/x]) \land w \neq x))]
+= 1 - \prod_a (1 - p_a) - \sum_a p_a \prod_{b \neq a} (1 - p_b),\]</div>
+<p>computed with <code class="docutils literal notranslate"><span class="pre">Subtraction</span></code>, the second query being projected
+exclusively. It is tried last, and only on this shape: other
+conjuncts, or other quantified variables in the atoms, are declined.</p>
+<p>For instance, the segregation of a term on the selected study,</p>
+<div class="math notranslate nohighlight">
+\[\exists s\, \mathrm{mentions}(s, t) \land \mathrm{selected}(s) \land
+\lnot\exists s_2\, (\mathrm{mentions}(s_2, t) \land s_2 \neq s),\]</div>
+<p>is the disjoint projection on <span class="math notranslate nohighlight">\(s\)</span> of a query that the comparison
+rule lifts once <span class="math notranslate nohighlight">\(s\)</span> is free; with <span class="math notranslate nohighlight">\(t\)</span> projected too, an
+independent projection on <span class="math notranslate nohighlight">\(t\)</span> follows. Without the choice,
+<span class="math notranslate nohighlight">\(\exists s\, \mathrm{seg}(t, s)\)</span>, the probability that exactly one
+study mentions <span class="math notranslate nohighlight">\(t\)</span>, is the exclusive projection on <span class="math notranslate nohighlight">\(s\)</span>, and
+<span class="math notranslate nohighlight">\(\exists t\, \mathrm{seg}(t, s)\)</span> the independent projection on
+<span class="math notranslate nohighlight">\(t\)</span>. A body that is a union, of which the choice is not a conjunct
+of every disjunct, block-independent disjoint relations other than
+choices, and an exclusive projection whose atoms have a constant, which
+shattering replaces by a quantified variable, are not covered. When the
+query uses two kinds of quantifiers or is not unate, as the
+segregation is, and a projection applies, the global checks are
+skipped, and applied to each query lifted.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="correctness-of-the-plans">
+<h2><a class="toc-backref" href="#id48" role="doc-backlink">Correctness of the plans</a><a class="headerlink" href="#correctness-of-the-plans" title="Link to this heading">#</a></h2>
+<p>A rule is <em>liftable</em> when its plan computes the exact probability of the
+query (soundness) in time polynomial in the size of the data, the query
+being fixed (data complexity). This section proves both for the rules of
+this page which are not covered by a cited theorem. Completeness, that
+every tractable query is lifted, is not claimed for them.</p>
+<dl>
+<dt>The probabilistic model</dt><dd><p>A tuple-independent relation has a Boolean random variable per tuple,
+these variables being independent. A probabilistic choice has one
+random variable whose value is the single tuple of the relation which
+is true: its probabilities sum to one, which
+<code class="xref py py-func docutils literal notranslate"><span class="pre">check_probabilistic_choice_set_probabilities_sum_to_one()</span></code>
+checks when the choice is added to the program. The variables of
+different relations are independent, and a possible world is a value
+for all of them. Deterministic relations are the same in every world.</p>
+<p>For a formula <span class="math notranslate nohighlight">\(\varphi\)</span> and a tuple <span class="math notranslate nohighlight">\(\theta\)</span> of values for
+its free variables, the answer variables being constants, the event
+<span class="math notranslate nohighlight">\(\varphi\theta\)</span> is the set of worlds in which it holds. Its
+<em>tuples</em> are the tuples <span class="math notranslate nohighlight">\(R(\bar a)\)</span> of the atoms of
+<span class="math notranslate nohighlight">\(\varphi\theta\)</span> for the values of its quantified variables that
+satisfy the comparisons and the deterministic atoms conjoined with them:
+the other values make these conjunctions false in every world, so the
+event is determined by the random variables of its tuples alone. For
+instance, <span class="math notranslate nohighlight">\(\exists t\, (t \neq x \land R(t))\)</span> has the tuples
+<span class="math notranslate nohighlight">\(R(a)\)</span> with <span class="math notranslate nohighlight">\(a \neq x\theta\)</span>, and not <span class="math notranslate nohighlight">\(R(x\theta)\)</span>.</p>
+<p>Two distinct answer variables can take the same value in an answer:
+for <span class="math notranslate nohighlight">\(x\theta = y\theta\)</span>, the atoms <span class="math notranslate nohighlight">\(R(x)\)</span> and <span class="math notranslate nohighlight">\(R(y)\)</span>
+are the same tuple. No rule shatters on the equality of two answer
+variables but the rule “answer variables as constants” of <a class="reference internal" href="#extensions-of-the-dalvisuciu-algorithm">Extensions
+of the Dalvi–Suciu algorithm</a>, for two variables: the rules whose
+proofs reason on the term at a position of an atom
+(<code class="docutils literal notranslate"><span class="pre">_are_different_tuples_when_different</span></code>, <code class="docutils literal notranslate"><span class="pre">_separates</span></code>,
+<code class="docutils literal notranslate"><span class="pre">find_separator_variables</span></code>) require the same variable at that
+position in the atoms they compare, and do not take two different free
+variables to be different values.</p>
+<p>A plan computes, for every <span class="math notranslate nohighlight">\(\theta\)</span> in its support,
+<span class="math notranslate nohighlight">\(P[\varphi\theta]\)</span>, and <span class="math notranslate nohighlight">\(P[\varphi\theta] = 0\)</span> outside it.
+All the implemented rules use this convention: an answer that is not
+in the plan of a formula has probability 0. A universal projection,
+<span class="math notranslate nohighlight">\(\prod_a P[\varphi(a)]\)</span>, ranges over all the values <span class="math notranslate nohighlight">\(a\)</span>:
+outside the support of the plan of <span class="math notranslate nohighlight">\(\varphi\)</span>, the plan gives
+<span class="math notranslate nohighlight">\(P[\varphi(a)] = 0\)</span>, which would make the product 0, while the
+projection needs <span class="math notranslate nohighlight">\(P[\varphi(a)] = 1\)</span> there. It cannot be added to
+the rules without changing this convention.</p>
+<p>The rules identify the variables by their names, so the quantified
+variables are first renamed to fresh ones
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">standardise_apart()</span></code>, applied by
+<code class="xref py py-func docutils literal notranslate"><span class="pre">solve_succ_query()</span></code>): no
+substitution is captured and no atom has a variable on which it does
+not depend.</p>
+</dd>
+<dt>Lemma 1 (independence)</dt><dd><p>If no two events of a family <span class="math notranslate nohighlight">\(E_1, \dots, E_n\)</span> have a tuple of a
+tuple-independent relation in common, nor both have tuples of the same
+probabilistic choice, the events are mutually independent: they are
+determined by pairwise disjoint sets of independent random variables.
+Formulas without a common probabilistic relation satisfy this.</p>
+</dd>
+<dt>Lemma 2 (exclusivity)</dt><dd><p>If <span class="math notranslate nohighlight">\(E_1\)</span> implies that the tuple <span class="math notranslate nohighlight">\(C(\bar a)\)</span> of a
+probabilistic choice <span class="math notranslate nohighlight">\(C\)</span> is true, and <span class="math notranslate nohighlight">\(E_2\)</span> that the tuple
+<span class="math notranslate nohighlight">\(C(\bar b)\)</span> is, with <span class="math notranslate nohighlight">\(\bar a \neq \bar b\)</span>, then
+<span class="math notranslate nohighlight">\(E_1 \land E_2\)</span> is impossible, as a single tuple of <span class="math notranslate nohighlight">\(C\)</span> is
+true.</p>
+</dd>
+<dt>Polynomial time</dt><dd><p>Each operation of the plans (<a class="reference internal" href="#operations-of-the-lifted-plans">Operations of the lifted plans</a>) is
+computed in time polynomial in the size of its inputs: joins,
+selections, left joins for <code class="docutils literal notranslate"><span class="pre">Difference</span></code> and <code class="docutils literal notranslate"><span class="pre">Subtraction</span></code>, and
+grouped products or sums for the projections. A plan is built from the
+query alone, so its size does not depend on the data, and it is
+computed in polynomial time if the construction terminates. The size of
+the plan can be exponential in the size of the query: inclusion–exclusion
+enumerates the <span class="math notranslate nohighlight">\(2^n - 1\)</span> non-empty subsets of the <span class="math notranslate nohighlight">\(n\)</span>
+clauses (<code class="docutils literal notranslate"><span class="pre">powerset</span></code>), and ranking the weak orders of the ranked
+variables (<code class="docutils literal notranslate"><span class="pre">_weak_orders</span></code>), of which there are at most
+<code class="docutils literal notranslate"><span class="pre">MAX_RANKED_VARIABLES</span></code>, two.</p>
+<p>The rules of <a class="reference internal" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing relations</a> call each
+other through the queries they lift. Each call is on a query that is
+smaller for the lexicographic order on (number of quantifiers, number
+of negations, size): negation by subtraction lifts <span class="math notranslate nohighlight">\(A\)</span>, a part of
+<span class="math notranslate nohighlight">\(A \land \lnot N\)</span>, and <span class="math notranslate nohighlight">\(A \land N\)</span>, which has one negation
+less; free-variable shattering lifts <span class="math notranslate nohighlight">\(A \land \lnot\psi(x)\)</span> and
+<span class="math notranslate nohighlight">\(\psi(t)\)</span>, with one quantifier less than
+<span class="math notranslate nohighlight">\(A \land \lnot\exists t\, \psi(t)\)</span>; existential shattering lifts
+<span class="math notranslate nohighlight">\(A\)</span> and the queries of free-variable shattering; the comparison
+rule lifts <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(\psi(t)\)</span>, parts of the query; the
+projections lift a body with at least one quantifier less, and a part
+of the query. The Dalvi–Suciu rules, whose recursion terminates
+<a class="reference internal" href="#dalvi2012" id="id26"><span>[Dalvi2012]</span></a>, do not call
+the rules of this section; the disjoint separator, added to them,
+lifts a union with the variables of the choice no longer quantified,
+one quantifier less, or nothing when the rest is deterministic. The
+order being well founded, the
+construction terminates.</p>
+</dd>
+<dt>Absorption in negations</dt><dd><p>In every world, for every <span class="math notranslate nohighlight">\(\theta\)</span>: if <span class="math notranslate nohighlight">\(A\theta\)</span> holds,
+<span class="math notranslate nohighlight">\(\lnot(A \land B)\theta\)</span> and <span class="math notranslate nohighlight">\(\lnot B\theta\)</span> agree;
+otherwise both sides of <span class="math notranslate nohighlight">\(A \land \lnot(A \land B) \equiv A \land
+\lnot B\)</span> are false. When <span class="math notranslate nohighlight">\(y\)</span> is not free in <span class="math notranslate nohighlight">\(A\)</span>,
+<span class="math notranslate nohighlight">\(\exists y\, (A \land B) \equiv A \land \exists y\, B\)</span>, which gives
+the rule through existentials. A conjunct is removed from a negation
+only if it is one of the conjuncts asserted outside it and no variable
+quantified between the negation and it is free in it
+(<code class="docutils literal notranslate"><span class="pre">_without_asserted_conjuncts</span></code>), so that its variables are the same
+inside and outside. A negation whose conjuncts would all be removed is
+left unchanged. The rewriting is done once, before lifting.</p>
+</dd>
+<dt>Contradicting disjuncts</dt><dd><p>A disjunct <span class="math notranslate nohighlight">\(\exists \bar y\,(C \land \lnot A)\)</span> is false in
+every world and for every <span class="math notranslate nohighlight">\(\theta\)</span> where <span class="math notranslate nohighlight">\(A\theta\)</span> holds,
+provided no variable of <span class="math notranslate nohighlight">\(\bar y\)</span> is free in <span class="math notranslate nohighlight">\(A\)</span>, so that
+<span class="math notranslate nohighlight">\(A\)</span> has the same variables inside the disjunct and outside it
+(<code class="docutils literal notranslate"><span class="pre">_is_contradiction</span></code>). If <span class="math notranslate nohighlight">\(A\)</span> is a conjunct of the disjunct,
+the disjunct is false in every world. If <span class="math notranslate nohighlight">\(A\)</span> is asserted by the
+conjunction <span class="math notranslate nohighlight">\(A \land (B \lor D)\)</span>, then where <span class="math notranslate nohighlight">\(A\theta\)</span>
+holds <span class="math notranslate nohighlight">\((B \lor D)\theta \equiv B\theta\)</span>, and where it does not
+both sides are false. Removing a false disjunct preserves the
+probability of every answer. A disjunction left with a single disjunct
+is replaced by it, and nested conjunctions are flattened, both
+equivalences. Every rewriting removes a disjunct or a nested
+conjunction, so it terminates. The rewriting is done once, before
+lifting, together with absorption in negations.</p>
+</dd>
+<dt>Deterministic negations</dt><dd><p>The atoms of <span class="math notranslate nohighlight">\(N\)</span> are deterministic relations or comparisons
+(<code class="docutils literal notranslate"><span class="pre">_is_deterministic</span></code>, the extensional database of a
+<code class="docutils literal notranslate"><span class="pre">CPLogicProgram</span></code> excluding its probabilistic relations), so
+<span class="math notranslate nohighlight">\(N\)</span>, and the relation of <span class="math notranslate nohighlight">\(D = G \land \lnot N\)</span>, defined by
+its relational algebra expression, are the same in every world. <span class="math notranslate nohighlight">\(G\)</span> being asserted by the
+conjunction, <span class="math notranslate nohighlight">\(G \land \lnot N \equiv G \land D\)</span> in every world.
+<span class="math notranslate nohighlight">\(G\)</span> binds every free variable of <span class="math notranslate nohighlight">\(N\)</span> (<code class="docutils literal notranslate"><span class="pre">_can_replace</span></code>),
+so <span class="math notranslate nohighlight">\(D\)</span> is finite. <span class="math notranslate nohighlight">\(G\)</span> is conjoined within the existentials
+of <span class="math notranslate nohighlight">\(N\)</span>, whose variables are not free in <span class="math notranslate nohighlight">\(G\)</span>:
+<span class="math notranslate nohighlight">\(\lnot\exists t\, N \equiv \lnot\exists t\, (G \land N)\)</span> given
+<span class="math notranslate nohighlight">\(G\)</span>, by absorption. <span class="math notranslate nohighlight">\(D\)</span> is computed when the plan is, as
+one of its subexpressions, in time polynomial in the deterministic
+relations.</p>
+</dd>
+<dt>Deterministic builtins</dt><dd><p><span class="math notranslate nohighlight">\(R\)</span> is a deterministic relation and a builtin is a function of
+its arguments, so the relation of <span class="math notranslate nohighlight">\(D = R \land B\)</span> is the same in
+every world, and <span class="math notranslate nohighlight">\(R(\bar x) \land B(\bar y) \equiv D(\bar x)\)</span>
+in every world by definition. As <span class="math notranslate nohighlight">\(\bar y \subseteq \bar x\)</span>,
+<span class="math notranslate nohighlight">\(D\)</span> is a selection of <span class="math notranslate nohighlight">\(R\)</span>, which is finite. The replaced
+builtins are not comparisons, which the lifting rules plan.</p>
+<p>For <span class="math notranslate nohighlight">\(y = f(\bar x)\)</span>, <span class="math notranslate nohighlight">\(A\)</span> is true only for tuples of its
+support, so <span class="math notranslate nohighlight">\(A \land y = f(\bar x)\)</span> implies <span class="math notranslate nohighlight">\(F(\bar x,
+y)\)</span>, and the converse holds by definition of <span class="math notranslate nohighlight">\(F\)</span>. <span class="math notranslate nohighlight">\(F\)</span> is
+the same in every world, and finite.</p>
+</dd>
+<dt>Independent negation</dt><dd><p>For <span class="math notranslate nohighlight">\(A \land \lnot N\)</span> where <span class="math notranslate nohighlight">\(N\)</span> shares no probabilistic
+relation with <span class="math notranslate nohighlight">\(A\)</span> and its free variables are among those of
+<span class="math notranslate nohighlight">\(A\)</span>, which the range restriction of the rules, checked when they
+are declared (<code class="xref py py-func docutils literal notranslate"><span class="pre">check_range_restriction()</span></code>),
+ensures, Lemma 1 gives, for every <span class="math notranslate nohighlight">\(\theta\)</span>,
+<span class="math notranslate nohighlight">\(P[(A \land \lnot N)\theta] = P[A\theta]\,(1 - P[N\theta])\)</span>, which
+<code class="docutils literal notranslate"><span class="pre">Difference</span></code> computes, a tuple of <span class="math notranslate nohighlight">\(A\)</span> absent from the plan of
+<span class="math notranslate nohighlight">\(N\)</span> having <span class="math notranslate nohighlight">\(P[N\theta] = 0\)</span>. The query is thus liftable when
+<span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(N\)</span> are.</p>
+</dd>
+<dt>Negation by subtraction</dt><dd><p><span class="math notranslate nohighlight">\(A\theta\)</span> is the disjoint union of <span class="math notranslate nohighlight">\((A \land N)\theta\)</span> and
+<span class="math notranslate nohighlight">\((A \land \lnot N)\theta\)</span>, so
+<span class="math notranslate nohighlight">\(P[(A \land \lnot N)\theta] = P[A\theta] - P[(A \land N)\theta]\)</span>
+for any events. The free variables of <span class="math notranslate nohighlight">\(N\)</span> being among those of
+<span class="math notranslate nohighlight">\(A\)</span> (<code class="docutils literal notranslate"><span class="pre">_split_dependent_conjunct</span></code>), the plan of
+<span class="math notranslate nohighlight">\(A \land N\)</span> has the columns of the plan of <span class="math notranslate nohighlight">\(A\)</span>, and
+<code class="docutils literal notranslate"><span class="pre">Subtraction</span></code> computes this difference tuple by tuple. Existential
+shattering is the same identity, with <span class="math notranslate nohighlight">\(\exists t\, \psi(t)\)</span> for
+<span class="math notranslate nohighlight">\(N\)</span>.</p>
+</dd>
+<dt>Free-variable shattering</dt><dd><p>Splitting on <span class="math notranslate nohighlight">\(t = x\)</span>,
+<span class="math notranslate nohighlight">\(\exists t\, \psi(t) \equiv \psi(x) \lor E\)</span> with
+<span class="math notranslate nohighlight">\(E = \exists t\, (t \neq x \land \psi(t))\)</span>, so
+<span class="math notranslate nohighlight">\(A \land \lnot\exists t\, \psi(t) \equiv L \land \lnot E\)</span> with
+<span class="math notranslate nohighlight">\(L = A \land \lnot\psi(x)\)</span>. The rule checks that</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(t\)</span> is a separator variable of <span class="math notranslate nohighlight">\(\psi\)</span>
+(<code class="docutils literal notranslate"><span class="pre">_is_separator_variable</span></code>): every probabilistic atom of
+<span class="math notranslate nohighlight">\(\psi\)</span> has <span class="math notranslate nohighlight">\(t\)</span>, and any two atoms of the same relation
+have <span class="math notranslate nohighlight">\(t\)</span> at a common position (<code class="docutils literal notranslate"><span class="pre">find_separator_variables</span></code>).
+A tuple of <span class="math notranslate nohighlight">\(\psi(a)\)</span> through one of them and a tuple of
+<span class="math notranslate nohighlight">\(\psi(b)\)</span> through the other have <span class="math notranslate nohighlight">\(a\)</span> and <span class="math notranslate nohighlight">\(b\)</span> at
+that position, so they differ when <span class="math notranslate nohighlight">\(a \neq b\)</span>. A separator
+variable cannot be a variable of a
+probabilistic choice atom (<code class="docutils literal notranslate"><span class="pre">extract_probabilistic_root_variables</span></code>),
+so <span class="math notranslate nohighlight">\(\psi\)</span> has no such atom, and the relations shared with
+<span class="math notranslate nohighlight">\(A\)</span> are tuple-independent (<code class="docutils literal notranslate"><span class="pre">_shares_a_choice_relation</span></code>). By
+Lemma 1, the events <span class="math notranslate nohighlight">\(\psi(a)\theta\)</span> being mutually
+independent,
+<span class="math notranslate nohighlight">\(P[E\theta] = 1 - \prod_{a
+\neq x\theta} (1 - P[\psi(a)\theta])\)</span>, which the independent
+projection of the plan computes, <code class="docutils literal notranslate"><span class="pre">support(L)</span></code> giving the value of
+<span class="math notranslate nohighlight">\(x\)</span>;</p></li>
+<li><p>for <span class="math notranslate nohighlight">\(t \neq x\)</span>, each probabilistic atom of <span class="math notranslate nohighlight">\(\psi(t)\)</span> has
+<span class="math notranslate nohighlight">\(t\)</span> at a position where each atom of the same relation in
+<span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(\psi(x)\)</span> has <span class="math notranslate nohighlight">\(x\)</span>
+(<code class="docutils literal notranslate"><span class="pre">_are_different_tuples_when_different</span></code>): the tuples of
+<span class="math notranslate nohighlight">\(E\theta\)</span>, those of <span class="math notranslate nohighlight">\(\psi(a)\theta\)</span> for the values
+<span class="math notranslate nohighlight">\(a \neq x\theta\)</span>, the comparison <span class="math notranslate nohighlight">\(t \neq x\)</span> excluding
+<span class="math notranslate nohighlight">\(a = x\theta\)</span>, are not tuples of <span class="math notranslate nohighlight">\(L\theta\)</span>, and by Lemma 1
+<span class="math notranslate nohighlight">\(P[(L \land \lnot E)\theta] = P[L\theta]\,(1 - P[E\theta])\)</span>,
+which <code class="docutils literal notranslate"><span class="pre">Difference</span></code> computes.</p></li>
+</ul>
+</dd>
+<dt>Comparisons in an existential conjunct</dt><dd><p>With <span class="math notranslate nohighlight">\(E = \exists t\, (\psi(t) \land C)\)</span>, the rule checks that
+<span class="math notranslate nohighlight">\(t\)</span> is a separator variable of <span class="math notranslate nohighlight">\(\psi\)</span>, which as above gives
+<span class="math notranslate nohighlight">\(P[E\theta] = 1 - \prod_{a : C\theta(a)} (1 - P[\psi(a)\theta])\)</span>,
+computed by selecting <span class="math notranslate nohighlight">\(C\)</span> before the independent projection; and
+that each probabilistic atom of <span class="math notranslate nohighlight">\(\psi(t)\)</span> has <span class="math notranslate nohighlight">\(t\)</span> at a
+position where each atom of the same relation in <span class="math notranslate nohighlight">\(A\)</span> has a term
+<span class="math notranslate nohighlight">\(u\)</span> with <span class="math notranslate nohighlight">\(t \neq u\)</span>, <span class="math notranslate nohighlight">\(t &lt; u\)</span> or <span class="math notranslate nohighlight">\(t &gt; u\)</span> in
+<span class="math notranslate nohighlight">\(C\)</span> (<code class="docutils literal notranslate"><span class="pre">_terms_different_from</span></code>, <code class="docutils literal notranslate"><span class="pre">STRICT_COMPARISONS</span></code>), the
+terms of <span class="math notranslate nohighlight">\(C\)</span> other than <span class="math notranslate nohighlight">\(t\)</span> being free variables or
+constants (<code class="docutils literal notranslate"><span class="pre">comparison_conjunct_plan</span></code>), fixed by <span class="math notranslate nohighlight">\(\theta\)</span>. The
+tuples of <span class="math notranslate nohighlight">\(E\theta\)</span>, those of <span class="math notranslate nohighlight">\(\psi(a)\theta\)</span> for the
+values <span class="math notranslate nohighlight">\(a\)</span> with <span class="math notranslate nohighlight">\(C\theta(a)\)</span>, are thus not tuples of
+<span class="math notranslate nohighlight">\(A\theta\)</span>, and by Lemma 1
+<span class="math notranslate nohighlight">\(P[(A \land E)\theta] = P[A\theta]\,P[E\theta]\)</span> and
+<span class="math notranslate nohighlight">\(P[(A \land \lnot E)\theta] = P[A\theta]\,(1 - P[E\theta])\)</span>, which
+the join and <code class="docutils literal notranslate"><span class="pre">Difference</span></code> compute. Olteanu and Huang
+<a class="reference internal" href="#olteanu2009" id="id27"><span>[Olteanu2009]</span></a> compute conjunctive queries with inequalities without
+self-joins on tuple-independent databases; this rule uses the
+inequalities instead to show that the tuples of a relation occurring
+in both <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(\psi\)</span> differ, which their result does not
+cover.</p>
+</dd>
+<dt>Conjunctive queries summed on probabilistic choices</dt><dd><p>The body is a conjunction without negation and, the probabilistic
+atoms forming a query without self-joins
+(<code class="docutils literal notranslate"><span class="pre">is_hierarchical_without_self_joins</span></code>), no probabilistic relation
+occurs in two atoms. For an assignment of all its variables, the event
+of the body is then the conjunction of distinct tuples of distinct
+relations, deterministic tuples being true or false in every world, so
+its probability is the product that the join computes (Lemma 1). Every
+existential variable occurs in a probabilistic atom
+(<code class="docutils literal notranslate"><span class="pre">_verify_deterministic_e_quantification</span></code>), and if it occurs in an
+atom of a probabilistic fact relation, it also occurs in an atom of a
+probabilistic choice (<code class="docutils literal notranslate"><span class="pre">_verify_fact_and_choice_e_quantification</span></code>):
+every existential variable occurs in an atom of a choice. Two rows of
+the join that the projection on the head merges have the same answer
+and differ on an existential variable, so they imply different tuples
+of a choice, and are mutually exclusive by Lemma 2. Their probabilities
+add up, which the projection of the provenance solver computes. The
+hierarchy of the probabilistic atoms is not used.</p>
+</dd>
+<dt>Non-repeating queries</dt><dd><p><code class="xref py py-func docutils literal notranslate"><span class="pre">non_repeating_plan()</span></code>
+applies only if no probabilistic relation, fact or choice, occurs
+twice in the query (<code class="docutils literal notranslate"><span class="pre">_is_non_repeating</span></code>), the occurrences of an atom
+being counted: <span class="math notranslate nohighlight">\(R(x) \land \lnot R(x)\)</span> has two occurrences of
+<span class="math notranslate nohighlight">\(R\)</span>, which are not independent. Its rewrites add no atom,
+so this holds for every subformula planned, and by Lemma 1 two
+subformulas without a common atom are independent. Then:</p>
+<ul class="simple">
+<li><p><em>rewrites</em>, by <code class="docutils literal notranslate"><span class="pre">NormaliseNonRepeatingQuery</span></code>:
+<span class="math notranslate nohighlight">\(\exists v\, (v = e \land \varphi) \equiv \varphi[e/v]\)</span> when no
+variable of <span class="math notranslate nohighlight">\(e\)</span> is captured, which
+<code class="docutils literal notranslate"><span class="pre">UnifyExistentialVariableEqualitiesMixin</span></code> checks with
+<code class="docutils literal notranslate"><span class="pre">ExtractBoundVariables</span></code> after the query is standardised apart;
+<span class="math notranslate nohighlight">\(\lnot(A \lor B) \equiv \lnot A \land \lnot B\)</span>
+(<code class="docutils literal notranslate"><span class="pre">MoveNegationsIntoDisjunctionsMixin</span></code>);
+<span class="math notranslate nohighlight">\(\exists v\, (A \lor B) \equiv \exists v\, A \lor \exists v\, B\)</span>
+(<code class="docutils literal notranslate"><span class="pre">PushExistentialsDownDisjunctionsMixin</span></code>); and, by the planner,
+<span class="math notranslate nohighlight">\(\exists \bar v\, (A \land B) \equiv \exists \bar v_A\, A
+\land \exists \bar v_B\, B\)</span> when <span class="math notranslate nohighlight">\(A\)</span> and <span class="math notranslate nohighlight">\(B\)</span> share no
+variable of <span class="math notranslate nohighlight">\(\bar v\)</span> (<code class="docutils literal notranslate"><span class="pre">_connected_groups</span></code>). These hold in
+every world;</p></li>
+<li><p><em>conjunction</em>: the join of independent positive conjuncts is the
+product of their probabilities; a comparison, deterministic, is a
+selection; for a negation whose free variables are bound by the
+positive conjuncts (checked in <code class="docutils literal notranslate"><span class="pre">_conjunction_plan</span></code>),
+<code class="docutils literal notranslate"><span class="pre">Difference</span></code> computes <span class="math notranslate nohighlight">\(P[A\theta]\,(1 - P[N\theta])\)</span> as for an
+independent negation above. Atoms with constants or repeated
+variables are selected on named columns (<code class="docutils literal notranslate"><span class="pre">NonRepeatingPlanner.atom</span></code>);</p></li>
+<li><p><em>disjunction</em>: its disjuncts have the same free variables (checked in
+<code class="docutils literal notranslate"><span class="pre">NonRepeatingPlanner.disjunction</span></code>) and are independent, so
+<span class="math notranslate nohighlight">\(P[(A \lor B)\theta] = 1 - (1 - P[A\theta])(1 - P[B\theta])\)</span>;</p></li>
+<li><p><em>projection</em>: the variable <span class="math notranslate nohighlight">\(v\)</span> occurs in every probabilistic
+atom of the group <span class="math notranslate nohighlight">\(\varphi\)</span>, including those within its
+negations and existentials (<code class="docutils literal notranslate"><span class="pre">_root_variable</span></code>); the query being
+standardised apart, these atoms depend on <span class="math notranslate nohighlight">\(v\)</span>. Each relation
+occurring once, its atom has <span class="math notranslate nohighlight">\(v\)</span> at some position <span class="math notranslate nohighlight">\(i\)</span>, so
+for <span class="math notranslate nohighlight">\(a \neq b\)</span> the tuples of <span class="math notranslate nohighlight">\(\varphi(a)\theta\)</span> and
+<span class="math notranslate nohighlight">\(\varphi(b)\theta\)</span> of that relation differ at <span class="math notranslate nohighlight">\(i\)</span>. If no
+probabilistic choice atom has <span class="math notranslate nohighlight">\(v\)</span> (<code class="docutils literal notranslate"><span class="pre">_projection</span></code>), there is
+no choice atom in <span class="math notranslate nohighlight">\(\varphi\)</span>, and by Lemma 1 the events
+<span class="math notranslate nohighlight">\(\varphi(a)\theta\)</span> are mutually independent:
+<span class="math notranslate nohighlight">\(P[\exists v\, \varphi\theta] = 1 - \prod_a (1 -
+P[\varphi(a)\theta])\)</span>. If a conjunct of <span class="math notranslate nohighlight">\(\varphi\)</span> is an atom of
+a choice <span class="math notranslate nohighlight">\(C\)</span> with <span class="math notranslate nohighlight">\(v\)</span>, <span class="math notranslate nohighlight">\(\varphi(a)\theta\)</span> and
+<span class="math notranslate nohighlight">\(\varphi(b)\theta\)</span> imply different tuples of <span class="math notranslate nohighlight">\(C\)</span>, and by
+Lemma 2 they are mutually exclusive:
+<span class="math notranslate nohighlight">\(P[\exists v\, \varphi\theta] = \sum_a P[\varphi(a)\theta]\)</span>.
+Otherwise no plan is given;</p></li>
+<li><p>deterministic relations are the same in every world, so they neither
+count as repetitions nor need to have <span class="math notranslate nohighlight">\(v\)</span>.</p></li>
+</ul>
+<p>Each recursive call is on a smaller formula: a part of a conjunction,
+negation or disjunction, or a group with one quantifier less. Pushing
+<span class="math notranslate nohighlight">\(\exists \bar v\)</span> into a disjunction copies the quantifiers into
+every disjunct, but the disjuncts are planned one by one, and each
+<span class="math notranslate nohighlight">\(\exists \bar v\, \varphi_i\)</span> is smaller than
+<span class="math notranslate nohighlight">\(\exists \bar v\, (\varphi_1 \lor \dots \lor \varphi_n)\)</span>. The
+rewrites remove equalities and negations of disjunctions without adding
+atoms. The plan is thus built from the query alone, and computed in
+polynomial time in the data.</p>
+</dd>
+<dt>Disjoint separator</dt><dd><p><em>Renaming.</em> A quantified variable of a disjunct is renamed into the
+corresponding variable of the first disjunct’s choice atom. As
+<span class="math notranslate nohighlight">\(\exists\)</span> distributes over <span class="math notranslate nohighlight">\(\lor\)</span>, a disjunct’s quantified
+variables can be renamed without changing the union, provided the new
+name does not occur in the disjunct (no capture) and the renamings of
+the disjunct for different choices agree (<code class="docutils literal notranslate"><span class="pre">_renamings_are_safe</span></code>); at
+positions with a free variable or a constant, the atoms must already
+be equal (<code class="docutils literal notranslate"><span class="pre">_align_choice_atoms</span></code>). The renaming relies on the prenex
+form, all the quantifiers of the union before its disjunction: the rule
+declines a disjunct that still has a quantifier (<code class="docutils literal notranslate"><span class="pre">_has_quantifier</span></code>),
+which could capture a renamed variable.</p>
+<p><em>Exclusivity.</em> Every disjunct has <span class="math notranslate nohighlight">\(C(\bar z)\)</span>, a conjunct of it
+(<code class="docutils literal notranslate"><span class="pre">_choice_separators</span></code> takes the atoms of a disjunct’s conjunction,
+one per disjunct). For a given answer, the free positions are fixed, so
+for <span class="math notranslate nohighlight">\(\bar a \neq \bar b\)</span> the events <span class="math notranslate nohighlight">\(\bigvee_i
+Q_i(\bar a)\)</span> and <span class="math notranslate nohighlight">\(\bigvee_i Q_i(\bar b)\)</span> imply different tuples
+of <span class="math notranslate nohighlight">\(C\)</span> and are mutually exclusive by Lemma 2: their probabilities
+add up, which <code class="docutils literal notranslate"><span class="pre">DisjointProjection</span></code> computes. With several choices,
+two values differ on the variables of at least one of them.</p>
+<p><em>Deterministic rest.</em> When every other atom is deterministic, the event
+<span class="math notranslate nohighlight">\(\bigvee_i Q_i(\bar a)\)</span> is <span class="math notranslate nohighlight">\(C(\bar a) \land D(\bar a)\)</span>,
+with <span class="math notranslate nohighlight">\(D(\bar a)\)</span> true or false in every world, so its probability
+is <span class="math notranslate nohighlight">\(P[C(\bar a)]\)</span> where <span class="math notranslate nohighlight">\(D(\bar a)\)</span> holds and 0 elsewhere:
+the join of the choice with the support of <span class="math notranslate nohighlight">\(D\)</span>. The choice atoms
+are kept in <span class="math notranslate nohighlight">\(D\)</span>, which is then range-restricted, and replaced in
+its plan by their support, so that every label in <span class="math notranslate nohighlight">\(D\)</span> is 0 or 1.
+<span class="math notranslate nohighlight">\(D\)</span> may have negations: the difference of provenance sets gives
+a tuple the label <span class="math notranslate nohighlight">\(l\,(1 - r)\)</span>, <span class="math notranslate nohighlight">\(l\)</span> and <span class="math notranslate nohighlight">\(r\)</span> those of
+the two sides, and keeps the tuple. With the probability <span class="math notranslate nohighlight">\(q\)</span> of
+the choice in both sides, a tuple that the negation removes would get
+<span class="math notranslate nohighlight">\(q(1 - q)\)</span>, not 0, as if the negation were independent of the
+choice; with the support, <span class="math notranslate nohighlight">\(1 \cdot (1 - 1) = 0\)</span>. A tuple of null
+label is not in the support of a provenance set, which the plan of
+<span class="math notranslate nohighlight">\(D\)</span> ends with.</p>
+<p><em>Free variables.</em> Every disjunct has all the free variables of the
+query: a disjunct without one, true for every value of it, could not be
+given by a plan, whose rows are a finite set of values.</p>
+<p><em>Equalities.</em> In every world, <span class="math notranslate nohighlight">\(C(u) \equiv \exists f\, (C(f)
+\land f = u)\)</span>, and, a single tuple of <span class="math notranslate nohighlight">\(C\)</span> being true,
+<span class="math notranslate nohighlight">\(C(f) \land C(u) \equiv C(f) \land f = u\)</span> (Lemma 2): the
+rewritten disjuncts are equivalent to the given ones, and their choice
+atoms have quantified variables where the others have, so that the
+renaming above applies. An equality, as any comparison, is true or
+false for given values in every world, and is thus part of the
+deterministic rest <span class="math notranslate nohighlight">\(D\)</span>, whose plan selects on it.</p>
+<p><em>Termination.</em> The rule lifts the union with the variables of the
+choice free, one quantifier less, or lifts nothing (deterministic rest).</p>
+<p><em>Sign of the other literals.</em> Let <span class="math notranslate nohighlight">\(Q = \exists \bar z\,
+\bigvee_i Q_i\)</span>, each <span class="math notranslate nohighlight">\(Q_i\)</span> a conjunction of literals, positive
+or negated, with the positive literal <span class="math notranslate nohighlight">\(C(\bar z, \bar u)\)</span> as
+a conjunct, <span class="math notranslate nohighlight">\(C\)</span> a choice, <span class="math notranslate nohighlight">\(\bar z\)</span> quantified and
+<span class="math notranslate nohighlight">\(\bar u\)</span> free variables or constants (what <code class="docutils literal notranslate"><span class="pre">_choice_separators</span></code>
+establishes: it takes the atoms among the conjuncts of a disjunct, so
+a negated atom of <span class="math notranslate nohighlight">\(C\)</span> is never a separator). Then, for fixed
+values of the free variables,</p>
+<div class="math notranslate nohighlight">
+\[P[Q] = \sum_{\bar a} P\Big[\bigvee_i Q_i[\bar a/\bar z]\Big].\]</div>
+<p><em>Proof.</em> A world in which <span class="math notranslate nohighlight">\(\bigvee_i Q_i[\bar a/\bar z]\)</span> holds
+satisfies <span class="math notranslate nohighlight">\(C(\bar a, \bar u)\)</span>, as every <span class="math notranslate nohighlight">\(Q_i\)</span> has it as a
+conjunct. For <span class="math notranslate nohighlight">\(\bar a \neq \bar b\)</span>, no world satisfies both
+<span class="math notranslate nohighlight">\(C(\bar a, \bar u)\)</span> and <span class="math notranslate nohighlight">\(C(\bar b, \bar u)\)</span> (Lemma 2, the
+tuples of a choice are mutually exclusive), so the events for
+<span class="math notranslate nohighlight">\(\bar a\)</span> and <span class="math notranslate nohighlight">\(\bar b\)</span> are disjoint. Their union over all
+<span class="math notranslate nohighlight">\(\bar a\)</span> is <span class="math notranslate nohighlight">\(Q\)</span>, and the probability of a disjoint union is
+the sum of the probabilities. <span class="math notranslate nohighlight">\(\square\)</span></p>
+<p>The proof uses only that every disjunct has the positive conjunct
+<span class="math notranslate nohighlight">\(C(\bar z, \bar u)\)</span> and Lemma 2: the other literals, positive
+or negated, are never looked at.</p>
+<p><em>Coverage of the disjoint projection.</em> The rule lifts every query that
+the disjoint projection of Suciu et al. <a class="reference internal" href="#suciu2011" id="id28"><span>[Suciu2011]</span></a> (section 4.3.1)
+lifted, but the two listed here. For a choice <span class="math notranslate nohighlight">\(C\)</span>, a relation
+without key attribute, the disjoint projection applies to a
+conjunctive query <span class="math notranslate nohighlight">\(\exists \bar y\, Q\)</span> that has an atom
+<span class="math notranslate nohighlight">\(C(\bar u)\)</span> with a quantified variable; it sums over the values
+of the variables <span class="math notranslate nohighlight">\(\bar z\)</span> of the choice atoms that are
+quantified, and lifts the query with them free, which is
+<span class="math notranslate nohighlight">\(\exists \bar y'\, Q\)</span> with <span class="math notranslate nohighlight">\(\bar y' = \bar y \setminus
+\bar z\)</span>: the old implementation
+(<code class="docutils literal notranslate"><span class="pre">disjoint_project_conjunctive_query</span></code>) removed the existential
+quantifiers of <span class="math notranslate nohighlight">\(\bar z\)</span>. It was tried at the place of
+<code class="docutils literal notranslate"><span class="pre">disjoint_separator</span></code>, after the separator variables, on the same
+query. For such a query, in prenex form with a single disjunct and one
+atom of each choice:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_align_choice_atoms</span></code> has one atom to align and returns the empty
+renaming, <code class="docutils literal notranslate"><span class="pre">_renamings_are_safe</span></code> holds, and the disjunct is not
+changed;</p></li>
+<li><p>the separators are the quantified variables of the choice atoms,
+<span class="math notranslate nohighlight">\(\bar z\)</span>, which is not empty, so the rule applies;</p></li>
+<li><p>the free variables are those of the only disjunct, so the
+free-variable condition and the prenex condition
+(<code class="docutils literal notranslate"><span class="pre">_has_quantifier</span></code>) hold, and there is no union to decline;</p></li>
+<li><p>the sum is the one of the old rule (<em>Sign of the other literals</em>),
+negations included, and the rule lifts
+<code class="docutils literal notranslate"><span class="pre">add_existentials_except</span></code> on the free variables and <span class="math notranslate nohighlight">\(\bar z\)</span>:
+the quantifiers of all the variables but those, the very query the
+old rule lifted, projected with <code class="docutils literal notranslate"><span class="pre">DisjointProjection</span></code> on the free
+variables as the old rule did. The plans are the same;</p></li>
+<li><p>when the other atoms are all deterministic, the old rule lifted <span class="math notranslate nohighlight">\(C(\bar a) \land D(\bar a)\)</span> by the
+algorithm, whose plan gives <span class="math notranslate nohighlight">\(P[C(\bar a)]\)</span> where <span class="math notranslate nohighlight">\(D(\bar
+a)\)</span> holds, and the new plan is the join of the choice with the
+support of <span class="math notranslate nohighlight">\(D\)</span>: the same probabilities (<em>Deterministic rest</em>),
+without lifting <span class="math notranslate nohighlight">\(D\)</span>.</p></li>
+</ul>
+<p>The rule declines, where the old rule applied, in two cases:</p>
+<ul class="simple">
+<li><p><em>A choice atom without a quantified variable,</em> all its terms being
+free variables or constants. There is no sum to take: the old rule
+removed no quantifier and lifted the same query again, making no
+progress. The solver answers such queries before the algorithm is
+called.</p></li>
+<li><p><em>Several atoms of the same choice</em> in a conjunction with different
+variables (<code class="docutils literal notranslate"><span class="pre">len(same)</span> <span class="pre">!=</span> <span class="pre">1</span></code> in <code class="docutils literal notranslate"><span class="pre">_choice_separators</span></code>). The rewriting
+of the choices (Lemma 2) makes them one atom before the algorithm
+runs, so the queries the solver gives it have none; a query that
+still has them, given to the algorithm directly, is declined where
+the old rule took the variables of both.</p></li>
+</ul>
+<p>An atom of a tuple-independent relation with only constants did not
+trigger the old rule: it raised an exception.</p>
+<p>On unions, the old rule was a different one (<span class="math notranslate nohighlight">\(P[A \lor B] = P[A]
++ P[B] - P[A \land B]\)</span> with its own conditions, removed). The identity
+above holds for a union with negations too, and the rule lifts it.
+<code class="docutils literal notranslate"><span class="pre">disjoint_separator</span></code> lifts the unions
+whose every disjunct has the choice in a single projection, and the
+other unions are lifted by inclusion–exclusion, applied to the
+conjunctive queries that the rule lifts; that this covers all that the
+old union rule lifted is not proved.</p>
+</dd>
+<dt>Rewriting of the choices</dt><dd><p>By Lemma 2, <span class="math notranslate nohighlight">\(C(\bar x) \land C(\bar y) \equiv C(\bar x) \land
+\bar x = \bar y\)</span> in every world. The equivalence needs the two atoms in
+the same conjunction: in <span class="math notranslate nohighlight">\((C(s) \land A(s)) \lor (C(f) \land
+B(f))\)</span>, the two disjuncts are not both true, and making <span class="math notranslate nohighlight">\(s\)</span> and
+<span class="math notranslate nohighlight">\(f\)</span> equal across them would turn the union into a conjunction.
+The rewriting descends into disjunctions and makes equal only the
+arguments of atoms conjoined with each other
+(<code class="docutils literal notranslate"><span class="pre">lift_optimization_for_choice_predicates</span></code>). For the same reason, the
+unification of the variables of equalities is done in each disjunct
+apart (<code class="docutils literal notranslate"><span class="pre">UnifyVariableEqualitiesMixin</span></code>).</p>
+<p>Within a negation, in every world and for every answer where
+<span class="math notranslate nohighlight">\(C(\bar u)\)</span> holds, <span class="math notranslate nohighlight">\(C(\bar v)\)</span> holds exactly when
+<span class="math notranslate nohighlight">\(\bar v = \bar u\)</span>, a single tuple of <span class="math notranslate nohighlight">\(C\)</span> being true. So
+<span class="math notranslate nohighlight">\(\exists W\, (C(\bar v) \land \psi) \equiv \exists W\, (\bar v =
+\bar u \land C(\bar u) \land \psi)\)</span>, and as the variables of
+<span class="math notranslate nohighlight">\(\bar v\)</span> set to those of <span class="math notranslate nohighlight">\(\bar u\)</span> are in <span class="math notranslate nohighlight">\(W\)</span>, each
+variable at most once, the equalities are eliminated by substitution,
+<span class="math notranslate nohighlight">\(\exists v\, (v = u \land \varphi) \equiv \varphi[u/v]\)</span>, the
+query being standardised apart so that no variable is captured
+(<code class="docutils literal notranslate"><span class="pre">UnifyChoicesInNegations</span></code>). Where <span class="math notranslate nohighlight">\(C(\bar u)\)</span> does not hold,
+both sides of the rewriting are false. A strict comparison of a term
+with itself is false, <span class="math notranslate nohighlight">\(t \neq t \equiv \bot\)</span>
+(<code class="docutils literal notranslate"><span class="pre">StrictComparisonOfATermWithItselfMixin</span></code>), and the truth values are
+simplified by <span class="math notranslate nohighlight">\(\bot \land \varphi \equiv \bot\)</span>,
+<span class="math notranslate nohighlight">\(\top \land \varphi \equiv \varphi\)</span>, <span class="math notranslate nohighlight">\(\lnot\bot \equiv
+\top\)</span> and <span class="math notranslate nohighlight">\(\exists x\, \bot \equiv \bot\)</span>
+(<code class="docutils literal notranslate"><span class="pre">SimplifyTruthValuesMixin</span></code> of <code class="xref py py-mod docutils literal notranslate"><span class="pre">neurolang.logic.transformations</span></code>):
+every step of the rewriting is an equivalence.</p>
+</dd>
+<dt>Answer variables as constants</dt><dd><p>For an answer, the free variables have values, and their equalities
+are those of exactly one partition <span class="math notranslate nohighlight">\(\Pi\)</span> of <span class="math notranslate nohighlight">\(x_1, \dots,
+x_k\)</span>: the branches select different answers, and their independent
+union, <span class="math notranslate nohighlight">\(1 - (1 - p)(1 - 0)\)</span>, gives each its probability. In the
+branch of <span class="math notranslate nohighlight">\(\Pi\)</span>, <span class="math notranslate nohighlight">\(Q\)</span> and <span class="math notranslate nohighlight">\(Q[\Pi]\)</span> are the same query
+for the answer, and the projection copies each representative into the
+variables of its block. The representatives have pairwise different
+values <span class="math notranslate nohighlight">\(a_1, \dots, a_m\)</span>, which the selection keeps. Every atom
+<span class="math notranslate nohighlight">\(R(\bar u)\)</span> renamed for <span class="math notranslate nohighlight">\(r_j\)</span> has <span class="math notranslate nohighlight">\(a_j\)</span> at a position
+<span class="math notranslate nohighlight">\(i\)</span> where every other atom <span class="math notranslate nohighlight">\(R(\bar v)\)</span> of <span class="math notranslate nohighlight">\(Q[\Pi]\)</span>,
+renamed for another representative or not, has another <span class="math notranslate nohighlight">\(a_l\)</span>
+(<code class="docutils literal notranslate"><span class="pre">_are_different_tuples_when_different</span></code>, given the other
+representatives), so their tuples differ, for all values of the
+quantified variables. An alias naming the relation <span class="math notranslate nohighlight">\(R\)</span>,
+<span class="math notranslate nohighlight">\(Q[\Pi][\rho] \equiv Q[\Pi]\)</span>; the atoms of different aliases,
+and of <span class="math notranslate nohighlight">\(R\)</span>, have no tuple in common, and <span class="math notranslate nohighlight">\(Q[\Pi][\rho]\)</span>,
+with each alias a relation with the tuples and probabilities of
+<span class="math notranslate nohighlight">\(R\)</span>, has the probability of <span class="math notranslate nohighlight">\(Q[\Pi]\)</span> for this answer: in
+every world the atoms have the values they have in <span class="math notranslate nohighlight">\(Q[\Pi]\)</span>, and
+the tuples of the aliases are independent of each other and of those of
+<span class="math notranslate nohighlight">\(R\)</span> that <span class="math notranslate nohighlight">\(Q\)</span> uses, as Lemma 1 needs. Splitting on a pair
+<span class="math notranslate nohighlight">\(x = y\)</span> or <span class="math notranslate nohighlight">\(x \neq y\)</span> and renaming would not do: the
+alias would hide, from the next split, the pairs of the renamed
+variable with the others, whose atoms can then be the same tuple. The
+relation is tuple-independent: the tuples of a choice are exclusive,
+and an alias would make them independent. The rule terminates: a branch
+that merges variables has fewer free variables, and the branch of the
+partition into singletons the same free variables and fewer pairs of
+atoms of a relation with different free variables at a position, the
+renaming separating some and joining none.</p>
+</dd>
+<dt>Comparisons of answer variables</dt><dd><p>A comparison <span class="math notranslate nohighlight">\(C\)</span> of free variables is true or false for an
+answer, in every world: <span class="math notranslate nohighlight">\(P[(Q \land C)\theta] = P[Q\theta]\)</span> if
+<span class="math notranslate nohighlight">\(C\theta\)</span> holds and 0 otherwise, which the selection computes.</p>
+</dd>
+<dt>Comparisons with a constant</dt><dd><p>The sets of a relation are the cells of a product of partitions of its
+tuples, so they are disjoint and cover the relation: each atom of the
+query is the disjunction of the atoms of the cells it may be true in,
+and atoms of different cells are different tuples, as shattering
+requires <a class="reference internal" href="#dalvi2012" id="id29"><span>[Dalvi2012]</span></a>. In a conjunction with <span class="math notranslate nohighlight">\(y\ \theta\ c\)</span> and
+an atom <span class="math notranslate nohighlight">\(R(\ldots, y, \ldots)\)</span>, <span class="math notranslate nohighlight">\(y\)</span> at position <span class="math notranslate nohighlight">\(i\)</span>,
+the cells with the complement of <span class="math notranslate nohighlight">\(R.i\ \theta\ c\)</span> are false for
+every value of <span class="math notranslate nohighlight">\(y\)</span> satisfying the comparison, and the others
+satisfy it: the conjunction without the comparison, with the atom
+replaced by the disjunction of the remaining cells, is equivalent. Moving
+the comparison into an existential is the prenex rule
+<span class="math notranslate nohighlight">\(C \land \exists x\, \psi \equiv \exists x\, (C \land \psi)\)</span>, for
+<span class="math notranslate nohighlight">\(x\)</span> not free in <span class="math notranslate nohighlight">\(C\)</span>.</p>
+</dd>
+<dt>Separator determined by a functional dependency</dt><dd><p>Let <span class="math notranslate nohighlight">\(Q = \exists y\, \varphi(y)\)</span> be a conjunctive query in which
+every atom of a tuple-independent relation has <span class="math notranslate nohighlight">\(y\)</span>, or variables
+<span class="math notranslate nohighlight">\(\bar x\)</span> from which positive deterministic atoms of
+<span class="math notranslate nohighlight">\(\varphi\)</span> determine <span class="math notranslate nohighlight">\(y\)</span>: <span class="math notranslate nohighlight">\(y = f(\bar x)\)</span> in every
+world satisfying them, <span class="math notranslate nohighlight">\(f\)</span> being the same in every world. A tuple
+<span class="math notranslate nohighlight">\(R(\bar a)\)</span> of such an atom is then a tuple of
+<span class="math notranslate nohighlight">\(\varphi(b)\)</span> only for <span class="math notranslate nohighlight">\(b = f(\bar a)\)</span>, the relation of
+<span class="math notranslate nohighlight">\(R\)</span> being in no other atom (the separator variable rule declines
+a relation in two atoms without <span class="math notranslate nohighlight">\(y\)</span> at the same position, and a
+relation in two disjuncts keeps its variables). The events
+<span class="math notranslate nohighlight">\(\varphi(b)\)</span> for different <span class="math notranslate nohighlight">\(b\)</span> thus have no tuple in common
+and are independent, which is what the separator variable rule needs:
+<span class="math notranslate nohighlight">\(P[Q] = 1 - \prod_b (1 - P[\varphi(b)])\)</span>. The tuples of a choice
+are not independent of each other, so its atoms are not extended. The
+dependency is checked on the relation, by comparing the numbers of
+distinct values of <span class="math notranslate nohighlight">\(\bar x\)</span> and of <span class="math notranslate nohighlight">\((\bar x, y)\)</span>, in
+polynomial time.</p>
+</dd>
+<dt>Declined unions</dt><dd><p>Declining a query is sound: it is then solved by weighted model
+counting, exactly. The disjoint separator declines the unions with a
+disjunct without a free variable of the query, with a quantifier left
+in a disjunct, or with the equalities of a free variable or a constant
+of a choice atom and a rest that is not deterministic.</p>
+</dd>
+<dt>Projection on a variable</dt><dd><p><em>Disjoint projection.</em> The atom <span class="math notranslate nohighlight">\(C(\bar u)\)</span> is a conjunct of the
+body (<code class="docutils literal notranslate"><span class="pre">_split_choice_projection</span></code>), so for two values <span class="math notranslate nohighlight">\(a \neq b\)</span>
+of <span class="math notranslate nohighlight">\(X'\)</span> the events imply the different tuples
+<span class="math notranslate nohighlight">\(C(\bar u)[a/X']\)</span> and <span class="math notranslate nohighlight">\(C(\bar u)[b/X']\)</span> of <span class="math notranslate nohighlight">\(C\)</span>, and are
+mutually exclusive by Lemma 2: their probabilities add up, which
+<code class="docutils literal notranslate"><span class="pre">DisjointProjection</span></code> computes. <span class="math notranslate nohighlight">\(C\)</span> occurring nowhere else in the
+body (the same check), <span class="math notranslate nohighlight">\(C(\bar u)\)</span> is independent of the rest of
+the body by Lemma 1, as the plan of the body, lifted with every rule,
+assumes.</p>
+<p><em>Independent projection.</em> Every probabilistic atom of <span class="math notranslate nohighlight">\(\psi\)</span> has
+<span class="math notranslate nohighlight">\(v\)</span>, and any two atoms of a relation have it at a common position
+(<code class="docutils literal notranslate"><span class="pre">_separates</span></code>); the query being standardised apart, these atoms
+depend on <span class="math notranslate nohighlight">\(v\)</span>. For <span class="math notranslate nohighlight">\(a \neq b\)</span>, the tuples of
+<span class="math notranslate nohighlight">\(\psi[a/v]\)</span> and <span class="math notranslate nohighlight">\(\psi[b/v]\)</span> thus differ at that position, and
+none is of a probabilistic choice (also checked): the events are
+mutually independent by Lemma 1, and their disjunction has the
+probability that <code class="docutils literal notranslate"><span class="pre">IndependentProjection</span></code> computes. <span class="math notranslate nohighlight">\(A\)</span> sharing
+no probabilistic relation with <span class="math notranslate nohighlight">\(\psi\)</span>
+(<code class="docutils literal notranslate"><span class="pre">_split_separator_projection</span></code>), the join with its plan is a product
+by Lemma 1.</p>
+<p><em>Exclusive projection.</em> Let <span class="math notranslate nohighlight">\(E_a\)</span> be the event of
+<span class="math notranslate nohighlight">\((\exists (X - \{v\})\, \varphi)[a/v]\)</span>, for fixed values of the
+free variables. <span class="math notranslate nohighlight">\(v\)</span> being the only variable of <span class="math notranslate nohighlight">\(X\)</span> in
+<span class="math notranslate nohighlight">\(R(\bar u)\)</span>, a conjunct of <span class="math notranslate nohighlight">\(\varphi\)</span>
+(<code class="docutils literal notranslate"><span class="pre">_split_exclusive_projection</span></code>), <span class="math notranslate nohighlight">\(E_a\)</span> implies
+<span class="math notranslate nohighlight">\(R(\bar u[a/v])\)</span>. <span class="math notranslate nohighlight">\(E_b\)</span> implies the conjunct
+<span class="math notranslate nohighlight">\(\lnot\exists w\, (R(\bar u[w/v]) \land w \neq b)\)</span>
+(<code class="docutils literal notranslate"><span class="pre">ExcludingNegations</span></code>, the patterns of such a negated conjunct),
+hence, for <span class="math notranslate nohighlight">\(w = a \neq b\)</span>, <span class="math notranslate nohighlight">\(\lnot R(\bar u[a/v])\)</span>. With
+<span class="math notranslate nohighlight">\(w &lt; v\)</span> instead, for <span class="math notranslate nohighlight">\(a &lt; b\)</span>, <span class="math notranslate nohighlight">\(E_b\)</span> implies
+<span class="math notranslate nohighlight">\(\lnot R(\bar u[a/v])\)</span> the same way, and, for <span class="math notranslate nohighlight">\(a &gt; b\)</span>,
+<span class="math notranslate nohighlight">\(E_a\)</span> implies <span class="math notranslate nohighlight">\(\lnot R(\bar u[b/v])\)</span>; <span class="math notranslate nohighlight">\(w &gt; v\)</span> is
+symmetric. No world satisfies <span class="math notranslate nohighlight">\(E_a\)</span> and
+<span class="math notranslate nohighlight">\(E_b\)</span>: the events are mutually exclusive, their union is
+<span class="math notranslate nohighlight">\(\exists X\, \varphi\)</span>, and its probability is the sum of theirs,
+which <code class="docutils literal notranslate"><span class="pre">DisjointProjection</span></code> computes. The proof does not depend on the
+relation of <span class="math notranslate nohighlight">\(R\)</span>, which can be tuple-independent, a choice or
+deterministic, nor on the other conjuncts of <span class="math notranslate nohighlight">\(\varphi\)</span>.</p>
+<p><em>Least value.</em> The conjunct added by <code class="docutils literal notranslate"><span class="pre">_extremum_conjunct</span></code> makes the
+query no stronger. Take a world and values of the variables, <span class="math notranslate nohighlight">\(v
+= a\)</span> among them, satisfying <span class="math notranslate nohighlight">\(\varphi\)</span>. The values <span class="math notranslate nohighlight">\(c\)</span> for
+which <span class="math notranslate nohighlight">\(R(\bar u[c/v])\)</span> holds, the other variables of
+<span class="math notranslate nohighlight">\(R(\bar u)\)</span> being free ones, fixed, include <span class="math notranslate nohighlight">\(a\)</span>, and are
+finite: let <span class="math notranslate nohighlight">\(m \leq a\)</span> be the least, the order compared being
+total. With <span class="math notranslate nohighlight">\(v = m\)</span>, <span class="math notranslate nohighlight">\(R(\bar u[m/v])\)</span> holds and no
+<span class="math notranslate nohighlight">\(R(\bar u[w/v])\)</span> with <span class="math notranslate nohighlight">\(w &lt; m\)</span>, so the added conjunct holds;
+the conjuncts without <span class="math notranslate nohighlight">\(v\)</span> are unchanged; each comparison
+<span class="math notranslate nohighlight">\(v &lt; t\)</span> or <span class="math notranslate nohighlight">\(v \leq t\)</span> holds, as <span class="math notranslate nohighlight">\(m \leq a\)</span>. These are
+all the conjuncts of <span class="math notranslate nohighlight">\(\varphi\)</span>, which then holds with the added
+conjunct. The converse is immediate, so both queries have the same
+worlds; the greatest value is symmetric. The query rewritten is then
+projected exclusively, proved above.</p>
+<p><em>At least two.</em> <span class="math notranslate nohighlight">\(Q\)</span> holds in a world exactly when
+<span class="math notranslate nohighlight">\(R(\bar u[a/x])\)</span> holds for at least two values <span class="math notranslate nohighlight">\(a\)</span>: given
+two, <span class="math notranslate nohighlight">\(a &lt; b\)</span>, the values <span class="math notranslate nohighlight">\(x = a, y = b\)</span> satisfy
+<span class="math notranslate nohighlight">\(x &lt; y\)</span> and <span class="math notranslate nohighlight">\(x \neq y\)</span>, and <span class="math notranslate nohighlight">\(x = b, y = a\)</span> satisfy
+<span class="math notranslate nohighlight">\(x &gt; y\)</span>, the free variables, the only other ones of the atoms,
+being fixed; conversely each comparison makes the two values different.
+<span class="math notranslate nohighlight">\(Q\)</span> is thus
+<span class="math notranslate nohighlight">\(\exists x\, R(\bar u)\)</span> without the worlds where exactly one
+value holds, which the second query describes, and which imply
+<span class="math notranslate nohighlight">\(\exists x\, R(\bar u)\)</span>. Hence
+<span class="math notranslate nohighlight">\(P[Q] = P[\exists x\, R(\bar u)] - P[\text{exactly one}]\)</span>, which
+<code class="docutils literal notranslate"><span class="pre">Subtraction</span></code> computes, each plan being lifted, and checked, by the
+rules of this page.</p>
+</dd>
+<dt>Algorithms from the literature</dt><dd><p>The rules of <a class="reference internal" href="#algorithms-from-the-literature">Algorithms from the literature</a> are proved in the papers
+cited there: Dalvi and Suciu <a class="reference internal" href="#dalvi2012" id="id30"><span>[Dalvi2012]</span></a> for unions of conjunctive
+queries on tuple-independent databases, and Suciu et al. <a class="reference internal" href="#suciu2011" id="id31"><span>[Suciu2011]</span></a>
+(section 4.3.1) for the disjoint projection on probabilistic choices,
+which the disjoint separator applies to unions (its proof is above).</p>
+</dd>
+<dt>Inclusion–exclusion</dt><dd><p>The weights computed by <code class="docutils literal notranslate"><span class="pre">_formulas_weights</span></code> from an incomplete
+containment test give the probability of the conjunction:
+<a class="reference internal" href="inclusion_exclusion.html#inclusion-exclusion"><span class="std std-ref">Inclusion–exclusion with an incomplete containment test</span></a> proves it.</p>
+</dd>
+<dt>Ranking</dt><dd><p>Dalvi and Suciu prove the ranked query equivalent to the query, and its
+relations to be tuple-independent, by mapping each tuple of a relation
+to a single tuple of a single ranked relation <a class="reference internal" href="#dalvi2012" id="id32"><span>[Dalvi2012]</span></a>
+(Proposition 4.2). <code class="docutils literal notranslate"><span class="pre">rank_query</span></code> keeps what the proof needs:</p>
+<ul class="simple">
+<li><p>every atom of a relation has variables to rank at the same positions
+(<code class="docutils literal notranslate"><span class="pre">_ranked_variables_and_positions</span></code> closes the set of variables to
+rank), so the ranked relations of <span class="math notranslate nohighlight">\(R\)</span> partition its tuples by
+the order of their values at these positions, and keep their
+probabilities: a tuple-independent relation gives tuple-independent
+relations;</p></li>
+<li><p>a probabilistic choice, a single block of exclusive tuples, is not
+split: its parts would not be independent choices;</p></li>
+<li><p>the atoms split are positive: each disjunct then implies the query,
+even when no atom forces its order, while a negated
+<span class="math notranslate nohighlight">\(\lnot R_&lt;(x, y)\)</span> would hold whenever <span class="math notranslate nohighlight">\(x &gt; y\)</span>;</p></li>
+<li><p>the order compared is total, with equality: real numbers or strings
+(<code class="docutils literal notranslate"><span class="pre">_is_totally_ordered</span></code>), without NaN. Sets, ordered by inclusion,
+would leave the tuples of incomparable values in no ranked relation.</p></li>
+</ul>
+<p>The answer variables are not ordered (<code class="docutils literal notranslate"><span class="pre">verify_that_the_query_is_ranked</span></code>
+and <code class="docutils literal notranslate"><span class="pre">_ranked_variables_and_positions</span></code> leave out the free variables).
+Dalvi and Suciu lift the Boolean query of each answer, whose answer
+variables are constants, and rank its variables only. Rankedness is
+needed by no rule to be sound: the independent join and
+union need relations apart, the separator variable a common position
+of every two atoms of a relation (<code class="docutils literal notranslate"><span class="pre">find_separator_variables</span></code>),
+inclusion–exclusion is an identity, and
+<code class="docutils literal notranslate"><span class="pre">different_free_variables_plan</span></code> checks that the atoms renamed are
+different tuples. Ranking only lets them apply; a query whose answer
+variables would need it is lifted by them or declined. An answer
+variable at a ranked position is still declined
+(<code class="docutils literal notranslate"><span class="pre">_check_rankable</span></code>): splitting the relation by the order of its
+values would order the constants.</p>
+</dd>
+<dt>Liftable queries that are declined</dt><dd><p>The rules are not complete. These queries, among others, are
+polynomial but declined, and left to weighted model counting:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\mathit{ans}() \leftarrow R(x) \land \lnot C(x)\)</span>, with
+<span class="math notranslate nohighlight">\(C\)</span> a probabilistic choice, whose probability is
+<span class="math notranslate nohighlight">\(1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b))\)</span>, exactly one
+tuple <span class="math notranslate nohighlight">\(C(a)\)</span> being true: the atom of the choice is negated, so
+no conjunct of the choice has <span class="math notranslate nohighlight">\(x\)</span> for the projections of
+<a class="reference internal" href="#planning-non-repeating-queries">Planning non-repeating queries</a>, and the Dalvi–Suciu algorithm marks
+the query <code class="docutils literal notranslate"><span class="pre">NonLiftable</span></code>;</p></li>
+<li><p>more than <code class="docutils literal notranslate"><span class="pre">MAX_ANSWER_VARIABLES_AT_A_POSITION</span></code>, three, answer
+variables at the same position of atoms of a relation: “answer
+variables as constants” splits on all their equalities, and the
+Bell number of the branches makes the planning too long.</p></li>
+</ul>
+</dd>
+</dl>
+<p>The tests of the rules of <a class="reference internal" href="#negations-and-comparisons-sharing-relations">Negations and comparisons sharing relations</a>
+(<code class="docutils literal notranslate"><span class="pre">packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py</span></code>) also compare
+their plans with an enumeration of the possible worlds of small
+databases.</p>
+</section>
+<section id="references">
+<h2><a class="toc-backref" href="#id49" role="doc-backlink">References</a><a class="headerlink" href="#references" title="Link to this heading">#</a></h2>
+<div role="list" class="citation-list">
+<div class="citation" id="chavira2008" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">Chavira2008</a><span class="fn-bracket">]</span></span>
+<p>M. Chavira and A. Darwiche. <em>On probabilistic inference by
+weighted model counting</em>. Artificial Intelligence, 172(6–7), 772–799,
+2008.</p>
+</div>
+<div class="citation" id="dalvi2007" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id6">Dalvi2007</a><span class="fn-bracket">]</span></span>
+<p>N. Dalvi and D. Suciu. <em>Efficient query evaluation on
+probabilistic databases</em>. The VLDB Journal, 16(4), 523–544, 2007.</p>
+</div>
+<div class="citation" id="dalvi2012" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Dalvi2012<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id8">1</a>,<a role="doc-backlink" href="#id9">2</a>,<a role="doc-backlink" href="#id10">3</a>,<a role="doc-backlink" href="#id11">4</a>,<a role="doc-backlink" href="#id13">5</a>,<a role="doc-backlink" href="#id20">6</a>,<a role="doc-backlink" href="#id23">7</a>,<a role="doc-backlink" href="#id26">8</a>,<a role="doc-backlink" href="#id29">9</a>,<a role="doc-backlink" href="#id30">10</a>,<a role="doc-backlink" href="#id32">11</a>)</span>
+<p>N. Dalvi and D. Suciu. <em>The dichotomy of probabilistic
+inference for unions of conjunctive queries</em>. Journal of the ACM,
+59(6), 1–87, 2012.</p>
+</div>
+<div class="citation" id="darwiche2011" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">Darwiche2011</a><span class="fn-bracket">]</span></span>
+<p>A. Darwiche. <em>SDD: A new canonical representation of
+propositional knowledge bases</em>. In Proceedings of the 22nd International
+Joint Conference on Artificial Intelligence (IJCAI), 819–826, 2011.</p>
+</div>
+<div class="citation" id="fink2014" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Fink2014<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id7">1</a>,<a role="doc-backlink" href="#id15">2</a>,<a role="doc-backlink" href="#id18">3</a>)</span>
+<p>R. Fink and D. Olteanu. <em>A dichotomy for non-repeating
+queries with negation in probabilistic databases</em>. In Proceedings of
+the 33rd ACM SIGMOD-SIGACT-SIGART Symposium on Principles of Database
+Systems (PODS), 144–155, 2014.</p>
+</div>
+<div class="citation" id="fink2016" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Fink2016<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id16">1</a>,<a role="doc-backlink" href="#id17">2</a>,<a role="doc-backlink" href="#id19">3</a>)</span>
+<p>R. Fink and D. Olteanu. <em>Dichotomies for queries with
+negation in probabilistic databases</em>. ACM Transactions on Database
+Systems, 41(1), 1–47, 2016.</p>
+</div>
+<div class="citation" id="olteanu2009" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Olteanu2009<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id22">1</a>,<a role="doc-backlink" href="#id24">2</a>,<a role="doc-backlink" href="#id27">3</a>)</span>
+<p>D. Olteanu and J. Huang. <em>Secondary-storage confidence
+computation for conjunctive queries with inequalities</em>. In Proceedings
+of the 2009 ACM SIGMOD International Conference on Management of Data,
+389–402, 2009.</p>
+</div>
+<div class="citation" id="olteanu2009b" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id21">Olteanu2009b</a><span class="fn-bracket">]</span></span>
+<p>D. Olteanu, J. Huang and C. Koch. <em>SPROUT: Lazy vs.
+eager query plans for tuple-independent probabilistic databases</em>. In
+Proceedings of the 25th IEEE International Conference on Data
+Engineering (ICDE), 640–651, 2009.</p>
+</div>
+<div class="citation" id="re2009" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id25">Re2009</a><span class="fn-bracket">]</span></span>
+<p>C. Ré and D. Suciu. <em>The trichotomy of HAVING queries on a
+probabilistic database</em>. The VLDB Journal, 18(5), 1091–1116, 2009.</p>
+</div>
+<div class="citation" id="suciu2011" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>Suciu2011<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id5">1</a>,<a role="doc-backlink" href="#id14">2</a>,<a role="doc-backlink" href="#id28">3</a>,<a role="doc-backlink" href="#id31">4</a>)</span>
+<p>D. Suciu, D. Olteanu, C. Ré and C. Koch. <em>Probabilistic
+Databases</em>. Synthesis Lectures on Data Management. Morgan &amp; Claypool,
+2011.</p>
+</div>
+<div class="citation" id="suciu2020" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id12">Suciu2020</a><span class="fn-bracket">]</span></span>
+<p>D. Suciu. <em>Probabilistic databases for all</em>. In Proceedings
+of the 39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database
+Systems (PODS), 19–31, 2020.</p>
+</div>
+<div class="citation" id="vennekens2009" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id3">Vennekens2009</a><span class="fn-bracket">]</span></span>
+<p>J. Vennekens, M. Denecker and M. Bruynooghe. <em>CP-logic:
+A language of causal probabilistic events and its relation to logic
+programming</em>. Theory and Practice of Logic Programming, 9(3), 245–308,
+2009.</p>
+</div>
+</div>
+<p><a class="reference internal" href="tutorial_squall.html#zanitti2023" id="id33"><span>[Zanitti2023]</span></a> is listed in <a class="reference internal" href="tutorial_squall.html"><span class="doc">SQUALL: Controlled English for NeuroLang</span></a>.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="concepts.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Concepts</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="inclusion_exclusion.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Inclusion–exclusion with an incomplete containment test</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+ 
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2017–2026, Demian Wassermann and the NeuroLang contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+  </p>
+</div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+<div class="container neurolang-timestamp">
+    <p style="margin-top: -10px;">on </p>
+</div>
+  </body>
+</html>

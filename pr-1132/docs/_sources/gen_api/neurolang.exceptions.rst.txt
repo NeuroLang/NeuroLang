@@ -1,0 +1,50 @@
+﻿neurolang.exceptions
+====================
+
+.. automodule:: neurolang.exceptions
+
+   
+   .. rubric:: Exceptions
+
+   .. autosummary::
+   
+      CouldNotTranslateConjunctionException
+      ForbiddenBuiltinError
+      ForbiddenDisjunctionError
+      ForbiddenExistentialError
+      ForbiddenExpressionError
+      ForbiddenRecursivityError
+      ForbiddenUnstratifiedAggregation
+      InvalidCommandExpression
+      NegativeFormulaNotNamedRelationException
+      NegativeFormulaNotSafeRangeException
+      NeuroLangException
+      NeuroLangFrontendException
+      NeuroLangNotImplementedError
+      NoValidChaseClassForStratumException
+      NonLiftableException
+      NotConjunctiveExpression
+      NotConjunctiveExpressionNegation
+      NotConjunctiveExpressionNestedPredicates
+      NotInFONegE
+      NotRankedException
+      NotUnateException
+      ParserError
+      PredicateArityError
+      ProjectionOverMissingColumnsError
+      ProtectedKeywordError
+      RelationalAlgebraError
+      RelationalAlgebraNotImplementedError
+      RuleNotFoundError
+      SquallSemanticError
+      SymbolNotFoundError
+      TranslateToNamedRAException
+      UnboundVariablesError
+      UnexpectedCharactersError
+      UnexpectedExpressionError
+      UnexpectedTokenError
+      UnsupportedProgramError
+      UnsupportedQueryError
+      UnsupportedSolverError
+      WrongArgumentsInPredicateError
+   
