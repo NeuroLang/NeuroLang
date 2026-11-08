@@ -3,14 +3,31 @@ name: Deploy Documentation
 on:
   push:
     branches: [master]
+  # Every pull request, whatever its base: a pull request stacked on the
+  # branch of another one is checked too.
   pull_request:
-    branches: [master]
+
+# A push to a pull request cancels its runs still going; each run of master
+# is a group of its own, never cancelled nor kept waiting.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+# A pull request's site, the documentation with its REPL in the browser, is
+# the artifact repl-pr-NUMBER, which the job repl tells of in a comment of the
+# pull request; that of master is the artifact documentation-html, deployed
+# to GitHub Pages.
+env:
+  ARTIFACT: ${{ github.event_name == 'pull_request' && format('repl-pr-{0}', github.event.pull_request.number) || 'documentation-html' }}
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      complete: ${{ steps.check.outputs.complete }}
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
 
     steps:
       - name: Checkout repository
@@ -53,21 +70,54 @@ jobs:
           key: repl-embeddings-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/specter2_numpy.py') }}
           restore-keys: repl-embeddings-
 
+      # What the engine downloads to be built (the Neurosynth tables, the
+      # atlases), kept from one build to the next: a data host that is down
+      # (a 504 of GitHub's raw files) does not stop the build. Saved below
+      # only when the bundle was built, so that it is never what a failed
+      # build had downloaded.
+      - name: Restore the engine's downloads
+        id: downloads
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/repl-downloads
+          key: repl-downloads-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/engines/neurosynth/init.py', 'packages/neurolang/neurolang/frontend/neurosynth_utils.py') }}
+          restore-keys: repl-downloads-
+
       # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheels and
       # the data of the neurosynth engine from beside its page. The step builds
       # the engine, which keeps in its data directory the tables the page
       # would take a minute and a half to find (neurolang_apps.utils.
       # engine_cache), so that they are in the data zip, and stops if it kept
-      # none. If this step fails, the documentation is still deployed, with
-      # the REPL's page telling that it could not start.
+      # none. If this step fails, the documentation is still uploaded and
+      # deployed, with the REPL's page telling that it could not start, and
+      # the job repl fails, telling it.
       - name: Build the in-browser REPL's bundle
+        id: bundle
         continue-on-error: true
-        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads
 
-      - name: Upload documentation artifact
+      - name: Check the in-browser REPL's bundle
+        id: check
+        run: |
+          if test -f doc/_build/html/_static/repl/bundle.json; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start (see the step Build the in-browser REPL's bundle)."
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save the engine's downloads
+        if: steps.check.outputs.complete == 'true' && steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/repl-downloads
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+
+      - name: Upload the site
+        id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: documentation-html
+          name: ${{ env.ARTIFACT }}
           path: doc/_build/html
           retention-days: 30
 
@@ -80,3 +130,69 @@ jobs:
           publish_branch: master
           publish_dir: ./doc/_build/html
           force_orphan: true
+
+  # Tells whether the REPL's bundle was built, failing if not (the
+  # documentation is deployed all the same), and, on a pull request, how to
+  # run its REPL, in a comment of the pull request kept up to date: the
+  # comment with the marker below, which each run edits. The token of a pull
+  # request from a fork cannot comment: its REPL is the artifact only.
+  repl:
+    name: REPL bundle
+    needs: build-docs
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on the pull request how to run its REPL
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          COMMIT: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_URL: ${{ needs.build-docs.outputs.artifact-url }}
+          COMPLETE: ${{ needs.build-docs.outputs.complete }}
+        run: |
+          marker="<!-- neurolang-repl -->"
+          if test "$COMPLETE" = true; then
+            bundle="The REPL's bundle is complete."
+          else
+            bundle=":warning: The REPL's bundle could not be built: the page will say that it cannot start (see the [run's log]($RUN_URL))."
+          fi
+          body=$(cat <<EOF
+          $marker
+          ### The REPL in the browser of this pull request
+
+          Built from $COMMIT by [run $RUN_ID]($RUN_URL): the documentation and its REPL, the artifact [\`$ARTIFACT\`]($ARTIFACT_URL) (kept 30 days). $bundle
+
+          The page is static but must be served over HTTP. From a checkout of NeuroLang:
+
+          \`\`\`bash
+          uv run --extra apps neurolang-repl-serve --pr $PR
+          \`\`\`
+
+          or with the GitHub CLI and Python only:
+
+          \`\`\`bash
+          gh run download $RUN_ID -R $REPO -n $ARTIFACT -D pr-$PR
+          python3 -m http.server -b 127.0.0.1 -d pr-$PR 8000
+          \`\`\`
+
+          then open http://localhost:8000/_static/repl/index.html.
+          EOF
+          )
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
+          if test -n "$id"; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
+
+      - name: Fail if the REPL's bundle was not built
+        if: needs.build-docs.outputs.complete != 'true'
+        run: |
+          echo "::error title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start. See the step Build the in-browser REPL's bundle of the job build-docs."
+          exit 1
