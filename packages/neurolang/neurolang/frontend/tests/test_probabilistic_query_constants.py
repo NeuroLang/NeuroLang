@@ -393,3 +393,32 @@ def test_query_constant_keeps_large_program_feasible():
         pytest.fail("query constant not propagated: query timed out")
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "2000"
+
+
+def test_query_constant_restricts_conditioned_atoms_first(nl, capsys):
+    """
+    A constant of the query for a head variable, such as the text of
+    ``p_a_given_similar(q, ...)``, binds the body atom holding it before
+    the others: ``close('pain', s)`` restricts ``reports_close`` to its
+    studies, as when the constant is written into the rule.
+    """
+    nl.add_symbol(
+        lambda q, s: float(int(s[1:]) % 3 == len(q) % 3), name="similarity"
+    )
+    nl.execute_datalog_program("""
+    study(s) :- peak_reported(i, j, k, s)
+    close(q, s) :- study(s) & (v == similarity(q, s)) & (v > 0)
+    c(q, i, j, k, PROB) :- (reports_close(i, j, k, s) & selected_study(s)) // (close(q, s) & selected_study(s))
+    c_pain(i, j, k, PROB) :- (reports_close(i, j, k, s) & selected_study(s)) // (close('pain', s) & selected_study(s))
+    """)
+    found = _rows(nl, ("i", "j", "k", "p"), ("c", "pain", "i", "j", "k", "p"))
+    expected = _rows(nl, ("i", "j", "k", "p"), ("c_pain", "i", "j", "k", "p"))
+    assert len(expected) > 0
+    _assert_same(found, expected)
+    with nl.scope as e:
+        nl.query(
+            (e.i, e.j, e.k, e.p), e.c("pain", e.i, e.j, e.k, e.p),
+            show_rewritten=True, dry_run=True,
+        )
+    rules = dict(_rewritten_rules(capsys.readouterr().out))
+    assert "magic_reports_close^fffb_0(s) :-" in rules
