@@ -440,6 +440,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def import_datalog_module(self, path):
+        """
+        Import the Datalog module at *path*, as ``.import("path")`` in a
+        program does: its facts, rules and commands are added to the
+        program, once. ``"package:path/module.dl"`` is a module shipped
+        in the Python package ``package``.
+        """
+        self.program_ir.walk(
+            ir.Command(ir.Symbol("import"), (ir.Constant(str(path)),), ())
+        )
+
     def _rule_counts(self):
         """Return the number of rules of each predicate of the IDB."""
         return {

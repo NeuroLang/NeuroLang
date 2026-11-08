@@ -57,6 +57,7 @@ Usage
 """
 
 import argparse
+import contextlib
 import dataclasses
 import difflib
 import json
@@ -1035,6 +1036,17 @@ def _origin_notes(exc: BaseException) -> list:
     return notes[:4]
 
 
+def _importing_from_file(args, nl):
+    """
+    Return the context where the program of ``--file`` runs on *nl*: the
+    modules it imports (``.import``) are relative to its directory.
+    """
+    file = getattr(args, "file", None)
+    if not file or nl is None:
+        return contextlib.nullcontext()
+    return nl.program_ir.importing_from(file)
+
+
 def _run_reporting_errors(action, program: str, args, nl=None):
     """
     Run *action* and report any failure as a formatted error.
@@ -1042,9 +1054,12 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     On error, prints a readable message (source context, location and
     hints) to stderr and exits with status 1. In debug mode
     (``--debug`` or ``NEUROLANG_DEBUG=1``) the traceback is printed first.
+    The modules a program of ``--file`` imports are relative to its
+    directory.
     """
     try:
-        return action()
+        with _importing_from_file(args, nl):
+            return action()
     except Exception as exc:
         report_error(
             exc, program, squall=args.squall, debug=_debug_enabled(args),
@@ -1359,6 +1374,7 @@ def _tui_settings(args, tui, argv=()):
         command_line=shlex.join(["neurolang-query", *argv]),
         llm_config=args.llm_config,
         llm_provider=args.llm_provider,
+        program_file=args.file,
     )
 
 
