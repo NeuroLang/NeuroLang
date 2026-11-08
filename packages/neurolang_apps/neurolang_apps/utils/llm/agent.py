@@ -52,10 +52,11 @@ _THOUGHT = re.compile(
 _FINAL = re.compile(r"^\s*Final\s+Answer\s*:", re.MULTILINE | re.IGNORECASE)
 _OBSERVATION = re.compile(r"^\s*Observation\s*:", re.MULTILINE)
 _VERDICT = re.compile(r"VERDICT\s*:\s*\**\s*(yes|no)\b", re.IGNORECASE)
-# A keyword line as models write it, emphasis included: **Action:** x
+# A keyword line as models write it, emphasis or tags included:
+# **Action:** x, <Action: x>, <Action>x</Action>
 _KEYWORD_LINE = re.compile(
-    r"^[\s*_`#>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
-    r"[*_`\s]*:[*_`\s]*(.*)$",
+    r"^[\s*_`#<>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
+    r"[*_`\s]*[:>][*_`\s]*(.*?)\s*(?:</[\w ]+>|>)?\s*$",
     re.IGNORECASE,
 )
 
@@ -170,15 +171,13 @@ def parse_text_action(text: str, language: str) -> TextAction:
     """
     Parse the Thought / Action / Action Input of a text protocol reply.
 
-    A reply hallucinating its own ``Observation:`` is cut there. A
-    ``Final Answer:`` or a lone fenced query is read as a call of
-    ``final_answer``. On a malformed reply, *error* tells the model
-    how to write its action.
+    A reply hallucinating its own ``Observation:`` is cut there (see
+    :func:`_reply_end`). A ``Final Answer:`` or a lone fenced query is
+    read as a call of ``final_answer``. On a malformed reply, *error*
+    tells the model how to write its action.
     """
-    observed = _OBSERVATION.search(text)
-    if observed:
-        text = text[:observed.start()]
     text = _normalise_keywords(text)
+    text = text[:_reply_end(text)]
     thought = _THOUGHT.search(text)
     thought = thought.group(1).strip() if thought else ""
     action = _ACTION.search(text)
@@ -215,15 +214,43 @@ def parse_text_action(text: str, language: str) -> TextAction:
             except ValueError:
                 pass
         return TextAction(thought, name, {})
+    rest = text[arguments_start.end():]
     try:
-        arguments = _json_object(text[arguments_start.end():])
+        arguments = _json_object(rest)
     except ValueError:
+        # A lone JSON string is the argument of a tool taking one.
+        required = next((
+            tool["parameters"].get("required", [])
+            for tool in prompts.TOOLS if tool["name"] == name
+        ), [])
+        try:
+            value = json.loads(rest.strip().split("\n", 1)[0])
+        except ValueError:
+            value = None
+        if isinstance(value, str) and len(required) == 1:
+            return TextAction(thought, name, {required[0]: value})
         return TextAction(
             thought, name,
             error="The Action Input is not a JSON object, e.g. Action Input: "
             + json.dumps({"query": EXAMPLE_QUERIES[language]}),
         )
     return TextAction(thought, name, arguments)
+
+
+def _reply_end(text: str) -> int:
+    """
+    Return where a text protocol reply, its keywords normalised, ends: at
+    the ``Observation:`` it hallucinates after its action (or final
+    answer), if any; one before it, the echo of the last observation, is
+    kept.
+    """
+    starts = [
+        m.start() for m in (
+            _ACTION.search(text), _FINAL.search(text), _FENCE.search(text)
+        ) if m
+    ]
+    observed = _OBSERVATION.search(text, min(starts, default=0))
+    return observed.start() if observed else len(text)
 
 
 def _atom_count(query: str) -> int:
@@ -262,8 +289,28 @@ class Toolbox:
         # whole result (see validation.Preview.frames).
         self.answer_rows = ""
         self.answer_frames = None
+        # The observations of the calls, by tool and arguments.
+        self.observations = {}
 
     def call(self, name: str, arguments: dict):
+        """
+        Run the tool *name* with *arguments*: (observation, final). A call
+        made already, but final_answer, is not run again: a model in a
+        loop is told so, with the result it had.
+        """
+        key = (name, json.dumps(arguments, sort_keys=True, default=str))
+        if key in self.observations and name != "final_answer":
+            return (
+                f"You already called {name} with these arguments, which "
+                f"gave:\n{truncate(self.observations[key], 500)}\n"
+                "Do not call it again: use that result and take the next "
+                "step."
+            ), None
+        observation, final = self._call(name, arguments)
+        self.observations[key] = observation
+        return observation, final
+
+    def _call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
         handler = getattr(self, f"tool_{name}", None)
         if handler is None:
@@ -413,13 +460,20 @@ class Agent:
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):
-        """Return the model's reply to *messages*, counting its usage."""
-        reply = self.client.complete(
-            messages, tools,
-            self.config.temperature if temperature is None else temperature,
-        )
-        result.calls += 1
-        result.usage.update(reply.usage)
+        """
+        Return the model's reply to *messages*, counting its usage. An
+        empty reply (all the tokens spent on reasoning, or a glitch of
+        the provider) is asked for again once.
+        """
+        for _ in range(2):
+            reply = self.client.complete(
+                messages, tools, self.config.temperature
+                if temperature is None else temperature,
+            )
+            result.calls += 1
+            result.usage.update(reply.usage)
+            if reply.text.strip() or reply.tool_calls:
+                break
         return reply
 
     def _step(self, result: AgentResult, step: AgentStep) -> None:
@@ -758,8 +812,8 @@ class ReactAgent(Agent):
         """Run one turn of the Thought / Action / Observation protocol."""
         reply = self._complete(result, messages)
         action = parse_text_action(reply.text, self.language)
-        observed = _OBSERVATION.search(reply.text)
-        content = reply.text[:observed.start()] if observed else reply.text
+        content = _normalise_keywords(reply.text)
+        content = content[:_reply_end(content)]
         error = action.error
         if error and reply.usage.get("output", 0) >= self.provider.max_tokens:
             # A reply cut at the token limit, often a loop the model

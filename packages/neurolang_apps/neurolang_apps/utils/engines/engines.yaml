@@ -136,6 +136,8 @@ engines:
     # argument of the predicate their variable comes from in the query,
     # else of the sort they are named as.  ``atlas_voxel`` indexes the
     # grid of the 2 mm Schaefer atlas, not the template's.
+    # A sort named ``streamline`` holds streamline ids, which ``.view``
+    # draws with an engine giving their points (``streamline_points``).
     sorts:
       study:
         columns: [study_id]

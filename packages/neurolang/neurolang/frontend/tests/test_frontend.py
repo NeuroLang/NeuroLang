@@ -11,6 +11,7 @@ import pytest
 from nl_expr import exceptions, expressions as exp
 from ... import frontend
 from nl_core.datalog import DatalogProgram, Fact, Implication
+from nl_core.datalog.horn_clauses import Fol2DatalogTranslationException
 from nl_expr.exceptions import (
     NeuroLangException,
     UnsupportedProgramError,
@@ -630,6 +631,70 @@ def test_neurolang_dl_datalog_code():
     assert res["D"].to_unnamed() == {
         ("x",),
     }
+
+
+def _tracts():
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set(
+        [(1, "orbital"), (2, "middle"), (3, "superior"), (4, "middle")],
+        name="traverses",
+    )
+    neurolang.add_tuple_set([(2,), (3,)], name="temporal")
+    return neurolang
+
+
+def test_neurolang_dl_datalog_code_disjunction():
+    neurolang = _tracts()
+    res = neurolang.execute_datalog_program(
+        """
+    uncinate(x) :-
+        (traverses(x, "orbital") | traverses(x, "middle")
+         \N{LOGICAL OR} traverses(x, "inferior")),
+        temporal(x)
+    frontal(x) :- traverses(x, "orbital") | traverses(x, "superior")
+    ans(x) :- uncinate(x) | frontal(x), ~temporal(x)
+    """
+    )
+
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+    assert neurolang.solve_all()["uncinate"].to_unnamed() == {(2,)}
+
+
+def test_neurolang_dl_datalog_code_disjunction_constant_query():
+    neurolang = _tracts()
+    res = neurolang.execute_datalog_program(
+        """
+    q(x, y) :- traverses(x, y), (temporal(x) | (y == "orbital"))
+    ans(x) :- q(x, "middle")
+    """
+    )
+
+    assert set(res.to_unnamed()) == {(2,)}
+
+
+def test_neurolang_dl_datalog_code_disjunction_under_negation():
+    neurolang = _tracts()
+    res = neurolang.execute_datalog_program(
+        """
+    q(x) :- traverses(x, "orbital") | traverses(x, "superior")
+    ans(x) :- traverses(x, _), ~q(x)
+    """
+    )
+
+    assert set(res.to_unnamed()) == {(2,), (4,)}
+
+
+@pytest.mark.parametrize(
+    "body", ['traverses(x, "orbital") | temporal(y)', 'temporal(x) | ~q(x)']
+)
+def test_neurolang_dl_datalog_code_unsafe_disjunct(body):
+    neurolang = _tracts()
+    neurolang.add_tuple_set([(1,)], name="q")
+    with pytest.raises(
+        Fol2DatalogTranslationException,
+        match="in a positive atom of every disjunct",
+    ):
+        neurolang.execute_datalog_program(f"p(x) :- {body}")
 
 
 def test_neurolang_dl_datalog_code_statement():

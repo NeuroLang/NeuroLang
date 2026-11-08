@@ -8,6 +8,7 @@ from ..pretty_printer import PrettyPrinter, pretty_repr, rows_label
 from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
+    Materialise,
     NameColumns,
     NaturalJoin,
     NaryNaturalJoin,
@@ -44,6 +45,18 @@ def test_nary_join_one_operand_per_branch():
         "   └─ ρ[l, w]",
         "      └─ π[#0, #1]",
         "         └─ weight",
+    ]
+
+
+def test_materialised_relation_and_fresh_columns():
+    """A relation to materialise is drawn as a tree, its fresh columns
+    numbered c₀, c₁, …."""
+    plan = Materialise(named(Symbol("edge"), "fresh_00000001", "y"))
+    assert pretty_repr(plan).splitlines() == [
+        "materialise",
+        "└─ ρ[c₀, y]",
+        "   └─ π[#0, #1]",
+        "      └─ edge",
     ]
 
 

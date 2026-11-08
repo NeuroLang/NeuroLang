@@ -260,6 +260,45 @@ def test_relational_algebra_difference():
         first - third
 
 
+def _typed(dtype, rows, text=("a", "b")):
+    return polars.RelationalAlgebraFrozenSet(
+        pl.DataFrame(
+            {
+                "0": pl.Series(rows, dtype=dtype),
+                "1": pl.Series(list(text[: len(rows)])),
+            }
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "left,right",
+    [
+        (pl.Int32, pl.Int64),
+        (pl.Int64, pl.Int32),
+        (pl.Int8, pl.Int64),
+        (pl.Int64, pl.Float64),
+    ],
+)
+def test_union_of_numeric_columns_of_different_types(left, right):
+    """A literal is an Int32 in polars and a column is an Int64: the union
+    takes their common type, as the pandas backend does."""
+    first = _typed(left, [1, 2])
+    second = _typed(right, [2, 3], text=("b", "c"))
+    union = first | second
+    assert sorted(union) == [(1, "a"), (2, "b"), (3, "c")]
+    assert len(union) == 3
+
+
+def test_in_place_union_of_numeric_columns_of_different_types():
+    first = polars.RelationalAlgebraSet(
+        pl.DataFrame({"0": pl.Series([1], dtype=pl.Int32), "1": ["a"]})
+    )
+    second = _typed(pl.Int64, [2], text=("b",))
+    first |= second
+    assert sorted(first) == [(1, "a"), (2, "b")]
+
+
 def test_relational_algebra_ra_union():
     first = polars.RelationalAlgebraFrozenSet([(7, 8), (9, 2)])
     second = polars.RelationalAlgebraFrozenSet([(9, 2), (42, 0)])

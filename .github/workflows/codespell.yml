@@ -4,8 +4,15 @@ name: Codespell
 on:
   push:
     branches: [master]
+  # Every pull request, whatever its base: a pull request stacked on the
+  # branch of another one is checked too.
   pull_request:
-    branches: [master]
+
+# A push to a pull request cancels its runs still going; each run of master
+# is a group of its own, never cancelled nor kept waiting.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

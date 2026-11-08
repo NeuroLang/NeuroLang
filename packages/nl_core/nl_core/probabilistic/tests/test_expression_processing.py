@@ -23,6 +23,7 @@ from ...utils.relational_algebra_set import pandas as pandas_ras
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import DistributionDoesNotSumToOneError
 from ..expression_processing import (
+    NegatedChoicesAsOtherTuples,
     UnifyChoicesInNegations,
     add_to_union,
     check_probabilistic_choice_set_probabilities_sum_to_one,
@@ -270,3 +271,19 @@ def test_unify_choices_in_negations():
     assert UnifyChoicesInNegations({C}).walk(formula) == Conjunction((
         C(x), Negation(Conjunction((C(x), M(x, x))))
     ))
+
+
+def test_negated_choice_atom_is_another_tuple_of_the_choice():
+    """¬C(x) ≡ ∃f (C(f) ∧ f ≠ x), exactly one tuple of C being true;
+    negated atoms of other relations are left as they are."""
+    import operator
+    C, M = Symbol("C"), Symbol("M")
+    result = NegatedChoicesAsOtherTuples({C}).walk(
+        Conjunction((M(x), Negation(C(x)), Negation(M(y))))
+    )
+    m, choice, negated = result.formulas
+    assert (m, negated) == (M(x), Negation(M(y)))
+    f = choice.head
+    assert choice == ExistentialPredicate(
+        f, Conjunction((C(f), Constant(operator.ne)(f, x)))
+    )

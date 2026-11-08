@@ -109,7 +109,11 @@ from .datalog.sugar.spatial import (
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import ProbabilisticTypeResolutionMixin
-from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
+from .datalog.squall import (
+    CheckPredicateArities,
+    ResolveInvertedFunctionApplicationMixin,
+    StripDimensionTypePredicatesMixin,
+)
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .show_ra import (
@@ -888,6 +892,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
+        CheckPredicateArities(self.program_ir).walk(prob_idb)
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
         det_solution = with_empty_relations(

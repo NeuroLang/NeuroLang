@@ -412,6 +412,43 @@ def test_push_in_optimiser():
     assert res == exp_res
 
 
+@pytest.mark.parametrize("left, right", [
+    (("a",), ("b",)),
+    (("a", "b"), ("b",)),
+    (("a", "b"), ("a", "b")),
+])
+def test_push_in_equality_of_columns_of_both_sides_of_a_join(left, right):
+    """
+    An equality of a column of each side of a join is pushed in by
+    renaming only when each column is of one side alone: a column of both
+    sides is joined on, and renaming it loses that join, or, when no
+    column is of one side alone, crashed with a ``KeyError``.
+    """
+    class Opt(PushInSelections, ExpressionWalker):
+        pass
+
+    def relation(columns, rows):
+        return NameColumns(
+            C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+                WrappedRelationalAlgebraSet(
+                    row[:len(columns)] for row in rows
+                )
+            ),
+            tuple(str2columnstr_constant(c) for c in columns),
+        )
+
+    a, b = str2columnstr_constant("a"), str2columnstr_constant("b")
+    exp = Selection(
+        NaturalJoin(
+            relation(left, [(0, 1), (1, 0)]),
+            relation(right, [(1, 1)] if len(right) == 1 else [(1, 1), (1, 0)])
+        ),
+        eq_(a, b)
+    )
+    solver = RelationalAlgebraSolver()
+    assert solver.walk(Opt().walk(exp)) == solver.walk(exp)
+
+
 def test_eliminate_trivial_projections_optimiser(r1):
     class Opt(EliminateTrivialProjections, ExpressionWalker):
         pass
@@ -1729,3 +1766,29 @@ def test_constant_of_the_null_side_of_an_outer_join(
     expected = RelationalAlgebraSolver().walk(expression).value
     result = RelationalAlgebraSolver().walk(Opt().walk(expression)).value
     assert result == expected
+
+
+def test_projection_of_a_join_of_joins_is_ordered_as_one_join():
+    """
+    Check that a projection of nested joins gives one join ordered by size.
+
+    In ``π[l, s]((((D(l, s) ⋈ C(s)) ⋈ A(f, s)) ⋈ L(f))``, pushing the
+    projection into the outer join first hid its join operand, which was
+    then never flattened: the large ``D`` and ``A`` were joined before
+    the small ``L``.
+    """
+    d = _sized_constant(("l", "s"), 300)
+    c = _sized_constant(("s",), 140)
+    a = _sized_constant(("f", "s"), 290)
+    small = _sized_constant(("f",), 14)
+    tree = Projection(
+        NaturalJoin(NaturalJoin(NaturalJoin(d, c), a), small),
+        (str2columnstr_constant("l"), str2columnstr_constant("s")),
+    )
+
+    result = RelationalAlgebraOptimiser().walk(tree)
+
+    join = result.relation
+    assert isinstance(join, NaryNaturalJoin)
+    assert join.relations[0] is small
+    assert _same_result(tree, result)
