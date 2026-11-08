@@ -19,6 +19,20 @@ Unreleased
 
 **Performance:**
 
+* A Euclidean distance bound between a set of voxels and a set of peaks
+  holds half the memory and takes about half the time: on 300 k peaks and
+  the 318 k voxels of a 2 mm brain mask, a radius of 6 voxels (120 M pairs)
+  peaks at 7.5 GB instead of 14.6 GB, and takes 18 s instead of 43 s, and
+  a radius of 3 at 1.1 GB instead of 2.8 GB, in 1.6 s instead of 5.5 s. An
+  integer join looked its neighbours up with the integer offsets of the
+  radius only when it needed few look-ups, and built k-d trees otherwise,
+  whose pairs are 5 to 10 times dearer than a look-up: it now looks them up
+  whenever the larger set fills at least one cell of the grid of its
+  coordinates in 40. The k-d trees are searched in chunks of the smaller
+  set, so that the pairs they return are never all alive at once; and the
+  distances, the 64-bit indices of the points and a copy of the pairs are
+  no longer kept when they are not needed.
+
 * A selection by a Python function of a single column, as
   ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
   (291,533 rows) in a probabilistic rule, applies the function to the column
