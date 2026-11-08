@@ -19,6 +19,7 @@ def symbols(nl):
 
 @pytest.mark.parametrize("query, language", [
     ("ans(s) :- mentions(s, 'pain')", "datalog"),
+    ("ans[pain](s) :- mentions(s, 'pain')", "datalog"),
     ("obtain every Study that mentions 'pain'.", "squall"),
 ])
 def test_valid_queries(nl, query, language):

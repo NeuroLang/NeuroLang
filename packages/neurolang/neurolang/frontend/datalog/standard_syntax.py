@@ -42,6 +42,37 @@ AGGREGATION_FUNCS = frozenset(
 )
 
 
+ANS = "ans"
+
+
+def query_symbol(name=None):
+    """
+    Return the head symbol of a query: ``ans``, or ``ans[name]`` of the
+    query ``ans[name](...) :- ...`` that is named, which a program holds
+    several of.
+    """
+    return Symbol(ANS if name is None else f"{ANS}[{name}]")
+
+
+def is_query_head(head):
+    """Return whether *head* is the head of a query, named or not."""
+    functor = getattr(head, "functor", None)
+    return isinstance(functor, Symbol) and (
+        functor.name == ANS or (
+            functor.name.startswith(f"{ANS}[") and functor.name.endswith("]")
+        )
+    )
+
+
+def query_name(head):
+    """
+    Return the name of the query of *head*, that of ``ans[name](...)``;
+    ``ans`` for a query that is not named.
+    """
+    name = head.functor.name
+    return name[len(ANS) + 1:-1] if name != ANS else ANS
+
+
 GRAMMAR = u"""
 start: expressions
 expressions : (expression)+
@@ -78,6 +109,7 @@ prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
                | "PROB" "[" predicate PROB_SEP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
+      | "ans" "[" cmd_identifier "]" "(" [ arguments ] ")" -> named_query
 
 condition : composite_predicate PROB_SEP composite_predicate
 ?composite_predicate : predicate
@@ -471,7 +503,7 @@ class DatalogTransformer(Transformer):
                 result = self._build_prob_rule(head, prob_specs, new_body)
                 return self._ans_main_rule_as_query(head, result)
 
-        if isinstance(head, Expression) and head.functor == Symbol("ans"):
+        if is_query_head(head):
             return Query(ast[0], body_or_cond)
         else:
             return Implication(ast[0], body_or_cond)
@@ -486,9 +518,7 @@ class DatalogTransformer(Transformer):
         ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
         queried as ``ans(t, n) :- fresh(t, n)``.
         """
-        if not (
-            isinstance(head, Expression) and head.functor == Symbol("ans")
-        ):
+        if not is_query_head(head):
             return result
         if isinstance(result, Implication):
             result = Union((result,))
@@ -681,13 +711,7 @@ class DatalogTransformer(Transformer):
             if result_var not in head_args:
                 head_args.append(result_var)
 
-        if isinstance(head, Query) or (
-            isinstance(head, Expression)
-            and hasattr(head, 'functor')
-            and head.functor == Symbol("ans")
-        ):
-            new_head = head.functor(*head_args)
-        elif hasattr(head, 'functor'):
+        if hasattr(head, 'functor'):
             new_head = head.functor(*head_args)
         else:
             new_head = head
@@ -1014,18 +1038,18 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        arguments_raw = ast[0]
-        if arguments_raw is not None:
-            if isinstance(arguments_raw, tuple):
-                arguments = list(arguments_raw)
-            else:
-                arguments = list(arguments_raw) if arguments_raw else []
+        return self._query_head(query_symbol(), ast[0])
 
-            arguments = self._wrap_aggregation_args(arguments)
-            arguments = self._expand_implicit_prob(arguments)
-            return Symbol("ans")(*arguments)
-        else:
-            return Symbol("ans")()
+    def named_query(self, ast):
+        return self._query_head(query_symbol(ast[0].name), ast[1])
+
+    def _query_head(self, symbol, arguments_raw):
+        if arguments_raw is None:
+            return symbol()
+        arguments = list(arguments_raw) if arguments_raw else []
+        arguments = self._wrap_aggregation_args(arguments)
+        arguments = self._expand_implicit_prob(arguments)
+        return symbol(*arguments)
 
     def statement(self, ast):
         return Statement(ast[0], ast[2])
