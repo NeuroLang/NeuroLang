@@ -1,5 +1,8 @@
+import re
+from contextlib import contextmanager
+from importlib import resources
 from pathlib import Path
-from typing import AbstractSet, Dict, Tuple
+from typing import AbstractSet, Dict, NamedTuple, Tuple
 
 import nibabel
 import pandas as pd
@@ -8,16 +11,46 @@ from pandas.errors import ParserError
 
 from nl_expr.exceptions import (
     InvalidCommandExpression,
+    NeuroLangException,
+    ParserError as DatalogParserError,
     UnsupportedProgramError,
 )
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
-from nl_expr.expressions import Command, Constant, Symbol
+from nl_expr.expressions import Command, Constant, Query, Symbol
 from .regions import EmptyRegion, ExplicitVBR
 from .utils.nilearn_compat import fetch_files as _fetch_files
 
+# The documentation of the predicates of a scope (see
+# CommandsMixin.document).
+PREDICATE_DOCUMENTATION = Symbol("__predicate_documentation__")
+
+
+class PredicateDocumentation(NamedTuple):
+    """
+    The documentation of a predicate: its *description* and its
+    *arguments*, ``(name, sort)`` pairs, the sort ``""`` when not given,
+    or none.
+    """
+
+    description: str
+    arguments: Tuple[Tuple[str, str], ...] = ()
+
+
+# The modules imported in a scope (see CommandsMixin.import_module).
+IMPORTED_MODULES = Symbol("__imported_modules__")
+
+# A module of a Python package, ``package:path/module.dl``.
+_PACKAGE_RESOURCE = re.compile(r"([A-Za-z_][\w.]+):(.+)")
+
+
+class DatalogModuleError(InvalidCommandExpression):
+    """A Datalog module could not be imported."""
+
 
 class CommandsMixin(PatternWalker):
+    protected_keywords = {IMPORTED_MODULES.name}
+
     @add_match(Command(Symbol("load_csv"), ..., ...))
     def load_csv(self, command):
         """
@@ -161,6 +194,166 @@ class CommandsMixin(PatternWalker):
             Symbol[AbstractSet[type_]](symbol.name), atlas_set, type_=type_
         )
 
+    @add_match(Command(Symbol("document"), ..., ...))
+    def document(self, command):
+        """
+        Process the `.document` command, which documents a predicate, as
+        a ``%%`` block before its rule or fact does.
+
+        Usage
+        -----
+        `.document(name, "description")` documents the predicate *name*;
+        a third argument, a tuple of ``(name, sort)`` pairs, names its
+        arguments. A predicate documented several times has its
+        descriptions one after the other, each once, and the arguments
+        given last. The documentation follows the scopes of the program,
+        as its rules do (see :meth:`predicate_documentation`).
+        """
+        if not 2 <= len(command.args) <= 3 or command.kwargs:
+            raise InvalidCommandExpression(
+                'The .document command takes the name of a predicate and '
+                'its description, as in .document(p, "description").'
+            )
+        name = _unwrap_expr(command.args[0])
+        description = str(_unwrap_expr(command.args[1])).strip()
+        arguments = (
+            tuple(_unwrap_expr(command.args[2]))
+            if len(command.args) == 3 else ()
+        )
+        documentation = self._documentation()
+        old = documentation.get(name, PredicateDocumentation(""))
+        if description and description not in old.description:
+            description = "\n\n".join(
+                d for d in (old.description, description) if d
+            )
+        else:
+            description = old.description
+        documentation[name] = PredicateDocumentation(
+            description, tuple(map(tuple, arguments)) or old.arguments
+        )
+        self.symbol_table[PREDICATE_DOCUMENTATION] = Constant[Tuple](
+            tuple(documentation.items()),
+            auto_infer_type=False, verify_type=False,
+        )
+
+    def _documentation(self):
+        """Return the documentation of the scope, of every predicate."""
+        documentation = self.symbol_table.get(PREDICATE_DOCUMENTATION)
+        return dict(documentation.value) if documentation is not None else {}
+
+    def predicate_documentation(self):
+        """
+        Return the :class:`PredicateDocumentation` of the predicates of
+        the scope, by name.
+
+        Only the predicates the program defines are documented: those of
+        a scope that was closed, or that were removed, are not.
+        """
+        return {
+            name: documentation
+            for name, documentation in self._documentation().items()
+            if Symbol(name) in self.symbol_table
+        }
+
+    @add_match(Command(Symbol("import"), ..., ...))
+    def import_module(self, command):
+        """
+        Process the `.import` command, which runs the statements of a
+        Datalog module, a file, as if they were written in its place:
+        its facts, rules and commands, ``.import`` included.
+
+        Usage
+        -----
+        `.import("bundles/uf.dl")` imports the file relative to the
+        directory of the importing module, or of the program run from a
+        file (see :meth:`importing_from`), or else to the working
+        directory. `.import("package:bundles/uf.dl")` imports a module
+        shipped in the Python package ``package``.
+
+        A module is imported once: importing it again, in the scope it was
+        imported in, does nothing. A module has no query.
+
+        Raises
+        ------
+        DatalogModuleError
+            raised if the module is not found, does not parse, has a
+            query, is in an import cycle, or its statements fail.
+        """
+        if len(command.args) != 1 or command.kwargs:
+            raise InvalidCommandExpression(
+                'The .import command takes the path of a module, as in '
+                '.import("module.dl").'
+            )
+        path = self._module_path(_unwrap_expr(command.args[0]))
+        if path in self._importing:
+            cycle = " -> ".join(
+                str(p) for p in self._importing[self._importing.index(path):]
+            )
+            raise DatalogModuleError(f"Import cycle: {cycle} -> {path}")
+        if str(path) in self.imported_modules():
+            return
+        program = _parse_module(path)
+        before = dict(self.symbol_table._symbols)
+        with self.importing_from(path):
+            try:
+                self.walk(program)
+            except DatalogModuleError:
+                raise
+            except NeuroLangException as e:
+                raise DatalogModuleError(
+                    f"In the Datalog module {path}: {e}"
+                ) from e
+        imported = self.imported_modules()
+        imported[str(path)] = tuple(
+            symbol for symbol, value in self.symbol_table._symbols.items()
+            if before.get(symbol) is not value and symbol != IMPORTED_MODULES
+        )
+        self.symbol_table[IMPORTED_MODULES] = Constant[Tuple](
+            tuple(imported.items()), auto_infer_type=False, verify_type=False
+        )
+
+    _importing = ()
+
+    @contextmanager
+    def importing_from(self, path):
+        """
+        Run the block as an import of the module at *path*: the modules
+        it imports are relative to its directory.
+        """
+        importing = self._importing
+        self._importing = importing + (Path(path).resolve(),)
+        try:
+            yield
+        finally:
+            self._importing = importing
+
+    def imported_modules(self):
+        """
+        Return the paths of the modules imported in the scope, mapped to
+        the symbols each defined.
+        """
+        imported = self.symbol_table.get(IMPORTED_MODULES)
+        return dict(imported.value) if imported is not None else {}
+
+    def _module_path(self, name):
+        """Return the path of the module *name* (see :meth:`import_module`)."""
+        match = _PACKAGE_RESOURCE.fullmatch(name)
+        if match:
+            package, name = match.groups()
+            try:
+                path = Path(str(resources.files(package).joinpath(name)))
+            except ModuleNotFoundError as e:
+                raise DatalogModuleError(
+                    f"No Datalog module {name!r}: no package {package!r}"
+                ) from e
+        elif self._importing:
+            path = self._importing[-1].parent / name
+        else:
+            path = Path(name)
+        if not path.is_file():
+            raise DatalogModuleError(f"No Datalog module {str(path)!r}")
+        return path.resolve()
+
     @add_match(Command)
     def _unknown_command(self, command):
         raise UnsupportedProgramError(
@@ -172,3 +365,29 @@ def _unwrap_expr(expr):
     if isinstance(expr, Constant):
         return expr.value
     return expr.name
+
+
+def _parse_module(path):
+    """
+    Return the statements of the Datalog module at *path*, refusing a
+    module with a query.
+    """
+    from .frontend.datalog.standard_syntax import parser
+
+    try:
+        program = parser(path.read_text(encoding="utf-8"))
+    except DatalogParserError as e:
+        message = re.sub(
+            r",? at line \d+,? col(umn)? \d+\.?$", "",
+            str(e).strip().splitlines()[0],
+        )
+        where = "" if e.line is None else f", line {e.line}, column {e.column}"
+        raise DatalogModuleError(
+            f"In the Datalog module {path}{where}: {message}"
+        ) from e
+    if any(isinstance(f, Query) for f in program.formulas):
+        raise DatalogModuleError(
+            f"The Datalog module {path} has a query: a module defines "
+            "facts and rules, the program importing it queries them."
+        )
+    return program

@@ -61,7 +61,7 @@ def data_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _build(data_dir):
+def _build(data_dir, **options):
     mask = nib.Nifti1Image(
         np.ones((4, 4, 4), dtype="uint8"), np.diag([2.0, 2.0, 2.0, 1.0])
     )
@@ -77,12 +77,12 @@ def _build(data_dir):
             {"task_id": ["t1"], "name": ["n-back"], "description": ["d"]}
         ),
     ):
-        neurostore_init.init_engine(nl, mask, Path(data_dir))
+        neurostore_init.init_engine(nl, mask, Path(data_dir), **options)
     return nl
 
 
 def test_init_engine(data_dir):
-    nl = _build(data_dir)
+    nl = _build(data_dir, unknown_space="drop")
     rel = lambda name: set(nl.symbols[name].value)  # noqa: E731
 
     assert {s for (s,) in rel("study")} == {"s1", "s2"}
@@ -108,6 +108,13 @@ def test_init_engine(data_dir):
     assert rel("cognitive_task") == {("t1", "n-back", "d")}
 
 
+def test_unknown_space_studies_are_kept_as_mni(data_dir):
+    nl = _build(data_dir)
+
+    assert {s for (s,) in nl.symbols["study"].value} == {"s1", "s2", "s3"}
+    assert len(nl.symbols["peak_reported"].value) == 4
+
+
 def test_engine_declarations_match_neurosynth_names():
     ns = engine_registry.get_predicates("neurosynth")
     nstore = engine_registry.get_predicates("neurostore")
@@ -125,6 +132,7 @@ def test_embeddings_read_the_engine_texts(data_dir):
     assert engine_registry._predicate_texts(nl, source) == {
         "s1": ("Memory paper", "Memory and attention network"),
         "s2": ("Emotion paper", "Emotion network"),
+        "s3": ("Other", "Ignored study"),
     }
     # Same function and models as the neurosynth engine.
     entry = cfg["text_embeddings"]["study_abstracts"]
@@ -229,19 +237,19 @@ def test_an_init_takes_the_cache_directory_only_if_it_asks_for_it(
     )
     monkeypatch.setitem(sys.modules, "fake_engines.plain.init", plain)
     monkeypatch.setitem(sys.modules, "fake_engines.cached.init", cached)
+    kept = tmp_path / "kept"
+    nl = types.SimpleNamespace(engine_cache_dir=kept)
     engine_registry._phase_python_init(
-        None, {"python_init": "fake_engines.plain.init"}, None, tmp_path
+        nl, {"python_init": "fake_engines.plain.init"}, None, tmp_path
     )
     engine_registry._phase_python_init(
-        None, {"python_init": "fake_engines.cached.init"}, None, tmp_path
+        nl, {"python_init": "fake_engines.cached.init"}, None, tmp_path
     )
-    assert calls["plain"] and calls["cache_dir"] == (
-        tmp_path / "cached" / "engine_cache"
-    )
+    assert calls["plain"] and calls["cache_dir"] == kept
     calls.clear()
+    nl.engine_cache_dir = None
     engine_registry._phase_python_init(
-        None, {"python_init": "fake_engines.cached.init"}, None, tmp_path,
-        use_cache=False,
+        nl, {"python_init": "fake_engines.cached.init"}, None, tmp_path
     )
     assert calls["cache_dir"] is None
 

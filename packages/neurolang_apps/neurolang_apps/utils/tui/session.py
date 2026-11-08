@@ -30,11 +30,15 @@ from nl_core.datalog import Union as DatalogUnion
 from nl_core.datalog.basic_representation import UnionOfConjunctiveQueries
 from nl_core.datalog.expressions import AdornedSymbol
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
-from nl_expr.expressions import Query, Symbol
+from nl_expr.expressions import Command, Query, Symbol
 from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
+)
+from neurolang.frontend.datalog.standard_syntax import (
+    DOCUMENT_COMMAND,
+    documentation_command,
 )
 from nl_expr.logic import Implication
 from neurolang_apps.utils import engine_registry
@@ -51,6 +55,7 @@ from neurolang_apps.utils.predicate_catalog import (
     is_user_symbol,
     listed,
     predicate_catalog,
+    program_documentation,
 )
 from .submission import predicate_extent
 
@@ -475,25 +480,41 @@ def cmd_sets(app, arg: str) -> None:
 
 
 def _print_predicates_table(app, infos) -> None:
-    """Print the predicates *infos* as a table."""
+    """
+    Print the predicates *infos* as a table, with the description of
+    those documented in the program, if any is.
+    """
+    described = any(info.description for info in infos)
     table = Table(box=box.ROUNDED, header_style="bold cyan")
-    for column in _PREDICATE_COLUMNS:
+    for column in _PREDICATE_COLUMNS + ("Description",) * described:
         table.add_column(column)
     for info in infos:
-        table.add_row(info.name, info.kind, info.signature())
+        row = (info.name, info.kind, info.signature())
+        table.add_row(*row, *(_one_line(info.description),) * described)
     app.console.print(table)
 
 
+def _one_line(text: str) -> str:
+    """Return *text* on one line."""
+    return " ".join(text.split())
+
+
 def _print_predicates_text(app, infos) -> None:
-    """Print the predicates *infos* as plain aligned text."""
-    rows = [_PREDICATE_COLUMNS] + [
-        (info.name, info.kind, info.signature()) for info in infos
+    """
+    Print the predicates *infos* as plain aligned text, each documented
+    in the program followed by its description.
+    """
+    rows = [_PREDICATE_COLUMNS + ("",)] + [
+        (info.name, info.kind, info.signature(), info.description)
+        for info in infos
     ]
     widths = [max(len(row[i]) for row in rows) for i in range(2)]
-    for name, kind, signature in rows:
+    for name, kind, signature, description in rows:
+        line = f"{name:<{widths[0]}}  {kind:<{widths[1]}}  {signature}"
+        if description:
+            line += f" — {_one_line(description)}"
         app.console.print(
-            f"{name:<{widths[0]}}  {kind:<{widths[1]}}  {signature}",
-            markup=False, highlight=False, soft_wrap=True,
+            line, markup=False, highlight=False, soft_wrap=True,
         )
 
 
@@ -679,9 +700,13 @@ def _print_datalog_of(app, name: str) -> None:
             return
         rules = value.formulas
     printer = DatalogPrettyPrinter()
+    documentation = program_documentation(app._nl.program_ir).get(name)
+    doc = () if documentation is None else (printer.walk(
+        documentation_command(name, *documentation)
+    ),)
     app.console.print(
-        "\n\n".join(printer.walk(rule) for rule in rules), markup=False,
-        highlight=False, soft_wrap=True,
+        "\n\n".join((*doc, *(printer.walk(rule) for rule in rules))),
+        markup=False, highlight=False, soft_wrap=True,
     )
 
 
@@ -690,7 +715,12 @@ def _print_datalog_program(app, program: str) -> None:
     printer = DatalogPrettyPrinter()
     parsed = app._nl.datalog_parser(program)
     for formula in getattr(parsed, "formulas", (parsed,)):
-        label = "query" if isinstance(formula, Query) else "rule"
+        label = (
+            "query" if isinstance(formula, Query)
+            else "rule" if not isinstance(formula, Command)
+            else "documentation" if formula.name == DOCUMENT_COMMAND
+            else "command"
+        )
         app.console.print(
             f"── {label} ──\n{printer.walk(formula)}\n", markup=False,
             highlight=False, soft_wrap=True,

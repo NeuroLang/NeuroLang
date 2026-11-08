@@ -17,7 +17,9 @@ needs no other solver: it rewrites the rules ``pred`` depends on into
 * the rules below a ``PROB``, which depend on ``C``, with the outcome ``c``
   of ``C`` as their first argument (``q@boot:c``);
 * each ``PROB`` over them as ``P(q ∧ C = c)``, followed by its sum weighted
-  by the replicate's ``w`` (``q@boot``);
+  by the replicate's ``w`` (``q@boot``), an aggregation computing the sums
+  of all the replicates at once, ``W P``, without joining the replicates
+  with the outcomes;
 * the rules over those probabilities (arithmetic, ratios, aggregations) with
   the replicate ``b`` as their first argument, shared by all the atoms of a
   body, so that the measures of a replicate are computed on the same
@@ -27,7 +29,8 @@ A conditional ``PROB[q // e]`` is already the ratio of two ``PROB`` rules,
 both resampled.  The point estimates are those of the original rules, which
 are left as they are.
 """
-from operator import eq, mul
+from operator import contains
+from typing import AbstractSet, Tuple
 
 import numpy as np
 import pandas as pd
@@ -76,19 +79,40 @@ def resampling_relation(choice_rows, n, scheme="bayesian", seed=0):
     """
     The rows ``(b, c..., w)`` of a resampling of the choice whose rows are
     ``(p, c...)``, ordered by outcome so that a seed always gives the same
-    replicates.
+    replicates, and the aggregation of :func:`replicate_sums` over them.
     """
     choice = pd.DataFrame(choice_rows).sort_values(
         by=list(range(1, len(choice_rows.columns)))
     )
     ratios = resampling_ratios(choice[0].to_numpy(), n, scheme, seed)
-    outcomes = choice.iloc[:, 1:].to_numpy()
+    outcomes = choice.iloc[:, 1:]
     size = len(choice)
     columns = {"b": np.repeat(np.arange(n), size)}
-    for i in range(outcomes.shape[1]):
-        columns[f"c{i}"] = np.tile(outcomes[:, i], n)
+    for i, column in enumerate(outcomes.columns):
+        columns[f"c{i}"] = np.tile(outcomes[column].to_numpy(), n)
     columns["w"] = ratios.ravel()
-    return pd.DataFrame(columns)
+    return pd.DataFrame(columns), replicate_sums(outcomes, ratios)
+
+
+def replicate_sums(outcomes, ratios):
+    """
+    The aggregation of the values ``p`` of outcomes ``c`` into the sums
+    ``Σ_c w_bc p_c`` of every replicate ``b``, as the pairs ``(b, sum)``,
+    for the ``n × N`` *ratios* of the *outcomes*.
+
+    It is the product of the ratios by the values: joining the replicates
+    with the outcomes, to sum them, would take ``n`` rows per outcome.
+    """
+    index = pd.MultiIndex.from_frame(outcomes)
+    replicates = range(len(ratios))
+
+    def sums(*columns) -> AbstractSet[Tuple[int, float]]:
+        *outcome, values = columns
+        positions = index.get_indexer(pd.MultiIndex.from_arrays(outcome))
+        totals = ratios[:, positions] @ values.to_numpy(dtype=float)
+        return tuple(zip(replicates, totals.tolist()))
+
+    return sums
 
 
 def is_resample_marker(formula):
@@ -154,11 +178,14 @@ class ResampledProgram:
       replicate as first argument.
     """
 
-    def __init__(self, idb, name, choice, weights, arity, versions):
+    def __init__(self, idb, name, choice, weights, sums, arity, versions):
         self.idb = idb
         self.name = name
         self.choice = choice
         self.weights = weights
+        # The aggregation of the values of the outcomes into the sums of
+        # every replicate (see replicate_sums).
+        self.sums = sums
         self.arity = arity
         # The rewritings of earlier RESAMPLEs: for each predicate, its
         # rules and the rewritten predicates they used, and its rewriting.
@@ -321,37 +348,35 @@ class ResampledProgram:
         """
         ``f(x, PROB(x)) :- body`` as ``f:c(c, x, PROB(c, x)) :- body:c``,
         the probability ``P(body ∧ C = c)``, then its sum weighted by each
-        replicate, ``f(b, x, sum(w p))``.
+        replicate, ``f(b, x, Σ_c w_bc p_c)``, all the replicates' sums of
+        ``x`` computed at once by :attr:`sums` then unnested.
         """
         outcome, walker, body = self._choice_body(rule.antecedent)
         head = walker.walk(rule.consequent)
         per_outcome = ir.Symbol(f"{symbol.name}:c")
-        weighted = ir.Symbol(f"{symbol.name}:w")
+        summed = ir.Symbol(f"{symbol.name}:s")
         args = tuple(
             ProbabilisticQuery(PROB, (*outcome, *arg.args))
             if _is_prob(arg) else arg
             for arg in head.args
         )
         rules = [Implication(per_outcome(*outcome, *args), body)]
-        b, w, p, v = (ir.Symbol.fresh() for _ in range(4))
+        b, p, v, sums = (ir.Symbol.fresh() for _ in range(4))
         c = tuple(ir.Symbol.fresh() for _ in outcome)
         values = tuple(p if _is_prob(arg) else arg for arg in head.args)
         others = tuple(arg for arg in head.args if not _is_prob(arg))
         rules.append(Implication(
-            weighted(b, *c, *others, v),
-            Conjunction((
-                self.weights(b, *c, w),
-                per_outcome(*c, *values),
-                ir.Constant(eq)(v, ir.Constant(mul)(w, p)),
+            summed(*others, AggregationApplication(
+                ir.Constant(self.sums), (*c, p)
             )),
+            per_outcome(*c, *values),
         ))
-        sums = tuple(
-            AggregationApplication(ir.Symbol("sum"), (v,))
-            if _is_prob(arg) else arg
-            for arg in head.args
-        )
         rules.append(Implication(
-            symbol(b, *sums), weighted(b, *c, *others, v)
+            symbol(b, *(v if _is_prob(arg) else arg for arg in head.args)),
+            Conjunction((
+                summed(*others, sums),
+                ir.Constant(contains)(sums, ir.Constant((b, v))),
+            )),
         ))
         return rules
 

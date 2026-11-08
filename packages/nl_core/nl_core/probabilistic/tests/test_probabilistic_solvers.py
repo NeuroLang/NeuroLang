@@ -293,9 +293,7 @@ def test_simple_probchoice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1349,9 +1347,7 @@ def test_probchoice_selfjoin_multiple_variables(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
+    weighted_model_counting,
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
@@ -1468,17 +1464,19 @@ def test_dalvi_suciu_fails_single_quantifier():
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 
 
-def test_dalvi_suciu_fails_not_ranked():
+def test_dalvi_suciu_answer_and_bound_variables_in_both_orders():
+    """`y` is split on `y = x` and `y ≠ x`."""
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q,
-        [(0.2, 'a', 'b'), (0.1, 'b', 'c')]
+        [(0.2, 'a', 'b'), (0.1, 'b', 'c'), (0.5, 'b', 'a'), (0.3, 'c', 'c')]
     )
     rule = Implication(P(x), Conjunction((Q(x, y), Q(y, x))))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
-    with pytest.raises(NonLiftableException):
-        dalvi_suciu_lift.solve_succ_query(query, cpl)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl)
+    expected = weighted_model_counting.solve_succ_query(query, cpl)
+    assert testing.eq_prov_relations(res, expected)
 
 
 @pytest.mark.parametrize("solver", [

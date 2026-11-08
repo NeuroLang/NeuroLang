@@ -980,3 +980,68 @@ engines:
     assert 0 < lo < .5 < hi < 1
     predicates = engine_registry.get_predicates("e", path)
     assert "boot_studies" in predicates
+
+
+@pytest.mark.parametrize(
+    "unknown_space, expected_studies",
+    [("mni", [1, 2, 3]), ("tal", [1, 2, 3]), ("drop", [1, 2])],
+)
+def test_process_peaks_converts_only_talairach(
+    unknown_space, expected_studies
+):
+    """GH-1071: the peaks of UNKNOWN space are not taken as Talairach by
+    default."""
+    import nibabel as nib
+
+    from neurolang_apps.utils.engines.neurosynth.init import process_peaks
+
+    activations = pd.DataFrame({
+        "id": [1, 2, 3], "x": [40.0] * 3, "y": [-60.0] * 3, "z": [30.0] * 3,
+        "space": ["MNI", "TAL", "UNKNOWN"],
+    })
+    mask = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.uint8), np.eye(4))
+    peaks = process_peaks(
+        activations, mask, unknown_space=unknown_space
+    ).set_index("study_id")
+    assert sorted(peaks.index) == expected_studies
+    mni, tal = (tuple(peaks.loc[s, ["i", "j", "k"]]) for s in (1, 2))
+    assert mni == (40, -60, 30)
+    assert tal != mni
+    if unknown_space != "drop":
+        unknown = tuple(peaks.loc[3, ["i", "j", "k"]])
+        assert unknown == (mni if unknown_space == "mni" else tal)
+
+
+def test_process_peaks_rejects_an_unknown_option():
+    import nibabel as nib
+
+    from neurolang_apps.utils.engines.neurosynth.init import process_peaks
+
+    mask = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.uint8), np.eye(4))
+    with pytest.raises(ValueError, match="unknown_space"):
+        process_peaks(
+            pd.DataFrame(columns=["id", "x", "y", "z", "space"]), mask,
+            unknown_space="MNI",
+        )
+
+
+@pytest.mark.parametrize("engine", ["neurosynth", "neurostore"])
+def test_unknown_space_peaks_are_taken_as_mni(engine):
+    from neurolang_apps.utils import engine_registry
+
+    config = engine_registry.get_engine_config(engine)
+    assert config["python_init_options"]["unknown_space"] == "mni"
+
+
+def test_python_init_is_given_the_python_init_options():
+    from neurolang_apps.utils import engine_registry
+
+    cfg = {
+        "python_init": NS_INIT,
+        "python_init_options": {"unknown_space": "drop"},
+    }
+    with patch(f"{NS_INIT}.init_engine") as init_engine:
+        engine_registry._phase_python_init("nl", cfg, "mask", DATA_DIR)
+    init_engine.assert_called_once_with(
+        "nl", "mask", DATA_DIR, unknown_space="drop"
+    )

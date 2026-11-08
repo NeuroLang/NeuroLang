@@ -15,7 +15,11 @@ class TfIDf(float):
     pass
 
 
-NS_DATA_URL = "https://github.com/neurosynth/neurosynth-data/raw/master/"
+# The host of the repository's files: github.com/neurosynth/neurosynth-data/
+# raw/master/, which sends there, may answer 504 for this repository.
+NS_DATA_URL = (
+    "https://raw.githubusercontent.com/neurosynth/neurosynth-data/master/"
+)
 
 
 def fetch_study_metadata(

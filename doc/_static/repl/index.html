@@ -80,6 +80,12 @@
   #summary p { margin: .15rem 0 0; }
   #summary p:empty { display: none; }
   #summary-reads { font-style: italic; }
+  #rate { margin: .75rem 0; padding: .5rem 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  button.outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  @media (pointer: coarse) { #rate button, #rate input { min-height: 44px; } }
+  #rate[hidden], #rate [hidden] { display: none; }
+  #rate-note:empty { display: none; }
+  #rate-comment { flex: 1 1 14rem; }
   #live { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .4rem .75rem; }
   #live[hidden] { display: none; }
   #live summary { color: var(--text); }
@@ -303,6 +309,15 @@
   </details>
 
   <div id="out" aria-live="polite"></div>
+  <section id="rate" hidden role="group" aria-labelledby="rate-question">
+    <span id="rate-question">Did this query do what you wanted?</span>
+    <button id="rate-good" type="button" class="ghost">Yes</button>
+    <button id="rate-bad" type="button" class="ghost">No</button>
+    <input id="rate-comment" type="text" maxlength="500" placeholder="What was wrong? (optional)" aria-label="What was wrong?" hidden>
+    <button id="rate-send" type="button" class="outline" hidden>Send</button>
+    <span id="rate-note" class="note" role="status" tabindex="-1"></span>
+    <span class="note">A rating sends the query with its first rows or its error, and for an answer of the assistant the question and its steps, to the NeuroLang feedback table.</span>
+  </section>
   <section id="results" data-tab="table">
     <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button></div>
     <div id="table" role="tabpanel" aria-labelledby="tab-table"></div>

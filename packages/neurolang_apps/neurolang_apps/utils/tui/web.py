@@ -93,6 +93,15 @@ def lightweight_engines_yaml(directory) -> Path:
     return path
 
 
+def _from_an_ontology(name: str) -> bool:
+    """
+    Whether the predicate *name* is the IRI of a class or a property of an
+    ontology, ``http://...#CAO_00137``: those of the vocabularies the engine
+    names with a prefix (``rdfs:label``) are few, and relations to query.
+    """
+    return "://" in name
+
+
 class _PrintedOn(io.TextIOBase):
     """A file whose text is printed on a console, to be recorded with it."""
 
@@ -117,8 +126,10 @@ class Reply:
     :func:`table_payload`), *failed* tells whether a statement of it
     failed, *prompt* is the query the assistant wrote, for the page
     to put in its input, and *mode* the language of the REPL, ``datalog``
-    or ``squall``, which the assistant may have switched, and *predicates*
-    those of the engine and the session (see :meth:`WebRepl.predicates`).
+    or ``squall``, which the assistant may have switched, *predicates*
+    those of the engine and the session (see :meth:`WebRepl.predicates`),
+    and *ratable* whether it was a query or an answer of the assistant,
+    which :meth:`WebRepl.rate_answer` can share.
     """
 
     html: str
@@ -128,6 +139,7 @@ class Reply:
     prompt: str = ""
     mode: str = "datalog"
     predicates: List[dict] = field(default_factory=list)
+    ratable: bool = False
 
 
 class Download(NamedTuple):
@@ -271,6 +283,25 @@ def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
     }
 
 
+def _arguments(info, described: dict) -> list:
+    """
+    Return the arguments of the predicate *info*, those of its ``%%``
+    documentation or else those the engine declares (*described*): the
+    ``columns``, ``sort`` and ``type`` of each.
+    """
+    if info.arguments:
+        return [
+            {"columns": list(argument.columns), "sort": argument.sort,
+             "type": argument.type}
+            for argument in info.arguments
+        ]
+    return [
+        {"columns": list(argument["columns"]),
+         "sort": argument["sort"], "type": argument["type"]}
+        for argument in described.get(info.name, {}).get("arguments", [])
+    ]
+
+
 class WebRepl:
     """A REPL on the engine *nl*, which a web page submits input to."""
 
@@ -292,6 +323,11 @@ class WebRepl:
             else None
         )
         self._tables: list = []
+        self._rating = None  # where a rated answer goes (see set_feedback)
+        # What a rating shares: "answer" (the assistant's last), the record
+        # of the last query, or None.
+        self._rated = None
+        self._frames: list = []  # the results of the last submission
         command = "neurolang-query -i"
         if engine_name:
             command += f" --engine {engine_name}"
@@ -345,6 +381,50 @@ class WebRepl:
             provider.name, "", provider.model, provider.base_url
         )
 
+    def set_feedback(self, url: str, doc: str, transport=None) -> None:
+        """
+        Let the page share a rated answer in the table ``Answers`` of the
+        Grist document *doc* at *url*, anonymously (see
+        :class:`~neurolang_apps.utils.llm.feedback.GristFeedbackClient`):
+        without a *doc*, answers cannot be rated. *transport* replaces the
+        browser's (in tests).
+        """
+        from neurolang_apps.utils.llm.feedback import GristFeedbackClient
+
+        self._rating = GristFeedbackClient(
+            url, doc, api_key_env="", transport=transport
+        ) if doc else None
+
+    def can_rate(self) -> bool:
+        """Whether the page can send the rating of an answer."""
+        return self._rating is not None
+
+    def rate_answer(self, verdict: str, comment: str = "") -> dict:
+        """
+        Share the last answer of the assistant, or the last query, rated
+        *verdict* (``good`` or ``bad``) with the visitor's *comment*, and
+        return ``ok`` and a ``message`` to show. A query is shared with its
+        first rows or its error (see
+        :func:`~neurolang_apps.utils.llm.feedback.query_record`).
+        """
+        from neurolang_apps.utils.llm.feedback import FeedbackError
+
+        run = self.app.assistant.last_run
+        rated = self._rated
+        if self._rating is None or verdict not in ("good", "bad") or not (
+            isinstance(rated, dict) or (rated == "answer" and run)
+        ):
+            return {"ok": False, "message": "There is no answer to rate."}
+        engine = self.app.settings.engine_name
+        try:
+            if isinstance(rated, dict):
+                self._rating.share_record(dict(rated), verdict, comment)
+            else:
+                self._rating.share_rated(*run, engine, verdict, comment)
+        except FeedbackError as error:
+            return {"ok": False, "message": str(error)}
+        return {"ok": True, "message": "Thank you: your rating is sent."}
+
     def set_event_sink(self, send) -> None:
         """
         Send the events of the assistant to *send*, as it works.
@@ -382,6 +462,8 @@ class WebRepl:
         """
         self.app.failed = False
         self._tables = []
+        self._frames = []
+        answered = self.app.assistant.last_run
         with _viewers_returned() as viewers:
             try:
                 self.app._run_line(text)
@@ -391,10 +473,36 @@ class WebRepl:
                     "start a new one.[/dim]"
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
+        self._rated = self._what_is_rated(
+            text, self.app.assistant.last_run is not answered
+        )
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(),
+            self.predicates(), self._rated is not None,
+        )
+
+    def _what_is_rated(self, text: str, answered: bool):
+        """
+        Return what a rating of the submission *text* shares: "answer"
+        when the assistant *answered* it, the record of a query, or None
+        for a dot-command.
+        """
+        if answered:
+            return "answer"
+        if not text.strip() or text.strip().startswith("."):
+            return None
+        from neurolang_apps.utils.llm.feedback import query_record
+
+        output = self.console.export_text(clear=False).strip()
+        rows = "\n\n".join(
+            f"{len(frame)} rows; columns {', '.join(map(str, frame.columns))}"
+            f"\n{frame.head(10).to_string(index=False)}"
+            for frame in self._frames
+        )
+        return query_record(
+            text.strip(), rows, output if self.app.failed else "",
+            self.app.settings.engine_name,
         )
 
     def _print_block(self, block: ResultBlock) -> None:
@@ -404,6 +512,7 @@ class WebRepl:
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
         sorts = [s.sort if s else None for s in block.sorts or ()]
+        self._frames.append(block.frame)
         table = table_payload(
             block.frame, block.title, self.max_rows,
             sorts if len(sorts) == len(block.frame.columns) else None,
@@ -426,29 +535,32 @@ class WebRepl:
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the
-        page to list: ``name``, ``kind`` (stored, derived, session...),
-        ``signature`` as ``.predicates`` shows it, and the engine's
+        page to list, but for the IRIs of an ontology's own classes and
+        properties that the engine does not declare: ``name``,
+        ``kind`` (stored, derived, session...),
+        ``signature`` as ``.predicates`` shows it, and its
         ``description``, if any, with its ``arguments``: the ``columns``,
-        ``sort`` and ``type`` of each.
+        ``sort`` and ``type`` of each. Those of the ``%%`` documentation
+        of the predicate in the program win over the engine's.
         """
         engine = self.app.settings.engine_name
         signatures = engine_registry.get_signatures(engine) if engine else {}
         described = engine_registry.get_predicates(engine) if engine else {}
-        infos = listed(predicate_catalog(
-            self.app._nl, _declared_columns(engine),
-            self.app.loaded_relations, signatures,
-        ))
+        infos = [
+            info for info in listed(predicate_catalog(
+                self.app._nl, _declared_columns(engine),
+                self.app.loaded_relations, signatures,
+            ))
+            if info.kind == "session" or info.name in described
+            or not _from_an_ontology(info.name)
+        ]
         return [
             {"name": info.name, "kind": info.kind,
              "signature": info.signature(),
-             "description": described.get(info.name, {}).get("description", ""),
-             "arguments": [
-                 {"columns": list(argument["columns"]),
-                  "sort": argument["sort"], "type": argument["type"]}
-                 for argument in described.get(info.name, {}).get(
-                     "arguments", []
-                 )
-             ]}
+             "description": info.description or described.get(
+                 info.name, {}
+             ).get("description", ""),
+             "arguments": _arguments(info, described)}
             for info in infos
         ]
 

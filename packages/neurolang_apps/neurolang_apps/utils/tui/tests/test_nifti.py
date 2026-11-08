@@ -93,6 +93,7 @@ engines:
         space: voxel
         grid: schaefer
       label: {columns: [label], type: str}
+      streamline: {columns: [streamline], type: int}
     predicates:
       voxel: {arguments: [voxel]}
       study: {arguments: [study]}
@@ -102,6 +103,7 @@ engines:
       mni: {arguments: [mni]}
       atlas_voxel: {arguments: [atlas_voxel]}
       labels: {arguments: [label, atlas_voxel]}
+      tract: {arguments: [streamline]}
 """
 
 
@@ -1018,6 +1020,25 @@ class TestProvenanceUnits:
             ColumnSort("voxel", 1), ColumnSort("voxel", 2),
         )]
 
+    def test_column_sorts_through_a_resampling(self, tiny):
+        from neurolang_apps.utils.tui.provenance import (
+            ColumnSort,
+            column_sorts,
+        )
+
+        sorts = column_sorts(
+            tiny._nl, "tiny",
+            "measure(x, y, z, p) :- reports(s, x, y, z) & (p == 1)\n"
+            "rep(b, x, y, z, p) :- "
+            "RESAMPLE[boot](measure(x, y, z, p)) = b\n"
+            "ans(x, y, z, mean(p)) :- rep(b, x, y, z, p)",
+            squall=False,
+        )
+        assert list(sorts.values()) == [(
+            ColumnSort("voxel", 0), ColumnSort("voxel", 1),
+            ColumnSort("voxel", 2), None,
+        )]
+
     def test_unknown_column_sorts(self, tiny):
         from neurolang_apps.utils.tui.provenance import (
             COMPUTED,
@@ -1069,3 +1090,190 @@ class TestProvenanceUnits:
         provenance = (ColumnSort("study", 0), None, None)
         with pytest.raises(nifti.SaveError, match="no voxel columns"):
             nifti.point_columns(df, self._sorts(), provenance)
+
+
+# Streamlines on the tiny template, in millimetres: id s runs along x,
+# at y = -5 + 2 (s % 4).
+def _streamline(s):
+    return np.array([
+        [-3.0 + 2 * n, -5.0 + 2 * (s % 4), -7.0] for n in range(4)
+    ])
+
+
+@pytest.fixture
+def tracts(tiny):
+    """Give the tiny engine streamlines, ``uncinate(s, side)`` of them
+    and the ``tract(s)`` of the sort streamline; record the ids asked."""
+    nl = tiny._nl
+    nl.add_tuple_set(
+        [(1, "left"), (2, "left"), (3, "right")], name="uncinate"
+    )
+    nl.add_tuple_set([(1,), (3,)], name="tract")
+    nl.asked = []
+
+    def streamline_points(ids):
+        nl.asked.append(list(ids))
+        return [_streamline(s) for s in ids]
+
+    nl.streamline_points = streamline_points
+    nl.streamline_background = lambda: nl.template
+    return tiny
+
+
+class TestViewStreamlines:
+    """Check .view draws a result of streamline ids as streamlines."""
+
+    def _view(self, app, query, calls):
+        app._execute_and_display(query)
+        app._handle_dot_command(".view")
+        out = _output(app)
+        for prefix in ("image to: ", "viewer to: "):
+            if prefix in out:
+                Path(out.split(prefix)[-1].split()[0]).unlink()
+        return (calls[-1] if calls else None), out
+
+    def test_ids_of_a_rule_are_streamlines(self, tracts, view_calls):
+        tracts._execute_and_display(
+            'left_uncinate(s) :- uncinate(s, "left")'
+        )
+        kwargs, out = self._view(
+            tracts, "ans(x) :- left_uncinate(x)", view_calls
+        )
+        assert tracts.results[-1].sorts in (None, (None,))
+        assert tracts._nl.asked == [[1, 2]]
+        state = kwargs["streamlines"]
+        assert state["shown"] == 2 and state["total"] == 2
+        assert kwargs["threshold"] == 0.0
+        assert "Streamlines of the column 'x': 2 of 2 shown" in out
+        assert "subsampled" not in out
+
+    def test_a_column_of_the_sort_streamline(self, tracts, view_calls):
+        kwargs, _ = self._view(tracts, "ans(s) :- tract(s)", view_calls)
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert tracts._nl.asked == [[1, 3]]
+        assert kwargs["streamlines"]["total"] == 2
+
+    def test_a_column_documented_of_the_sort_streamline(
+        self, tracts, view_calls
+    ):
+        tracts._nl.document_predicate(
+            "uncinate", "The uncinate fasciculus.",
+            [("x", "streamline"), ("h", "hemisphere")],
+        )
+        self._view(tracts, 'ans(x) :- uncinate(x, "left")', view_calls)
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert tracts._nl.asked == [[1, 2]]
+
+    def test_a_rule_documented_of_the_sort_streamline(
+        self, tracts, view_calls
+    ):
+        tracts._execute_and_display(
+            "%% unc(s: streamline, side)\n"
+            "%% Renamed.\n"
+            "unc(s, side) :- uncinate(s, side)"
+        )
+        self._view(tracts, "ans(a, b) :- unc(a, b)", view_calls)
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert tracts._nl.asked == [[1, 2, 3]]
+
+    @pytest.mark.parametrize("query", [
+        "ans(x, y, z) :- mni(x, y, z)",
+        "ans(i, j, k) :- voxel(i, j, k)",
+    ])
+    def test_voxels_stay_voxels(self, tracts, view_calls, query):
+        kwargs, _ = self._view(tracts, query, view_calls)
+        assert "streamlines" not in kwargs and tracts._nl.asked == []
+        assert kwargs["threshold"] == "95%"
+
+    def test_pairs_of_points_stay_a_network(self, tracts):
+        tracts._execute_and_display(
+            "ans(x, y, z, x2, y2, z2) :- mni(x, y, z), mni(x2, y2, z2)"
+        )
+        assert nifti._last_result_kind(
+            tracts, nifti.SaveRequest(Path("x.nii"))
+        ) == "network"
+
+    def test_several_integer_columns_are_not_streamlines(self, tracts):
+        tracts._nl.add_tuple_set([(1, 7), (2, 8)], name="pairs")
+        tracts._execute_and_display("ans(a, b) :- pairs(a, b)")
+        assert nifti._last_result_kind(
+            tracts, nifti.SaveRequest(Path("x.nii"))
+        ) == "voxels"
+
+    def test_the_overlay_counts_the_streamlines_per_voxel(
+        self, tracts, view_calls, monkeypatch
+    ):
+        images = []
+        monkeypatch.setattr(
+            nifti, "_view_image_file",
+            lambda app, image: images.append(image) or Path("x.nii.gz"),
+        )
+        self._view(tracts, 'ans(x) :- uncinate(x, "left")', view_calls)
+        counts = np.asarray(images[0].image.dataobj)
+        assert np.array_equal(images[0].image.affine, TINY_AFFINE)
+        # ids 1 and 2 at y = -3 and -1 mm: voxel j = 1 and 2, all along i
+        assert counts[:, 1, 0].tolist() == [1, 1, 1, 1]
+        assert counts[:, 2, 0].tolist() == [1, 1, 1, 1]
+        assert counts.sum() == 8
+
+    def test_the_streamlines_are_capped(
+        self, tracts, view_calls, monkeypatch
+    ):
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        kwargs, out = self._view(
+            tracts, "ans(x) :- uncinate(x, s)", view_calls
+        )
+        assert tracts._nl.asked == [[1, 3]]
+        assert kwargs["streamlines"]["shown"] == 2
+        assert kwargs["streamlines"]["total"] == 3
+        assert "2 of 3 shown, evenly subsampled to 2 at most" in out
+
+    def test_the_engine_background(self, tracts, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            nifti.brain_viewer, "viewer_html",
+            lambda img, background, **kw: calls.append((background, kw))
+            or "",
+        )
+        _, out = self._view(tracts, "ans(s) :- tract(s)", [])
+        assert calls[0][0] is tracts._nl.template
+        # their space, not MNI's: the cursor's mm are named so
+        assert calls[0][1]["space"] == "RAS"
+        assert "MNI152" not in out
+
+    def test_the_mni_background_otherwise(self, tracts, monkeypatch):
+        pytest.importorskip("nilearn")
+        calls = []
+        monkeypatch.setattr(
+            nifti.brain_viewer, "viewer_html",
+            lambda img, background, **kw: calls.append((background, kw))
+            or "",
+        )
+        del tracts._nl.streamline_background
+        _, out = self._view(tracts, "ans(s) :- tract(s)", [])
+        assert calls[0][0].shape == (197, 233, 189)
+        assert calls[0][1].get("space", "MNI") == "MNI"
+        # streamlines of a subject would be misplaced on it: say so
+        assert "drawn on the MNI152 T1" in out
+
+    def test_a_sort_streamline_without_the_hook(self, tracts, view_calls):
+        del tracts._nl.streamline_points
+        kwargs, out = self._view(tracts, "ans(s) :- tract(s)", view_calls)
+        assert kwargs is None
+        assert "engine has no streamlines" in out
+        assert "streamline_points" in out
+
+    def test_integers_without_the_hook_are_not_streamlines(
+        self, tracts, view_calls
+    ):
+        del tracts._nl.streamline_points
+        kwargs, out = self._view(
+            tracts, 'ans(x) :- uncinate(x, "left")', view_calls
+        )
+        assert kwargs is None and "no voxel columns" in out
+
+    def test_help_tells_the_hook(self, tiny):
+        tiny._handle_dot_command(".help view")
+        out = _output(tiny)
+        assert "streamline_points" in out
+        assert "streamline_background" in out

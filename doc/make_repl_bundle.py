@@ -26,7 +26,7 @@ result, with the tables and without them, to check that it suffices.
 Usage::
 
     python doc/make_repl_bundle.py OUTPUT_DIR [EMBEDDINGS_DATA_DIR]
-        [--engine NAME ...]
+        [--downloads DIR] [--engine NAME ...]
 
 with the engines of the page by default; the page downloads the data of the
 one it is asked for. An engine other than the default that cannot be built is
@@ -36,8 +36,15 @@ Embedding the studies takes their abstracts from PubMed and a while:
 EMBEDDINGS_DATA_DIR keeps them: a data directory where they were embedded
 already (``python -m neurolang.utils.text_embeddings -d DIR``), or where
 they are saved for the next time, as CI caches it.
+
+The engine is built in a temporary data directory. ``--downloads`` keeps
+what it downloads there between builds, as CI caches it: the files found in
+DIR are not downloaded again, and those downloaded are added to DIR (the
+engine's kept tables and embeddings are not), even when the build fails,
+so that a data host that is down does not stop a build that had them.
 """
 
+import argparse
 import json
 import os
 import shutil
@@ -97,7 +104,14 @@ PACKAGES = ("nl_expr", "nl_core", "neurolang", "neurolang_apps")
 
 def build_wheels(output: Path) -> list:
     """Build the wheels of NeuroLang's packages in *output* and return their
-    file names, in the order of ``PACKAGES``."""
+    file names, in the order of ``PACKAGES``.
+
+    The wheels of an earlier build are removed first: their version is
+    that of the commit they were built from, so they keep their names and
+    would be taken for the new ones."""
+    for name in PACKAGES:
+        for wheel in output.glob(f"{name}-*.whl"):
+            wheel.unlink()
     uv = shutil.which("uv")
     subprocess.check_call(
         [uv, "build", "--all-packages", "--wheel", "--out-dir", str(output),
@@ -143,6 +157,18 @@ def build_engine(
         engine_registry.build_engine(
             engine, data_dir, RESOLUTION, use_cache=use_cache
         )
+
+
+def keep_downloads(source: Path, target: Path) -> None:
+    """Copy the data directory *source* into *target*, without
+    the engine's kept tables nor its text embeddings."""
+    from neurolang_apps.utils import engine_cache
+
+    ignored = {engine_cache.DIRECTORY, "embeddings"}
+    shutil.copytree(
+        source, target, dirs_exist_ok=True,
+        ignore=lambda directory, names: [n for n in names if n in ignored],
+    )
 
 
 def check_engine_cache(data_dir: Path, engine: str = ENGINE) -> None:
@@ -288,17 +314,28 @@ def export_embeddings(
     return files
 
 
-def bundle_engine(engine: str, output: Path, embedded=None) -> dict:
+def bundle_engine(
+    engine: str, output: Path, embedded=None, downloads=None
+) -> dict:
     """
     Build the data of *engine* for the page and write its zip in *output*,
     in parts if it is larger than GitHub takes; return its entry of
     ``bundle.json``: its label, its data (the name of the zip, or those of its
     parts, which the page joins) and the files of its text embeddings.
     """
+    # What an engine downloads is kept apart from that of the others, so that
+    # the zip of an engine holds its data only.
+    kept = None if downloads is None else Path(downloads) / engine
     with tempfile.TemporaryDirectory() as tmp:
         data_dir = Path(tmp) / "data"
         data_dir.mkdir()
-        build_engine(data_dir, engine=engine)
+        if kept is not None and kept.is_dir():
+            keep_downloads(kept, data_dir)
+        try:
+            build_engine(data_dir, engine=engine)
+        finally:
+            if kept is not None:
+                keep_downloads(data_dir, kept)
         check_engine_cache(data_dir, engine)
         trim(data_dir, engine)
         build_engine(data_dir, engine=engine)  # the page's way: from the kept tables
@@ -314,13 +351,17 @@ def bundle_engine(engine: str, output: Path, embedded=None) -> dict:
     }
 
 
-def main(output: Path, embedded=None, engines=ENGINES) -> None:
+def main(
+    output: Path, embedded=None, downloads=None, engines=ENGINES
+) -> None:
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
     built = {}
     for engine in engines:
         try:
-            built[engine] = bundle_engine(engine, output, embedded)
+            built[engine] = bundle_engine(
+                engine, output, embedded, downloads
+            )
         except Exception as error:
             if engine == engines[0]:
                 raise  # the page's default: there is no page without it
@@ -347,19 +388,23 @@ def main(output: Path, embedded=None, engines=ENGINES) -> None:
           f"highlight.json in {output}")
 
 
-if __name__ == "__main__":
-    import argparse
-
+def parse_args(argv=None):
+    """Return the options of the command line *argv*."""
     parser = argparse.ArgumentParser(
-        description=__doc__.split("\n\n")[0],
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("output", type=Path)
-    parser.add_argument("embedded", nargs="?", default=None)
+    parser.add_argument("embedded", nargs="?")
+    parser.add_argument("--downloads", type=Path)
     parser.add_argument(
         "--engine", action="append", choices=ENGINES, dest="engines",
         help="an engine of the page (repeat); by default all of them",
     )
-    arguments = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    args = parse_args()
     # The default first, whatever the order of the options.
-    chosen = [e for e in ENGINES if e in (arguments.engines or ENGINES)]
-    main(arguments.output, arguments.embedded, tuple(chosen))
+    chosen = [e for e in ENGINES if e in (args.engines or ENGINES)]
+    main(args.output, args.embedded, args.downloads, tuple(chosen))

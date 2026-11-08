@@ -317,7 +317,7 @@ def test_union_with_a_self_join_of_the_choice_in_a_rule():
 
 def test_disjoint_separator_plans_a_union_in_one_projection():
     """The union over the choice is one disjoint projection on the study,
-    of the choice joined with the support of the deterministic union."""
+    of the choice joined with the deterministic union."""
     plan = _plan_of(
         "a(s) :- mentions(s, 'language'), selected_study(s)\n"
         "a(s) :- mentions(s, 'speech'), selected_study(s)\n"
@@ -326,6 +326,8 @@ def test_disjoint_separator_plans_a_union_in_one_projection():
     )
     assert isinstance(plan, DisjointProjection)
     assert "Σ" not in repr(plan)
+    # The deterministic union is a relation computed as a set.
+    assert "∪" not in repr(plan)
 
 
 def test_integer_constant_of_a_deterministic_atom():
@@ -468,6 +470,7 @@ def test_comparison_with_a_constant_of_a_bound_variable(
     ("x, y, w", "R(x), R(y), R(w), S(x, y), V(y, w)"),
     ("x, y, w", "R(x), R(y), R(w), S(x, y), V(y, w), T(y)"),
     ("x, y, w", "R(x), R(y), R(w), T(x), T(y), S(x, y)"),
+    ("x, y, w, z", "R(x), R(y), R(w), R(z), S(x, y), V(w, z)"),
 ])
 def test_answer_variables_at_the_same_position(head, body):
     """
@@ -492,6 +495,70 @@ def test_answer_variables_at_the_same_position(head, body):
         for name, tuples in facts.items():
             nl.add_probabilistic_facts_from_tuples(tuples, name=name)
         nl.execute_datalog_program(f"q({head}, PROB) :- {body}")
+        return {
+            tuple(row[:-1]): row[-1]
+            for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
+                index=False
+            )
+        }
+
+    expected = solve(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    )
+    assert solve(**LIFTED_ONLY) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("head, body", [
+    # The variables of a choice need no order.
+    ("", "C(x, y), S(y, x)"),
+    ("", "C(x, y), S(y, x), R(x)"),
+    ("", "C(x, y), S(x, y), S(y, x)"),
+    # A comparison of the ranked variables decides their order.
+    ("", "S(x, y), S(y, x), (x < y)"),
+    ("", "S(x, y), S(y, x), (x > y)"),
+    ("", "S(x, y), S(y, x), (x != y)"),
+    ("", "S(x, y), S(y, x), V(y, x), (x < y)"),
+    # A bound variable at the position of an answer variable.
+    ("x", "S(x, y), S(y, x)"),
+    ("x", "S(x, y), S(y, x), R(y)"),
+    ("x", "S(x, y), S(y, x), V(x, y)"),
+    ("x, z", "S(x, y), S(y, x), V(z, y)"),
+    ("", "D(x), S(x, y), S(y, x)"),
+])
+def test_choices_comparisons_and_a_bound_variable_in_ranking(head, body):
+    """
+    Queries that were not ranked, or whose bound variable at the position
+    of an answer variable was not split from it, are lifted with the
+    probabilities weighted model counting gives.
+    """
+    from .. import NeurolangPDL
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    def solve(**solvers):
+        nl = NeurolangPDL(**solvers)
+        facts = {
+            "R": [(0.2, 0), (0.5, 1), (0.7, 2)],
+            "S": [
+                (0.3, 0, 1), (0.8, 1, 1), (0.6, 2, 0), (0.5, 1, 2),
+                (0.4, 1, 0), (0.9, 0, 2), (0.7, 2, 1), (0.2, 0, 0),
+            ],
+            "V": [(0.4, 1, 0), (0.7, 1, 1), (0.9, 2, 2), (0.2, 0, 2)],
+        }
+        for name, tuples in facts.items():
+            nl.add_probabilistic_facts_from_tuples(tuples, name=name)
+        nl.add_probabilistic_choice_from_tuples(
+            [(0.1, 0, 1), (0.3, 1, 0), (0.2, 2, 2), (0.4, 1, 2)], name="C"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(0,), (1,), (2,)], name="D"
+        )
+        nl.execute_datalog_program(
+            f"q({head + ', ' if head else ''}PROB) :- {body}"
+        )
         return {
             tuple(row[:-1]): row[-1]
             for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
@@ -560,3 +627,177 @@ def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
     )
     assert dict(inline) == pytest.approx({10: 1 / 3, 11: 1 / 3})
     assert dict(in_a_rule) == pytest.approx(dict(inline))
+
+
+def _solve_random(query, seed, solvers, facts=None):
+    """Probabilities of the answers of `query` on random tuple-independent
+    relations over a small domain, whose values collide, but those of
+    probability 0, which the lifted plans of differences can keep."""
+    import itertools
+    import random
+
+    from .. import NeurolangPDL
+
+    random.seed(seed)
+    nl = NeurolangPDL(**solvers)
+    for name, arity in dict(R=1, T=1, S=2, V=2, U=1).items():
+        tuples = [
+            (round(random.uniform(.1, .9), 2),) + t
+            for t in itertools.product(range(4), repeat=arity)
+            if random.random() < .7
+        ]
+        nl.add_probabilistic_facts_from_tuples(
+            (facts or {}).get(name, tuples), name=name
+        )
+    nl.execute_datalog_program(query)
+    result = nl.solve_all()
+    if "q" not in result:
+        return {}
+    return {
+        tuple(row[:-1]): row[-1]
+        for row in result["q"].as_pandas_dataframe().itertuples(index=False)
+        if abs(row[-1]) > 1e-12
+    }
+
+
+ORDER_AND_COUNT_QUERIES = [
+    "q(PROB) :- R(x), T(y), (x < y)",
+    "q(PROB) :- R(x), T(y), (x <= y)",
+    "q(PROB) :- R(x), T(y), (y > x)",
+    "q(PROB) :- R(x), T(y), (x >= y), (x != 1)",
+    "q(w, PROB) :- V(w, x), T(y), (x < y)",
+    "q(PROB) :- R(x), R(y), (x != y)",
+    "q(PROB) :- R(x), R(y), (x < y)",
+    "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
+    "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
+    "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+]
+
+
+@pytest.mark.parametrize("seed", [0, 1, 7])
+@pytest.mark.parametrize("query", ORDER_AND_COUNT_QUERIES)
+def test_order_across_atoms_and_at_least_two(query, seed):
+    """
+    An order comparison between atoms is lifted by projecting on the
+    least, or greatest, value of a variable, and two values of a relation
+    as the complement of one, with the probabilities of weighted model
+    counting, ties included.
+    """
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    expected = _solve_random(query, seed, dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    ))
+    assert _solve_random(query, seed, LIFTED_ONLY) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        "q(PROB) :- R(x), T(y), (x < y)",
+        dict(R=[(.5, 1), (.4, 2)], T=[(.6, 2), (.7, 3)]),
+        .5 * (1 - .4 * .3) + .4 * .5 * .7
+    ),
+    ("q(PROB) :- R(x), T(y), (x < y)", dict(R=[(.5, 3)], T=[(.6, 2)]), None),
+    (
+        "q(PROB) :- R(x), R(y), (x != y)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        1 - .5 * .6 * .7 - (.5 * .6 * .7 + .5 * .4 * .7 + .5 * .6 * .3)
+    ),
+    ("q(PROB) :- R(x), R(y), (x != y)", dict(R=[(.5, 1)]), None),
+])
+def test_order_across_atoms_and_at_least_two_formulas(
+    query, facts, expected
+):
+    """
+    The probabilities are those of the formulas: for R(x) ∧ T(y) ∧ x < y
+    the sum, on the least value a of R, of p_R(a) ∏_{b<a} (1 - p_R(b))
+    (1 - ∏_{c>a} (1 - p_T(c))), and for two values of R
+    1 - ∏ (1 - p) - Σ_a p_a ∏_{b≠a} (1 - p_b).
+    Without the tuples needed, there is no answer.
+    """
+    result = _solve_random(query, 0, LIFTED_ONLY, facts)
+    if expected is None:
+        assert result == {}
+    else:
+        assert result == {(): pytest.approx(expected)}
+
+
+@pytest.mark.parametrize("query", [
+    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+])
+def test_order_across_atoms_declined(query):
+    """
+    The comparison of a variable of a join is declined: the plan of the
+    projection of the join would select on the value of z, which it does
+    not have.
+    """
+    from nl_expr.exceptions import NonLiftableException
+
+    with pytest.raises(NonLiftableException):
+        _solve_random(query, 0, LIFTED_ONLY)
+
+
+DETERMINISTIC_UNION_QUERIES = [
+    "seed(s) :- A(l, s), startswith('a', l), C(s)\n"
+    "seed(s) :- A(l, s), startswith('b', l), C(s)\n"
+    "active(l, s) :- B(l, s), C(s)\n"
+    "ans(l, p) :- PROB[active(l, s) // seed(s)] = p",
+    "seed(s) :- A(l, s), startswith('a', l), C(s)\n"
+    "seed(s) :- B(l, s), C(s), ~A(l, s)\n"
+    "ans(p) :- PROB[seed(s)] = p",
+    "seed(s, l) :- A(l, s), C(s)\n"
+    "seed(s, l) :- B(l, s), startswith('b', l), C(s)\n"
+    "ans(l, p) :- PROB[seed(s, l)] = p",
+]
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+@pytest.mark.parametrize("query", DETERMINISTIC_UNION_QUERIES)
+def test_union_of_rules_joining_a_choice_and_deterministic_atoms(
+    query, seed
+):
+    """
+    The deterministic union that a choice is joined with by the disjoint
+    separator is computed as a set, with the probabilities of weighted
+    model counting.
+    """
+    import itertools
+    import random
+
+    from .. import NeurolangPDL
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query
+    )
+
+    def startswith(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    def solve(solvers):
+        random.seed(seed)
+        nl = NeurolangPDL(**solvers)
+        nl.add_symbol(startswith, name="startswith")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(s,) for s in range(6)], name="C"
+        )
+        for name in "AB":
+            labels = ("a1", "a2", "b1", "c1")
+            nl.add_tuple_set([
+                t for t in itertools.product(labels, range(6))
+                if random.random() < .4
+            ], name=name)
+        return {
+            tuple(row[:-1]): row[-1]
+            for row in nl.execute_datalog_program(query)
+        }
+
+    expected = solve(dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    ))
+    assert expected
+    assert solve(LIFTED_ONLY) == pytest.approx(expected)

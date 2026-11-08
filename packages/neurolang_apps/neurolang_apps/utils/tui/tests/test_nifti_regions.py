@@ -259,7 +259,7 @@ class TestViewNetworks:
         }
         np.testing.assert_allclose(centre["A"], [-3.0, -1.0, -1.0])
         # A–B given both ways keeps 0.75; A–A is left out
-        assert [e["colorValue"] for e in network["edges"]] == [0.75]
+        assert [e["value"] for e in network["edges"]] == [0.75]
         # the overlay is the strength of each node, on the atlas's grid
         np.testing.assert_allclose(_data(img)[0, 0, 0], 0.75)
         out = _output(tiny)
@@ -274,7 +274,7 @@ class TestViewNetworks:
         """)
         tiny._handle_dot_command(".view")
         network = view_calls[-1][1]["connectome"]
-        assert [e["colorValue"] for e in network["edges"]] == [1.0]
+        assert [e["value"] for e in network["edges"]] == [1.0]
         _remove_view_files(_output(tiny))
 
     def test_pairs_of_points_named_with_a_suffix(self, tiny, view_calls):
@@ -312,18 +312,26 @@ class TestConnectomeState:
         state = brain_viewer.connectome_state(
             self.NAMES, self.COORDINATES, self.EDGES, 0.15
         )
-        assert [e["colorValue"] for e in state["edges"]] == [0.2, 0.4]
-        assert state["edgeMin"] == 0.15 and state["edgeMax"] == 0.4
-        # the edges index the nodes kept: b and c, and a
-        strength = {n["name"]: n["colorValue"] for n in state["nodes"]}
-        assert strength == pytest.approx({"a": 0.4, "b": 0.2, "c": 0.6})
-        assert max(n["sizeValue"] for n in state["nodes"]) == 1.0
+        # all the edges, the largest first, for the page to threshold
+        assert [e["value"] for e in state["edges"]] == [0.4, 0.2, 0.1]
+        assert state["threshold"] == 0.15
+        assert [e["value"] for e in brain_viewer.shown_edges(state)] == [
+            0.4, 0.2
+        ]
+        assert [n["name"] for n in state["nodes"]] == self.NAMES
 
     def test_a_percentile_shows_a_few_edges_at_least(self):
         state = brain_viewer.connectome_state(
             self.NAMES, self.COORDINATES, self.EDGES, "95%"
         )
-        assert len(state["edges"]) == 3
+        assert len(brain_viewer.shown_edges(state)) == 3
+
+    def test_the_page_is_given_the_largest_edges(self, monkeypatch):
+        monkeypatch.setattr(brain_viewer, "MAX_EDGES", 2)
+        state = brain_viewer.connectome_state(
+            self.NAMES, self.COORDINATES, self.EDGES + [(0, 1, np.nan)], 0
+        )
+        assert [e["value"] for e in state["edges"]] == [0.4, 0.2]
 
     def test_a_percentile_of_many_edges(self):
         edges = [(0, 1, float(v)) for v in range(1, 101)]

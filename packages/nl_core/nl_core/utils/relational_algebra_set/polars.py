@@ -176,7 +176,28 @@ def _concat_safe(dfs):
             for i, df in enumerate(non_null):
                 if col_schemas[i].get(col) == pl.Null:
                     non_null[i] = df.with_columns(pl.lit(None, dtype=target_type).alias(col))
-    return pl.concat(non_null, how="vertical")
+    return _vertical_concat(non_null)
+
+
+def _vertical_concat(frames):
+    """Stack frames; columns that differ only in the type of their numbers
+    (an Int32 literal and an Int64 column, an integer and a float) are
+    brought to their common type, as the pandas backend does. Other
+    differences are left to polars."""
+    frames = list(frames)
+    if len(frames) > 1:
+        schemas = [
+            f.collect_schema() if isinstance(f, pl.LazyFrame) else f.schema
+            for f in frames
+        ]
+        for column in schemas[0]:
+            types = {
+                s[column] for s in schemas
+                if column in s and s[column] != pl.Null
+            }
+            if len(types) > 1 and all(t.is_numeric() for t in types):
+                return pl.concat(frames, how="vertical_relaxed")
+    return pl.concat(frames, how="vertical")
 
 
 def _has_sentinel(df):
@@ -1794,7 +1815,7 @@ class RelationalAlgebraSet(
             eager = self._eager()
             if eager is not None and new_row is not None:
                 new_eager = new_row.collect() if isinstance(new_row, pl.LazyFrame) else new_row
-                self._container = pl.concat([eager, new_eager], how="vertical").lazy()
+                self._container = _vertical_concat([eager, new_eager]).lazy()
             elif eager is not None:
                 self._container = eager.lazy()
 
@@ -1834,7 +1855,7 @@ class RelationalAlgebraSet(
             sc = _strip_sentinel(self_eager)
             oc = _strip_sentinel(other_eager)
             if sc is not None and oc is not None:
-                new_eager = pl.concat([sc, oc], how="vertical")
+                new_eager = _vertical_concat([sc, oc])
                 new_eager = new_eager.unique(maintain_order=True)
                 self._container = new_eager.lazy()
             self._might_have_duplicates = True

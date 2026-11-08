@@ -48,6 +48,26 @@ def test_the_wheels_leave_no_gitignore_that_would_hide_the_bundle(
     assert (tmp_path / "page.html").exists()
 
 
+def test_the_wheels_of_an_earlier_build_are_not_taken(
+    bundle, monkeypatch, tmp_path
+):
+    """Their version is that of the commit they were built from."""
+    def uv_build(command):
+        out = Path(command[command.index("--out-dir") + 1])
+        for name in bundle.PACKAGES:
+            (out / f"{name}-2-py3-none-any.whl").write_bytes(b"new")
+
+    monkeypatch.setattr(bundle.subprocess, "check_call", uv_build)
+    for name in bundle.PACKAGES:
+        (tmp_path / f"{name}-1-py3-none-any.whl").write_bytes(b"old")
+    assert bundle.build_wheels(tmp_path) == [
+        f"{name}-2-py3-none-any.whl" for name in bundle.PACKAGES
+    ]
+    assert sorted(path.name for path in tmp_path.glob("*.whl")) == sorted(
+        f"{name}-2-py3-none-any.whl" for name in bundle.PACKAGES
+    )
+
+
 def test_a_certificate_error_is_retried_with_the_system_certificates(
     bundle, monkeypatch, tmp_path
 ):
@@ -164,12 +184,56 @@ def test_the_files_of_the_embeddings_have_plain_names(bundle):
     assert name == "neurosynth-a--base_a--query.npz"
 
 
+def test_the_downloads_are_kept_even_when_the_build_fails(
+    bundle, monkeypatch, tmp_path
+):
+    """A data host that is down (a 504) does not stop the next build, which
+    finds what this one downloaded; the engine's kept tables and its
+    embeddings are made by each build, not kept with the downloads. Each
+    engine's downloads are kept apart from the others'."""
+    downloads = tmp_path / "downloads"
+    (downloads / "neurosynth" / "fsl").mkdir(parents=True)
+    (downloads / "neurosynth" / "fsl" / "atlas.nii.gz").write_bytes(b"atlas")
+    (downloads / "neurostore").mkdir()
+    (downloads / "neurostore" / "release.parquet").write_bytes(b"other")
+    found = []
+
+    def build(data_dir, use_cache=True, engine="neurosynth"):
+        found.append(sorted(
+            str(p.relative_to(data_dir)) for p in data_dir.rglob("*")
+            if p.is_file()
+        ))
+        (data_dir / "peaks.tsv.gz").write_bytes(b"peaks")
+        for kept in ("engine_cache", "embeddings"):
+            (data_dir / "neurosynth" / kept).mkdir(parents=True)
+            (data_dir / "neurosynth" / kept / "table.npz").write_bytes(b"t")
+        raise requests.HTTPError("504 Gateway Time-out")
+
+    monkeypatch.setattr(bundle, "build_wheels", lambda output: [])
+    monkeypatch.setattr(bundle, "build_engine", build)
+    with pytest.raises(requests.HTTPError):
+        bundle.main(tmp_path / "out", downloads=downloads)
+    assert found == [["fsl/atlas.nii.gz"]]
+    kept = downloads / "neurosynth"
+    assert sorted(
+        str(p.relative_to(kept)) for p in kept.rglob("*") if p.is_file()
+    ) == ["fsl/atlas.nii.gz", "peaks.tsv.gz"]
+
+
+def test_the_downloads_directory_is_an_option(bundle, tmp_path):
+    args = bundle.parse_args([str(tmp_path), "emb", "--downloads", "dl"])
+    assert (args.output, args.embedded, args.downloads) == (
+        tmp_path, "emb", Path("dl")
+    )
+    assert bundle.parse_args([str(tmp_path)]).downloads is None
+
+
 def _fake_bundle(bundle, monkeypatch, failing=()):
     """Stub the slow steps of the script: the wheels and the engines."""
     monkeypatch.setattr(bundle, "build_wheels", lambda out: ["w.whl"])
     monkeypatch.setattr(bundle, "write_highlight_words", lambda out: None)
 
-    def bundle_engine(engine, output, embedded=None):
+    def bundle_engine(engine, output, embedded=None, downloads=None):
         if engine in failing:
             raise RuntimeError("no network")
         return {

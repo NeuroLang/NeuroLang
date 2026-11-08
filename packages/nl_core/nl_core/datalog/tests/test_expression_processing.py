@@ -16,6 +16,7 @@ from nl_expr.logic import (
     Implication,
     Negation,
     Conjunction,
+    TRUE,
     Union,
 )
 from .. import DatalogProgram, Fact
@@ -37,6 +38,7 @@ from ..expression_processing import (
     HeadRepeatedVariableToBodyEquality,
     maybe_deconjunct_single_pred,
     is_to_be_sorted_equality,
+    InlineEqualityConstantsMixin,
 )
 from ..instance import MapInstance
 
@@ -311,6 +313,45 @@ def test_stratification_defers_rules_on_deferred_heads():
     ]
 
 
+def test_stratification_reads_a_predicate_after_all_its_rules():
+    """
+    A predicate whose rules are at different depths is complete only after
+    its last rule: a rule that reads it waits for it, rather than going to
+    the stratum of the rule that completes it. There an aggregation, which
+    no chase can solve in a stratum with other rules, was left, and a
+    negation read the predicate before it was complete.
+    """
+    A = S_('A')  # noqa: N806
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+
+    code = DT.walk(B_([
+        T_(A(C_(1))),
+        Imp_(Q(x), A(x)),
+        Imp_(P(x), A(x)),  # P at depth 1
+        Imp_(P(x), Q(x)),  # and at depth 2
+        Imp_(R(x), P(x)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    strata, stratifiable = stratify(code, datalog)
+
+    assert stratifiable
+    stratum_of = {
+        rule: i for i, stratum in enumerate(strata) for rule in stratum
+    }
+    both_rules_of_p = code.formulas[2:4]
+    reading_rule = code.formulas[4]
+    assert all(
+        stratum_of[rule] < stratum_of[reading_rule]
+        for rule in both_rules_of_p
+    )
+
+
 def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')
@@ -344,11 +385,14 @@ def test_stratification_with_consequent_in_multiple_rules():
     strata, stratifyiable = stratify(code, datalog)
 
     assert stratifyiable
+    # q reads anc, which has a rule at the second stratum and a recursive
+    # one after O: q waits for the last rule of anc
     assert strata == [
         list(code.formulas[:4]),
         list(code.formulas[4:6]),
         list((code.formulas[6],)),
-        list(code.formulas[7:]),
+        list((code.formulas[8],)),
+        list((code.formulas[7],)),
     ]
 
 
@@ -661,3 +705,35 @@ def test_is_to_be_sorted_equality_with_unknown_type():
 
     # Should return False without raising ValueError
     assert not is_to_be_sorted_equality(formula)
+
+
+class InlineEqualityConstants(InlineEqualityConstantsMixin, ExpressionWalker):
+    pass
+
+
+def test_inline_equality_constants_of_an_equality_only_body():
+    """GH-1076: ``p(x) :- x == 'c'`` becomes the fact ``p('c')``."""
+    p, q, x, y = S_("p"), S_("q"), S_("x"), S_("y")
+    a, b = C_("a"), C_("b")
+    walker = InlineEqualityConstants()
+    assert walker.walk(Imp_(p(x), Conjunction((EQ(x, a),)))) == Imp_(
+        p(a), TRUE
+    )
+    assert walker.walk(
+        Imp_(p(x, y), Conjunction((EQ(x, a), EQ(y, b))))
+    ) == Imp_(p(a, b), TRUE)
+    assert walker.walk(
+        Imp_(p(x), Conjunction((q(x, y), EQ(x, a))))
+    ) == Imp_(p(a), q(a, y))
+
+
+def test_inline_equality_constants_keeps_the_equalities_it_cannot_inline():
+    p, q, x, y = S_("p"), S_("q"), S_("x"), S_("y")
+    a, b = C_("a"), C_("b")
+    walker = InlineEqualityConstants()
+    for body in (
+        Conjunction((q(x), EQ(x, a), EQ(x, b))),
+        Conjunction((q(y), EQ(x, a), EQ(y, x))),
+        Conjunction((q(y), EQ(x, a), Negation(q(x)))),
+    ):
+        assert walker.walk(Imp_(p(x), body)) == Imp_(p(x), body)

@@ -4,6 +4,7 @@ Query Builder Datalog
 Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
+import warnings
 from collections import defaultdict
 from nl_core.datalog.magic_sets import magic_rewrite
 from nl_core.datalog.range_restriction import check_range_restriction
@@ -15,6 +16,7 @@ from nl_expr.exceptions import (
 from nl_expr.exceptions import UnboundVariablesError
 from typing import (
     AbstractSet,
+    Any,
     Dict,
     Iterable,
     List,
@@ -60,7 +62,10 @@ from .datalog.squall_syntax_lark import (
     SquallProgram,
     WeightedChoiceDef,
 )
-from .datalog.standard_syntax import parser as datalog_parser
+from .datalog.standard_syntax import (
+    documentation_command,
+    parser as datalog_parser,
+)
 from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from nl_core.datalog import DatalogProgram
@@ -359,7 +364,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Execute a Datalog program in classical syntax.
         If the program contains a query, in the form `ans(x) :- R(x)`,
         then this query is executed against the program and the result is
-        returned. Otherwise returns None.
+        returned. Otherwise returns None. The rules of the program stay in
+        it after the query: a later rule of the same head is added to them,
+        with a warning if its program has a query; run the query in
+        ``with nl.scope:`` to keep its rules local to it.
 
         Parameters
         ----------
@@ -401,6 +409,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_program(intermediate_representation.formulas)
             return
         elif len(queries) == 1:
+            counts = self._rule_counts()
             self._walk_program(
                 [
                     rule
@@ -408,6 +417,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     if not isinstance(rule, ir.Query)
                 ]
             )
+            self._warn_added_rules(counts)
             query = self.frontend_translator.walk(
                 self._expand_resamplings(queries[0])
             )
@@ -428,6 +438,41 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                         ]
                     )
                 )
+            )
+
+    def import_datalog_module(self, path):
+        """
+        Import the Datalog module at *path*, as ``.import("path")`` in a
+        program does: its facts, rules and commands are added to the
+        program, once. ``"package:path/module.dl"`` is a module shipped
+        in the Python package ``package``.
+        """
+        self.program_ir.walk(
+            ir.Command(ir.Symbol("import"), (ir.Constant(str(path)),), ())
+        )
+
+    def _rule_counts(self):
+        """Return the number of rules of each predicate of the IDB."""
+        return {
+            symbol: len(getattr(rules, "formulas", ()))
+            for symbol, rules in self.program_ir.intensional_database().items()
+        }
+
+    def _warn_added_rules(self, counts):
+        """
+        Warn that a query's rules were added to predicates that had
+        *counts* rules: the predicate is the union of all its rules.
+        """
+        added = sorted({
+            symbol.name for symbol, count in self._rule_counts().items()
+            if counts.get(symbol, count) < count
+        })
+        if added:
+            warnings.warn(
+                f"{', '.join(added)} already defined: the rules of the "
+                "query are added to the earlier ones, not replacing them; "
+                "rename them, or run the queries in `with nl.scope:` to "
+                "keep their rules local.", stacklevel=3,
             )
 
     def _walk_program(self, rules):
@@ -1274,6 +1319,43 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
         return fe.Symbol(self, name)
+
+    def predicate_documentation(self) -> Dict[str, Any]:
+        """
+        Return the documentation of the predicates of the program, by
+        name: the ``%%`` blocks of their rules and facts, a
+        :class:`~neurolang.commands.PredicateDocumentation` each, with
+        their ``description`` and ``arguments``, ``(name, sort)`` pairs.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangDL
+        >>> nl = NeurolangDL()
+        >>> nl.execute_datalog_program('''
+        ... %% p(x: number)
+        ... %% The numbers of p.
+        ... p(1)
+        ... ''')
+        >>> nl.predicate_documentation()["p"].arguments
+        (('x', 'number'),)
+        """
+        documentation = getattr(
+            self.program_ir, "predicate_documentation", None
+        )
+        return documentation() if documentation is not None else {}
+
+    def document_predicate(
+        self, name: str, description: str,
+        arguments: Iterable[Tuple[str, str]] = (),
+    ) -> None:
+        """
+        Document the predicate *name* with its *description* and its
+        *arguments*, ``(name, sort)`` pairs, as a ``%%`` block before its
+        rule does (see :meth:`predicate_documentation`).
+        """
+        self.program_ir.walk(
+            documentation_command(name, description, arguments)
+        )
 
     def predicate_parameter_names(
         self, predicate_name: Union[str, fe.Symbol, fe.Expression]

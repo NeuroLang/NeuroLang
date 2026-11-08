@@ -10,8 +10,9 @@ millimetres. ``.save`` and ``.view`` locate the voxels of a result
 from these sorts (see :func:`~.nifti.point_columns`).
 
 The sorts of the predicates follow from the engine's declarations (see
-:func:`~neurolang_apps.utils.engine_registry.get_signatures`), then from the
-rules defining the others, as
+:func:`~neurolang_apps.utils.engine_registry.get_signatures`) and the
+``%%`` documentation of the predicates of the program, which wins, then
+from the rules defining the others, as
 :func:`~neurolang_apps.utils.cli.squall_column_names` follows their names.
 """
 
@@ -25,6 +26,7 @@ from neurolang.frontend.datalog.squall_syntax_lark import (
     parser as squall_parser,
 )
 from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils.predicate_catalog import program_documentation
 from neurolang_apps.utils.cli import (
     _body_atoms, _subformulas, _whole_relation,
 )
@@ -64,6 +66,25 @@ def declared_column_sorts(engine_name: str) -> dict:
         for name, arguments in engine_registry.get_signatures(
             engine_name
         ).items()
+    }
+
+
+def documented_column_sorts(nl) -> dict:
+    """
+    Return the sort of each column of the predicates the program of *nl*
+    documents with sorts, by name (see :func:`declared_column_sorts`):
+    ``%% uncinate(x: streamline, h: hemisphere)``. A column of no sort
+    has None.
+    """
+    return {
+        name: tuple(
+            ColumnSort(sort, 0) if sort else None
+            for _, sort in documentation.arguments
+        )
+        for name, documentation in program_documentation(
+            nl.program_ir
+        ).items()
+        if any(sort for _, sort in documentation.arguments)
     }
 
 
@@ -196,7 +217,9 @@ def _column_sorts(nl, engine_name, program, squall, rules) -> dict:
     program_rules, queries = (
         _squall_queries(program) if squall else _datalog_queries(nl, program)
     )
-    known = declared_column_sorts(engine_name)
+    known = {
+        **declared_column_sorts(engine_name), **documented_column_sorts(nl)
+    }
     for rule in (*rules, *program_rules):
         _add_rule_sorts(rule, known)
     return {

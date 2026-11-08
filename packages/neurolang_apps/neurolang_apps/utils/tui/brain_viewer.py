@@ -20,6 +20,9 @@ convention, the interpolation of the voxels and a clip plane of the 3D
 render; NiiVue's hot keys, V and C on the views, cycle the views and the
 clip planes. The page shows the MNI coordinates of the voxel under the
 cursor, the value of each overlay there, and a colour bar per overlay.
+It also draws a network (:func:`connectome_state`) or streamlines
+(:func:`streamlines_state`), in the 3D render and on the slices near
+them.
 
 The page needs no network: NiiVue (``static/niivue/niivue.umd.js``, a
 copy of its release :data:`NIIVUE_VERSION`), the script of the page
@@ -28,7 +31,8 @@ copy of its release :data:`NIIVUE_VERSION`), the script of the page
 document holding the overlays and the background as gzipped NIfTI
 images, base64-encoded, and the colormaps as 256 RGB colours, deflated
 with zlib then base64-encoded, which the page inflates with the browser's
-``DecompressionStream``. NiiVue reorients the images itself, and draws
+``DecompressionStream``; streamlines are a TrackVis ``.trk`` file,
+encoded as the colormaps. NiiVue reorients the images itself, and draws
 them as nilearn does: neurological, the left hemisphere on the left.
 
 .. [niivue] https://github.com/niivue/niivue, BSD 2-Clause License.
@@ -37,6 +41,7 @@ them as nilearn does: neurological, the left hemisphere on the left.
 import base64
 import gzip
 import html
+import io
 import json
 import re
 import zlib
@@ -305,13 +310,16 @@ def viewer_state(
 NODE_RADIUS = 4.0
 EDGE_RADIUS = 1.5
 
-# The opacity the overlays of a network start with, for its edges to
-# show on the slices.
+# The opacity the overlays of a network or of streamlines start with, for
+# its edges or them to show on the slices.
 NETWORK_OVERLAY_OPACITY = 0.5
 
 # The number of edges a percentile threshold shows at least, all of them
 # when there are fewer.
 MIN_SHOWN_EDGES = 20
+
+# The number of edges, the largest, given to the page to threshold there.
+MAX_EDGES = 20000
 
 
 def edge_threshold(values, threshold, at_least: int = 0) -> float:
@@ -333,56 +341,94 @@ def edge_threshold(values, threshold, at_least: int = 0) -> float:
 
 def connectome_state(names, coordinates, edges, threshold) -> dict:
     """
-    Return the network of *edges* as NiiVue draws it, a JSON-able dict.
+    Return the network of *edges* for the page to draw, a JSON-able dict.
 
     The nodes have *names* and the millimetre *coordinates* of their
     centre; an edge ``(first, second, value)`` joins two of them, by
-    index. Only the edges of |value| at least the threshold
-    (:func:`edge_threshold`; a percentile shows the
-    :data:`MIN_SHOWN_EDGES` largest at least) are drawn, and the nodes
-    they join: the
-    colour and the size of a node is its strength, the sum of the values
-    of its edges drawn, and the colour and the thickness of an edge its
-    value.
+    index. The page draws the edges of |value| at least its edge
+    threshold, which starts at *threshold* (:func:`edge_threshold`; a
+    percentile shows the :data:`MIN_SHOWN_EDGES` largest at least) and
+    can be changed there, and the nodes they join: the colour and the
+    size of a node is its strength, the sum of the values of its edges
+    drawn, and the colour and the thickness of an edge its value, from
+    the threshold to the largest. The :data:`MAX_EDGES` largest edges
+    are given to the page.
     """
-    minimum = edge_threshold(
-        [w for _, _, w in edges], threshold, MIN_SHOWN_EDGES
-    )
-    shown = [e for e in edges if abs(e[2]) >= minimum and e[2] != 0]
-    strength = np.zeros(len(names))
-    for first, second, weight in shown:
-        strength[first] += weight
-        strength[second] += weight
-    kept = sorted({n for first, second, _ in shown for n in (first, second)})
-    position = {n: p for p, n in enumerate(kept)}
-    top_node = max((abs(strength[n]) for n in kept), default=0.0) or 1.0
-    top_edge = max((abs(w) for _, _, w in shown), default=0.0) or 1.0
+    edges = sorted(
+        (e for e in edges if e[2] != 0 and not np.isnan(e[2])),
+        key=lambda e: -abs(e[2]),
+    )[:MAX_EDGES]
     return {
         "name": "network",
-        "nodeColormap": "winter", "nodeColormapNegative": "cool",
-        "nodeMinColor": 0.0, "nodeMaxColor": float(top_node),
-        "nodeScale": NODE_RADIUS,
-        "edgeColormap": "warm", "edgeColormapNegative": "cool",
-        "edgeMin": float(minimum), "edgeMax": float(top_edge),
-        "edgeScale": EDGE_RADIUS / top_edge,
-        "legendLineThickness": 0, "showLegend": False,
+        "threshold": edge_threshold(
+            [w for _, _, w in edges], threshold, MIN_SHOWN_EDGES
+        ),
+        "nodeRadius": NODE_RADIUS, "edgeRadius": EDGE_RADIUS,
         "nodes": [
             {
-                "name": str(names[n]),
-                "x": float(coordinates[n][0]), "y": float(coordinates[n][1]),
-                "z": float(coordinates[n][2]),
-                "colorValue": float(strength[n]),
-                "sizeValue": float(max(abs(strength[n]) / top_node, 0.4)),
+                "name": str(name), "x": float(x), "y": float(y),
+                "z": float(z),
             }
-            for n in kept
+            for name, (x, y, z) in zip(names, coordinates)
         ],
         "edges": [
-            {
-                "first": position[first], "second": position[second],
-                "colorValue": float(weight),
-            }
-            for first, second, weight in shown
+            {"first": int(a), "second": int(b), "value": float(w)}
+            for a, b, w in edges
         ],
+    }
+
+
+def shown_edges(connectome: dict) -> list:
+    """Return the edges of *connectome* the page draws at first."""
+    return [
+        e for e in connectome["edges"]
+        if abs(e["value"]) >= connectome["threshold"]
+    ]
+
+
+# The number of streamlines drawn at most, evenly subsampled.
+MAX_STREAMLINES = 20000
+
+
+def shown_streamlines(ids, cap=None) -> list:
+    """Return the *ids* drawn: all of them, or *cap* evenly spaced,
+    :data:`MAX_STREAMLINES` by default."""
+    ids = list(ids)
+    cap = MAX_STREAMLINES if cap is None else cap
+    if len(ids) <= cap:
+        return ids
+    return [ids[n] for n in np.linspace(0, len(ids) - 1, cap).round()
+            .astype(int)]
+
+
+def trk_bytes(lines) -> bytes:
+    """
+    Return the TrackVis ``.trk`` file of the streamlines *lines*, (n, 3)
+    arrays of points in millimetres (RAS+).
+
+    NiiVue 0.69.0 reads a ``.tck`` without its first streamline (its
+    ``readTCK`` misses the offset 0), a ``.trk`` whole.
+    """
+    tractogram = nib.streamlines.Tractogram(
+        [np.asarray(line, dtype=np.float32) for line in lines],
+        affine_to_rasmm=np.eye(4),
+    )
+    file = io.BytesIO()
+    nib.streamlines.TrkFile(tractogram).save(file)
+    return file.getvalue()
+
+
+def streamlines_state(lines, total: int) -> dict:
+    """
+    Return the streamlines *lines* for the page to draw, a JSON-able dict.
+
+    *lines* are (n, 3) arrays of points in millimetres, those drawn of
+    the *total* of the result; they go in the page as a ``.trk`` file
+    (:func:`trk_bytes`), encoded as :func:`encode_array` does.
+    """
+    return {
+        "trk": encode_array(np.frombuffer(trk_bytes(lines), np.uint8)),
+        "shown": len(lines), "total": int(total),
     }
 
 
@@ -393,7 +439,7 @@ def _script_json(state: dict) -> str:
 
 def viewer_html(
     img, background, *, title: str, threshold, cmap, symmetric: bool,
-    connectome=None,
+    connectome=None, streamlines=None, space: str = "MNI",
 ) -> str:
     """
     Return the HTML page of an interactive viewer of the image *img*.
@@ -408,14 +454,23 @@ def viewer_html(
     not, as *symmetric*, a bool or one per overlay, tells. Its controls
     change them. A *connectome*, a network of :func:`connectome_state`,
     is drawn in the 3D render, which the page then starts with, beside
-    the slices, and its strongest edges are listed.
+    the slices, and its strongest edges are listed. *streamlines*, of
+    :func:`streamlines_state`, are drawn so too, coloured by their
+    direction, with a control of their visibility and opacity, on
+    slices cut in millimetres, as they are drawn. *space* names the
+    millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
+    a subject.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
         symmetric=symmetric,
     )
+    state["space"] = space
+    if streamlines is not None:
+        state["streamlines"] = streamlines
     if connectome is not None:
         state["connectome"] = connectome
+    if connectome is not None or streamlines is not None:
         state["initial"]["display"] = {"renderTile": True, "layout": "grid"}
         for layer in state["initial"]["layers"]:
             layer["opacity"] = NETWORK_OVERLAY_OPACITY
