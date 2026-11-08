@@ -191,7 +191,7 @@ know them from the engines' examples and guidance:
 .. code-block:: text
 
     $ neurolang-query --engine neurosynth --ask "Which studies are about the Cognitive Atlas concept response inhibition, with their titles?"
-    ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+    ans(s, title) :- cogat_definition('response inhibition', d), similar_study(d, s), study_title(s, title)
 
 The label must be the Cognitive Atlas one: ICL writes it from the
 question, and finds nothing for a concept the atlas does not have (it has
