@@ -11,6 +11,7 @@ from collections import Counter
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker, ReplaceExpressionWalker
 from nl_expr.expressions import (
+    Command,
     Constant,
     Expression,
     ExpressionBlock,
@@ -59,7 +60,7 @@ class DatalogPrettyPrinter(PatternWalker):
     Uses the PatternWalker pattern-matching framework to recursively format
     each expression type. Strips type annotations, uses ``:-`` notation for
     rules/queries, and renames fresh variables to short names (``s₀``, ``s₁``,
-    …). Handles probabilistic ``Condition`` objects (``[A | B]``),
+    …). Handles probabilistic ``Condition`` objects (``(A) // (B)``),
     ``ExpressionBlock``, ``Union``, and all standard FOL/Datalog constructs.
 
     Parameters
@@ -151,13 +152,20 @@ class DatalogPrettyPrinter(PatternWalker):
         )
         return f"\u03bb({args_s}). {body_s}"
 
+    def _walk_operand(self, expr) -> str:
+        # A conjunction binds tighter than a disjunction: parenthesise a
+        # disjunction within a conjunction or a disjunction.
+        if isinstance(expr, Disjunction):
+            return f"({self.walk(expr)})"
+        return self.walk(expr)
+
     @add_match(Conjunction)
     def format_conjunction(self, expr: Conjunction) -> str:
-        return " \u2227 ".join(self.walk(f) for f in expr.formulas)
+        return " \u2227 ".join(self._walk_operand(f) for f in expr.formulas)
 
     @add_match(Disjunction)
     def format_disjunction(self, expr: Disjunction) -> str:
-        return " \u2228 ".join(self.walk(f) for f in expr.formulas)
+        return " \u2228 ".join(self._walk_operand(f) for f in expr.formulas)
 
     @add_match(Negation(FunctionApplication(Symbol, ...)))
     def format_negated_atom(self, expr: Negation) -> str:
@@ -184,9 +192,11 @@ class DatalogPrettyPrinter(PatternWalker):
 
     @add_match(Condition)
     def format_condition(self, expr: Condition) -> str:
-        cond_s = self.walk(expr.conditioned)
-        conding_s = self.walk(expr.conditioning)
-        return f"[{cond_s} | {conding_s}]"
+        return " // ".join(
+            f"({self.walk(f)})"
+            if isinstance(f, (Conjunction, Disjunction)) else self.walk(f)
+            for f in (expr.conditioned, expr.conditioning)
+        )
 
     @add_match(ProbabilisticFact)
     def format_probabilistic_fact(self, expr: ProbabilisticFact) -> str:
@@ -222,6 +232,34 @@ class DatalogPrettyPrinter(PatternWalker):
             head_s = head_walked
         return self._rule(head_s, expr.body)
 
+    @add_match(Command(Symbol("document"), (Symbol, Constant, Constant), ()))
+    def format_documentation(self, command: Command) -> str:
+        """
+        Write the documentation of a predicate as the ``%%`` block of
+        Datalog: its signature, if it has arguments, then its
+        description.
+        """
+        name, description, arguments = command.args
+        lines = []
+        if arguments.value:
+            lines.append("{}({})".format(name.name, ", ".join(
+                f"{a}: {sort}" if sort else a
+                for a, sort in arguments.value
+            )))
+        lines.extend(description.value.split("\n"))
+        return "\n".join(
+            f"%% {line}" if line else "%%" for line in lines
+        )
+
+    @add_match(Command)
+    def format_command(self, command: Command) -> str:
+        args = [self._format_arg(a) for a in command.args]
+        args += [
+            f"{self._format_arg(k)}={self._format_arg(v)}"
+            for k, v in command.kwargs
+        ]
+        return f".{self.walk(command.name)}({', '.join(args)})"
+
     @add_match(Expression)
     def format_default(self, expr: Expression) -> str:
         return repr(expr)
@@ -241,7 +279,7 @@ class DatalogPrettyPrinter(PatternWalker):
         regular walker.
         """
         if isinstance(e, Conjunction):
-            return ",\n".join(self.walk(f) for f in e.formulas)
+            return ",\n".join(self._walk_operand(f) for f in e.formulas)
         return self.walk(e)
 
 
@@ -281,14 +319,15 @@ def fold_probabilities(formulas) -> list:
     atom replaced by ``PROB[A // B] = p``, a :class:`ProbabilisticQuery`
     equal to ``p``, put first in the body.
     """
-    helpers = {f.consequent.functor: f for f in formulas if _is_helper(f)}
+    rules = [f for f in formulas if isinstance(f, (Query, Implication))]
+    helpers = {f.consequent.functor: f for f in rules if _is_helper(f)}
     uses = Counter(
-        atom.functor for f in formulas if not _is_helper(f)
+        atom.functor for f in rules if not _is_helper(f)
         for atom in extract_logic_atoms(_body(f))
         if atom.functor in helpers
     )
     folds = {}
-    for f in formulas:
+    for f in rules:
         for atom in extract_logic_atoms(_body(f)):
             if uses[atom.functor] == 1 and not _is_helper(f):
                 rule = helpers[atom.functor]
@@ -301,7 +340,9 @@ def fold_probabilities(formulas) -> list:
                 )
     replace = ReplaceExpressionWalker(folds)
     return [
-        _fold(f, replace, set(folds.values())) for f in formulas
+        _fold(f, replace, set(folds.values()))
+        if isinstance(f, (Query, Implication)) else f
+        for f in formulas
         if not (_is_helper(f) and uses[f.consequent.functor] == 1)
     ]
 

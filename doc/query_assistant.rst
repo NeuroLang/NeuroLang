@@ -122,20 +122,28 @@ and text-to-SPARQL systems.
     predicates of the engine and a few example questions with their
     queries. The predicates are given with their columns, their
     description in the engine configuration and their size (schema
-    linking). The examples are those closest to the question, chosen by
-    BM25 from a bank of checked examples
-    (``packages/neurolang_apps/neurolang_apps/utils/llm/examples/<engine>.yaml``).
+    linking). A predicate documented in the program with a ``%%``
+    block (see :ref:`datalog-doc-comments`) is given with its
+    description and the names and sorts of its arguments,
+    ``uncinate(x: streamline, h: hemisphere) — The uncinate
+    fasciculus…``, which win over those of the configuration: the first
+    paragraph of the description in the prompt and ``list_predicates``,
+    all of it in ``describe_predicate``. The examples are those
+    closest to the question, chosen by
+    BM25 from a bank of checked examples, the ``assistant_examples`` of
+    the engine's configuration, kept in
+    ``packages/neurolang_apps/neurolang_apps/utils/engines/<engine>/examples.yaml``
+    (see :ref:`neurolang-engine-registry`).
     An engine inherits the banks of the engines it ``extends``: the
     ``neurosynth`` and ``neurostore`` engines share that of
-    ``coordinate_meta_analysis``, and ``neurostore.yaml`` adds questions
-    on its concepts, domains and abstracts.
+    ``coordinate_meta_analysis``, and ``neurostore/examples.yaml`` adds
+    questions on its concepts, domains and abstracts. The guidance of the
+    prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
 
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
     arguments are reported. When it fails, the formatted error is sent
     back to the model for a correction, up to ``max_repairs`` times.
-    With ``samples`` above 1, several queries are generated and the one
-    whose result most of them share is kept (self-consistency).
 
 ``react`` (ReAct agent)
     The model reasons and calls tools:
@@ -164,6 +172,15 @@ and text-to-SPARQL systems.
     default, 0 to turn the check off) is the number of answers the check
     may reject; after them, the answer is kept with a warning. The REPL
     and ``neurolang-query --ask`` show the English reading of the query.
+
+With ``samples`` above 1, either strategy answers that many times, at a
+temperature of at least 0.7, and the answer whose rows most of them give
+is kept (self-consistency). With ``fallback_provider: NAME``, a provider
+of the file, that provider answers once instead when no result is given
+by more than half of the answers, or when none is valid (a single sample
+asks it only when its answer fails): e.g. three DeepSeek answers, and
+Sonnet when they disagree. The fallback is a step of the answer, with
+the query the vote kept (``voted``), and its requests count in the usage.
 
 The rules of the queries the assistant checks or runs are defined in a
 scope that is discarded afterwards. They never stay in the session.
@@ -274,6 +291,7 @@ order:
       max_repairs: 3
       few_shot_k: 6
       samples: 1
+      # fallback_provider: anthropic
       temperature: 0.0
       timeout: 60
       preview_rows: 10
@@ -404,8 +422,8 @@ private data.
     it as the corrected query of the last answer. It is rated incorrect.
     A query that fails the check is not shared.
 
-``.help feedback`` recalls these commands. In the browser, the REPL does not
-share its answers.
+``.help feedback`` recalls these commands. In the browser, the REPL shares an
+answer only when its visitor rates it, in a Grist document (see below).
 
 **In a Grist document.** Instead of a server, the answers can be rows of a
 `Grist <https://www.getgrist.com>`_ document:
@@ -430,8 +448,26 @@ columns ``verdict`` (choice: good, bad or unsure), ``comment`` and
 ``corrected_query``. Each answer is a row, its id the row's number. Flag the
 rows in Grist by setting their ``verdict``, or with ``.rate`` (``good`` or
 ``bad`` set the ``verdict``) and ``.refine submit`` (``bad`` and the
-``corrected_query``). The browser REPL never shares, so the key never
-reaches the page.
+``corrected_query``).
+
+**Rating an answer in the browser.** After an answer of the assistant, and
+after a query typed in the page, the page asks "Did this query do what you
+wanted?", between the output and the result:
+*Yes* sends it as ``good``, *No* asks what was wrong and sends it as ``bad``.
+Nothing is sent unless it is rated. An answer is sent as the terminal shares
+it; a typed query with its first rows or its error, and an empty
+``question``. Either is one new row of the table ``Answers`` with its
+``verdict`` and ``comment`` set. The page has no API key: Grist does not accept the
+``Authorization`` header of another origin, and a key in a page is public.
+The document is the one of ``feedback.json`` next to the page (``url`` and
+``doc``; without a ``doc``, the page does not ask), and must let anyone add
+rows, and do nothing else, in its access rules (*Access rules*, then the
+table ``Answers``: for *Everyone*, create only, no read, update or delete),
+so that a visitor can neither read nor change what others sent. Two rules
+for the table, in this order: the condition ``user.Access == OWNER`` gives
+all permissions, and a rule without a condition gives ``+C-RUD``. A visitor
+who reads, changes or deletes a row is then answered "Blocked by table ...
+access rules", and adding a row works.
 
 **Running a server.** ``neurolang-feedback-server`` comes with
 ``neurolang-apps[llm]`` and adds no dependency: it runs on ``http.server`` and
@@ -471,8 +507,8 @@ The JSON lines hold each answer with its steps and ratings, plus a
 ``training`` pair. That pair is the question with its best query: the latest
 corrected query that was checked on the engine, or else the answer's own query
 when most ratings say it is correct. ``--format examples`` writes these pairs
-as a bank of examples (``examples/*.yaml``), one per question, ready to be
-reviewed and added to an engine's bank.
+as a bank of examples (``assistant_examples``), one per question, ready to be
+reviewed and added to an engine's ``<engine>/examples.yaml``.
 
 Evaluation
 ----------

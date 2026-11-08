@@ -15,6 +15,7 @@ from nl_expr.expression_walker import (
     ChainedWalker,
     ExpressionWalker,
     PatternWalker,
+    WalkExpressionsOnceMixin,
 )
 from nl_expr.expressions import (
     Constant,
@@ -479,6 +480,7 @@ class RAQueryOptimiser(
     SimplifyExtendedProjectionsWithConstants,
     FloatArithmeticSimplifier,
     PushUnnamedSelectionsUp,
+    WalkExpressionsOnceMixin,
     ExpressionWalker,
 ):
     pass

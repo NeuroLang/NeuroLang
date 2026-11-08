@@ -285,12 +285,17 @@ def stratify(union, datalog_instance):
             to_process, seen
         )
         to_process = new_to_process
-        if len(new_seen) == 0:
+        if len(stratum) == 0:
             stratifiable = False
             stratum, to_process = stratify_obtain_recursive_stratum(
                 to_process, seen
             )
             new_seen = {r.consequent.functor for r in stratum}
+        else:
+            # A predicate is complete, and can be read by a rule that is not
+            # monotone, only when no rule of it is left to process: its
+            # rules can be at different depths.
+            new_seen -= {r.consequent.functor for r in to_process}
         strata.append(stratum)
         seen |= new_seen
 
@@ -1294,6 +1299,40 @@ def is_inlineable_equality(formula):
     )
 
 
+def _is_atom(formula):
+    return isinstance(formula, FunctionApplication) and not isinstance(
+        formula.functor, Constant
+    )
+
+
+def inlineable_equalities(implication):
+    """Map ``x`` to ``c`` for each ``eq(x, c)`` body conjunct that can be
+    inlined: ``x`` has no other such equality, and it occurs elsewhere
+    only in non-builtin body atoms or as a head argument, where ``c``
+    replaces it.
+    """
+    formulas = implication.antecedent.formulas
+    equalities = [f for f in formulas if is_inlineable_equality(f)]
+    counts = collections.Counter(f.args[0] for f in equalities)
+    kept_vars = set().union(
+        *(
+            extract_logic_free_variables(f)
+            for f in formulas
+            if not (_is_atom(f) or is_inlineable_equality(f))
+        ),
+        *(
+            extract_logic_free_variables(arg)
+            for arg in implication.consequent.args
+            if not isinstance(arg, Symbol)
+        ),
+    )
+    return {
+        f.args[0]: f.args[1]
+        for f in equalities
+        if counts[f.args[0]] == 1 and f.args[0] not in kept_vars
+    }
+
+
 class InlineEqualityConstantsMixin(PatternWalker):
     """Rewrite ``eq(var, Constant)`` atoms in query rules by inlining the
     constant into IDB predicate arguments.
@@ -1319,33 +1358,25 @@ class InlineEqualityConstantsMixin(PatternWalker):
     # are rewritten and checked.
     @add_match(
         Implication(FunctionApplication, Conjunction),
-        lambda implication: any(
-            is_inlineable_equality(conjunct)
-            for conjunct in implication.antecedent.formulas
-        ),
+        lambda implication: inlineable_equalities(implication),
     )
     def inline_equality_constants(self, implication):
-        eq_map = {}
-        other_formulas = []
-        for f in implication.antecedent.formulas:
-            if is_inlineable_equality(f):
-                eq_map[f.args[0]] = f.args[1]
-            else:
-                other_formulas.append(f)
+        eq_map = inlineable_equalities(implication)
         inlined_formulas = []
-        for f in other_formulas:
-            if isinstance(f, FunctionApplication) and not isinstance(
-                f.functor, Constant
-            ):
+        for f in implication.antecedent.formulas:
+            if is_inlineable_equality(f) and f.args[0] in eq_map:
+                continue
+            if _is_atom(f):
                 new_args = tuple(eq_map.get(arg, arg) for arg in f.args)
                 if new_args != f.args:
                     f = f.functor(*new_args)
             inlined_formulas.append(f)
-        new_body = (
-            Conjunction(tuple(inlined_formulas))
-            if len(inlined_formulas) > 1
-            else inlined_formulas[0]
-        )
+        if len(inlined_formulas) > 1:
+            new_body = Conjunction(tuple(inlined_formulas))
+        elif inlined_formulas:
+            new_body = inlined_formulas[0]
+        else:
+            new_body = TRUE
         new_head_args = tuple(
             eq_map.get(arg, arg) for arg in implication.consequent.args
         )

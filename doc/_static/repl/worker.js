@@ -28,7 +28,7 @@ const PYODIDE_PACKAGES = [
 ];
 const PYPI_PACKAGES = [
   "lark", "typing_inspect", "rdflib", "nibabel", "rich",
-  "prompt_toolkit", "httpx",
+  "prompt_toolkit", "httpx", "omegaconf",
 ];
 
 const status = (message) => postMessage({ type: "status", message });
@@ -239,7 +239,8 @@ def submit(text):
         {"html": reply.html, "viewers": reply.viewers,
          "failed": reply.failed, "tables": reply.tables,
          "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
-         "predicates": getattr(reply, "predicates", [])}
+         "predicates": getattr(reply, "predicates", []),
+         "ratable": getattr(reply, "ratable", False)}
     )
 
 # The providers of the AI assistant, for the page's form: none when this
@@ -258,15 +259,30 @@ def download(block, kind, value):
 
 def llm_providers():
     return json.dumps(providers_for_form())
+
+def rate(verdict, comment):
+    return json.dumps(repl.rate_answer(verdict, comment))
 `);
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
   const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
-  postMessage({ type: "ready", banner, source, providers, examples, predicates, commands });
+  // Where a rated answer goes (feedback.json next to the page); without a
+  // document, or in a version without ratings, answers cannot be rated.
+  let canRate = false;
+  try {
+    const answer = await fetch("feedback.json", { cache: "no-store" });
+    const { url = "", doc = "" } = answer.ok ? await answer.json() : {};
+    pyodide.globals.set("feedback_target", pyodide.toPy([url, doc]));
+    canRate = pyodide.runPython("(repl.set_feedback(*feedback_target), repl.can_rate())[1] if hasattr(repl, 'set_feedback') else False");
+  } catch {
+    // the page works without ratings
+  }
+  postMessage({ type: "ready", banner, source, providers, examples, predicates, commands, canRate });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
+  rateAnswer = pyodide.globals.get("rate");
   return pyodide.globals.get("submit");
 }
 
@@ -274,6 +290,7 @@ def llm_providers():
 let submit = null;
 let repl = null;
 let makeFile = null; // the file of a result, for a download
+let rateAnswer = null; // shares the last answer of the assistant with its rating
 
 // The visitor's key is given to the REPL, in this worker's memory: from
 // here it goes to the provider, and to no one else.
@@ -303,6 +320,15 @@ onmessage = async ({ data }) => {
       // A ValueError of Python says what is wrong with the choices.
       const message = String(error.message ?? error).trim().split("\n").at(-1);
       postMessage({ type: "llm", ok: false, message: message.replace(/^\w+Error: /, "") });
+    }
+    return;
+  }
+  if (data.type === "rate") {
+    try {
+      postMessage({ type: "rated", ...JSON.parse(rateAnswer(data.verdict, data.comment ?? "")) });
+    } catch (error) {
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "rated", ok: false, message });
     }
     return;
   }

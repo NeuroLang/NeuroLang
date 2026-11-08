@@ -24,13 +24,21 @@ result, with the tables and without them, to check that it suffices.
 Usage::
 
     python doc/make_repl_bundle.py OUTPUT_DIR [EMBEDDINGS_DATA_DIR]
+        [--downloads DIR]
 
 Embedding the studies takes their abstracts from PubMed and a while:
 EMBEDDINGS_DATA_DIR keeps them: a data directory where they were embedded
 already (``python -m neurolang.utils.text_embeddings -d DIR``), or where
 they are saved for the next time, as CI caches it.
+
+The engine is built in a temporary data directory. ``--downloads`` keeps
+what it downloads there between builds, as CI caches it: the files found in
+DIR are not downloaded again, and those downloaded are added to DIR (the
+engine's kept tables and embeddings are not), even when the build fails,
+so that a data host that is down does not stop a build that had them.
 """
 
+import argparse
 import json
 import os
 import shutil
@@ -74,7 +82,14 @@ PACKAGES = ("nl_expr", "nl_core", "neurolang", "neurolang_apps")
 
 def build_wheels(output: Path) -> list:
     """Build the wheels of NeuroLang's packages in *output* and return their
-    file names, in the order of ``PACKAGES``."""
+    file names, in the order of ``PACKAGES``.
+
+    The wheels of an earlier build are removed first: their version is
+    that of the commit they were built from, so they keep their names and
+    would be taken for the new ones."""
+    for name in PACKAGES:
+        for wheel in output.glob(f"{name}-*.whl"):
+            wheel.unlink()
     uv = shutil.which("uv")
     subprocess.check_call(
         [uv, "build", "--all-packages", "--wheel", "--out-dir", str(output),
@@ -118,6 +133,18 @@ def build_engine(data_dir: Path, use_cache: bool = True) -> None:
         engine_registry.build_engine(
             ENGINE, data_dir, RESOLUTION, use_cache=use_cache
         )
+
+
+def keep_downloads(source: Path, target: Path) -> None:
+    """Copy the data directory *source* into *target*, without
+    the engine's kept tables nor its text embeddings."""
+    from neurolang_apps.utils import engine_cache
+
+    ignored = {engine_cache.DIRECTORY, "embeddings"}
+    shutil.copytree(
+        source, target, dirs_exist_ok=True,
+        ignore=lambda directory, names: [n for n in names if n in ignored],
+    )
 
 
 def check_engine_cache(data_dir: Path) -> None:
@@ -230,12 +257,18 @@ def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
     return files
 
 
-def main(output: Path, embedded=None) -> None:
+def main(output: Path, embedded=None, downloads=None) -> None:
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
     with tempfile.TemporaryDirectory() as tmp:
         data_dir = Path(tmp)
-        build_engine(data_dir)
+        if downloads is not None and Path(downloads).is_dir():
+            keep_downloads(Path(downloads), data_dir)
+        try:
+            build_engine(data_dir)
+        finally:
+            if downloads is not None:
+                keep_downloads(data_dir, Path(downloads))
         check_engine_cache(data_dir)
         trim(data_dir)
         build_engine(data_dir)  # the page's way: from the kept tables
@@ -253,7 +286,17 @@ def main(output: Path, embedded=None) -> None:
           f"highlight.json in {output}")
 
 
+def parse_args(argv=None):
+    """Return the options of the command line *argv*."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument("output", type=Path)
+    parser.add_argument("embedded", nargs="?")
+    parser.add_argument("--downloads", type=Path)
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) not in (2, 3):
-        sys.exit(__doc__)
-    main(Path(sys.argv[1]), sys.argv[2] if len(sys.argv) == 3 else None)
+    args = parse_args()
+    main(args.output, args.embedded, args.downloads)

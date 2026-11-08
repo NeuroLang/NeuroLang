@@ -3,7 +3,7 @@
 import sys
 import time
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
@@ -92,7 +92,9 @@ class TuiSettings:
     those the configuration gives. With *scope_queries* (``.scope``),
     the rules defined with a query are local to it. With
     *logic_notation* (``.logic``), queries and rules are also shown in
-    logic notation.
+    logic notation. *program_file* is the file of the program run first,
+    if any (``--file``): the modules it imports are relative to its
+    directory.
     """
 
     engine_name: str = ""
@@ -112,6 +114,7 @@ class TuiSettings:
     llm_config: Optional[str] = None
     llm_provider: Optional[str] = None
     scope_queries: bool = True
+    program_file: Optional[str] = None
 
 
 class AgentRun(NamedTuple):
@@ -614,9 +617,14 @@ class InteractiveTuiApp:
 
     def _run_initial_program(self, program: str) -> None:
         """Run the query *program* given on the command line, if any."""
-        if program.strip():
-            with self._recording(program.strip(), "statement"):
-                self._execute_and_display(program.strip())
+        if not program.strip():
+            return
+        importing = (
+            self._nl.program_ir.importing_from(self.settings.program_file)
+            if self.settings.program_file else nullcontext()
+        )
+        with importing, self._recording(program.strip(), "statement"):
+            self._execute_and_display(program.strip())
 
     def run(self, session=None, initial_program: str = "") -> None:
         """

@@ -57,6 +57,7 @@ Usage
 """
 
 import argparse
+import contextlib
 import dataclasses
 import difflib
 import json
@@ -75,10 +76,14 @@ from lark.exceptions import LarkError
 
 from nl_core.datalog import WrappedRelationalAlgebraSet
 from nl_expr.exceptions import NeuroLangException
-from nl_expr.expressions import Constant, Symbol
+from nl_expr.expressions import Command, Constant, Symbol
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
+)
+from neurolang.frontend.datalog.standard_syntax import (
+    DOCUMENT_COMMAND,
+    parser as datalog_parser,
 )
 from nl_core.datalog.pretty_printer import (
     DatalogPrettyPrinter,
@@ -86,6 +91,7 @@ from nl_core.datalog.pretty_printer import (
     fold_probabilities,
 )
 from neurolang.frontend.error_formatting import print_formatted_error
+from neurolang.frontend.resampling import is_resample_marker
 from neurolang.frontend.show_ra import ShowRAOptions
 from nl_expr.logic import ExistentialPredicate
 from nl_core.probabilistic.expressions import Condition
@@ -337,7 +343,12 @@ def _body_atoms(formula):
 
 
 def _subformulas(formula) -> tuple:
-    """Return the formulas of a conjunction, existential or condition."""
+    """
+    Return the formulas of a conjunction, existential or condition, or
+    the atom of a ``RESAMPLE[boot](atom) = b``.
+    """
+    if is_resample_marker(formula):
+        return (formula.args[1],)
     if isinstance(formula, ExistentialPredicate):
         return (formula.body,)
     if isinstance(formula, Condition):
@@ -848,22 +859,53 @@ def _show_squall_datalog(program_text: str) -> None:
         print(printer.walk(parsed))
 
 
-def _list_predicates(engine_name: str) -> None:
-    """Print predicate metadata from the YAML engine config."""
+def _list_predicates(engine_name: str, program: str = "") -> None:
+    """
+    Print predicate metadata from the YAML engine config, then the
+    predicates the Datalog *program* documents.
+    """
     cfg = engine_registry.get_engine_config(engine_name)
     print(f"\nEngine: {engine_name}")
     print(f"  {cfg.get('description', '')}")
     predicates = engine_registry.get_predicates(engine_name)
     if not predicates:
         print("\n  (no predicate metadata declared)")
-        return
-    print("\nAvailable predicates:")
+    else:
+        print("\nAvailable predicates:")
     for pname, info in predicates.items():
         cols = ", ".join(info.get("columns", []))
         desc = info.get("description", "")
         print(f"\n  {pname}({cols})")
         if desc:
             print(f"    {desc}")
+    _list_documented_predicates(program)
+
+
+def _list_documented_predicates(program: str) -> None:
+    """
+    Print the predicates the ``%%`` blocks of the Datalog *program*
+    document, with their arguments and description, if it has any.
+    """
+    try:
+        formulas = datalog_parser(program).formulas if program else ()
+    except NeuroLangException:
+        return
+    documented = [
+        formula for formula in formulas
+        if isinstance(formula, Command) and formula.name == DOCUMENT_COMMAND
+    ]
+    if documented:
+        print("\nPredicates documented in the program:")
+    for command in documented:
+        name = command.args[0].name
+        description, arguments = (a.value for a in command.args[1:])
+        if arguments:
+            name += "({})".format(", ".join(
+                f"{a}: {sort}" if sort else a for a, sort in arguments
+            ))
+        print(f"\n  {name}")
+        for line in description.splitlines():
+            print(f"    {line}")
 
 
 def _ra_sets(nl: NeurolangPDL, column_names: dict) -> list:
@@ -1030,6 +1072,17 @@ def _origin_notes(exc: BaseException) -> list:
     return notes[:4]
 
 
+def _importing_from_file(args, nl):
+    """
+    Return the context where the program of ``--file`` runs on *nl*: the
+    modules it imports (``.import``) are relative to its directory.
+    """
+    file = getattr(args, "file", None)
+    if not file or nl is None:
+        return contextlib.nullcontext()
+    return nl.program_ir.importing_from(file)
+
+
 def _run_reporting_errors(action, program: str, args, nl=None):
     """
     Run *action* and report any failure as a formatted error.
@@ -1037,9 +1090,12 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     On error, prints a readable message (source context, location and
     hints) to stderr and exits with status 1. In debug mode
     (``--debug`` or ``NEUROLANG_DEBUG=1``) the traceback is printed first.
+    The modules a program of ``--file`` imports are relative to its
+    directory.
     """
     try:
-        return action()
+        with _importing_from_file(args, nl):
+            return action()
     except Exception as exc:
         report_error(
             exc, program, squall=args.squall, debug=_debug_enabled(args),
@@ -1355,6 +1411,7 @@ def _tui_settings(args, tui, argv=()):
         command_line=shlex.join(["neurolang-query", *argv]),
         llm_config=args.llm_config,
         llm_provider=args.llm_provider,
+        program_file=args.file,
     )
 
 
@@ -1654,7 +1711,7 @@ def main(argv: Optional[list] = None) -> None:
     # Predicate metadata comes from the YAML config: no need to build
     # (and download data for) the engine.
     if args.list_predicates:
-        _list_predicates(args.engine)
+        _list_predicates(args.engine, _program_argument(args))
         return
 
     _run_query(args)

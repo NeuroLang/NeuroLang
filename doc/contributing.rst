@@ -125,13 +125,33 @@ Pyodide, from a static page.  To run that of your checkout on your machine:
 
 The first run builds the page's bundle (NeuroLang's wheels and the data of
 the ``neurosynth`` engine, a few minutes) in
-:file:`~/.cache/neurolang/repl-site`; later runs serve it at once, and
-``--rebuild`` builds it again from the checkout.  The page opens at
+:file:`~/.cache/neurolang/repl-site`; later runs serve it at once,
+``--rebuild`` builds it again from the checkout, and ``--clear`` removes the
+bundle built before and then builds it from nothing (the text embeddings
+below are kept).  The page opens at
 ``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
 from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--port`` changes the port, ``--no-browser`` does not open the page, and
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
+
+The REPL of a pull request is built by its CI: the documentation's
+workflow uploads the site, the documentation with its REPL, as the artifact
+``repl-pr-NUMBER`` (kept 30 days), and a comment of the pull request tells
+the commit it was built from, whether the REPL's bundle is complete, and how
+to run it.  To run it, without building anything:
+
+.. code-block:: bash
+
+   uv run --extra apps neurolang-repl-serve --pr NUMBER
+
+which downloads the site of the latest run of the pull request into
+:file:`~/.cache/neurolang/repl-site/pr-NUMBER` (``--run-id ID`` for that of
+a given run, into :file:`run-ID`) and serves it.  It needs the `GitHub CLI
+<https://cli.github.com>`_, ``gh``, logged in (``gh auth login``).  Without
+NeuroLang, the comment gives the ``gh run download`` and ``python3 -m
+http.server`` commands that do the same; the page is at
+``http://localhost:8000/_static/repl/index.html``.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in
@@ -153,6 +173,14 @@ Submitting a Pull Request
 5. Add a changelog entry under *Unreleased* in ``doc/changelog.rst``.
 6. Update docstrings for any changed public API.
 7. Push your branch and open a pull request against ``master``.
+
+CI runs on every pull request, also one whose base is the branch of another
+pull request (a stacked pull request): the tests are those of the packages
+it changes with respect to its base.  Every pull request gets the REPL in
+the browser of its branch: the artifact ``repl-pr-NUMBER`` and a comment
+telling how to run it (see `Running the REPL in the Browser Locally`_); a
+pull request from a fork gets the artifact only, the comment needing a
+token that a fork's runs do not have.
 
 **PR checklist:**
 
@@ -199,7 +227,11 @@ dataset backends.  To add a new engine:
 
    The optional fields ``datalog_init`` (inline Datalog rules) and
    ``relations`` (CSV/TSV files loaded as predicates) run after the
-   Python init.  See :ref:`concepts` for details.
+   Python init.  See :ref:`concepts` for details.  Example queries
+   (``examples``, ``assistant_examples``) and the query assistant's
+   ``assistant_guidance`` go in ``engines/my_dataset/examples.yaml`` and
+   ``engines/my_dataset/guidance.yaml``, merged into the entry (see
+   :ref:`neurolang-engine-registry`).
 
 2. If your engine needs custom Python logic (data downloads, non-trivial
    processing), create the init module at

@@ -71,6 +71,7 @@ class RelationalAlgebraOptimiser(
     PushUnnamedSelectionsUp,
     PushProjectionsDown,
     FlattenAndReorderJoins,
+    ew.WalkExpressionsOnceMixin,
     ew.ExpressionWalker,
 ):
     """

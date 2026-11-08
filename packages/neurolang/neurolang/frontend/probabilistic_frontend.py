@@ -109,7 +109,11 @@ from .datalog.sugar.spatial import (
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import ProbabilisticTypeResolutionMixin
-from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
+from .datalog.squall import (
+    CheckPredicateArities,
+    ResolveInvertedFunctionApplicationMixin,
+    StripDimensionTypePredicatesMixin,
+)
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .show_ra import (
@@ -888,6 +892,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
+        CheckPredicateArities(self.program_ir).walk(prob_idb)
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
         det_solution = with_empty_relations(
@@ -1234,9 +1239,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         if choice_symbol not in choices:
             raise ValueError(f"{choice} is not a probabilistic choice")
         rows = choices[choice_symbol].value.as_pandas_dataframe()
-        relation = resampling_relation(rows, n, scheme, seed)
+        relation, sums = resampling_relation(rows, n, scheme, seed)
         symbol = self.add_tuple_set(relation, name=name)
-        self.resamplings[name] = choice_symbol
+        self.resamplings[name] = choice_symbol, sums
         return symbol
 
     def _expand_resamplings(self, rule):
@@ -1248,14 +1253,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             if name.name not in self.resamplings:
                 raise ValueError(f"{name.name} is not a resampling")
             if name not in programs:
-                choice = self.resamplings[name.name]
+                choice, sums = self.resamplings[name.name]
                 arity = len(
                     self.program_ir.probabilistic_choices()[choice]
                     .value.columns
                 ) - 1
                 programs[name] = ResampledProgram(
                     self.program_ir.intensional_database(),
-                    name, choice, name, arity,
+                    name, choice, name, sums, arity,
                     self._resampled_versions.setdefault(name.name, {}),
                 )
             return programs[name].predicate(functor)

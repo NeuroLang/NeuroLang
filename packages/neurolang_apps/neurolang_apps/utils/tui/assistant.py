@@ -72,6 +72,9 @@ class AssistantState:
     # feedback server (None if not shared), its query and the REPL's last
     # query when it was asked.
     last_answer: Optional[dict] = None
+    # What the last answer was made of, to share it when it is rated:
+    # (question, result, provider, strategy).
+    last_run: Optional[tuple] = None
 
     def config(self):
         """Return the configuration, reading it the first time."""
@@ -495,6 +498,7 @@ def _run_assistant(
     state.last_answer = {
         "id": None, "query": result.query, "ran": app.last_query,
     }
+    state.last_run = (question, result, provider, agent.strategy)
     feedback = state.feedback(_say(app))
     if feedback:
         answer = feedback.share(

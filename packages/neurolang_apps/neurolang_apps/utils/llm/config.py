@@ -87,8 +87,11 @@ class AssistantConfig:
     *strategy* is ``react`` (an agent exploring the engine with tools)
     or ``icl`` (a few-shot prompt, then validation and repair).
     *language* is ``auto`` (the language of the REPL), ``squall`` or
-    ``datalog``. *samples* above 1 generate several ICL candidates and
-    keep the one most of them agree on (self-consistency).
+    ``datalog``. *samples* above 1 generate several candidates and
+    keep the one most of them agree on (self-consistency); without a
+    majority, more than half of them giving the same rows, or when none
+    is valid, the provider *fallback_provider* (a name in the file),
+    if any, answers instead.
     *query_timeout* and *query_memory_mb* stop a query the agent runs
     after that many seconds, or when it uses that much memory: it runs in
     a child process. With *comment_rules*, the accepted query is shown
@@ -106,6 +109,7 @@ class AssistantConfig:
     max_repairs: int = 3
     few_shot_k: int = 6
     samples: int = 1
+    fallback_provider: Optional[ProviderConfig] = None
     temperature: float = 0.0
     timeout: float = 60.0
     preview_rows: int = 10
@@ -248,6 +252,10 @@ def parse_config(data: dict, path: Optional[Path] = None) -> LLMConfig:
         providers, default, _assistant(data.get("assistant")), path, feedback
     )
     config.provider()
+    if config.assistant.fallback_provider is not None:
+        config.assistant.fallback_provider = config.provider(
+            config.assistant.fallback_provider
+        )
     return config
 
 

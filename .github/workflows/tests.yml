@@ -3,8 +3,15 @@ name: Tests
 on:
   push:
     branches: [master]
+  # Every pull request, whatever its base: a pull request stacked on the
+  # branch of another one is checked too.
   pull_request:
-    branches: [master]
+
+# A push to a pull request cancels its runs still going; each run of master
+# is a group of its own, never cancelled nor kept waiting.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 # A pull request runs the tests of the packages it changes, on every Python
 # version, and those of the packages depending on them, on the oldest one:
@@ -21,6 +28,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # On a pull request, the files it changes with respect to its base, as
+    # GitHub lists them: those of a pull request stacked on another one are
+    # its own, not those of the pull request below it.
     - name: Find the changed packages
       id: changes
       uses: dorny/paths-filter@v3

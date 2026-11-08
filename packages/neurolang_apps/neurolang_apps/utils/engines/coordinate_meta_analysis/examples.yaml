@@ -1,16 +1,36 @@
+# The example queries of coordinate_meta_analysis, merged into its
+# entry of ../engines.yaml (see doc/engine_configuration.rst): those
+# the REPL shows (examples) and the questions of the query assistant
+# (assistant_examples).
+examples:
+  datalog:
+    - "ans(s) :- mentions(s, 'pain')"
+    - "ans(s, w) :- weighted_mention(s, 'pain', w), (w > 0.1)"
+    - "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)"
+    - "ans(i, j, k, u) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, u)"
+    - "ans(t) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t)"
+    - "ans(s) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(s, t)"
+  squall:
+    - "obtain every Study that mentions 'pain'."
+    - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
+    - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
+
 # Questions on the coordinate-based meta-analysis engines (neurosynth,
 # neurostore) with their Datalog queries: the few-shot examples of the
 # LLM query assistant, the most similar to the user's question being put
 # in the prompt. Both engines extend coordinate_meta_analysis and share
-# this bank; examples/<engine>.yaml adds those of one engine. Every
+# this bank; <engine>/examples.yaml adds those of one engine. Every
 # query is checked against the engines by the tests
 # (NEUROLANG_TEST_DATA_DIR).
 #
-# As the engines' assistant_guidance asks, every question but a count
-# (how many) is answered with probabilistic query answering over
-# selected_study, the uniform choice of a study: a study is chosen at
-# random and the answer is the probability of what the question asks,
-# conditioned on the term it names. A study activates a point when one
+# As the engines' assistant_guidance asks, a list (which studies, list
+# ...) is answered with the entities themselves, without probabilities,
+# and a count (how many) with AGGREGATE; every other question, and the
+# activations, co-activations and co-occurrences of a term or region, with
+# probabilistic query answering over selected_study, the uniform choice
+# of a study: a study is chosen at random and the answer is the
+# probability of what the question asks, conditioned on the term it
+# names. A study activates a point when one
 # of its peaks is within 3 mm:
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
@@ -29,11 +49,10 @@
 # is pred(x), a rule over PROB, on each of the replicates b of
 # boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
 # replicates; two measures are compared on the same replicate b.
-examples:
+assistant_examples:
   - question: Which studies mention pain?
     datalog: |-
-      pain_study(s) :- mentions(s, 'pain'), selected_study(s)
-      ans(p) :- PROB[pain_study(s)] = p
+      ans(s) :- mentions(s, 'pain')
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -44,18 +63,15 @@ examples:
     datalog: |-
       language_or_speech(s) :- mentions(s, 'language')
       language_or_speech(s) :- mentions(s, 'speech')
-      chosen(s) :- language_or_speech(s), selected_study(s)
-      ans(p) :- PROB[chosen(s)] = p
+      ans(s) :- language_or_speech(s)
 
   - question: Which studies mention both pain and emotion?
     datalog: |-
-      pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
-      ans(p) :- PROB[pain_and_emotion(s)] = p
+      ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')
 
   - question: Which studies do not mention pain?
     datalog: |-
-      no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
-      ans(p) :- PROB[no_pain(s)] = p
+      ans(s) :- study(s), ~mentions(s, 'pain')
 
   - question: Which terms co-occur with fear in a study?
     datalog: |-
@@ -70,9 +86,7 @@ examples:
 
   - question: Which studies report an activation within 3 mm of the left amygdala, MNI (-24, -4, -20)?
     datalog: |-
-      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
-      active(s) :- near(s), selected_study(s)
-      ans(p) :- PROB[active(s)] = p
+      ans(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
 
   - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
     datalog: |-
@@ -302,9 +316,7 @@ examples:
 
   - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
     datalog: |-
-      close(q, s) :- similar_study(q, s), selected_study(s), ~mentions(s, 'fear')
-      p_close(q, PROB) :- close(q, s)
-      ans(p) :- cogat_definition('fear', d), p_close(d, p)
+      ans(s) :- cogat_definition('fear', d), similar_study(d, s), ~mentions(s, 'fear')
 
   - question: How likely is a study about pain, by its Cognitive Atlas definition, to report an activation of the insula?
     datalog: |-
