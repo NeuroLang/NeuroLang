@@ -19,12 +19,45 @@ Unreleased
 
 **Performance:**
 
+* A selection by a Python function of a single column, as
+  ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
+  (291,533 rows) in a probabilistic rule, applies the function to the column
+  instead of to every row: the probability of the Destrieux regions given a
+  study activating a salience parcel of one hemisphere takes 2.4 s instead
+  of 8.6 s, and of either hemisphere (a union of two rules) 12 s instead of
+  37 s.
+  
+* The deterministic rest of a query that the disjoint separator joins with
+  a probabilistic choice, as ``sub(t), mentions(s, t)`` in ``term_study(s)
+  :- sub(t), mentions(s, t), selected_study(s)``, is computed as a set with
+  the relational algebra, a union with a union and a projection, instead of
+  with the operations on probabilities (sums, and a union of independent
+  events through logarithms). The relational algebra optimiser flattens a
+  projection of nested joins before pushing the projection into them, so
+  that the joins are ordered by size; it joined the large relations first.
+  The voxels activated by the studies mentioning a subclass of a Cognitive
+  Atlas concept take 4.5 s instead of 6.2 s, and the Destrieux regions
+  given a study activating a salience parcel of either hemisphere (a union
+  of two rules with ``startswith``) 15 s instead of 37 s, and 2.3 s with
+  the column-wise selection of #1126. ``--show-ra`` draws these relations as
+  trees.
+  
+* Magic sets adorn first the body atoms holding a variable bound in the
+  head, as they do the atoms with a constant: a query constant for a head
+  variable, such as the text of ``p_a_given_similar('being socially
+  excluded', i, j, k, p)``, restricts ``activated`` to the studies similar
+  to it, as when the text is written into the rule, instead of joining the
+  50 M activations of every study in the probabilistic plan: 0.9 GB more
+  than the engine instead of 4.2 GB, and 23 s instead of 45 s, for the same
+  1,151,590 rows.
+
 * ``RESAMPLE`` sums the probabilities of the outcomes of the choice over all
   the replicates at once, as a product of matrices, instead of joining every
   replicate with every outcome: the 500 replicates of the probability that
   two Schaefer parcels are active given a term (``PROB[co_active(l1, l2) //
   term_association(s, 'auditory')]``) take 13 s and 1 GB more than the
   engine, instead of 43 GB, and run in the REPL in the browser.
+  
 * ``uniformity`` of a term (``uniformity('pain', i, j, k, u)``) takes 19 s
   instead of 55 s, and the memory of the engine instead of 18 GB, so that it
   runs in the REPL in the browser with the full engine (``?engine=full``):
@@ -34,6 +67,7 @@ Unreleased
   variables (45 M rows of activations for 11 k of the head). A relation made
   from a data frame shares its columns, with copy-on-write, rather than
   copying them in one block, 1.4 GB for the activations.
+  
 * ``lift`` of a term (``lift('pain', i, j, k, l)``) runs in the REPL in the
   browser with the full engine too: a look-up join (the probabilities of a
   choice) and a grouped sum, maximum, minimum or count of many rows go a
@@ -50,6 +84,36 @@ Unreleased
   three DeepSeek answers and Sonnet when they disagree. The fallback is a
   step of the answer, with the query the vote kept.
 
+* A block of ``%%`` lines right before a rule or a fact of the Datalog
+  syntax documents its predicate, with an optional signature giving the
+  names and the sorts of its arguments, ``%% uncinate(x: streamline, h:
+  hemisphere)``, then its description (see :ref:`datalog-doc-comments`).
+  The engine keeps it, in the scopes of the program, with the modules a
+  program imports (``nl.predicate_documentation()``,
+  ``nl.document_predicate()``, ``.document(name, "description")``); the
+  query assistant tells the model the description and the sorts of a
+  documented predicate, before those of the engine's configuration, as do
+  the REPL's ``.predicates`` and ``.datalog PREDICATE``,
+  ``neurolang-query --list-predicates -f program.dl`` and the predicates of
+  the REPL in the browser; ``.view`` draws a column documented of the sort
+  ``streamline`` as streamlines. The pretty printer writes the blocks back,
+  and a ``.command(...)`` as written. The model is told the sort of the
+  argument of a declared predicate too, ``reports(study_id: study, ...)``,
+  and the description of each sort of an argument that the engine declares.
+* Datalog modules: ``.import("bundles/uf.dl")`` in a program runs the facts,
+  rules and commands of a Datalog file where it stands, as if written there,
+  so that a vocabulary or a set of definitions (the white-matter bundles of
+  a tractography package) is written once and imported by queries.  The
+  path is relative to the importing file (the program of
+  ``neurolang-query --file``, or a module importing another), else to the
+  working directory; ``.import("package:bundles/uf.dl")`` imports a module
+  shipped in a Python package.  A module is imported once (importing it
+  again does nothing), an import cycle is an error, and a module with a
+  query (``ans(...)``) is refused.  An error in a module names its file,
+  and its line if it does not parse.  From Python:
+  ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
+  define stays in the session although the query's own rules are local to
+  it, and ``.clear`` forgets the imports with their rules.
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
@@ -161,6 +225,27 @@ Unreleased
 
 **Internal:**
 
+* Every pull request gives its reviewer the REPL in the browser of its
+  branch: the documentation's workflow uploads the site (the documentation
+  and the REPL) as the artifact ``repl-pr-NUMBER`` and keeps one comment of
+  the pull request up to date with the commit it was built from, the
+  artifact, whether the REPL's bundle is complete and how to run it:
+  ``uv run --extra apps neurolang-repl-serve --pr NUMBER`` (or ``--run-id
+  ID``), which downloads it with the GitHub CLI and serves it without
+  building anything, or ``gh run download`` and ``python3 -m http.server``.
+  A pull request from a fork has the artifact, without the comment.
+* The workflows of the tests, the layers, the spelling and the
+  documentation run on every pull request, whatever its base, so that a
+  pull request stacked on another one is checked (its tests are those of
+  the packages it changes with respect to the pull request below it); a
+  push to a pull request cancels its runs still going.
+* A REPL's bundle that could not be built fails the check *REPL bundle*
+  instead of passing unseen (the documentation is deployed all the same).
+  ``doc/make_repl_bundle.py --downloads DIR`` keeps what the engine
+  downloads in DIR, even when the build fails, and CI keeps that directory
+  from one build to the next; a download failing for a while (a time-out,
+  an error 5xx) is tried again after 2, 4 and 8 s
+  (``neurolang.utils.nilearn_compat.fetch_files``).
 * Helpers reused instead of repeated: the conjuncts of a formula and the
   selection of a plan by comparisons in the probabilistic lifting, the
   aggregate types of the magic sets, the pandas reductions table, the
@@ -182,6 +267,15 @@ Unreleased
 
 **Bug fixes:**
 
+* Several probabilistic facts of a predicate written in a Datalog program
+  (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
+  its columns, and a query over them failed with an ``IndexError`` when its
+  arities were checked.
+* The Neurosynth data are downloaded from raw.githubusercontent.com:
+  github.com/neurosynth/neurosynth-data/raw/master/, which sends there,
+  answers 504 for that repository, so that the ``neurosynth`` engine could
+  not be built from nothing, nor the REPL's bundle, whose build passed
+  unseen and left the deployed page unable to start.
 * The semi-naive chase merged, at every step and for every rule, the
   relation of each predicate of the step's delta with that delta, even
   the predicates the rule does not use, and inferred the type of the

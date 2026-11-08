@@ -19,6 +19,7 @@ from nl_core.probabilistic.expressions import ProbabilisticQuery
 from neurolang_apps.utils.cli import _is_generated_column
 
 from neurolang_apps.utils import squall_sorts
+from neurolang_apps.utils.engine_registry import Argument
 
 
 class PredicateInfo(NamedTuple):
@@ -34,7 +35,9 @@ class PredicateInfo(NamedTuple):
     unknown. A *probabilistic* predicate has a probability column
     besides its *arity* columns. *arguments* are the
     :class:`~neurolang_apps.utils.engine_registry.Argument` the engine
-    declares, the entities it relates, or None.
+    declares, the entities it relates, or None. *description* is the
+    documentation of the predicate in the program, its ``%%`` block, or
+    "".
     """
 
     name: str
@@ -43,6 +46,7 @@ class PredicateInfo(NamedTuple):
     arity: Optional[int] = None
     probabilistic: bool = False
     arguments: Optional[tuple] = None
+    description: str = ""
 
     def signature(self) -> str:
         """
@@ -170,6 +174,50 @@ def _declared_arguments(name, arity, signatures) -> Optional[tuple]:
     return tuple(arguments)
 
 
+def program_documentation(program_ir) -> dict:
+    """
+    Return the documentation of the predicates of the program, by name
+    (see :meth:`~neurolang.commands.CommandsMixin.predicate_documentation`),
+    none if the engine keeps none.
+    """
+    documentation = getattr(program_ir, "predicate_documentation", None)
+    return documentation() if documentation is not None else {}
+
+
+def documented_arguments(documentation, arity) -> Optional[tuple]:
+    """
+    Return the arguments the *documentation* of a predicate gives, an
+    :class:`~neurolang_apps.utils.engine_registry.Argument` of one column
+    each, if they all have a sort and fit its *arity*.
+    """
+    arguments = documentation.arguments if documentation else ()
+    if not arguments or len(arguments) != arity or not all(
+        sort for _, sort in arguments
+    ):
+        return None
+    return tuple(Argument(sort, (name,)) for name, sort in arguments)
+
+
+def _documented(info, documentation):
+    """
+    Return *info* with its *documentation*: its description and, if they
+    fit its arity, the names and the sorts of its arguments.
+    """
+    if documentation is None:
+        return info
+    columns = _fitting(
+        [name for name, _ in documentation.arguments], info.arity
+    )
+    return info._replace(
+        description=documentation.description,
+        columns=columns or info.columns,
+        arguments=(
+            documented_arguments(documentation, info.arity)
+            or info.arguments
+        ),
+    )
+
+
 def _function_arity(symbol) -> Optional[int]:
     """Return the number of parameters of the typed function *symbol*."""
     args = getattr(symbol.type, "__args__", None)
@@ -195,6 +243,7 @@ class CatalogBuilder:
         self.signatures = signatures or {}
         self.probabilistic = _probabilistic_symbols(self.program_ir)
         self.protected = getattr(self.program_ir, "protected_keywords", ())
+        self.documentation = program_documentation(self.program_ir)
 
     def info(self, symbol, value, session: bool):
         """
@@ -203,14 +252,17 @@ class CatalogBuilder:
         *session* tells whether it is defined in the session's scope.
         None is returned for a symbol that is not a predicate or that
         NeuroLang generates. The arguments are those the signatures
-        declare for it, if they fit its arity.
+        declare for it, if they fit its arity. The documentation of the
+        predicate in the program, its ``%%`` block, gives its description
+        and, rather than the declared ones, its columns and arguments.
         """
         info = self._info(symbol, value, session)
         if info is None:
             return None
-        return info._replace(arguments=_declared_arguments(
+        info = info._replace(arguments=_declared_arguments(
             info.name, info.arity, self.signatures
         ))
+        return _documented(info, self.documentation.get(info.name))
 
     def _info(self, symbol, value, session: bool):
         """Return the info of *symbol* without its arguments, or None."""

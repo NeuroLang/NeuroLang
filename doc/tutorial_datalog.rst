@@ -227,6 +227,54 @@ both strings and numbers (see Part 8 for more comparisons).  Comparisons in a
 rule body must be enclosed in parentheses.
 
 
+.. _datalog-doc-comments:
+
+2.6 Comments and Documentation
+-------------------------------
+
+A ``%`` starts a comment, to the end of the line, unless it is in a string
+or an IRI.  A block of lines starting with ``%%`` right before a rule or a
+fact documents its predicate.  Its first line may give the signature of the
+predicate, the names of its arguments and, after a ``:``, their sorts; the
+other lines are its description:
+
+.. code-block:: none
+
+    %% uncinate(x: streamline, h: hemisphere)
+    %% The uncinate fasciculus: streamlines joining the orbitofrontal
+    %% cortex to the anterior temporal lobe through the temporal stem,
+    %% in hemisphere h.
+    uncinate(x, h) :- ...
+
+Without a signature, the whole block is the description.  The engine keeps
+the documentation (``nl.predicate_documentation()`` in Python,
+``nl.document_predicate(name, description, arguments)`` to set it): the
+query assistant and the REPL's ``.predicates`` show it, and a column of the
+sort ``streamline`` is drawn as streamlines by ``.view``.  The rules are:
+
+* The block must be right before the statement: a block followed by a blank
+  line, a ``%`` comment or nothing is a comment, as a header of a file.  A
+  ``%%`` after the start of a line, or inside a rule, is a comment too.
+* It documents the predicate of the rule, fact, probabilistic fact or
+  choice, or ``name := ...`` statement after it, and the following rules of
+  that predicate need none; it documents nothing before a query or a
+  command.
+* The signature is the first line only if it reads ``name(...)`` with the
+  name of that predicate, and then it must give its number of arguments.
+  Each argument is a column: the three columns of a voxel are written
+  ``i: voxel, j: voxel, k: voxel``.
+* The blocks of a predicate add up: their descriptions follow one another,
+  each once, and the arguments of the last signature are kept.
+* The documentation follows the scopes of the program, as its rules do:
+  that of a rule defined in ``with nl.scope:``, or in the REPL's session
+  that ``.clear`` empties, goes with it.  A module imported with
+  ``.import`` documents its predicates as the program does.
+* The documentation of a predicate in the program wins over its
+  description in the engine's configuration.
+
+``.document(name, "description")`` in a program documents a predicate too.
+
+
 Part 3: Predicates and Simple Rules
 =====================================
 
@@ -725,13 +773,45 @@ Comparisons can be combined with conjunction in the same rule body.
 -----------------------------
 
 Commands use the ``.`` prefix and follow the Prolog convention.  The text
-Datalog frontend currently executes two commands, which load external data
-into a relation:
+Datalog frontend executes two commands which load external data into a
+relation:
 
 .. code-block:: none
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
+
+and ``.import``, which imports a *Datalog module*, a file of facts, rules
+and commands, as if its statements were written in its place:
+
+.. code-block:: none
+
+    .import("bundles/uncinate.dl")
+    .import("nl_tracts:bundles/freesurfer_queries.dl")
+    ans(x) :- uf(x, "left").
+
+* The path of a module is relative to the directory of the importing file:
+  the program run with ``neurolang-query --file``, or the module importing
+  another; otherwise it is relative to the working directory.
+  ``package:path`` is the file ``path`` shipped in the Python package
+  ``package``, found with :mod:`importlib.resources`, so that an engine or
+  a package can ship modules without their users knowing where it is
+  installed.
+* A module is imported once in a program (by its resolved path): importing
+  it again, from the program or from another module, does nothing.  The
+  imports belong to the scope they are made in: leaving a ``with
+  nl.scope:`` block, or ``.clear`` in the REPL, forgets them with the
+  rules they defined, and the module can be imported again.
+* A module imported while it is being imported is an import cycle, an error
+  naming the modules of the cycle.
+* A module defines; it does not query: a module with a query
+  (``ans(...) :- ...``) is refused.  An error in a module names its file,
+  with the line and column of a syntax error.
+
+From Python, ``nl.import_datalog_module("bundles/uncinate.dl")`` imports a
+module, and ``with nl.program_ir.importing_from("main.dl"):`` runs a
+program read from ``main.dl`` with its imports relative to the file's
+directory.
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend

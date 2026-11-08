@@ -1153,6 +1153,29 @@ class TestViewStreamlines:
         assert tracts._nl.asked == [[1, 3]]
         assert kwargs["streamlines"]["total"] == 2
 
+    def test_a_column_documented_of_the_sort_streamline(
+        self, tracts, view_calls
+    ):
+        tracts._nl.document_predicate(
+            "uncinate", "The uncinate fasciculus.",
+            [("x", "streamline"), ("h", "hemisphere")],
+        )
+        self._view(tracts, 'ans(x) :- uncinate(x, "left")', view_calls)
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert tracts._nl.asked == [[1, 2]]
+
+    def test_a_rule_documented_of_the_sort_streamline(
+        self, tracts, view_calls
+    ):
+        tracts._execute_and_display(
+            "%% unc(s: streamline, side)\n"
+            "%% Renamed.\n"
+            "unc(s, side) :- uncinate(s, side)"
+        )
+        self._view(tracts, "ans(a, b) :- unc(a, b)", view_calls)
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert tracts._nl.asked == [[1, 2, 3]]
+
     @pytest.mark.parametrize("query", [
         "ans(x, y, z) :- mni(x, y, z)",
         "ans(i, j, k) :- voxel(i, j, k)",

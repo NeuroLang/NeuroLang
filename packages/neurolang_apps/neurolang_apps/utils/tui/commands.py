@@ -169,6 +169,10 @@ def help_text(engine_name: str = "") -> str:
         for cmd in COMMANDS.values()
     ]
     lines.append(
+        "  [green].import(\"m.dl\")[/green]      "
+        "import a Datalog module, once (\"package:m.dl\": of a package)"
+    )
+    lines.append(
         "  [green].name(...)[/green]           "
         "any other: a Datalog command of the engine, e.g. "
         "[green].load_csv(p, \"t.csv\")[/green]"

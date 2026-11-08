@@ -262,3 +262,68 @@ def test_comparison_within_a_union_is_not_lifted():
     )
     with pytest.raises(UnsupportedSolverError):
         _solve(_engine(True, choices), program)
+
+
+@pytest.mark.parametrize("program, holds, answers", [
+    (
+        "q(PROB) :- mentions(s, t), ~selected_study(s)",
+        lambda w, c, _: any(s != c["selected_study"] for s, _t in w),
+        ((),),
+    ),
+    (
+        "q(t, PROB) :- mentions(s, t), ~selected_study(s)",
+        lambda w, c, a: any(
+            (s, a[0]) in w for s in STUDIES if s != c["selected_study"]
+        ),
+        tuple((t,) for t in TERMS),
+    ),
+    (
+        "q(PROB) :- mentions(s, t), selected_term(t), ~selected_study(s)",
+        lambda w, c, _: any(
+            (s, c["selected_term"]) in w
+            for s in STUDIES if s != c["selected_study"]
+        ),
+        ((),),
+    ),
+    (
+        "q(PROB) :- mentions(s, t), selected_study(s2), ~selected_study(s)",
+        lambda w, c, _: any(s != c["selected_study"] for s, _t in w),
+        ((),),
+    ),
+    (
+        "q(PROB) :- mentions(s, 'pain'), mentions(s2, 'fear'), "
+        "~selected_study(s), ~selected_study(s2)",
+        lambda w, c, _: any(
+            (s, "pain") in w for s in STUDIES if s != c["selected_study"]
+        ) and any(
+            (s, "fear") in w for s in STUDIES if s != c["selected_study"]
+        ),
+        ((),),
+    ),
+])
+def test_negated_choice_is_lifted(program, holds, answers):
+    """¬C(s) ≡ ∃f (C(f) ∧ f ≠ s), exactly one tuple of the choice being
+    true: the disjoint projection on f of P[C(f)] P[∃s (ψ(s) ∧ s ≠ f)],
+    that is 1 - Σ_a p_C(a) Π_{b ≠ a} (1 - p_ψ(b)) without answer
+    variables."""
+    choices = {"selected_study": STUDIES, "selected_term": TERMS}
+    expected = _enumerated(choices, holds, answers=answers)
+    _assert_close(_solve(_engine(True, choices), program), expected)
+
+
+def test_comparison_with_a_variable_of_the_projected_choice():
+    """∃s (mentions(s, t) ∧ s ≠ f) with t free and f given by the
+    choice: the comparison selects the join of the plan of mentions with
+    the support of the choice, which has the column f."""
+    choices = {"selected_study": STUDIES}
+    program = (
+        "q(t, PROB) :- selected_study(f), mentions(s, t), (s != f)"
+    )
+    expected = _enumerated(
+        choices,
+        lambda w, c, a: any(
+            (s, a[0]) in w for s in STUDIES if s != c["selected_study"]
+        ),
+        answers=tuple((t,) for t in TERMS)
+    )
+    _assert_close(_solve(_engine(True, choices), program), expected)

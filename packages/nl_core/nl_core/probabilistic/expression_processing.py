@@ -36,6 +36,7 @@ from nl_expr.logic import (
     TRUE,
     Conjunction,
     Disjunction,
+    ExistentialPredicate,
     Implication,
     Negation,
     Union,
@@ -119,7 +120,10 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
         )
         for pf in pfacts
     ]
-    return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
+    ras = WrappedRelationalAlgebraSet(iterable)
+    return Constant[AbstractSet[ras.row_type]](
+        ras, auto_infer_type=False, verify_type=False
+    )
 
 
 def _probability_column_sum(ras):
@@ -561,6 +565,32 @@ class UnifyChoicesInNegations(
     """`UnifyChoicesInNegationsMixin`, simplifying the truth values the
     substitution can give, as `s ≠ s` ≡ ⊥."""
 
+    def __init__(self, choice_symbols):
+        self.choice_symbols = choice_symbols
+
+
+class NegatedChoicesAsOtherTuplesMixin(PatternWalker):
+    """
+    Rewrite a negated atom ¬C(u) of a probabilistic choice of one column
+    of `choice_symbols` as ∃f (C(f) ∧ f ≠ u), f fresh: exactly one tuple
+    of C is true, and C(u) is false if and only if it is another one.
+    Other negated atoms are left as they are.
+    """
+
+    @add_match(Negation(FunctionApplication(Symbol, (Expression,))))
+    def negated_atom(self, negation):
+        atom = negation.formula
+        if atom.functor not in self.choice_symbols:
+            return negation
+        f = Symbol[atom.args[0].type].fresh()
+        return ExistentialPredicate(f, Conjunction((
+            atom.functor(f), Constant(operator.ne)(f, atom.args[0])
+        )))
+
+
+class NegatedChoicesAsOtherTuples(
+    NegatedChoicesAsOtherTuplesMixin, LogicExpressionWalker
+):
     def __init__(self, choice_symbols):
         self.choice_symbols = choice_symbols
 

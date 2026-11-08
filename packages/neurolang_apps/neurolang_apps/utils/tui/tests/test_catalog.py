@@ -201,3 +201,86 @@ def test_catalog_arguments_from_signatures(session):
     )
     assert peaks.meta() == f"{peaks.signature()} · stored"
     assert catalog["person"].arguments is None
+
+
+DOCUMENTED = (
+    "%% active(who: person)\n"
+    "%% The people who are active.\n"
+    "active(who) :- person(who)"
+)
+
+
+def test_catalog_documented_rule(session):
+    session.execute_datalog_program(DOCUMENTED)
+    info = predicate_catalog(session)["active"]
+    assert info.description == "The people who are active."
+    assert info.columns == ("who",)
+    assert [(a.sort, a.columns) for a in info.arguments] == [
+        ("person", ("who",))
+    ]
+
+
+def test_catalog_documentation_wins_over_signatures(session):
+    session.document_predicate(
+        "peak_reported", "Peaks.",
+        [("x", "c"), ("y", "c"), ("z", "c"), ("s", "study")],
+    )
+    signatures = engine_registry.get_signatures("neurosynth")
+    peaks = predicate_catalog(session, signatures=signatures)[
+        "peak_reported"
+    ]
+    assert peaks.columns == ("x", "y", "z", "s")
+    assert [a.sort for a in peaks.arguments] == ["c", "c", "c", "study"]
+
+
+def test_catalog_documentation_without_sorts_names_the_columns(session):
+    session.document_predicate("person", "People.", [("name", "")])
+    info = predicate_catalog(session)["person"]
+    assert info.columns == ("name",) and info.arguments is None
+
+
+def test_predicates_shows_the_documentation(engine):
+    console = Console(file=io.StringIO(), width=200)
+    app = _app(engine, console)
+    app._execute_and_display(DOCUMENTED)
+    console.file.truncate(0)
+    console.file.seek(0)
+    app._handle_dot_command(".predicates")
+    lines = [
+        " ".join(line.split())
+        for line in console.file.getvalue().splitlines()
+    ]
+    assert (
+        "active session active(who) — The people who are active." in lines
+    )
+    assert "person stored person/1" in lines
+
+
+def test_predicates_table_has_a_description_column(engine):
+    console = Console(file=io.StringIO(), width=200, force_terminal=True)
+    app = _app(engine, console)
+    app._execute_and_display(DOCUMENTED)
+    app._handle_dot_command(".predicates")
+    out = console.file.getvalue()
+    assert "Description" in out and "The people who are active." in out
+
+
+def test_datalog_of_a_predicate_shows_its_documentation(engine):
+    console = Console(file=io.StringIO(), width=200)
+    app = _app(engine, console)
+    app._execute_and_display(DOCUMENTED)
+    console.file.truncate(0)
+    console.file.seek(0)
+    app._handle_dot_command(".datalog active")
+    assert console.file.getvalue().startswith(
+        "%% active(who: person)\n%% The people who are active.\n\nactive(who)"
+    )
+
+
+def test_clear_removes_the_documentation(engine):
+    console = Console(file=io.StringIO(), width=200)
+    app = _app(engine, console)
+    app._execute_and_display(DOCUMENTED)
+    assert "active" in engine.predicate_documentation()
+    app._handle_dot_command(".clear")
+    assert engine.predicate_documentation() == {}
