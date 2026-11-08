@@ -22,6 +22,7 @@ const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
 const llmForm = $("llm");
 const results = $("results");
+const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
 // The code box colours its text as the language of the mode select.
@@ -239,7 +240,7 @@ function show(tab, ...nodes) {
 // The tab shown of the results, as the tab list tells it.
 function selectTab(tab) {
   results.dataset.tab = tab;
-  for (const name of ["table", "brain"]) {
+  for (const name of TABS) {
     $(`tab-${name}`).setAttribute("aria-selected", name === tab);
     $(`tab-${name}`).tabIndex = name === tab ? 0 : -1;
   }
@@ -381,6 +382,7 @@ const workerMessages = {
     // A failure without a table hides the last result, not to be taken for its own.
     if (data.failed && !data.tables?.length) results.classList.remove("has");
     if (data.tables?.length) showTables(data);
+    showGraph(data);
     if (data.viewers?.length) showViewer(data.viewers.at(-1));
     setBusy(false);
   },
@@ -413,6 +415,29 @@ function showTables({ tables, prompt }) {
 function showViewer(page) {
   const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: page, title: "NeuroLang brain viewer" });
   show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
+}
+
+let graphUrl = null; // the address of the page of the graph shown
+
+// The graph of the query a reply ran, in the graph tab, shown when the reply
+// has no table (.graph); a query that has no graph hides that of the last one.
+function showGraph({ graph, tables }) {
+  const shown = tables?.length > 0;
+  if (!graph) {
+    if (shown) $("tab-graph").hidden = true;
+    return;
+  }
+  const page = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: graph, title: "Graph of the query" });
+  // The graph is often wider than the page: it can open in a tab of its own.
+  if (graphUrl) URL.revokeObjectURL(graphUrl);
+  graphUrl = URL.createObjectURL(new Blob([graph], { type: "text/html" }));
+  const open = Object.assign(document.createElement("a"), { href: graphUrl, target: "_blank", rel: "noopener", textContent: "Open the graph in a new tab" });
+  const nodes = [Object.assign(document.createElement("p"), { className: "note" }), page];
+  nodes[0].append(open);
+  if (shown) {
+    $("graph").replaceChildren(...nodes);
+    $("tab-graph").hidden = false;
+  } else show("graph", ...nodes);
 }
 
 // The log of a query that gave a table is folded to its last line, which says how long it took.
@@ -561,9 +586,9 @@ history_.addEventListener("change", () => {
   history_.value = "";
   input.focus();
 });
-for (const tab of ["table", "brain"]) $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+for (const tab of TABS) $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
 $("tabs").addEventListener("keydown", (event) => {
-  const shown = ["table", "brain"].filter((tab) => !$(`tab-${tab}`).hidden);
+  const shown = TABS.filter((tab) => !$(`tab-${tab}`).hidden);
   const next = tabAfter(shown, results.dataset.tab, event.key);
   if (!next) return;
   event.preventDefault();

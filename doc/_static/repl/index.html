@@ -113,8 +113,8 @@
   #results.has { display: block; }
   #tabs { display: flex; gap: .25rem; margin-bottom: .5rem; }
   #tabs button { background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-weight: 400; }
-  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain { color: var(--text); border-bottom-color: var(--accent); }
-  #results[data-tab=table] #brain, #results[data-tab=brain] #table { display: none; }
+  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); }
+  #results:not([data-tab=table]) #table, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
   #table { display: grid; gap: .75rem; }
   iframe { width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: 6px; background: #000; }
   kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; font: .8em var(--mono); }
@@ -318,9 +318,10 @@
     <span class="note">A rating sends the query with its first rows or its error, and for an answer of the assistant the question and its steps, to the NeuroLang feedback table.</span>
   </section>
   <section id="results" data-tab="table">
-    <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button></div>
+    <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
     <div id="table" role="tabpanel" aria-labelledby="tab-table"></div>
     <div id="brain" role="tabpanel" aria-labelledby="tab-brain"></div>
+    <div id="graph" role="tabpanel" aria-labelledby="tab-graph"></div>
   </section>
 
   <details>

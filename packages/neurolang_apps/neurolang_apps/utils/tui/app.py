@@ -153,6 +153,8 @@ class InteractiveTuiApp:
         self.session = None
         self.completer = None
         self.last_query = None
+        # The query whose result is in results, for the graph of its rows.
+        self.results_query = None
         # The rules added by the submission of the last query, by symbol.
         self.last_added_rules: dict = {}
         self.failed = False
@@ -298,6 +300,21 @@ class InteractiveTuiApp:
         self.agent_run = AgentRun(program, self.settings.squall, frames)
         self.last_query = (program, self.settings.squall)
         self.last_added_rules = {}
+        self.results_query = self.last_query
+
+    def show_graph(self, page: str) -> None:
+        """
+        Show the HTML *page* of the graph of a query (``.graph``): save
+        it, print its path and open it in a browser on a terminal.
+        """
+        from .nifti import _html_file, _open_in_browser
+
+        path = _html_file(page)
+        self.console.print(
+            f"Saved the graph to: {path}", style="green", markup=False,
+            highlight=False,
+        )
+        _open_in_browser(self.console, path)
 
     def print_block(self, block: ResultBlock) -> None:
         """
@@ -477,6 +494,7 @@ class InteractiveTuiApp:
             self.last_query = (program, self.settings.squall)
             self.last_added_rules = {}
             self.show_frames(run.frames, program)
+            self.results_query = self.last_query
             self.err_console.print(
                 "[dim]The assistant ran this query: its result, not run "
                 "again.[/dim]"
@@ -488,6 +506,7 @@ class InteractiveTuiApp:
             self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         if self._run_submission(program, query, facts) and query:
+            self.results_query = self.last_query
             elapsed = time.perf_counter() - t0
             self.err_console.print(
                 f"[dim]Query completed in {elapsed:.2f} s[/dim]"

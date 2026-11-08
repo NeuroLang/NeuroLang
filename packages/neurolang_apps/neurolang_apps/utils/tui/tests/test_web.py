@@ -311,6 +311,21 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     assert repl.submit("1").prompt == ""
 
 
+def test_the_query_the_assistant_wrote_comes_with_its_graph(repl):
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([
+        [("check_query", {"query": "ans(x) :- person(x, n)"})],
+        [("final_answer", {
+            "query": "ans(x) :- person(x, n)", "explanation": "Everyone.",
+        })],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    reply = repl.submit(".ask --react Who is there?")
+    assert ">person<" in reply.graph and ">ans<" in reply.graph
+
+
 def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     import json
 

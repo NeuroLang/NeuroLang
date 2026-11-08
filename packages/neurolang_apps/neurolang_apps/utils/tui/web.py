@@ -40,7 +40,7 @@ from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import _declared_columns
 from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
 
-from . import nifti
+from . import nifti, query_graph
 from .app import InteractiveTuiApp, TuiSettings
 from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
@@ -128,8 +128,10 @@ class Reply:
     to put in its input, and *mode* the language of the REPL, ``datalog``
     or ``squall``, which the assistant may have switched, *predicates*
     those of the engine and the session (see :meth:`WebRepl.predicates`),
-    and *ratable* whether it was a query or an answer of the assistant,
-    which :meth:`WebRepl.rate_answer` can share.
+    *ratable* whether it was a query or an answer of the assistant,
+    which :meth:`WebRepl.rate_answer` can share, and *graph* the HTML page
+    of the graph of the query it ran, or that ``.graph`` showed (see
+    :mod:`~neurolang_apps.utils.tui.query_graph`).
     """
 
     html: str
@@ -140,6 +142,7 @@ class Reply:
     mode: str = "datalog"
     predicates: List[dict] = field(default_factory=list)
     ratable: bool = False
+    graph: str = ""
 
 
 class Download(NamedTuple):
@@ -350,6 +353,9 @@ class WebRepl:
         )
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
+        # and the graph of a query in a tab of its own.
+        self._graph = ""
+        self.app.show_graph = self._show_graph
         try:
             # Until the visitor gives a key, the assistant asks for it.
             self.set_llm("anthropic", "")
@@ -463,7 +469,9 @@ class WebRepl:
         self.app.failed = False
         self._tables = []
         self._frames = []
+        self._graph = ""
         answered = self.app.assistant.last_run
+        query = self.app.last_query
         with _viewers_returned() as viewers:
             try:
                 self.app._run_line(text)
@@ -473,14 +481,24 @@ class WebRepl:
                     "start a new one.[/dim]"
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
+        ran = self.app.last_query  # a new tuple for each query run
+        if not self._graph and ran is not None and ran is not query:
+            try:
+                self._graph = query_graph.last_query_page(self.app)
+            except Exception:  # a query that does not parse has no graph
+                pass
         self._rated = self._what_is_rated(
             text, self.app.assistant.last_run is not answered
         )
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(), self._rated is not None,
+            self.predicates(), self._rated is not None, self._graph,
         )
+
+    def _show_graph(self, page: str) -> None:
+        """Keep the *page* of the graph of a query for the reply."""
+        self._graph = page
 
     def _what_is_rated(self, text: str, answered: bool):
         """
