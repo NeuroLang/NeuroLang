@@ -227,6 +227,54 @@ both strings and numbers (see Part 8 for more comparisons).  Comparisons in a
 rule body must be enclosed in parentheses.
 
 
+.. _datalog-doc-comments:
+
+2.6 Comments and Documentation
+-------------------------------
+
+A ``%`` starts a comment, to the end of the line, unless it is in a string
+or an IRI.  A block of lines starting with ``%%`` right before a rule or a
+fact documents its predicate.  Its first line may give the signature of the
+predicate, the names of its arguments and, after a ``:``, their sorts; the
+other lines are its description:
+
+.. code-block:: none
+
+    %% uncinate(x: streamline, h: hemisphere)
+    %% The uncinate fasciculus: streamlines joining the orbitofrontal
+    %% cortex to the anterior temporal lobe through the temporal stem,
+    %% in hemisphere h.
+    uncinate(x, h) :- ...
+
+Without a signature, the whole block is the description.  The engine keeps
+the documentation (``nl.predicate_documentation()`` in Python,
+``nl.document_predicate(name, description, arguments)`` to set it): the
+query assistant and the REPL's ``.predicates`` show it, and a column of the
+sort ``streamline`` is drawn as streamlines by ``.view``.  The rules are:
+
+* The block must be right before the statement: a block followed by a blank
+  line, a ``%`` comment or nothing is a comment, as a header of a file.  A
+  ``%%`` after the start of a line, or inside a rule, is a comment too.
+* It documents the predicate of the rule, fact, probabilistic fact or
+  choice, or ``name := ...`` statement after it, and the following rules of
+  that predicate need none; it documents nothing before a query or a
+  command.
+* The signature is the first line only if it reads ``name(...)`` with the
+  name of that predicate, and then it must give its number of arguments.
+  Each argument is a column: the three columns of a voxel are written
+  ``i: voxel, j: voxel, k: voxel``.
+* The blocks of a predicate add up: their descriptions follow one another,
+  each once, and the arguments of the last signature are kept.
+* The documentation follows the scopes of the program, as its rules do:
+  that of a rule defined in ``with nl.scope:``, or in the REPL's session
+  that ``.clear`` empties, goes with it.  A module imported with
+  ``.import`` documents its predicates as the program does.
+* The documentation of a predicate in the program wins over its
+  description in the engine's configuration.
+
+``.document(name, "description")`` in a program documents a predicate too.
+
+
 Part 3: Predicates and Simple Rules
 =====================================
 

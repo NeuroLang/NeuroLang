@@ -20,7 +20,9 @@ from nl_expr.expressions import (
     Statement,
     Symbol,
 )
-from nl_expr.exceptions import NeuroLangFrontendException
+from nl_expr.exceptions import NeuroLangFrontendException, ParserError
+from nl_expr.expression_pattern_matching import add_match
+from nl_expr.expression_walker import PatternWalker
 from nl_expr.logic import Disjunction, ExistentialPredicate
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
@@ -263,8 +265,13 @@ OPERATOR = {
 
 @functools.lru_cache(maxsize=None)
 def compiled_grammar():
-    """Compile the Datalog grammar on first use (it takes ~0.15 s)."""
-    return Lark(GRAMMAR, parser='lalr')
+    """
+    Compile the Datalog grammar on first use (it takes ~0.15 s).
+
+    The nodes of its trees have their lines, which attach a ``%%``
+    documentation block to the statement it precedes.
+    """
+    return Lark(GRAMMAR, parser='lalr', propagate_positions=True)
 
 
 def __getattr__(name):
@@ -1339,18 +1346,189 @@ def _preprocess(code):
     return '\n'.join(processed)
 
 
-def parser(code, locals=None, globals=None, interactive=False):
+# The command a ``%%`` documentation block is read as.
+DOCUMENT_COMMAND = Symbol("document")
 
+_DOC_LINE = re.compile(r"\s*%%(?P<text>.*)")
+_DOC_ARGUMENT = re.compile(
+    r"\s*(?P<name>[A-Za-z_]\w*)\s*(?::\s*(?P<sort>[A-Za-z_][\w-]*)\s*)?"
+)
+
+
+def _doc_blocks(code):
+    """
+    Return the ``%%`` documentation blocks of *code*, by the line they
+    document.
+
+    A block is a run of lines starting with ``%%``, each without the
+    ``%%`` and the space after it; it documents the statement starting
+    on the line right after it, numbered from 1. A block followed by a
+    blank line, a ``%`` comment or the end of the code documents
+    nothing: it is a comment.
+    """
+    blocks = {}
+    block = []
+    for number, line in enumerate(code.split('\n'), start=1):
+        doc = _DOC_LINE.match(line)
+        if doc:
+            text = doc.group("text").rstrip()
+            block.append(text[1:] if text.startswith(" ") else text)
+            continue
+        if block and strip_comment(line).strip():
+            blocks[number] = block
+        block = []
+    return blocks
+
+
+class _DocumentedHead(PatternWalker):
+    """
+    Return the name and the arity of the predicate a statement defines,
+    or None: a query, a command and a constraint define none. A
+    statement ``x := ...`` defines ``x``, of no arity.
+    """
+
+    @add_match(Union)
+    def union(self, union):
+        heads = (self.walk(formula) for formula in union.formulas)
+        return next((head for head in heads if head is not None), None)
+
+    @add_match(Implication(ProbabilisticFact(..., FunctionApplication), ...))
+    def probabilistic_fact(self, implication):
+        return self.walk(
+            Implication(implication.consequent.body, Constant(True))
+        )
+
+    @add_match(
+        Implication(ProbabilisticChoice(..., FunctionApplication), ...)
+    )
+    def probabilistic_choice(self, implication):
+        return self.walk(
+            Implication(implication.consequent.body, Constant(True))
+        )
+
+    @add_match(Implication(FunctionApplication(Symbol, ...), ...))
+    def rule(self, implication):
+        head = implication.consequent
+        return head.functor.name, len(head.args)
+
+    @add_match(Statement(Symbol, ...))
+    def statement(self, statement):
+        return statement.lhs.name, None
+
+    @add_match(Expression)
+    def other(self, expression):
+        return None
+
+
+def _doc_signature(lines, name, arity, line):
+    """
+    Return the arguments of the signature *lines* start with, or None.
+
+    The signature is the first line when it reads ``name(a, b: sort)``
+    for the predicate *name*; it must give its *arity* arguments, if
+    known. *line* is the number of that line, for the errors.
+    """
+    signature = re.fullmatch(
+        rf"\s*{re.escape(name)}\s*\((?P<args>[^()]*)\)\s*", lines[0]
+    )
+    if signature is None:
+        return None
+    texts = signature.group("args").split(",")
+    if len(texts) == 1 and not texts[0].strip():
+        texts = []
+    arguments = []
+    for text in texts:
+        argument = _DOC_ARGUMENT.fullmatch(text)
+        if argument is None:
+            raise ParserError(
+                f"The documentation of {name} gives the argument "
+                f"{text.strip()!r}: write name or name: sort",
+                line=line,
+            )
+        arguments.append(
+            (argument.group("name"), argument.group("sort") or "")
+        )
+    if arity is not None and len(arguments) != arity:
+        raise ParserError(
+            f"The documentation of {name} gives {len(arguments)} "
+            f"arguments, its statement has {arity}",
+            line=line,
+        )
+    return tuple(arguments)
+
+
+def documentation_command(name, description, arguments=()):
+    """
+    Return the command documenting the predicate *name*: its
+    *description* and its *arguments*, ``(name, sort)`` pairs, the sort
+    ``""`` when not given.
+    """
+    return Command(DOCUMENT_COMMAND, (
+        Symbol(name), Constant[str](description),
+        Constant[Tuple](
+            tuple(tuple(a) for a in arguments),
+            auto_infer_type=False, verify_type=False,
+        ),
+    ), ())
+
+
+def _documentation(expression, lines, line):
+    """
+    Return the commands documenting the statement *expression* with the
+    ``%%`` *lines*, which end before the *line* it starts on.
+    """
+    head = _DocumentedHead().walk(expression)
+    if head is None:
+        return ()
+    name, arity = head
+    arguments = _doc_signature(lines, name, arity, line - len(lines))
+    if arguments is not None:
+        lines = lines[1:]
+    description = "\n".join(lines).strip()
+    if not description and not arguments:
+        return ()
+    return (documentation_command(name, description, arguments or ()),)
+
+
+def _transform(tree, docs):
+    """
+    Return the expressions of the parse *tree*, each statement preceded
+    by the command documenting it when *docs* has a block for its line.
+    """
+    transformer = DatalogTransformer()
+    if not docs:
+        return transformer.transform(tree)
+    formulas = []
+    for statement in tree.children[0].children:
+        expression = transformer.transform(statement)
+        lines = docs.get(statement.meta.line)
+        if lines:
+            formulas.extend(
+                _documentation(expression, lines, statement.meta.line)
+            )
+        formulas.append(expression)
+    return transformer.expressions(formulas)
+
+
+def parser(code, locals=None, globals=None, interactive=False):
+    """
+    Return the expressions of the Datalog program *code*.
+
+    A ``%%`` block documenting a statement (see :func:`_doc_blocks`) is
+    read as a ``.document`` command before it (see
+    :func:`documentation_command`).
+    """
     with lark_errors_as_neurolang():
         if (interactive):
             completer = LarkCompleter(compiled_grammar())
             res = completer.complete(code.strip())
             return res.token_options
         else:
+            docs = _doc_blocks(code)
             code = _preprocess(code)
             # Keep leading blank lines so error positions match the input.
             jp = compiled_grammar().parse(code.rstrip())
-            return DatalogTransformer().transform(jp)
+            return _transform(jp, docs)
 
 
 def parse_rules():

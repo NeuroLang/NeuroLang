@@ -77,6 +77,22 @@ Unreleased
 
 **New features:**
 
+* A block of ``%%`` lines right before a rule or a fact of the Datalog
+  syntax documents its predicate, with an optional signature giving the
+  names and the sorts of its arguments, ``%% uncinate(x: streamline, h:
+  hemisphere)``, then its description (see :ref:`datalog-doc-comments`).
+  The engine keeps it, in the scopes of the program, with the modules a
+  program imports (``nl.predicate_documentation()``,
+  ``nl.document_predicate()``, ``.document(name, "description")``); the
+  query assistant tells the model the description and the sorts of a
+  documented predicate, before those of the engine's configuration, as do
+  the REPL's ``.predicates`` and ``.datalog PREDICATE``,
+  ``neurolang-query --list-predicates -f program.dl`` and the predicates of
+  the REPL in the browser; ``.view`` draws a column documented of the sort
+  ``streamline`` as streamlines. The pretty printer writes the blocks back,
+  and a ``.command(...)`` as written. The model is told the sort of the
+  argument of a declared predicate too, ``reports(study_id: study, ...)``,
+  and the description of each sort of an argument that the engine declares.
 * Datalog modules: ``.import("bundles/uf.dl")`` in a program runs the facts,
   rules and commands of a Datalog file where it stands, as if written there,
   so that a vocabulary or a set of definitions (the white-matter bundles of
