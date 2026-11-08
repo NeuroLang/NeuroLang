@@ -65,6 +65,7 @@ from .datalog.squall_syntax_lark import (
 from .datalog.standard_syntax import (
     documentation_command,
     parser as datalog_parser,
+    query_name,
 )
 from .datalog.squall import CheckPredicateArities, predicate_arity
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
@@ -200,18 +201,26 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def _print_rewritten_program(
         self, query_expression, reachable_rules=None
     ):
-        """Print the Datalog program after magic-sets rewriting."""
+        """
+        Print the Datalog program after magic-sets rewriting, of the
+        query rule *query_expression*, or of a list of them.
+        """
         reachable_rules = self._simplify_rewritten_rules(reachable_rules)
+        queries = (
+            query_expression if isinstance(query_expression, list)
+            else [query_expression]
+        )
 
         print("── rewritten program ──")
         printer = DatalogPrettyPrinter()
-        print(printer.walk(query_expression))
+        for query in queries:
+            print(printer.walk(query))
         if reachable_rules is not None:
             strata, _ = stratify(reachable_rules, self.program_ir)
-            query_functor = query_expression.consequent.functor
+            query_functors = {query.consequent.functor for query in queries}
             for stratum in strata:
                 for rule in stratum:
-                    if rule.consequent.functor != query_functor:
+                    if rule.consequent.functor not in query_functors:
                         print(printer.walk(rule))
         print()
 
@@ -225,14 +234,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         (caller should short-circuit), False when execution should continue.
         When show_ra is True, the caller still needs to build the RA plan,
         and the rewritten program is only printed if show_rewritten is.
+        *query_expression* is a query rule, or a list of the rules of
+        queries solved together.
         """
         if show_rewritten or (dry_run and not show_ra):
-            reachable_rules = reachable_code(
-                query_expression, self.program_ir
+            queries = (
+                query_expression if isinstance(query_expression, list)
+                else [query_expression]
             )
-            self._print_rewritten_program(
-                query_expression, reachable_rules
+            reachable_rules = self._union_of_rules(
+                reachable_code(query, self.program_ir) for query in queries
             )
+            self._print_rewritten_program(query_expression, reachable_rules)
         return dry_run and not show_ra
 
     @property
@@ -427,18 +440,122 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 show_ra=show_ra,
             )
         else:
+            return self._execute_named_queries(
+                intermediate_representation, queries,
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+
+    def _execute_named_queries(
+        self, intermediate_representation, queries, show_rewritten=False,
+        dry_run=False, show_ra=False,
+    ):
+        """
+        Execute the several queries of a program, ``ans[name](...) :-
+        ...``, together, and return their answers by name.
+
+        The queries are solved as one: see :meth:`_solve_queries`.
+        """
+        names = [query_name(q.head) for q in queries]
+        if len(set(names)) < len(names):
             raise UnsupportedProgramError(
-                "Only one query, in the form of ans(...) :- R(...) is "
-                "supported. Datalog program has more than one query rule: "
-                "{}".format(
-                    "\n".join(
-                        [
-                            str(self.frontend_translator.walk(q))
-                            for q in queries
-                        ]
+                "The queries of a program have each a name, in the form "
+                "of ans[name](...) :- R(...); the name of more than one "
+                "query is {}".format(
+                    ", ".join(
+                        sorted(n for n in set(names) if names.count(n) > 1)
                     )
                 )
             )
+        counts = self._rule_counts()
+        self._walk_program(
+            [
+                rule
+                for rule in intermediate_representation.formulas
+                if not isinstance(rule, ir.Query)
+            ]
+        )
+        self._warn_added_rules(counts)
+        queries = [
+            self.frontend_translator.walk(self._expand_resamplings(q))
+            for q in queries
+        ]
+        heads_and_bodies = [(q.head.arguments, q.body) for q in queries]
+        if show_ra:
+            # the plans are those of each query, solved apart
+            answers = []
+            for name, (head, body) in zip(names, heads_and_bodies):
+                print(f"── {name} ──")
+                answers.append(self.query(
+                    head, body, show_rewritten=show_rewritten,
+                    dry_run=dry_run, show_ra=show_ra,
+                ))
+        else:
+            answers = self._solve_queries(
+                heads_and_bodies, show_rewritten=show_rewritten,
+                dry_run=dry_run,
+            )
+        if answers is None:
+            return None
+        return dict(zip(names, answers))
+
+    def _solve_queries(self, queries, show_rewritten=False, dry_run=False):
+        """
+        Solve the *queries*, pairs of a head and a body as
+        :meth:`query` takes them, together, and return their answers as
+        :meth:`query` does, or None if nothing was solved.
+
+        The queries are rewritten with magic sets, each for its own
+        bindings, into the rules of a single program, which is run once:
+        the predicates that queries share are computed once, for the
+        bindings of all the queries that use them.
+        """
+        self.program_ir.symbol_table = self.symbol_table.create_scope()
+        try:
+            rewritten = [
+                self._magic_sets_rewrite_query(head, body)
+                for head, body in queries
+            ]
+            goals = [query for query, _ in rewritten]
+            rules = self._union_of_rules(rules for _, rules in rewritten)
+            if self._handle_rewritten_output(goals, show_rewritten, dry_run):
+                return None
+            solution = self.chase_class(
+                self.program_ir, rules=rules
+            ).build_chase_solution()
+            return [
+                self._query_answer(head, goal, solution)
+                for (head, _), goal in zip(queries, goals)
+            ]
+        finally:
+            self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+
+    @staticmethod
+    def _union_of_rules(unions):
+        """Return the rules of the *unions*, each of them once."""
+        rules = dict.fromkeys(
+            rule for union in unions for rule in union.formulas
+        )
+        return logic.Union(tuple(rules))
+
+    def _query_answer(self, head, goal, solution):
+        """Return the answer of the query *head* from the *solution*."""
+        solution_set = solution.get(
+            goal.consequent.functor,
+            ir.Constant(WrappedRelationalAlgebraFrozenSet())
+        )
+        if isinstance(head, tuple):
+            row_type = solution_set.value.row_type
+            solution_set = NamedRelationalAlgebraFrozenSet(
+                self._parameter_names(s.expression for s in head),
+                solution_set.value.unwrap()
+            )
+            solution_set.row_type = row_type
+        if not isinstance(head, tuple):
+            return solution_set
+        if len(head) == 0:
+            return len(solution_set) > 0
+        return solution_set
 
     def import_datalog_module(self, path):
         """

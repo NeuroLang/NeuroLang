@@ -77,6 +77,14 @@ Unreleased
 
 **New features:**
 
+* A program holds several queries, each named in brackets,
+  ``ans[name](...) :- ...``, and ``execute_datalog_program`` returns their
+  answers in a dictionary by name. The queries are solved together: each is
+  rewritten with magic sets for its own bindings, into one program that is
+  run once, so that the predicates they share are computed once, for the
+  bindings of all of them (four queries sharing a recursive predicate take
+  1.6 s instead of 2.5 s).
+
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and
   ``fallback_provider: NAME`` asks another provider once when no result

@@ -624,6 +624,14 @@ class TestExecuteProgram:
         with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
 
+    def test_named_queries_give_a_result_each(self, nl):
+        result = _execute_program(
+            nl, "ans[x_of_r](x) :- R(x, y)\nans[z_of_s](z) :- S(z, w)"
+        )
+        assert list(result) == ["x_of_r", "z_of_s"]
+        assert result["x_of_r"].columns == ("x",)
+        assert result["z_of_s"].columns == ("z",)
+
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
         result = _execute_program(
