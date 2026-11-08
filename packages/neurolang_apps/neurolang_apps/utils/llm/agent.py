@@ -37,7 +37,9 @@ from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
 from .providers import LLMError, make_client
-from .validation import check_query, run_preview
+from .validation import (
+    QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
+)
 
 MAX_OBSERVATION = 2000
 EXAMPLE_QUERIES = {
@@ -334,7 +336,17 @@ class Toolbox:
         return self.context.schema_summary(), None
 
     def tool_describe_predicate(self, name: str):
-        return self.context.describe(name), None
+        # Its sample rows run the rules: as long as any query may.
+        try:
+            return _in_child(
+                lambda: self.context.describe(name),
+                self.query_timeout, self.query_memory_mb,
+            ), None
+        except (QueryTimeout, QueryTooLarge):
+            return (
+                f"Computing the rows of {name} takes too long, they are "
+                f"not listed.\n{self.context._bound_usage(name)}"
+            ), None
 
     def tool_search_values(self, pattern: str, predicate=None, column=None):
         return self.context.search_values(pattern, predicate, column), None
