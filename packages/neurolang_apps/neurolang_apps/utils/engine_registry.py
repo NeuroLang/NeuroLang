@@ -1428,13 +1428,24 @@ def _phase_base_symbols(nl, cfg, mask):
 
 
 def _phase_python_init(nl, cfg, mask, data_dir):
+    """
+    Run the ``init_engine`` of the ``python_init`` module.
+
+    An init that takes a ``cache_dir`` is given the directory where the
+    tables of the engine are kept (see
+    :mod:`~neurolang_apps.utils.engine_cache`), or None without cache.
+    """
     py_init = cfg.get("python_init")
     if not py_init:
         return
     import importlib
+    import inspect
 
     mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir, **cfg.get("python_init_options", {}))
+    kwargs = dict(cfg.get("python_init_options", {}))
+    if "cache_dir" in inspect.signature(mod.init_engine).parameters:
+        kwargs["cache_dir"] = nl.engine_cache_dir
+    mod.init_engine(nl, mask, data_dir, **kwargs)
 
 
 def _solver_mixins(cfg, engine_name) -> list:

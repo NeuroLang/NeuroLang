@@ -17,6 +17,7 @@ import { explainStartError } from "./start_error.js";
 import { Session, parseSession, replayTexts } from "./session.js";
 import { PmcLookup } from "./study_links.js";
 import { tabAfter } from "./tabs.js";
+import { bundleEngines, engineChoice, withEngine } from "./engines.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -40,6 +41,10 @@ const history = new History(store("localStorage"));
 const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage"));
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
+// What the page downloads (bundle.json): the engines it offers, chosen with
+// the select of the header or ?engine=NAME.
+let bundle = {};
+const engineSelect = $("engine");
 
 // The work of the AI assistant, shown as it comes from the worker.
 const agentLog = new AgentLog();
@@ -297,12 +302,29 @@ function setProviders(list) {
   if (list.length && saved.key) useKey();
 }
 
-// The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH.
+// Offer the engines of the bundle: a select, when there are several.
+async function loadEngines() {
+  try {
+    bundle = await (await fetch("bundle.json", { cache: "no-store" })).json();
+  } catch {
+    bundle = {}; // the worker tells that the bundle is missing
+  }
+  const engines = Object.entries(bundleEngines(bundle));
+  engineSelect.replaceChildren(
+    ...engines.map(([name, entry]) => Object.assign(document.createElement("option"), { value: name, textContent: entry.label })),
+  );
+  engineSelect.hidden = engines.length < 2;
+}
+
+// The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH,
+// and the engine: ?engine=NAME.
 function start({ restore = null } = {}) {
   if (!restore) session.replace([]); // a new engine has none of the rules
   worker?.terminate();
   const params = new URLSearchParams(location.search);
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
+  const { name: engine, full } = engineChoice(params, bundle);
+  engineSelect.value = engine;
   Object.assign(version.elements.repo, { value: repo });
   Object.assign(version.elements.ref, { value: ref });
   $("version-summary").textContent = ref ? `${repo} at ${ref}` : "the build of this page";
@@ -321,7 +343,7 @@ function start({ restore = null } = {}) {
   setBusy(true);
   input.disabled = false; // the query can be written while the engine loads
   worker = new Worker("worker.js", { type: "module" });
-  worker.postMessage({ type: "start", repo, ref, full: params.get("engine") === "full" });
+  worker.postMessage({ type: "start", repo, ref, full, engine });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "reply" && replaying) replayStep(data);
@@ -644,6 +666,8 @@ version.addEventListener("submit", (event) => {
   event.preventDefault();
   const params = new URLSearchParams();
   const { repo, ref } = Object.fromEntries(new FormData(version));
+  const engine = new URLSearchParams(location.search).get("engine");
+  if (engine) params.set("engine", engine);
   if (ref.trim()) {
     params.set("ref", ref.trim());
     if (repo.trim() !== DEFAULT_REPO) params.set("repo", repo.trim());
@@ -651,5 +675,10 @@ version.addEventListener("submit", (event) => {
   window.history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
   start();
 });
+engineSelect.addEventListener("change", () => {
+  const params = withEngine(new URLSearchParams(location.search), engineSelect.value, bundle);
+  window.history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
+  start();
+});
 showHistory();
-start();
+loadEngines().then(() => start());

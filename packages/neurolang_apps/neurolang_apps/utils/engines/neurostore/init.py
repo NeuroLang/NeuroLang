@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -39,9 +40,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import nibabel as nib
+import numpy as np
 import pandas as pd
 
 from neurolang.frontend import NeurolangPDL
+from neurolang_apps.utils import engine_cache
 from neurolang_apps.utils.engines.neurosynth.init import (
     process_peaks,
     register_tables,
@@ -106,21 +109,35 @@ def _download_release(release: Dict[str, Any], target: Path) -> None:
         shutil.move(str(studyset_json.parent), str(target))
 
 
+def _cached_release(root: Path, version: str):
+    """The newest release of *root* matching *version*, or None."""
+    cached = sorted(
+        p for p in root.glob("*/coordinates.parquet")
+        if version in ("latest", p.parent.name)
+    )
+    return cached[-1].parent if cached else None
+
+
 def fetch_neurostore_dir(data_dir: Path) -> Path:
-    """Return the directory of the selected release, downloading it once."""
+    """Return the directory of the selected release, downloading it once.
+
+    In a browser (Pyodide) the release is the one that came with the page: the
+    network is not asked.
+    """
     version = os.environ.get(RELEASE_ENV_VAR, "latest")
     root = Path(data_dir) / "neurostore"
+    if sys.platform == "emscripten":
+        bundled = _cached_release(root, version)
+        if bundled is not None:
+            return bundled
     try:
         release = _select_release(_fetch_releases(), version)
     except OSError:
         # Offline: reuse the newest cached release matching the request.
-        cached = sorted(
-            p for p in root.glob("*/coordinates.parquet")
-            if version in ("latest", p.parent.name)
-        )
-        if not cached:
+        cached = _cached_release(root, version)
+        if cached is None:
             raise
-        return cached[-1].parent
+        return cached
     target = root / release["version"]
     # Nightly builds change under the same name.
     if release["release_type"] == "nightly" and target.exists():
@@ -175,6 +192,17 @@ def _parse_list(raw: str) -> list:
 
 def _tfidf_terms(abstracts: pd.Series) -> pd.DataFrame:
     """TF-IDF of the abstract terms as ``term, tfidf, study_id`` rows."""
+    return _tfidf_table(_tfidf_arrays(abstracts))
+
+
+def _tfidf_arrays(abstracts: pd.Series) -> dict:
+    """
+    Compute the TF-IDF of the terms of *abstracts* as arrays.
+
+    They are the ``study_ids`` and the ``terms``, and for each of the
+    studies, from ``indptr`` on, the ``col`` of the term of each ``value``
+    above the threshold.
+    """
     from sklearn.feature_extraction.text import TfidfVectorizer
 
     vectorizer = TfidfVectorizer(
@@ -184,20 +212,72 @@ def _tfidf_terms(abstracts: pd.Series) -> pd.DataFrame:
         ngram_range=NGRAM_RANGE,
     )
     matrix = vectorizer.fit_transform(abstracts.values).tocoo()
-    terms = vectorizer.get_feature_names_out()
-    table = pd.DataFrame(
+    keep = matrix.data > TFIDF_THRESHOLD
+    terms = np.array(vectorizer.get_feature_names_out(), dtype=str)
+    # The rows are in order: they are kept as the offsets of each study's
+    # terms, and the terms by 16 bits when the vocabulary allows, which makes
+    # the file half as large.
+    per_study = np.bincount(matrix.row[keep], minlength=len(abstracts))
+    return {
+        "study_ids": np.array(abstracts.index.values, dtype=str),
+        "terms": terms,
+        "indptr": np.concatenate([[0], np.cumsum(per_study)]).astype(np.int32),
+        "col": matrix.col[keep].astype(
+            np.uint16 if len(terms) < 2 ** 16 else np.int32
+        ),
+        "value": matrix.data[keep].astype(np.float32),
+    }
+
+
+def _tfidf_table(arrays: dict) -> pd.DataFrame:
+    """The ``term, tfidf, study_id`` rows of the arrays of the TF-IDF."""
+    # Object arrays share the strings of the vocabulary and of the ids: the
+    # fixed-width strings of numpy would take hundreds of MB for the rows.
+    terms = arrays["terms"].astype(object)
+    study_ids = arrays["study_ids"].astype(object)
+    row = np.repeat(np.arange(len(study_ids)), np.diff(arrays["indptr"]))
+    return pd.DataFrame(
         {
-            "term": terms[matrix.col],
-            "tfidf": matrix.data,
-            "study_id": abstracts.index.values[matrix.row],
+            "term": terms[arrays["col"].astype(np.int64)],
+            "tfidf": arrays["value"].astype(np.float64),
+            "study_id": study_ids[row],
         }
     )
-    return table[table["tfidf"] > TFIDF_THRESHOLD].reset_index(drop=True)
+
+
+def _kept_tfidf_terms(abstracts, release, cache_dir) -> pd.DataFrame:
+    """
+    The TF-IDF of the terms of *abstracts*, kept in *cache_dir* (if any)
+    for the same release and settings.
+
+    It takes about 20 s, and more than a minute and a lot of memory in a
+    browser; what is kept is arrays, which any Python reads (see
+    :mod:`~neurolang_apps.utils.engine_cache`).
+    """
+    key = engine_cache.digest(
+        "neurostore-tfidf", release, MIN_TERM_STUDIES, NGRAM_RANGE,
+        TFIDF_THRESHOLD, np.array(abstracts.index.values, dtype=str),
+    )
+    arrays = engine_cache.keep_arrays(
+        cache_dir, "tfidf", key, lambda: _tfidf_arrays(abstracts)
+    )
+    return _tfidf_table(arrays)
+
+
+def _annotation_columns(path) -> List[str]:
+    """The columns of the annotations the engine reads: the study and the
+    concepts and domains of the tasks."""
+    import pyarrow.parquet
+
+    return [
+        name for name in pyarrow.parquet.read_schema(path).names
+        if name == "study_id" or name.endswith((".Concepts", ".Domain"))
+    ]
 
 
 def init_engine(
     nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path,
-    unknown_space: str = "mni",
+    unknown_space: str = "mni", cache_dir=None
 ) -> None:
     """Populate a fresh engine with NeuroStore data.
 
@@ -213,6 +293,8 @@ def init_engine(
         How the peaks of an unknown space are handled (``mni``, ``tal`` or
         ``drop``, see :func:`process_peaks`); the engine's
         ``python_init_options``.
+    cache_dir :
+        Directory where the TF-IDF table is kept, if any.
 
     """
     release_dir = fetch_neurostore_dir(data_dir)
@@ -227,7 +309,7 @@ def init_engine(
     texts = studies_table.set_index("study_id").reindex(study_ids.values)
     abstracts = texts["description"].fillna("")
     abstracts = abstracts[abstracts.str.strip() != ""]
-    tfidf = _tfidf_terms(abstracts)
+    tfidf = _kept_tfidf_terms(abstracts, release_dir.name, cache_dir)
     register_tables(
         nl, mask, data_dir, peak_data,
         tfidf[["study_id", "term", "tfidf"]],
@@ -241,7 +323,10 @@ def init_engine(
         table = table.rename_axis("study_id").reset_index()
         nl.add_tuple_set(table, name=name)
 
-    annotations = pd.read_parquet(release_dir / "annotations.parquet")
+    annotations_path = release_dir / "annotations.parquet"
+    annotations = pd.read_parquet(
+        annotations_path, columns=_annotation_columns(annotations_path)
+    )
     studies = set(study_ids)
     for label, suffix in (("concept", "Concepts"), ("domain", "Domain")):
         table = _extract_labels(annotations, suffix).rename(

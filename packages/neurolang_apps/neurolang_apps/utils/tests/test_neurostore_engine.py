@@ -162,3 +162,142 @@ def test_terms_include_word_sequences():
     assert {"working memory", "memory task", "working memory network"} <= set(
         terms["term"]
     )
+
+
+def test_the_tfidf_is_kept_for_the_same_release(tmp_path, monkeypatch):
+    abstracts = pd.Series(
+        ["working memory task", "working memory network", "emotion network"],
+        index=["a", "b", "c"],
+    )
+    monkeypatch.setattr(neurostore_init, "MIN_TERM_STUDIES", 1)
+    monkeypatch.setattr(neurostore_init, "NGRAM_RANGE", (1, 2))
+    first = neurostore_init._kept_tfidf_terms(abstracts, "2026-10", tmp_path)
+    assert list(tmp_path.glob("tfidf-*.npz"))
+    expected = neurostore_init._tfidf_terms(abstracts)
+    key = ["study_id", "term"]
+    pd.testing.assert_frame_equal(
+        first.sort_values(key).reset_index(drop=True),
+        expected.sort_values(key).reset_index(drop=True),
+        check_exact=False, atol=1e-6, check_dtype=False,
+    )
+
+    def not_again(abstracts):
+        raise AssertionError("computed again")
+
+    monkeypatch.setattr(neurostore_init, "_tfidf_arrays", not_again)
+    again = neurostore_init._kept_tfidf_terms(abstracts, "2026-10", tmp_path)
+    pd.testing.assert_frame_equal(again, first)
+    with pytest.raises(AssertionError):  # another release: computed anew
+        neurostore_init._kept_tfidf_terms(abstracts, "2026-11", tmp_path)
+
+
+def test_the_tfidf_without_a_cache_directory_is_computed(monkeypatch):
+    abstracts = pd.Series(["a memory task", "a memory test"], index=["a", "b"])
+    monkeypatch.setattr(neurostore_init, "MIN_TERM_STUDIES", 1)
+    table = neurostore_init._kept_tfidf_terms(abstracts, "2026-10", None)
+    assert {"memory", "task", "test"} <= set(table["term"])
+
+
+def test_only_the_columns_the_engine_reads_are_taken_from_the_annotations(
+    tmp_path
+):
+    path = tmp_path / "annotations.parquet"
+    pd.DataFrame(
+        {
+            "study_id": ["s1"], "contrast_id": ["c1"],
+            "TaskExtractor.fMRITasks[0].Concepts": ['["memory"]'],
+            "TaskExtractor.fMRITasks[0].Domain": ['["Learning"]'],
+            "TaskExtractor.fMRITasks[0].TaskName": ["n-back"],
+            "ParticipantDemographicsExtractor.groups": [None],
+        }
+    ).to_parquet(path)
+    assert neurostore_init._annotation_columns(path) == [
+        "study_id",
+        "TaskExtractor.fMRITasks[0].Concepts",
+        "TaskExtractor.fMRITasks[0].Domain",
+    ]
+
+
+def test_an_init_takes_the_cache_directory_only_if_it_asks_for_it(
+    tmp_path, monkeypatch
+):
+    import sys
+    import types
+
+    from neurolang_apps.utils import engine_registry
+
+    calls = {}
+    plain = types.ModuleType("fake_engines.plain.init")
+    plain.init_engine = lambda nl, mask, data_dir: calls.setdefault(
+        "plain", True
+    )
+    cached = types.ModuleType("fake_engines.cached.init")
+    cached.init_engine = lambda nl, mask, data_dir, cache_dir=None: (
+        calls.setdefault("cache_dir", cache_dir)
+    )
+    monkeypatch.setitem(sys.modules, "fake_engines.plain.init", plain)
+    monkeypatch.setitem(sys.modules, "fake_engines.cached.init", cached)
+    kept = tmp_path / "kept"
+    nl = types.SimpleNamespace(engine_cache_dir=kept)
+    engine_registry._phase_python_init(
+        nl, {"python_init": "fake_engines.plain.init"}, None, tmp_path
+    )
+    engine_registry._phase_python_init(
+        nl, {"python_init": "fake_engines.cached.init"}, None, tmp_path
+    )
+    assert calls["plain"] and calls["cache_dir"] == kept
+    calls.clear()
+    nl.engine_cache_dir = None
+    engine_registry._phase_python_init(
+        nl, {"python_init": "fake_engines.cached.init"}, None, tmp_path
+    )
+    assert calls["cache_dir"] is None
+
+
+def test_in_a_browser_the_release_of_the_page_is_used_without_the_network(
+    tmp_path, monkeypatch
+):
+    release = tmp_path / "neurostore" / "2026-10"
+    release.mkdir(parents=True)
+    (release / "coordinates.parquet").write_bytes(b"")
+
+    def no_network():
+        raise AssertionError("the network was asked")
+
+    monkeypatch.setattr(neurostore_init, "_fetch_releases", no_network)
+    monkeypatch.setattr(neurostore_init.sys, "platform", "emscripten")
+    assert neurostore_init.fetch_neurostore_dir(tmp_path) == release
+
+
+def test_the_tfidf_table_is_that_of_the_vectorizer(tmp_path, monkeypatch):
+    """The arrays kept (offsets by study, terms by index) give back the
+    rows of scikit-learn's matrix."""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    abstracts = pd.Series(
+        ["working memory task", "working memory network", "emotion network",
+         "an emotion task with working memory"],
+        index=["a", "b", "c", "d"],
+    )
+    monkeypatch.setattr(neurostore_init, "MIN_TERM_STUDIES", 1)
+    monkeypatch.setattr(neurostore_init, "NGRAM_RANGE", (1, 2))
+    vectorizer = TfidfVectorizer(
+        stop_words="english", strip_accents="unicode", min_df=1,
+        ngram_range=(1, 2),
+    )
+    dense = pd.DataFrame(
+        vectorizer.fit_transform(abstracts).toarray(),
+        index=abstracts.index, columns=vectorizer.get_feature_names_out(),
+    )
+    expected = {
+        (study, term): value
+        for study, row in dense.iterrows() for term, value in row.items()
+        if value > neurostore_init.TFIDF_THRESHOLD
+    }
+    kept = neurostore_init._kept_tfidf_terms(abstracts, "r", tmp_path)
+    got = {
+        (row.study_id, row.term): row.tfidf for row in kept.itertuples()
+    }
+    assert got.keys() == expected.keys()
+    for key, value in expected.items():
+        assert got[key] == pytest.approx(value, abs=1e-6)

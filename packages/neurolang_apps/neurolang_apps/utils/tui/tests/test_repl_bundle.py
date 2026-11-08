@@ -1,6 +1,7 @@
 """Tests for the script that builds the bundle of the REPL in the browser."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -188,13 +189,16 @@ def test_the_downloads_are_kept_even_when_the_build_fails(
 ):
     """A data host that is down (a 504) does not stop the next build, which
     finds what this one downloaded; the engine's kept tables and its
-    embeddings are made by each build, not kept with the downloads."""
+    embeddings are made by each build, not kept with the downloads. Each
+    engine's downloads are kept apart from the others'."""
     downloads = tmp_path / "downloads"
-    (downloads / "fsl").mkdir(parents=True)
-    (downloads / "fsl" / "atlas.nii.gz").write_bytes(b"atlas")
+    (downloads / "neurosynth" / "fsl").mkdir(parents=True)
+    (downloads / "neurosynth" / "fsl" / "atlas.nii.gz").write_bytes(b"atlas")
+    (downloads / "neurostore").mkdir()
+    (downloads / "neurostore" / "release.parquet").write_bytes(b"other")
     found = []
 
-    def build(data_dir, use_cache=True):
+    def build(data_dir, use_cache=True, engine="neurosynth"):
         found.append(sorted(
             str(p.relative_to(data_dir)) for p in data_dir.rglob("*")
             if p.is_file()
@@ -210,9 +214,9 @@ def test_the_downloads_are_kept_even_when_the_build_fails(
     with pytest.raises(requests.HTTPError):
         bundle.main(tmp_path / "out", downloads=downloads)
     assert found == [["fsl/atlas.nii.gz"]]
+    kept = downloads / "neurosynth"
     assert sorted(
-        str(p.relative_to(downloads)) for p in downloads.rglob("*")
-        if p.is_file()
+        str(p.relative_to(kept)) for p in kept.rglob("*") if p.is_file()
     ) == ["fsl/atlas.nii.gz", "peaks.tsv.gz"]
 
 
@@ -222,3 +226,121 @@ def test_the_downloads_directory_is_an_option(bundle, tmp_path):
         tmp_path, "emb", Path("dl")
     )
     assert bundle.parse_args([str(tmp_path)]).downloads is None
+
+
+def _fake_bundle(bundle, monkeypatch, failing=()):
+    """Stub the slow steps of the script: the wheels and the engines."""
+    monkeypatch.setattr(bundle, "build_wheels", lambda out: ["w.whl"])
+    monkeypatch.setattr(bundle, "write_highlight_words", lambda out: None)
+
+    def bundle_engine(engine, output, embedded=None, downloads=None):
+        if engine in failing:
+            raise RuntimeError("no network")
+        return {
+            "label": bundle.LABELS[engine], "data": bundle.data_zip(engine),
+            "files": {f"{engine}/model.npz": [f"{engine}-model.npz"]},
+        }
+
+    monkeypatch.setattr(bundle, "bundle_engine", bundle_engine)
+
+
+def test_the_bundle_names_the_data_and_files_of_each_engine(
+    bundle, monkeypatch, tmp_path
+):
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path)
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert described["default"] == "neurosynth"
+    assert list(described["engines"]) == ["neurosynth", "neurostore"]
+    assert described["engines"]["neurostore"] == {
+        "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
+        "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
+    }
+    # What a page of before the choice of the engine reads: the default's.
+    assert described["data"] == "neurolang-neurosynth-data.zip"
+    assert described["files"] == {"neurosynth/model.npz": ["neurosynth-model.npz"]}
+
+
+def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
+    bundle, monkeypatch, tmp_path, capsys
+):
+    _fake_bundle(bundle, monkeypatch, failing={"neurostore"})
+    bundle.main(tmp_path)
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert list(described["engines"]) == ["neurosynth"]
+    assert "neurostore is left out" in capsys.readouterr().out
+    _fake_bundle(bundle, monkeypatch, failing={"neurosynth"})
+    with pytest.raises(RuntimeError):
+        bundle.main(tmp_path / "again")
+
+
+def test_only_the_engines_asked_for_are_built(bundle, monkeypatch, tmp_path):
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path, engines=("neurostore",))
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert list(described["engines"]) == ["neurostore"]
+    assert described["default"] == "neurostore"
+
+
+def test_the_files_of_the_embeddings_are_named_for_their_engine(bundle):
+    name = bundle.bundle_name(Path("a+b.npz"), "neurostore")
+    assert name == "neurostore-a_b.npz"
+
+
+def test_a_neurostore_release_keeps_the_tables_and_columns_the_engine_reads(
+    bundle, tmp_path
+):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    release = tmp_path / "neurostore" / "2026-10"
+    release.mkdir(parents=True)
+    pd.DataFrame(
+        {"study_id": ["s"], "x": [1.0], "y": [2.0], "z": [3.0],
+         "space": ["MNI"], "t_stat": [1.0], "p": [0.1]}
+    ).to_parquet(release / "coordinates.parquet")
+    pd.DataFrame(
+        {"study_id": ["s"], "name": ["n"], "description": ["d"],
+         "authors": ["a"]}
+    ).to_parquet(release / "studies.parquet")
+    pd.DataFrame(
+        {"study_id": ["s"], "TaskExtractor.fMRITasks[0].Concepts": ["[]"],
+         "TaskExtractor.fMRITasks[0].Domain": ["[]"],
+         "TaskExtractor.fMRITasks[0].TaskName": ["n-back"]}
+    ).to_parquet(release / "annotations.parquet")
+    for name in ("analyses", "images", "metadata", "texts"):
+        (release / f"{name}.parquet").write_bytes(b"x")
+    (release / "studyset.json").write_text("{}")
+    bundle.trim(tmp_path, "neurostore")
+    assert sorted(p.name for p in release.iterdir()) == [
+        "annotations.parquet", "coordinates.parquet", "studies.parquet"
+    ]
+    assert list(pd.read_parquet(release / "coordinates.parquet")) == [
+        "study_id", "x", "y", "z", "space"
+    ]
+    assert list(pd.read_parquet(release / "annotations.parquet")) == [
+        "study_id", "TaskExtractor.fMRITasks[0].Concepts",
+        "TaskExtractor.fMRITasks[0].Domain",
+    ]
+    assert list(pd.read_parquet(release / "studies.parquet")) == [
+        "study_id", "name", "description"
+    ]
+
+
+def test_the_data_of_an_engine_is_written_in_parts_when_it_is_large(
+    bundle, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(bundle, "PART_SIZE", 10)
+    monkeypatch.setattr(bundle, "build_engine", lambda *a, **k: None)
+    monkeypatch.setattr(bundle, "check_engine_cache", lambda *a: None)
+    monkeypatch.setattr(bundle, "trim", lambda *a: None)
+    monkeypatch.setattr(bundle, "export_embeddings", lambda *a: {})
+    monkeypatch.setattr(
+        bundle, "zip_directory",
+        lambda directory, archive: archive.write_bytes(b"x" * 25),
+    )
+    entry = bundle.bundle_engine("neurostore", tmp_path)
+    assert entry["data"] == [f"neurolang-neurostore-data.zip.{n}" for n in range(3)]
+    assert b"".join((tmp_path / name).read_bytes() for name in entry["data"]) == b"x" * 25
+    monkeypatch.setattr(bundle, "PART_SIZE", 100)
+    entry = bundle.bundle_engine("neurostore", tmp_path)
+    assert entry["data"] == "neurolang-neurostore-data.zip"

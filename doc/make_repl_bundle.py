@@ -2,12 +2,13 @@
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
-- the data the ``neurosynth`` engine needs, as a zip in the layout of its
-  data directory, and
+- for each engine of the page (``neurosynth``, the page's default, and
+  ``neurostore``), the data it needs, as a zip in the layout of its data
+  directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
 - with torch installed (the ``embeddings`` extra), the files of the
-  engine's text embeddings, which the page fetches when a query first
+  engines' text embeddings, which the page fetches when a query first
   needs them: the SPECTER2 query model for :mod:`specter2_numpy
   <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
   studies, named in ``bundle.json`` by their path in the data directory.
@@ -15,7 +16,8 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 The engine downloads its data (about 100 MB) on first use. The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
 engine reads are kept, and the others are emptied rather than removed,
-because the fetchers of nilearn look for every file of a dataset. The
+because the fetchers of nilearn look for every file of a dataset; of the
+NeuroStore release only the columns of three of its tables. The
 tables that take the engine long to build are kept in the data directory by
 its build (``neurolang_apps.utils.engine_cache``) and so are in the zip: the
 page starts in about 30 s instead of 2 min. The engine is built again from the
@@ -24,7 +26,11 @@ result, with the tables and without them, to check that it suffices.
 Usage::
 
     python doc/make_repl_bundle.py OUTPUT_DIR [EMBEDDINGS_DATA_DIR]
-        [--downloads DIR]
+        [--downloads DIR] [--engine NAME ...]
+
+with the engines of the page by default; the page downloads the data of the
+one it is asked for. An engine other than the default that cannot be built is
+left out, with a message.
 
 Embedding the studies takes their abstracts from PubMed and a while:
 EMBEDDINGS_DATA_DIR keeps them: a data directory where they were embedded
@@ -48,10 +54,26 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-ENGINE = "neurosynth"
+# The engines the page offers, the first being its default.
+ENGINES = ("neurosynth", "neurostore")
+ENGINE = ENGINES[0]
+LABELS = {"neurosynth": "Neurosynth", "neurostore": "NeuroStore"}
 RESOLUTION = 2.0
-DATA_ZIP = "neurolang-neurosynth-data.zip"
 HIGHLIGHT_WORDS = "highlight.json"
+
+# The tables of a NeuroStore release that the engine reads, and their columns
+# (all, or those that end with one of the suffixes, besides study_id).
+NEUROSTORE_TABLES = {
+    "coordinates.parquet": ("study_id", "x", "y", "z", "space"),
+    "studies.parquet": ("study_id", "name", "description"),
+    "annotations.parquet": None,
+}
+
+
+def data_zip(engine: str = ENGINE) -> str:
+    """Return the name of the zip of the data of *engine*."""
+    return f"neurolang-{engine}-data.zip"
+
 
 # The images of the datasets the engine reads; the other ones are emptied.
 KEPT_IMAGES = {
@@ -110,7 +132,9 @@ def write_highlight_words(output: Path) -> None:
     )
 
 
-def build_engine(data_dir: Path, use_cache: bool = True) -> None:
+def build_engine(
+    data_dir: Path, use_cache: bool = True, engine: str = ENGINE
+) -> None:
     """
     Build the engine on *data_dir*, which downloads what it lacks.
 
@@ -123,7 +147,7 @@ def build_engine(data_dir: Path, use_cache: bool = True) -> None:
 
     try:
         engine_registry.build_engine(
-            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+            engine, data_dir, RESOLUTION, use_cache=use_cache
         )
     except requests.exceptions.SSLError:
         system = next((c for c in SYSTEM_CERTIFICATES if c.is_file()), None)
@@ -131,7 +155,7 @@ def build_engine(data_dir: Path, use_cache: bool = True) -> None:
             raise
         os.environ["REQUESTS_CA_BUNDLE"] = str(system)
         engine_registry.build_engine(
-            ENGINE, data_dir, RESOLUTION, use_cache=use_cache
+            engine, data_dir, RESOLUTION, use_cache=use_cache
         )
 
 
@@ -147,7 +171,7 @@ def keep_downloads(source: Path, target: Path) -> None:
     )
 
 
-def check_engine_cache(data_dir: Path) -> None:
+def check_engine_cache(data_dir: Path, engine: str = ENGINE) -> None:
     """
     Stop if building the engine kept no tables in *data_dir*.
 
@@ -158,7 +182,7 @@ def check_engine_cache(data_dir: Path) -> None:
     """
     from neurolang_apps.utils import engine_cache
 
-    files = engine_cache.cached_files(data_dir, ENGINE)
+    files = engine_cache.cached_files(data_dir, engine)
     if not files:
         sys.exit(
             "The engine kept no tables in its data directory: the page "
@@ -169,12 +193,43 @@ def check_engine_cache(data_dir: Path) -> None:
           f"{size:.1f} MB")
 
 
-def trim(data_dir: Path) -> None:
-    """Empty the images of the datasets that the engine does not read."""
+def trim(data_dir: Path, engine: str = ENGINE) -> None:
+    """Empty the images of the datasets that the engine does not read, and
+    keep of a NeuroStore release only what it reads."""
     for dataset in TRIMMED_DATASETS:
         for image in (data_dir / dataset).rglob("*.nii.gz"):
             if image.name not in KEPT_IMAGES:
                 image.write_bytes(b"")
+    if engine == "neurostore":
+        trim_neurostore(data_dir / "neurostore")
+
+
+def trim_neurostore(directory: Path) -> None:
+    """
+    Keep in each release of *directory* the tables the engine reads, and of
+    them the columns it reads: the annotations have almost a thousand, of
+    which it takes those of the concepts and the domains of the tasks.
+    """
+    import pyarrow.parquet as parquet
+
+    for release in directory.iterdir():
+        if not release.is_dir():
+            continue
+        for path in release.iterdir():
+            if path.name not in NEUROSTORE_TABLES:
+                path.unlink()
+        for name, columns in NEUROSTORE_TABLES.items():
+            path = release / name
+            if not path.exists():
+                continue
+            names = parquet.read_schema(path).names
+            if columns is None:
+                columns = [
+                    n for n in names
+                    if n == "study_id" or n.endswith((".Concepts", ".Domain"))
+                ]
+            table = parquet.read_table(path, columns=list(columns))
+            parquet.write_table(table, path, compression="zstd")
 
 
 def zip_directory(directory: Path, archive: Path) -> None:
@@ -204,13 +259,15 @@ def write_parts(path: Path, output: Path, name: str) -> list:
     return names
 
 
-def bundle_name(path: Path) -> str:
-    """Return the name in the bundle of the file *path* of the embeddings:
-    without ``+``, a space in the URLs of some servers."""
-    return f"{ENGINE}-{path.name.replace('+', '_')}"
+def bundle_name(path: Path, engine: str = ENGINE) -> str:
+    """Return the name in the bundle of the file *path* of the embeddings of
+    *engine*: without ``+``, a space in the URLs of some servers."""
+    return f"{engine}-{path.name.replace('+', '_')}"
 
 
-def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
+def export_embeddings(
+    data_dir: Path, output: Path, embedded=None, engine: str = ENGINE
+) -> dict:
     """
     Write in *output* the files of the engine's text embeddings: for each
     index, the query model of the numpy encoder and the embeddings of the
@@ -225,16 +282,16 @@ def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
     from neurolang.utils import engine_registry, text_embeddings
     from neurolang_apps.utils import specter2_numpy
 
-    emb_dir = data_dir / ENGINE / "embeddings"
+    emb_dir = data_dir / engine / "embeddings"
     saved = None
     if embedded is not None:
-        saved = Path(embedded) / ENGINE / "embeddings"
+        saved = Path(embedded) / engine / "embeddings"
     if saved is not None and saved.exists():
         shutil.copytree(saved, emb_dir, dirs_exist_ok=True)
     torch = text_embeddings._torch_available()
     files = {}
     try:
-        nl = engine_registry.build_engine(ENGINE, data_dir, RESOLUTION)
+        nl = engine_registry.build_engine(engine, data_dir, RESOLUTION)
         for name, index in nl.text_embedding_indexes.items():
             model = index.encoder.numpy_path
             if not model.exists() and torch:
@@ -246,7 +303,7 @@ def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
             index.build()
             for path in (model, index.cache_path):
                 files[str(path.relative_to(data_dir))] = write_parts(
-                    path, output, bundle_name(path)
+                    path, output, bundle_name(path, engine)
                 )
     except Exception as error:  # the page works without them
         print(f"The text embeddings are left out: {error!r}")
@@ -257,31 +314,76 @@ def export_embeddings(data_dir: Path, output: Path, embedded=None) -> dict:
     return files
 
 
-def main(output: Path, embedded=None, downloads=None) -> None:
+def bundle_engine(
+    engine: str, output: Path, embedded=None, downloads=None
+) -> dict:
+    """
+    Build the data of *engine* for the page and write its zip in *output*,
+    in parts if it is larger than GitHub takes; return its entry of
+    ``bundle.json``: its label, its data (the name of the zip, or those of its
+    parts, which the page joins) and the files of its text embeddings.
+    """
+    # What an engine downloads is kept apart from that of the others, so that
+    # the zip of an engine holds its data only.
+    kept = None if downloads is None else Path(downloads) / engine
+    with tempfile.TemporaryDirectory() as tmp:
+        data_dir = Path(tmp) / "data"
+        data_dir.mkdir()
+        if kept is not None and kept.is_dir():
+            keep_downloads(kept, data_dir)
+        try:
+            build_engine(data_dir, engine=engine)
+        finally:
+            if kept is not None:
+                keep_downloads(data_dir, kept)
+        check_engine_cache(data_dir, engine)
+        trim(data_dir, engine)
+        build_engine(data_dir, engine=engine)  # the page's way: from the kept tables
+        build_engine(data_dir, use_cache=False, engine=engine)  # and without them
+        files = export_embeddings(data_dir, output, embedded, engine)
+        archive = Path(tmp) / data_zip(engine)
+        zip_directory(data_dir, archive)
+        names = write_parts(archive, output, data_zip(engine))
+    return {
+        "label": LABELS.get(engine, engine),
+        "data": names[0] if len(names) == 1 else names,
+        "files": files,
+    }
+
+
+def main(
+    output: Path, embedded=None, downloads=None, engines=ENGINES
+) -> None:
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
-    with tempfile.TemporaryDirectory() as tmp:
-        data_dir = Path(tmp)
-        if downloads is not None and Path(downloads).is_dir():
-            keep_downloads(Path(downloads), data_dir)
+    built = {}
+    for engine in engines:
         try:
-            build_engine(data_dir)
-        finally:
-            if downloads is not None:
-                keep_downloads(data_dir, Path(downloads))
-        check_engine_cache(data_dir)
-        trim(data_dir)
-        build_engine(data_dir)  # the page's way: from the kept tables
-        build_engine(data_dir, use_cache=False)  # and without them
-        files = export_embeddings(data_dir, output, embedded)
-        zip_directory(data_dir, output / DATA_ZIP)
+            built[engine] = bundle_engine(
+                engine, output, embedded, downloads
+            )
+        except Exception as error:
+            if engine == engines[0]:
+                raise  # the page's default: there is no page without it
+            print(f"The engine {engine} is left out of the bundle: {error!r}")
+    default = engines[0]
     (output / "bundle.json").write_text(
-        json.dumps({"wheels": wheels, "data": DATA_ZIP, "files": files})
-        + "\n"
+        json.dumps({
+            "wheels": wheels, "default": default, "engines": built,
+            # What a page of before the choice of the engine reads.
+            "data": built[default]["data"], "files": built[default]["files"],
+        }) + "\n"
     )
     write_highlight_words(output)
-    parts = [name for names in files.values() for name in names]
-    print(f"Wrote {', '.join(wheels)}, {DATA_ZIP}, "
+    names = [
+        name for engine in built for name in [built[engine]["data"]]
+        for name in ([name] if isinstance(name, str) else name)
+    ]
+    parts = [
+        name for engine in built for names_ in built[engine]["files"].values()
+        for name in names_
+    ]
+    print(f"Wrote {', '.join(wheels)}, {', '.join(names)}, "
           f"{', '.join(parts) or 'no embeddings'}, bundle.json and "
           f"highlight.json in {output}")
 
@@ -294,9 +396,15 @@ def parse_args(argv=None):
     parser.add_argument("output", type=Path)
     parser.add_argument("embedded", nargs="?")
     parser.add_argument("--downloads", type=Path)
+    parser.add_argument(
+        "--engine", action="append", choices=ENGINES, dest="engines",
+        help="an engine of the page (repeat); by default all of them",
+    )
     return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.output, args.embedded, args.downloads)
+    # The default first, whatever the order of the options.
+    chosen = [e for e in ENGINES if e in (args.engines or ENGINES)]
+    main(args.output, args.embedded, args.downloads, tuple(chosen))
