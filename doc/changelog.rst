@@ -171,6 +171,17 @@ Unreleased
   ``uv run --extra apps neurolang-repl-serve --pr NUMBER`` (or ``--run-id
   ID``), which downloads it with the GitHub CLI and serves it without
   building anything, or ``gh run download`` and ``python3 -m http.server``.
+  A pull request from a branch of this repository is also hosted on GitHub
+  Pages: ``https://neurolang.github.io/NeuroLang/pr-NUMBER/`` opens its
+  REPL, ``…/pr-NUMBER/docs/`` is its documentation, which the comment
+  leads with. The preview loads the data and embeddings of the main site
+  (``doc/make_repl_bundle.py --data-url URL`` points a built bundle at
+  them), and the comment tells when the pull request changes what they are
+  built from, or when the main site lacks them. Closing the pull request
+  removes its preview, and squashes the history of ``gh-pages`` past
+  500 MB. The benchmarks' dashboard moves to
+  ``https://neurolang.github.io/NeuroLang/benchmarks/``, its results with
+  it, and every job pushing to ``gh-pages`` is of one concurrency group.
   A pull request from a fork has the artifact, without the comment.
 * The workflows of the tests, the layers, the spelling and the
   documentation run on every pull request, whatever its base, so that a

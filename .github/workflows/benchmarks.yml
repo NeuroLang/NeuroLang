@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # needed to push to gh-pages
+      contents: read
 
     steps:
       - name: Checkout code with full history
@@ -26,18 +26,23 @@ jobs:
       - name: Install ASV
         run: pip install asv
 
+      # The results are kept on gh-pages, beside the dashboard, in
+      # benchmarks/results; before the dashboard moved to benchmarks/, they
+      # were in results/ at the root, which is the fallback.
       - name: Restore previous benchmark results
         run: |
           set -euo pipefail
           git fetch --no-tags --prune --depth=1 origin gh-pages || true
-          if git rev-parse origin/gh-pages >/dev/null 2>&1; then
-            git checkout origin/gh-pages -- results/ 2>/dev/null || true
-            if [ -d results ]; then
-              mkdir -p .asv/results
-              cp -r results/* .asv/results/
-              rm -rf results/
-              echo "Restored $(ls .asv/results/ | wc -l) result files from gh-pages"
-            fi
+          if git rev-parse -q --verify origin/gh-pages >/dev/null; then
+            for dir in benchmarks/results results; do
+              if git cat-file -e "origin/gh-pages:$dir" 2>/dev/null; then
+                mkdir -p .asv/results
+                strip=$(( $(tr -cd / <<< "$dir" | wc -c) + 1 ))
+                git archive origin/gh-pages "$dir" | tar -x -C .asv/results --strip-components="$strip"
+                echo "Restored $(ls .asv/results/ | wc -l) result files from gh-pages:$dir"
+                break
+              fi
+            done
           fi
 
       - name: Run benchmarks
@@ -57,10 +62,74 @@ jobs:
             ls -la .asv/html/results/
           fi
 
+      # Hidden directories are left out of artifacts.
+      - name: Copy the dashboard out of .asv
+        run: cp -r .asv/html asv-html
+
+      - name: Upload the dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: asv-html
+          path: asv-html
+          retention-days: 1
+
+  # The dashboard is deployed to benchmarks/ of gh-pages, which also holds
+  # the previews of the pull requests (pr-N/, see docs.yml). Every job that
+  # pushes to gh-pages is of the concurrency group gh-pages: one at a time.
+  deploy:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to push to gh-pages
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: asv-html
+          path: asv-html
+
+      # keep_files: false empties only destination_dir before copying.
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .asv/html
-          destination_dir: .
+          publish_dir: asv-html
+          destination_dir: benchmarks
           keep_files: false
+
+      - name: Check out gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      # The root of gh-pages holds a page linking to the dashboard, beside
+      # benchmarks/ and the previews: what else is there (the dashboard of
+      # before it moved to benchmarks/) is removed.
+      - name: Keep the root of gh-pages to its index
+        working-directory: pages
+        run: |
+          set -euo pipefail
+          git ls-tree --name-only HEAD | while read -r entry; do
+            case "$entry" in
+              index.html|.nojekyll|benchmarks|pr-*) ;;
+              *) git rm -rq -- "$entry" ;;
+            esac
+          done
+          cat > index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>NeuroLang</title></head>
+          <body><h1>NeuroLang</h1><ul><li><a href="benchmarks/">Benchmarks</a></li></ul></body>
+          </html>
+          EOF
+          git add index.html
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -q -m "Keep the root of gh-pages to its index"
+            git push origin HEAD:gh-pages
+          fi
