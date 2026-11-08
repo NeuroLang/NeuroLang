@@ -821,10 +821,10 @@ Answer variables as constants
    (``_are_different_tuples_when_different``). A variable at that position
    in an atom of :math:`R` that is not free, as :math:`z` in :math:`A(x, s)
    \land A(y, s) \land A(z, s)`, prevents it. The number of branches is the
-   Bell number of :math:`k`, 2, 5 and 15 for 2, 3 and 4 variables; more
-   than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 3, variables at a position
-   are declined, the optimisation of the plan of 15 branches taking too
-   long.
+   Bell number of :math:`k`, 2, 5, 15 and 52 for 2, 3, 4 and 5
+   variables; more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, 4,
+   variables at a position are declined, the plan of 52 branches being
+   deeper than the recursion limit of the walkers.
 
    A single free variable :math:`x` and a single variable :math:`y` of
    the existential prefix of a conjunctive query at that position are
@@ -1890,15 +1890,23 @@ Liftable queries that are declined
    The rules are not complete. These queries, among others, are
    polynomial but declined, and left to weighted model counting:
 
+   * :math:`\mathit{ans}() \leftarrow R(x) \land \lnot C(x)`, with
+     :math:`C` a probabilistic choice, whose probability is
+     :math:`1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b))`, exactly one
+     tuple :math:`C(a)` being true: the atom of the choice is negated, so
+     no conjunct of the choice has :math:`x` for the projections of
+     `Planning non-repeating queries`_, and the Dalvi–Suciu algorithm marks
+     the query ``NonLiftable``;
+   * more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, four, answer
+     variables at the same position of atoms of a relation: "answer
+     variables as constants" splits on all their equalities, and the
+     plan of the Bell number of the branches is too deep.
    * :math:`\mathit{ans}() \leftarrow S(x, y) \land \lnot C_2(x, y)`,
      with :math:`C_2` a probabilistic choice of two columns: the
      rewriting of the negated choice would give the disjunction
      :math:`f \neq x \lor g \neq y`, which no rule selects (see
      `Preparing the query`_);
    * more than ``MAX_ANSWER_VARIABLES_AT_A_POSITION``, three, answer
-     variables at the same position of atoms of a relation: "answer
-     variables as constants" splits on all their equalities, and the
-     Bell number of the branches makes the planning too long.
 
 The tests of the rules of `Negations and comparisons sharing relations`_
 (``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare

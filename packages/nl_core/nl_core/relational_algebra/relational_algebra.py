@@ -836,7 +836,9 @@ class ReplaceColumns(ew.ReplaceExpressionWalker):
         return constant
 
 
-class RelationalAlgebraSolver(ew.ExpressionWalker):
+class RelationalAlgebraSolver(
+    ew.WalkSharedExpressionsOnceMixin, ew.ExpressionWalker
+):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations.
