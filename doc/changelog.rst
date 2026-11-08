@@ -83,7 +83,9 @@ Unreleased
   rewritten with magic sets for its own bindings, into one program that is
   run once, so that the predicates they share are computed once, for the
   bindings of all of them (four queries sharing a recursive predicate take
-  1.6 s instead of 2.5 s).
+  1.6 s instead of 2.5 s). ``.view`` of the REPL shows the results of all the
+  queries in one viewer: images, a network and streamlines, beside one
+  another.
 
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and

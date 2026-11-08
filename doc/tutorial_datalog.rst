@@ -184,7 +184,8 @@ retrieve results later with ``nl.solve_all()``.
 
 A program can hold several queries, each with a name in brackets,
 ``ans[name](...)``. The result is then a dictionary from the names to the
-answers:
+answers, and ``.view`` in the REPL shows them all at once, as one image per
+query, with the networks and streamlines of the others:
 
 .. code-block:: python
 
