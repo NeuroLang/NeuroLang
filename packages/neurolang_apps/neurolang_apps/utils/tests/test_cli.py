@@ -1426,6 +1426,50 @@ def test_query_with_aggregation_in_head(aggregate, rows, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
+class TestImportFromFile:
+    """``.import`` in a program run with ``--file``."""
+
+    @staticmethod
+    def _engine(monkeypatch):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        monkeypatch.setattr(
+            engine_registry, "build_engine", lambda *args, **kwargs: nl
+        )
+        return nl
+
+    def test_modules_are_relative_to_the_file(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from neurolang_apps.utils.cli import main
+
+        self._engine(monkeypatch)
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "sides.dl").write_text(
+            'side("left")\nside("right")\n'
+        )
+        main_dl = tmp_path / "main.dl"
+        main_dl.write_text('.import("lib/sides.dl")\nans(x) :- side(x)\n')
+        main(["--format", "csv", "--file", str(main_dl)])
+        out = capsys.readouterr().out
+        assert "left" in out and "right" in out
+
+    def test_an_error_in_a_module_names_it(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from neurolang_apps.utils.cli import main
+
+        self._engine(monkeypatch)
+        (tmp_path / "bad.dl").write_text("r(1)\nq(x) :- r(x\n")
+        main_dl = tmp_path / "main.dl"
+        main_dl.write_text('.import("bad.dl")\nans(x) :- q(x)\n')
+        with pytest.raises(SystemExit):
+            main(["--file", str(main_dl)])
+        err = capsys.readouterr().err
+        assert f"{tmp_path.resolve() / 'bad.dl'}, line 2" in err
+
+
 class TestErrorReporting:
     """Errors are reported as formatted messages with exit status 1."""
 

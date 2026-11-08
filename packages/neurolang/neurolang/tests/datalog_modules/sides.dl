@@ -1,0 +1,4 @@
+% The sides of the brain, a module the tests import from a package.
+side("left")
+side("right")
+opposite(x, y) :- side(x), side(y), (x != y)

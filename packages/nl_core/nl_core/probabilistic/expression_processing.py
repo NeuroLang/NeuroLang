@@ -120,7 +120,10 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
         )
         for pf in pfacts
     ]
-    return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
+    ras = WrappedRelationalAlgebraSet(iterable)
+    return Constant[AbstractSet[ras.row_type]](
+        ras, auto_infer_type=False, verify_type=False
+    )
 
 
 def _probability_column_sum(ras):

@@ -9,12 +9,14 @@ submission succeeds, and then tells what it defined, one line per
 predicate (:meth:`Submission.definitions`). The symbols of a submission
 that is not to be kept, such as the rules of a query, local to it, are
 discarded even when it succeeds, but for the relations its commands
-loaded (``.load_csv``, the commands of an engine).
+loaded (``.load_csv``, the commands of an engine) and what the modules
+it imported defined (``.import``).
 """
 
 from nl_core.datalog import Fact, Union as DatalogUnion
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Constant, Query
+from neurolang.commands import IMPORTED_MODULES
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
@@ -159,6 +161,7 @@ class Submission:
                 for symbol in self.scope._symbols
             }
             _commit(self._loaded(), self.session)
+            _commit(self._imported(), self.session)
         return False
 
     def _loaded(self) -> dict:
@@ -173,6 +176,28 @@ class Submission:
         return {
             symbol: value for symbol, value in self.scope._symbols.items()
             if relation_rows(value) is not None and symbol not in self._facts
+        }
+
+    def _imported(self) -> dict:
+        """
+        Return what the modules the submission imported defined, by
+        symbol, with the record of the imports.
+
+        A query keeps them although its rules are local to it: a module
+        is imported once in the session.
+        """
+        imported = self.scope._symbols.get(IMPORTED_MODULES)
+        if imported is None:
+            return {}
+        before = self.session.get(IMPORTED_MODULES)
+        before = dict(before.value) if before is not None else {}
+        symbols = {
+            symbol for path, defined in imported.value if path not in before
+            for symbol in defined
+        }
+        return {
+            symbol: value for symbol, value in self.scope._symbols.items()
+            if symbol in symbols or symbol == IMPORTED_MODULES
         }
 
     def _copy_relations(self) -> None:
