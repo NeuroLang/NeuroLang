@@ -85,19 +85,21 @@ class Printer:
     Messages are cut to *limit* characters, and system prompts to
     *system_limit*, unless *full*; *hint* tells how to see them whole.
     The queries the model writes in its tool calls are shown on their
-    lines, highlighted as *language* on a terminal. Other kinds of
-    events are printed by the methods ``_<event>`` of subclasses.
+    lines, highlighted as *language* on a terminal, the probabilistic
+    predicates of *kinds* as such. Other kinds of events are printed by
+    the methods ``_<event>`` of subclasses.
     """
 
     def __init__(self, stream=None, full: bool = False, limit: int = 4000,
                  system_limit: int = 800, hint: str = "",
-                 language: str = "datalog"):
+                 language: str = "datalog", kinds=None):
         self.stream = stream or sys.stderr
         self.full = full
         self.limit = limit
         self.system_limit = system_limit
         self.hint = hint
         self.language = language
+        self.kinds = kinds
         self.color = query_highlight.use_color(self.stream)
 
     def show(self, event: dict) -> None:
@@ -134,7 +136,8 @@ class Printer:
         for call in event["tool_calls"]:
             self._write(f"tool call {call['name']}:")
             self._write("\n".join(argument_lines(
-                call["arguments"], self.language, self.color, "  "
+                call["arguments"], self.language, self.color, "  ",
+                self.kinds,
             )))
 
     def _reply_text(self, text: str):
@@ -148,7 +151,7 @@ class Printer:
             return
         self._write(self._cut(text[:start.end()].rstrip(), self.limit))
         self._write("\n".join(argument_lines(
-            action.arguments, self.language, self.color, "  "
+            action.arguments, self.language, self.color, "  ", self.kinds
         )))
 
     def _message(self, message: dict):
@@ -174,15 +177,16 @@ class Printer:
 
 
 def argument_lines(arguments: dict, language: str, color: bool,
-                   indent: str = "") -> list:
+                   indent: str = "", kinds=None) -> list:
     """
     Return the lines showing the *arguments* of a tool call: its query on
-    its own lines, highlighted as *language* if *color*, then the others.
+    its own lines, highlighted as *language* if *color* (see
+    :func:`query_lines`), then the others.
     """
     lines = []
     query = arguments.get("query")
     if isinstance(query, str):
-        lines += query_lines(query, language, color, indent)
+        lines += query_lines(query, language, color, indent, kinds)
     for name, value in arguments.items():
         if name != "query":
             value = value if isinstance(value, str) else json.dumps(
@@ -193,11 +197,15 @@ def argument_lines(arguments: dict, language: str, color: bool,
 
 
 def query_lines(query: str, language: str, color: bool,
-                indent: str = "") -> list:
-    """Return the lines of *query*, highlighted as *language* if *color*."""
+                indent: str = "", kinds=None) -> list:
+    """
+    Return the lines of *query*, highlighted as *language* if *color*.
+
+    The probabilistic predicates are highlighted as *kinds* tells.
+    """
     text = query.strip()
     if color:
-        text = query_highlight.ansi(text, language)
+        text = query_highlight.ansi(text, language, kinds)
     return [indent + line for line in text.split("\n")]
 
 
