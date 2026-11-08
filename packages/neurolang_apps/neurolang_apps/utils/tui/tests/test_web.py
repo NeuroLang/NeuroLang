@@ -78,7 +78,7 @@ def test_view_pages_are_returned_not_opened(repl, monkeypatch, tmp_path):
     monkeypatch.setattr(nifti.tempfile, "tempdir", str(tmp_path))
     repl.submit("ans(x) :- person(x, n)")
     monkeypatch.setattr(
-        nifti, "last_result_images", lambda app, save: [("layer", Path("a"))]
+        nifti, "last_result_images", lambda app, block, save: [("layer", Path("a"))]
     )
     monkeypatch.setattr(
         nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"

@@ -1108,9 +1108,12 @@ in a browser.
 Without a path, the last result is converted into an image as .save
 converts it, with its options --value, --voxel and --mm. A result with
 several value columns, numeric ones that are neither of the voxels nor
-of an entity, gives an overlay per column, unless --value picks one;
-the voxels without a value, not in the result or NaN, take the value of
---fill (default: 0, no value: hidden). A nonzero fill is a value of
+of an entity, gives an overlay per column, unless --value picks one.
+A program with several queries, ans[name](...) :- ..., gives the layers
+of all its results, each named after its query, which the viewer shows
+together: images, a network and streamlines, one network and one set of
+streamlines at most. The voxels without a value, not in the result or
+NaN, take the value of --fill (default: 0, no value: hidden). A nonzero fill is a value of
 every other voxel of the grid, which the percentiles count. The viewer
 is an HTML page, saved to a temporary file and opened in the browser when
 the REPL runs on a terminal; it needs no network, but a browser with
@@ -1489,23 +1492,15 @@ def cmd_save(app, arg: str) -> None:
         _save_block(app, block, request._replace(path=path))
 
 
-def last_result_images(app, request: SaveRequest) -> Optional[list]:
+def last_result_images(app, block, request: SaveRequest) -> Optional[list]:
     """
-    Save the last result as NIfTI images in temporary files.
+    Save the result *block* as NIfTI images in temporary files.
 
-    The result, the last ``obtain`` block of a SQUALL program with
-    several, is converted as ``.save`` converts it, as *request* asks,
+    The block is converted as ``.save`` converts it, as *request* asks,
     into an image per value column (:func:`value_columns`). Return the
-    (column name, path) of each, or None, telling why, if there is no
-    result or it has no voxels.
+    (column name, path) of each, or None, telling why, if it has no
+    voxels.
     """
-    if not app.results:
-        app.console.print(
-            "[yellow]Nothing to view — run a query first, or give a NIfTI "
-            "file.[/yellow]"
-        )
-        return None
-    block = app.results[-1]
     try:
         saved = [
             result_image(app, block, request._replace(value=column))
@@ -1531,17 +1526,14 @@ def _view_image_file(app, image: SavedImage) -> Path:
     return Path(name)
 
 
-def _last_result_kind(app, request: SaveRequest) -> str:
+def _result_kind(app, block, request: SaveRequest) -> str:
     """
-    Return what the last result of *app* holds: ``network`` for pairs of
-    regions or points, ``regions`` for regions of an atlas, else
+    Return what the result *block* of *app* holds: ``network`` for pairs
+    of regions or points, ``regions`` for regions of an atlas, else
     ``voxels``; without voxel columns, ``streamlines`` for streamline ids
     (:func:`streamline_column`), of the sort :data:`STREAMLINE_SORT` or,
     the engine having streamlines (:func:`has_streamlines`), integers.
     """
-    if not app.results:
-        return "voxels"
-    block = app.results[-1]
     sorts = _engine_sorts(app.settings.engine_name)
     if request.points is not None:
         return "voxels"
@@ -1557,16 +1549,15 @@ def _last_result_kind(app, request: SaveRequest) -> str:
     return "regions" if points.space == LABEL_SPACE else "voxels"
 
 
-def last_result_network(app, request: ViewRequest):
+def last_result_network(app, block, request: ViewRequest):
     """
-    Return the last result of *app*, of pairs, as a network to view.
+    Return the result *block*, of pairs, as a network to view.
 
     Return the layer of the strength of its nodes, (name, path) of a
     temporary NIfTI file, and the network as the viewer draws it
     (:func:`~.brain_viewer.connectome_state`), or None, telling why, if
     it cannot be built.
     """
-    block = app.results[-1]
     sorts = _engine_sorts(app.settings.engine_name)
     try:
         network = result_network(
@@ -1664,9 +1655,9 @@ def streamline_background(nl):
     return background, ("RAS" if callable(hook) else "MNI")
 
 
-def last_result_streamlines(app):
+def last_result_streamlines(app, block):
     """
-    Return the last result of *app*, of streamline ids, as streamlines.
+    Return the result *block*, of streamline ids, as streamlines.
 
     The engine's ``streamline_points`` gives the points of
     :data:`~.brain_viewer.MAX_STREAMLINES` of them at most, evenly
@@ -1678,7 +1669,6 @@ def last_result_streamlines(app):
     (:func:`streamline_background`); or None, telling why, if they cannot
     be built.
     """
-    block = app.results[-1]
     column = streamline_column(block.frame, block.sorts)
     try:
         if not has_streamlines(app._nl):
@@ -1725,6 +1715,85 @@ def last_result_streamlines(app):
     )
 
 
+def _one_of_a_kind(extra: dict, found: dict, console, title: str) -> bool:
+    """
+    Add what a block draws, *found*, to *extra*, the viewer's keyword
+    arguments, and return whether it was added: the viewer draws one
+    network and one set of streamlines, so those of a later block are
+    left out, telling it on *console*.
+    """
+    for key in ("connectome", "streamlines"):
+        if key in found and key in extra:
+            console.print(
+                f"Only one {'network' if key == 'connectome' else key} is "
+                f"drawn: that of {title or 'the result'} is left out.",
+                style="yellow", markup=False,
+            )
+            return False
+    extra.update(found)
+    return True
+
+
+def _block_layers(app, block, request: ViewRequest):
+    """
+    Return the layers of the result *block* for the viewer, as
+    (kind, layers, extra), or None, telling why, if it cannot be shown.
+
+    *kind* is what the block holds (:func:`_result_kind`), *layers* are
+    (name, path) pairs of temporary NIfTI files and *extra* the keyword
+    arguments of the viewer that the block draws, if any.
+    """
+    kind = _result_kind(app, block, request.save)
+    if kind == "network":
+        built = last_result_network(app, block, request)
+        if built is not None:
+            built = (built[0], {"connectome": built[1]})
+    elif kind == "streamlines":
+        built = last_result_streamlines(app, block)
+    else:
+        layers = last_result_images(app, block, request.save)
+        built = None if layers is None else (layers, {})
+    return None if built is None else (kind, *built)
+
+
+def last_results_layers(app, request: ViewRequest):
+    """
+    Return the layers of all the results of *app*, as (layers, extra,
+    request), or None, telling why, if they cannot be shown.
+
+    Each block of the last result, a query's or an ``obtain``'s or the
+    ``ans[name]`` of a program with several, gives its images, network
+    or streamlines; the viewer shows them together, the layers of a
+    result of several named after its block. The *request*'s threshold
+    is 0 for results that are not of voxels, unless it is given: the
+    one the viewer starts all the layers with.
+    """
+    if not app.results:
+        app.console.print(
+            "[yellow]Nothing to view — run a query first, or give a NIfTI "
+            "file.[/yellow]"
+        )
+        return None
+    several = len(app.results) > 1
+    layers, extra, kinds = [], {}, set()
+    for block in app.results:
+        built = _block_layers(app, block, request)
+        if built is None:
+            return None
+        kind, block_layers, found = built
+        if not _one_of_a_kind(extra, found, app.console, block.title):
+            continue
+        kinds.add(kind)
+        layers += [
+            (f"{block.title}: {name}" if several and block.title else name,
+             path)
+            for name, path in block_layers
+        ]
+    if "voxels" not in kinds and not request.threshold_given:
+        request = request._replace(threshold=0.0)
+    return layers, extra, request
+
+
 @command(
     ".view", "Show a NIfTI image, or the last result, in an interactive "
     "viewer in the browser (.help view)", VIEW_USAGE,
@@ -1735,7 +1804,8 @@ def cmd_view(app, arg: str) -> None:
 
     Without a path, the last result is converted as ``.save`` would, its
     options included, into temporary ``.nii.gz`` files, an overlay per
-    value column.
+    value column; those of all the results of a program with several
+    queries are shown together.
     """
     try:
         request = parse_view_args(arg)
@@ -1744,24 +1814,10 @@ def cmd_view(app, arg: str) -> None:
         return
     extra = {}
     if request.path is None:
-        kind = _last_result_kind(app, request.save)
-        if kind == "network":
-            network = last_result_network(app, request)
-            if network is None:
-                return
-            layers, connectome = network
-            extra = {"connectome": connectome}
-        elif kind == "streamlines":
-            streamlines = last_result_streamlines(app)
-            if streamlines is None:
-                return
-            layers, extra = streamlines
-        else:
-            layers = last_result_images(app, request.save)
-        if layers is None:
+        shown = last_results_layers(app, request)
+        if shown is None:
             return
-        if kind != "voxels" and not request.threshold_given:
-            request = request._replace(threshold=0.0)
+        layers, extra, request = shown
     elif not request.path.is_file():
         app.console.print(
             f"File not found: {request.path}", style="red", markup=False
@@ -1779,5 +1835,7 @@ def _view_title(app, request: ViewRequest, path: Path) -> str:
     """Return the title of the viewer: the image's name, or the result's."""
     if request.path is not None:
         return path.name
-    block = app.results[-1].title
-    return f"Last result: {block}" if block else "Last result"
+    titles = [block.title for block in app.results if block.title]
+    if len(titles) > 1:
+        return f"Last results: {', '.join(titles)}"
+    return f"Last result: {titles[0]}" if titles else "Last result"

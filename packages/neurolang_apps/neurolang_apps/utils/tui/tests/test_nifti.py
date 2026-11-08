@@ -1189,15 +1189,15 @@ class TestViewStreamlines:
         tracts._execute_and_display(
             "ans(x, y, z, x2, y2, z2) :- mni(x, y, z), mni(x2, y2, z2)"
         )
-        assert nifti._last_result_kind(
-            tracts, nifti.SaveRequest(Path("x.nii"))
+        assert nifti._result_kind(
+            tracts, tracts.results[-1], nifti.SaveRequest(Path("x.nii"))
         ) == "network"
 
     def test_several_integer_columns_are_not_streamlines(self, tracts):
         tracts._nl.add_tuple_set([(1, 7), (2, 8)], name="pairs")
         tracts._execute_and_display("ans(a, b) :- pairs(a, b)")
-        assert nifti._last_result_kind(
-            tracts, nifti.SaveRequest(Path("x.nii"))
+        assert nifti._result_kind(
+            tracts, tracts.results[-1], nifti.SaveRequest(Path("x.nii"))
         ) == "voxels"
 
     def test_the_overlay_counts_the_streamlines_per_voxel(
@@ -1277,3 +1277,84 @@ class TestViewStreamlines:
         out = _output(tiny)
         assert "streamline_points" in out
         assert "streamline_background" in out
+
+
+SEVERAL_QUERIES = """\
+ans[seen](i, j, k) :- voxel(i, j, k)
+ans[weighted](i, j, k, w) :- weight(i, j, k, w)
+"""
+
+
+class TestViewSeveralQueries:
+    """Check .view draws the results of all the queries of a program."""
+
+    @pytest.fixture
+    def viewed(self, monkeypatch):
+        """Record the images and the options of the viewer page."""
+        calls = []
+
+        def viewer_html(img, background, **kwargs):
+            calls.append((img, kwargs))
+            return "<html></html>"
+
+        monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
+        return calls
+
+    def _view(self, app, program):
+        app._execute_and_display(program)
+        app._handle_dot_command(".view")
+        out = _output(app)
+        rest = out
+        for prefix in ("image to: ", "viewer to: "):
+            while prefix in rest:
+                _, _, rest = rest.partition(prefix)
+                Path(rest.split()[0]).unlink(missing_ok=True)
+        return out
+
+    def test_a_result_block_per_query(self, tiny):
+        tiny._execute_and_display(SEVERAL_QUERIES)
+        assert [block.title for block in tiny.results] == [
+            "seen", "weighted"
+        ]
+        assert [block.sorts[0].sort for block in tiny.results] == [
+            "voxel", "voxel"
+        ]
+
+    def test_the_layers_of_all_the_queries_in_one_viewer(
+        self, tiny, viewed
+    ):
+        self._view(tiny, SEVERAL_QUERIES)
+        (images, kwargs), = viewed
+        assert [name for name, _ in images] == [
+            "seen: mask", "weighted: w"
+        ]
+        assert "Last results: seen, weighted" in kwargs["title"]
+
+    def test_a_network_and_streamlines_beside_images(
+        self, tracts, viewed
+    ):
+        self._view(tracts, SEVERAL_QUERIES + (
+            "ans[tracts](s) :- tract(s)\n"
+            "ans[pairs](x, y, z, x2, y2, z2, w) :- mni(x, y, z), "
+            "mni(x2, y2, z2), weight(1, 2, 3, w)\n"
+        ))
+        (images, kwargs), = viewed
+        names = [name for name, _ in images]
+        assert names[:2] == ["seen: mask", "weighted: w"]
+        assert "tracts: streamlines" in names
+        assert "pairs: node strength" in names
+        assert kwargs["streamlines"]["total"] == 2
+        assert kwargs["connectome"]["nodes"]
+
+    def test_one_set_of_streamlines_is_drawn(self, tracts, viewed):
+        out = self._view(tracts, (
+            "ans[a](s) :- tract(s)\nans[b](s) :- tract(s)\n"
+        ))
+        (images, kwargs), = viewed
+        assert "streamlines" in kwargs
+        assert isinstance(images, nib.Nifti1Image)  # a single layer
+        assert "Only one streamlines is drawn: that of b" in out
+
+    def test_the_threshold_is_the_default_with_voxels(self, tiny, viewed):
+        self._view(tiny, SEVERAL_QUERIES)
+        assert viewed[0][1]["threshold"] == "95%"
