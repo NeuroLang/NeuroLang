@@ -36,9 +36,9 @@ def atlas_of(volume, affine, **kw):
     return Atlas("x", volume, affine, TABLE, "s", **kw)
 
 
-def extents(atlas):
+def extents(atlas, extent="edge"):
     """{label: (lo (3,), hi (3,))} from the relation."""
-    rel = label_extent_relation(atlas)
+    rel = label_extent_relation(atlas, extent)
     out = {}
     for label, g in rel.groupby("l"):
         g = g.sort_values("axis")
@@ -188,3 +188,71 @@ def test_the_relation_is_the_same_each_time(volume):
     first = label_extent_relation(atlas)
     again = label_extent_relation(atlas)
     pd.testing.assert_frame_equal(first, again)
+
+
+def test_the_default_extent_is_the_edge(volume):
+    atlas = atlas_of(volume, AFFINES["aligned"])
+    pd.testing.assert_frame_equal(
+        label_extent_relation(atlas), label_extent_relation(atlas, "edge")
+    )
+
+
+def test_centre_extent_values(volume):
+    """Label 3 is the voxel (10, 9, 7): the extent of its centre, a point;
+    label 1, the voxels 2..4, 1..3, 0..2, is from the centre of the first
+    to that of the last."""
+    rel = label_extent_relation(atlas_of(volume, AFFINES["aligned"]), "centre")
+    assert rel.columns.tolist() == ["a", "l", "axis", "lo", "hi"]
+    assert len(rel) == 3 * 4
+    one = rel[rel.l == 3].sort_values("axis")
+    # diag(2, 3, 4) + (-10, -20, -30)
+    assert one["lo"].tolist() == [10.0, 7.0, -2.0]
+    assert one["hi"].tolist() == [10.0, 7.0, -2.0]
+    one = rel[rel.l == 1].sort_values("axis")
+    assert one["lo"].tolist() == [-6.0, -17.0, -30.0]
+    assert one["hi"].tolist() == [-2.0, -11.0, -22.0]
+    flipped = label_extent_relation(
+        atlas_of(volume, AFFINES["flipped"]), "centre"
+    )
+    flipped = flipped[flipped.l == 1].sort_values("axis")
+    # diag(-2, -3, 4) + (10, 20, -30): lo < hi
+    assert flipped["lo"].tolist() == [2.0, 11.0, -30.0]
+    assert flipped["hi"].tolist() == [6.0, 17.0, -22.0]
+
+
+@pytest.mark.parametrize("name", EXACT_AFFINES)
+def test_centre_extent_is_the_extent_of_the_voxel_centres(volume, name):
+    """What ``compute_label_bounding_boxes`` does without scipy (the
+    minimum and maximum of the voxel centres), transcribed by
+    ``brute_force_extent`` over the voxels."""
+    affine = AFFINES[name]
+    got = extents(atlas_of(volume, affine), "centre")
+    assert set(got) == {1, 2, 3, 4}
+    for label, (lo, hi) in got.items():
+        true_lo, true_hi = brute_force_extent(volume, affine, label, 0)
+        np.testing.assert_allclose(lo, true_lo, atol=1e-4)
+        np.testing.assert_allclose(hi, true_hi, atol=1e-4)
+
+
+def test_centre_extent_is_inside_the_edge_extent_by_half_a_voxel(volume):
+    affine = AFFINES["flipped"]
+    edge = extents(atlas_of(volume, affine))
+    centre = extents(atlas_of(volume, affine), "centre")
+    half = np.abs(np.diag(affine[:3, :3])) / 2
+    for label in edge:
+        np.testing.assert_allclose(centre[label][0], edge[label][0] + half)
+        np.testing.assert_allclose(centre[label][1], edge[label][1] - half)
+
+
+def test_centre_extent_oblique_contains_the_voxel_centres(volume):
+    affine = AFFINES["oblique"]
+    for label, (lo, hi) in extents(
+        atlas_of(volume, affine), "centre"
+    ).items():
+        true_lo, true_hi = brute_force_extent(volume, affine, label, 0)
+        assert (lo <= true_lo + 1e-3).all() and (hi >= true_hi - 1e-3).all()
+
+
+def test_an_extent_that_is_not_one(volume):
+    with pytest.raises(ValueError, match="extent"):
+        label_extent_relation(atlas_of(volume, AFFINES["aligned"]), "corner")

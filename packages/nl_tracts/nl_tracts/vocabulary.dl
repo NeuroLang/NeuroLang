@@ -56,8 +56,9 @@ leaves(x, term, h) :- traverses(x, term, h), streamline_label(a, x, l), ~term_la
 %% only_in(x: streamline, term: term, h: hemisphere)
 %% Every label x goes through is of the term and of hemisphere h. With
 %% .index_tracts(..., emit_background=1) the background is a label x goes
-%% through, of no term, so that hardly any streamline is only_in a term:
-%% leave it at its default, 0.
+%% through (as in tract_querier's index), of no term: a streamline with
+%% crossing_threshold % of its points in it is not only_in a term, as in
+%% tract_querier's only(); without those rows, the default, it is.
 only_in(x, term, h) :- traverses(x, term, h), ~leaves(x, term, h)
 
 %% term_box_lo(term: term, h: hemisphere, axis: axis, lo: coordinate)

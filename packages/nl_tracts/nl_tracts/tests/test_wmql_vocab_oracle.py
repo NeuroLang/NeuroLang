@@ -17,13 +17,17 @@ directions are anatomical in the vocabulary, inverted in tract_querier
 (DESIGN.md, 15.20): checked against numpy instead.
 """
 
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from nl_tracts.wmql_vocab import translate
 
-from .reference_tq import Indexing, evaluate, load_reference
+from .reference_tq import (
+    Indexing, evaluate, load_indexing, load_reference,
+)
 
 TERMS = {  # label: (term, hemisphere)
     1: ("p", "left"), 2: ("p", "right"), 3: ("q", "left"),
@@ -70,14 +74,20 @@ uf.side = ((p.side or q.side) and endpoints_in(r.side and anterior_of(s.side))
 """
 
 
-def synthetic(seed, n=80):
-    """crossing, endings, label boxes, streamline boxes, endpoints."""
+def synthetic(seed, n=80, background=False):
+    """crossing, endings, label boxes, streamline boxes, endpoints. With
+    ``background``, about half the streamlines traverse label 0, which has
+    no term (``.index_tracts(..., emit_background=1)``)."""
     rng = np.random.default_rng(seed)
     crossing = {
         s: set(rng.choice(list(TERMS), size=rng.integers(0, 5),
                           replace=False).tolist())
         for s in range(n)
     }
+    if background:
+        for s in range(n):
+            if rng.random() < 0.5:
+                crossing[s].add(0)
     endings = tuple(  # 0: an end in the background, of no label
         {s: int(rng.integers(0, len(TERMS) + 1)) for s in range(n)}
         for _ in range(2)
@@ -131,11 +141,14 @@ def relations(crossing, endings, boxes, tract_boxes, endpoints):
     }
 
 
-def solve(program, data):
+def solve(program, data, label_extent=None):
     from nl_tracts.frontend import tracts_engine
 
     nl = tracts_engine()  # with the vocabulary
-    for name, frame in relations(*data).items():
+    frames = relations(*data)
+    if label_extent is not None:
+        frames["label_extent"] = label_extent
+    for name, frame in frames.items():
         nl.add_tuple_set(frame, name=name)
     nl.execute_datalog_program(program)
     return {
@@ -186,3 +199,91 @@ def test_the_vertical_directions_are_anatomical():
             np.flatnonzero(tract_boxes[:, 1, 2] > hi[2]).tolist())
         assert streamlines(solution, f'down(x, "{side}")') == set(
             np.flatnonzero(tract_boxes[:, 0, 2] < lo[2]).tolist())
+
+
+@pytest.mark.parametrize("seed", [1, 2])
+def test_the_background_among_the_labels_is_as_in_tract_querier(seed):
+    """With ``emit_background=1`` (rows of label 0 in ``streamline_label``,
+    as the reference's ``crossing_tracts_labels``), every query, ``only``
+    included, is the reference's: the background is a label outside the
+    term, so that a streamline in it is not ``only`` in a term."""
+    reference = load_reference()
+    source = LABELS + QUERIES
+    translation = translate(source)
+    data = synthetic(seed, background=True)
+    expected = evaluate(reference, source, Indexing(*data))
+    solution = solve(translation.text, data)
+    for name, atom in translation.queries.items():
+        assert streamlines(solution, atom) == expected[name], (name, seed)
+    # without the rows of the background (the default of .index_tracts) the
+    # `only` queries are supersets of the reference's
+    plain = solve(translation.text, (
+        {s: labels - {0} for s, labels in data[0].items()}, *data[1:]))
+    more = [
+        name for name, atom in translation.queries.items()
+        if name.startswith(("x12.", "x13.", "x14.", "x26."))
+        and streamlines(plain, atom) > expected[name]
+    ]
+    assert more
+
+
+@pytest.mark.parametrize("affine_name", ["aligned", "flipped", "permuted"])
+def test_the_directions_with_tract_queriers_boxes(affine_name, monkeypatch):
+    """``extent="centre"``: ``label_extent`` of a label volume is the
+    reference's ``compute_label_bounding_boxes`` where scipy is not
+    installed (its voxel centres; blocked here, for it is installed in the
+    tests), and the directional queries, with streamline boxes on the faces
+    of the labels' (half a voxel from the edge's), are the reference's."""
+    from neurolang.atlases import Atlas
+    from nl_tracts.atlas import label_extent_relation
+
+    from .conftest import AFFINES
+
+    affine = AFFINES[affine_name]
+    rng = np.random.default_rng(3)
+    volume = np.zeros((12, 10, 8), dtype=np.int32)
+    for label in TERMS:
+        lo = rng.integers(0, [10, 8, 6])
+        volume[tuple(slice(a, a + 1 + rng.integers(0, 3)) for a in lo)] = label
+    table = pd.DataFrame({
+        "id": [0, *TERMS], "name": ["bg", *[f"{t}_{h}" for t, h in
+                                            TERMS.values()]]})
+    atlas = Atlas("fs", volume, affine, table, "s")
+    extent = label_extent_relation(atlas, "centre")
+    monkeypatch.setitem(sys.modules, "scipy", None)  # no scipy: ImportError
+    reference_boxes = load_indexing().compute_label_bounding_boxes(
+        volume, affine)
+    monkeypatch.undo()
+    boxes = {label: (np.asarray(box[:3]), np.asarray(box[3:]))
+             for label, box in reference_boxes.items()}
+    assert set(boxes) == set(extent["l"]) == set(TERMS)
+    for label, (lo, hi) in boxes.items():
+        got = extent[extent.l == label].sort_values("axis")
+        np.testing.assert_allclose(got["lo"], lo, atol=1e-4)
+        np.testing.assert_allclose(got["hi"], hi, atol=1e-4)
+
+    crossing, endings, _, tract_boxes, endpoints = synthetic(4)
+    # streamline boxes on a 1 mm grid, which the faces of the boxes are on
+    low = np.round(rng.uniform(-30, 30, tract_boxes.shape[0:1] + (3,)))
+    tract_boxes = np.stack(
+        [low, low + rng.integers(0, 40, low.shape)], axis=1)
+    endpoints = tract_boxes[:, [0, 1]]
+    data = (crossing, endings, boxes, tract_boxes, endpoints)
+    source = LABELS + """
+a.side = anterior_of(p.side) and q.side
+b.side = posterior_of(p.side) not in r.side
+c.side = anterior_of(s.side) or posterior_of(q.side)
+d.side = medial_of(p.side) and q.side
+e.side = lateral_of(q.side) not in medial_of(p.opposite)
+f.side = endpoints_in(p.side and anterior_of(q.side))
+"""
+    translation = translate(source)
+    expected = evaluate(
+        load_reference(), source, Indexing(*data))
+    solution = solve(translation.text, data, label_extent=extent)
+    nonempty = 0
+    for name, atom in translation.queries.items():
+        got = streamlines(solution, atom)
+        assert got == expected[name], (name, atom, affine_name)
+        nonempty += bool(got)
+    assert nonempty >= 6

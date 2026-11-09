@@ -20,6 +20,7 @@ from .terms import COLUMNS as TERM_COLUMNS
 from .terms import load_term_mapping
 
 __all__ = [
+    "EXTENTS",
     "DEFAULT_TERM_MAPPINGS",
     "ProbabilisticAtlas",
     "atlas_term_mapping",
@@ -150,7 +151,10 @@ def unmapped_labels(
     return t[unmapped & (t["id"] != atlas.background)].reset_index(drop=True)
 
 
-def label_extent_relation(atlas: Atlas) -> pd.DataFrame:
+EXTENTS = ("edge", "centre")
+
+
+def label_extent_relation(atlas: Atlas, extent: str = "edge") -> pd.DataFrame:
     """``label_extent(a, l, axis, lo, hi)``.
 
     The extent of each label along each world axis (0, 1, 2 = x, y, z
@@ -169,9 +173,22 @@ def label_extent_relation(atlas: Atlas) -> pd.DataFrame:
     two corners ``[start, stop]`` (half a voxel off at both ends) and
     is not a box under an oblique affine (DESIGN.md, 6.1).
 
+    ``extent="centre"`` gives the extent of the voxel *centres* instead:
+    ``[start, stop - 1]``, the centre of the first and of the last voxel,
+    as ``tract_querier``'s ``compute_label_bounding_boxes`` does where
+    ``scipy`` is not installed (the case of a ``pip install`` of its
+    declared dependencies), so that the directional rules reproduce
+    ``tract_querier``'s (DESIGN.md, 6.1.1). It is exact under the same
+    affines as the default, and shorter by one voxel (a single voxel has
+    the extent zero). The 8 corners of the box are mapped in both.
+
     The background has no row, nor has an id absent from the volume.
     All the labels are done at once, from one ``find_objects``.
     """
+    if extent not in EXTENTS:
+        raise ValueError(
+            f"the extent of a label is one of {EXTENTS}, not {extent!r}"
+        )
     volume = atlas.labels
     if atlas.background != 0:
         # find_objects skips 0: swap it with the background
@@ -187,7 +204,9 @@ def label_extent_relation(atlas: Atlas) -> pd.DataFrame:
     start = np.array([[s.start for s in o] for _, o in found], float)
     stop = np.array([[s.stop for s in o] for _, o in found], float)
     start, stop = start.reshape(-1, 3), stop.reshape(-1, 3)
-    lo, hi = start - 0.5, stop - 0.5  # voxel edges
+    # voxel edges, or voxel centres: [start, stop - 1] widened by a margin
+    margin = 0.5 if extent == "edge" else 0.0
+    lo, hi = start - margin, stop - 1 + margin
     bits = np.array(list(itertools.product((0, 1), repeat=3)), bool)
     corners = np.where(bits[None], hi[:, None, :], lo[:, None, :])
     world = corners @ atlas.affine[:3, :3].T + atlas.affine[:3, 3]

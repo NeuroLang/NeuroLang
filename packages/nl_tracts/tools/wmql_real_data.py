@@ -25,13 +25,27 @@ Three steps, each writing or reading a JSON file of
 * ``compare tq.json vocab.json``: a Markdown table, tract, side, the two
   counts and their Jaccard index.
 
+The two options of the vocabulary that reproduce tract_querier where the
+two differ by design (DESIGN.md, 6.1 and 6.1.1) are the words ``background``
+(``.index_tracts(..., emit_background=1)``) and ``extent``
+(``extent="centre"``) after the output of ``vocab``;
+``wmql_parity_causes.py`` says why each difference is one.
+
 Both read the streamlines in the order of the file, so that a streamline is
 its position ``s`` in both (one tractogram: ``x`` is ``s``).
 """
 
 import json
+import resource
 import sys
 import time
+
+
+def peak_gb():
+    """Peak resident memory of this process, GB (macOS counts bytes,
+    Linux kilobytes)."""
+    scale = 1 << 30 if sys.platform == "darwin" else 1 << 20
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / scale
 
 
 def run_tq(trk, atlas, qry, out):
@@ -64,11 +78,24 @@ def run_tq(trk, atlas, qry, out):
     }
     seconds = {"load": t1 - t0, "index": t2 - t1, "queries": t3 - t2}
     with open(out, "w") as f:
-        json.dump({"queries": queries, "seconds": seconds}, f)
-    print(seconds)
+        json.dump({
+            "queries": queries, "seconds": seconds, "peak_gb": peak_gb(),
+            # for tools/wmql_parity_causes.py: what the index says
+            "crossing": {
+                int(t): sorted(int(label) for label in labels)
+                for t, labels in indexing.crossing_tracts_labels.items()
+            },
+            "label_boxes": {
+                int(label): [float(v) for v in box]
+                for label, box in indexing.label_bounding_boxes.items()
+            },
+        }, f)
+    print(seconds, peak_gb())
 
 
-def run_vocab(trk, atlas, lut, qry, out):
+def run_vocab(trk, atlas, lut, qry, out, *options):
+    """``options``: ``background`` (``emit_background=1`` of
+    ``.index_tracts``) and ``extent`` (``extent="centre"``)."""
     import os
 
     from nl_tracts.frontend import tracts_engine
@@ -81,13 +108,19 @@ def run_vocab(trk, atlas, lut, qry, out):
             terms=set(load_term_mapping("freesurfer_aseg_aparc")["term"]),
             skip_unsupported=True,
         )
+    index = ""
+    if "background" in options:
+        index += ", emit_background=1"
+    if "extent" in options:
+        index += ', extent="centre"'
     t0 = time.perf_counter()
     nl = tracts_engine()
     nl.execute_datalog_program(
         f'.load_atlas("fs", "{atlas}", "{lut}", kind="freesurfer", '
         'space="MNI152")\n'
         f'.load_tractogram("t", "{trk}", space="MNI152")\n'
-        '.index_tracts("t", "fs", term_mapping="freesurfer_aseg_aparc")\n'
+        '.index_tracts("t", "fs", term_mapping="freesurfer_aseg_aparc"'
+        f'{index})\n'
     )
     t1 = time.perf_counter()
     nl.execute_datalog_program(translation.text)
@@ -107,8 +140,9 @@ def run_vocab(trk, atlas, lut, qry, out):
     seconds = {"load_and_index": t1 - t0, "queries": t2 - t1}
     with open(out, "w") as f:
         json.dump({"queries": queries, "seconds": seconds,
-                   "skipped": translation.skipped}, f)
-    print(seconds)
+                   "skipped": translation.skipped, "options": options,
+                   "peak_gb": peak_gb()}, f)
+    print(seconds, peak_gb())
 
 
 def compare(tq_json, vocab_json):
@@ -118,15 +152,22 @@ def compare(tq_json, vocab_json):
         vocab = json.load(f)
     print("| Tract | Side | n_tq | n_vocab | Jaccard |")
     print("|---|---|---|---|---|")
+    identical = 0
     for key, xs in vocab["queries"].items():
         a, b = set(tq["queries"][key]), set(xs)
         union = a | b
         jaccard = len(a & b) / len(union) if union else 1.0
+        identical += a == b
         tract, _, side = key.partition(".")
         print(f"| {tract} | {side or '-'} | {len(a)} | {len(b)} | "
               f"{jaccard:.3f} |")
-    print(f"\ntract_querier: {tq['seconds']}")
-    print(f"vocabulary: {vocab['seconds']}")
+    print(f"\n{identical} of {len(vocab['queries'])} the same streamlines, "
+          f"{len(vocab['skipped'])} skipped")
+    print(f"tract_querier: {tq['seconds']}, peak {tq['peak_gb']:.1f} GB")
+    print(f"vocabulary: {vocab['seconds']}, peak {vocab['peak_gb']:.1f} GB, "
+          f"options {vocab.get('options', [])}")
+    for key, why in vocab["skipped"].items():
+        print(f"skipped {key}: {why}")
 
 
 if __name__ == "__main__":

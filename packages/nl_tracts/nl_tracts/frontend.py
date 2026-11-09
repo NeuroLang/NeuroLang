@@ -117,6 +117,7 @@ class _State:
         self.store = RelationStore()
         self.atlases: Dict[str, Atlas] = {}  # those in the store
         self.term_mappings: Dict[str, Any] = {}  # theirs, as given
+        self.extents: Dict[str, str] = {}  # theirs, of label_extent
         self.tractograms: Dict[str, Tractogram] = {}
         self.in_store = set()  # the tractograms in the store
         self.length_threshold: Dict[str, float] = {}
@@ -164,7 +165,7 @@ class TractsCommandsMixin(PatternWalker):
         (:func:`nl_tracts.fetch.fetch_tractogram`).
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
-    allow_space_mismatch=0, term_mapping=None)``
+    allow_space_mismatch=0, term_mapping=None, extent=None)``
         Index the tractogram by the atlas, one of the engine
         (``.load_atlas``, ``add_atlas_set``, the ``atlases:`` of an engine
         of the apps: its ``atlases``): ``streamline_label`` and
@@ -176,6 +177,11 @@ class TractsCommandsMixin(PatternWalker):
         ``destrieux``, ``tian``), else none. It is what publishes the
         relations to the program; to be repeated for another atlas or
         tractogram, whose rows are added to the same relations.
+        ``extent`` is that of ``label_extent``, fixed by the first
+        indexing by the atlas, ``"edge"`` if not given: ``"edge"`` (the
+        voxel edges, DESIGN.md 6.1.1) or ``"centre"`` (the voxel centres,
+        as tract_querier's boxes, for the directional terms to reproduce
+        its own).
 
     The matches are exact: a command that is not one of these is left to the
     ones after it in the solver, which refuse it.
@@ -246,7 +252,8 @@ class TractsCommandsMixin(PatternWalker):
             command, ("tractogram", "atlas"),
             {"crossing_threshold": 2.0, "length_threshold": 0.0,
              "emit_background": 0, "cache": None,
-             "allow_space_mismatch": 0, "term_mapping": None},
+             "allow_space_mismatch": 0, "term_mapping": None,
+             "extent": None},
         )
         state = self._tracts
         ident, atlas_name = names["tractogram"], names["atlas"]
@@ -270,6 +277,15 @@ class TractsCommandsMixin(PatternWalker):
                 f"atlas {atlas_name!r} was indexed with term_mapping="
                 f"{state.term_mappings[atlas_name]!r}, its relations have "
                 f"those terms: {mapping!r} cannot differ"
+            )
+        extent = options["extent"]
+        if atlas_name in state.atlases and extent not in (
+            None, state.extents[atlas_name]
+        ):
+            raise InvalidCommandExpression(
+                f"atlas {atlas_name!r} was indexed with extent="
+                f"{state.extents[atlas_name]!r}, its relations have that "
+                f"extent: {extent!r} cannot differ"
             )
         tractogram = state.tractograms[ident]
         try:
@@ -302,14 +318,16 @@ class TractsCommandsMixin(PatternWalker):
         if atlas_name not in state.atlases:
             try:
                 state.store.add_atlas(
-                    atlas, atlas_term_mapping(atlas, mapping)
+                    atlas, atlas_term_mapping(atlas, mapping),
+                    extent or "edge",
                 )
             except (OSError, ValueError) as e:
                 raise InvalidCommandExpression(
-                    f"the term mapping of atlas {atlas_name!r}: {e}"
+                    f"the term mapping or extent of atlas {atlas_name!r}: {e}"
                 ) from e
             state.atlases[atlas_name] = atlas
             state.term_mappings[atlas_name] = mapping
+            state.extents[atlas_name] = extent or "edge"
         if ident not in state.in_store:
             state.store.add_tractogram(tractogram, params)
             state.in_store.add(ident)
