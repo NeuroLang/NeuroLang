@@ -22,10 +22,16 @@
 %       cortex only, misses the streamlines that end in the white matter
 %       (DESIGN.md, 16.5). The label image is also what .view draws the
 %       streamlines on.
-%   .load_tractogram(id, .trk, .tck or .vtk file, ...): in the space of the
-%       atlas (both tagged MNI152 here), e.g. the whole-brain tractogram
-%       of the HCP842 atlas of DIPY, whole_brain_MNI.trk, without its 37
-%       streamlines of one point, which nl_tracts refuses.
+%   .load_tractogram(id, kind="hcp842"): the whole-brain tractogram of
+%       the HCP842 atlas of Yeh et al. (2018) in MNI152, 144,678
+%       streamlines, downloaded the first time (320 MB) into the data
+%       directory of neurolang-query, neurolang_data/tracts by default
+%       (~/.cache/nl_tracts from Python; data_dir="..." chooses another;
+%       README.md); its 37 streamlines of one point are in no relation.
+%       bundle="UF_L" is the atlas's own left uncinate
+%       (uncinate_hcp842.dl compares them).
+%       A file of one's own, in the space of the atlas, is
+%       .load_tractogram(id, .trk, .tck or .vtk file, space="MNI152").
 %   .index_tracts(tractogram, atlas): the streamlines of each label
 %       (a label is traversed by at least 2 % of the points of a
 %       streamline: crossing_threshold=2.0) and their ends. The terms of
@@ -41,7 +47,7 @@
 %         .index_tracts("hcp842", "d", term_mapping="freesurfer_destrieux")
 
 .load_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
-.load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
+.load_tractogram("hcp842", kind="hcp842")
 .index_tracts("hcp842", "fs")
 
 % in hemisphere h: one of the frontal gyri (| is "or"), through the insula,

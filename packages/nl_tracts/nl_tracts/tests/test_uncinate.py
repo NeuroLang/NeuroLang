@@ -21,12 +21,12 @@ def example(directory, side="left"):
         pytest.skip(f"{EXAMPLE} not found (an installed package)")
     text = EXAMPLE.read_text()
     for name, path in (
-        ('"wmparc.mgz"', directory / "labels.nii.gz"),
-        ('"FreeSurferColorLUT.txt"', directory / "lut.txt"),
-        ('"whole_brain_MNI.trk"', directory / "tracts.trk"),
+        ('"wmparc.mgz"', f'"{directory / "labels.nii.gz"}"'),
+        ('"FreeSurferColorLUT.txt"', f'"{directory / "lut.txt"}"'),
+        ('kind="hcp842")', f'"{directory / "tracts.trk"}", space="MNI152")'),
     ):
         assert name in text
-        text = text.replace(name, f'"{path}"')
+        text = text.replace(name, path)
     return text.replace('uncinate(x, "left")', f'uncinate(x, "{side}")')
 
 
@@ -99,4 +99,30 @@ def test_the_hooks_with_two_tractograms(files, tmp_path):
     n = len(other)
     assert {x & 0xFFFFFFFF for x in xs(result)} == {
         n - 1 - s for s in uncinate_files.expected("left")
+    }
+
+
+def test_the_recall_example_counts_the_expert_bundles(files):
+    """``examples/uncinate_hcp842.dl``, its two bundles being the file of
+    the designed streamlines: each bundle has all of them, and the rule
+    selects the uncinates of its side."""
+    path = EXAMPLE.with_name("uncinate_hcp842.dl")
+    if not path.exists():
+        pytest.skip(f"{path} not found (an installed package)")
+    text = path.read_text()
+    tracts = f'"{files / "tracts.trk"}", space="MNI152")'
+    for name, replacement in (
+        ('"wmparc.mgz"', f'"{files / "labels.nii.gz"}"'),
+        ('"FreeSurferColorLUT.txt"', f'"{files / "lut.txt"}"'),
+        ('kind="hcp842", bundle="UF_L")', tracts),
+        ('kind="hcp842", bundle="UF_R")', tracts),
+    ):
+        assert name in text
+        text = text.replace(name, replacement)
+    rows = set(tracts_engine().execute_datalog_program(text)
+               .as_pandas_dataframe().itertuples(index=False, name=None))
+    total = len(uncinate_files.streamlines())
+    assert rows == {
+        ("uf_l", len(uncinate_files.expected("left")), total),
+        ("uf_r", len(uncinate_files.expected("right")), total),
     }

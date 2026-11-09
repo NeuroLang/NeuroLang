@@ -124,11 +124,13 @@ def _kept_streamlines(
     tractogram: Tractogram, params: IndexingParams
 ) -> np.ndarray:
     """The ids of the streamlines the relations have: all of them, or those
-    at least ``length_threshold`` mm long. The ids are never renumbered
+    at least ``length_threshold`` mm long, never those of one point
+    (``Tractogram(drop_short=True)``). The ids are never renumbered
     (DESIGN.md, 6.1, parity 7)."""
-    ids = np.arange(tractogram.n_streamlines)
+    ids = np.flatnonzero(tractogram.lengths_in_points() >= 2)
     if params.length_threshold > 0:
-        ids = ids[tractogram.lengths_in_mm() >= params.length_threshold]
+        ids = ids[
+            tractogram.lengths_in_mm()[ids] >= params.length_threshold]
     return ids
 
 

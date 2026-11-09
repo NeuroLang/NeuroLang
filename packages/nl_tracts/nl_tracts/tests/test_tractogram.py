@@ -133,3 +133,24 @@ def test_content_hash():
     assert base != Tractogram.from_streamlines(
         "t", merged, "subject:100307"
     ).content_hash()
+
+
+def test_streamlines_of_one_point_are_dropped_keeping_the_positions():
+    """DESIGN.md, 15.37: kept in the arrays, so that ``s`` is the position
+    in the file, in no relation, with a warning; none still an error."""
+    from nl_tracts.indexing import IndexingParams, RelationStore
+
+    lines = [np.zeros((3, 3)), np.ones((1, 3)),
+             np.arange(12.0).reshape(4, 3)]
+    with pytest.warns(UserWarning, match="1 streamlines of one point"):
+        tg = Tractogram.from_streamlines("t", lines, "s", drop_short=True)
+    assert tg.n_streamlines == 3
+    for threshold, kept in ((0.0, [0, 2]), (0.5, [2])):
+        store = RelationStore()
+        store.add_tractogram(tg, IndexingParams(length_threshold=threshold))
+        assert store.relations["streamline"]["s"].tolist() == kept
+        assert set(store.relations["streamline_extent"]["x"]) == set(
+            store.relations["streamline"]["x"])
+    with pytest.raises(ValueError, match="streamline 1 has 0 points"):
+        Tractogram("t", np.zeros((3, 3)), np.array([0, 3, 3]), "s",
+                   drop_short=True)
