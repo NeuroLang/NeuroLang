@@ -172,9 +172,20 @@ Unreleased
   ``tracts`` declares the sorts (``streamline``, ``end``, ``term``,
   ``hemisphere``, ``axis``...) with descriptions, so that the query assistant
   lists ``uf``, ``cst``, ``cc_1``... by name, and ``.view`` draws a column of
-  the sort ``streamline``.  The description of the engine names the bundle modules, so
-  that the assistant imports one (``.import('nl_tracts:bundles/
-  freesurfer_queries.dl')``) to answer with ``uf``.
+  the sort ``streamline``.  The description of the engine names the bundle
+  modules, so that the assistant imports one
+  (``.import('nl_tracts:bundles/freesurfer_queries.dl')``) to answer with
+  ``uf``.
+
+* nl_tracts is an engine rather than an application: ``nl_tracts.frontend``
+  keeps the solver's mixin of the commands and the ``python_init`` of the
+  engine ``tracts``, which imports the vocabulary
+  (``.import('nl_tracts:vocabulary.dl')``); an engine of the apps has them
+  by extending ``tracts``.  ``register``, ``relation_frames``,
+  ``RELATION_NAMES``, ``TractsSolver``, ``tracts_engine`` and
+  ``nl_tracts.vocabulary`` are gone (``nl_tracts.vocabulary_predicates()``
+  lists the predicates of the vocabulary), and the command ``nl-tracts wmql``
+  is the script ``tools/wmql_to_datalog.py`` of the package.
 
 * The vocabulary of tractography can reproduce tract_querier where the two
   differ by design (``nl_tracts``, DESIGN.md 6.1, 6.1.1, 17.5).  With

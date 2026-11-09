@@ -21,8 +21,8 @@ The box of the left amygdala is x -35 -20, y -10 5, z -25 -10.
 
 import pytest
 
-from nl_tracts.frontend import tracts_engine
-from nl_tracts.vocabulary import predicates, prelude
+from nl_tracts.tests.engine import tracts_engine
+from nl_tracts import vocabulary_predicates as predicates
 
 LABELS = [
     (0, "Unknown", "none"), (1, "Left-Amygdala", "left"),
@@ -108,8 +108,10 @@ def ask(nl, query):
         index=False, name=None)} if result is not None else set()
 
 
-def test_the_prelude_is_datalog_with_percent_comments():
-    text = prelude()
+def test_the_vocabulary_is_datalog_with_percent_comments():
+    from importlib.resources import files
+
+    text = files("nl_tracts").joinpath("vocabulary.dl").read_text()
     assert "#" not in text
     assert {"traverses", "endpoint_in", "ends_in", "in_hemisphere",
             "only_in", "term_box_lo", "term_box_hi", "anterior_of",

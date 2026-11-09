@@ -16,7 +16,7 @@ from nl_expr.exceptions import (
     UnsupportedProgramError,
 )
 from neurolang.atlases import Atlas
-from nl_tracts.frontend import tracts_engine
+from nl_tracts.tests.engine import tracts_engine
 from nl_tracts.indexing import (
     IndexingParams,
     endpoint_relation,

@@ -98,7 +98,7 @@ def run_vocab(trk, atlas, lut, qry, out, *options):
     ``.index_tracts``) and ``extent`` (``extent="centre"``)."""
     import os
 
-    from nl_tracts.frontend import tracts_engine
+    from nl_tracts.tests.engine import tracts_engine
     from nl_tracts.terms import load_term_mapping
     from nl_tracts.wmql_vocab import translate
 

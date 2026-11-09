@@ -142,7 +142,7 @@ def relations(crossing, endings, boxes, tract_boxes, endpoints):
 
 
 def solve(program, data, label_extent=None):
-    from nl_tracts.frontend import tracts_engine
+    from nl_tracts.tests.engine import tracts_engine
 
     nl = tracts_engine()  # with the vocabulary
     frames = relations(*data)

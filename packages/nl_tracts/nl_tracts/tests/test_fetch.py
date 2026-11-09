@@ -13,7 +13,8 @@ import pytest
 
 from nl_expr.exceptions import InvalidCommandExpression
 from nl_tracts.fetch import ATLASES, fetch_tractogram
-from nl_tracts.frontend import init_engine, tracts_engine
+from nl_tracts.frontend import init_engine
+from nl_tracts.tests.engine import tracts_engine
 from nl_tracts.tractogram import Tractogram
 
 from .test_commands import atlas_command, files, lines, rows  # noqa: F401

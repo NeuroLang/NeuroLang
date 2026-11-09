@@ -1,22 +1,23 @@
-"""``nl-tracts wmql FILE.qry``: a WMQL program of tract_querier in the
-vocabulary of tractography (:mod:`nl_tracts.wmql_vocab`), on the standard
-output; what is not translated is listed in the header of the rules, and
-on the standard error."""
+"""A WMQL program of tract_querier in the vocabulary of tractography
+(:mod:`nl_tracts.wmql_vocab`), on the standard output; what is not
+translated is listed in the header of the rules, and on the standard error.
+
+    python tools/wmql_to_datalog.py FILE.qry [-I FOLDER] [--terms MAPPING]
+"""
 
 import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-from .terms import SHIPPED_MAPPINGS, load_term_mapping
-from .wmql_vocab import WMQLError, translate
+from nl_tracts.terms import SHIPPED_MAPPINGS, load_term_mapping
+from nl_tracts.wmql_vocab import WMQLError, translate
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(prog="nl-tracts")
-    commands = parser.add_subparsers(dest="command", required=True)
-    wmql = commands.add_parser(
-        "wmql", help="translate a .qry program to the vocabulary")
+    wmql = argparse.ArgumentParser(
+        prog="wmql_to_datalog",
+        description="translate a .qry program to the vocabulary")
     wmql.add_argument("program", help="the .qry file, - for standard input")
     wmql.add_argument(
         "-I", "--include", action="append", default=[],
@@ -29,7 +30,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     wmql.add_argument(
         "--strict", action="store_true",
         help="fail on what cannot be translated instead of leaving it out")
-    args = parser.parse_args(argv)
+    args = wmql.parse_args(argv)
 
     if args.program == "-":
         source, folders, title = sys.stdin.read(), args.include, "<stdin>"
@@ -47,11 +48,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             skip_unsupported=not args.strict, title=title,
             qry_file=qry_file)
     except WMQLError as e:
-        print(f"nl-tracts: {e}", file=sys.stderr)
+        print(f"wmql_to_datalog: {e}", file=sys.stderr)
         return 1
     sys.stdout.write(translation.text)
     if translation.skipped:
-        print(f"nl-tracts: {len(translation.skipped)} queries not "
+        print(f"wmql_to_datalog: {len(translation.skipped)} queries not "
               "translated (see the header)", file=sys.stderr)
     return 0
 

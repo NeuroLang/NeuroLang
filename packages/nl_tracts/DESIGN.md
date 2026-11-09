@@ -147,7 +147,7 @@ tractogram `x == s`); `nl_tracts.ids` has `encode` and `decode`, vectorised.
 `streamline(x, t, s)` is the **decoding relation**: a rule that needs the
 tractogram or the position joins it (`ans(t, s) :- q_uf_left(x),
 streamline(x, t, s)`); a rule that does not never carries them. The engine of
-the commands (`tracts_engine()`, 8.2) also has the functions
+the commands (8.2) also has the functions
 `streamline_id(t, s)`, `subject_of(x)` (the `t` of `x`) and `index_of(x)`
 (its `s`), for a comparison in a rule body: `ans(t) :- streamline_label("fs",
 x, 1), (t == subject_of(x))`. Why one id rather than the pair `(t, s)`: a
@@ -753,37 +753,36 @@ engine.
 
 ### 8.2 The frontend module
 
-`nl_tracts.frontend.register(engine, store, only=None)` calls
-`engine.add_tuple_set(frame, name=relation_name)` for each relation of a
-`RelationStore`. It is a function, not an engine subclass: a subclass would
-be a parallel class hierarchy and would not compose with `NeurolangPDL`
-and the other engines. The column names of 3.1 are carried by
-`RELATION_NAMES` for documentation and for rule authors; `add_tuple_set`
-renames columns to positions, so the engine itself does not hold them
-(rules bind by position).
+nl_tracts is an engine, not an application: `nl_tracts.frontend` has the
+mixin of the solver with the commands (below) and the `python_init` of the
+engine, `init_engine` (16.3); the engine `tracts` of the apps'
+`engines.yaml` puts them together, and an engine of the apps has them by
+extending it (`extends: [neurosynth, tracts]`). There is no engine class nor
+factory of its own: a subclass would be a parallel class hierarchy, and the
+engines of the apps are built from their configuration. (The tests build
+the same engine without the atlases of the apps, `nl_tracts.tests.engine`.)
 
-Because `add_tuple_set` **replaces** the symbol, several atlases or
-tractograms must be concatenated *before* registration: that is the
-`RelationStore`'s job (`add_atlas`, `add_tractogram`, `add_index` accumulate
-into one frame per relation), and `register` is called once. Registering
-again replaces everything: there is no incremental add in phase 1 (15.5).
-`add_tractogram` gives the tractogram its index in the ids `x` (the number of
-tractograms added before it, kept in `RelationStore.tractograms`), so it comes
-before `add_index`, which raises otherwise.
+The relations are DataFrames, with the column names of 3.1; an engine
+renames the columns to positions, so the engine itself does not hold them
+(rules bind by position). Because adding a relation **replaces** the
+symbol, several atlases or tractograms are concatenated *before* it is
+given: that is the `RelationStore`'s job (`add_atlas`, `add_tractogram`,
+`add_index` accumulate into one frame per relation). `add_tractogram` gives
+the tractogram its index in the ids `x` (the number of tractograms added
+before it, kept in `RelationStore.tractograms`), so it comes before
+`add_index`, which raises otherwise. From Python, the frames of a store are
+given to any engine with `add_tuple_set`:
 
 ```python
 store = RelationStore()
 store.add_atlas(Atlas.from_freesurfer("dk", img, lut, space="subject:100307"),
                 "freesurfer_aseg_aparc")
-store.add_atlas(Atlas.from_bids_dseg("aal", img2, tsv, space="subject:100307"))
 tg = Tractogram.from_file("100307", "tracts.trk", space="subject:100307")
 store.add_tractogram(tg, params)
-for atlas in atlases:
-    store.add_index(tg, atlas, params, cache_dir="~/.cache/nl_tracts")
+store.add_index(tg, atlas, params, cache_dir="~/.cache/nl_tracts")
 nl = NeurolangDL()
-register(nl, store)
-nl.execute_datalog_program(
-    'ans(s) :- streamline_label("dk", x, l), streamline(x, "100307", s), ...')
+for name, frame in store.relations.items():
+    nl.add_tuple_set(frame, name=name)
 ```
 
 #### The commands: the second hand-off path
@@ -861,7 +860,7 @@ The relations are those of 3.1: `streamline(x, t, s)`, `streamline_label(a,
 x, l)`, `endpoint_label(a, x, e, l)`, the geometry by `x`, and the catalogue.
 A tractogram enters the store at its first `.index_tracts`, so its index in
 `x` is the order of the first `.index_tracts` of each tractogram. The
-engine `tracts_engine()` also has three functions, typed by their annotations,
+engine also has three functions, typed by their annotations,
 over the tractograms its commands have indexed: `streamline_id(t, s)` (the
 `x`), `subject_of(x)` (the `t`) and `index_of(x)` (the `s`). They are for
 comparisons in a rule body, as other functions of the frontend are:
@@ -874,10 +873,8 @@ The join with `streamline(x, t, s)` gives the same.
 
 Where the handler sits matters. The solver of `NeurolangPDL` is
 `RegionFrontendCPLogicSolver`, whose `CommandsMixin` has a catch-all that
-refuses every command it does not know; `TractsSolver` puts
-`TractsCommandsMixin` *before* it, and `tracts_engine()` is
-`NeurolangPDL(solver_class=TractsSolver)`, the hook `NeurolangPDL` has for
-that. The matches are exact (no catch-all of its own): any other command
+refuses every command it does not know; the engine's `solver_mixins` puts
+`TractsCommandsMixin` *before* it. The matches are exact (no catch-all of its own): any other command
 still reaches the refusal, which a test checks. The commands and the rules of
 a program are run by one `execute_datalog_program`. The engine `tracts` of
 `neurolang-query` (the apps' `engines.yaml`) is the same engine, built from
@@ -898,6 +895,7 @@ packages/nl_tracts/
   tools/make_freesurfer_mappings.py   writes the shipped mappings
   tools/make_bundle_modules.py        writes the shipped bundle modules
   tools/wmql_real_data.py             tract_querier against them (17.5)
+  tools/wmql_to_datalog.py            a .qry in the vocabulary (17)
   nl_tracts/
     __init__.py         re-exports the public classes (core only)
     terms.py            term-mapping format, validation, shipped keys
@@ -909,14 +907,12 @@ packages/nl_tracts/
     indexing.py         IndexingParams, *_relation, RelationStore, build_relations
     cache.py            parquet cache: cache_key, read_cached, write_cached
     fetch.py            the atlases of Yeh, HCP842 and HCP1065: download (7.5)
-    vocabulary.dl       the vocabulary of tractography, Datalog rules (16)
-    vocabulary.py       prelude(), predicates(): reads it; no NeuroLang
+    vocabulary.dl       the vocabulary of tractography, Datalog rules (16);
+                        vocabulary_predicates() of __init__ reads its heads
     wmql_vocab.py       WMQL to the vocabulary, text to text (17)
-    cli.py              the command nl-tracts wmql (17)
     bundles/            the .qry of tract_querier in the vocabulary (17)
-    frontend.py         register(), the commands, init_engine(),
-                        tracts_engine() -- the only module that imports
-                        NeuroLang
+    frontend.py         TractsCommandsMixin, init_engine() -- the only
+                        module that imports NeuroLang
     mappings/           shipped term mappings (TSV): freesurfer_aseg_aparc,
                         freesurfer_destrieux, tian_subcortex_s2
     tests/              conftest.py: synthetic volumes, `network` marker;
@@ -957,8 +953,7 @@ that the core can be used (and tested) without importing NeuroLang. It is
 the same pattern as `nl_core` not importing `nibabel`. A layers
 contract alone would not say that: nl_tracts's own core is *allowed* to
 import `neurolang`, and the forbidden contract is what forbids it. Only
-`frontend.py` imports NeuroLang: `register` uses the engine duck-typed, and
-the commands extend the solver of `NeurolangPDL` (8.2); the directional
+`frontend.py` imports NeuroLang: the commands extend the solver of `NeurolangPDL` (8.2); the directional
 terms did not need it (they are comparisons over relations, 12).
 
 `lint-imports` was run on the scaffold with the contracts above: 4 kept, 0
@@ -1074,21 +1069,15 @@ def fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
                      md5=None) -> Path               # a .trk, downloaded once
 
 # frontend.py
-RELATION_NAMES: dict[str, tuple[str, ...]]
-def register(engine, store, only=None) -> None
-def relation_frames(store) -> dict[str, DataFrame]       # + opposite_hemisphere
 class TractsCommandsMixin   # .load_tractogram, .index_tracts (term_mapping=, extent=)
-class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver)
-def tracts_engine(**kw) -> NeurolangPDL                  # solver_class=TractsSolver,
-                    # then init_engine
-def init_engine(engine, mask=None, data_dir=None) -> None
-                    # the vocabulary (16), the functions streamline_id(t, s),
-                    # subject_of(x), index_of(x), the hooks of .view
-                    # streamline_points(ids), streamline_background()
+def init_engine(engine, mask=None, data_dir=None, **options) -> None
+                    # .import('nl_tracts:vocabulary.dl') (16), the functions
+                    # streamline_id(t, s), subject_of(x), index_of(x), the
+                    # hooks of .view streamline_points(ids),
+                    # streamline_background()
 
-# vocabulary.py
-def prelude() -> str                    # the rules of vocabulary.dl
-def predicates() -> tuple[str, ...]     # the predicates they define
+# __init__.py
+def vocabulary_predicates() -> tuple[str, ...]   # those vocabulary.dl defines
 # wmql_vocab.py
 def translate(source, include_folders=(), terms=None,
               skip_unsupported=False, title=...) -> Translation
@@ -1175,9 +1164,8 @@ random walks plus hand-built edge cases.
 * `cache`: key changes with each ingredient; round trip preserves dtypes;
   interrupted write leaves nothing trusted; two ids of the same file share
   the entry.
-* `frontend`: `register` adds each relation with `add_tuple_set` as a
-  DataFrame (a recording stub engine: no tuple built); a real `NeurolangDL`
-  answers the example rules of 3.2.
+* `frontend`: the relations of a store have the columns of 3.1, and a
+  `NeurolangDL` given them answers the example rules of 3.2.
 
 ### 13.2 Equivalence against tract_querier
 
@@ -1255,8 +1243,7 @@ own; the scaffold's smoke test stays.
 
 1. **Core**: `terms`, `atlas` (loaders, hemispheres, `label`,
    `label_term`, `label_extent`), `tractogram` with the geometry relations
-   (`streamline_extent`, `endpoint_coord`, `streamline_length`), the store and
-   `register`, the voxel indexing (`streamline_label`, `endpoint_label`), the
+   (`streamline_extent`, `endpoint_coord`, `streamline_length`), the store, the voxel indexing (`streamline_label`, `endpoint_label`), the
    streamline ids `x`, the cache and the commands -- **done**. Still to
    do: re-measure the sizes of 7.2 on a real tractogram.
 2. **Relations, cache, frontend**: **done** but for the mapping files for AAL
@@ -1452,9 +1439,8 @@ Recommendations in bold; none changes a decision of section 2.
 
 ## 16. The vocabulary of tractography
 
-**Implemented**: `nl_tracts/vocabulary.dl`, read by `nl_tracts.vocabulary`
-(`prelude()`, `predicates()`), and `nl_tracts.frontend.init_engine`, which
-gives it to an engine. It needs nothing but the relations of 3.1.
+**Implemented**: `nl_tracts/vocabulary.dl`, a Datalog module that
+`nl_tracts.frontend.init_engine` imports into an engine. It needs nothing but the relations of 3.1.
 
 ### 16.1 Why
 
@@ -1527,16 +1513,15 @@ documented with the sorts of its arguments.
 
 ### 16.3 How it enters a program
 
-`init_engine(engine, mask=None, data_dir=None)` gives an engine whose
+`init_engine(engine, mask=None, data_dir=None, **options)` gives an engine whose
 solver has `TractsCommandsMixin` the rules of the vocabulary (it runs
-`prelude()`), the three functions of the ids, and two hooks, the methods
-that the REPL's `.view` calls on an engine to draw a result of streamline
+`.import('nl_tracts:vocabulary.dl')`), the three functions of the ids,
+and two hooks, the methods that the REPL's `.view` calls on an engine to draw a result of streamline
 ids: `streamline_points(ids)`, the points of each `x` (decoded by
 `ids.decode` to the tractogram, by the store's load order, and the position
 in it), in mm, RAS+; and `streamline_background()`, the label image of the
 first atlas indexed (the tractograms are in its space), or None before
-`.index_tracts`. `tracts_engine()` calls it, and so does the engine `tracts`
-of the apps, as its `python_init` (its signature is that of a `python_init`).
+`.index_tracts`. It is the `python_init` of the engine `tracts` of the apps (its signature is that of a `python_init`).
 The hooks are closures over the solver's state, so that the solver mixin
 needs no access to the frontend and the core of nl_tracts no NeuroLang.
 
@@ -1548,9 +1533,9 @@ publishes); it warns that their types cannot be inferred, which
 considered, the commands adding the rules when they first publish the
 relations, puts them in the scope of the submission that ran the command in
 the REPL, where `.clear`, or the end of a query's scope, would drop them
-while the commands' state stays. On an engine without the commands
-(`register()` on a `NeurolangDL`), `engine.execute_datalog_program(prelude())`
-adds the rules.
+while the commands' state stays. On an engine without the commands, the
+relations of a store given with `add_tuple_set`,
+`.import('nl_tracts:vocabulary.dl')` adds the rules.
 
 **A clash of names, solved in the solver.** The solver of `NeurolangPDL`
 has the functions `anterior_of(r1, r2)`, `posterior_of`, `superior_of`,
@@ -1744,7 +1729,7 @@ make the vocabulary as long as the label-set programs of 16.1 (15.38).
 
 **Implemented**: `nl_tracts/wmql_vocab.py` (`translate`, `to_vocabulary`,
 `bundle`), a core module (text in, text out; no NeuroLang, checked by
-`.importlinter`), the command `nl-tracts wmql FILE.qry`, and the shipped
+`.importlinter`), the script `tools/wmql_to_datalog.py FILE.qry`, and the shipped
 modules `nl_tracts/bundles/*.dl`, the `.qry` files of tract_querier
 translated by `tools/make_bundle_modules.py`.
 

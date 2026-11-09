@@ -1,12 +1,11 @@
-"""``register``: the relations of a store, to an engine; and a directional
-query run end to end, from a tractogram and an atlas."""
+"""A directional query run end to end, from a tractogram and an atlas,
+over the relations of a store given to an engine."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from neurolang.atlases import Atlas
-from nl_tracts.frontend import RELATION_NAMES, register
 from nl_tracts.indexing import IndexingParams, RelationStore
 from nl_tracts.tractogram import Tractogram
 
@@ -16,16 +15,6 @@ TABLE = pd.DataFrame(
     {"id": [0, 1, 2, 3, 4],
      "name": ["bg", "Left-A", "Right-B", "C", "D"]}
 )
-
-
-class Recorder:
-    """An engine that records what it is given."""
-
-    def __init__(self):
-        self.calls = {}
-
-    def add_tuple_set(self, iterable, name=None, type_=None):
-        self.calls[name] = iterable
 
 
 def lines(seed=0, n=40):
@@ -48,28 +37,24 @@ def make_store():
     return store, atlas, tractogram
 
 
-def test_register_gives_each_relation_to_the_engine_as_a_dataframe():
-    store, _, _ = make_store()
-    engine = Recorder()
-    register(engine, store)
-    assert set(engine.calls) == set(store.relations) | {"opposite_hemisphere"}
-    for name, frame in engine.calls.items():
-        assert isinstance(frame, pd.DataFrame), name  # no tuple is built
-    assert engine.calls["streamline_extent"] is store.relations[
-        "streamline_extent"]  # not copied here either
-    opposite = engine.calls["opposite_hemisphere"]
-    assert {tuple(r) for r in opposite.itertuples(index=False)} == {
-        ("left", "right"), ("right", "left"), ("none", "none")}
+#: The relations of a store, with the names of their columns (DESIGN.md, 3).
+RELATION_NAMES = {
+    "tractogram": ("t",),
+    "streamline": ("x", "t", "s"),
+    "atlas": ("a",),
+    "label": ("a", "l", "name", "hemi"),
+    "label_term": ("a", "l", "term"),
+    "streamline_label": ("a", "x", "l"),
+    "endpoint_label": ("a", "x", "e", "l"),
+    "streamline_extent": ("x", "axis", "lo", "hi"),
+    "endpoint_coord": ("x", "e", "axis", "v"),
+    "endpoint_point": ("x", "e", "px", "py", "pz"),
+    "label_extent": ("a", "l", "axis", "lo", "hi"),
+    "streamline_length": ("x", "mm"),
+}
 
 
-def test_register_only_some_relations():
-    store, _, _ = make_store()
-    engine = Recorder()
-    register(engine, store, only=["label", "tractogram"])
-    assert set(engine.calls) == {"label", "tractogram"}
-
-
-def test_register_has_the_columns_of_the_schema():
+def test_the_relations_have_the_columns_of_the_schema():
     store, _, _ = make_store()
     for name, frame in store.relations.items():
         assert tuple(frame.columns) == RELATION_NAMES[name], name
@@ -98,7 +83,8 @@ def test_a_directional_query_end_to_end(axis, face, op, edge, cmp):
     store, atlas, tractogram = make_store()
     box = f'label_extent("fs", 1, {axis}, lo_1, hi_1)'
     nl = NeurolangDL()
-    register(nl, store)
+    for name, frame in store.relations.items():
+        nl.add_tuple_set(frame, name=name)
     nl.execute_datalog_program(
         f"tracts(x) :- streamline_extent(x, {axis}, lo, hi), {box}, "
         f"({edge} {cmp} {face}_1)\n"

@@ -1,23 +1,23 @@
-"""Hand the relations of nl_tracts to a NeuroLang engine (DESIGN.md, 8.2).
+"""The engine of nl_tracts: what an engine of the apps needs to have the
+relations of a tractogram (DESIGN.md, 8.2), its only module written against
+NeuroLang.
 
-The only module of nl_tracts that is written against NeuroLang. Two ways:
+* :class:`TractsCommandsMixin`, a mixin of the solver: the commands
+  ``.load_tractogram`` and ``.index_tracts`` of a Datalog program build the
+  relations from files and from an atlas of the engine (``.load_atlas``,
+  ``add_atlas_set``, its ``atlases:``);
+* :func:`init_engine`, its ``python_init``: the functions of the ids of the
+  streamlines and the hooks that ``.view`` draws them with.
 
-* :func:`register` gives the relations of a :class:`RelationStore` to an engine
-  with ``add_tuple_set(DataFrame, name=...)``, such as ``NeurolangDL`` and
-  ``NeurolangPDL``;
-* the commands ``.load_tractogram`` and ``.index_tracts`` of a Datalog
-  program build the relations from files and from an atlas of the engine
-  (``.load_atlas``, ``add_atlas_set``, its ``atlases:``), by
-  :class:`TractsCommandsMixin`, which :func:`tracts_engine` has in its solver,
-  and :func:`init_engine` gives such an engine the vocabulary of rules over
-  them (:mod:`nl_tracts.vocabulary`) and the hooks that ``.view`` of the
-  apps draws the streamlines with. ``neurolang-query --engine tracts`` is
-  this engine.
+The vocabulary of rules over the relations is ``vocabulary.dl``, which
+:func:`init_engine` imports. The engine ``tracts`` of ``engines.yaml``
+puts them together; an engine of the apps has them by extending it
+(``extends: [neurosynth, tracts]``).
 """
 
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict
 
 import nibabel as nib
 import pandas as pd
@@ -27,74 +27,21 @@ from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Symbol
 from neurolang.atlases import Atlas, SpaceMismatchError
-from neurolang.frontend.probabilistic_frontend import (
-    NeurolangPDL,
-    RegionFrontendCPLogicSolver,
-)
 
+from . import vocabulary_predicates
 from .atlas import atlas_term_mapping
 from .fetch import ATLASES, fetch_tractogram
 from .ids import decode, encode
 from .indexing import IndexingParams, RelationStore
 from .tractogram import Tractogram
-from .vocabulary import predicates, prelude
 
-__all__ = [
-    "RELATION_NAMES",
-    "TractsCommandsMixin",
-    "TractsSolver",
-    "init_engine",
-    "register",
-    "relation_frames",
-    "tracts_engine",
-]
+__all__ = ["TractsCommandsMixin", "init_engine"]
 
-#: The relations, with the names of their columns (DESIGN.md, 3).
-RELATION_NAMES = {
-    "tractogram": ("t",),
-    "streamline": ("x", "t", "s"),
-    "atlas": ("a",),
-    "label": ("a", "l", "name", "hemi"),
-    "label_term": ("a", "l", "term"),
-    "opposite_hemisphere": ("h1", "h2"),
-    "streamline_label": ("a", "x", "l"),
-    "endpoint_label": ("a", "x", "e", "l"),
-    "streamline_extent": ("x", "axis", "lo", "hi"),
-    "endpoint_coord": ("x", "e", "axis", "v"),
-    "endpoint_point": ("x", "e", "px", "py", "pz"),
-    "label_extent": ("a", "l", "axis", "lo", "hi"),
-    "streamline_length": ("x", "mm"),
-}
+#: The predicates of the vocabulary (``vocabulary.dl``).
+VOCABULARY_PREDICATES = vocabulary_predicates()
 
 
-def register(
-    engine: Any,
-    store: RelationStore,
-    only: Optional[Iterable[str]] = None,
-) -> None:
-    """Add the relations of ``store`` to ``engine``.
-
-    Each relation is passed as a DataFrame to ``engine.add_tuple_set``,
-    under its own name (``streamline_label``, ...), so that no Python tuple is
-    built. Relations the store does not have are skipped;
-    ``opposite_hemisphere`` is always added.
-
-    Parameters
-    ----------
-    engine
-        A NeuroLang query builder with ``add_tuple_set``.
-    store : RelationStore
-        The relations to add.
-    only : iterable of str, optional
-        Add only these relations.
-    """
-    frames = relation_frames(store)
-    for name in (frames if only is None else only):
-        if name in frames:
-            engine.add_tuple_set(frames[name], name=name)
-
-
-def relation_frames(store: RelationStore) -> Dict[str, pd.DataFrame]:
+def _relation_frames(store: RelationStore) -> Dict[str, pd.DataFrame]:
     """The relations of a store and ``opposite_hemisphere``, which is
     always there (``left`` and ``right`` are opposite, ``none`` its own)."""
     frames = dict(store.relations)
@@ -187,18 +134,17 @@ class TractsCommandsMixin(PatternWalker):
     ones after it in the solver, which refuse it.
 
     The solver has none of the functions of the engine that are named as a
-    predicate of the vocabulary (:mod:`nl_tracts.vocabulary`): the
+    predicate of the vocabulary (``vocabulary.dl``): the
     relations of ``Region`` values ``anterior_of(r1, r2)``, ``left_of``...,
     of the solver of ``NeurolangPDL``, are its rules over streamlines here.
     """
 
     @property
     def included_functions(self):
-        vocabulary = set(predicates())
         return {
             name: function
             for name, function in super().included_functions.items()
-            if name not in vocabulary
+            if name not in VOCABULARY_PREDICATES
         }
 
     @property
@@ -343,7 +289,7 @@ class TractsCommandsMixin(PatternWalker):
     def _publish_tracts(self):
         """Give the program the relations built so far (what ``load_csv``
         does for a table), with positions as the names of the columns."""
-        for name, frame in relation_frames(self._tracts.store).items():
+        for name, frame in _relation_frames(self._tracts.store).items():
             self.add_extensional_predicate_from_tuples(
                 Symbol(name),
                 frame.rename(
@@ -352,35 +298,13 @@ class TractsCommandsMixin(PatternWalker):
             )
 
 
-class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver):
-    """The solver of ``NeurolangPDL`` with the commands of nl_tracts, which
-    come before the ``CommandsMixin`` that refuses the commands it does not
-    know."""
-
-
-def tracts_engine(**kwargs) -> NeurolangPDL:
-    """A ``NeurolangPDL`` that understands ``.load_tractogram`` and
-    ``.index_tracts`` (and ``.load_atlas``), with the vocabulary and the
-    functions of :func:`init_engine`.
-
-    Parameters
-    ----------
-    **kwargs
-        Those of ``NeurolangPDL``.
-    """
-    engine = NeurolangPDL(solver_class=TractsSolver, **kwargs)
-    init_engine(engine)
-    return engine
-
-
 def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     """Give an engine whose solver has :class:`TractsCommandsMixin` the
-    vocabulary of tractography, three functions and two hooks.
+    vocabulary of tractography, ``.import('nl_tracts:vocabulary.dl')``,
+    three functions and two hooks.
 
-    The vocabulary is the rules of :func:`nl_tracts.vocabulary.prelude`,
-    over the relations the commands publish. The functions encode and
-    decode the id ``x`` of a streamline (``nl_tracts.ids``), over the
-    tractograms the commands have indexed:
+    The functions encode and decode the id ``x`` of a streamline
+    (``nl_tracts.ids``), over the tractograms the commands have indexed:
 
     ``streamline_id(t, s)``
         ``x`` of the streamline ``s`` of tractogram ``t``;
@@ -444,4 +368,4 @@ def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     with warnings.catch_warnings():
         # its relations are published by .index_tracts, later
         warnings.filterwarnings("ignore", "Symbol .* has no entry")
-        engine.execute_datalog_program(prelude())
+        engine.execute_datalog_program(".import('nl_tracts:vocabulary.dl')")
