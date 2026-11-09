@@ -318,6 +318,13 @@ Unreleased
 
 **Bug fixes:**
 
+* The query assistant's ``anthropic`` provider, in the terminal and in the
+  browser REPL, no longer sends ``temperature``, which current Claude models
+  reject (HTTP 400 "`temperature` is deprecated for this model"). It sends
+  back each reply's content blocks unchanged, so the thinking blocks of
+  Claude Sonnet 5.5 stay with its tool calls, and gives it 16000 output
+  tokens since its thinking counts in them.
+
 * The documentation's CI builds the REPL in the browser for ``master`` only,
   with the Neurosynth engine only, and keeps the embeddings of its studies
   between builds, saved whenever a build changed them: a build embedded the
