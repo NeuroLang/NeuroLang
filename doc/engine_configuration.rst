@@ -24,18 +24,22 @@ may specify the following keys, all of them optional:
   available names are ``exp``, ``log`` and ``startswith``
 - ``python_init`` — dotted path of a Python *module* (not of a function)
   which must define ``init_engine(nl, mask, data_dir)``; it registers
-  extensional data (predicates, regions, atlases) into the engine
+  extensional data (predicates, regions, atlases) into the engine.  It may
+  be a list of modules, whose ``init_engine`` run in order; an engine
+  extending others runs theirs first (the lists are concatenated, parent
+  first)
 - ``solver_mixins`` — classes, as ``"module:Class"`` strings, put before
   the solver of the engine, e.g. to add Datalog commands ``.name(...)``
   (the ``tracts`` engine, below)
-- ``python_init_options`` — keyword arguments given to that
-  ``init_engine``.  The ``neurosynth`` and ``neurostore`` engines take
-  ``unknown_space``, set once in ``coordinate_meta_analysis``: the peaks
-  whose space is neither MNI nor Talairach (Neurosynth's ``UNKNOWN``,
-  10.6% of its peaks; NeuroStore's other or missing spaces) are taken as
-  MNI (``mni``, the default, as Neurosynth and NiMARE do), converted as
-  Talairach (``tal``) or left out (``drop``); only the Talairach peaks
-  are converted to MNI otherwise
+- ``python_init_options`` — keyword arguments given to every
+  ``init_engine`` of ``python_init`` (one that has no use for the options
+  of another takes them with ``**options``). The ``neurosynth`` and
+  ``neurostore`` engines take ``unknown_space``, set once in
+  ``coordinate_meta_analysis``: the peaks whose space is neither MNI nor
+  Talairach (Neurosynth's ``UNKNOWN``, 10.6% of its peaks; NeuroStore's
+  other or missing spaces) are taken as MNI (``mni``, the default, as
+  Neurosynth and NiMARE do), converted as Talairach (``tal``) or left out
+  (``drop``); only the Talairach peaks are converted to MNI otherwise
 - ``downloads`` — list of ``{url, dest, extract}`` entries fetched into the
   data directory (``extract: true`` uncompresses an archive, a list of
   member names extracts only those members)
@@ -412,17 +416,21 @@ and the engine's own entries override all of them.  Merging works per key:
 
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
-  ``dimension_type_predicates`` and ``assistant_examples`` are
-  concatenated without duplicates;
+  ``dimension_type_predicates``, ``assistant_examples``,
+  ``hidden_predicates``, ``solver_mixins`` and ``python_init`` (a single
+  module is a list of one) are concatenated without duplicates;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
   setting an entry to ``null`` removes the inherited one (a list cannot
   replace a mapping, nor a mapping a list);
-- every other value, lists included (``python_init``, ``description``,
-  ``hidden_predicates``, ...), is replaced.
+- every other value is replaced (``description``, ``requires_mni_mask``,
+  ...).
 
-Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+A base reached by two paths (``extends: [a, b]`` where both ``a`` and
+``b`` extend ``c``) is merged once, where it is first reached: its rules
+are not defined twice.  Unknown bases and cyclic ``extends`` chains raise
+``ValueError``.
 
 Files of an engine
 ------------------
@@ -527,6 +535,27 @@ tract_querier is ``packages/nl_tracts/examples/uncinate.dl``::
 
    neurolang-query --engine tracts --file uncinate.dl
    neurolang-query --engine tracts -i --file uncinate.dl   # then .view
+
+The ``neurosynth_tracts`` engine
+--------------------------------
+
+``neurosynth_tracts`` is both, ``extends: [neurosynth, tracts]``: the
+studies, terms, peaks and Cognitive Atlas of ``neurosynth``, its atlases
+with the studies that activate their regions (``schaefer_activated(label,
+study)``...) and the centres of their voxels in millimetres
+(``schaefer_points(x, y, z, label)``...), and the commands, vocabulary and
+``.view`` of ``tracts``.  Their common base ``mni_atlases`` is merged once,
+and both ``python_init`` run, ``neurosynth``'s then ``nl_tracts.frontend``.
+It needs the extra ``tracts``, and ``embeddings`` for ``similar_study``
+(SPECTER2; without it a query that uses it fails with a message saying what
+to install).  The ends of the streamlines of a bundle, ``endpoint_point(x,
+e, x, y, z)``, join the points of the parcels within a distance, and the
+parcels the studies that activate them:
+``packages/nl_tracts/examples/uncinate_cogat.dl`` asks which Cognitive Atlas
+concepts the studies of the parcels the uncinate fasciculus connects are
+about::
+
+   neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

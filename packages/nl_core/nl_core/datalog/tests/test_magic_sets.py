@@ -362,6 +362,38 @@ def test_edb_atom_without_constant_does_not_seed_magic_sets():
         magic_rewrite(q(y), dl)
 
 
+def test_intensional_atom_without_constant_binds_the_atoms_right_of_it():
+    """
+    No constant, but ``x`` of ``anc(x, y)`` is bound by ``p2(z, x)``, an
+    intensional atom left of it: magic sets restrict ``anc`` to it.
+    """
+    p2 = S_("p2")
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(p2(x, y), par(x, y)),
+            Imp_(q(y), p2(z, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(y), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("magic_anc^bf")
+        for rule in mr.formulas
+    )
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((c,)), C_((d,))}
+
+
 def test_magic_rules_leave_out_unconnected_atoms():
     """
     A magic rule keeps only the atoms left of its arc which share a
@@ -855,14 +887,23 @@ def _cycle_through_an_aggregate_program():
     return dl
 
 
-def test_magic_rewrite_refuses_a_cycle_through_an_aggregation():
-    """The rewritten program would not be stratified: the frontend falls
-    back to the program as it is, which is."""
-    dl = _cycle_through_an_aggregate_program()
-    with raises(InvalidMagicSetError, match="aggregation"):
-        magic_rewrite(q(x), dl)
-    with raises(InvalidMagicSetError, match="aggregation"):
-        magic_rewrite(q(x), dl, seed_from_edb=False)
+def test_magic_rewrite_leaves_unbound_an_aggregation_in_a_cycle():
+    """Bound, Agg would be in a cycle of the rewritten program, which would
+    not be stratified: the rewrite leaves Agg unbound, computed whole, and
+    binds the rest."""
+    for seed_from_edb in (True, False):
+        dl = _cycle_through_an_aggregate_program()
+        goal, mr = magic_rewrite(q(x), dl, seed_from_edb=seed_from_edb)
+        magic = {
+            rule.consequent.functor.name for rule in mr.formulas
+            if rule.consequent.functor.name.startswith("magic_")
+        }
+        assert not any(name.startswith("magic_Agg^b") for name in magic)
+        assert any(name.startswith("magic_B^b") for name in magic)
+        dl = _cycle_through_an_aggregate_program()
+        dl.walk(mr)
+        solution = Chase(dl).build_chase_solution()
+        assert solution[goal].value == {(c,)}
 
 
 def test_the_program_without_the_rewrite_is_solved():
