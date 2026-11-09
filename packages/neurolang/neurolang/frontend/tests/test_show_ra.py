@@ -697,6 +697,16 @@ def test_show_ra_returns_empty_without_running_query(show_ra):
     assert res.value.is_empty()
 
 
+@pytest.mark.parametrize("option", ["dry_run", "show_ra"])
+@pytest.mark.parametrize("engine_class", [NeurolangDL, NeurolangPDL])
+def test_yes_no_query_is_not_run(option, engine_class):
+    """A query without answer variables is planned, not run, either."""
+    nl = engine_class()
+    nl.add_tuple_set([(1,)], name="p")
+    answer = nl.execute_datalog_program("ans() :- p(1).", **{option: True})
+    assert answer is False
+
+
 def test_relation_rows_of_expensive_values_is_an_upper_bound():
     class Region:
         def __hash__(self):

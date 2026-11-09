@@ -325,6 +325,14 @@ Unreleased
   Claude Sonnet 5.5 stay with its tool calls, and gives it 16000 output
   tokens since its thinking counts in them.
 
+* The documentation's CI builds the REPL in the browser for ``master`` only,
+  with the Neurosynth engine only, and keeps the embeddings of its studies
+  between builds, saved whenever a build changed them: a build embedded the
+  studies again each time, an hour for Neurosynth's and four for
+  NeuroStore's, and some reached the six-hour limit of a job.  A pull
+  request's CI uploads its documentation without a REPL that can start, and
+  no longer comments on how to run it; ``neurolang-repl-serve`` builds the
+  REPL of a branch locally.
 * Several probabilistic facts of a predicate written in a Datalog program
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
