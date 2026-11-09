@@ -40,9 +40,19 @@ may specify the following keys, all of them optional:
   other or missing spaces) are taken as MNI (``mni``, the default, as
   Neurosynth and NiMARE do), converted as Talairach (``tal``) or left out
   (``drop``); only the Talairach peaks are converted to MNI otherwise
-- ``downloads`` — list of ``{url, dest, extract}`` entries fetched into the
-  data directory (``extract: true`` uncompresses an archive, a list of
-  member names extracts only those members)
+- ``downloads`` — list of ``{url, dest, extract, name, md5}`` entries
+  fetched into the data directory (``extract: true`` uncompresses an
+  archive, a list of member names extracts only those members; ``name`` is
+  the file's name when the URL has none, ``md5`` its checksum)
+- ``tractogram`` — ``{kind, subsample, step, seed}``, for an engine that
+  loads a whole-brain tractogram of the engine ``tracts``
+  (``.load_tractogram(..., kind=kind)``): how the bundle of the browser's
+  REPL (``doc/make_repl_bundle.py``) reduces it to ship it, ``subsample``
+  streamlines drawn at random with the seed ``seed`` (default 0), each
+  thinned to every ``step``-th point (default 1) and its last. The engine
+  itself loads the file whole, wherever it is; the entry is read by the
+  bundle only (``neurosynth_hcp842``: 20,000 streamlines of ``hcp842``,
+  ``step: 2``)
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,

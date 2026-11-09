@@ -286,7 +286,7 @@
       <span id="run-help" class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
     </div>
   </form>
-  <p id="boot" class="note">The first start takes about 30 s: it loads Python, the engine and its data (Neurosynth or NeuroStore, as the selector at the top says), which the browser keeps for the next visit.</p>
+  <p id="boot" class="note">The first start takes about 30 s: it loads Python, the engine and its data (Neurosynth, Neurosynth + tracts or NeuroStore, as the selector at the top says), which the browser keeps for the next visit.</p>
   <p id="hint" class="note" aria-live="polite"></p>
 
   <details id="guide">
@@ -328,6 +328,7 @@
   <details>
     <summary>Engine and version</summary>
     <p class="note">The engine here leaves out the precomputed analyses <code>lift</code>, <code>relative_risk</code>, <code>uniformity</code> and <code>ratios</code>: they need several GB, more than a browser tab is given. Add <code>?engine=full</code> to the address to build them on a machine with the memory; the terminal command has them. The first query using <code>query_similarity</code> downloads the SPECTER2 query model and the embeddings of the studies, about 310 MB.</p>
+    <p class="note"><strong>Neurosynth + tracts</strong> (<code>?engine=neurosynth_hcp842</code>) adds to the studies of Neurosynth a whole-brain tractogram, 20,000 streamlines of the HCP842 atlas chosen at random and thinned, indexed by the Desikan&ndash;Killiany wmparc of the IIT Human Brain Atlas v3 (labels of FreeSurfer's colour LUT), and tract_querier's bundles (<code>uf</code>, <code>af</code>, <code>cst</code>&hellip;) as Datalog rules. The tractogram is that of Yeh et al., &ldquo;Population-averaged atlas of the macroscale human structural connectome and its network topology&rdquo;, <em>NeuroImage</em> 178:57&ndash;68 (2018), as curated for DIPY's RecoBundles (&ldquo;Advanced Atlas of 80 Bundles in MNI space&rdquo;) by Garyfallidis et al., &ldquo;Recognition of white matter bundles using local and global streamline-based registration and clustering&rdquo;, <em>NeuroImage</em> 170:283&ndash;297 (2018), licence <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. The atlas is the IIT Human Brain Atlas (Illinois Institute of Technology; Qi, Arfanakis et al.), under the <a href="https://www.nitrc.org/projects/iit/">IIT Human Brain Template License</a> (non-commercial educational and research use, with attribution), and the colour LUT is FreeSurfer's.</p>
     <div id="banner"></div>
     <form id="version" class="row">
       NeuroLang from <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">

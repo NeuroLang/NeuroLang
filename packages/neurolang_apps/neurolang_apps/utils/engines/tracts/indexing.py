@@ -142,7 +142,9 @@ def _chunks(tractogram: Tractogram, ids: np.ndarray):
     """``(ids, points, offsets)`` of groups of the streamlines ``ids`` of
     at most ``CHUNK_POINTS`` points (more for one longer streamline): the
     points of each group are gathered with no loop over the streamlines."""
-    lengths = tractogram.lengths_in_points()[ids]
+    # intp, the type of the counts of np.repeat: a 32-bit platform
+    # (WebAssembly) refuses the int64 of the offsets
+    lengths = tractogram.lengths_in_points()[ids].astype(np.intp)
     ends = np.cumsum(lengths)
     group = (ends - lengths) // CHUNK_POINTS
     cuts = np.r_[0, np.flatnonzero(np.diff(group)) + 1, len(ids)]
@@ -183,7 +185,7 @@ def _index(
             + np.searchsorted(present, labels)
         )
         if k * n_labels <= 1 << 26:
-            counts = np.bincount(key, minlength=k * n_labels)
+            counts = np.bincount(key.astype(np.intp), minlength=k * n_labels)
             unique = np.flatnonzero(counts)
             count = counts[unique]
         else:
@@ -273,7 +275,8 @@ def streamline_extent_relation(
     0, 1, 2 for x, y, z. One ``reduceat`` per bound over all the points.
     """
     ids = _kept_streamlines(tractogram, params)
-    start = tractogram.offsets[:-1]
+    # intp: a 32-bit platform (WebAssembly) refuses the int64 of the offsets
+    start = tractogram.offsets[:-1].astype(np.intp)
     low = np.minimum.reduceat(tractogram.points, start, axis=0)[ids]
     high = np.maximum.reduceat(tractogram.points, start, axis=0)[ids]
     n = len(ids)

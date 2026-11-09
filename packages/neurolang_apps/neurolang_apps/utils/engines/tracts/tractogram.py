@@ -134,7 +134,7 @@ class Tractogram:
         )
         # no step from a streamline to the next
         steps[self.offsets[1:] - 1] = 0
-        return np.add.reduceat(steps, self.offsets[:-1])
+        return np.add.reduceat(steps, self.offsets[:-1].astype(np.intp))
 
     def content_hash(self) -> str:
         """Hash of the points, offsets and space (not of the id)."""

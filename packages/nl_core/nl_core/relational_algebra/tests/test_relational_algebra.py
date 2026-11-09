@@ -349,6 +349,23 @@ def test_sort_typed_const_named_relation_tuple_type_args():
     )
 
 
+def test_difference_of_named_relations_one_of_a_known_type():
+    """A named relation of no known type has its type inferred in the order
+    of its columns; the type of another is known in the order of their
+    names: both are in the order of the names, so that they unify."""
+    left = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(1, "a"), (2, "b")])
+    )
+    right = Constant[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(2, "b")])
+    )
+    solution = RelationalAlgebraSolver().walk(Difference(left, right))
+    assert solution.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "h"), [(1, "a")]
+    )
+    assert solution.type is AbstractSet[Tuple[int, str]]
+
+
 def test_infer_relation_type():
     assert (
         _infer_relation_type(RelationalAlgebraFrozenSet())
