@@ -135,23 +135,12 @@ from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
 
-The REPL of a pull request is built by its CI: the documentation's
-workflow uploads the site, the documentation with its REPL, as the artifact
-``repl-pr-NUMBER`` (kept 30 days), and a comment of the pull request tells
-the commit it was built from, whether the REPL's bundle is complete, and how
-to run it.  To run it, without building anything:
-
-.. code-block:: bash
-
-   uv run --extra apps neurolang-repl-serve --pr NUMBER
-
-which downloads the site of the latest run of the pull request into
-:file:`~/.cache/neurolang/repl-site/pr-NUMBER` (``--run-id ID`` for that of
-a given run, into :file:`run-ID`) and serves it.  It needs the `GitHub CLI
-<https://cli.github.com>`_, ``gh``, logged in (``gh auth login``).  Without
-NeuroLang, the comment gives the ``gh run download`` and ``python3 -m
-http.server`` commands that do the same; the page is at
-``http://localhost:8000/_static/repl/index.html``.
+CI builds the REPL in the browser for ``master`` only, deployed with the
+documentation: its bundle takes an hour on a runner's CPU when the
+embeddings of the studies are not kept.  A pull request's CI uploads its
+documentation, the artifact ``repl-pr-NUMBER`` (kept 30 days), without a
+REPL that can start; to try the REPL of a branch, build it locally with
+``neurolang-repl-serve``, as above.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in
@@ -176,11 +165,9 @@ Submitting a Pull Request
 
 CI runs on every pull request, also one whose base is the branch of another
 pull request (a stacked pull request): the tests are those of the packages
-it changes with respect to its base.  Every pull request gets the REPL in
-the browser of its branch: the artifact ``repl-pr-NUMBER`` and a comment
-telling how to run it (see `Running the REPL in the Browser Locally`_); a
-pull request from a fork gets the artifact only, the comment needing a
-token that a fork's runs do not have.
+it changes with respect to its base.  Its documentation is the artifact
+``repl-pr-NUMBER``; the REPL in the browser of a branch is built locally
+(see `Running the REPL in the Browser Locally`_).
 
 **PR checklist:**
 
