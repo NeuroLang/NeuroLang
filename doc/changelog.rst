@@ -403,6 +403,14 @@ Unreleased
 
 **Bug fixes:**
 
+* In the REPL in the browser, the Brain and Graph windows are as tall as
+  their page, instead of 34 rem with scrollbars of their own within the
+  page's (the readout and the colour bar of the viewer were cut off), and
+  they follow the light or dark theme of the REPL, switching with it: the
+  brain viewer was always dark, drawing the image on black, and the graph
+  followed the system's theme, not the REPL's. In the light theme the
+  viewer draws the image on white. Opened apart, as ``.view`` does in the
+  terminal, they follow the system's theme as before.
 * The query assistant's ``anthropic`` provider, in the terminal and in the
   browser REPL, no longer sends ``temperature``, which current Claude models
   reject (HTTP 400 "`temperature` is deprecated for this model"). It sends
