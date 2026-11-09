@@ -22,8 +22,10 @@ classifiers = [
 ]
 keywords = ["tractography", "diffusion MRI", "white matter", "datalog"]
 # The core (atlas, tractogram, indexing, cache) needs numpy, scipy, nibabel,
-# pandas and, for the parquet cache of pandas, pyarrow.
+# pandas and, for the parquet cache of pandas, pyarrow. ``neurolang`` is
+# needed by nl_tracts.frontend only; see DESIGN.md.
 dependencies = [
+    "neurolang",
     "numpy",
     "scipy",
     "nibabel>=5.0.0",
@@ -37,6 +39,9 @@ dev = [
     # Only the tests build atlases from nilearn objects (DESIGN.md, 4.2).
     "nilearn>=0.10.0",
 ]
+
+[tool.uv.sources]
+neurolang = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["nl_tracts"]

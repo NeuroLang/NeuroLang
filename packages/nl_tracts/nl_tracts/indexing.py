@@ -361,7 +361,7 @@ class RelationStore:
 
     A NeuroLang engine's ``add_tuple_set`` *replaces* a relation, so the
     rows of several atlases and tractograms are accumulated here, and
-    handed over to the engine once.
+    handed over once, by :func:`nl_tracts.frontend.register`.
 
     A streamline is ``x = (index << 32) | s`` in the relations
     (:mod:`nl_tracts.ids`), ``index`` being the position of its tractogram
