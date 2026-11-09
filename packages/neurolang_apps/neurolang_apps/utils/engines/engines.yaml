@@ -689,9 +689,9 @@ engines:
       atlas (unc, ifo, cg, corpus_callosum...). The modules share names:
       import one.
     solver_mixins: ["nl_tracts.frontend:TractsCommandsMixin"]
-    # the vocabulary (nl_tracts/vocabulary.dl), the functions of the ids x
-    # and the hooks of .view, over what the commands load; .index_tracts
-    # finds the atlases of the engine, loaded after it
+    # the vocabulary (.import('nl_tracts:vocabulary.dl')), the functions
+    # of the ids x and the hooks of .view, over what the commands load;
+    # .index_tracts finds the atlases of the engine, loaded after it
     python_init: "nl_tracts.frontend"
     # The sorts of the arguments of the vocabulary and of the bundles, as
     # their %% documentation gives them (uncinate(x: streamline, h:

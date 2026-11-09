@@ -8,7 +8,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from nl_tracts.frontend import tracts_engine
+from nl_tracts.tests.engine import tracts_engine
 
 from . import uncinate_files
 

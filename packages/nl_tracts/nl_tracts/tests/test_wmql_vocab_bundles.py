@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from nl_tracts.frontend import tracts_engine
+from nl_tracts.tests.engine import tracts_engine
 from nl_tracts.wmql_vocab import BUNDLES, bundle
 
 from . import uncinate_files

@@ -56,8 +56,15 @@ nl(tracts:DL)> .view
 `.view` draws the streamlines of the answer, coloured by direction, on the
 label image of the atlas, in the browser. At the REPL's prompt the commands
 and the rules can also be typed or pasted one by one, and other questions
-asked of the same relations (`ans(x) :- uncinate(x, "right")`). From
-Python, `nl_tracts.frontend.tracts_engine()` is the same engine.
+asked of the same relations (`ans(x) :- uncinate(x, "right")`).
+
+nl_tracts is an engine, not an application: `nl_tracts.frontend` has the
+solver's mixin of the commands, `TractsCommandsMixin`, and the
+`python_init` that imports the vocabulary, `vocabulary.dl`, and adds the
+functions of the ids and the hooks of `.view`. The engine `tracts` of the
+apps (`engines.yaml`) puts them together, and another engine of the apps has
+them by extending it, as `neurosynth_tracts` does (`extends: [neurosynth,
+tracts]`).
 
 [`examples/uncinate_hcp842.dl`](examples/uncinate_hcp842.dl) counts the
 streamlines of the atlas's own uncinates, `UF_L` and `UF_R`, that the rule
@@ -190,7 +197,7 @@ anterior, posterior and superior thalamic radiation.
 
 ## tract_querier's queries in the vocabulary
 
-`nl-tracts wmql` translates a WMQL program of tract_querier (a `.qry`) into
+`tools/wmql_to_datalog.py` translates a WMQL program of tract_querier (a `.qry`) into
 rules of the vocabulary, one predicate per query, each documented by a `%%`
 block, its signature, the full name of the bundle for tract_querier's own
 files (`uf` of `freesurfer_queries` is the uncinate fasciculus) and the WMQL
@@ -199,25 +206,19 @@ statement it is translated from (DESIGN.md section 17): `UF.side` becomes
 cannot say is left out and listed in the header.
 
 ```sh
-nl-tracts wmql my_queries.qry -I path/to/tract_querier/data \
-    --terms freesurfer_aseg_aparc > my_queries.dl
+python tools/wmql_to_datalog.py my_queries.qry \
+    -I path/to/tract_querier/data --terms freesurfer_aseg_aparc > my_queries.dl
 ```
 
 `--terms` checks the names of labels against a mapping (a name that is not
 one of its terms stands for those it is made of). The translations of
 tract_querier's own files are shipped (`freesurfer_queries`,
 `freesurfer_queries_bsf2016`, `freesurfer_queries_bsf2016_toad`,
-`mori_queries`): rules without commands, to put after the commands of a
-program, or from Python
+`mori_queries`) as modules that a program imports after its commands:
 
-```python
-from nl_tracts.frontend import tracts_engine
-from nl_tracts.wmql_vocab import bundle
-
-nl = tracts_engine()
-nl.execute_datalog_program(commands)   # .load_atlas, .load_tractogram, ...
-nl.execute_datalog_program(bundle("freesurfer_queries"))
-nl.execute_datalog_program('ans(x) :- af(x, "left")')
+```
+.import("nl_tracts:bundles/freesurfer_queries.dl")
+ans(x) :- af(x, "left")
 ```
 
 ## The atlases

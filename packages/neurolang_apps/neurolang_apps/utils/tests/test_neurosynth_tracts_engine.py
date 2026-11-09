@@ -136,7 +136,7 @@ def rows(result):
 
 def test_the_engine_has_both(engine):
     from nl_tracts.frontend import TractsCommandsMixin
-    from nl_tracts.vocabulary import predicates
+    from nl_tracts import vocabulary_predicates as predicates
 
     assert isinstance(engine.program_ir, TractsCommandsMixin)
     symbols = set(engine.symbols)

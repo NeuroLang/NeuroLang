@@ -46,7 +46,7 @@ from importlib.resources import files
 from itertools import takewhile
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .vocabulary import predicates as _vocabulary_predicates
+from . import vocabulary_predicates as _vocabulary_predicates
 
 __all__ = [
     "BUNDLES",

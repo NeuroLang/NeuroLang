@@ -3,7 +3,6 @@ text of the rules (``nl_tracts.wmql_vocab``, DESIGN.md, 17)."""
 
 import pytest
 
-from nl_tracts import cli
 from nl_tracts.wmql_vocab import (
     BUNDLES, WMQLError, WMQLUnsupported, bundle, translate,
 )
@@ -251,19 +250,34 @@ def test_import_and_for(tmp_path):
         'traverses(x, "c", h)' in text
 
 
+def _tool():
+    """The script tools/wmql_to_datalog.py, the command line."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).parents[2] / "tools" / "wmql_to_datalog.py"
+    if not path.is_file():
+        pytest.skip("the tools of nl_tracts are not installed")
+    spec = importlib.util.spec_from_file_location("wmql_to_datalog", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_the_command_line(tmp_path, capsys):
+    cli = _tool()
     path = tmp_path / "q.qry"
     path.write_text(LABELS + "x.side = a.side\ny.side = anterior_of(u)\n")
-    assert cli.main(["wmql", str(path)]) == 0
+    assert cli.main([str(path)]) == 0
     out, err = capsys.readouterr()
     assert out == translate(path.read_text(), skip_unsupported=True,
                             title="q.qry", qry_file="q.qry").text
     assert "%%\n%% Translated from q.qry:\n%% x.side = a.side\n" in out
-    assert "nl-tracts: 2 queries not translated" in err  # y.left, y.right
-    assert cli.main(["wmql", "--strict", str(path)]) == 1
+    assert "wmql_to_datalog: 2 queries not translated" in err  # y.*
+    assert cli.main(["--strict", str(path)]) == 1
     assert "y.left" in capsys.readouterr().err
-    assert cli.main(["wmql", "--terms", "freesurfer_aseg_aparc",
-                     str(path)]) == 0
+    assert cli.main(
+        ["--terms", "freesurfer_aseg_aparc", str(path)]) == 0
     assert "%   x.side: a is not a term" in capsys.readouterr().out
 
 
