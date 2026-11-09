@@ -6,9 +6,9 @@
 % putamen and of the other hemisphere. It is tract_querier's UF.side of
 % freesurfer_queries.qry.
 %
-% Run it with the engine of tractography, from Python:
-%   from nl_tracts.frontend import tracts_engine
-%   tracts_engine().execute_datalog_program(open("uncinate.dl").read())
+% Run it with the engine of tractography:
+%   neurolang-query --engine tracts --file uncinate.dl
+%   neurolang-query --engine tracts -i --file uncinate.dl, then .view at the prompt
 %
 % The three commands build the relations from files. The paths are read as
 % written, relative to where the program runs:

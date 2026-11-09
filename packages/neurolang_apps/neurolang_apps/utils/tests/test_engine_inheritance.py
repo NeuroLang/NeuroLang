@@ -90,7 +90,9 @@ def test_unknown_base_and_cycle():
 
 
 def test_builtin_engines():
-    assert list_engine_names() == ["destrieux", "neurostore", "neurosynth"]
+    assert list_engine_names() == [
+        "destrieux", "neurostore", "neurosynth", "tracts"
+    ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
         assert cfg["requires_mni_mask"] and cfg["use_base_symbols"]

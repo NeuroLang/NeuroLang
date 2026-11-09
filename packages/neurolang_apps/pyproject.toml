@@ -51,6 +51,10 @@ tui = [
 llm = [
     "httpx>=0.27",
 ]
+# The engine tracts: tractograms and atlases (nl_tracts).
+tracts = [
+    "nl-tracts",
+]
 embeddings = [
     "torch",
     "transformers",
@@ -62,6 +66,7 @@ dev = [
 
 [tool.uv.sources]
 neurolang = { workspace = true }
+nl-tracts = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["neurolang_apps"]
