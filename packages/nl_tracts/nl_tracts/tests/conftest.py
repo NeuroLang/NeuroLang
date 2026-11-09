@@ -7,6 +7,19 @@ import numpy as np
 import pytest
 
 
+@pytest.fixture
+def fetch_or_skip():
+    """Call a fetcher; skip the test if it cannot get its data."""
+
+    def fetch(fetcher, *args, **kwargs):
+        try:
+            return fetcher(*args, **kwargs)
+        except Exception as e:  # offline, mirror down, cache unreadable
+            pytest.skip(f"cannot fetch {fetcher.__name__}: {e!r}")
+
+    return fetch
+
+
 # Affines of the synthetic volume, voxel indices -> RAS mm. ``aligned``,
 # ``flipped`` and ``permuted`` map the axes of the volume onto those of the
 # space, so a box of voxels is a box of mm; ``oblique`` does not.
