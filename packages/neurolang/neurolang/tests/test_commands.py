@@ -312,6 +312,8 @@ def test_load_atlas_of_nilearn_without_nilearn(monkeypatch):
     monkeypatch.setitem(sys.modules, "nilearn", None)
     with pytest.raises(InvalidCommandExpression, match="needs nilearn"):
         _walk(Datalog(), "d", kind="nilearn", fetcher="destrieux_2009")
+
+
 def _write(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
@@ -367,6 +369,34 @@ def test_import_relative_to_the_working_directory(tmp_path, monkeypatch):
     nl = NeurolangPDL()
     nl.execute_datalog_program('.import("lib/base.dl")')
     assert "base" in nl.symbol_table
+
+
+def test_import_from_the_directories_of_the_engine(tmp_path, monkeypatch):
+    """A module not found beside the importing one, nor in the working
+    directory, is looked for in the engine's module directories, in order;
+    one found first relative to the importer wins."""
+    _write(tmp_path / "first" / "bundles" / "b.dl", "b(1)\n")
+    _write(tmp_path / "second" / "bundles" / "b.dl", "b(2)\n")
+    _write(tmp_path / "second" / "only.dl", "only(1)\n")
+    monkeypatch.chdir(tmp_path)
+    nl = NeurolangPDL()
+    nl.program_ir.module_directories = (
+        tmp_path / "first", tmp_path / "second")
+    result = nl.execute_datalog_program(
+        '.import("bundles/b.dl")\n.import("only.dl")\n'
+        'ans(x, y) :- b(x), only(y)'
+    )
+    assert _rows(result) == {(1, 1)}
+
+    _write(tmp_path / "bundles" / "b.dl", "b(3)\n")
+    nl = NeurolangPDL()
+    nl.program_ir.module_directories = (tmp_path / "first",)
+    result = nl.execute_datalog_program(
+        '.import("bundles/b.dl")\nans(x) :- b(x)')
+    assert _rows(result) == {(3,)}
+
+    with pytest.raises(InvalidCommandExpression, match="No Datalog module"):
+        NeurolangPDL().execute_datalog_program('.import("none.dl")')
 
 
 def test_import_a_module_of_a_package():

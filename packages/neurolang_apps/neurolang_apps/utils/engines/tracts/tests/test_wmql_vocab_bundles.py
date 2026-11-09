@@ -57,3 +57,18 @@ def test_the_uncinate_of_freesurfer_queries_is_the_example(files):
         designed = {(x, side) for x in uncinate_files.expected(side)}
         assert designed <= uf
         assert len(designed) + 10 < len({x for x, h in uf if h == side})
+
+
+def test_a_program_imports_a_bundle_module_by_its_path_in_the_engine(
+    tmp_path, monkeypatch
+):
+    """The engine's directory is one of its module directories: a program
+    imports ``bundles/freesurfer_queries.dl`` wherever it runs, and a file
+    of the working directory named as the vocabulary does not shadow it."""
+    (tmp_path / "vocabulary.dl").write_text("not_the_vocabulary(1)\n")
+    monkeypatch.chdir(tmp_path)
+    nl = tracts_engine()
+    assert "traverses" in nl.predicate_documentation()
+    assert "not_the_vocabulary" not in nl.symbols
+    nl.execute_datalog_program('.import("bundles/freesurfer_queries.dl")')
+    assert "uf" in nl.predicate_documentation()

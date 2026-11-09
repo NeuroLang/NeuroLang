@@ -176,8 +176,7 @@ Unreleased
   lists ``uf``, ``cst``, ``cc_1``... by name, and ``.view`` draws a column of
   the sort ``streamline``.  The description of the engine names the bundle
   modules, so that the assistant imports one
-  (``.import('neurolang_apps.utils.engines.tracts:bundles/
-  freesurfer_queries.dl')``) to answer with
+  (``.import('bundles/freesurfer_queries.dl')``) to answer with
   ``uf``.
 
 * Tractography is the engine ``tracts`` of the apps,
@@ -246,6 +245,11 @@ Unreleased
   ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
   define stays in the session although the query's own rules are local to
   it, and ``.clear`` forgets the imports with their rules.
+* ``.import`` looks for a module not found relative to the importing file
+  or the working directory in the directories the engine gives its modules,
+  ``module_directories`` of its solver: the engine ``tracts`` gives its
+  own, so that a program imports its bundles as
+  ``.import("bundles/freesurfer_queries.dl")``.
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather

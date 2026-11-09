@@ -681,7 +681,7 @@ engines:
       result of streamline ids x is drawn by .view.
       The white-matter bundles, tract_querier's queries translated to the
       vocabulary and each described, are defined by importing a module of
-      the package: .import('neurolang_apps.utils.engines.tracts:bundles/freesurfer_queries.dl')
+      the engine: .import('bundles/freesurfer_queries.dl')
       defines uf(x, h) (the uncinate fasciculus), af, cst, ilf, ioff, cb,
       slf_i, cc, cc_1 ... cc_7 and more; freesurfer_queries_bsf2016.dl and
       freesurfer_queries_bsf2016_toad.dl revise them (uf, af, ilf, dlf,

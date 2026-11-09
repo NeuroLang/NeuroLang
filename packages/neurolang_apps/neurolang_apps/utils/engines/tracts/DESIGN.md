@@ -1043,7 +1043,7 @@ def fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
 # frontend.py
 class TractsCommandsMixin   # .load_tractogram, .index_tracts (term_mapping=, extent=)
 def init_engine(engine, mask=None, data_dir=None, **options) -> None
-                    # .import('neurolang_apps.utils.engines.tracts:vocabulary.dl') (16), the functions
+                    # the vocabulary (16), the functions
                     # streamline_id(t, s), subject_of(x), index_of(x), the
                     # hooks of .view streamline_points(ids),
                     # streamline_background()
@@ -1485,17 +1485,22 @@ documented with the sorts of its arguments.
 
 ### 16.3 How it enters a program
 
-`init_engine(engine, mask=None, data_dir=None, **options)` gives an engine whose
-solver has `TractsCommandsMixin` the rules of the vocabulary (it runs
-`.import('neurolang_apps.utils.engines.tracts:vocabulary.dl')`), the three functions of the ids,
-and two hooks, the methods that the REPL's `.view` calls on an engine to draw a result of streamline
-ids: `streamline_points(ids)`, the points of each `x` (decoded by
-`ids.decode` to the tractogram, by the store's load order, and the position
-in it), in mm, RAS+; and `streamline_background()`, the label image of the
-first atlas indexed (the tractograms are in its space), or None before
-`.index_tracts`. It is the `python_init` of the engine `tracts` of the apps (its signature is that of a `python_init`).
-The hooks are closures over the solver's state, so that the solver mixin
-needs no access to the frontend and the core of the engine tracts no NeuroLang.
+`init_engine(engine, mask=None, data_dir=None, **options)` gives an engine
+whose solver has `TractsCommandsMixin` the rules of the vocabulary (it runs
+`.import('neurolang_apps.utils.engines.tracts:vocabulary.dl')`), the three
+functions of the ids, and two hooks, the methods that the REPL's `.view`
+calls on an engine to draw a result of streamline ids:
+`streamline_points(ids)`, the points of each `x` (decoded by `ids.decode` to
+the tractogram, by the store's load order, and the position in it), in mm,
+RAS+; and `streamline_background()`, the label image of the first atlas
+indexed (the tractograms are in its space), or None before `.index_tracts`.
+It is the `python_init` of the engine `tracts` of the apps (its signature is
+that of a `python_init`). The hooks are closures over the solver's state, so
+that the solver mixin needs no access to the frontend and the core of the
+engine no NeuroLang. It also adds the directory of the package to the
+solver's `module_directories`, where `.import` looks for a module not found
+relative to the importing file or the working directory: a program imports
+the shipped bundles as `.import("bundles/freesurfer_queries.dl")`.
 
 So **a program is pure Datalog and the three commands**: the rules of the
 vocabulary are the engine's before the program runs. NeuroLang accepts
@@ -1989,7 +1994,7 @@ parieto-temporal) are read from their definitions. A test checks that every
 predicate of the shipped modules is named and has the sorts of its
 arguments.
 
-With the engine `tracts`, the modules loaded (`.import("neurolang_apps.utils.engines.tracts:bundles/
-freesurfer_queries.dl")`, or `nl.execute_datalog_program(bundle(...))`),
+With the engine `tracts`, the modules loaded
+(`.import("bundles/freesurfer_queries.dl")`, or `nl.execute_datalog_program(bundle(...))`),
 the query assistant's catalog lists `uf(x: streamline, h: hemisphere) —
 Uncinate fasciculus: ...`, and the descriptions of the sorts.

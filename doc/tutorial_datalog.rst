@@ -818,12 +818,15 @@ and commands, as if its statements were written in its place:
 .. code-block:: none
 
     .import("bundles/uncinate.dl")
-    .import("neurolang_apps.utils.engines.tracts:bundles/freesurfer_queries.dl")
+    .import("bundles/freesurfer_queries.dl")
     ans(x) :- uf(x, "left").
 
 * The path of a module is relative to the directory of the importing file:
   the program run with ``neurolang-query --file``, or the module importing
-  another; otherwise it is relative to the working directory.
+  another; otherwise it is relative to the working directory.  A module not
+  found there is looked for in the directories an engine gives its modules
+  (``module_directories`` of its solver): with the engine ``tracts``,
+  ``.import("bundles/freesurfer_queries.dl")`` is one of its modules.
   ``package:path`` is the file ``path`` shipped in the Python package
   ``package``, found with :mod:`importlib.resources`, so that an engine or
   a package can ship modules without their users knowing where it is
