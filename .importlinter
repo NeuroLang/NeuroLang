@@ -1,7 +1,7 @@
 # The packages of NeuroLang, from the top: each imports only the packages
 # below it. Tests are checked as part of their package.
-#   neurolang_apps  the command line, terminal interface, engines, assistant
-#   nl_tracts       tractography: atlases and tractograms as relations
+#   neurolang_apps  the command line, terminal interface, engines (among
+#                   them tracts, tractography), assistant
 #   neurolang       the language: parsers, frontends, regions, neuroimaging
 #   nl_core         relational algebra and its sets, Datalog, probabilistic
 #   nl_expr         the expression engine: expressions, walkers, types, logic
@@ -11,16 +11,14 @@ root_packages =
     nl_expr
     nl_core
     neurolang
-    nl_tracts
     neurolang_apps
 include_external_packages = True
 
 [importlinter:contract:layers]
-name = NeuroLang packages: apps > tractography > language > core > expression engine
+name = NeuroLang packages: apps > language > core > expression engine
 type = layers
 layers =
     neurolang_apps
-    nl_tracts
     neurolang
     nl_core
     nl_expr
@@ -63,17 +61,17 @@ ignore_imports =
     neurolang.atlases -> neurolang.utils.nilearn_compat
 
 [importlinter:contract:tracts-core-dependencies]
-name = The core of nl_tracts needs neither NeuroLang, but its atlases, nor the parsers
+name = The core of the engine tracts needs neither NeuroLang, but its atlases, nor the parsers
 type = forbidden
 source_modules =
-    nl_tracts.terms
-    nl_tracts.atlas
-    nl_tracts.tractogram
-    nl_tracts.indexing
-    nl_tracts.cache
-    nl_tracts.wmql_vocab
-    nl_tracts.ids
-    nl_tracts.fetch
+    neurolang_apps.utils.engines.tracts.terms
+    neurolang_apps.utils.engines.tracts.atlas
+    neurolang_apps.utils.engines.tracts.tractogram
+    neurolang_apps.utils.engines.tracts.indexing
+    neurolang_apps.utils.engines.tracts.cache
+    neurolang_apps.utils.engines.tracts.wmql_vocab
+    neurolang_apps.utils.engines.tracts.ids
+    neurolang_apps.utils.engines.tracts.fetch
 forbidden_modules =
     neurolang
     nl_core
@@ -82,4 +80,4 @@ forbidden_modules =
     nilearn
 # but neurolang.atlases, whose own contract is the one above
 ignore_imports =
-    nl_tracts.* -> neurolang.atlases
+    neurolang_apps.utils.engines.tracts.* -> neurolang.atlases

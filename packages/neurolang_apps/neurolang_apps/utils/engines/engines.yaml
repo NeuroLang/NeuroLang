@@ -669,7 +669,7 @@ engines:
   tracts:
     extends: mni_atlases
     description: >
-      Tractography (the package nl_tracts, extra tracts of neurolang-apps):
+      Tractography (neurolang_apps.utils.engines.tracts):
       the commands .load_tractogram and .index_tracts of a program build
       the relations of a tractogram, in MNI152, indexed by the atlases of
       the engine (.index_tracts(t, "destrieux"), "tian" or "schaefer") or
@@ -681,18 +681,19 @@ engines:
       result of streamline ids x is drawn by .view.
       The white-matter bundles, tract_querier's queries translated to the
       vocabulary and each described, are defined by importing a module of
-      the package: .import('nl_tracts:bundles/freesurfer_queries.dl')
+      the package: .import('neurolang_apps.utils.engines.tracts:bundles/freesurfer_queries.dl')
       defines uf(x, h) (the uncinate fasciculus), af, cst, ilf, ioff, cb,
       slf_i, cc, cc_1 ... cc_7 and more; freesurfer_queries_bsf2016.dl and
       freesurfer_queries_bsf2016_toad.dl revise them (uf, af, ilf, dlf,
       emc, cortico_spinal...); mori_queries.dl gives those of the JHU
       atlas (unc, ifo, cg, corpus_callosum...). The modules share names:
       import one.
-    solver_mixins: ["nl_tracts.frontend:TractsCommandsMixin"]
-    # the vocabulary (.import('nl_tracts:vocabulary.dl')), the functions
+    solver_mixins:
+      - "neurolang_apps.utils.engines.tracts.frontend:TractsCommandsMixin"
+    # the vocabulary (vocabulary.dl of the package), the functions
     # of the ids x and the hooks of .view, over what the commands load;
     # .index_tracts finds the atlases of the engine, loaded after it
-    python_init: "nl_tracts.frontend"
+    python_init: "neurolang_apps.utils.engines.tracts.frontend"
     # The sorts of the arguments of the vocabulary and of the bundles, as
     # their %% documentation gives them (uncinate(x: streamline, h:
     # hemisphere)); the query assistant is told their descriptions.
@@ -716,7 +717,7 @@ engines:
         description: >-
           a term of the term mapping of the atlas indexed, a string such as
           "temporal", "insula" or "amygdala": label_term(a, l, term) lists
-          them, from the mappings of nl_tracts/mappings/*.tsv
+          them, from the mappings of the engine (its mappings/*.tsv)
           (freesurfer_aseg_aparc for a FreeSurfer atlas)
       hemisphere:
         columns: [h]
@@ -754,7 +755,7 @@ engines:
       (endpoint_point, schaefer_points). similar_study, the studies about
       a text, needs the extra embeddings (SPECTER2). The uncinate
       fasciculus and the concepts of the studies that activate its parcels
-      are nl_tracts/examples/uncinate_cogat.dl.
+      are examples/uncinate_cogat.dl of the engine tracts.
 
   # Example template usage (commented out — uncomment to enable):
   #

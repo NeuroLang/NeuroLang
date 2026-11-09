@@ -818,7 +818,7 @@ and commands, as if its statements were written in its place:
 .. code-block:: none
 
     .import("bundles/uncinate.dl")
-    .import("nl_tracts:bundles/freesurfer_queries.dl")
+    .import("neurolang_apps.utils.engines.tracts:bundles/freesurfer_queries.dl")
     ans(x) :- uf(x, "left").
 
 * The path of a module is relative to the directory of the importing file:

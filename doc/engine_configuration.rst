@@ -499,14 +499,16 @@ as ``cogat_subclass_of`` and ``cogat_measures`` do.
 The ``tracts`` engine
 ---------------------
 
-``tracts`` is tractography, from the package ``nl_tracts`` (the extra
+``tracts`` is tractography, ``neurolang_apps.utils.engines.tracts`` (the extra
 ``tracts`` of ``neurolang-apps``; without it the engine fails to build,
 with a message that says so).  It extends ``mni_atlases``: its atlases are
 those of ``neurosynth`` (Destrieux, Schaefer, Tian, about 270 KB downloaded
 on the first build), without the studies that activate them and without
 the MNI mask.  A program loads its tractograms with the commands
 ``.load_tractogram`` and ``.index_tracts``, which its ``solver_mixins``
-entry, ``nl_tracts.frontend:TractsCommandsMixin``, adds to the solver;
+entry,
+``neurolang_apps.utils.engines.tracts.frontend:TractsCommandsMixin``, adds
+to the solver;
 ``.index_tracts(t, "destrieux")`` indexes a tractogram in MNI152 by an
 atlas of the engine, whose label names are those of its relation:
 ``label("destrieux", l, name, h)`` joins ``destrieux(name, region)``.  An
@@ -517,9 +519,10 @@ labels the terms of the vocabulary by the term mapping of its kind
 (FreeSurfer, Destrieux, Tian) or by ``term_mapping=...``.  It
 asks where the streamlines go in the vocabulary of
 tractography, Datalog rules that its ``python_init``
-(``nl_tracts.frontend``) gives the engine: ``traverses(x, term, h)``,
+(``neurolang_apps.utils.engines.tracts.frontend``) gives the engine:
+``traverses(x, term, h)``,
 ``endpoint_in(x, e, term, h)``, ``anterior_of(x, term, h)`` and the like
-(``packages/nl_tracts/DESIGN.md``, section 16).  The same ``init_engine``
+(the engine's ``DESIGN.md``, section 16).  The same ``init_engine``
 gives it the hooks with which ``.view`` draws a result of streamline ids
 ``x`` on the label image of the atlas.  The ends of the streamlines are
 also points in millimetres, ``endpoint_point(x, e, px, py, pz)``, stored
@@ -531,7 +534,7 @@ found with a tree::
        (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
 
 The uncinate fasciculus of
-tract_querier is ``packages/nl_tracts/examples/uncinate.dl``::
+tract_querier is the engine's ``examples/uncinate.dl``::
 
    neurolang-query --engine tracts --file uncinate.dl
    neurolang-query --engine tracts -i --file uncinate.dl   # then .view
@@ -545,13 +548,14 @@ with the studies that activate their regions (``schaefer_activated(label,
 study)``...) and the centres of their voxels in millimetres
 (``schaefer_points(x, y, z, label)``...), and the commands, vocabulary and
 ``.view`` of ``tracts``.  Their common base ``mni_atlases`` is merged once,
-and both ``python_init`` run, ``neurosynth``'s then ``nl_tracts.frontend``.
+and both ``python_init`` run, ``neurosynth``'s then
+``neurolang_apps.utils.engines.tracts.frontend``.
 It needs the extra ``tracts``, and ``embeddings`` for ``similar_study``
 (SPECTER2; without it a query that uses it fails with a message saying what
 to install).  The ends of the streamlines of a bundle, ``endpoint_point(x,
 e, x, y, z)``, join the points of the parcels within a distance, and the
 parcels the studies that activate them:
-``packages/nl_tracts/examples/uncinate_cogat.dl`` asks which Cognitive Atlas
+The engine's ``examples/uncinate_cogat.dl`` asks which Cognitive Atlas
 concepts the studies of the parcels the uncinate fasciculus connects are
 about::
 

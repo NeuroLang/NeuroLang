@@ -1,11 +1,8 @@
 """The engine ``tracts`` of engines.yaml: the commands and the vocabulary of
-nl_tracts, which neurolang_apps names in its YAML only (the package is the
-extra ``tracts``), over the atlases of ``mni_atlases``, those of the
-neurosynth engine."""
+``neurolang_apps.utils.engines.tracts``, over the atlases of
+``mni_atlases``, those of the neurosynth engine."""
 
-import importlib
 import io
-import sys
 from pathlib import Path
 
 import nibabel as nib
@@ -60,8 +57,9 @@ def offline_atlases(monkeypatch, tmp_path):
 def test_the_engine_is_declared():
     assert "tracts" in engine_registry.list_engine_names()
     cfg = engine_registry.get_engine_config("tracts")
-    assert cfg["solver_mixins"] == ["nl_tracts.frontend:TractsCommandsMixin"]
-    assert cfg["python_init"] == ["nl_tracts.frontend"]
+    frontend = "neurolang_apps.utils.engines.tracts.frontend"
+    assert cfg["solver_mixins"] == [f"{frontend}:TractsCommandsMixin"]
+    assert cfg["python_init"] == [frontend]
     # the atlases of neurosynth, without the studies that activate them
     # (which need its peaks), and no MNI template
     assert not cfg.get("requires_mni_mask")
@@ -79,26 +77,15 @@ def test_the_engine_is_declared():
         "neurosynth")["destrieux"]
 
 
-def test_without_nl_tracts_the_engine_fails_clearly(monkeypatch, tmp_path):
-    monkeypatch.setitem(sys.modules, "nl_tracts", None)
-    monkeypatch.setitem(sys.modules, "nl_tracts.frontend", None)
-    with pytest.raises(ValueError, match=r"engine 'tracts' cannot be loaded"
-                       r".*nl_tracts.*install the package"):
-        engine_registry.build_engine("tracts", tmp_path)
-    # the other engines are still listed and described
-    assert "tracts" in engine_registry.list_engine_names()
-    engine_registry.show_engines()
-
-
 @pytest.fixture
 def uncinate():
-    """The example of nl_tracts and the files it reads, written by its
-    tests; skipped if nl_tracts or its example is not there."""
-    pytest.importorskip("nl_tracts")
-    tests = importlib.import_module("nl_tracts.tests.test_uncinate")
-    files = importlib.import_module("nl_tracts.tests.uncinate_files")
+    """The example of the engine and the files it reads, written by its
+    tests; skipped if its example is not there."""
+    from ..engines.tracts.tests import test_uncinate as tests
+    from ..engines.tracts.tests import uncinate_files as files
+
     if not tests.EXAMPLE.exists():
-        pytest.skip("the examples of nl_tracts are not installed")
+        pytest.skip("the examples of the engine tracts are not installed")
     return tests, files
 
 
@@ -188,7 +175,7 @@ def rows(result):
 def tractogram(tmp_path):
     """Streamlines in MNI152, through the regions 1 and 2 of the fake
     atlases, and their ids: x is s, one tractogram."""
-    pytest.importorskip("nl_tracts")
+    pytest.importorskip("neurolang_apps.utils.engines.tracts")
     centre = nib.affines.apply_affine(AFFINE, [[3, 2, 1], [7, 6, 5]])
     lines = [np.linspace(centre[0], centre[1], 20).astype(np.float32),
              np.linspace(centre[0], centre[0] + [0, -20, 0], 20).astype(
@@ -242,7 +229,7 @@ def test_the_atlases_of_the_engine_index_tractograms(
 @pytest.mark.slow
 def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
     """Downloads Destrieux, Schaefer and Tian; every term of the uncinate
-    of nl_tracts is in their term mappings."""
+    of the engine tracts is in their term mappings."""
     try:
         nl = engine_registry.build_engine("tracts", tmp_path / "data")
     except Exception as e:  # offline, mirror down
@@ -274,7 +261,7 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
 def test_the_points_of_the_atlases(offline_atlases, tmp_path):
     """``schaefer_points(x, y, z, label)``: the centre of each labelled
     voxel, in mm through the affine, with the name of its region."""
-    pytest.importorskip("nl_tracts")
+    pytest.importorskip("neurolang_apps.utils.engines.tracts")
     nl = engine_registry.build_engine("tracts", tmp_path / "data")
     volume = fake_volume()
     voxels = np.argwhere(volume)
@@ -326,7 +313,7 @@ def test_the_assistant_is_told_the_bundles_and_their_sorts(
     """The %% documentation of the vocabulary and of a bundle module, and
     the sorts the engine declares, reach the catalog of the assistant."""
     from neurolang_apps.utils.llm.context import EngineContext
-    from nl_tracts.wmql_vocab import bundle
+    from neurolang_apps.utils.engines.tracts.wmql_vocab import bundle
 
     tests, files = uncinate
     files.write_files(tmp_path)

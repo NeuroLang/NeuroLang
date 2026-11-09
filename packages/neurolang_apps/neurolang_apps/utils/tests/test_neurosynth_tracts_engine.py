@@ -1,6 +1,6 @@
 """The engine ``neurosynth_tracts`` of engines.yaml: neurosynth and tracts,
 on fake data (no download), and its example, uncinate_cogat.dl of
-nl_tracts."""
+the engine tracts."""
 
 import warnings
 from pathlib import Path
@@ -19,16 +19,17 @@ from .test_engines import _COGNITIVE_ATLAS_TASKS, FAKE_METADATA
 from .test_tracts_engine import FAKE_LABELS
 
 NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
-EXAMPLE = Path(__file__).parents[4] / "nl_tracts" / "examples" / (
-    "uncinate_cogat.dl")
+TRACTS = "neurolang_apps.utils.engines.tracts.frontend"
+EXAMPLE = (Path(__file__).parents[1] / "engines" / "tracts" / "examples"
+           / "uncinate_cogat.dl")
 
 
 def test_the_engine_is_neurosynth_and_tracts():
     cfg = engine_registry.get_engine_config("neurosynth_tracts")
     # both inits, neurosynth's first, given the options of neurosynth
-    assert cfg["python_init"] == [NS_INIT, "nl_tracts.frontend"]
+    assert cfg["python_init"] == [NS_INIT, TRACTS]
     assert cfg["python_init_options"] == {"unknown_space": "mni"}
-    assert cfg["solver_mixins"] == ["nl_tracts.frontend:TractsCommandsMixin"]
+    assert cfg["solver_mixins"] == [f"{TRACTS}:TractsCommandsMixin"]
     # the atlases keep the studies activating them and get their points
     schaefer = cfg["atlases"]["schaefer"]
     assert schaefer["activated"]["predicate_name"] == "schaefer_activated"
@@ -53,12 +54,12 @@ LONE_VOXEL = (20, 74, 18)
 
 @pytest.fixture
 def files(tmp_path):
-    """The atlas and colour LUT of the uncinate's tests of nl_tracts, and
+    """The atlas and colour LUT of the uncinate's tests of the engine, and
     their streamlines with 21 more left uncinates (positions 16 to 36): 20
     copies of the designed one, shifted by less than 1 mm, and one whose
     frontal end is LONE_END."""
-    pytest.importorskip("nl_tracts")
-    from nl_tracts.tests import uncinate_files
+    pytest.importorskip("neurolang_apps.utils.engines.tracts")
+    from neurolang_apps.utils.engines.tracts.tests import uncinate_files
 
     uncinate_files.write_files(tmp_path)
     temporal, insula, frontal = uncinate_files.DESIGNED["uncinate"][0]
@@ -135,8 +136,8 @@ def rows(result):
 
 
 def test_the_engine_has_both(engine):
-    from nl_tracts.frontend import TractsCommandsMixin
-    from nl_tracts import vocabulary_predicates as predicates
+    from ..engines.tracts import vocabulary_predicates as predicates
+    from ..engines.tracts.frontend import TractsCommandsMixin
 
     assert isinstance(engine.program_ir, TractsCommandsMixin)
     symbols = set(engine.symbols)

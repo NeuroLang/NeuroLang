@@ -42,8 +42,6 @@ jobs:
             - 'packages/nl_core/**'
           neurolang:
             - 'packages/neurolang/**'
-          nl_tracts:
-            - 'packages/nl_tracts/**'
           neurolang_apps:
             - 'packages/neurolang_apps/**'
             # The REPL's page and bundle are tested with the applications.

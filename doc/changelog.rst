@@ -57,7 +57,8 @@ Unreleased
   negation was joined with the difference of those before it, which put
   that difference in both operands and doubled the relational algebra with
   each negation (14 negations, as in the bundles of tract_querier
-  translated to the vocabulary of nl_tracts, took most of an hour; now a
+  translated to the vocabulary of the engine tracts, took most of an hour;
+  now a
   second).
 * The regions of a large atlas are found in a second rather than ten (1.5 s
   instead of 12 s for the 180 labels of FreeSurfer's 256³ ``wmparc``): the
@@ -159,36 +160,41 @@ Unreleased
   relations are unchanged.  The ``tracts`` engine indexes a tractogram by
   any of them, ``.index_tracts(t, name, term_mapping=...)``, the term
   mapping defaulting to that of the atlas's kind (FreeSurfer, Destrieux,
-  Tian); nl_tracts' ``.load_tract_atlas`` is gone.  ``nl.atlas_labels`` is
+  Tian); the engine's ``.load_tract_atlas`` is gone.  ``nl.atlas_labels`` is
   gone too: ``atlas_label_values`` reads the recorded atlas.
 
-* The vocabulary of tractography (``nl_tracts/vocabulary.dl``) and the
-  shipped translations of tract_querier's queries (``nl_tracts/bundles``)
+* The vocabulary of tractography (``vocabulary.dl`` of the engine
+  ``tracts``) and the shipped translations of tract_querier's queries
+  (its ``bundles``)
   document each predicate with a ``%%`` block: its signature with the sorts
   of its arguments, ``uf(x: streamline, h: hemisphere)``, and, for a bundle,
   its full name (``uf`` of ``freesurfer_queries`` is the uncinate
-  fasciculus, from the table ``nl_tracts/tract_names.tsv``), a sentence on
+  fasciculus, from the engine's table ``tract_names.tsv``), a sentence on
   what it selects and the WMQL statement it is translated from.  The engine
   ``tracts`` declares the sorts (``streamline``, ``end``, ``term``,
   ``hemisphere``, ``axis``...) with descriptions, so that the query assistant
   lists ``uf``, ``cst``, ``cc_1``... by name, and ``.view`` draws a column of
   the sort ``streamline``.  The description of the engine names the bundle
   modules, so that the assistant imports one
-  (``.import('nl_tracts:bundles/freesurfer_queries.dl')``) to answer with
+  (``.import('neurolang_apps.utils.engines.tracts:bundles/
+  freesurfer_queries.dl')``) to answer with
   ``uf``.
 
-* nl_tracts is an engine rather than an application: ``nl_tracts.frontend``
-  keeps the solver's mixin of the commands and the ``python_init`` of the
-  engine ``tracts``, which imports the vocabulary
-  (``.import('nl_tracts:vocabulary.dl')``); an engine of the apps has them
-  by extending ``tracts``.  ``register``, ``relation_frames``,
-  ``RELATION_NAMES``, ``TractsSolver``, ``tracts_engine`` and
-  ``nl_tracts.vocabulary`` are gone (``nl_tracts.vocabulary_predicates()``
-  lists the predicates of the vocabulary), and the command ``nl-tracts wmql``
-  is the script ``tools/wmql_to_datalog.py`` of the package.
+* Tractography is the engine ``tracts`` of the apps,
+  ``neurolang_apps.utils.engines.tracts``, rather than the workspace package
+  ``nl_tracts``, which is gone: its modules, vocabulary, bundles, mappings,
+  examples and tests are those of the engine, its tools in
+  ``packages/neurolang_apps/tools/tracts`` (``wmql_to_datalog.py``, the
+  former command ``nl-tracts wmql``), and the extra ``tracts`` needs
+  nothing more than the apps.  ``frontend`` keeps the solver's mixin of the
+  commands and the ``python_init``, which imports the vocabulary; an engine
+  of the apps has them by extending ``tracts``.  ``register``,
+  ``relation_frames``, ``RELATION_NAMES``, ``TractsSolver``,
+  ``tracts_engine`` and the module ``vocabulary`` are gone
+  (``vocabulary_predicates()`` lists the predicates of the vocabulary).
 
 * The vocabulary of tractography can reproduce tract_querier where the two
-  differ by design (``nl_tracts``, DESIGN.md 6.1, 6.1.1, 17.5).  With
+  differ by design (the engine ``tracts``, DESIGN.md 6.1, 6.1.1, 17.5).  With
   ``.index_tracts(..., emit_background=1)`` (as before: rows of the
   background label in ``streamline_label``) ``only_in``, hence ``only(...)``
   of a translated query, is tract_querier's, which counts the background

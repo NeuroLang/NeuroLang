@@ -4,14 +4,14 @@ Atlases: a label image, its affine, a label table and a space.
 An :class:`Atlas` is what ``.load_atlas``, ``add_atlas_set`` and the
 ``atlases:`` of an engine load: the regions of the relation
 ``name(label, region)`` of the engine, the centres of their voxels, and
-what ``nl_tracts`` indexes streamlines by. This module owns the loaders
+what the engine ``tracts`` indexes streamlines by. This module owns the loaders
 (a FreeSurfer colour LUT, a BIDS ``dseg.tsv``, a TSV, a CSV, a nilearn
 fetcher, the fetchers of the atlases of the engines), the normalisation of
 label names, the inference of the hemisphere of a label, the space tag and
 the content hash.
 
 It needs numpy, pandas and nibabel only, and nilearn when an atlas is
-fetched, so that the core of ``nl_tracts`` may import it: it imports no
+fetched, so that the core of the engine ``tracts`` may import it: it imports no
 other module of NeuroLang but ``neurolang.utils.nilearn_compat``, lazily,
 to fetch (``.importlinter``).
 """
@@ -543,7 +543,7 @@ class Atlas:
         ----------
         hints : dict, optional
             A label name -> ``left``, ``right``, ``none`` or ``""``, e.g.
-            the ``hemi`` of a term mapping of ``nl_tracts``.
+            the ``hemi`` of a term mapping of the engine ``tracts``.
         """
         names = self.table["name"]
         from_hints = (

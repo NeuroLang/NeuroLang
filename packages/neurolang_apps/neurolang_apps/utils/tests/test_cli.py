@@ -238,7 +238,7 @@ class TestEngineRegistry:
     def test_datalog_init_in_config(self):
         """Every engine of this package with python_init should have
         inline datalog_init; an engine of another package (tracts, of
-        nl_tracts) brings its rules with its python_init."""
+        the engine tracts) brings its rules with its python_init."""
         for name in engine_registry.list_engine_names():
             cfg = engine_registry.get_engine_config(name)
             if any(

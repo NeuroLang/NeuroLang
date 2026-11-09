@@ -18,7 +18,6 @@ PACKAGES = {
     "nl_expr": ("nl-expr", "--extra dev"),
     "nl_core": ("nl-core", "--extra dev --extra ras-polars"),
     "neurolang": ("neurolang", "--extra dev"),
-    "nl_tracts": ("nl-tracts", "--extra dev"),
     "neurolang_apps": (
         "neurolang-apps", "--extra dev --extra tui --extra llm"
     ),
