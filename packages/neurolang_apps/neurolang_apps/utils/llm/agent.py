@@ -861,7 +861,7 @@ class ReactAgent(Agent):
             return None
         messages.append({
             "role": "assistant", "content": reply.text,
-            "tool_calls": reply.tool_calls,
+            "tool_calls": reply.tool_calls, "blocks": reply.blocks,
         })
         accepted = None
         for call in reply.tool_calls:

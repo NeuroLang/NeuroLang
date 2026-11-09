@@ -318,6 +318,13 @@ Unreleased
 
 **Bug fixes:**
 
+* The query assistant's ``anthropic`` provider, in the terminal and in the
+  browser REPL, no longer sends ``temperature``, which current Claude models
+  reject (HTTP 400 "`temperature` is deprecated for this model"). It sends
+  back each reply's content blocks unchanged, so the thinking blocks of
+  Claude Sonnet 5.5 stay with its tool calls, and gives it 16000 output
+  tokens since its thinking counts in them.
+
 * Several probabilistic facts of a predicate written in a Datalog program
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its

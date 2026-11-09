@@ -80,6 +80,7 @@ providers:
     api_key_env: ANTHROPIC_API_KEY
     model: claude-sonnet-5-5
     tool_calling: native
+    max_tokens: 16000           # its thinking counts in max_tokens
 
   # Claude Code in print mode, using its own login: no API key here.
   claude-code:
