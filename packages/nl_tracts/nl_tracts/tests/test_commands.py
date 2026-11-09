@@ -491,3 +491,37 @@ def test_the_real_destrieux_of_nilearn(files, tmp_path):
         'ans(n, h) :- label("d", l, n, h)\n'))
     assert {h for _, h in names} == {"left", "right"}
     assert all(n[:2] == {"left": "L ", "right": "R "}[h] for n, h in names)
+
+
+def test_the_extent_of_index_tracts(files):
+    """label 1 spans y -18.5 .. -9.5 by voxel edges, -17 .. -11 by voxel
+    centres (tract_querier's boxes); fixed by the first indexing by the
+    atlas."""
+    ask = 'ans(lo, hi) :- label_extent("fs", 1, 1, lo, hi)\n'
+    default = tracts_engine().execute_datalog_program(
+        atlas_command(files) + tractogram_command(files)
+        + '.index_tracts("t1", "fs")\n' + ask
+    )
+    assert rows(default) == {(-18.5, -9.5)}
+    nl = tracts_engine()
+    result = nl.execute_datalog_program(
+        atlas_command(files) + tractogram_command(files, "a", "t1")
+        + tractogram_command(files, "b", "t2")
+        + '.index_tracts("t1", "fs", extent="centre")\n' + ask
+    )
+    assert rows(result) == {(-17.0, -11.0)}
+    nl.execute_datalog_program(  # unspecified, or the same: fine
+        '.index_tracts("t2", "fs", extent="centre")\n'
+    )
+    with pytest.raises(InvalidCommandExpression, match="extent"):
+        nl.execute_datalog_program(
+            '.index_tracts("t2", "fs", extent="edge")\n'
+        )
+
+
+def test_an_extent_that_is_not_one(files):
+    with pytest.raises(InvalidCommandExpression, match="extent"):
+        tracts_engine().execute_datalog_program(
+            atlas_command(files) + tractogram_command(files)
+            + '.index_tracts("t1", "fs", extent="corner")\n'
+        )

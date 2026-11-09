@@ -176,6 +176,22 @@ Unreleased
   that the assistant imports one (``.import('nl_tracts:bundles/
   freesurfer_queries.dl')``) to answer with ``uf``.
 
+* The vocabulary of tractography can reproduce tract_querier where the two
+  differ by design (``nl_tracts``, DESIGN.md 6.1, 6.1.1, 17.5).  With
+  ``.index_tracts(..., emit_background=1)`` (as before: rows of the
+  background label in ``streamline_label``) ``only_in``, hence ``only(...)``
+  of a translated query, is tract_querier's, which counts the background
+  among the labels of a streamline; the new option
+  ``.index_tracts(..., extent="centre")`` (``label_extent_relation(atlas,
+  extent)``, ``RelationStore.add_atlas(atlas, term_mapping, extent)``) gives
+  the boxes of the labels by the centres of their voxels, as tract_querier's
+  without scipy, instead of the voxel edges, the default, so that the
+  directional terms (``anterior_of``...) are its own.  On the whole brain of
+  HCP842 and ``wmparc``, the 58 bundles of ``freesurfer_queries.qry`` (both
+  sides) are the same streamlines as tract_querier's with both options (50
+  without) and the 43 translated of ``freesurfer_queries_bsf2016.qry`` and
+  of its ``_toad`` variant, too.
+
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and
   ``fallback_provider: NAME`` asks another provider once when no result

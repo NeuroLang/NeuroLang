@@ -393,12 +393,16 @@ class RelationStore:
             )
         self.relations[name] = frame
 
-    def add_atlas(self, atlas: Atlas, term_mapping=None) -> None:
+    def add_atlas(
+        self, atlas: Atlas, term_mapping=None, extent: str = "edge"
+    ) -> None:
         """Add ``atlas``, ``label``, ``label_term`` and ``label_extent``.
 
         ``term_mapping`` (a DataFrame, a path or the key of a shipped one,
         :func:`nl_tracts.terms.load_term_mapping`) gives the terms of its
-        labels; without it ``label_term`` has no row of the atlas.
+        labels; without it ``label_term`` has no row of the atlas. ``extent``
+        is that of ``label_extent`` (:func:`nl_tracts.atlas.
+        label_extent_relation`): ``"edge"`` or ``"centre"``.
 
         Raises
         ------
@@ -415,7 +419,7 @@ class RelationStore:
             term_mapping = load_term_mapping(term_mapping)
         self._append("label", label_relation(atlas, term_mapping))
         self._append("label_term", label_term_relation(atlas, term_mapping))
-        self._append("label_extent", label_extent_relation(atlas))
+        self._append("label_extent", label_extent_relation(atlas, extent))
 
     def add_tractogram(
         self, tractogram: Tractogram, params: IndexingParams
@@ -548,14 +552,15 @@ def build_relations(
     cache_dir: Optional[Union[str, os.PathLike]] = None,
     allow_space_mismatch: bool = False,
     term_mapping=None,
+    extent: str = "edge",
 ) -> RelationStore:
     """All the relations of one tractogram and one atlas.
 
     The one-call form of ``RelationStore.add_atlas`` (with
-    ``term_mapping``), ``add_tractogram`` and ``add_index``.
+    ``term_mapping`` and ``extent``), ``add_tractogram`` and ``add_index``.
     """
     store = RelationStore()
-    store.add_atlas(atlas, term_mapping)
+    store.add_atlas(atlas, term_mapping, extent)
     store.add_tractogram(tractogram, params)
     store.add_index(
         tractogram, atlas, params, cache_dir=cache_dir,

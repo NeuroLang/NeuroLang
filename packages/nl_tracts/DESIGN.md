@@ -460,7 +460,7 @@ have a test** (13.2):
 | 7 | With `length_threshold > 0` the tract list is **filtered before enumeration**, so the ids of the survivors are *renumbered* | **ids are never renumbered**: `s` is the position in the file (and `x` encodes it, 3.1); filtered streamlines are absent from every relation. The equivalence test maps the reference's ids back through the kept-index list. **The reference's `tract_bounding_boxes` and `tract_endpoints_pos` are computed on all the tracts, unfiltered, so its directional terms are misaligned with the renumbered ids when `length_threshold > 0`**: not comparable there |
 | 8 | Length = sum of segment norms of the polyline, `>= length_threshold` keeps | same, in float64, then stored as float32 in `streamline_length` |
 | 9 | Streamlines with fewer than 2 points make the bounding-box step raise | `Tractogram` rejects them at construction, with the id of the first offender; with `drop_short=True`, those of one point are kept in its arrays and are in no relation, as the streamlines under `length_threshold` (parity 7: the ids are not renumbered), and none still raises (15.37) |
-| 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below) |
+| 10 | `compute_label_bounding_boxes`: `ndimage.find_objects` (labels start at 1, `stop` exclusive), then **two** corners `[start, stop]` mapped by the linear part and the translation, `BoundingBox` takes their min and max. That is the centre of the first voxel to the centre of the voxel *after* the last (half a voxel off at both ends), and a box only if each world axis depends on one voxel axis (wrong for oblique affines) | `label_extent` (implemented, 6.1.1): the same `find_objects` and the same "box of a box" idea, by **voxel edges** `[start - .5, stop - .5]`, **8 corners** through the full affine, min and max per world axis. Tests transcribe the reference and check the relation exactly (below). **Where scipy is not installed** (it is not a dependency of tract_querier) the reference takes the minimum and maximum of the **voxel centres** instead, `[start, stop - 1]`; `.index_tracts(..., extent="centre")` reproduces that one (6.1.1) |
 | 11 | `tract_endpoints_pos` = first and last point | `endpoint_coord`, float32 (the reference holds float64; tests compare with `atol` 1e-4 mm) |
 | 12 | At a `crossing_threshold` of 0 every label up to the largest the streamline has is kept, whether or not a point is in it (`bincount` has a zero for it, and `0 >= 0`) | **not reproduced**: a label is traversed only if at least one point is in it; the tests of parity use thresholds above 0 |
 
@@ -494,6 +494,34 @@ box: a pass over all the voxels of the atlas (the earlier design) instead of
 one `find_objects`; not done, because atlases are in practice aligned or
 nearly, and the loose box is safe for the uses planned (a conservative
 bound). Open question 15.13.
+
+*Voxel centres, as tract_querier without scipy* (`extent="centre"`).
+`compute_label_bounding_boxes` has two paths. With scipy it maps
+`[start, stop]` (above). Without it (scipy is not among tract_querier's
+dependencies: a `pip install` has none, so this is what most installations
+run) it takes the world coordinates of **every voxel of the label** and the
+`BoundingBox` is their minimum and maximum: the box of the voxel *centres*,
+`[start, stop - 1]` in voxel units, a single voxel a point, a face of the box
+at the centre of the outermost voxel. The directional rules compare a
+streamline against the faces of the box, so the same streamline is "beyond
+the anterior face" of a label with the edge extent and not with the centre
+one when it ends within half a voxel of the last voxel's centre. The
+extent is a property of the atlas relation `label_extent(a, l, axis, lo,
+hi)`, whose rows are built when the atlas enters the program, so the option
+sits where the atlas's other choice is, the term mapping: `.index_tracts(t,
+atlas, extent="edge"|"centre")`, `"edge"` unless the first indexing by the
+atlas says otherwise, then fixed (a later `.index_tracts` of the atlas with
+another extent is an error, as with `term_mapping`); in Python
+`label_extent_relation(atlas, extent)` and `RelationStore.add_atlas(atlas,
+term_mapping, extent)`. Not an `IndexingParams` field, which determines the
+cached relations of a tractogram: `label_extent` is not one of them. The
+default is unchanged. `"centre"` is exact, against the voxels, under the same
+affines as the edge (aligned, flipped or permuted: the tests loop over the
+voxels), and under an oblique affine the box of the box of centres, which
+contains the centres (tract_querier's, by the voxels, is the tight box of
+the centres). The path with scipy, `[start, stop]`, has no option: it is
+neither the edge nor the centre but half a voxel beyond the centre at the
+`stop` side, which no atlas property justifies. 17.5 measures the three.
 
 ### 6.2 Algorithm (all vectorised)
 
@@ -545,7 +573,10 @@ denominators, can be traversed, and can be an endpoint label. nl_tracts:
   `streamline_label` grows by a factor of 1.1-1.3 for facts no rule should
   use. `emit_background=True` reproduces the reference's
   `crossing_tracts_labels` and is what the equivalence tests use; it has no
-  effect on `endpoint_label`.
+  effect on `endpoint_label`. It is what makes `only` (`only_in`, 16.2) the
+  reference's: the background is a label of no term, so it counts as a label
+  outside the term (17.3, tested against the reference on synthetic data
+  with background labels; 17.5 on real data).
 * `label` has a row for the background only if the label table has one (the
   FreeSurfer LUT does: `0 Unknown`).
 * tract_querier's `not`/`-` operate on the set of labels that appear in
@@ -810,7 +841,8 @@ has: the program then loads only its tractograms, in `MNI152`. An atlas the
 engine does not have is an error that lists those it has. The first
 `.index_tracts` of an atlas attaches its term mapping (3.2): its option
 `term_mapping`, else the default of the atlas's kind; a later one cannot
-give another, the relations have those terms. An atlas loaded again under
+give another, the relations have those terms; so with its option `extent`
+(`"edge"`, or `"centre"`, tract_querier's boxes: 6.1.1). An atlas loaded again under
 its name after its first index does not change the relations, which keep
 the first. `.index_tracts` is the command that publishes the relations: it
 adds the atlas and the tractogram to a `RelationStore` that the solver
@@ -987,7 +1019,7 @@ DEFAULT_TERM_MAPPINGS: dict[str, str]      # the kind of an atlas -> key
 def atlas_term_mapping(atlas, term_mapping=None) -> DataFrame
 def label_relation(atlas, term_mapping=None) -> DataFrame
 def label_term_relation(atlas, term_mapping=None) -> DataFrame
-def label_extent_relation(atlas) -> DataFrame
+def label_extent_relation(atlas, extent="edge") -> DataFrame   # or "centre"
 def unmapped_labels(atlas, term_mapping=None) -> DataFrame      # id, name, hemi
 class ProbabilisticAtlas:      # extension point, constructor raises
 
@@ -1024,10 +1056,11 @@ def endpoint_coord_relation(tractogram, params) -> DataFrame
 def endpoint_point_relation(tractogram, params) -> DataFrame     # one row per end
 def streamline_length_relation(tractogram, params) -> DataFrame
 class RelationStore:    # relations (by x, 3.1), tractograms (ids, load order)
-    add_atlas(atlas, term_mapping=None) / add_tractogram(tractogram, params) /
+    add_atlas(atlas, term_mapping=None, extent="edge") / add_tractogram(tractogram, params) /
     add_index(tractogram, atlas, params, cache_dir=None, allow_space_mismatch=False)
 def build_relations(tractogram, atlas, params=IndexingParams(), cache_dir=None,
-                    allow_space_mismatch=False, term_mapping=None) -> RelationStore
+                    allow_space_mismatch=False, term_mapping=None,
+                    extent="edge") -> RelationStore
 
 # cache.py
 def cache_key(tractogram, atlas, params) -> str
@@ -1044,7 +1077,7 @@ def fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
 RELATION_NAMES: dict[str, tuple[str, ...]]
 def register(engine, store, only=None) -> None
 def relation_frames(store) -> dict[str, DataFrame]       # + opposite_hemisphere
-class TractsCommandsMixin   # .load_tractogram, .index_tracts (term_mapping=)
+class TractsCommandsMixin   # .load_tractogram, .index_tracts (term_mapping=, extent=)
 class TractsSolver(TractsCommandsMixin, RegionFrontendCPLogicSolver)
 def tracts_engine(**kw) -> NeurolangPDL                  # solver_class=TractsSolver,
                     # then init_engine
@@ -1380,9 +1413,11 @@ Recommendations in bold; none changes a decision of section 2.
     the vocabulary under these names. **Keep** (the tracts engine has no
     regions); rename the vocabulary's if one engine needs both.
 35. **`only_in` and the background** (16.2): with `emit_background=1` the
-    background is a label of no term that almost every streamline
-    traverses. **Keep**; `only_in` could leave out the labels of no term,
-    which would also leave out the labels a mapping misses.
+    background is a label of no term that many streamlines traverse, so
+    they are not `only_in` a term: tract_querier's `only`, which is what
+    the option is for (17.3, 17.5). **Keep**; `only_in` could leave out the
+    labels of no term, which would also leave out the labels a mapping
+    misses.
 36. **aparc+aseg against wmparc** (16.4): the terms are the cortex and the
     white matter under it, so on an atlas without the white matter of each
     gyrus the bundles lose the streamlines that end in the white matter
@@ -1469,8 +1504,9 @@ tract_querier's meaning, relative to the side of their argument, and need
 a side, as there (a term of hemisphere `"none"` has no rows).
 `only_in` counts every label `x` traverses, the background included when
 `.index_tracts(..., emit_background=1)` has its rows (6.3): it has no term,
-so with them hardly any streamline is `only_in` a term; leave the option at
-its default.
+so it is a label outside any term, and a streamline with `crossing_threshold`
+% of its points in the background is not `only_in` a term, as in
+tract_querier's `only` (17.3). By default, without those rows, it is.
 
 The atlas is not an argument: each predicate holds over every atlas loaded
 (`a` is quantified in its rules). With one atlas, as usual, it is that one;
@@ -1814,7 +1850,12 @@ its name's; the background is not traversed (`.index_tracts`' default,
 * **`only`**: tract_querier counts the background (label 0, at least 2 % of
   the points) among a streamline's labels, so that a streamline partly in
   it is never `only` anything; nl_tracts emits no rows for it by default,
-  so `only` is a superset.
+  so `only` is a superset. With `.index_tracts(..., emit_background=1)` it
+  is the same (the background has no term: a label outside it), tested
+  against the reference with background labels in the synthetic data.
+* **The boxes of the directions** are those of `label_extent`: voxel edges
+  by default, tract_querier's (without scipy) with `.index_tracts(...,
+  extent="centre")`, 6.1.1.
 * **Vertical directions**, anatomical here (15.20).
 * A term without a side is of any hemisphere (`_`); `HEMISPHERE` is
   `label.hemi` (16.5).
@@ -1843,76 +1884,116 @@ negations, did not finish in an hour; each now takes a few seconds.
 
 ### 17.5 On real data
 
-*Measured* (not a test; `tools/wmql_real_data.py`, this Mac, pandas
-backend). Tractogram the whole brain of DIPY's HCP842 atlas, MNI, without
-its streamlines of one point (`whole_brain_MNI_2pts.trk`, 144,641); atlas
-`wmparc.mgz` of FreeSurfer's `cvs_avg35_inMNI152` with its colour LUT.
-tract_querier itself (its Python API, as its command line calls it, in its
-own environment): the `.trk` read by nibabel, in RAS+ mm, which is what
-nl_tracts reads too, the label image with its affine, crossing threshold
-2 %, no length threshold, every query of `freesurfer_queries.qry` kept; a
+*Measured* (not a test; `tools/wmql_real_data.py` for the two runs and
+`tools/wmql_parity_causes.py` for the causes, this Mac, pandas backend,
+the whole of one run is in `/tmp/parity`, outside git). Tractogram the
+whole brain of DIPY's HCP842 atlas, MNI, without its streamlines of one
+point (`whole_brain_MNI_2pts.trk`, 144,641); atlas `wmparc.mgz` of
+FreeSurfer's `cvs_avg35_inMNI152` with its colour LUT. tract_querier
+itself (0.10.1.dev18, its Python API, as its command line calls it, in its
+own environment **without scipy**, which is not among its dependencies and
+changes its boxes, 6.1.1): the `.trk` read by nibabel, in RAS+ mm, which is
+what nl_tracts reads too, the label image with its affine, crossing
+threshold 2 %, no length threshold, every query of the `.qry` kept; a
 streamline is its position in the file in both. The vocabulary: the
 translation with the terms of `freesurfer_aseg_aparc` (the shipped module)
-after the three commands, every predicate at once (`solve_all`).
+after the three commands, every predicate at once (`solve_all`), by default
+and with the two options that reproduce tract_querier (`.index_tracts(...,
+emit_background=1, extent="centre")`, 6.1.1, 6.3).
 
-| Tract | Side | n_tq | n_vocab | Jaccard |
+`freesurfer_queries.qry`, 58 bundle-sides (the 59 of an earlier version of
+this table was a miscount): n_tq, n_vocab by default, n_vocab with both
+options. **50 of 58 are the same streamlines by default, 58 of 58 with both
+options.**
+
+| Tract | Side | n_tq | default | both options |
 |---|---|---|---|---|
-| cst, cst_pre, cst_post | left, right | 2636, 3378; 2464, 3218; 455, 491 | the same | 1 |
-| internal_capsule_new | left, right | 25, 85 | 25, 85 | 1 |
-| ioff | left, right | 70, 93 | 70, 93 | 1 |
-| soff | left, right | 2, 253 | 2, 253 | 1 |
-| **uf** | left, right | 724, 810 | 724, 810 | 1 |
-| ilf | left | 1167 | 1126 | 0.965 |
-| ilf | right | 10 | 10 | 1 |
-| ec | left, right | 68, 2 | 68, 2 | 1 |
-| slf_i, slf_ii, slf_iii | left | 0, 301, 0 | the same | 1 |
-| slf_i, slf_ii, slf_iii | right | 0, 407, 104 | the same | 1 |
-| extreme_capsule | left, right | 55, 0 | 55, 0 | 1 |
-| af | left, right | 5, 0 | 5, 0 | 1 |
-| internal_capsule, cc, cc_5, cc_6 | | 0 | 0 | 1 |
-| thalamo_frontal, _parietal, _occipital | left | 1557, 1137, 232 | the same | 1 |
-| thalamo_frontal, _parietal, _occipital | right | 1210, 856, 185 | the same | 1 |
-| striato_frontal, _parietal, _occipital | left | 1471, 376, 85 | the same | 1 |
-| striato_frontal, _parietal, _occipital | right | 1160, 386, 27 | the same | 1 |
-| cc_1, cc_2, cc_3, cc_4, cc_7 | | 854, 5224, 276, 697, 4533 | the same | 1 |
-| precentral_postcentral | left | 47 | 185 | 0.254 |
-| precentral_postcentral | right | 136 | 284 | 0.479 |
-| cb | left | 1153 | 1576 | 0.732 |
-| cb | right | 829 | 1653 | 0.502 |
-| mdlf | left | 89 | 102 | 0.873 |
-| mdlf | right | 133 | 191 | 0.696 |
-| mdlf_probable_sections | left | 76 | 214 | 0.355 |
-| mdlf_probable_sections | right | 0 | 0 | 1 |
+| cst | left, right | 2636, 3378 | the same | the same |
+| cst_pre | left, right | 2464, 3218 | the same | the same |
+| cst_post | left, right | 455, 491 | the same | the same |
+| internal_capsule_new | left, right | 25, 85 | the same | the same |
+| ioff | left, right | 70, 93 | the same | the same |
+| soff | left, right | 2, 253 | the same | the same |
+| uf | left, right | 724, 810 | the same | the same |
+| ec | left, right | 68, 2 | the same | the same |
+| slf_i, slf_ii, slf_iii | left | 0, 301, 0 | the same | the same |
+| slf_i, slf_ii, slf_iii | right | 0, 407, 104 | the same | the same |
+| extreme_capsule | left, right | 55, 0 | the same | the same |
+| af | left, right | 5, 0 | the same | the same |
+| internal_capsule, cc, cc_5, cc_6 | | 0 | the same | the same |
+| thalamo_frontal, _parietal, _occipital | left | 1557, 1137, 232 | the same | the same |
+| thalamo_frontal, _parietal, _occipital | right | 1210, 856, 185 | the same | the same |
+| striato_frontal, _parietal, _occipital | left | 1471, 376, 85 | the same | the same |
+| striato_frontal, _parietal, _occipital | right | 1160, 386, 27 | the same | the same |
+| cc_1, cc_2, cc_3, cc_4, cc_7 | | 854, 5224, 276, 697, 4533 | the same | the same |
+| **precentral_postcentral** | left, right | 47, 136 | 185, 284 | 47, 136 |
+| **cb** | left, right | 1153, 829 | 1576, 1653 | 1153, 829 |
+| **mdlf** | left, right | 89, 133 | 102, 191 | 89, 133 |
+| **mdlf_probable_sections** | left, right | 76, 0 | 214, 0 | 76, 0 |
+| **ilf** | left | 1167 | 1126 | 1167 |
+| ilf | right | 10 | 10 | 10 |
 
-51 of the 59 queries are the same streamlines. The others, explained
-streamline by streamline:
+The eight that differ by default, each streamline of the symmetric
+difference checked against tract_querier's own index (the labels it says
+the streamline crosses) and against a run with each option alone:
 
-* The four of **`only`** are supersets of tract_querier's, and every
-  streamline in excess (138, 148, 423, 824, 13, 58, 138) has the background
-  among its labels in tract_querier's index (at least 2 % of its points in
-  label 0), which tract_querier counts in `only` and nl_tracts, without
-  rows for the background, does not (17.3). `only` with
-  `.index_tracts(..., emit_background=1)` counts it, but then so does every
-  `only_in`.
-* **`ilf.left`** misses 41 streamlines of tract_querier's, all of whose
-  temporal end is between y = -6 and -5.5 mm, in front of the hippocampus
-  by tract_querier's box (its anterior face at -6 mm, the centre of the
-  last voxel, as tract_querier maps the box) and not by `label_extent`'s
-  (-5.5 mm, the edge of the voxel: 6.1.1). Half a voxel on a face, by
-  design; the uncinate's `anterior_of(amygdala)` has no end in that band.
+* the seven of **`only`** (`precentral_postcentral`, `cb`, `mdlf`,
+  `mdlf_probable_sections`, both sides where they have streamlines) are
+  supersets of tract_querier's, and **every** streamline in excess (138,
+  148, 423, 824, 13, 58, 138) has the background among its labels in
+  tract_querier's index (at least 2 % of its points in label 0), which
+  tract_querier counts in `only`. `emit_background=1` alone makes the seven
+  identical (57 of 58); no rule had to change, the background being a label
+  of no term (6.3, 16.2, 17.3).
+* **`ilf.left`** misses 41 streamlines of tract_querier's, all with a
+  point between y = -5.9 and -5.5 mm at the temporal end, in front of the
+  hippocampus by tract_querier's box and not by `label_extent`'s: the
+  anterior face is at the centre of the last voxel in tract_querier and
+  half a voxel further, at its edge, in `label_extent` (6.1.1).
+  `extent="centre"` alone makes it identical (51 of 58 with it alone, the
+  seven of `only` remaining). The boxes of the 179 labels of the atlas:
+  `label_extent` with the centres equals tract_querier's boxes for 179 of
+  179 (largest difference 0 mm), with the edges for 0 of 179 (0.5 mm).
 * The label sets of `subcortical` (17.3) change nothing here: no
   streamline of `ioff`, `soff`, `ec`, `slf_*` goes through the brain stem
   and not through the caudate, hippocampus or accumbens, or the reverse.
 
-Time: tract_querier 1.9 s to load the files, 51 s to index, 1.0 s for all
-the queries; the vocabulary 6.3 s to load and index (the cache of 7.3 warm:
-it was 4.4 s cold in 16.4), 317 s for all the queries of both sides at
-once, 13 GB of memory. The queries are compile-bound, as in 16.6: the
-Magic Sets rewrite is refused for these programs (negations), so every
-predicate of the vocabulary they read is computed for every term and
-hemisphere, and the 37 rules, many with ten negations or more, are
-translated into relational algebra. Before the fix of the negations (17.4),
-they did not finish.
+`freesurfer_queries_bsf2016.qry` and its `_toad` variant: 55 queries each,
+**12 skipped by the translator** (`thalamo_prefrontal`, `_premotor`,
+`_precentral`, `_postcentral`, `_parietal`, `_occipital`, both sides:
+"thalamus is not a term, and thalamus.left and thalamus.right are two
+definitions", 17.2) and 43 translated: **33 of 43 the same by default (34
+for `_toad`), 43 of 43 with both options** for both. The ten that differ by
+default (nine in `_toad`, which has not `uf.left`), by the runs with each
+option alone: `cb`, `slf_i.right`, `slf_ii`, `dlf` (both sides where
+present) are `only` with the background in tract_querier's labels, for all
+their streamlines (423, 824, 20, 36, 38, 410, 122), resolved by
+`emit_background=1` (40 of 43 with it alone); `af` has both causes: 64 and
+124 streamlines in excess, 37 and 68 of them with the background (resolved by
+`emit_background=1`) and 27 and 56 without it, resolved by `extent="centre"`,
+for its `not in medial_of(supramarginal.side)`; `uf.left` (not `_toad`)
+misses two streamlines, resolved by the extent (34 of 43 with it alone).
+
+*With scipy* tract_querier's boxes are `[start, stop]` (6.1.1): its
+`uf.left` has 722 streamlines (724 without) and its `ilf.left` 1101 (1167).
+Neither option reproduces it: with both, 56 of 58 of `freesurfer_queries`
+(`uf.left` 724 against 722, `ilf.left` 1167 against 1101), 49 of 58 by
+default. Its index takes 11 s, against 51-57 s for the fallback of a voxel
+loop per label.
+
+Time (the tractogram of 144,641 streamlines, each .qry alone):
+tract_querier 1.8-2.0 s to load the files, 51-57 s to index (without
+scipy; 10-11 s with), 1.2-2.6 s for all the queries, 3.1 GB at peak; the
+vocabulary 6.8-7.3 s to load and index (the cache of 7.3 warm), 245-266 s
+for all the queries of both sides at once (58 bundles of
+`freesurfer_queries`; the same, 43 translated, for the others; with the
+options the same, 256-266 s), 32-37 GB at peak (`ru_maxrss`; the 13 GB
+of the earlier measurement was on an older branch: not investigated). The
+queries are compile-bound, as in 16.6: the Magic Sets rewrite is refused
+for these programs (negations), so every predicate of the vocabulary they
+read is computed for every term and hemisphere, and the 37 rules, many with
+ten negations or more, are translated into relational algebra; a run per
+bundle was not measured, it would pay that compilation each time.
 
 ### 17.6 The documentation of the bundles
 
