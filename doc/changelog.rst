@@ -52,6 +52,13 @@ Unreleased
   of the Cognitive Atlas concepts, embedded a text again for nearly every
   row, as the rows come in any order and only the similarities of the last
   16 texts were kept.
+
+* A rule with many negated atoms compiles in a time linear in them: each
+  negation was joined with the difference of those before it, which put
+  that difference in both operands and doubled the relational algebra with
+  each negation (14 negations, as in the bundles of tract_querier
+  translated to the vocabulary of nl_tracts, took most of an hour; now a
+  second).
 * The regions of a large atlas are found in a second rather than ten (1.5 s
   instead of 12 s for the 180 labels of FreeSurfer's 256³ ``wmparc``): the
   labels are searched for in the type of the image's values, all at once.
@@ -361,6 +368,9 @@ Unreleased
   no longer comments on how to run it; ``neurolang-repl-serve`` builds the
   REPL of a branch locally.
 
+* ``_`` in a negated atom or in a disjunct of a rule body is quantified
+  there: ``~traverses(x, _, h)`` is "no term", ``~∃t traverses(x, t, h)``,
+  instead of an error that the rule is not safe.
 * ``.load_atlas`` put a tuple of the region, not the region, in the second
   column of its relation, ``Tuple[str, ExplicitVBR]``, and kept the labels
   without voxels.  The background (label 0) is no region any more either.

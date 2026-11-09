@@ -684,6 +684,38 @@ def test_neurolang_dl_datalog_code_disjunction_under_negation():
     assert set(res.to_unnamed()) == {(2,), (4,)}
 
 
+
+def test_neurolang_dl_datalog_code_anonymous_variable_negated():
+    """``~traverses(x, _)``: no label at all; ``_`` is quantified in the
+    negation (and in a disjunct), not a variable of the rule."""
+    neurolang = _tracts()
+    neurolang.add_tuple_set([(1,), (2,), (5,)], name="streamline")
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), ~traverses(x, _)
+    """
+    )
+    assert set(res.to_unnamed()) == {(5,)}
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), (temporal(x) | traverses(x, _))
+    """
+    )
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
+def test_neurolang_dl_datalog_code_many_negations():
+    """A rule with twenty negated atoms: the answer, in a time that grows
+    linearly with the negations (it doubled with each)."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(i, i % 25) for i in range(100)], name="r")
+    neurolang.add_tuple_set([(i, f"t{i}") for i in range(25)], name="s")
+    body = ", ".join(f'~s(l, "t{i}")' for i in range(20))
+    res = neurolang.execute_datalog_program(f"ans(x) :- r(x, l), {body}")
+    assert set(res.to_unnamed()) == {
+        (i,) for i in range(100) if i % 25 >= 20
+    }
+
 @pytest.mark.parametrize(
     "body", ['traverses(x, "orbital") | temporal(y)', 'temporal(x) | ~q(x)']
 )

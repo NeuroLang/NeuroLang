@@ -71,6 +71,8 @@ source_modules =
     nl_tracts.tractogram
     nl_tracts.indexing
     nl_tracts.cache
+    nl_tracts.wmql_vocab
+    nl_tracts.cli
     nl_tracts.ids
     nl_tracts.vocabulary
     nl_tracts.fetch
