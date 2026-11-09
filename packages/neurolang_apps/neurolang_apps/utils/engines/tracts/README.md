@@ -116,6 +116,20 @@ contrasts there.
 neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
 ```
 
+The engine `neurosynth_hcp842` is `neurosynth_tracts` with what the browser's
+REPL (`doc/_static/repl`) needs to answer `ans(x) :- uf(x, "left")` at
+the prompt: its `downloads` fetch the wmparc of the IIT Human Brain Atlas v3
+(`IIT3mean_desikan_2009.nii.gz`, labels of FreeSurfer's colour LUT) and
+`FreeSurferColorLUT.txt` into `<data_dir>/tracts/fs`, and its `datalog_init`
+loads the whole-brain tractogram of HCP842, loads that atlas, indexes the one
+by the other and imports `bundles/freesurfer_queries.dl` (the files are read
+relative to the working directory, which is the data directory). Its
+`tractogram: {kind, subsample, step, seed}` entry tells the bundle of the
+page how to subsample the tractogram it ships (20,000 streamlines at random,
+every second point): `doc/make_repl_bundle.py`. The IIT atlas is under the IIT
+Human Brain Template License (non-commercial research and education, with
+attribution).
+
 ## Getting the data: the atlases of tractography of Yeh
 
 Two public atlases of streamlines in MNI152, whose bundles were labelled by

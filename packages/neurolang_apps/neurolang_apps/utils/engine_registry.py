@@ -1475,8 +1475,14 @@ def _phase_downloads(cfg, data_dir, engine_name):
             files = [(m, url, {"uncompress": True}) for m in extract_members]
             _fetch_files(dl_dest, files, verbose=1)
         else:
-            file_name = Path(url).name
-            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
+            # a name for a URL that has none, and the checksum of the file
+            file_name = dl_entry.get("name", Path(url).name)
+            options = {}
+            if "md5" in dl_entry:
+                options["md5sum"] = dl_entry["md5"]
+            if "name" in dl_entry:
+                options["move"] = file_name
+            _fetch_files(dl_dest, [(file_name, url, options)], verbose=1)
 
 
 def _phase_templates(nl, cfg, data_dir, engine_name):

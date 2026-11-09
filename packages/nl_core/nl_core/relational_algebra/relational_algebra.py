@@ -1284,6 +1284,20 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
     return AbstractSet[Tuple[sorted_tuple_args]]
 
 
+def _sort_named_relation_type(type_, columns):
+    """
+    Return the type `AbstractSet[Tuple[...]]` *type_* of a named relation,
+    whose tuple types are in the order of its *columns*, in the alphabetical
+    order of the columns (the inverse of :func:`_unsort_named_relation_type`).
+    A type without tuple types is returned as it is.
+    """
+    tuple_args = type_system.get_args(type_system.get_args(type_)[0])
+    if len(tuple_args) != len(columns):
+        return type_
+    order = sorted(range(len(columns)), key=lambda i: columns[i])
+    return AbstractSet[Tuple[tuple(tuple_args[i] for i in order)]]
+
+
 def _unsort_named_relation_type(type_, columns):
     """
     Return the type `AbstractSet[Tuple[...]]` *type_* of a named relation,
@@ -1334,4 +1348,11 @@ def _get_const_relation_type(const_relation):
         else:
             return const_relation.type
     else:
-        return _infer_relation_type(const_relation.value)
+        type_ = _infer_relation_type(const_relation.value)
+        if isinstance(const_relation.value, NamedRelationalAlgebraFrozenSet):
+            # inferred in the order of the columns, as the other branch has
+            # the types of a named relation: in the order of their names
+            type_ = _sort_named_relation_type(
+                type_, const_relation.value.columns
+            )
+        return type_

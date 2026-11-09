@@ -3,7 +3,7 @@
 //     neurolang-query -i --engine neurosynth --resolution 2
 //
 // It loads Pyodide, gets NeuroLang, installs the data of the engine the page
-// asks for (neurosynth or neurostore, see engines.js) that the bundle ships,
+// asks for (neurosynth, neurosynth_hcp842 or neurostore, see engines.js) that the bundle ships,
 // builds the engine, and answers the page's submissions with the HTML
 // that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //
@@ -157,6 +157,7 @@ async function start({ repo, ref, full, engine }) {
   await pyodide.runPythonAsync(`
 import inspect
 import json
+import os
 from pathlib import Path
 
 import js
@@ -185,6 +186,9 @@ if not ${full ? "True" : "False"}:
 tells = {}
 if "progress" in inspect.signature(engine_registry.build_engine).parameters:
     tells = {"progress": say}
+# The files an engine reads by a relative path (the atlas of tractography)
+# are in its data directory.
+os.chdir("/data")
 nl = engine_registry.build_engine(
     "${name}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
 )
@@ -193,7 +197,7 @@ say("Starting the REPL")
 # studies of a result; a version that predates them does not take them. They
 # are those of the studies of Neurosynth, whose ids are PubMed's.
 options = {}
-if "${name}" == "neurosynth" and "study_metadata" in inspect.signature(WebRepl).parameters:
+if "${name}".startswith("neurosynth") and "study_metadata" in inspect.signature(WebRepl).parameters:
     try:
         from neurolang.frontend.neurosynth_utils import fetch_study_metadata
         options["study_metadata"] = fetch_study_metadata(Path("/data"), verbose=0)

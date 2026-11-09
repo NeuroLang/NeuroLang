@@ -757,6 +757,43 @@ engines:
       fasciculus and the concepts of the studies that activate its parcels
       are examples/uncinate_cogat.dl of the engine tracts.
 
+  neurosynth_hcp842:
+    extends: neurosynth_tracts
+    description: >
+      Neurosynth with a whole-brain tractogram and tract_querier's bundles:
+      neurosynth_tracts after the commands that load the tractogram of the
+      HCP842 atlas (Yeh et al. 2018; tractogram in the data directory,
+      tracts/hcp842/whole_brain_MNI.trk, else downloaded whole: 320 MB),
+      load the wmparc of the IIT Human Brain Atlas v3 (downloaded, with
+      FreeSurfer's colour LUT, into the data directory's tracts/fs; its
+      labels are the codes of FreeSurfer's, so the term mapping
+      freesurfer_aseg_aparc applies), index the tractogram by it and import
+      the bundles of tract_querier's freesurfer_queries.qry, so that
+      ans(x) :- uf(x, "left") and .view work at the prompt. The atlas is
+      read relative to the working directory, which is the data directory.
+      The entry tractogram tells the bundle of the REPL in the browser how to
+      subsample the whole-brain tractogram it ships.
+    # The atlas: IIT Human Brain Atlas v3, Desikan-Killiany wmparc style
+    # (Qi, Arfanakis et al., IIT Human Brain Template License: non-commercial
+    # research, attribution), and FreeSurfer's colour LUT, at a commit.
+    downloads:
+      - url: https://osf.io/download/rk7a5/
+        name: IIT3mean_desikan_2009.nii.gz
+        md5: 767813ba451d5209cdc9454617a636b7
+        dest: tracts/fs
+      - url: https://raw.githubusercontent.com/freesurfer/freesurfer/18761d34d14d62216ec1ca3b0056fb9b04ea2f59/distribution/FreeSurferColorLUT.txt
+        md5: ce7f38b53a507ac1990e0795353417d7
+        dest: tracts/fs
+    # The tractogram of the bundle of the REPL: the whole brain of the atlas
+    # kind, subsample streamlines drawn at random (seed), each thinned to
+    # every step-th point (doc/make_repl_bundle.py)
+    tractogram: {kind: hcp842, subsample: 20000, step: 2, seed: 0}
+    datalog_init: |
+      .load_tractogram("hcp842", kind="hcp842")
+      .load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", "tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+      .index_tracts("hcp842", "fs")
+      .import("bundles/freesurfer_queries.dl")
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:
