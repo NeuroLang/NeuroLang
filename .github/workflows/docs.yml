@@ -61,14 +61,23 @@ jobs:
           uv pip install --index-url https://download.pytorch.org/whl/cpu torch
           uv pip install adapters
 
-      # The studies' embeddings take their abstracts from PubMed and a long
-      # while on a CPU: they are kept from one build to the next.
+      # The studies' embeddings take their abstracts from PubMed and hours
+      # on a CPU (an hour for Neurosynth's, four for NeuroStore's): they are
+      # kept from one build to the next. The newest saved ones are restored;
+      # each index checks that they are its own (EmbeddingIndex.cache_key)
+      # and embeds again those that are not. They are saved below under the
+      # hash of their files, whenever the build changed them.
       - name: Restore the REPL's text embeddings
-        uses: actions/cache@v4
+        id: embeddings
+        uses: actions/cache/restore@v4
         with:
           path: ~/repl-embeddings
-          key: repl-embeddings-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/specter2_numpy.py') }}
+          key: repl-embeddings-
           restore-keys: repl-embeddings-
+
+      - name: Hash the restored text embeddings
+        id: embeddings-before
+        run: echo "hash=$(.github/hash_tree.sh ~/repl-embeddings)" >> "$GITHUB_OUTPUT"
 
       # What the engine downloads to be built (the Neurosynth tables, the
       # atlases), kept from one build to the next: a data host that is down
@@ -94,6 +103,8 @@ jobs:
       - name: Build the in-browser REPL's bundle
         id: bundle
         continue-on-error: true
+        # leaves the time to save what it embedded before the job's limit
+        timeout-minutes: 300
         run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads
 
       - name: Check the in-browser REPL's bundle
@@ -105,6 +116,20 @@ jobs:
             echo "::warning title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start (see the step Build the in-browser REPL's bundle)."
             echo "complete=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Even when the bundle failed or timed out: the embeddings of an
+      # engine are kept as soon as they are made, and are its own.
+      - name: Hash the text embeddings
+        id: embeddings-after
+        if: always()
+        run: echo "hash=$(.github/hash_tree.sh ~/repl-embeddings)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the REPL's text embeddings
+        if: always() && steps.embeddings-after.outputs.hash != steps.embeddings-before.outputs.hash
+        uses: actions/cache/save@v4
+        with:
+          path: ~/repl-embeddings
+          key: repl-embeddings-${{ steps.embeddings-after.outputs.hash }}
 
       - name: Save the engine's downloads
         if: steps.check.outputs.complete == 'true' && steps.downloads.outputs.cache-hit != 'true'
