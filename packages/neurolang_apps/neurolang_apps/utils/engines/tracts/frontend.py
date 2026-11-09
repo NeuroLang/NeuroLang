@@ -39,8 +39,6 @@ __all__ = ["TractsCommandsMixin", "init_engine"]
 
 #: The predicates of the vocabulary (``vocabulary.dl``).
 VOCABULARY_PREDICATES = vocabulary_predicates()
-#: The command that imports the vocabulary, a module of this package.
-VOCABULARY_IMPORT = f".import('{__package__}:vocabulary.dl')"
 
 
 def _relation_frames(store: RelationStore) -> Dict[str, pd.DataFrame]:
@@ -303,7 +301,10 @@ class TractsCommandsMixin(PatternWalker):
 def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     """Give an engine whose solver has :class:`TractsCommandsMixin` the
     vocabulary of tractography (the module ``vocabulary.dl`` of the
-    package, imported), three functions and two hooks.
+    package, imported), three functions and two hooks. The directory of
+    the package is one of the engine's module directories, so that a
+    program imports its modules by their path in it:
+    ``.import("bundles/freesurfer_queries.dl")``.
 
     The functions encode and decode the id ``x`` of a streamline
     (``ids``), over the tractograms the commands have indexed:
@@ -330,6 +331,10 @@ def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     ``<data_dir>/tracts`` (an engine's directory of the apps), if given.
     """
     state = engine.program_ir._tracts
+    solver = engine.program_ir
+    solver.module_directories = (
+        tuple(solver.module_directories) + (str(Path(__file__).parent),)
+    )
     if data_dir is not None:
         state.data_dir = str(Path(data_dir) / "tracts")
     tractograms = state.store.tractograms
@@ -370,4 +375,7 @@ def init_engine(engine, mask=None, data_dir=None, **options) -> None:
     with warnings.catch_warnings():
         # its relations are published by .index_tracts, later
         warnings.filterwarnings("ignore", "Symbol .* has no entry")
-        engine.execute_datalog_program(VOCABULARY_IMPORT)
+        # by its package, which no file of the working directory shadows
+        engine.execute_datalog_program(
+            f".import('{__package__}:vocabulary.dl')"
+        )

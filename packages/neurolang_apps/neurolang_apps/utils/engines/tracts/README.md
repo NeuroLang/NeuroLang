@@ -217,7 +217,7 @@ tract_querier's own files are shipped (`freesurfer_queries`,
 `mori_queries`) as modules that a program imports after its commands:
 
 ```
-.import("neurolang_apps.utils.engines.tracts:bundles/freesurfer_queries.dl")
+.import("bundles/freesurfer_queries.dl")
 ans(x) :- af(x, "left")
 ```
 

@@ -333,8 +333,10 @@ class CommandsMixin(PatternWalker):
         `.import("bundles/uf.dl")` imports the file relative to the
         directory of the importing module, or of the program run from a
         file (see :meth:`importing_from`), or else to the working
-        directory. `.import("package:bundles/uf.dl")` imports a module
-        shipped in the Python package ``package``.
+        directory; not found there, in the directories an engine gives its
+        modules (:attr:`module_directories`), in order.
+        `.import("package:bundles/uf.dl")` imports a module shipped in the
+        Python package ``package``.
 
         A module is imported once: importing it again, in the scope it was
         imported in, does nothing. A module has no query.
@@ -380,6 +382,10 @@ class CommandsMixin(PatternWalker):
 
     _importing = ()
 
+    #: The directories where ``.import`` looks for a module not found
+    #: relative to the importing one, such as those an engine ships.
+    module_directories = ()
+
     @contextmanager
     def importing_from(self, path):
         """
@@ -412,10 +418,12 @@ class CommandsMixin(PatternWalker):
                 raise DatalogModuleError(
                     f"No Datalog module {name!r}: no package {package!r}"
                 ) from e
-        elif self._importing:
-            path = self._importing[-1].parent / name
         else:
-            path = Path(name)
+            base = self._importing[-1].parent if self._importing else Path()
+            candidates = [base / name] + [
+                Path(d) / name for d in self.module_directories
+            ]
+            path = next((p for p in candidates if p.is_file()), candidates[0])
         if not path.is_file():
             raise DatalogModuleError(f"No Datalog module {str(path)!r}")
         return path.resolve()
