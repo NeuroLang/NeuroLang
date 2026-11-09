@@ -2,11 +2,9 @@ import re
 from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
-from typing import AbstractSet, Dict, NamedTuple, Tuple
+from typing import AbstractSet, Dict, NamedTuple, Optional, Tuple
 
-import nibabel
 import pandas as pd
-from nibabel.dataobj_images import DataobjImage
 from pandas.errors import ParserError
 
 from nl_expr.exceptions import (
@@ -18,8 +16,16 @@ from nl_expr.exceptions import (
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Query, Symbol
-from .regions import EmptyRegion, ExplicitVBR
+from .atlases import FETCHERS, Atlas
+from .regions import ExplicitVBR
 from .utils.nilearn_compat import fetch_files as _fetch_files
+
+#: The kinds of ``.load_atlas`` that read a label image and a table.
+ATLAS_FILE_KINDS = {
+    "freesurfer": Atlas.from_freesurfer,
+    "bids": Atlas.from_bids_dseg,
+    "tsv": Atlas.from_tsv,
+}
 
 # The documentation of the predicates of a scope (see
 # CommandsMixin.document).
@@ -101,25 +107,47 @@ class CommandsMixin(PatternWalker):
     @add_match(Command(Symbol("load_atlas"), ..., ...))
     def load_atlas(self, command):
         """
-        Process the `.load_atlas` command. The load_atlas command fetches an
-        atlas image with its corresponding labels and loads it into the
-        neurolang instance.
+        Process the `.load_atlas` command. The load_atlas command loads an
+        atlas, a label image and the names of its labels, into the relation
+        `name(label, region)` of its regions, and records it in the
+        `atlases` of the engine, by name (:class:`~neurolang.atlases.Atlas`),
+        where `nl_tracts`' `.index_tracts` finds it.
 
         Usage
         -----
-        The `.load_csv` command requires three positional arguments:
-            - symbol: str, the name of the symbol to load the data into
-            - atlas_url: str, the url for the atlas file
-            - labels_url: str, the url for the atlas labels
-            - base_url: str, optional. if given, atlas and labels url are
-                        considered relative to this base_url
-        Other keyword arguments are passed to pandas' `read_csv` method.
+        The first positional argument is the name of the relation and of
+        the atlas. The option `kind` says where the rest comes from:
+
+        - no `kind` (or `kind="csv"`), the label image and the labels at
+          a URL: `.load_atlas(name, atlas_url, labels_url[, base_url])`.
+          If `base_url` is given, the atlas and labels urls are relative
+          to it (an archive, uncompressed). The files are downloaded to
+          `~/neurolang_data`; the first two columns of the labels are the
+          value and the name of each label. Other keyword arguments are
+          passed to pandas' `read_csv` method. Names are kept as they are.
+        - `kind="freesurfer"` (a colour LUT), `"bids"` (a `dseg.tsv`) or
+          `"tsv"` (columns `id`, `name`, optional `hemi`): local files,
+          `.load_atlas(name, image, table, kind=..., space=...,
+          background=0)`. Names are kept as they are.
+        - `kind="destrieux"`, `"schaefer"` or `"tian"`: the atlases of the
+          engines, fetched, `.load_atlas(name, kind=..., space="MNI152",
+          data_dir=...)`; other options go to the fetcher (`n_rois=100`
+          of `schaefer`, `scale=2` of `tian`).
+        - `kind="nilearn"`: `nilearn.datasets.fetch_atlas_<fetcher>`,
+          `.load_atlas(name, kind="nilearn", fetcher="destrieux_2009",
+          space="MNI152", background=0)`; other options go to the fetcher.
+
+        The names of the fetched atlases are normalised, `-` and `_` being
+        spaces (:func:`~neurolang.atlases.label_name`), as the engines name
+        them. The space is `"unspecified"` for files, `"MNI152"` for the
+        fetched atlases, unless given.
 
         `.load_atlas(destrieux, "destrieux2009_rois_lateralized.nii.gz",
         "destrieux2009_rois_labels_lateralized.csv",
         "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz")`
 
-        will load Destrieux's atlas into the destrieux relation.
+        will load Destrieux's atlas into the destrieux relation, as
+        `.load_atlas(destrieux, kind="destrieux")` does from nilearn.
 
         Raises
         ------
@@ -127,34 +155,72 @@ class CommandsMixin(PatternWalker):
             raised if command args are invalid or if an error occurs while
             loading the data
         """
-        try:
-            if len(command.args) == 4:
-                symbol, atlas_url, labels_url, base_url = command.args
-                base_url = _unwrap_expr(base_url)
-            else:
-                symbol, atlas_url, labels_url = command.args
-                base_url = None
-            if not isinstance(symbol, Symbol):
-                symbol = Symbol(symbol)
-            atlas_url = _unwrap_expr(atlas_url)
-            labels_url = _unwrap_expr(labels_url)
-            kwargs = {
-                _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
-            }
-        except ValueError:
+        args = [_unwrap_expr(a) for a in command.args]
+        options = {
+            _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
+        }
+        kind = options.pop("kind", "csv")
+        if not args:
             raise InvalidCommandExpression(
-                "Could not extract Symbol name and url from arguments."
+                ".load_atlas needs the name of the atlas"
             )
+        name, args = args[0], args[1:]
+        try:
+            atlas = self._load_atlas(name, kind, args, options)
+        except (OSError, ValueError, NotImplementedError, ImportError) as e:
+            raise InvalidCommandExpression(
+                f"cannot load the atlas {name!r}: {e}"
+            ) from e
+        self.add_atlas(atlas)
 
-        atlas_labels, spatial_image = self._fetch_atlas_map_and_labels(
-            atlas_url, labels_url, base_url, kwargs
+    def _load_atlas(self, name, kind, args, options):
+        def expect(n, what, allowed):
+            if len(args) != n:
+                raise InvalidCommandExpression(
+                    f'.load_atlas of kind="{kind}" takes the name of the '
+                    f"atlas{what}, not {len(args) + 1} arguments"
+                )
+            unknown = set(options) - set(allowed or options)
+            if unknown:
+                raise InvalidCommandExpression(
+                    f'.load_atlas of kind="{kind}" has no option '
+                    f"{sorted(unknown)}; its options are {sorted(allowed)}"
+                )
+
+        if kind == "csv":
+            if len(args) not in (2, 3):
+                expect(2, ", the atlas url and the labels url", None)
+            image, labels = self._fetch_atlas_map_and_labels(
+                *args[:2], args[2] if len(args) == 3 else None
+            )
+            return Atlas.from_csv(name, image, labels, read_csv=options)
+        if kind in ATLAS_FILE_KINDS:
+            expect(2, ", the image and the table", ("space", "background"))
+            return ATLAS_FILE_KINDS[kind](
+                name, *args, options.get("space", "unspecified"),
+                background=int(options.get("background", 0)),
+            )
+        if kind in FETCHERS:
+            expect(0, "", None)
+            data_dir = options.pop("data_dir", Path.home() / "neurolang_data")
+            return Atlas.fetch(name, kind, data_dir, **options)
+        if kind == "nilearn":
+            expect(0, "", None)
+            if not options.get("fetcher"):
+                raise InvalidCommandExpression(
+                    'an atlas of kind="nilearn" needs fetcher=..., the name '
+                    "of a nilearn fetcher, such as destrieux_2009"
+                )
+            if "background" in options:
+                options["background"] = int(options["background"])
+            return Atlas.from_nilearn(name, options.pop("fetcher"), **options)
+        raise InvalidCommandExpression(
+            f"the kind of an atlas is csv, {', '.join(ATLAS_FILE_KINDS)}, "
+            f"{', '.join(FETCHERS)} or nilearn, not {kind!r}"
         )
 
-        self._add_atlas_set(symbol, atlas_labels, spatial_image)
-
-    def _fetch_atlas_map_and_labels(
-        self, atlas_url, labels_url, base_url, kwargs
-    ):
+    def _fetch_atlas_map_and_labels(self, atlas_url, labels_url, base_url):
+        """Download the atlas and its labels to ``~/neurolang_data``."""
         data_dir = Path.home() / "neurolang_data"
         if base_url is None:
             opts = {}
@@ -168,31 +234,31 @@ class CommandsMixin(PatternWalker):
             opts = {"uncompress": True}
             files = [(atlas_url, base_url, opts), (labels_url, base_url, opts)]
 
-        files_ = _fetch_files(data_dir, files)
-        atlas_labels = pd.read_csv(files_[1], **kwargs)
-        atlas_labels = {
-            label: name for label, name in atlas_labels.to_records(index=False)
-        }
-        spatial_image = nibabel.load(files_[0])
-        return atlas_labels, spatial_image
+        return _fetch_files(data_dir, files)
 
-    def _add_atlas_set(
-        self,
-        symbol: Symbol,
-        atlas_labels: Dict[int, str],
-        spatial_image: DataobjImage,
-    ) -> None:
-        atlas_set = set()
-        for idx, label_name in atlas_labels.items():
-            region = (ExplicitVBR.from_spatial_image_label(spatial_image, idx),)
-            if isinstance(region, EmptyRegion):
-                continue
-            atlas_set.add((label_name, region))
+    @property
+    def atlases(self) -> Dict[str, Atlas]:
+        """The atlases loaded (``.load_atlas``, ``add_atlas_set``, the
+        ``atlases:`` of an engine), by name."""
+        return self.__dict__.setdefault("_atlases", {})
 
+    def add_atlas(self, atlas: Atlas, name: Optional[str] = None) -> None:
+        """Add the relation ``name(label, region)`` of the regions of
+        ``atlas`` (its name by default) and record it in :attr:`atlases`.
+
+        A region is an :class:`~neurolang.regions.ExplicitVBR` of the
+        voxels of a label of the table, but the background.
+        """
+        voxels, shape = atlas.label_voxels(), atlas.shape
+        rows = [
+            (name_, ExplicitVBR(voxels[i], atlas.affine, image_dim=shape))
+            for i, name_ in atlas.region_names().items()
+        ]
         type_ = Tuple[str, ExplicitVBR]
         self.add_extensional_predicate_from_tuples(
-            Symbol[AbstractSet[type_]](symbol.name), atlas_set, type_=type_
+            Symbol[AbstractSet[type_]](name or atlas.name), rows, type_=type_
         )
+        self.atlases[atlas.name] = atlas
 
     @add_match(Command(Symbol("document"), ..., ...))
     def document(self, command):

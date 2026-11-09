@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from nl_tracts.atlas import (
+from neurolang.atlases import (
     HEMISPHERE_RULES,
     HemisphereRule,
     infer_hemispheres,
@@ -18,6 +18,9 @@ from nl_tracts.atlas import (
         ("ctx-rh-precentral", "right"),
         ("ctx_lh_G_and_S_frontomargin", "left"),
         ("ctx_rh_G_and_S_frontomargin", "right"),
+        # and as neurolang.atlases.label_name writes them
+        ("ctx lh precentral", "left"),
+        ("ctx rh G and S frontomargin", "right"),
         # suffixes: AAL
         ("Precentral_L", "left"),
         ("Precentral_R", "right"),

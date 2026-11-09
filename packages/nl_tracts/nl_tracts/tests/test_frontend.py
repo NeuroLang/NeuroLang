@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nl_tracts.atlas import Atlas
+from neurolang.atlases import Atlas
 from nl_tracts.frontend import RELATION_NAMES, register
 from nl_tracts.indexing import IndexingParams, RelationStore
 from nl_tracts.tractogram import Tractogram

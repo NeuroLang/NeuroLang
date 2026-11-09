@@ -4,7 +4,7 @@ import re
 import pandas as pd
 import pytest
 
-from nl_tracts.atlas import load_label_table_freesurfer_lut
+from neurolang.atlases import load_label_table_freesurfer_lut
 from nl_tracts.terms import (
     SHIPPED_MAPPINGS,
     load_term_mapping,

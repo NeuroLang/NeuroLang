@@ -12,6 +12,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
+from neurolang.atlases import label_name
 from neurolang_apps.utils import engine_registry
 
 # The raw names of the label files of the atlases, as nilearn and Tian's
@@ -216,7 +217,7 @@ def test_the_atlases_of_the_engine_index_tractograms(
         'ans(n) :- label("destrieux", l, n, h), destrieux(n, r)\n'))
     regions = rows(nl.execute_datalog_program('ans(n) :- destrieux(n, r)\n'))
     assert names == regions == {
-        (engine_registry._label_name(n),)
+        (label_name(n),)
         for n in FAKE_LABELS["destrieux"][1:]}
     assert rows(nl.execute_datalog_program(
         'ans(n, h) :- label("tian", l, n, h), tian(n, r)\n')) == {
@@ -236,19 +237,6 @@ def test_the_atlases_of_the_engine_index_tractograms(
         'traverses(x, "amygdala", "left"), '
         'traverses(x, "temporalpole", "right"), '
         'traverses(x, "putamen", "right")\n')) == {(0,)}
-
-
-def test_the_names_are_normalised_as_the_registry_does():
-    """nl_tracts duplicates ``_label_name``, which it cannot import."""
-    pytest.importorskip("nl_tracts")
-    from nl_tracts.frontend import ATLAS_MAPPINGS, engine_label_name
-    from nl_tracts.terms import load_term_mapping
-
-    names = {n for labels in FAKE_LABELS.values() for n in labels}
-    for key in ATLAS_MAPPINGS.values():
-        names |= set(load_term_mapping(key)["atlas_label_name"])
-    for name in names:
-        assert engine_label_name(name) == engine_registry._label_name(name)
 
 
 @pytest.mark.slow
@@ -276,7 +264,7 @@ def test_the_engine_with_the_real_atlases(tractogram, tmp_path):
     assert hemis == {("left",), ("right",)}
     # nilearn's Destrieux, by the command, has the engine's names
     nl.execute_datalog_program(
-        '.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")\n'
+        '.load_atlas("d", kind="nilearn", fetcher="destrieux_2009")\n'
         '.index_tracts("t", "d")\n')
     assert rows(nl.execute_datalog_program(
         'ans(n) :- label("d", l, n, h), destrieux(n, r)\n'
@@ -295,7 +283,7 @@ def test_the_points_of_the_atlases(offline_atlases, tmp_path):
         result = nl.execute_datalog_program(
             f'ans(x, y, z, n) :- {atlas}_points(x, y, z, n)\n')
         assert rows(result) == {
-            (*map(float, c), engine_registry._label_name(labels[v]))
+            (*map(float, c), label_name(labels[v]))
             for c, v in zip(centres, volume[tuple(voxels.T)])}
         frame = result.as_pandas_dataframe()
         assert all(frame.dtypes.iloc[:3] == np.float64)
@@ -326,7 +314,7 @@ def test_the_parcels_near_the_ends_are_precomputed(
         if np.linalg.norm(np.subtract(p, m)) <= 3}
     # the first streamline ends in the parcels 1 and 2, the second in
     # parcel 1 and outside the atlas
-    left, right = (engine_registry._label_name(n)
+    left, right = (label_name(n)
                    for n in FAKE_LABELS["schaefer"][1:3])
     assert {(x, n) for x, _, n in near} == {
         (0, left), (0, right), (1, left)}

@@ -1,3 +1,4 @@
+import sys
 from collections import namedtuple
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +18,7 @@ from nl_expr.expression_walker import ExpressionBasicEvaluator
 from nl_expr.expressions import Command, Constant, Symbol
 from nl_core.probabilistic.cplogic.program import CPLogicMixin
 from ..commands import CommandsMixin
+from ..regions import ExplicitVBR
 
 
 class Datalog(
@@ -64,8 +66,8 @@ def test_load_csv_command_adds_tuple_set(mock_pd_readcsv):
     )
 
 
-@patch("neurolang.commands.nibabel.load")
-@patch("neurolang.commands.pd.read_csv")
+@patch("neurolang.atlases.nib.load")
+@patch("neurolang.atlases.pd.read_csv")
 @patch("neurolang.commands._fetch_files")
 def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
     """
@@ -110,7 +112,37 @@ def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
         ],
     )
     assert destrieux in datalog.symbol_table
-    assert len(datalog.symbol_table[destrieux].value) == 2
+    rows = datalog.symbol_table[destrieux].value.unwrap()
+    assert len(rows) == 2
+    # the region of a label is the region, not a tuple of it
+    for _, region in rows:
+        assert isinstance(region, ExplicitVBR)
+        assert len(region.voxels) == 1
+
+
+@patch("neurolang.atlases.nib.load")
+@patch("neurolang.atlases.pd.read_csv")
+@patch("neurolang.commands._fetch_files")
+def test_load_atlas_command_skips_labels_without_voxels(
+    mock_fetch_files, mock_read_csv, mock_nib_load
+):
+    mock_fetch_files.return_value = ["atlas", "labels"]
+    mock_read_csv.return_value = pd.DataFrame(
+        {"id": [1, 99], "labels": ["A", "Nowhere"]}
+    )
+    shape = (3, 3, 3)
+    mock_nib_load.return_value = namedtuple(
+        "SpatialImage", ["shape", "affine", "dataobj"]
+    )(shape, np.eye(4), np.arange(27).reshape(shape))
+    cmd = Command(
+        Symbol("load_atlas"),
+        (Symbol("A"), Constant("a.nii.gz"), Constant("a.csv")),
+        (),
+    )
+    datalog = Datalog()
+    datalog.walk(cmd)
+    rows = datalog.symbol_table[Symbol("A")].value.unwrap()
+    assert [name for name, _ in rows] == ["A"]
 
 
 def test_command_end2end():
@@ -134,6 +166,152 @@ def test_command_end2end():
     assert "LeftSulcus" not in nl.symbol_table
 
 
+# The kinds of .load_atlas, the atlases it records, and add_atlas_set.
+
+LUT = "0 Unknown 0 0 0 0\n1 Left-Putamen 1 1 1 0\n2 Right-Putamen 2 2 2 0\n"
+
+
+@pytest.fixture
+def atlas_files(tmp_path):
+    """A label image of two regions, its FreeSurfer LUT, a dseg.tsv and a
+    TSV."""
+    import nibabel as nib
+
+    data = np.zeros((4, 4, 4), dtype=np.int16)
+    data[0, 0, 0], data[1, 1, 1], data[2, 2, 2] = 1, 2, 2
+    nib.save(nib.Nifti1Image(data, np.eye(4)), tmp_path / "a.nii.gz")
+    (tmp_path / "lut.txt").write_text(LUT)
+    (tmp_path / "a_dseg.tsv").write_text(
+        "index\tname\n1\tLeft-Putamen\n2\tRight-Putamen\n"
+    )
+    (tmp_path / "a.tsv").write_text(
+        "id\tname\themi\n1\tLeft-Putamen\t\n2\tRight-Putamen\t\n"
+    )
+    return tmp_path
+
+
+def _walk(datalog, name, *args, **kwargs):
+    datalog.walk(Command(
+        Symbol("load_atlas"),
+        (Symbol(name),) + tuple(Constant(a) for a in args),
+        tuple((Symbol(k), Constant(v)) for k, v in kwargs.items()),
+    ))
+    return {
+        n: len(r.voxels)
+        for n, r in datalog.symbol_table[Symbol(name)].value.unwrap()
+    }
+
+
+@pytest.mark.parametrize("kind,table", [
+    ("freesurfer", "lut.txt"), ("bids", "a_dseg.tsv"), ("tsv", "a.tsv"),
+])
+def test_load_atlas_of_files(atlas_files, kind, table):
+    datalog = Datalog()
+    regions = _walk(
+        datalog, "fs", str(atlas_files / "a.nii.gz"),
+        str(atlas_files / table), kind=kind, space="subject:1",
+    )
+    # raw names; the background is no region
+    assert regions == {"Left-Putamen": 1, "Right-Putamen": 2}
+    atlas = datalog.atlases["fs"]
+    assert (atlas.kind, atlas.space) == (kind, "subject:1")
+    assert atlas.table["hemi"].tolist()[-2:] == ["left", "right"]
+
+
+def test_load_atlas_of_a_fetcher_of_the_engines(
+    atlas_files, monkeypatch, tmp_path
+):
+    from neurolang import atlases
+
+    calls = []
+
+    def fetch(**kwargs):
+        calls.append(kwargs)
+        return {"maps": str(atlas_files / "a.nii.gz"),
+                "labels": ["Background", "lAMY-lh", "aPUT-rh"]}
+
+    monkeypatch.setitem(atlases.FETCHERS, "tian", fetch)
+    datalog = Datalog()
+    regions = _walk(
+        datalog, "t", kind="tian", scale=2, data_dir=str(tmp_path)
+    )
+    assert calls == [{"data_dir": str(tmp_path), "scale": 2}]
+    # normalised as the engines name them
+    assert regions == {"lAMY lh": 1, "aPUT rh": 2}
+    assert datalog.atlases["t"].kind == "tian"
+    assert datalog.atlases["t"].space == "MNI152"
+
+
+def test_load_atlas_of_nilearn(atlas_files, monkeypatch):
+    from types import SimpleNamespace
+
+    from neurolang.utils import nilearn_compat
+
+    calls = []
+
+    def fetch_atlas_x(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            maps=str(atlas_files / "a.nii.gz"),
+            labels=["Background", "L G_x", "R G_x"],
+        )
+
+    monkeypatch.setattr(
+        nilearn_compat, "nilearn_datasets",
+        lambda: SimpleNamespace(fetch_atlas_x=fetch_atlas_x),
+    )
+    datalog = Datalog()
+    regions = _walk(datalog, "x", kind="nilearn", fetcher="x", n_rois=7)
+    assert calls == [{"n_rois": 7}]
+    assert regions == {"L G x": 1, "R G x": 2}
+    assert datalog.atlases["x"].kind == "nilearn:x"
+
+
+@pytest.mark.parametrize("args,kwargs,message", [
+    ((), {"kind": "aal"}, "kind of an atlas"),
+    (("a.nii.gz",), {"kind": "freesurfer"}, "the image and the table"),
+    (("a.nii.gz", "lut.txt"), {"kind": "freesurfer", "sep": ","},
+     "no option"),
+    (("a.nii.gz",), {"kind": "tian"}, "not 2 arguments"),
+    ((), {"kind": "nilearn"}, "fetcher"),
+    (("a.nii.gz",), {}, "atlas url and the labels url"),
+    (("missing.nii.gz", "lut.txt"), {"kind": "freesurfer"},
+     "cannot load the atlas"),
+])
+def test_load_atlas_refuses_what_it_cannot_load(
+    atlas_files, monkeypatch, args, kwargs, message
+):
+    monkeypatch.chdir(atlas_files)
+    with pytest.raises(InvalidCommandExpression, match=message):
+        _walk(Datalog(), "a", *args, **kwargs)
+
+
+def test_add_atlas_set_records_the_atlas(atlas_files):
+    import nibabel as nib
+
+    from ..atlases import Atlas
+    from ..frontend import NeurolangDL
+
+    nl = NeurolangDL()
+    image = nib.load(atlas_files / "a.nii.gz")
+    nl.add_atlas_set("dk", {1: "a", 2: "b"}, image)
+    assert nl.atlases["dk"].region_names() == {1: "a", 2: "b"}
+    fs = Atlas.from_freesurfer("fs", image, atlas_files / "lut.txt")
+    nl.add_atlas_set("putamen", fs)
+    assert nl.atlases["fs"] is fs
+    with nl.scope as e:
+        e.ans[e.n] = e.putamen[e.n, e.r]
+        names = set(nl.query((e.n,), e.ans[e.n]).as_pandas_dataframe()["n"])
+    assert names == {"Left-Putamen", "Right-Putamen"}
+
+
+def test_load_atlas_of_nilearn_without_nilearn(monkeypatch):
+    for name in list(sys.modules):
+        if name == "nilearn" or name.startswith("nilearn."):
+            monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setitem(sys.modules, "nilearn", None)
+    with pytest.raises(InvalidCommandExpression, match="needs nilearn"):
+        _walk(Datalog(), "d", kind="nilearn", fetcher="destrieux_2009")
 def _write(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)

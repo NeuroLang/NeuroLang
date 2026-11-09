@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nl_tracts.atlas import Atlas
+from neurolang.atlases import Atlas
 from nl_tracts.indexing import (
     IndexingParams,
     endpoint_relation,

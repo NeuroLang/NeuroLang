@@ -17,7 +17,8 @@ import pandas as pd
 import pytest
 from scipy import ndimage
 
-from nl_tracts.atlas import Atlas
+from neurolang.atlases import Atlas
+from nl_tracts.atlas import label_extent_relation
 
 from .conftest import (
     AFFINES,
@@ -37,7 +38,7 @@ def atlas_of(volume, affine, **kw):
 
 def extents(atlas):
     """{label: (lo (3,), hi (3,))} from the relation."""
-    rel = atlas.label_extent_relation()
+    rel = label_extent_relation(atlas)
     out = {}
     for label, g in rel.groupby("l"):
         g = g.sort_values("axis")
@@ -57,7 +58,7 @@ def reference_extent(volume, affine, label):
 
 
 def test_relation_schema_and_dtypes(volume):
-    rel = atlas_of(volume, AFFINES["aligned"]).label_extent_relation()
+    rel = label_extent_relation(atlas_of(volume, AFFINES["aligned"]))
     assert rel.columns.tolist() == ["a", "l", "axis", "lo", "hi"]
     assert rel.dtypes["l"] == np.int32
     assert rel.dtypes["axis"] == np.int8
@@ -67,7 +68,7 @@ def test_relation_schema_and_dtypes(volume):
 
 
 def test_axis_encoding_is_x_y_z_of_the_space(volume):
-    rel = atlas_of(volume, AFFINES["aligned"]).label_extent_relation()
+    rel = label_extent_relation(atlas_of(volume, AFFINES["aligned"]))
     # label 3 is the voxel (10, 9, 7): aligned affine diag(2,3,4)+(-10,-20,-30)
     one = rel[rel.l == 3].set_index("axis")
     assert one.loc[0, ["lo", "hi"]].tolist() == [9.0, 11.0]    # 2*10-10 +-1
@@ -76,14 +77,14 @@ def test_axis_encoding_is_x_y_z_of_the_space(volume):
 
 
 def test_no_row_for_the_background(volume):
-    rel = atlas_of(volume, AFFINES["aligned"]).label_extent_relation()
+    rel = label_extent_relation(atlas_of(volume, AFFINES["aligned"]))
     assert 0 not in rel["l"].tolist()
 
 
 def test_a_label_of_the_table_absent_from_the_volume_has_no_row(volume):
     volume[volume == 2] = 0
     with pytest.warns(UserWarning):
-        rel = atlas_of(volume, AFFINES["aligned"]).label_extent_relation()
+        rel = label_extent_relation(atlas_of(volume, AFFINES["aligned"]))
     assert set(rel["l"]) == {1, 3, 4}
 
 
@@ -165,7 +166,7 @@ def test_sparse_large_ids(volume):
     vol[1:3, 1:3, 1:3] = 11101
     vol[4, 4, 4] = 12175
     table = pd.DataFrame({"id": [11101, 12175], "name": ["a", "b"]})
-    rel = Atlas("d", vol, np.eye(4), table, "s").label_extent_relation()
+    rel = label_extent_relation(Atlas("d", vol, np.eye(4), table, "s"))
     assert set(rel["l"]) == {11101, 12175}
     one = rel[rel.l == 12175].sort_values("axis")
     assert one["lo"].tolist() == [3.5] * 3 and one["hi"].tolist() == [4.5] * 3
@@ -178,13 +179,12 @@ def test_one_pass_for_all_labels(volume, monkeypatch):
         ndimage, "find_objects",
         lambda *a, **k: calls.append(1) or original(*a, **k),
     )
-    atlas_of(volume, AFFINES["aligned"]).label_extent_relation()
+    label_extent_relation(atlas_of(volume, AFFINES["aligned"]))
     assert calls == [1]
 
 
-def test_the_relation_is_computed_once(volume):
+def test_the_relation_is_the_same_each_time(volume):
     atlas = atlas_of(volume, AFFINES["aligned"])
-    assert atlas.label_extent_relation() is not None
-    first = atlas.label_extent_relation()
-    again = atlas.label_extent_relation()
+    first = label_extent_relation(atlas)
+    again = label_extent_relation(atlas)
     pd.testing.assert_frame_equal(first, again)

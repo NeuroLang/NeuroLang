@@ -14,8 +14,13 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .atlas import Atlas
+from neurolang.atlases import Atlas
+
+from .atlas import (
+    label_extent_relation, label_relation, label_term_relation,
+)
 from .ids import encode
+from .terms import load_term_mapping
 from .tractogram import Tractogram
 
 __all__ = [
@@ -386,8 +391,12 @@ class RelationStore:
             )
         self.relations[name] = frame
 
-    def add_atlas(self, atlas: Atlas) -> None:
+    def add_atlas(self, atlas: Atlas, term_mapping=None) -> None:
         """Add ``atlas``, ``label``, ``label_term`` and ``label_extent``.
+
+        ``term_mapping`` (a DataFrame, a path or the key of a shipped one,
+        :func:`nl_tracts.terms.load_term_mapping`) gives the terms of its
+        labels; without it ``label_term`` has no row of the atlas.
 
         Raises
         ------
@@ -400,9 +409,11 @@ class RelationStore:
         self._append(
             "atlas", pd.DataFrame({"a": np.array([atlas.name], dtype=object)})
         )
-        self._append("label", atlas.label_relation())
-        self._append("label_term", atlas.label_term_relation())
-        self._append("label_extent", atlas.label_extent_relation())
+        if term_mapping is not None:
+            term_mapping = load_term_mapping(term_mapping)
+        self._append("label", label_relation(atlas, term_mapping))
+        self._append("label_term", label_term_relation(atlas, term_mapping))
+        self._append("label_extent", label_extent_relation(atlas))
 
     def add_tractogram(
         self, tractogram: Tractogram, params: IndexingParams
@@ -461,7 +472,7 @@ class RelationStore:
         by ``atlas``: ``traverses_relation`` and ``endpoint_relation``, with
         the streamlines as ids ``x``.
 
-        Checks the spaces (:class:`~nl_tracts.spaces.SpaceMismatchError`),
+        Checks the spaces (:class:`~neurolang.atlases.SpaceMismatchError`),
         and reads or writes the parquet cache if ``cache_dir`` is given.
 
         Raises
@@ -534,14 +545,15 @@ def build_relations(
     params: IndexingParams = IndexingParams(),
     cache_dir: Optional[Union[str, os.PathLike]] = None,
     allow_space_mismatch: bool = False,
+    term_mapping=None,
 ) -> RelationStore:
     """All the relations of one tractogram and one atlas.
 
-    The one-call form of ``RelationStore.add_atlas``, ``add_tractogram``
-    and ``add_index``.
+    The one-call form of ``RelationStore.add_atlas`` (with
+    ``term_mapping``), ``add_tractogram`` and ``add_index``.
     """
     store = RelationStore()
-    store.add_atlas(atlas)
+    store.add_atlas(atlas, term_mapping)
     store.add_tractogram(tractogram, params)
     store.add_index(
         tractogram, atlas, params, cache_dir=cache_dir,

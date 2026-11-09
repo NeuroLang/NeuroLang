@@ -14,6 +14,8 @@ from typing import Union
 
 import pandas as pd
 
+from neurolang.atlases import HEMISPHERES
+
 __all__ = [
     "COLUMNS",
     "HEMISPHERES",
@@ -21,9 +23,6 @@ __all__ = [
     "load_term_mapping",
     "shipped_mapping_path",
 ]
-
-#: ``hemi`` values of the ``label`` relation.
-HEMISPHERES = ("left", "right", "none")
 
 COLUMNS = ["atlas_label_name", "term", "hemi"]
 

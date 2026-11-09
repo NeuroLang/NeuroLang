@@ -302,3 +302,20 @@ def test_an_engine_without_such_steps_tells_nothing(tmp_path, monkeypatch):
     told = []
     engine_registry.build_engine("bare", tmp_path, progress=told.append)
     assert told == []
+
+
+def test_the_registry_imports_the_atlases_when_it_loads_them():
+    """neurolang.atlases imports pandas, which listing the engines does
+    not need."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, neurolang_apps.utils.engine_registry;"
+        "print('pandas' in sys.modules)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False"

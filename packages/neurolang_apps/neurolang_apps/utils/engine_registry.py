@@ -44,7 +44,9 @@ define:
 * ``atlases`` — brain atlases downloaded via nilearn (e.g. ``destrieux``,
   ``schaefer``, ``difumo``) and registered as predicates with
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
-  use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
+  are :class:`~neurolang.atlases.Atlas` objects, fetched as
+  ``.load_atlas(name, kind=...)`` fetches them, added by ``add_atlas_set``
+  and recorded in the engine's ``atlases``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
@@ -96,6 +98,7 @@ from __future__ import annotations
 import copy
 import functools
 import re
+import warnings
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
@@ -996,90 +999,33 @@ def _load_template(
 # Atlas helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_atlas_destrieux(**kwargs):
-    return _nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
-
-
-def _fetch_atlas_schaefer(**kwargs):
-    return _nilearn_datasets().fetch_atlas_schaefer_2018(**kwargs)
-
-
 def _fetch_atlas_difumo(**kwargs):
     return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
-TIAN_URL = (
-    "https://raw.githubusercontent.com/yetianmed/subcortex/master/"
-    "Group-Parcellation/3T/Subcortex-Only/"
-)
+def _atlas_fetcher(kind: str) -> Callable[..., Any]:
+    """The fetcher of the deterministic atlas *kind*, as ``.load_atlas(name,
+    kind=...)`` fetches it (:data:`neurolang.atlases.FETCHERS`), imported
+    when called: ``neurolang.atlases`` imports pandas."""
 
+    def fetch(**kwargs):
+        from neurolang.atlases import FETCHERS
 
-def _fetch_atlas_tian(scale: int = 2, data_dir: str = "", **kwargs):
-    """
-    Fetch the Melbourne subcortex atlas (Tian et al., 2020, Nat Neurosci,
-    doi:10.1038/s41593-020-00711-6), 3T, at *scale* 1 to 4 (16, 32, 50 or
-    54 regions), on the 2 mm grid of the MNI152 2009c asymmetric template,
-    from the authors' repository. Its label file names the region of value
-    *n* on its line *n*; region names end with the hemisphere (``-lh``,
-    ``-rh``).
-    """
-    base = f"Tian_Subcortex_S{int(scale)}_3T"
-    image, labels = _fetch_files(
-        str(Path(data_dir) / "tian"),
-        [
-            (f"{base}_2009cAsym.nii.gz",
-             f"{TIAN_URL}{base}_2009cAsym.nii.gz", {}),
-            (f"{base}_label.txt", f"{TIAN_URL}{base}_label.txt", {}),
-        ],
-        verbose=0,
-    )
-    names = Path(labels).read_text().split()
-    return {"maps": image, "labels": ["Background", *names]}
+        return FETCHERS[kind](**kwargs)
+
+    return fetch
 
 
 _ATLAS_REGISTRY = {
-    "destrieux": {
-        "fetch": _fetch_atlas_destrieux,
-        "probabilistic": False,
-    },
-    "schaefer": {
-        "fetch": _fetch_atlas_schaefer,
-        "probabilistic": False,
-    },
-    "tian": {
-        "fetch": _fetch_atlas_tian,
-        "probabilistic": False,
+    **{
+        kind: {"fetch": _atlas_fetcher(kind), "probabilistic": False}
+        for kind in ("destrieux", "schaefer", "tian")
     },
     "difumo": {
         "fetch": _fetch_atlas_difumo,
         "probabilistic": True,
     },
 }
-
-
-def _parse_labels(raw_labels):
-    """
-    Yield ``(index, name)`` pairs from a nilearn labels value.
-
-    Handles the three formats returned by different nilearn versions:
-    ``dict``, ``list``, and numpy structured array.
-
-    """
-    if isinstance(raw_labels, dict):
-        yield from raw_labels.items()
-    elif isinstance(raw_labels, list):
-        yield from enumerate(raw_labels)
-    else:
-        # numpy structured array with two columns
-        yield from raw_labels
-
-
-def _label_name(val: Any) -> str:
-    """Normalise a label value to a clean string."""
-    if isinstance(val, bytes):
-        val = val.decode("utf8")
-    name = str(val).replace("-", " ").replace("_", " ")
-    return name
 
 
 def _register_grid(nl, name: str, img) -> None:
@@ -1094,28 +1040,17 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
-def _register_atlas_labels(nl, name: str, labels: dict) -> None:
-    """
-    Register the values of the image of the atlas *name* labelling each
-    of its regions, *labels* mapping each value to the region's name.
-    """
-    if getattr(nl, "atlas_labels", None) is None:
-        nl.atlas_labels = {}
-    values = {}
-    for value, label in labels.items():
-        values.setdefault(label, []).append(int(value))
-    nl.atlas_labels[name] = values
-
-
 def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
     """
     Return the values labelling each region of the atlas *name* of *nl*
     in the image of its grid (``nl.grids[name]``), by region name.
 
     The names are those of the atlas's relation, ``{}`` for an atlas the
-    engine did not load.
+    engine did not load: the atlas is the one *nl* records, by name
+    (``nl.atlases``, :class:`~neurolang.atlases.Atlas`).
     """
-    return (getattr(nl, "atlas_labels", None) or {}).get(name, {})
+    atlas = (getattr(nl, "atlases", None) or {}).get(name)
+    return {} if atlas is None else atlas.label_values()
 
 
 def atlas_activation(
@@ -1235,22 +1170,14 @@ def _register_atlas_activation(
     nl.symbol_table[name].value.might_have_duplicates = False
 
 
-def _register_atlas_points(nl, img, names: dict, settings: dict) -> None:
+def _register_atlas_points(nl, atlas, settings: dict) -> None:
     """
     Register ``{predicate_name}(x, y, z, label)``: the centre of every
-    voxel of the atlas image *img* labelled by a region of *names* (value
-    -> name), in millimetres through its affine, with the name of its
-    region; stored, so that ``EUCLIDEAN`` joins it with a tree.
+    voxel of a region of *atlas*, in millimetres through its affine, with
+    the name of its region (:meth:`~neurolang.atlases.Atlas.points`);
+    stored, so that ``EUCLIDEAN`` joins it with a tree.
     """
-    import pandas as pd
-
-    data = np.asanyarray(img.dataobj).astype(np.int64)
-    voxels = np.argwhere(np.isin(data, list(names)))
-    points = nib.affines.apply_affine(img.affine, voxels)
-    nl.add_tuple_set(pd.DataFrame({
-        "x": points[:, 0], "y": points[:, 1], "z": points[:, 2],
-        "label": [names[v] for v in data[tuple(voxels.T)].tolist()],
-    }), name=settings["predicate_name"])
+    nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
 
 
 def _load_deterministic_atlas(
@@ -1265,6 +1192,8 @@ def _load_deterministic_atlas(
     which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
     """
+    from neurolang.atlases import Atlas, label_table
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
         k: v for k, v in params.items()
@@ -1275,14 +1204,14 @@ def _load_deterministic_atlas(
     def fetch():
         atl_data = info["fetch"](**fetch_kw)
         maps = Path(atl_data["maps"])
+        table = label_table(atl_data["labels"])
         return {
             "maps": str(
                 maps.relative_to(data_dir)
                 if maps.is_relative_to(data_dir) else maps
             ),
             "labels": [
-                [int(k), v.decode("utf8") if isinstance(v, bytes) else str(v)]
-                for k, v in _parse_labels(atl_data["labels"])
+                [int(k), v] for k, v in zip(table["id"], table["name"])
             ],
         }
 
@@ -1298,28 +1227,23 @@ def _load_deterministic_atlas(
         found = fetch()
         maps = Path(data_dir) / found["maps"]
 
-    from neurolang.regions import ExplicitVBR
-
-    img = nib.load(str(maps))
-    _register_grid(nl, atlas_name, img)
-    pred_name = params.get("predicate_name", atlas_name)
-    labels = [(k, v) for k, v in found["labels"] if k != 0]
-    regions = ExplicitVBR.from_spatial_image_labels(
-        img, [k for k, _ in labels]
-    )
     # A label of the look-up table may have no voxel in the image (the
-    # medial walls of Destrieux): it is no region.
-    labels = [(k, v) for k, v in labels if hasattr(regions[k], "voxels")]
-    rows = [(_label_name(v), regions[k]) for k, v in labels]
-    names = {k: _label_name(v) for k, v in labels}
-
-    nl.add_tuple_set(rows, name=pred_name)
-    _register_atlas_labels(nl, atlas_name, names)
+    # medial walls of Destrieux): it is no region, as the background.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        atlas = Atlas.from_labels(
+            atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
+            normalise=True, kind=atlas_name,
+        )
+    _register_grid(nl, atlas_name, atlas.image)
+    pred_name = params.get("predicate_name", atlas_name)
+    nl.add_atlas_set(pred_name, atlas)
     if params.get("points"):
-        _register_atlas_points(nl, img, names, params["points"])
+        _register_atlas_points(nl, atlas, params["points"])
     if params.get("activated"):
         _register_atlas_activation(
-            nl, names, img, params["activated"], pred_name, cache_dir,
+            nl, atlas.region_names(), atlas.image, params["activated"],
+            pred_name, cache_dir,
         )
 
 
@@ -1338,6 +1262,8 @@ def _load_probabilistic_atlas(
       ``prob_threshold``, default 0.01, to keep the set size manageable).
 
     """
+    from neurolang.atlases import label_name
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
     fetch_kw["data_dir"] = str(data_dir)
@@ -1364,7 +1290,7 @@ def _load_probabilistic_atlas(
     prob_frames = []
     for i in range(n_components):
         prob_map = np.asarray(img.dataobj[..., i])
-        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
+        label = label_name(labels[i] if i < len(labels) else f"component_{i}")
 
         # ── Binary region predicate (thresholded) ──
         mask = prob_map > threshold
@@ -1846,7 +1772,6 @@ def build_engine(
 
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
-    nl.atlas_labels = {}
     # Where the Python init of the engine may keep its tables (None: nowhere).
     nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)

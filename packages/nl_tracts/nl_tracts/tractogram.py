@@ -7,7 +7,7 @@ from typing import Any, Union
 import nibabel as nib
 import numpy as np
 
-from .spaces import Space
+from neurolang.atlases import Space
 
 __all__ = ["Tractogram"]
 

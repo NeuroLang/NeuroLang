@@ -1,23 +1,20 @@
 """Tractography for NeuroLang.
 
-The core of the package (``spaces``, ``atlas``, ``tractogram``,
+The core of the package (``atlas``, ``terms``, ``tractogram``,
 ``indexing``, ``cache``) turns an atlas and a tractogram into pandas
 DataFrames, the extensional relations of DESIGN.md, and depends only on
-numpy, scipy, nibabel and pandas. ``nl_tracts.frontend`` hands them to a
-NeuroLang engine.
+numpy, scipy, nibabel, pandas and the atlases of NeuroLang,
+:mod:`neurolang.atlases`, which need nothing else of NeuroLang.
+``nl_tracts.frontend`` hands them to a NeuroLang engine.
 """
 
 __all__ = [
-    "Atlas",
     "IndexingParams",
     "ProbabilisticAtlas",
-    "Space",
-    "SpaceMismatchError",
     "Tractogram",
     "build_relations",
 ]
 
-from .atlas import Atlas, ProbabilisticAtlas
+from .atlas import ProbabilisticAtlas
 from .indexing import IndexingParams, build_relations
-from .spaces import Space, SpaceMismatchError
 from .tractogram import Tractogram
