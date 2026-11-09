@@ -4,7 +4,6 @@
 #   packages/nl_expr         the expression engine
 #   packages/nl_core         relational algebra, Datalog, probabilistic Datalog
 #   packages/neurolang       the language: parsers, frontends, regions
-#   packages/nl_tracts       tractography: atlases and tractograms as relations
 #   packages/neurolang_apps  the command line, terminal interface, engines
 #
 # The root is a project, never published, that installs them for
@@ -30,7 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 apps = ["neurolang-apps"]
-tracts = ["nl-tracts"]
+tracts = ["neurolang-apps"]
 tui = ["neurolang-apps[tui]"]
 llm = ["neurolang-apps[llm]"]
 embeddings = ["neurolang-apps[embeddings]"]
@@ -38,7 +37,6 @@ ras-polars = ["nl-core[ras-polars]"]
 dev = [
     "nl-core[dev]",
     "neurolang[dev]",
-    "nl-tracts[dev]",
     "pytest>=7.0",
     "pytest-benchmark",
     "pytest-cov",
@@ -70,7 +68,6 @@ members = ["packages/*"]
 nl-expr = { workspace = true }
 nl-core = { workspace = true }
 neurolang = { workspace = true }
-nl-tracts = { workspace = true }
 neurolang-apps = { workspace = true }
 
 [tool.pytest.ini_options]

@@ -4,7 +4,7 @@
 # Questions on neurosynth_tracts, added after the bank of
 # coordinate_meta_analysis. They are about a tractogram the program has
 # loaded and indexed, as the commands of
-# packages/nl_tracts/examples/uncinate_cogat.dl do: an atlas "fs" with the
+# examples/uncinate_cogat.dl of the engine tracts do: an atlas "fs" with the
 # terms of the vocabulary of tractography (a wmparc of FreeSurfer) and the
 # Schaefer atlas of the engine, whose points the ends of the streamlines
 # (endpoint_point) are joined to. A bundle is the rules of the vocabulary

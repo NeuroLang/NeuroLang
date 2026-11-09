@@ -111,7 +111,7 @@ class CommandsMixin(PatternWalker):
         atlas, a label image and the names of its labels, into the relation
         `name(label, region)` of its regions, and records it in the
         `atlases` of the engine, by name (:class:`~neurolang.atlases.Atlas`),
-        where `nl_tracts`' `.index_tracts` finds it.
+        where the engine `tracts`' `.index_tracts` finds it.
 
         Usage
         -----

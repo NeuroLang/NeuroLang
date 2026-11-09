@@ -303,7 +303,7 @@ def test_the_tian_fetcher_reads_its_label_file(monkeypatch, tmp_path):
 
 def test_the_module_needs_nothing_else_of_neurolang():
     """Importing it loads neither nilearn, nor the core, the parsers, the
-    regions or the frontends: the core of nl_tracts imports it."""
+    regions or the frontends: the core of the engine tracts imports it."""
     code = (
         "import sys, neurolang.atlases;"
         "print(sorted(m for m in sys.modules if m.startswith("
