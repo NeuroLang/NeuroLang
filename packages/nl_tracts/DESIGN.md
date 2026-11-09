@@ -14,7 +14,8 @@ of tractography**,
 Datalog rules over this schema in which a bundle is a rule or two
 (`traverses(x, term, h)`, `anterior_of(x, term, h)`...: section 16), with the
 uncinate as an example, and the engine `tracts` of `neurolang-query` and of
-its interactive REPL, whose `.view` draws the streamlines (16.3). Not done:
+its interactive REPL, whose `.view` draws the streamlines (16.3), and
+tract_querier's queries translated into the vocabulary (17). Not done:
 the relations as a Python call for many atlases at once beyond what
 `RelationStore` does, the AAL and Schaefer mappings, the probabilistic
 variants (4.4, 12). Numbers below marked
@@ -27,7 +28,7 @@ Contents: 1 Goals · 2 Decisions taken · 3 Relations · 4 Atlases ·
 8 Handing the relations to the engine · 9 Packaging and layering ·
 10 Public API · 11 WMQL (a later PR) · 12 Directional terms ·
 13 Test plan · 14 Phases · 15 Open questions ·
-16 The vocabulary of tractography
+16 The vocabulary of tractography · 17 WMQL in the vocabulary
 
 ## 1. Goals
 
@@ -863,6 +864,8 @@ packages/nl_tracts/
   README.md
   DESIGN.md             this file
   tools/make_freesurfer_mappings.py   writes the shipped mappings
+  tools/make_bundle_modules.py        writes the shipped bundle modules
+  tools/wmql_real_data.py             tract_querier against them (17.5)
   nl_tracts/
     __init__.py         re-exports the public classes (core only)
     terms.py            term-mapping format, validation, shipped keys
@@ -876,6 +879,9 @@ packages/nl_tracts/
     fetch.py            the atlases of Yeh, HCP842 and HCP1065: download (7.5)
     vocabulary.dl       the vocabulary of tractography, Datalog rules (16)
     vocabulary.py       prelude(), predicates(): reads it; no NeuroLang
+    wmql_vocab.py       WMQL to the vocabulary, text to text (17)
+    cli.py              the command nl-tracts wmql (17)
+    bundles/            the .qry of tract_querier in the vocabulary (17)
     frontend.py         register(), the commands, init_engine(),
                         tracts_engine() -- the only module that imports
                         NeuroLang
@@ -1050,6 +1056,12 @@ def init_engine(engine, mask=None, data_dir=None) -> None
 # vocabulary.py
 def prelude() -> str                    # the rules of vocabulary.dl
 def predicates() -> tuple[str, ...]     # the predicates they define
+# wmql_vocab.py
+def translate(source, include_folders=(), terms=None,
+              skip_unsupported=False, title=...) -> Translation
+                                        # .text .queries .skipped .terms
+def to_vocabulary(source, include_folders=(), **kw) -> str
+def bundle(name) -> str                 # a shipped module, BUNDLES
 ```
 
 ## 11. WMQL (a later PR)
@@ -1057,7 +1069,8 @@ def predicates() -> tuple[str, ...]     # the predicates they define
 A transpiler from WMQL, tract_querier's language, to Datalog over these
 relations, with tract_querier's semantics exactly (its query evaluator as
 the oracle), is a separate, later PR. It will also be the oracle of the
-vocabulary of section 16 (16.5).
+vocabulary of section 16 (16.5). The translation of WMQL into the
+vocabulary of section 16, a predicate per query, is section 17.
 
 ## 12. Directional terms
 
@@ -1662,7 +1675,8 @@ And the atlas is quantified rather than a constant of the program (16.2).
 
 The comparison of the two, the uncinate of the vocabulary against
 tract_querier's `UF.side` transpiled, on synthetic data and on the real data
-of 16.4, belongs to the PR of the transpiler (11).
+of 16.4, belongs to the PR of the transpiler (11). WMQL translated into the
+vocabulary, and compared with tract_querier itself, is section 17.
 
 ### 16.6 Performance
 
@@ -1679,3 +1693,210 @@ relational algebra, 10 s of joins, 9 s of selections. Levers, not taken: a
 Magic Sets rewrite that keeps such programs stratified (15.30), so that the
 constants of the rule reach the vocabulary; term-specialised rules would
 make the vocabulary as long as the label-set programs of 16.1 (15.38).
+
+## 17. WMQL in the vocabulary
+
+**Implemented**: `nl_tracts/wmql_vocab.py` (`translate`, `to_vocabulary`,
+`bundle`), a core module (text in, text out; no NeuroLang, checked by
+`.importlinter`), the command `nl-tracts wmql FILE.qry`, and the shipped
+modules `nl_tracts/bundles/*.dl`, the `.qry` files of tract_querier
+translated by `tools/make_bundle_modules.py`.
+
+It writes a WMQL program as a person writes it in the vocabulary of
+section 16: **one predicate per query**, each a rule or two, with the WMQL
+statement over it as a `%` comment, and a header that says what the module
+needs (its terms) and what it leaves out. It is not the exact transpiler of
+section 11, whose label-set programs reproduce tract_querier tractogram by
+tractogram and are thousands of rules; its semantics is the vocabulary's,
+natural (16.5), and 17.3 says where that differs from tract_querier's. The
+parsing is tract_querier's, as the exact transpiler had it (Python syntax,
+lower case, `import` inlined from include folders, `not in` binding looser
+than `and` and `or`, `for` over a list of names expanded).
+
+### 17.1 The mapping
+
+| WMQL | Datalog |
+|---|---|
+| `t.side \|= ...` of labels: ids, a wildcard, an `or` of names of labels | the **term** `"t"`; no predicate. With `terms` (a mapping's), a name that is not a term stands for the terms it is made of |
+| `q.side = ...` (and `\|=` of a query) | `q(x, h) :- ...` |
+| `q.left = ...` | the rule `q(x, "left") :- ...` |
+| `q = ...` | `q(x) :- ...` |
+| `t.side`, `t.opposite`, `t.left`, `t` (a term) | `traverses(x, "t", h)`, `traverses(x, "t", o)` with `opposite_hemisphere(h, o)`, `traverses(x, "t", "left")`, `traverses(x, "t", _)` (any hemisphere) |
+| `HEMISPHERE.side` (`\|= '*.left'`) | `in_hemisphere(x, h)` |
+| `q.side` (a query) | `q(x, h)` |
+| `a or b`, `a + b` | `(A \| B)` |
+| `a and b`, `a * b` | `A, B` |
+| `a not in b`, `a - b`; `not a`, `-a` | `A, ~B`; `~A` (pushed to the atoms: `~(B \| C)` is `~B, ~C`, `~(B, C)` is `(~B \| ~C)`); the positive conditions first, so that `x` and `h` are bound |
+| `endpoints_in(t1 or t2)` | `(ends_in(x, "t1", h) \| ends_in(x, "t2", h))` |
+| `endpoints_in(E)`, E with `and`, `not in`, directions | the conditions of E on **one** end `e`: `endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h)`; a new `e` (`e2`...) per `endpoints_in`; under a negation or in a disjunct, `exists(e; ...)` |
+| `both_endpoints_in(E)` | E on the end `0` and on the end `1` |
+| `only(t)`, `~t` | `only_in(x, "t", h)` |
+| `only(E)`, E terms with `or` and `and` | `E, ~q_leaves(x, h)` and `q_leaves(x, h) :- in_hemisphere(x, h), streamline_label(a, x, l), ~term_label(a, l, "t1", h), ...` (x goes through a label of none of E's terms; the union of the labels, as tract_querier's) |
+| `anterior_of(t.side)`, ..., `medial_of`, `lateral_of` | `anterior_of(x, "t", h)` ...; inside `endpoints_in`, `endpoint_anterior_of(x, e, "t", h)` ... **`superior_of` and `inferior_of` are anatomical**, the reverse of tract_querier's (15.20): the header of every module says so |
+
+A predicate is named as the query, lower case (`UF.side` is `uf`); a name
+of the vocabulary or of a stored relation (`traverses`, `label`, `ans`...)
+is prefixed `wmql_`. A query defined again is a new predicate; the earlier
+one, which what came before uses, is `q_1`. `Translation.queries` maps each
+WMQL name to its atom (`uf.left` to `uf(x, "left")`).
+
+The uncinate of `freesurfer_queries.qry`, generated:
+
+```
+uf(x, h) :-
+    (traverses(x, "orbitofrontalgyrus", h)
+     | traverses(x, "middle_frontal_gyrus", h)
+     | traverses(x, "inferior_frontal_gyrus", h)),
+    endpoint_in(x, e, "temporal", h),
+    endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h),
+    ~traverses(x, "occipital", h), ~traverses(x, "parietal", h),
+    ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
+    opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+```
+
+the rule of `examples/uncinate.dl`, laid out by the width of the line.
+
+### 17.2 What is not translated
+
+What the vocabulary cannot say is left out, with the reason
+(`WMQLUnsupported`, or with `skip_unsupported` `Translation.skipped` and the
+header), and so is every query that uses it: a directional term of a union
+of terms (the box of a union is not a predicate) or of a name without a
+side (the box of a term over both hemispheres); `endpoints_in`, `only` or a
+direction of a query that is not made of terms; `only` of a query with
+`not in`; a label id in a query, or a name of label ids that is not a term
+of the mapping given; a `.side` name whose `.left` and `.right` are two
+definitions and not a term (`thalamus.side |= thalamus.side or
+thalamus_proper.side` of `freesurfer_queries_bsf2016.qry`: `thalamus` is not
+a term of `freesurfer_aseg_aparc`, whose `thalamus_proper` has both
+spellings of the LUT); a query that only negates (`not a`) or does not bind
+its hemisphere (`only(p.side or u)`); `save` and unknown functions.
+
+The shipped modules, with the terms of `freesurfer_aseg_aparc` for the
+FreeSurfer files (the JHU files define labels only):
+
+| `.qry` | Predicates | Left out |
+|---|---|---|
+| `freesurfer_queries` | 33 (and 4 `_leaves`) | none |
+| `freesurfer_queries_bsf2016` | 25 (and 7 `_leaves`) | `thalamus` and the 6 `thalamo_*` that use it |
+| `freesurfer_queries_bsf2016_toad` | 27 (and 7 `_leaves`; with the queries of the one above, which it imports, its `uf` and `cortico_spinal` redefining theirs, which are `uf_1` and `cortico_spinal_1`) | the same |
+| `mori_queries` (JHU's names as terms, no mapping) | 10 | none |
+
+### 17.3 Natural and exact semantics
+
+Where they coincide, tested: each name of WMQL is a term of the mapping,
+with the same labels and hemispheres (`HEMISPHERE.left` is then the labels
+of hemisphere `left`); each label has a box, so that the box of a term is
+its name's; the background is not traversed (`.index_tracts`' default,
+6.3). Where they differ, by design:
+
+* **Label sets** are the mapping's (16.5): `subcortical.side` of the file
+  has the brain stem (`Brain_Stem`, of no side), the mapping's
+  `subcortical` of a side does not, and it adds the caudate, hippocampus
+  and accumbens (3.2). `not in subcortical.side` (ioff, soff, ec, slf,
+  internal capsule) excludes the streamlines of the brain stem in
+  tract_querier, of the caudate, hippocampus and accumbens here.
+* **`not a`** is a negation; tract_querier's is a complement, the
+  streamlines that go through a label outside `a`. No shipped query uses it.
+* **`only`**: tract_querier counts the background (label 0, at least 2 % of
+  the points) among a streamline's labels, so that a streamline partly in
+  it is never `only` anything; nl_tracts emits no rows for it by default,
+  so `only` is a superset.
+* **Vertical directions**, anatomical here (15.20).
+* A term without a side is of any hemisphere (`_`); `HEMISPHERE` is
+  `label.hemi` (16.5).
+
+### 17.4 Tests
+
+`tests/test_wmql_vocab.py`: the text of each construct, the uncinate, the
+layout, redefinitions, prefixes, what is left out and why (and what uses
+it), the terms of a mapping, `import` and `for`, the command, the shipped
+modules have no command and no `ans`. `tests/test_wmql_vocab_oracle.py`:
+29 queries (55 names, every construct of 17.1 but the vertical directions,
+checked against numpy) on synthetic data, against tract_querier's own
+evaluator (`reference_tq.evaluate`), equal on two seeds.
+`tests/test_wmql_vocab_bundles.py`: the shipped modules are the
+translation (with `TRACT_QUERIER_DIR`), and `uf(x, h)` of
+`freesurfer_queries` is `uncinate(x, h)` of the example on the atlas and
+streamlines of `uncinate_files` with 300 random ones, the whole module
+running.
+
+Found doing it, two engine bugs, fixed with tests: `_` in a negated atom or
+a disjunct was a variable of the rule (`~traverses(x, "cerebellum", _)`
+was refused as unsafe); and a rule with k negated atoms compiled in time
+2^k (each negation was joined with the difference of the previous ones,
+which doubled the relational algebra): `cb`, `ec` and `af`, with 12 to 15
+negations, did not finish in an hour; each now takes a few seconds.
+
+### 17.5 On real data
+
+*Measured* (not a test; `tools/wmql_real_data.py`, this Mac, pandas
+backend). Tractogram the whole brain of DIPY's HCP842 atlas, MNI, without
+its streamlines of one point (`whole_brain_MNI_2pts.trk`, 144,641); atlas
+`wmparc.mgz` of FreeSurfer's `cvs_avg35_inMNI152` with its colour LUT.
+tract_querier itself (its Python API, as its command line calls it, in its
+own environment): the `.trk` read by nibabel, in RAS+ mm, which is what
+nl_tracts reads too, the label image with its affine, crossing threshold
+2 %, no length threshold, every query of `freesurfer_queries.qry` kept; a
+streamline is its position in the file in both. The vocabulary: the
+translation with the terms of `freesurfer_aseg_aparc` (the shipped module)
+after the three commands, every predicate at once (`solve_all`).
+
+| Tract | Side | n_tq | n_vocab | Jaccard |
+|---|---|---|---|---|
+| cst, cst_pre, cst_post | left, right | 2636, 3378; 2464, 3218; 455, 491 | the same | 1 |
+| internal_capsule_new | left, right | 25, 85 | 25, 85 | 1 |
+| ioff | left, right | 70, 93 | 70, 93 | 1 |
+| soff | left, right | 2, 253 | 2, 253 | 1 |
+| **uf** | left, right | 724, 810 | 724, 810 | 1 |
+| ilf | left | 1167 | 1126 | 0.965 |
+| ilf | right | 10 | 10 | 1 |
+| ec | left, right | 68, 2 | 68, 2 | 1 |
+| slf_i, slf_ii, slf_iii | left | 0, 301, 0 | the same | 1 |
+| slf_i, slf_ii, slf_iii | right | 0, 407, 104 | the same | 1 |
+| extreme_capsule | left, right | 55, 0 | 55, 0 | 1 |
+| af | left, right | 5, 0 | 5, 0 | 1 |
+| internal_capsule, cc, cc_5, cc_6 | | 0 | 0 | 1 |
+| thalamo_frontal, _parietal, _occipital | left | 1557, 1137, 232 | the same | 1 |
+| thalamo_frontal, _parietal, _occipital | right | 1210, 856, 185 | the same | 1 |
+| striato_frontal, _parietal, _occipital | left | 1471, 376, 85 | the same | 1 |
+| striato_frontal, _parietal, _occipital | right | 1160, 386, 27 | the same | 1 |
+| cc_1, cc_2, cc_3, cc_4, cc_7 | | 854, 5224, 276, 697, 4533 | the same | 1 |
+| precentral_postcentral | left | 47 | 185 | 0.254 |
+| precentral_postcentral | right | 136 | 284 | 0.479 |
+| cb | left | 1153 | 1576 | 0.732 |
+| cb | right | 829 | 1653 | 0.502 |
+| mdlf | left | 89 | 102 | 0.873 |
+| mdlf | right | 133 | 191 | 0.696 |
+| mdlf_probable_sections | left | 76 | 214 | 0.355 |
+| mdlf_probable_sections | right | 0 | 0 | 1 |
+
+51 of the 59 queries are the same streamlines. The others, explained
+streamline by streamline:
+
+* The four of **`only`** are supersets of tract_querier's, and every
+  streamline in excess (138, 148, 423, 824, 13, 58, 138) has the background
+  among its labels in tract_querier's index (at least 2 % of its points in
+  label 0), which tract_querier counts in `only` and nl_tracts, without
+  rows for the background, does not (17.3). `only` with
+  `.index_tracts(..., emit_background=1)` counts it, but then so does every
+  `only_in`.
+* **`ilf.left`** misses 41 streamlines of tract_querier's, all of whose
+  temporal end is between y = -6 and -5.5 mm, in front of the hippocampus
+  by tract_querier's box (its anterior face at -6 mm, the centre of the
+  last voxel, as tract_querier maps the box) and not by `label_extent`'s
+  (-5.5 mm, the edge of the voxel: 6.1.1). Half a voxel on a face, by
+  design; the uncinate's `anterior_of(amygdala)` has no end in that band.
+* The label sets of `subcortical` (17.3) change nothing here: no
+  streamline of `ioff`, `soff`, `ec`, `slf_*` goes through the brain stem
+  and not through the caudate, hippocampus or accumbens, or the reverse.
+
+Time: tract_querier 1.9 s to load the files, 51 s to index, 1.0 s for all
+the queries; the vocabulary 6.3 s to load and index (the cache of 7.3 warm:
+it was 4.4 s cold in 16.4), 317 s for all the queries of both sides at
+once, 13 GB of memory. The queries are compile-bound, as in 16.6: the
+Magic Sets rewrite is refused for these programs (negations), so every
+predicate of the vocabulary they read is computed for every term and
+hemisphere, and the 37 rules, many with ten negations or more, are
+translated into relational algebra. Before the fix of the negations (17.4),
+they did not finish.

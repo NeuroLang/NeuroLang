@@ -182,6 +182,36 @@ fasciculus I, II, III; `CBT` corticobulbar tract; `CPT_F`, `CPT_O`,
 reticulospinal tract (rubrospinal in HCP842); `TR_A`, `TR_P`, `TR_S`
 anterior, posterior and superior thalamic radiation.
 
+## tract_querier's queries in the vocabulary
+
+`nl-tracts wmql` translates a WMQL program of tract_querier (a `.qry`) into
+rules of the vocabulary, one predicate per query, with the WMQL statement
+over each (DESIGN.md section 17): `UF.side` becomes `uf(x, h)`, the rule
+above; a name of labels is a term of the mapping; what the vocabulary
+cannot say is left out and listed in the header.
+
+```sh
+nl-tracts wmql my_queries.qry -I path/to/tract_querier/data \
+    --terms freesurfer_aseg_aparc > my_queries.dl
+```
+
+`--terms` checks the names of labels against a mapping (a name that is not
+one of its terms stands for those it is made of). The translations of
+tract_querier's own files are shipped (`freesurfer_queries`,
+`freesurfer_queries_bsf2016`, `freesurfer_queries_bsf2016_toad`,
+`mori_queries`): rules without commands, to put after the commands of a
+program, or from Python
+
+```python
+from nl_tracts.frontend import tracts_engine
+from nl_tracts.wmql_vocab import bundle
+
+nl = tracts_engine()
+nl.execute_datalog_program(commands)   # .load_atlas, .load_tractogram, ...
+nl.execute_datalog_program(bundle("freesurfer_queries"))
+nl.execute_datalog_program('ans(x) :- af(x, "left")')
+```
+
 ## The atlases
 
 An atlas is NeuroLang's (`neurolang.atlases.Atlas`): whatever loaded it,

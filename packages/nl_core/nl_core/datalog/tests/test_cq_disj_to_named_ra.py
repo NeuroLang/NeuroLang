@@ -220,6 +220,35 @@ def test_joins():
     assert res == Difference(fa_trans, NaturalJoin(fa_trans, fb_trans))
 
 
+def test_several_negations_subtract_from_the_positive_formulas():
+    """Each negated formula is joined with the positive ones, not with the
+    difference of the negations before it, which would put that difference
+    in both operands and double the expression with each negation."""
+    x, y = S_("x"), S_("y")
+    R1, R2 = S_("R1"), S_("R2")
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+    )
+
+    def fb_trans(c):
+        return NameColumns(
+            Projection(
+                Selection(R2, C_(eq)(C_(ColumnInt(1)), C_(c))),
+                (C_(ColumnInt(0)),),
+            ),
+            (Constant(ColumnStr("y")),),
+        )
+
+    exp = Conjunction((R1(x, y),) + tuple(
+        Negation(R2(y, C_(c))) for c in range(3)))
+    res = TranslateToNamedRA().walk(exp)
+    expected = fa_trans
+    for c in range(3):
+        expected = Difference(expected, NaturalJoin(fa_trans, fb_trans(c)))
+    assert res == expected
+
+
 def test_selection():
     x = S_("x")
     y = S_("y")
