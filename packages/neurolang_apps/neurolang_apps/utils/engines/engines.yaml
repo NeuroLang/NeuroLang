@@ -757,26 +757,33 @@ engines:
       fasciculus and the concepts of the studies that activate its parcels
       are examples/uncinate_cogat.dl of the engine tracts.
 
-  neurosynth_hcp842:
+  neurosynth_iit:
     extends: neurosynth_tracts
     description: >
       Neurosynth with a whole-brain tractogram and tract_querier's bundles:
-      neurosynth_tracts after the commands that load the tractogram of the
-      HCP842 atlas (Yeh et al. 2018; tractogram in the data directory,
-      tracts/hcp842/whole_brain_MNI.trk, else downloaded whole: 320 MB),
-      load the wmparc of the IIT Human Brain Atlas v3 (downloaded, with
-      FreeSurfer's colour LUT, into the data directory's tracts/fs; its
-      labels are the codes of FreeSurfer's, so the term mapping
-      freesurfer_aseg_aparc applies), index the tractogram by it and import
-      the bundles of tract_querier's freesurfer_queries.qry, so that
-      ans(x) :- uf(x, "left") and .view work at the prompt. The atlas is
-      read relative to the working directory, which is the data directory.
-      The entry tractogram tells the bundle of the REPL in the browser how to
-      subsample the whole-brain tractogram it ships.
-    # The atlas: IIT Human Brain Atlas v3, Desikan-Killiany wmparc style
-    # (Qi, Arfanakis et al., IIT Human Brain Template License: non-commercial
-    # research, attribution), and FreeSurfer's colour LUT, at a commit.
+      neurosynth_tracts after the commands that load the whole-brain
+      tractogram of the IIT Human Brain Atlas v3 (IIT3mean.tck, 38,000
+      streamlines, RAS+ mm, 88 MB, downloaded into the data directory's
+      tracts/iit), load the atlas's Desikan-Killiany wmparc (downloaded, with
+      FreeSurfer's colour LUT, into tracts/fs; its labels are the codes of
+      FreeSurfer's, so the term mapping freesurfer_aseg_aparc applies; the
+      tractogram and the atlas are of the same atlas, so in the same space),
+      index the tractogram by it and import the bundles of tract_querier's
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view work
+      at the prompt. The files are read relative to the working directory,
+      which is the data directory. The entry tractogram tells the bundle of
+      the REPL in the browser how to subsample the file it ships in its
+      place, so that this program is the same there.
+    # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain
+    # Template License: non-commercial research, attribution): its
+    # whole-brain tractogram and its Desikan-Killiany wmparc, from the OSF
+    # project of tract_querier's test files (https://osf.io/ugyqa/), and
+    # FreeSurfer's colour LUT, at a commit.
     downloads:
+      - url: https://osf.io/download/6af216907216d01bbe53b9f5/
+        name: IIT3mean.tck
+        md5: 6e9703e4e331cfb26f3eb2e29526e225
+        dest: tracts/iit
       - url: https://osf.io/download/rk7a5/
         name: IIT3mean_desikan_2009.nii.gz
         md5: 767813ba451d5209cdc9454617a636b7
@@ -784,14 +791,15 @@ engines:
       - url: https://raw.githubusercontent.com/freesurfer/freesurfer/18761d34d14d62216ec1ca3b0056fb9b04ea2f59/distribution/FreeSurferColorLUT.txt
         md5: ce7f38b53a507ac1990e0795353417d7
         dest: tracts/fs
-    # The tractogram of the bundle of the REPL: the whole brain of the atlas
-    # kind, subsample streamlines drawn at random (seed), each thinned to
-    # every step-th point (doc/make_repl_bundle.py)
-    tractogram: {kind: hcp842, subsample: 20000, step: 2, seed: 0}
+    # The tractogram of the bundle of the REPL: the file path is replaced in
+    # the bundle's data directory by subsample of its streamlines drawn at
+    # random (seed), each thinned to every step-th point
+    # (doc/make_repl_bundle.py)
+    tractogram: {path: tracts/iit/IIT3mean.tck, subsample: 15000, step: 3, seed: 0}
     datalog_init: |
-      .load_tractogram("hcp842", kind="hcp842")
+      .load_tractogram("iit", "tracts/iit/IIT3mean.tck", space="MNI152")
       .load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", "tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
-      .index_tracts("hcp842", "fs")
+      .index_tracts("iit", "fs")
       .import("bundles/freesurfer_queries.dl")
 
   # Example template usage (commented out — uncomment to enable):

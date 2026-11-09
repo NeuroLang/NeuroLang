@@ -253,7 +253,7 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     described = json.loads((tmp_path / "bundle.json").read_text())
     assert described["default"] == "neurosynth"
     assert list(described["engines"]) == [
-        "neurosynth", "neurosynth_hcp842", "neurostore"]
+        "neurosynth", "neurosynth_iit", "neurostore"]
     assert described["engines"]["neurostore"] == {
         "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
         "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
@@ -269,7 +269,7 @@ def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
     _fake_bundle(bundle, monkeypatch, failing={"neurostore"})
     bundle.main(tmp_path)
     described = json.loads((tmp_path / "bundle.json").read_text())
-    assert list(described["engines"]) == ["neurosynth", "neurosynth_hcp842"]
+    assert list(described["engines"]) == ["neurosynth", "neurosynth_iit"]
     assert "neurostore is left out" in capsys.readouterr().out
     _fake_bundle(bundle, monkeypatch, failing={"neurosynth"})
     with pytest.raises(RuntimeError):
@@ -349,9 +349,10 @@ def test_the_data_of_an_engine_is_written_in_parts_when_it_is_large(
 
 
 def test_the_tractogram_of_the_page_is_a_seeded_thinned_draw(bundle, tmp_path):
-    """20,000 of the HCP842 atlas in the page; here 5 of 8 streamlines (one
-    of a point, never drawn), in the order of the file, every second point
-    and the last: the same draw for the same seed."""
+    """15,000 of the IIT atlas's in the page; here 5 of 8 streamlines (one
+    of a point, never drawn) of a ``.tck``, in the order of the file, every
+    second point and the last: the same draw for the same seed, in the same
+    format."""
     import nibabel as nib
     import numpy as np
 
@@ -359,13 +360,13 @@ def test_the_tractogram_of_the_page_is_a_seeded_thinned_draw(bundle, tmp_path):
         np.cumsum(np.ones((n, 3)), axis=0).astype(np.float32) + k
         for k, n in enumerate([5, 1, 6, 2, 9, 3, 4, 7])
     ]
-    source = tmp_path / "whole_brain_MNI.trk"
+    source = tmp_path / "whole_brain.tck"
     nib.streamlines.save(
         nib.streamlines.Tractogram(lines, affine_to_rasmm=np.eye(4)),
-        str(source), header=nib.streamlines.TrkFile.create_empty_header(),
+        str(source),
     )
     drawn = []
-    for name in ("a.trk", "b.trk"):
+    for name in ("a.tck", "b.tck"):
         bundle.subsample_tractogram(source, tmp_path / name, 5, 2, seed=1)
         drawn.append(nib.streamlines.load(str(tmp_path / name)).streamlines)
     assert [list(map(len, d)) for d in drawn] == 2 * [list(map(len, drawn[0]))]
@@ -386,39 +387,31 @@ def test_the_tractogram_of_the_page_is_a_seeded_thinned_draw(bundle, tmp_path):
 def test_the_tractogram_entry_of_the_engine_tells_how_to_subsample(
     bundle, monkeypatch, tmp_path
 ):
-    """engines.yaml: ``tractogram: {kind, subsample, step, seed}``. The
-    subsampled file goes where ``.load_tractogram(kind=...)`` finds it, so
-    that nothing is downloaded."""
-    from neurolang_apps.utils.engines import tracts
-
-    entry = bundle.tractogram_entry("neurosynth_hcp842")
+    """engines.yaml: ``tractogram: {path, subsample, step, seed}``. The file
+    of the data directory at ``path`` is replaced by its subsample."""
+    entry = bundle.tractogram_entry("neurosynth_iit")
     assert dict(entry) == {
-        "kind": "hcp842", "subsample": 20000, "step": 2, "seed": 0}
+        "path": "tracts/iit/IIT3mean.tck", "subsample": 15000, "step": 3,
+        "seed": 0}
     assert bundle.tractogram_entry("neurosynth") is None
-    full = tmp_path / "source" / "whole_brain_MNI.trk"
-    full.parent.mkdir()
-    full.write_bytes(b"full")
-    asked = {}
-    monkeypatch.setattr(
-        tracts, "fetch_tractogram",
-        lambda kind, data_dir: asked.update(kind=kind, dir=data_dir) or full,
-    )
     drawn = {}
 
     def subsample(source, target, count, step, seed):
-        drawn.update(source=source, count=count, step=step, seed=seed)
-        target.parent.mkdir(parents=True)
+        drawn.update(source=source, target=target, count=count, step=step,
+                     seed=seed)
         target.write_bytes(b"x")
 
     monkeypatch.setattr(bundle, "subsample_tractogram", subsample)
     data = tmp_path / "data"
-    bundle.add_tractogram(
-        data, tmp_path / "sources",
-        {"kind": "hcp842", "subsample": 7, "step": 3, "seed": 5})
-    assert asked == {"kind": "hcp842", "dir": tmp_path / "sources"}
-    assert drawn == {"source": full, "count": 7, "step": 3, "seed": 5}
-    found = tracts.fetch.fetch_tractogram("hcp842", data_dir=data / "tracts")
-    assert found == data / "tracts" / "hcp842" / "whole_brain_MNI.trk"
+    (data / "tracts" / "iit").mkdir(parents=True)
+    path = data / "tracts" / "iit" / "IIT3mean.tck"
+    path.write_bytes(b"full")
+    bundle.reduce_tractogram(
+        data, {"path": "tracts/iit/IIT3mean.tck", "subsample": 7, "step": 3,
+               "seed": 5})
+    assert drawn == {
+        "source": path, "target": path, "count": 7, "step": 3, "seed": 5}
+    assert path.read_bytes() == b"x"
 
 
 def test_an_engine_with_the_studies_of_another_shares_its_embeddings(bundle):
@@ -430,14 +423,14 @@ def test_an_engine_with_the_studies_of_another_shares_its_embeddings(bundle):
         },
     }
     entry = {"cache_keys": {"study_abstracts": "k"}, "files": {}}
-    bundle.share_embeddings("neurosynth_hcp842", entry, donor)
+    bundle.share_embeddings("neurosynth_iit", entry, donor)
     assert entry["files"] == {
-        "neurosynth_hcp842/embeddings/study_abstracts.npz": ["a.0", "a.1"],
-        "neurosynth_hcp842/embeddings/models/m.npz": ["m"],
+        "neurosynth_iit/embeddings/study_abstracts.npz": ["a.0", "a.1"],
+        "neurosynth_iit/embeddings/models/m.npz": ["m"],
     }
     entry = {"cache_keys": {"study_abstracts": "other"}, "files": {}}
     with pytest.raises(ValueError, match="cache_key"):
-        bundle.share_embeddings("neurosynth_hcp842", entry, donor)
+        bundle.share_embeddings("neurosynth_iit", entry, donor)
 
 
 def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
@@ -451,12 +444,12 @@ def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
         return {**entry, "cache_keys": {"study_abstracts": "k"}}
 
     monkeypatch.setattr(bundle, "bundle_engine", with_keys)
-    bundle.main(tmp_path, engines=("neurosynth", "neurosynth_hcp842"))
+    bundle.main(tmp_path, engines=("neurosynth", "neurosynth_iit"))
     described = json.loads((tmp_path / "bundle.json").read_text())
     assert described["default"] == "neurosynth"
-    assert described["engines"]["neurosynth_hcp842"] == {
+    assert described["engines"]["neurosynth_iit"] == {
         "label": "Neurosynth + tracts",
-        "data": "neurolang-neurosynth_hcp842-data.zip",
-        "files": {"neurosynth_hcp842/model.npz": ["neurosynth-model.npz"]},
+        "data": "neurolang-neurosynth_iit-data.zip",
+        "files": {"neurosynth_iit/model.npz": ["neurosynth-model.npz"]},
     }
     assert all("cache_keys" not in e for e in described["engines"].values())

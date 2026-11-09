@@ -3,7 +3,7 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
 - for each engine of the page (``neurosynth``, the page's default,
-  ``neurosynth_hcp842`` and ``neurostore``), the data it needs, as a zip in the layout of its data
+  ``neurosynth_iit`` and ``neurostore``), the data it needs, as a zip in the layout of its data
   directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
@@ -13,18 +13,20 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
   <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
   studies, named in ``bundle.json`` by their path in the data directory.
 
-``neurosynth_hcp842`` is Neurosynth with tractography. Its engines.yaml entry
-downloads the atlas (the IIT Human Brain Atlas's wmparc and FreeSurfer's colour
-LUT) and has a ``tractogram`` entry (``kind``, ``subsample``, ``step``,
-``seed``): its data holds the whole-brain tractogram of the HCP842 atlas of
-Yeh et al., ``subsample`` streamlines drawn at random with ``seed`` and
-thinned to every ``step``-th point (``subsample_tractogram``), that the engine
-loads and indexes by the atlas. It has the studies of ``neurosynth``, so it
-takes the files of the text embeddings of ``neurosynth`` instead of embedding
-them again (the same ids give the same ``EmbeddingIndex.cache_key``, which is
-checked).
+``neurosynth_iit`` is Neurosynth with tractography. Its engines.yaml entry
+downloads the IIT Human Brain Atlas v3 (its whole-brain tractogram
+``IIT3mean.tck``, its wmparc and FreeSurfer's colour LUT) and has a
+``tractogram`` entry (``path``, ``subsample``, ``step``, ``seed``): the file
+``path`` of the data is replaced by its subsample (``subsample_tractogram``),
+``subsample`` streamlines drawn at random with ``seed`` and thinned to every
+``step``-th point, in the same format and at the same path, so that the
+engine's program is the same in the page. It has the studies of
+``neurosynth``, so it takes the files of the text embeddings of ``neurosynth``
+instead of embedding them again (the same ids give the same
+``EmbeddingIndex.cache_key``, which is checked).
 
-The engine downloads its data (about 100 MB) on first use. The browser
+The engine downloads its data on first use (about 100 MB, 190 MB with the
+tractogram). The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
 engine reads are kept, and the others are emptied rather than removed,
 because the fetchers of nilearn look for every file of a dataset; of the
@@ -66,14 +68,14 @@ import zipfile
 from pathlib import Path
 
 # The engines the page offers, the first being its default.
-ENGINES = ("neurosynth", "neurosynth_hcp842", "neurostore")
+ENGINES = ("neurosynth", "neurosynth_iit", "neurostore")
 ENGINE = ENGINES[0]
 LABELS = {
     "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
-    "neurosynth_hcp842": "Neurosynth + tracts",
+    "neurosynth_iit": "Neurosynth + tracts",
 }
 # The engines that have the studies of another and so its text embeddings.
-EMBEDDINGS_FROM = {"neurosynth_hcp842": "neurosynth"}
+EMBEDDINGS_FROM = {"neurosynth_iit": "neurosynth"}
 RESOLUTION = 2.0
 HIGHLIGHT_WORDS = "highlight.json"
 
@@ -153,7 +155,7 @@ def build_engine(
 ):
     """Build the engine from the data directory, as ``_build_engine`` does;
     an engine of the tractogram is run from it, as the page does, since it
-    reads its atlas by a relative path."""
+    reads its files by a relative path."""
     if not tractogram_entry(engine):
         return _build_engine(data_dir, use_cache, engine)
     cwd = os.getcwd()
@@ -268,15 +270,16 @@ def subsample_tractogram(
     source: Path, target: Path, count: int, step: int = 1, seed: int = 0,
 ) -> None:
     """
-    Write in *target* a ``.trk`` of *count* streamlines of the one *source*,
+    Write in *target* a tractogram, of the format of *source* (``.tck``,
+    ``.trk``), of *count* streamlines of the one *source*,
     chosen at random with *seed* among those of two points or more, in the
     order of the file, each thinned to every *step*-th point and its last.
     """
     import nibabel as nib
     import numpy as np
 
-    trk = nib.streamlines.load(str(source))
-    lines = trk.streamlines
+    full = nib.streamlines.load(str(source))
+    lines = full.streamlines
     candidates = np.flatnonzero([len(line) > 1 for line in lines])
     chosen = np.sort(np.random.default_rng(seed).choice(
         candidates, min(count, len(candidates)), replace=False
@@ -289,7 +292,7 @@ def subsample_tractogram(
     target.parent.mkdir(parents=True, exist_ok=True)
     nib.streamlines.save(
         nib.streamlines.Tractogram(thinned, affine_to_rasmm=np.eye(4)),
-        str(target), header=trk.header,
+        str(target), header=full.header,
     )
 
 
@@ -300,21 +303,15 @@ def tractogram_entry(engine: str):
     return engine_registry.get_engine_config(engine).get("tractogram")
 
 
-def add_tractogram(data_dir: Path, sources: Path, entry) -> None:
-    """Put in *data_dir* the whole-brain tractogram of the atlas *entry*
-    names (``kind``), subsampled as it says, where the engine finds it
-    (``tracts/<kind>/whole_brain_MNI.trk``, where ``.load_tractogram(kind=)``
-    finds it and downloads nothing); the archive is downloaded into
-    *sources*, not into the data."""
-    from neurolang_apps.utils.engines.tracts import fetch_tractogram
-
-    full = fetch_tractogram(entry["kind"], data_dir=sources)
-    target = data_dir / "tracts" / entry["kind"] / full.name
+def reduce_tractogram(data_dir: Path, entry) -> None:
+    """Replace in *data_dir* the tractogram file *entry* names (``path``)
+    by its subsample, as the entry says."""
+    path = data_dir / entry["path"]
     subsample_tractogram(
-        full, target, int(entry["subsample"]), int(entry.get("step", 1)),
+        path, path, int(entry["subsample"]), int(entry.get("step", 1)),
         int(entry.get("seed", 0)),
     )
-    print(f"The tractogram of the page: {target.stat().st_size / 1048576:.1f} MB")
+    print(f"The tractogram of the page: {path.stat().st_size / 1048576:.1f} MB")
 
 
 def zip_directory(directory: Path, archive: Path) -> None:
@@ -416,15 +413,14 @@ def bundle_engine(
         data_dir.mkdir()
         if kept is not None and kept.is_dir():
             keep_downloads(kept, data_dir)
-        entry = tractogram_entry(engine)
-        if entry:
-            sources = Path(downloads or tmp) / f"{entry['kind']}-source"
-            add_tractogram(data_dir, sources, entry)
         try:
             build_engine(data_dir, engine=engine)
         finally:
             if kept is not None:
                 keep_downloads(data_dir, kept)
+        entry = tractogram_entry(engine)
+        if entry:  # the page ships a subsample of what the engine downloaded
+            reduce_tractogram(data_dir, entry)
         check_engine_cache(data_dir, engine)
         trim(data_dir, engine)
         build_engine(data_dir, engine=engine)  # the page's way: from the kept tables
@@ -453,7 +449,7 @@ def share_embeddings(engine: str, entry: dict, donor: dict) -> None:
     """Give the entry *entry* of *engine* the files of the text embeddings
     of *donor*, the entry of the engine whose studies it has, under its own
     data directory (``neurosynth/embeddings/x.npz`` is
-    ``neurosynth_hcp842/embeddings/x.npz`` there): the files are those of
+    ``neurosynth_iit/embeddings/x.npz`` there): the files are those of
     the donor's, which the page downloads once, whichever engine asks.
     The embeddings are of the same studies, which their ``cache_key`` tells."""
     if entry["cache_keys"] != donor["cache_keys"]:

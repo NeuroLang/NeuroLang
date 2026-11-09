@@ -68,14 +68,13 @@ def files(tmp_path):
         [temporal, insula, (frontal[0] + 0.04 * k,) + frontal[1:]]
         for k in range(20)
     ] + [[temporal, insula, LONE_END]]
-    nib.streamlines.save(
-        nib.streamlines.Tractogram(
-            uncinate_files.streamlines()
-            + [uncinate_files.polyline(w) for w in extra],
-            affine_to_rasmm=np.eye(4),
-        ),
-        str(tmp_path / "tracts.trk"),
+    tractogram = nib.streamlines.Tractogram(
+        uncinate_files.streamlines()
+        + [uncinate_files.polyline(w) for w in extra],
+        affine_to_rasmm=np.eye(4),
     )
+    nib.streamlines.save(tractogram, str(tmp_path / "tracts.trk"))
+    nib.streamlines.save(tractogram, str(tmp_path / "tracts.tck"))
     return uncinate_files
 
 
@@ -120,11 +119,11 @@ def engine(tmp_path, files, monkeypatch, engine_name):
         "term": ["memory", "language"], "tfidf": [0.5, 0.3],
     })
     mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
-    if engine_name == "neurosynth_hcp842":
+    if engine_name == "neurosynth_iit":
         # where the engine finds the whole-brain tractogram: no download
-        target = tmp_path / "data" / "tracts" / "hcp842"
+        target = tmp_path / "data" / "tracts" / "iit"
         target.mkdir(parents=True)
-        shutil.copy(tmp_path / "tracts.trk", target / "whole_brain_MNI.trk")
+        shutil.copy(tmp_path / "tracts.tck", target / "IIT3mean.tck")
         # the atlas the engine downloads, and its colour LUT, read from the
         # data directory
         fs = tmp_path / "data" / "tracts" / "fs"
@@ -243,32 +242,37 @@ def test_the_example_is_a_question_of_the_assistant():
 
 
 def test_the_engine_of_the_page_loads_the_tractogram_and_the_bundles():
-    cfg = engine_registry.get_engine_config("neurosynth_hcp842")
+    cfg = engine_registry.get_engine_config("neurosynth_iit")
     # neurosynth_tracts, then the commands that load the tractogram and the
     # wmparc, index the one by the other and import the bundles
     assert cfg["python_init"] == [NS_INIT, TRACTS]
     assert cfg["datalog_init"].rstrip().splitlines()[-4:] == [
-        '.load_tractogram("hcp842", kind="hcp842")',
+        '.load_tractogram("iit", "tracts/iit/IIT3mean.tck", '
+        'space="MNI152")',
         '.load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", '
         '"tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", '
         'space="MNI152")',
-        '.index_tracts("hcp842", "fs")',
+        '.index_tracts("iit", "fs")',
         '.import("bundles/freesurfer_queries.dl")',
     ]
-    # the atlas is downloaded, with the checksum of each file, into tracts/fs
+    # the tractogram and the atlas are downloaded, with the checksum of each
+    # file, into tracts/iit and tracts/fs
     assert [(d["name"] if "name" in d else d["url"].rsplit("/", 1)[-1],
              d["dest"]) for d in cfg["downloads"]] == [
+        ("IIT3mean.tck", "tracts/iit"),
         ("IIT3mean_desikan_2009.nii.gz", "tracts/fs"),
         ("FreeSurferColorLUT.txt", "tracts/fs")]
     assert all(len(d["md5"]) == 32 for d in cfg["downloads"])
     assert cfg["tractogram"] == {
-        "kind": "hcp842", "subsample": 20000, "step": 2, "seed": 0}
+        "path": "tracts/iit/IIT3mean.tck", "subsample": 15000, "step": 3,
+        "seed": 0}
+    assert cfg["downloads"][0]["md5"] == "6e9703e4e331cfb26f3eb2e29526e225"
     # the same studies as neurosynth: the same embeddings' cache key
     assert cfg["text_embeddings"] == engine_registry.get_engine_config(
         "neurosynth")["text_embeddings"]
 
 
-@pytest.mark.parametrize("engine_name", ["neurosynth_hcp842"])
+@pytest.mark.parametrize("engine_name", ["neurosynth_iit"])
 def test_the_engine_of_the_page_has_the_bundles_over_the_wmparc(
     engine, files
 ):
@@ -289,7 +293,7 @@ def test_the_engine_of_the_page_has_the_bundles_over_the_wmparc(
 def test_the_engine_of_the_page_has_its_own_questions():
     from neurolang_apps.utils.llm.examples import load_examples
 
-    bank = load_examples("neurosynth_hcp842")
+    bank = load_examples("neurosynth_iit")
     assert bank[:-2] == load_examples("neurosynth_tracts")
     assert "uncinate" in bank[-2].question
     assert bank[-2].queries["datalog"] == 'ans(x) :- uf(x, "left")'

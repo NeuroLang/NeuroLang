@@ -3,7 +3,7 @@
 //     neurolang-query -i --engine neurosynth --resolution 2
 //
 // It loads Pyodide, gets NeuroLang, installs the data of the engine the page
-// asks for (neurosynth, neurosynth_hcp842 or neurostore, see engines.js) that the bundle ships,
+// asks for (neurosynth, neurosynth_iit or neurostore, see engines.js) that the bundle ships,
 // builds the engine, and answers the page's submissions with the HTML
 // that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //

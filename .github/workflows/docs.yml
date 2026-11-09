@@ -117,7 +117,7 @@ jobs:
         # Neurosynth's studies (the same ones), but not NeuroStore, whose
         # studies take four hours to embed on the runner's CPU
         # (make_repl_bundle.py builds all of them by default).
-        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads --engine neurosynth --engine neurosynth_hcp842
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads --engine neurosynth --engine neurosynth_iit
 
       - name: Check the in-browser REPL's bundle
         id: check
