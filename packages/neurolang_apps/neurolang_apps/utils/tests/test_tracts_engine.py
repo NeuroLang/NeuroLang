@@ -318,3 +318,34 @@ def test_the_parcels_near_the_ends_are_precomputed(
                    for n in FAKE_LABELS["schaefer"][1:3])
     assert {(x, n) for x, _, n in near} == {
         (0, left), (0, right), (1, left)}
+
+
+def test_the_assistant_is_told_the_bundles_and_their_sorts(
+    uncinate, tmp_path, offline_atlases
+):
+    """The %% documentation of the vocabulary and of a bundle module, and
+    the sorts the engine declares, reach the catalog of the assistant."""
+    from neurolang_apps.utils.llm.context import EngineContext
+    from nl_tracts.wmql_vocab import bundle
+
+    tests, files = uncinate
+    files.write_files(tmp_path)
+    nl = engine_registry.build_engine("tracts", tmp_path / "data")
+    nl.execute_datalog_program(tests.example(tmp_path).replace(
+        'ans(x) :- uncinate(x, "left")', ""))
+    nl.execute_datalog_program(bundle("freesurfer_queries"))
+    context = EngineContext(nl, "tracts")
+    catalog = context.catalog()
+    assert catalog["uf"].columns == ("x", "h")
+    assert [a.sort for a in catalog["cst"].arguments] == [
+        "streamline", "hemisphere"]
+    lines = context.schema_summary().splitlines()
+    assert any(line.startswith(
+        "- uf(x: streamline, h: hemisphere) — Uncinate fasciculus: ")
+        for line in lines)
+    assert any(line.startswith(
+        "- traverses(x: streamline, term, h: hemisphere) — ")
+        for line in lines)
+    assert any(line.startswith('- hemisphere: a hemisphere: "left"')
+               for line in lines)
+    assert context.describe("uf").splitlines()[1].endswith("rows, e.g.:")

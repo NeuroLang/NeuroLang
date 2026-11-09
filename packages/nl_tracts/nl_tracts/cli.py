@@ -33,16 +33,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.program == "-":
         source, folders, title = sys.stdin.read(), args.include, "<stdin>"
+        qry_file = None
     else:
         path = Path(args.program)
         source, title = path.read_text(), path.name
         folders = [str(path.parent)] + args.include
+        qry_file = path.name
     terms = None if args.terms is None else set(
         load_term_mapping(args.terms)["term"])
     try:
         translation = translate(
             source, folders, terms=terms,
-            skip_unsupported=not args.strict, title=title)
+            skip_unsupported=not args.strict, title=title,
+            qry_file=qry_file)
     except WMQLError as e:
         print(f"nl-tracts: {e}", file=sys.stderr)
         return 1

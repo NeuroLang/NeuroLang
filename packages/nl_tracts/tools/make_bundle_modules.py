@@ -38,7 +38,7 @@ def module_text(name, data_dir):
     path = Path(data_dir) / f"{name}.qry"
     return translate(
         path.read_text(), [str(data_dir)], terms=terms,
-        skip_unsupported=True,
+        skip_unsupported=True, qry_file=path.name,
         title=f"tract_querier's {path.name}"
         + ("" if mapping is None else f", with the terms of {mapping}"),
     ).text

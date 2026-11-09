@@ -50,9 +50,16 @@
 .load_tractogram("hcp842", kind="hcp842")
 .index_tracts("hcp842", "fs")
 
-% in hemisphere h: one of the frontal gyri (| is "or"), through the insula,
+% In hemisphere h: one of the frontal gyri (| is "or"), through the insula,
 % with one end e in the temporal lobe in front of the amygdala, and none of
-% the regions it must avoid
+% the regions it must avoid. The %% block documents the predicate: the
+% query assistant and .predicates show it, and .view draws x, of the sort
+% streamline, as streamlines.
+%% uncinate(x: streamline, h: hemisphere)
+%% The uncinate fasciculus of hemisphere h: streamlines joining the
+%% orbitofrontal cortex and the middle and inferior frontal gyri to the
+%% anterior temporal lobe, in front of the amygdala, through the insula.
+%% It is tract_querier's UF.side of freesurfer_queries.qry.
 uncinate(x, h) :-
     (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
      | traverses(x, "inferior_frontal_gyrus", h)),
