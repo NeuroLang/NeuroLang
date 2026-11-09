@@ -72,6 +72,12 @@ BACKGROUND_MAX_VOXELS = 2 ** 24
 _STATIC = Path(__file__).parent / "static"
 
 
+def frame_hooks() -> str:
+    """Return the script that lets a page in a frame of the REPL take its
+    theme and say how tall it is, to inline in the page."""
+    return (_STATIC / "frame_hooks.js").read_text(encoding="utf-8")
+
+
 def encode_array(array: np.ndarray) -> str:
     """Return the bytes of *array*, deflated then base64-encoded."""
     raw = np.ascontiguousarray(array).tobytes()
@@ -481,12 +487,13 @@ def viewer_html(
             encoding="utf-8"
         ),
         "SCRIPT": (_STATIC / "brain_viewer.js").read_text(encoding="utf-8"),
+        "FRAME_HOOKS": frame_hooks(),
         "FAVICON": base64.b64encode(
             (_STATIC / "favicon.svg").read_bytes()
         ).decode("ascii"),
     }
     page = (_STATIC / "brain_viewer.html").read_text(encoding="utf-8")
     return re.sub(
-        r"__(TITLE|DATA|NIIVUE|SCRIPT|FAVICON)__",
+        r"__(TITLE|DATA|NIIVUE|SCRIPT|FRAME_HOOKS|FAVICON)__",
         lambda m: parts[m.group(1)], page,
     )

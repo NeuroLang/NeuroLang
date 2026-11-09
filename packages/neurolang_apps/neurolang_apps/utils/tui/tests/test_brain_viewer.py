@@ -163,6 +163,26 @@ class TestPage:
         ):
             assert control in html
 
+    def test_the_page_follows_the_theme_of_the_repl(self, html):
+        """In the REPL it is told the theme of the page, and says how tall
+        it is, so that its frame has no scrollbars: no colour of the page
+        is fixed to dark."""
+        style = html.split("<style>")[1].split("</style>")[0]
+        assert ":root[data-theme=light]" in style
+        assert "prefers-color-scheme" in style
+        for rule in ("body {", "input, select, button {", "#readout b {"):
+            body = style.split(rule)[1].split("}")[0]
+            assert "var(--" in body and "#" not in body
+        assert "'neurolang-theme'" in html
+        assert "'neurolang-height'" in html
+        assert "parent.postMessage" in html
+
+    def test_the_canvas_and_the_colour_bar_follow_the_theme(self, html):
+        script = html.split("<script>")[-1]
+        assert "backColor" in script and "neurolang-theme" in script
+        assert "rgba(17, 17, 17, 0.75)" not in script
+        assert "'#ddd'" not in script
+
     def test_initial_state(self, html):
         state = _state(html)
         assert state["initial"] == {
@@ -227,7 +247,8 @@ class TestPage:
         ).read_text(encoding="utf-8")
         assert bundle in html
         assert "<script src" not in html
-        assert html.count("</script>") == 3
+        # the data, the hooks of the frame, NiiVue and the viewer
+        assert html.count("</script>") == 4
 
     def test_no_external_urls(self, html):
         """No URL outside the NiiVue bundle, whose comments have some,

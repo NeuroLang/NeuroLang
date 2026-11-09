@@ -35,6 +35,7 @@ from nl_expr.expressions import Constant, FunctionApplication, Symbol
 from nl_expr.logic import Conjunction, Implication, Negation
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils.tui.brain_viewer import frame_hooks
 from neurolang_apps.utils.tui.commands import command
 from neurolang_apps.utils.tui.provenance import (
     _datalog_queries, _squall_queries
@@ -1093,15 +1094,23 @@ def _legend(graph: QueryGraph) -> str:
     return "<ul>" + "".join(items) + "</ul>"
 
 
+# The dark colours that differ from the light ones, which are the default:
+# those of the theme the REPL sends the page (see frame_hooks.js), else the
+# system's.
+_DARK = (
+    "color-scheme: dark; --bg: #0d1117; --text: #e6edf3; --muted: #9198a1; "
+    "--edge: #6e7681; --data: #172554; --rand: #431407; --rule: #082f49; "
+    "--prob: #2e1065; --ans: #052e16; --neg: #f87171;"
+)
+
 _STYLE = """
-:root { --bg: #fff; --text: #1f2328; --muted: #59636e; --edge: #8c959f;
-  --data: #dbeafe; --data-b: #2563eb; --rand: #ffedd5; --rand-b: #ea580c;
-  --rule: #e0f2fe; --rule-b: #0369a1; --prob: #ede9fe; --prob-b: #7c3aed;
-  --ans: #dcfce7; --ans-b: #15803d; --neg: #dc2626; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0d1117;
-  --text: #e6edf3; --muted: #9198a1; --edge: #6e7681; --data: #172554;
-  --rand: #431407; --rule: #082f49; --prob: #2e1065; --ans: #052e16;
-  --neg: #f87171; } }
+:root { color-scheme: light; --bg: #fff; --text: #1f2328; --muted: #59636e;
+  --edge: #8c959f; --data: #dbeafe; --data-b: #2563eb; --rand: #ffedd5;
+  --rand-b: #ea580c; --rule: #e0f2fe; --rule-b: #0369a1; --prob: #ede9fe;
+  --prob-b: #7c3aed; --ans: #dcfce7; --ans-b: #15803d; --neg: #dc2626; }
+:root[data-theme=dark] { __DARK__ }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { __DARK__ } }
 body { margin: 0; padding: .75rem 1rem; background: var(--bg);
   color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
 h1 { font-size: 1rem; margin: 0 0 .25rem; }
@@ -1169,7 +1178,7 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
   monospace; margin: .5rem 0 0; padding: .5rem; border-radius: 6px;
   border: 1px solid var(--edge); }
 #detail:empty { display: none; }
-"""
+""".replace("__DARK__", _DARK)
 
 # Clicking a node shows its details and what it depends on, fading the
 # rest; clicking elsewhere shows everything again.
@@ -1270,7 +1279,8 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
         "</svg></div>"
         f'<pre id="detail"></pre>{_legend(graph)}'
         f'<script type="application/json" id="nodes">{data}</script>'
-        f"<script>{_SCRIPT}</script></body></html>"
+        f"<script>{frame_hooks()}</script><script>{_SCRIPT}</script>"
+        "</body></html>"
     )
 
 

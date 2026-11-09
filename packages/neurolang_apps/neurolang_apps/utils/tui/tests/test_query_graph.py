@@ -307,6 +307,18 @@ def test_the_page_draws_every_node_and_explains_the_kinds(nl):
     assert 'class="histogram"' not in page
 
 
+def test_the_page_follows_the_theme_of_the_repl_and_says_its_height(nl):
+    page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
+    style = page.split("<style>")[1].split("</style>")[0]
+    # Light is the default, dark that of the REPL's dark theme or, with no
+    # theme sent, of the system's.
+    assert ":root[data-theme=dark]" in style
+    assert ":root:not([data-theme])" in style
+    assert "__DARK__" not in style
+    assert "'neurolang-theme'" in page and "'neurolang-height'" in page
+    assert "parent.postMessage" in page
+
+
 def test_the_page_draws_the_distribution_of_the_probabilities(nl):
     graph = query_graph(nl, CO_ACTIVATION)
     frame = pd.DataFrame({"r1": ["A", "A"], "r2": ["B", "C"], "p": [.5, 1.]})

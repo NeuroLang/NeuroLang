@@ -16,6 +16,7 @@ import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
 import { Session, parseSession, replayTexts } from "./session.js";
 import { PmcLookup } from "./study_links.js";
+import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
 import { bundleEngines, engineChoice, withEngine } from "./engines.js";
 
@@ -435,11 +436,22 @@ function showTables({ tables, prompt }) {
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
 function showViewer(page) {
-  const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: page, title: "NeuroLang brain viewer" });
+  const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(page, theme()), title: "NeuroLang brain viewer" });
   show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
 }
 
 let graphUrl = null; // the address of the page of the graph shown
+
+// The pages in frames, the brain viewer and the graph: they are as tall as
+// they say, so that they have no scrollbars within the page, and have its theme.
+const resultFrames = () => [...document.querySelectorAll("#brain iframe, #graph iframe")];
+const theme = () => document.documentElement.dataset.theme;
+window.addEventListener("message", (event) => {
+  const asked = frameHeight(event, resultFrames());
+  if (!asked) return;
+  const { frame, height } = asked;
+  frame.style.height = `${height + frame.offsetHeight - frame.clientHeight}px`; // its border too
+});
 
 // The graph of the query a reply ran, in the graph tab, shown when the reply
 // has no table (.graph); a query that has no graph hides that of the last one.
@@ -449,10 +461,10 @@ function showGraph({ graph, tables }) {
     if (shown) $("tab-graph").hidden = true;
     return;
   }
-  const page = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: graph, title: "Graph of the query" });
+  const page = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(graph, theme()), title: "Graph of the query" });
   // The graph is often wider than the page: it can open in a tab of its own.
   if (graphUrl) URL.revokeObjectURL(graphUrl);
-  graphUrl = URL.createObjectURL(new Blob([graph], { type: "text/html" }));
+  graphUrl = URL.createObjectURL(new Blob([themed(graph, theme())], { type: "text/html" }));
   const open = Object.assign(document.createElement("a"), { href: graphUrl, target: "_blank", rel: "noopener", textContent: "Open the graph in a new tab" });
   const nodes = [Object.assign(document.createElement("p"), { className: "note" }), page];
   nodes[0].append(open);
@@ -544,6 +556,7 @@ function applyTheme(choice) {
   document.documentElement.dataset.theme = light ? "light" : "dark";
   document.documentElement.dataset.themeChoice = choice;
   themeButtons.forEach((button) => button.setAttribute("aria-pressed", button.dataset.theme === choice));
+  for (const frame of resultFrames()) frame.contentWindow?.postMessage(themeMessage(theme()), "*");
 }
 const chosen = () => store("localStorage")?.getItem(THEME) || "system";
 for (const button of themeButtons) {
