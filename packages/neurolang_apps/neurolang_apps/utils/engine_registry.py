@@ -1235,13 +1235,32 @@ def _register_atlas_activation(
     nl.symbol_table[name].value.might_have_duplicates = False
 
 
+def _register_atlas_points(nl, img, names: dict, settings: dict) -> None:
+    """
+    Register ``{predicate_name}(x, y, z, label)``: the centre of every
+    voxel of the atlas image *img* labelled by a region of *names* (value
+    -> name), in millimetres through its affine, with the name of its
+    region; stored, so that ``EUCLIDEAN`` joins it with a tree.
+    """
+    import pandas as pd
+
+    data = np.asanyarray(img.dataobj).astype(np.int64)
+    voxels = np.argwhere(np.isin(data, list(names)))
+    points = nib.affines.apply_affine(img.affine, voxels)
+    nl.add_tuple_set(pd.DataFrame({
+        "x": points[:, 0], "y": points[:, 1], "z": points[:, 2],
+        "label": [names[v] for v in data[tuple(voxels.T)].tolist()],
+    }), name=settings["predicate_name"])
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
-    predicates: ``{predicate_name}(label, region)``, and with ``activated``
-    the studies activating each region (see
+    predicates: ``{predicate_name}(label, region)``, with ``points`` its
+    voxels in millimetres (see :func:`_register_atlas_points`), and with
+    ``activated`` the studies activating each region (see
     :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
     which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
@@ -1249,7 +1268,7 @@ def _load_deterministic_atlas(
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated")
+        if k not in ("predicate_name", "activated", "points")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
@@ -1296,6 +1315,8 @@ def _load_deterministic_atlas(
 
     nl.add_tuple_set(rows, name=pred_name)
     _register_atlas_labels(nl, atlas_name, names)
+    if params.get("points"):
+        _register_atlas_points(nl, img, names, params["points"])
     if params.get("activated"):
         _register_atlas_activation(
             nl, names, img, params["activated"], pred_name, cache_dir,
@@ -1476,6 +1497,11 @@ def _solver_mixins(cfg, engine_name) -> list:
             problem = None if isinstance(mixin, type) else "is not a class"
         except (ImportError, AttributeError) as error:
             problem = f"cannot be loaded: {error}"
+            if isinstance(error, ModuleNotFoundError):
+                problem += (
+                    "; install the package that provides it (the "
+                    "engine's description, --list-engines, says which)"
+                )
         if not colon:
             problem = "is not of the form module:Class"
         if problem:

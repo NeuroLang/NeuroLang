@@ -10,8 +10,134 @@ engines:
   # ``assistant_examples`` lists are concatenated, parent first, and any
   # other value is overridden by the extending engine.  Set a mapping
   # entry to ``null`` to drop it.
+
+  # The atlases of the MNI152 brain: the classical (gyral and sulcal)
+  # anatomy of the cortex, Destrieux, and the functional anatomy, Schaefer
+  # (cortical networks) and Tian (subcortex), each a relation (label,
+  # region) of the engines that extend this one; their label images are
+  # the grids of the engine (``grids``) and the values of their regions
+  # ``atlas_labels``.
+  mni_atlases:
+    abstract: true
+    description: >
+      The Destrieux, Schaefer and Tian atlases of the MNI152 brain, as
+      relations of a label and its region.
+    # ``points``: the centres of the voxels of each region, in millimetres,
+    # a stored relation that EUCLIDEAN(...) <= r joins with a tree.
+    atlases:
+      schaefer:
+        predicate_name: schaefer
+        n_rois: 100
+        resolution_mm: 2
+        yeo_networks: 17
+        points: {predicate_name: schaefer_points}
+      destrieux:
+        predicate_name: destrieux
+        points: {predicate_name: destrieux_points}
+      tian:
+        predicate_name: tian
+        scale: 2
+        points: {predicate_name: tian_points}
+    datalog_init: |
+      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
+      schaefer_label(l) :- schaefer(l, r)
+      labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+    hidden_predicates: [schaefer_voxels]
+    sorts:
+      mni:
+        columns: [x, y, z]
+        type: float
+        space: mm
+        description: "a point in MNI space, in millimetres, in 3D"
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+        description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
+      label:
+        columns: [label]
+        type: str
+        atlas: schaefer
+        description: "a Schaefer 2018 parcel label"
+      destrieux_label:
+        columns: [label]
+        type: str
+        atlas: destrieux
+        description: "a region of the Destrieux 2009 cortical atlas"
+      tian_label:
+        columns: [label]
+        type: str
+        atlas: tian
+        description: "a region of the Tian 2020 subcortical atlas"
+      region:
+        columns: [region]
+        type: ExplicitVBR
+        description: "a brain region"
+    predicates:
+      schaefer:
+        description: "Schaefer 2018 parcel label and its region"
+        arguments:
+          - label
+          - region
+      schaefer_label:
+        description: "Every Schaefer 2018 parcel label"
+        arguments:
+          - label
+      destrieux:
+        description: >-
+          Destrieux 2009 cortical atlas (gyri and sulci): region name and
+          region; names start with the hemisphere, L or R
+        arguments:
+          - destrieux_label
+          - region
+      tian:
+        description: >-
+          Tian 2020 subcortical atlas, scale 2 (32 regions): region name and
+          region; names end with the hemisphere, lh or rh
+        arguments:
+          - tian_label
+          - region
+      schaefer_voxels:
+        description: >-
+          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
+        arguments:
+          - atlas_voxel
+          - label
+      labels:
+        description: >-
+          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
+          grid (not the grid of voxel and reports)
+        arguments:
+          - label
+          - atlas_voxel
+      schaefer_points:
+        description: >-
+          The centre of each voxel of the Schaefer atlas, in MNI
+          millimetres, and its parcel; EUCLIDEAN(x, y, z, x2, y2, z2) <= r
+          with the points of another stored relation finds those near
+          them
+        arguments:
+          - mni
+          - label
+      destrieux_points:
+        description: >-
+          The centre of each voxel of the Destrieux atlas, in MNI
+          millimetres, and its region (see schaefer_points)
+        arguments:
+          - mni
+          - destrieux_label
+      tian_points:
+        description: >-
+          The centre of each voxel of the Tian atlas, in MNI millimetres,
+          and its region (see schaefer_points)
+        arguments:
+          - mni
+          - tian_label
+
   coordinate_meta_analysis:
     abstract: true
+    extends: mni_atlases
     description: >
       Shared setup of the coordinate-based meta-analysis engines
       (neurosynth, neurostore): reported activation peaks, TF-IDF term
@@ -29,31 +155,19 @@ engines:
       # and NiMARE do; ``tal`` converts them as Talairach; ``drop`` leaves
       # them out. An engine extending this one can set its own value.
       unknown_space: mni
-    # Each atlas with ``activated`` also registers which studies activate
-    # its regions: ``{atlas}_activated(label, study)`` when a peak of the
-    # study (``peak_mni``, in millimetres) is within ``radius_mm`` of a
-    # voxel of the region.  Destrieux is the classical (gyral and sulcal)
-    # anatomy of the cortex; Schaefer (cortical networks) and Tian
-    # (subcortex) the functional anatomy.
+    # Each atlas of mni_atlases, with ``activated``, also registers which
+    # studies activate its regions: ``{atlas}_activated(label, study)`` when
+    # a peak of the study (``peak_mni``, in millimetres) is within
+    # ``radius_mm`` of a voxel of the region.
     atlases:
       schaefer:
-        predicate_name: schaefer
-        n_rois: 100
-        resolution_mm: 2
-        yeo_networks: 17
         activated: {predicate_name: schaefer_activated, radius_mm: 3}
       destrieux:
-        predicate_name: destrieux
         activated: {predicate_name: destrieux_activated, radius_mm: 3}
       tian:
-        predicate_name: tian
-        scale: 2
         activated: {predicate_name: tian_activated, radius_mm: 3}
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
-      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
-      schaefer_label(l) :- schaefer(l, r)
-      labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
@@ -134,8 +248,8 @@ engines:
     # millimetres, converted to the nearest voxel of the template with
     # the inverse of its affine.  A result's columns take the sort of the
     # argument of the predicate their variable comes from in the query,
-    # else of the sort they are named as.  ``atlas_voxel`` indexes the
-    # grid of the 2 mm Schaefer atlas, not the template's.
+    # else of the sort they are named as.  ``atlas_voxel`` (mni_atlases)
+    # indexes the grid of the 2 mm Schaefer atlas, not the template's.
     # A sort named ``streamline`` holds streamline ids, which ``.view``
     # draws with an engine giving their points (``streamline_points``).
     sorts:
@@ -164,36 +278,6 @@ engines:
         type: int
         space: voxel
         description: "a voxel of the MNI template grid, in 3D"
-      mni:
-        columns: [x, y, z]
-        type: float
-        space: mm
-        description: "a point in MNI space, in millimetres, in 3D"
-      atlas_voxel:
-        columns: [i, j, k]
-        type: int
-        space: voxel
-        grid: schaefer
-        description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
-      label:
-        columns: [label]
-        type: str
-        atlas: schaefer
-        description: "a Schaefer 2018 parcel label"
-      destrieux_label:
-        columns: [label]
-        type: str
-        atlas: destrieux
-        description: "a region of the Destrieux 2009 cortical atlas"
-      tian_label:
-        columns: [label]
-        type: str
-        atlas: tian
-        description: "a region of the Tian 2020 subcortical atlas"
-      region:
-        columns: [region]
-        type: ExplicitVBR
-        description: "a brain region"
       query:
         columns: [query]
         type: str
@@ -453,15 +537,6 @@ engines:
         arguments:
           - cogat_class
           - cogat_class
-      schaefer:
-        description: "Schaefer 2018 parcel label and its region"
-        arguments:
-          - label
-          - region
-      schaefer_label:
-        description: "Every Schaefer 2018 parcel label"
-        arguments:
-          - label
       schaefer_activated:
         description: >-
           Studies activating a Schaefer parcel (cortical networks): one of
@@ -469,13 +544,6 @@ engines:
         arguments:
           - label
           - study
-      destrieux:
-        description: >-
-          Destrieux 2009 cortical atlas (gyri and sulci): region name and
-          region; names start with the hemisphere, L or R
-        arguments:
-          - destrieux_label
-          - region
       destrieux_activated:
         description: >-
           Studies activating a Destrieux region: one of their peaks is within
@@ -483,13 +551,6 @@ engines:
         arguments:
           - destrieux_label
           - study
-      tian:
-        description: >-
-          Tian 2020 subcortical atlas, scale 2 (32 regions): region name and
-          region; names end with the hemisphere, lh or rh
-        arguments:
-          - tian_label
-          - region
       tian_activated:
         description: >-
           Studies activating a Tian subcortical region: one of their peaks is
@@ -503,19 +564,6 @@ engines:
         arguments:
           - mni
           - study
-      schaefer_voxels:
-        description: >-
-          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
-        arguments:
-          - atlas_voxel
-          - label
-      labels:
-        description: >-
-          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
-          grid (not the grid of voxel and reports)
-        arguments:
-          - label
-          - atlas_voxel
 
   neurosynth:
     extends: coordinate_meta_analysis
@@ -616,6 +664,25 @@ engines:
         arguments:
           - label
           - region
+
+  tracts:
+    extends: mni_atlases
+    description: >
+      Tractography (the package nl_tracts, extra tracts of neurolang-apps):
+      the commands .load_tractogram and .index_tracts of a program build
+      the relations of a tractogram, in MNI152, indexed by the atlases of
+      the engine (.index_tracts(t, "destrieux"), "tian" or "schaefer") or
+      by one of its own (.load_tract_atlas), and the vocabulary of
+      tractography, rules over them, says where streamlines go:
+      traverses(x, term, h), endpoint_in(x, e, term, h), anterior_of(x,
+      term, h)... A label of an atlas of the engine, label("destrieux", l,
+      name, h), is the name of its relation, destrieux(name, region). A
+      result of streamline ids x is drawn by .view.
+    solver_mixins: ["nl_tracts.frontend:TractsCommandsMixin"]
+    # the vocabulary (nl_tracts/vocabulary.dl), the functions of the ids x
+    # and the hooks of .view, over what the commands load; .index_tracts
+    # finds the atlases of the engine, loaded after it
+    python_init: "nl_tracts.frontend"
 
   # Example template usage (commented out — uncomment to enable):
   #

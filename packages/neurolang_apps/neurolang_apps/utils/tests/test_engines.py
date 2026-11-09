@@ -416,7 +416,8 @@ _FAKE_ATLASES = {
 def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
-    with the studies activating them, as ``_phase_atlases``.
+    with the studies activating them and the points *cfg* asks for, as
+    ``_phase_atlases``.
     """
     import nibabel as nib
 
@@ -433,6 +434,11 @@ def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
         engine_registry._register_atlas_activation(
             nl, {1: label}, image, {"radius_mm": 3}, atlas
         )
+        points = cfg["atlases"][atlas].get("points")
+        if points:
+            engine_registry._register_atlas_points(
+                nl, image, {1: label}, points
+            )
 
 
 # The predicates of a free-text query: computed for the text a query gives
