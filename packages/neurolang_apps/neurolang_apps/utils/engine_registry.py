@@ -6,9 +6,11 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``), whose
-  ``init_engine`` is also given the keyword arguments of
-  ``python_init_options``;
+* **Python initialisation scripts** (``python_init``): a module name, or
+  a list of them, whose ``init_engine(nl, mask, data_dir, **options)``
+  run in order, each given all the keyword arguments of
+  ``python_init_options`` (an ``init_engine`` takes ``**options`` for
+  those of the others);
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -308,7 +310,10 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
+    "python_init", "hidden_predicates",
 })
+# Keys whose value is a list, or a single item standing for a list of one.
+_LIST_KEYS = frozenset({"python_init"})
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
@@ -348,7 +353,10 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     * any other value replaces the inherited one.
     """
     configs = [
-        {k: v for k, v in c.items() if k not in _NON_INHERITED_KEYS}
+        {
+            k: [v] if k in _LIST_KEYS and isinstance(v, str) else v
+            for k, v in c.items() if k not in _NON_INHERITED_KEYS
+        }
         for c in configs
     ]
     merged = OmegaConf.to_container(OmegaConf.merge(*configs))
@@ -359,13 +367,40 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     return _without_nulls(merged)
 
 
-def resolve_engine_config(
+def _linearized(
     engines: Dict[str, Dict[str, Any]],
     name: str,
     _stack: Tuple[str, ...] = (),
+) -> List[str]:
+    """
+    Return *name* after its bases, depth first in the order of their
+    ``extends``, each engine once: a base two of them extend is merged
+    once, where it is first reached.
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    order = []
+    for base in _extends(engines[name]):
+        for engine in _linearized(engines, base, _stack + (name,)):
+            if engine not in order:
+                order.append(engine)
+    return order + [name]
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
 ) -> Dict[str, Any]:
     """
-    Return the configuration of *name* with all ``extends`` resolved.
+    Return the configuration of *name* with all ``extends`` resolved: the
+    configurations of its bases and its own, merged in the order of
+    :func:`_linearized`.
 
     Parameters
     ----------
@@ -381,19 +416,9 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    if name in _stack:
-        chain = " -> ".join(_stack + (name,))
-        raise ValueError(f"Cyclic engine inheritance: {chain}")
-    if name not in engines:
-        available = ", ".join(engines.keys())
-        raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
-        )
-    raw = engines[name] or {}
     return _merge_engine_configs(*(
-        resolve_engine_config(engines, base, _stack + (name,))
-        for base in _extends(raw)
-    ), raw)
+        engines[engine] or {} for engine in _linearized(engines, name)
+    ))
 
 
 @functools.lru_cache(maxsize=None)
@@ -1392,23 +1417,22 @@ def _phase_base_symbols(nl, cfg, mask):
 
 def _phase_python_init(nl, cfg, mask, data_dir):
     """
-    Run the ``init_engine`` of the ``python_init`` module.
+    Run the ``init_engine`` of each ``python_init`` module, in order.
 
     An init that takes a ``cache_dir`` is given the directory where the
     tables of the engine are kept (see
     :mod:`~neurolang_apps.utils.engine_cache`), or None without cache.
     """
-    py_init = cfg.get("python_init")
-    if not py_init:
-        return
     import importlib
     import inspect
 
-    mod = importlib.import_module(py_init)
-    kwargs = dict(cfg.get("python_init_options", {}))
-    if "cache_dir" in inspect.signature(mod.init_engine).parameters:
-        kwargs["cache_dir"] = nl.engine_cache_dir
-    mod.init_engine(nl, mask, data_dir, **kwargs)
+    py_init = cfg.get("python_init") or []
+    for module in [py_init] if isinstance(py_init, str) else py_init:
+        mod = importlib.import_module(module)
+        kwargs = dict(cfg.get("python_init_options", {}))
+        if "cache_dir" in inspect.signature(mod.init_engine).parameters:
+            kwargs["cache_dir"] = nl.engine_cache_dir
+        mod.init_engine(nl, mask, data_dir, **kwargs)
 
 
 def _solver_mixins(cfg, engine_name) -> list:

@@ -241,7 +241,10 @@ class TestEngineRegistry:
         nl_tracts) brings its rules with its python_init."""
         for name in engine_registry.list_engine_names():
             cfg = engine_registry.get_engine_config(name)
-            if cfg.get("python_init", "").startswith("neurolang_apps."):
+            if any(
+                module.startswith("neurolang_apps.")
+                for module in cfg.get("python_init", [])
+            ):
                 code = cfg.get("datalog_init")
                 assert code, (
                     f"Engine {name!r} has python_init but no datalog_init"
