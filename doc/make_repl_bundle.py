@@ -3,8 +3,8 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
 - for each engine of the page (``neurosynth``, the page's default,
-  ``neurosynth_iit`` and ``neurostore``), the data it needs, as a zip in the layout of its data
-  directory, and
+  ``neurosynth_iit`` and ``neurostore``), the data it needs, as a zip in
+  the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
 - with torch installed (the ``embeddings`` extra), the files of the
@@ -311,7 +311,8 @@ def reduce_tractogram(data_dir: Path, entry) -> None:
         path, path, int(entry["subsample"]), int(entry.get("step", 1)),
         int(entry.get("seed", 0)),
     )
-    print(f"The tractogram of the page: {path.stat().st_size / 1048576:.1f} MB")
+    size = path.stat().st_size / 1048576
+    print(f"The tractogram of the page: {size:.1f} MB")
 
 
 def zip_directory(directory: Path, archive: Path) -> None:

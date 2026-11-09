@@ -277,8 +277,8 @@ def test_the_engine_of_the_page_has_the_bundles_over_the_wmparc(
     engine, files
 ):
     """The tractogram is loaded and indexed by the wmparc (a designed one
-    here, as the engine downloads it) and the uncinate of tract_querier answers at the prompt, as
-    in uncinate.dl."""
+    here, as the engine downloads it) and the uncinate of tract_querier
+    answers at the prompt, as in uncinate.dl."""
     atlases = rows(engine.execute_datalog_program("ans(a) :- atlas(a)"))
     assert atlases == {("fs",)}
     assert {"uf", "af", "cst", "ilf", "ioff"} <= set(engine.symbols)
