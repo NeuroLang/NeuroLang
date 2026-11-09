@@ -233,12 +233,14 @@ def _fake_bundle(bundle, monkeypatch, failing=()):
     monkeypatch.setattr(bundle, "build_wheels", lambda out: ["w.whl"])
     monkeypatch.setattr(bundle, "write_highlight_words", lambda out: None)
 
-    def bundle_engine(engine, output, embedded=None, downloads=None):
+    def bundle_engine(engine, output, embedded=None, downloads=None,
+                      shared=False):
         if engine in failing:
             raise RuntimeError("no network")
         return {
             "label": bundle.LABELS[engine], "data": bundle.data_zip(engine),
-            "files": {f"{engine}/model.npz": [f"{engine}-model.npz"]},
+            "files": {} if shared else {
+                f"{engine}/model.npz": [f"{engine}-model.npz"]},
             "cache_keys": {},
         }
 
@@ -261,6 +263,36 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     # What a page of before the choice of the engine reads: the default's.
     assert described["data"] == "neurolang-neurosynth-data.zip"
     assert described["files"] == {"neurosynth/model.npz": ["neurosynth-model.npz"]}
+
+
+def test_an_engine_of_shared_embeddings_is_built_alone(
+    bundle, monkeypatch, tmp_path
+):
+    """Without the engine whose studies it has in the bundle, the engine has
+    its own embeddings files (taken from those kept for the other)."""
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path, engines=("neurosynth_iit",))
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert described["default"] == "neurosynth_iit"
+    assert described["engines"]["neurosynth_iit"]["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth_iit-model.npz"]}
+
+
+def test_the_embeddings_of_an_engine_are_kept_as_those_of_another(
+    bundle, tmp_path, monkeypatch
+):
+    """``kept_as`` reads and saves the embeddings under the other engine's
+    directory of the kept data."""
+    seen = []
+    monkeypatch.setattr(bundle.shutil, "copytree",
+                        lambda src, dst, **kw: seen.append(Path(src)))
+    kept = tmp_path / "kept" / "neurosynth" / "embeddings"
+    kept.mkdir(parents=True)
+    (tmp_path / "data").mkdir()
+    bundle.export_embeddings(
+        tmp_path / "data", tmp_path, tmp_path / "kept", "neurosynth_iit",
+        "neurosynth")
+    assert kept in seen
 
 
 def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(

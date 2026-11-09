@@ -349,7 +349,8 @@ def bundle_name(path: Path, engine: str = ENGINE) -> str:
 
 
 def export_embeddings(
-    data_dir: Path, output: Path, embedded=None, engine: str = ENGINE
+    data_dir: Path, output: Path, embedded=None, engine: str = ENGINE,
+    kept_as: str = None,
 ) -> dict:
     """
     Write in *output* the files of the engine's text embeddings: for each
@@ -357,6 +358,9 @@ def export_embeddings(
     documents. Both are taken from the data directory *embedded* when it
     has them, and saved in it when made, which needs torch: without it,
     or if they cannot be made, the page goes without them.
+
+    They are kept in *embedded* under the engine's name, or *kept_as*, an
+    engine of the same studies, whose embeddings they are.
 
     They are left out of *data_dir*, not to be zipped with the data.
     Return the names of the files of each, by its path in the data
@@ -368,7 +372,7 @@ def export_embeddings(
     emb_dir = data_dir / engine / "embeddings"
     saved = None
     if embedded is not None:
-        saved = Path(embedded) / engine / "embeddings"
+        saved = Path(embedded) / (kept_as or engine) / "embeddings"
     if saved is not None and saved.exists():
         shutil.copytree(saved, emb_dir, dirs_exist_ok=True)
     torch = text_embeddings._torch_available()
@@ -398,13 +402,16 @@ def export_embeddings(
 
 
 def bundle_engine(
-    engine: str, output: Path, embedded=None, downloads=None
+    engine: str, output: Path, embedded=None, downloads=None,
+    shared: bool = False,
 ) -> dict:
     """
     Build the data of *engine* for the page and write its zip in *output*,
     in parts if it is larger than GitHub takes; return its entry of
     ``bundle.json``: its label, its data (the name of the zip, or those of its
-    parts, which the page joins) and the files of its text embeddings.
+    parts, which the page joins) and the files of its text embeddings, none
+    if *shared*, its embeddings being those of the engine of the same
+    studies (:data:`EMBEDDINGS_FROM`) in the bundle.
     """
     # What an engine downloads is kept apart from that of the others, so that
     # the zip of an engine holds its data only.
@@ -431,9 +438,10 @@ def bundle_engine(
             name: index.cache_key for name, index in
             getattr(nl, "text_embedding_indexes", {}).items()
         }
-        # an engine with the studies of another has its embeddings
-        files = {} if engine in EMBEDDINGS_FROM else export_embeddings(
-            data_dir, output, embedded, engine
+        # an engine with the studies of another has its embeddings: those
+        # of the bundle, or else those kept for it
+        files = {} if shared else export_embeddings(
+            data_dir, output, embedded, engine, EMBEDDINGS_FROM.get(engine)
         )
         archive = Path(tmp) / data_zip(engine)
         zip_directory(data_dir, archive)
@@ -472,10 +480,11 @@ def main(
     built = {}
     for engine in engines:
         try:
+            shared = EMBEDDINGS_FROM.get(engine) in built
             built[engine] = bundle_engine(
-                engine, output, embedded, downloads
+                engine, output, embedded, downloads, shared
             )
-            if engine in EMBEDDINGS_FROM:
+            if shared:
                 share_embeddings(
                     engine, built[engine], built[EMBEDDINGS_FROM[engine]]
                 )
