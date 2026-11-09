@@ -61,8 +61,8 @@ jobs:
           uv pip install --index-url https://download.pytorch.org/whl/cpu torch
           uv pip install adapters
 
-      # The studies' embeddings take their abstracts from PubMed and hours
-      # on a CPU (an hour for Neurosynth's, four for NeuroStore's): they are
+      # The studies' embeddings take their abstracts from PubMed and an hour
+      # on a CPU for Neurosynth's: they are
       # kept from one build to the next. The newest saved ones are restored;
       # each index checks that they are its own (EmbeddingIndex.cache_key)
       # and embeds again those that are not. They are saved below under the
@@ -105,7 +105,9 @@ jobs:
         continue-on-error: true
         # leaves the time to save what it embedded before the job's limit
         timeout-minutes: 300
-        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads
+        # Neurosynth only: NeuroStore's studies take four hours to embed on
+        # the runner's CPU (make_repl_bundle.py builds both by default).
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads --engine neurosynth
 
       - name: Check the in-browser REPL's bundle
         id: check
