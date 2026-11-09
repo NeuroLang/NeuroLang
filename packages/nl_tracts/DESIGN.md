@@ -1407,11 +1407,13 @@ Recommendations in bold; none changes a decision of section 2.
     rule into the vocabulary (Magic Sets through negation and aggregation,
     15.30).
 39. **The vocabulary is not declared in `engines.yaml`** (`predicates`,
-    `sorts`): the query assistant and `--list-predicates` see the
-    predicates the engine has, not their documentation, which is in the
-    `%` comments of `vocabulary.dl`. **Open**: give `engines.yaml` the
-    sort `streamline` and the predicates' arguments, or let the apps read
-    the comments of an engine's rules.
+    `sorts`): the query assistant and `--list-predicates` saw the
+    predicates the engine has, not their documentation, which was in the
+    `%` comments of `vocabulary.dl`. **Done**: the apps read the `%%`
+    documentation of an engine's rules (16.2), the engine `tracts` declares
+    the sorts. `neurolang-query --list-predicates` reads `engines.yaml`
+    without building the engine, so it lists the documented predicates of
+    the program given with `-f` only, not the vocabulary's.
 
 ## 16. The vocabulary of tractography
 
@@ -1475,9 +1477,17 @@ The atlas is not an argument: each predicate holds over every atlas loaded
 with several, a predicate is the union over them, and `term_box_*` is the
 box of the term over all of them (15.31).
 
-The file is documented by `%` comments, one per predicate with its
-arguments (a test checks it), so that it reads as the reference of the
-vocabulary, for a person or for the query assistant.
+Each predicate is documented by the `%%` block before its first rule (the
+doc comments of NeuroLang's Datalog): its signature, with the sort of each
+argument, `traverses(x: streamline, term: term, h: hemisphere)`, then what it
+means; the file reads as the reference of the vocabulary, and the engine
+keeps the documentation, which the query assistant is told and the REPL's
+`.predicates` shows. The sorts, `streamline`, `end`, `term`, `hemisphere`,
+`axis`, `atlas`, `label_id` and `coordinate`, are declared by the engine
+`tracts` with their descriptions (a term is one of the atlas's term
+mapping, `"left"`, `"right"` or `"none"` a hemisphere...); `streamline` is
+the sort `.view` draws as streamlines. A test checks that every predicate is
+documented with the sorts of its arguments.
 
 ### 16.3 How it enters a program
 
@@ -1703,9 +1713,12 @@ modules `nl_tracts/bundles/*.dl`, the `.qry` files of tract_querier
 translated by `tools/make_bundle_modules.py`.
 
 It writes a WMQL program as a person writes it in the vocabulary of
-section 16: **one predicate per query**, each a rule or two, with the WMQL
-statement over it as a `%` comment, and a header that says what the module
-needs (its terms) and what it leaves out. It is not the exact transpiler of
+section 16: **one predicate per query**, each a rule or two, documented by
+a `%%` block, and a header that says what the module needs (its terms) and
+what it leaves out. The block (17.6) gives the predicate's signature with
+its sorts, `uf(x: streamline, h: hemisphere)`, the full name of the bundle
+and a sentence on what it is, then the WMQL statement it is translated
+from. It is not the exact transpiler of
 section 11, whose label-set programs reproduce tract_querier tractogram by
 tractogram and are thousands of rules; its semantics is the vocabulary's,
 natural (16.5), and 17.3 says where that differs from tract_querier's. The
@@ -1900,3 +1913,45 @@ predicate of the vocabulary they read is computed for every term and
 hemisphere, and the 37 rules, many with ten negations or more, are
 translated into relational algebra. Before the fix of the negations (17.4),
 they did not finish.
+
+### 17.6 The documentation of the bundles
+
+`translate(..., qry_file=...)` documents each predicate with a `%%` block
+before its rule: its signature, `x: streamline` and, for a query with a
+side, `h: hemisphere`; for the first rule of the predicate, the full name of
+the bundle and a sentence on what it selects, read from
+`nl_tracts/tract_names.tsv` for the `.qry` files of tract_querier (by file,
+as one name means different queries in two files: `uf` of
+`freesurfer_queries_bsf2016_toad` adds the exclusions that of
+`freesurfer_queries_bsf2016` lacks), "The query q of FILE" for another
+program; then `Translated from tract_querier's FILE.qry:` and the WMQL
+statement, the file being that of the statement (an imported file's
+definitions, `uf_1` of the TOAD module, cite
+`freesurfer_queries_bsf2016.qry`). An auxiliary `q_leaves` says it is that
+of `q`'s `only`.
+
+The names are grounded in the files: the comments of
+`freesurfer_queries_bsf2016.qry` name each of its queries ("Cingulum
+bundle", "Extreme capsule" for `EmC`, "Middle longitudinal fascicle" for
+`dLF`, "Rostrum" ... "Splenium" for `CC_1` ... `CC_7`, "Thalamo-parietal"...),
+which name the queries of `freesurfer_queries.qry` of the same
+abbreviation and regions (its `cc_k` join much the same regions as `CC_k`);
+the labels of the JHU atlas the queries of `mori_queries.qry` use
+(`Inferior_fronto_occipital_fasciculus` for `IFO`, `Cingulum_*` for `CG`);
+or the name of the query (`extreme_capsule`, `internal_capsule`,
+`thalamic_radiations`). The column `source` of the table says which. What
+nothing grounds is named `tract_querier's <name>`: `ec` of
+`freesurfer_queries.qry` (the file defines the extreme capsule as
+`extreme_capsule`, and says nothing of `ec`), `precentral_postcentral` and
+`mdlf_probable_sections`; `internal_capsule_new` is called a variant of the
+internal capsule, `soff` the superior occipito-frontal fasciculus by analogy
+with `ioff` (its definition but for the temporal lobe), and the parts of
+Mori's `SLF_t`, `SLF_fp` and `SLF_pt` (temporal, fronto-parietal,
+parieto-temporal) are read from their definitions. A test checks that every
+predicate of the shipped modules is named and has the sorts of its
+arguments.
+
+With the engine `tracts`, the modules loaded (`.import("nl_tracts:bundles/
+freesurfer_queries.dl")`, or `nl.execute_datalog_program(bundle(...))`),
+the query assistant's catalog lists `uf(x: streamline, h: hemisphere) —
+Uncinate fasciculus: ...`, and the descriptions of the sorts.

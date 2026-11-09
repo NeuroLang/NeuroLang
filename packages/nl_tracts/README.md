@@ -16,12 +16,18 @@ Rules over the relations, in which a bundle is a rule or two
 the other directions (anatomical; `medial_of` and `lateral_of` relative to
 the hemisphere `h`), and `endpoint_anterior_of(x, e, term, h)` and the like
 for an end. A term is one of the term mapping (`"temporal"`, `"insula"`...),
-`h` is `"left"`, `"right"` or `"none"`.
+`h` is `"left"`, `"right"` or `"none"`. Each predicate is documented by the
+`%%` block before its rule, its signature with the sorts of its arguments
+(`traverses(x: streamline, term: term, h: hemisphere)`) and what it means,
+which the query assistant and the REPL's `.predicates` show; the engine
+`tracts` describes the sorts.
 
 The uncinate fasciculus, tract_querier's `UF.side`, is
 [`examples/uncinate.dl`](examples/uncinate.dl):
 
 ```
+%% uncinate(x: streamline, h: hemisphere)
+%% The uncinate fasciculus of hemisphere h: ...
 uncinate(x, h) :-
     (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h)
      | traverses(x, "inferior_frontal_gyrus", h)),
@@ -185,9 +191,11 @@ anterior, posterior and superior thalamic radiation.
 ## tract_querier's queries in the vocabulary
 
 `nl-tracts wmql` translates a WMQL program of tract_querier (a `.qry`) into
-rules of the vocabulary, one predicate per query, with the WMQL statement
-over each (DESIGN.md section 17): `UF.side` becomes `uf(x, h)`, the rule
-above; a name of labels is a term of the mapping; what the vocabulary
+rules of the vocabulary, one predicate per query, each documented by a `%%`
+block, its signature, the full name of the bundle for tract_querier's own
+files (`uf` of `freesurfer_queries` is the uncinate fasciculus) and the WMQL
+statement it is translated from (DESIGN.md section 17): `UF.side` becomes
+`uf(x, h)`, the rule above; a name of labels is a term of the mapping; what the vocabulary
 cannot say is left out and listed in the header.
 
 ```sh

@@ -123,10 +123,14 @@ UF.side = ((orbitofrontalgyrus.side
 """
     text = translate(source).text
     assert text.endswith("""
-% UF.side = ((orbitofrontalgyrus.side
-%             and endpoints_in(temporal.side and anterior_of(amygdala.side))
-%             and insula.side)
-%            not in posterior_of(amygdala.side) not in HEMISPHERE.opposite)
+%% uf(x: streamline, h: hemisphere)
+%% The query uf of WMQL.
+%%
+%% Translated from WMQL:
+%% UF.side = ((orbitofrontalgyrus.side
+%%             and endpoints_in(temporal.side and anterior_of(amygdala.side))
+%%             and insula.side)
+%%            not in posterior_of(amygdala.side) not in HEMISPHERE.opposite)
 uf(x, h) :-
     traverses(x, "orbitofrontalgyrus", h), endpoint_in(x, e, "temporal", h),
     endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h),
@@ -253,7 +257,8 @@ def test_the_command_line(tmp_path, capsys):
     assert cli.main(["wmql", str(path)]) == 0
     out, err = capsys.readouterr()
     assert out == translate(path.read_text(), skip_unsupported=True,
-                            title="q.qry").text
+                            title="q.qry", qry_file="q.qry").text
+    assert "%%\n%% Translated from q.qry:\n%% x.side = a.side\n" in out
     assert "nl-tracts: 2 queries not translated" in err  # y.left, y.right
     assert cli.main(["wmql", "--strict", str(path)]) == 1
     assert "y.left" in capsys.readouterr().err
@@ -269,3 +274,74 @@ def test_the_shipped_modules_are_self_contained_rules(name):
     assert not any(line.startswith(".") for line in text.splitlines())
     with pytest.raises(ValueError, match="unknown bundle"):
         bundle("nothing")
+
+
+def docs(text):
+    """The ``%%`` documentation of each predicate of ``text``, as the
+    Datalog parser reads it: ``{name: (description, arguments)}``, the
+    blocks of a predicate one after the other."""
+    from neurolang.frontend.datalog.standard_syntax import (
+        DOCUMENT_COMMAND, parser,
+    )
+
+    out = {}
+    for f in parser(text).formulas:
+        if getattr(f, "name", None) == DOCUMENT_COMMAND:
+            name, description, arguments = f.args
+            old = out.get(name.name, ("", ()))[0]
+            out[name.name] = (
+                "\n\n".join(filter(None, (old, description.value))),
+                arguments.value)
+    return out
+
+
+def test_each_predicate_is_documented():
+    source = ("x.left = a.left and b.left\nx.right = a.right\n"
+              "y = endpoints_in(c.left)\nz.side = only(a.side or b.side)\n")
+    documented = docs(translate(LABELS + source, qry_file="q.qry").text)
+    assert documented["x"] == (
+        "The query x of q.qry.\n\nTranslated from q.qry:\n"
+        "x.left = a.left and b.left\n\n"
+        "Translated from q.qry:\nx.right = a.right",
+        (("x", "streamline"), ("h", "hemisphere")),
+    )
+    assert documented["y"][1] == (("x", "streamline"),)
+    assert documented["z_leaves"] == (
+        'Auxiliary of z: x goes through a label of hemisphere h that is of '
+        'none of\nthe terms of its only(...), "a", "b".',
+        (("x", "streamline"), ("h", "hemisphere")),
+    )
+
+
+def test_an_imported_statement_cites_its_file(tmp_path):
+    (tmp_path / "labels.qry").write_text(
+        LABELS + "w.side = a.side and b.side\n")
+    text = translate("import labels.qry\nv.side = w.side\n",
+                     include_folders=[str(tmp_path)], qry_file="q.qry").text
+    assert "%% Translated from labels.qry:\n%% w.side = a.side" in text
+    assert "%% Translated from q.qry:\n%% v.side = w.side" in text
+
+
+@pytest.mark.parametrize("name", BUNDLES)
+def test_each_bundle_of_the_shipped_modules_is_named(name):
+    """Every predicate of a shipped module has a full name, from
+    ``tract_names.tsv``, and the sorts of its arguments."""
+    documented = docs(bundle(name))
+    for predicate, (description, arguments) in documented.items():
+        assert arguments[0] == ("x", "streamline"), predicate
+        assert "The query" not in description, predicate
+        if "_leaves" not in predicate:
+            assert "Translated from tract_querier's " in description
+
+
+def test_the_names_of_the_bundles():
+    fs = docs(bundle("freesurfer_queries"))
+    assert fs["uf"][0].startswith("Uncinate fasciculus: streamlines joining")
+    assert fs["uf"][1] == (("x", "streamline"), ("h", "hemisphere"))
+    assert fs["cc_7"][0].startswith("Corpus callosum, splenium: ")
+    assert fs["ec"][0].startswith("tract_querier's ec: ")
+    toad = docs(bundle("freesurfer_queries_bsf2016_toad"))
+    assert "freesurfer_queries_bsf2016.qry:\nUF.side" in toad["uf_1"][0]
+    assert "freesurfer_queries_bsf2016_toad.qry:\nUF.side" in toad["uf"][0]
+    assert docs(bundle("mori_queries"))["ifo"][0].startswith(
+        "Inferior fronto-occipital fasciculus: ")

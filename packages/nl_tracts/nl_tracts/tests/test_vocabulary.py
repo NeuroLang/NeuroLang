@@ -114,11 +114,22 @@ def test_the_prelude_is_datalog_with_percent_comments():
     assert {"traverses", "endpoint_in", "ends_in", "in_hemisphere",
             "only_in", "term_box_lo", "term_box_hi", "anterior_of",
             "medial_of", "endpoint_lateral_of"} <= set(predicates())
-    comments = "\n".join(
-        line for line in text.splitlines() if line.startswith("%")
-    )
-    for name in predicates():  # each is documented, with its arguments
-        assert f"{name}(" in comments, name
+
+
+SORTS = {
+    "x": "streamline", "e": "end", "term": "term", "h": "hemisphere",
+    "axis": "axis", "a": "atlas", "l": "label_id", "lo": "coordinate",
+    "hi": "coordinate",
+}
+
+
+def test_each_predicate_is_documented_with_the_sorts_of_its_arguments():
+    documentation = tracts_engine().predicate_documentation()
+    assert set(documentation) == set(predicates())
+    for name, doc in documentation.items():
+        assert doc.description, name
+        assert doc.arguments, name
+        assert all(SORTS[a] == sort for a, sort in doc.arguments), name
 
 
 def test_traverses(nl):

@@ -162,6 +162,20 @@ Unreleased
   Tian); nl_tracts' ``.load_tract_atlas`` is gone.  ``nl.atlas_labels`` is
   gone too: ``atlas_label_values`` reads the recorded atlas.
 
+* The vocabulary of tractography (``nl_tracts/vocabulary.dl``) and the
+  shipped translations of tract_querier's queries (``nl_tracts/bundles``)
+  document each predicate with a ``%%`` block: its signature with the sorts
+  of its arguments, ``uf(x: streamline, h: hemisphere)``, and, for a bundle,
+  its full name (``uf`` of ``freesurfer_queries`` is the uncinate
+  fasciculus, from the table ``nl_tracts/tract_names.tsv``), a sentence on
+  what it selects and the WMQL statement it is translated from.  The engine
+  ``tracts`` declares the sorts (``streamline``, ``end``, ``term``,
+  ``hemisphere``, ``axis``...) with descriptions, so that the query assistant
+  lists ``uf``, ``cst``, ``cc_1``... by name, and ``.view`` draws a column of
+  the sort ``streamline``.  The description of the engine names the bundle modules, so
+  that the assistant imports one (``.import('nl_tracts:bundles/
+  freesurfer_queries.dl')``) to answer with ``uf``.
+
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and
   ``fallback_provider: NAME`` asks another provider once when no result

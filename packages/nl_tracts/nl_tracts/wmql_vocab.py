@@ -36,8 +36,10 @@ imports nothing of NeuroLang: it turns text into text.
 """
 
 import ast
+import csv
 import fnmatch
 import os
+import textwrap
 from copy import deepcopy
 from dataclasses import dataclass, field
 from importlib.resources import files
@@ -53,6 +55,7 @@ __all__ = [
     "WMQLUnsupported",
     "bundle",
     "to_vocabulary",
+    "tract_names",
     "translate",
 ]
 
@@ -99,7 +102,8 @@ def _parse(source: str, filename: str) -> ast.Module:
         raise WMQLError(
             f"syntax error in {filename}, line {e.lineno}: {e.text}"
         ) from e
-    for node in module.body:  # the text of each statement, for the comments
+    for node in module.body:  # the file and text of each statement, for
+        node.wmql_file = os.path.basename(filename)  # its documentation
         node.wmql_source = [
             line.rstrip() for line in (
                 ast.get_source_segment(source, node) or ""
@@ -191,6 +195,7 @@ def _expand_for(node):
                 if isinstance(sub, ast.Name) and sub.id == node.target.id:
                     sub.id = item.id
             statement.wmql_source = [ast.unparse(statement)]
+            statement.wmql_file = getattr(node, "wmql_file", None)
             statements.append(statement)
     return statements
 
@@ -305,6 +310,7 @@ class _Definition:
     group: Optional["_Group"] = None
     body: object = None
     auxiliaries: list = field(default_factory=list)
+    file: Optional[str] = None  # the .qry file of the statement
 
     def head(self):
         hemi = {"side": ("h",), None: ()}.get(self.side, (f'"{self.side}"',))
@@ -396,7 +402,8 @@ class _Translator:
             raise WMQLError(f"invalid assignment in line {node.lineno}")
         keys = ([f"{base}.left", f"{base}.right"] if side == "side"
                 else [base if side is None else f"{base}.{side}"])
-        d = _Definition(base, side, getattr(node, "wmql_source", []), saved)
+        d = _Definition(base, side, getattr(node, "wmql_source", []), saved,
+                        file=getattr(node, "wmql_file", None))
         self.hemis, self.n_ends, self.current = side == "side", 0, d
         try:
             d.leaves = self.label_set(node.value)
@@ -687,7 +694,7 @@ class _Translator:
             "and, or, not in")
 
     # the names of the predicates, and the text
-    def finish(self, title) -> Translation:
+    def finish(self, title, qry_file=None) -> Translation:
         taken = set(RESERVED)
         for base, groups in self.groups.items():
             for k, group in enumerate(groups, 1):
@@ -698,19 +705,24 @@ class _Translator:
                     name += "_"
                 group.name = name
                 taken.add(name)
-        blocks, terms = [], set()
+        blocks, terms, named = [], set(), set()
         for d in self.definitions:
             if d.group is None:
                 continue
-            lines = [f"% {line}" for line in d.source]
+            lines = []
             for k, aux in enumerate(d.auxiliaries, 1):
                 aux.name = f"{d.group.name}_leaves" + (
                     f"_{k}" if k > 1 else "")
                 while aux.name in taken:
                     aux.name += "_"
                 taken.add(aux.name)
-                lines.append(_rule(_Atom(aux, d.head()[:1] + (
-                    ("h",) if d.side == "side" else ())), aux.body(), terms))
+                head = _Atom(aux, d.head()[:1] + (
+                    ("h",) if d.side == "side" else ()))
+                lines.append(_leaves_doc(head, aux, d.group.name))
+                lines.append(_rule(head, aux.body(), terms))
+            lines.append(_definition_doc(
+                d, qry_file, first=d.group.name not in named))
+            named.add(d.group.name)
             lines.append(_rule(_Atom(d.group, d.head()), d.body, terms))
             blocks.append("\n".join(lines))
         queries = {
@@ -722,6 +734,67 @@ class _Translator:
         text = header + "\n\n" + "\n\n".join(blocks) + "\n"
         return Translation(text, queries, dict(self.skipped),
                            tuple(sorted(terms)))
+
+
+def tract_names(qry_file: Optional[str]) -> Dict[str, Tuple[str, str]]:
+    """The full name and a sentence describing each bundle of a ``.qry``
+    file of tract_querier, by its WMQL name, lower case: ``uf`` of
+    ``freesurfer_queries.qry`` is the uncinate fasciculus. None for a file
+    that is not one of them (``tract_names.tsv``)."""
+    text = files("nl_tracts").joinpath("tract_names.tsv").read_text()
+    rows = csv.DictReader(
+        (line for line in text.splitlines() if not line.startswith("#")),
+        delimiter="\t")
+    return {
+        row["query"]: (row["name"], row["description"])
+        for row in rows if qry_file in row["files"].split()
+    }
+
+
+def _doc(lines):
+    """The ``%%`` documentation block of ``lines``."""
+    return "\n".join(f"%% {line}".rstrip() for line in lines)
+
+
+def _fill(text):
+    return textwrap.wrap(text, _WIDTH - 3, break_on_hyphens=False)
+
+
+def _signature(atom):
+    sorts = {"x": "streamline"}
+    args = [f"{a}: {sorts.get(a, 'hemisphere')}" for a in atom.args]
+    return f"{_name(atom.pred)}({', '.join(args)})"
+
+
+def _leaves_doc(head, aux, owner):
+    terms = ", ".join(f'"{t}"' for t, _ in aux.terms)
+    where = " of hemisphere h" if "h" in head.args else ""
+    return _doc([_signature(head)] + _fill(
+        f"Auxiliary of {owner}: x goes through a label{where} that is of "
+        f"none of the terms of its only(...), {terms}."))
+
+
+def _definition_doc(d, qry_file, first):
+    """The documentation of the rule of the definition ``d``: its
+    signature; for the ``first`` of its predicate, the full name of the
+    bundle and what it is, if the table of ``qry_file`` has it, a paragraph;
+    then the WMQL statement it is translated from."""
+    file = d.file if d.file not in (None, "<wmql>") else qry_file
+    shipped = file is not None and os.path.splitext(file)[0] in BUNDLES
+    source = f"tract_querier's {file}" if shipped else file or "WMQL"
+    lines = [_signature(_Atom(d.group, ("x",) + (
+        ("h",) if d.group.sided else ())))]
+    if first:
+        name = tract_names(file).get(d.base) if shipped else None
+        if name is not None:
+            full, sentence = name
+            if not full.startswith("tract_querier"):
+                full = full[:1].upper() + full[1:]
+            lines += _fill(f"{full}: {sentence}.")
+        else:
+            lines += _fill(f"The query {d.base} of {source}.")
+        lines.append("")  # the first paragraph, the one the assistant lists
+    return _doc(lines + [f"Translated from {source}:"] + d.source)
 
 
 def _name(pred):
@@ -859,6 +932,7 @@ def translate(
     terms: Optional[Sequence[str]] = None,
     skip_unsupported: bool = False,
     title: str = "a WMQL program",
+    qry_file: Optional[str] = None,
 ) -> Translation:
     """Translate a WMQL program to rules over the vocabulary.
 
@@ -878,11 +952,18 @@ def translate(
         :class:`WMQLUnsupported`.
     title : str
         What the header calls the program.
+    qry_file : str, optional
+        The name of the ``.qry`` file of the program. Each predicate is
+        documented by a ``%%`` block: its signature, ``uf(x: streamline,
+        h: hemisphere)``, the full name of the bundle and what it is, for
+        the files of tract_querier (:func:`tract_names`), and the WMQL
+        statement it is translated from, of this file or of one it
+        imports.
     """
     translator = _Translator(terms, skip_unsupported)
-    for node in _statements(source, "<wmql>", include_folders):
+    for node in _statements(source, qry_file or "<wmql>", include_folders):
         translator.statement(node)
-    return translator.finish(title)
+    return translator.finish(title, qry_file)
 
 
 def to_vocabulary(source: str, include_folders: Sequence[str] = (),

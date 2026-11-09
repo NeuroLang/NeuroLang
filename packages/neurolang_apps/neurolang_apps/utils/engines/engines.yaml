@@ -679,11 +679,69 @@ engines:
       term, h)... A label of an atlas of the engine, label("destrieux", l,
       name, h), is the name of its relation, destrieux(name, region). A
       result of streamline ids x is drawn by .view.
+      The white-matter bundles, tract_querier's queries translated to the
+      vocabulary and each described, are defined by importing a module of
+      the package: .import('nl_tracts:bundles/freesurfer_queries.dl')
+      defines uf(x, h) (the uncinate fasciculus), af, cst, ilf, ioff, cb,
+      slf_i, cc, cc_1 ... cc_7 and more; freesurfer_queries_bsf2016.dl and
+      freesurfer_queries_bsf2016_toad.dl revise them (uf, af, ilf, dlf,
+      emc, cortico_spinal...); mori_queries.dl gives those of the JHU
+      atlas (unc, ifo, cg, corpus_callosum...). The modules share names:
+      import one.
     solver_mixins: ["nl_tracts.frontend:TractsCommandsMixin"]
     # the vocabulary (nl_tracts/vocabulary.dl), the functions of the ids x
     # and the hooks of .view, over what the commands load; .index_tracts
     # finds the atlases of the engine, loaded after it
     python_init: "nl_tracts.frontend"
+    # The sorts of the arguments of the vocabulary and of the bundles, as
+    # their %% documentation gives them (uncinate(x: streamline, h:
+    # hemisphere)); the query assistant is told their descriptions.
+    # ``streamline`` is the sort .view draws as streamlines.
+    sorts:
+      streamline:
+        columns: [x]
+        type: int
+        description: >-
+          a streamline, by its integer id; streamline(x, t, s) gives the
+          tractogram t it is of and its position s in the file
+      end:
+        columns: [e]
+        type: int
+        description: >-
+          an end of a streamline, 0 or 1: it only tells the two ends apart
+          (the same end), the order of the points being arbitrary
+      term:
+        columns: [term]
+        type: str
+        description: >-
+          a term of the term mapping of the atlas indexed, a string such as
+          "temporal", "insula" or "amygdala": label_term(a, l, term) lists
+          them, from the mappings of nl_tracts/mappings/*.tsv
+          (freesurfer_aseg_aparc for a FreeSurfer atlas)
+      hemisphere:
+        columns: [h]
+        type: str
+        description: >-
+          a hemisphere: "left", "right" or "none" (a structure of no side,
+          such as the brain stem); opposite_hemisphere(h, o) gives the other
+      axis:
+        columns: [axis]
+        type: int
+        description: >-
+          an axis of RAS+ millimetres: 0 x (left to right), 1 y (posterior to
+          anterior), 2 z (inferior to superior)
+      atlas:
+        columns: [a]
+        type: str
+        description: "an atlas indexed with .index_tracts, by its name"
+      label_id:
+        columns: [l]
+        type: int
+        description: "the id of a label of an atlas indexed"
+      coordinate:
+        columns: [v]
+        type: float
+        description: "a coordinate in millimetres, RAS+, on an axis"
 
   neurosynth_tracts:
     extends: [neurosynth, tracts]
