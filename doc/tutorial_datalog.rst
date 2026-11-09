@@ -801,6 +801,16 @@ relation:
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
+    .load_atlas(fs, "aparc+aseg.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+    .load_atlas(schaefer, kind="schaefer", n_rois=100)
+
+``.load_atlas`` adds the relation ``name(label, region)`` of an atlas: an
+image and a CSV of its labels at URLs (the first form, downloaded to
+``~/neurolang_data``), local files of ``kind`` ``"freesurfer"`` (a colour
+LUT), ``"bids"`` (a ``dseg.tsv``) or ``"tsv"``, the atlases of the engines
+(``"destrieux"``, ``"schaefer"``, ``"tian"``) or a fetcher of nilearn
+(``kind="nilearn", fetcher="harvard_oxford"``).  The engine records the
+atlas, a :class:`~neurolang.atlases.Atlas`, by name, in its ``atlases``.
 
 and ``.import``, which imports a *Datalog module*, a file of facts, rules
 and commands, as if its statements were written in its place:

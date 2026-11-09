@@ -1,29 +1,10 @@
-"""Fixtures and markers of the nl_tracts tests."""
+"""Fixtures of the nl_tracts tests (the marker ``network`` is the
+repository's, ``pyproject.toml``)."""
 
 import itertools
 
 import numpy as np
 import pytest
-
-
-def pytest_configure(config):
-    config.addinivalue_line(
-        "markers",
-        "network: fetches data (nilearn atlases); skipped if the fetch fails",
-    )
-
-
-@pytest.fixture
-def fetch_or_skip():
-    """Call a fetcher; skip the test if it cannot get its data."""
-
-    def fetch(fetcher, *args, **kwargs):
-        try:
-            return fetcher(*args, **kwargs)
-        except Exception as e:  # offline, mirror down, cache unreadable
-            pytest.skip(f"cannot fetch {fetcher.__name__}: {e!r}")
-
-    return fetch
 
 
 # Affines of the synthetic volume, voxel indices -> RAS mm. ``aligned``,

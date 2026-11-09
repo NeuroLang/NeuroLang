@@ -421,24 +421,22 @@ def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     import nibabel as nib
 
-    from neurolang.regions import ExplicitVBR
+    from neurolang.atlases import Atlas
     from neurolang_apps.utils import engine_registry
 
     voxels = np.array([[1, 1, 1], [1, 2, 1]])
     data = np.zeros((4, 4, 4), dtype=np.int16)
     data[tuple(voxels.T)] = 1
     image = nib.Nifti1Image(data, np.eye(4))
-    for atlas, label in _FAKE_ATLASES.items():
-        region = ExplicitVBR(voxels, np.eye(4), image_dim=(4, 4, 4))
-        nl.add_tuple_set([(label, region)], name=atlas)
+    for name, label in _FAKE_ATLASES.items():
+        atlas = Atlas.from_labels(name, image, {1: label}, "MNI152")
+        nl.add_atlas_set(name, atlas)
         engine_registry._register_atlas_activation(
-            nl, {1: label}, image, {"radius_mm": 3}, atlas
+            nl, {1: label}, image, {"radius_mm": 3}, name
         )
-        points = cfg["atlases"][atlas].get("points")
+        points = cfg["atlases"][name].get("points")
         if points:
-            engine_registry._register_atlas_points(
-                nl, image, {1: label}, points
-            )
+            engine_registry._register_atlas_points(nl, atlas, points)
 
 
 # The predicates of a free-text query: computed for the text a query gives

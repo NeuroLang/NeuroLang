@@ -2,7 +2,7 @@ import warnings
 
 import pytest
 
-from nl_tracts.spaces import SpaceMismatchError, check_same_space
+from neurolang.atlases import SpaceMismatchError, check_same_space
 
 
 def test_equal_spaces_pass():

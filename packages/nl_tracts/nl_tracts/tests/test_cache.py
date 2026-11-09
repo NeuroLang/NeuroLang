@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 import nl_tracts.cache as cache
-from nl_tracts.atlas import Atlas
+from neurolang.atlases import Atlas
 from nl_tracts.cache import cache_key, read_cached, write_cached
 from nl_tracts.indexing import IndexingParams, RelationStore
 from nl_tracts.tractogram import Tractogram

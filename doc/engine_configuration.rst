@@ -43,7 +43,12 @@ may specify the following keys, all of them optional:
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
   ``tian``, ``difumo``) as region predicates ``name(label, region)``.  A
-  deterministic atlas with ``activated: {predicate_name, radius_mm,
+  deterministic atlas is a :class:`~neurolang.atlases.Atlas`, fetched and
+  read as ``.load_atlas(name, kind="destrieux")`` (``"schaefer"``,
+  ``"tian"``) reads it, its label names normalised (``-`` and ``_`` are
+  spaces), and recorded in the engine's ``atlases`` by its key, where
+  ``.index_tracts`` of the ``tracts`` engine finds it (the probabilistic
+  DiFuMo is thresholded into regions).  A deterministic atlas with ``activated: {predicate_name, radius_mm,
   peaks}`` also registers ``predicate_name(label, study)``: the studies
   with a peak within ``radius_mm`` (3 by default) of a voxel of the
   region, the peaks being the millimetre coordinates of the relation
@@ -250,9 +255,9 @@ the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
 atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),
 and ``.view`` shows a result with two such columns, pairs of regions and
 a value, as a network over the brain, a node at the centre of each
-region and an edge per pair (see ``.help view``).  The engine keeps the
-values labelling each region in the image of the atlas, by name, in
-``nl.atlas_labels`` (see
+region and an edge per pair (see ``.help view``).  The values labelling
+each region in the image of the atlas, by name, are those of the atlas
+the engine records under that key, ``nl.atlases`` (see
 :func:`~neurolang.utils.engine_registry.atlas_label_values`).
 
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
@@ -491,13 +496,17 @@ The ``tracts`` engine
 with a message that says so).  It extends ``mni_atlases``: its atlases are
 those of ``neurosynth`` (Destrieux, Schaefer, Tian, about 270 KB downloaded
 on the first build), without the studies that activate them and without
-the MNI mask.  A program loads its tractograms, and if it wants an atlas
-of its own, with the commands ``.load_tract_atlas``, ``.load_tractogram``
-and ``.index_tracts``, which its ``solver_mixins`` entry,
-``nl_tracts.frontend:TractsCommandsMixin``, adds to the solver;
+the MNI mask.  A program loads its tractograms with the commands
+``.load_tractogram`` and ``.index_tracts``, which its ``solver_mixins``
+entry, ``nl_tracts.frontend:TractsCommandsMixin``, adds to the solver;
 ``.index_tracts(t, "destrieux")`` indexes a tractogram in MNI152 by an
 atlas of the engine, whose label names are those of its relation:
-``label("destrieux", l, name, h)`` joins ``destrieux(name, region)``.  It
+``label("destrieux", l, name, h)`` joins ``destrieux(name, region)``.  An
+atlas of its own is loaded as any engine loads one, ``.load_atlas("fs",
+"wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer",
+space="MNI152")``, and indexed by its name; ``.index_tracts`` gives its
+labels the terms of the vocabulary by the term mapping of its kind
+(FreeSurfer, Destrieux, Tian) or by ``term_mapping=...``.  It
 asks where the streamlines go in the vocabulary of
 tractography, Datalog rules that its ``python_init``
 (``nl_tracts.frontend``) gives the engine: ``traverses(x, term, h)``,

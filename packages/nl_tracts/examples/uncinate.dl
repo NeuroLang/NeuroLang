@@ -12,30 +12,35 @@
 %
 % The three commands build the relations from files. The paths are read as
 % written, relative to where the program runs:
-%   .load_tract_atlas(name, label image, colour LUT, ...): a wmparc of
-%       FreeSurfer, e.g. $FREESURFER_HOME/subjects/cvs_avg35_inMNI152/mri/
-%       wmparc.mgz with $FREESURFER_HOME/FreeSurferColorLUT.txt;
-%       term_mapping gives its labels the terms used below. A term is the
-%       cortex of a gyrus and the white matter under it, as in
-%       tract_querier: an aparc+aseg, which has the cortex only, misses
-%       the streamlines that end in the white matter (DESIGN.md, 16.5).
-%       The label image is also what .view draws the streamlines on.
+%   .load_atlas(name, label image, colour LUT, kind="freesurfer", ...): a
+%       wmparc of FreeSurfer, e.g. $FREESURFER_HOME/subjects/
+%       cvs_avg35_inMNI152/mri/wmparc.mgz with
+%       $FREESURFER_HOME/FreeSurferColorLUT.txt, as the relation
+%       fs(label, region) of the engine and an atlas that .index_tracts
+%       finds by its name. A term is the cortex of a gyrus and the white
+%       matter under it, as in tract_querier: an aparc+aseg, which has the
+%       cortex only, misses the streamlines that end in the white matter
+%       (DESIGN.md, 16.5). The label image is also what .view draws the
+%       streamlines on.
 %   .load_tractogram(id, .trk, .tck or .vtk file, ...): in the space of the
 %       atlas (both tagged MNI152 here), e.g. the whole-brain tractogram
 %       of the HCP842 atlas of DIPY, whole_brain_MNI.trk, without its 37
 %       streamlines of one point, which nl_tracts refuses.
 %   .index_tracts(tractogram, atlas): the streamlines of each label
 %       (a label is traversed by at least 2 % of the points of a
-%       streamline: crossing_threshold=2.0) and their ends. The atlas may
-%       also be one of the engine, in MNI152: .index_tracts("hcp842",
-%       "destrieux") and .index_tracts("hcp842", "tian") instead of
-%       .load_tract_atlas give the rules below every term they use, but
+%       streamline: crossing_threshold=2.0) and their ends. The terms of
+%       the labels used below are those of the term mapping of the atlas's
+%       kind, freesurfer_aseg_aparc for a colour LUT (term_mapping=...
+%       gives another). The atlas may be any of the engine, in MNI152:
+%       .index_tracts("hcp842", "destrieux") and .index_tracts("hcp842",
+%       "tian"), the atlases of the engine tracts, instead of the
+%       .load_atlas below give the rules below every term they use, but
 %       only the cortex of the gyri, which finds few uncinates
-%       (DESIGN.md, 16.4). An atlas of nilearn, by its fetcher, is
-%       another alternative to the files:
-%         .load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")
+%       (DESIGN.md, 16.4); so does an atlas of nilearn, by its fetcher:
+%         .load_atlas("d", kind="nilearn", fetcher="destrieux_2009")
+%         .index_tracts("hcp842", "d", term_mapping="freesurfer_destrieux")
 
-.load_tract_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152", term_mapping="freesurfer_aseg_aparc")
+.load_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
 .load_tractogram("hcp842", "whole_brain_MNI.trk", space="MNI152")
 .index_tracts("hcp842", "fs")
 

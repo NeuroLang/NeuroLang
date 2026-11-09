@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nl_tracts.atlas import Atlas
+from neurolang.atlases import Atlas
 from nl_tracts.indexing import (
     IndexingParams,
     RelationStore,
@@ -130,15 +130,17 @@ def atlas(name="fs", space="subject:1"):
     volume[1:3, 1:3, 1:3] = 1
     volume[4, 4, 4] = 2
     table = pd.DataFrame({"id": [0, 1, 2], "name": ["bg", "Left-A", "B"]})
-    return Atlas(name, volume, AFFINES["aligned"], table, space,
-                 term_mapping=pd.DataFrame({
-                     "atlas_label_name": ["Left-A"], "term": ["a"],
-                     "hemi": ["left"]}))
+    return Atlas(name, volume, AFFINES["aligned"], table, space)
+
+
+MAPPING = pd.DataFrame(
+    {"atlas_label_name": ["Left-A"], "term": ["a"], "hemi": ["left"]}
+)
 
 
 def test_add_atlas_and_add_tractogram_fill_the_relations():
     store = RelationStore()
-    store.add_atlas(atlas())
+    store.add_atlas(atlas(), MAPPING)
     store.add_tractogram(tractogram(), PARAMS)
     assert set(store.relations) == {
         "atlas", "label", "label_term", "label_extent",
@@ -166,6 +168,8 @@ def test_add_atlas_and_add_tractogram_fill_the_relations():
         assert frame.columns.tolist() == columns, name
         assert frame.dtypes["x"] == np.int64, name
     assert len(store.relations["label"]) == 3
+    assert store.relations["label_term"][["l", "term"]].values.tolist() == [
+        [1, "a"]]
     assert len(store.relations["label_extent"]) == 6
 
 
@@ -275,7 +279,7 @@ def test_add_index_accumulates_atlases_and_tractograms():
 
 
 def test_add_index_checks_the_spaces():
-    from nl_tracts.spaces import SpaceMismatchError
+    from neurolang.atlases import SpaceMismatchError
 
     store = RelationStore()
     store.add_tractogram(near_the_label(), PARAMS)

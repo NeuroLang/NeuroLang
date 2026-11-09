@@ -33,8 +33,11 @@ uncinate(x, h) :-
 ans(x) :- uncinate(x, "left")
 ```
 
-after three commands that load a FreeSurfer `wmparc` with its colour LUT and
-a tractogram in its space, and index the one by the other. Edit their paths
+after three commands that load a FreeSurfer `wmparc` with its colour LUT
+(`.load_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt",
+kind="freesurfer", space="MNI152")`, the command of every engine of
+NeuroLang, see below) and a tractogram in its space, and index the one by
+the other. Edit their paths
 in the file (they are read relative to where it runs), then, with the extra
 `tracts` of `neurolang-apps`:
 
@@ -50,7 +53,19 @@ and the rules can also be typed or pasted one by one, and other questions
 asked of the same relations (`ans(x) :- uncinate(x, "right")`). From
 Python, `nl_tracts.frontend.tracts_engine()` is the same engine.
 
-## The atlases of the engine
+## The atlases
+
+An atlas is NeuroLang's (`neurolang.atlases.Atlas`): whatever loaded it,
+`.load_atlas` (of kind `freesurfer`, `bids`, `tsv`, `destrieux`,
+`schaefer`, `tian`, `nilearn`, or the CSV at a URL of old),
+`add_atlas_set` from Python, or the `atlases:` of an engine of the apps,
+the engine records it by name and `.index_tracts(t, name)` indexes by it.
+nl_tracts adds the term mapping of its labels, which `.index_tracts`
+attaches: `term_mapping=...` (the key of a shipped mapping or the path of
+one), else the default of the atlas's kind, `freesurfer_aseg_aparc` for a
+FreeSurfer colour LUT, `freesurfer_destrieux` for Destrieux (also nilearn's
+`destrieux_2009`), `tian_subcortex_s2` for Tian; Schaefer and the other
+kinds have none.
 
 The engine `tracts` has the atlases of the engine `neurosynth`, Destrieux,
 Schaefer and Tian, in MNI152: a tractogram in MNI152 is indexed by them
@@ -72,12 +87,13 @@ and the white matter under it, is found far better with a `wmparc`
 (DESIGN.md, 16.4).
 
 An atlas of nilearn is loaded by the name of its fetcher, its other
-options going to it, in MNI152, its names as the engine's (nilearn's
-Destrieux has the terms of `freesurfer_destrieux`):
+options going to it, in MNI152, its names normalised as the engine's
+(nilearn's Destrieux has the terms of `freesurfer_destrieux`):
 
 ```
-.load_tract_atlas("d", kind="nilearn", fetcher="destrieux_2009")
-.load_tract_atlas("ho", kind="nilearn", fetcher="harvard_oxford",
-                  atlas_name="cort-maxprob-thr25-1mm")
+.load_atlas("d", kind="nilearn", fetcher="destrieux_2009")
+.load_atlas("ho", kind="nilearn", fetcher="harvard_oxford",
+            atlas_name="cort-maxprob-thr25-1mm")
+.index_tracts("hcp842", "d")
 ```
 

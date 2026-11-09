@@ -7,7 +7,8 @@ from typing import Optional, Union
 
 import pandas as pd
 
-from .atlas import Atlas
+from neurolang.atlases import Atlas
+
 from .indexing import IndexingParams
 from .tractogram import Tractogram
 

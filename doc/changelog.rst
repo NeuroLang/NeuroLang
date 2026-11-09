@@ -46,6 +46,10 @@ Unreleased
   blocks into 32-bit indices: a radius of 6 voxels peaks at 6.6 GB, and
   at 6.0 GB in the memory profile, instead of 14.6 GB.
 
+* The regions of a large atlas are found in a second rather than ten (1.5 s
+  instead of 12 s for the 180 labels of FreeSurfer's 256³ ``wmparc``): the
+  labels are searched for in the type of the image's values, all at once.
+
 * A selection by a Python function of a single column, as
   ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
   (291,533 rows) in a probabilistic rule, applies the function to the column
@@ -127,6 +131,23 @@ Unreleased
   1.6 s instead of 2.5 s). ``.view`` of the REPL shows the results of all the
   queries in one viewer: images, a network and streamlines, beside one
   another.
+
+* One model of atlases, :class:`neurolang.atlases.Atlas`: a label image, a
+  label table (``id``, ``name``, ``hemi``), a space tag and a background,
+  with its loaders, the normalisation of label names, the hemisphere rules
+  and its regions.  ``.load_atlas(name, ...)`` loads any atlas into
+  ``name(label, region)``: ``kind="freesurfer"`` (a colour LUT),
+  ``"bids"`` (a ``dseg.tsv``) or ``"tsv"`` from local files, the atlases of
+  the engines (``kind="destrieux"``, ``"schaefer"``, ``"tian"``), a fetcher
+  of nilearn (``kind="nilearn", fetcher="harvard_oxford"``), and, without a
+  kind, an image and a CSV at URLs as before.  The engine records the atlas
+  by name (``nl.atlases``), as do ``add_atlas_set``, which also takes an
+  ``Atlas``, and the ``atlases:`` of an engine of ``engines.yaml``, whose
+  relations are unchanged.  The ``tracts`` engine indexes a tractogram by
+  any of them, ``.index_tracts(t, name, term_mapping=...)``, the term
+  mapping defaulting to that of the atlas's kind (FreeSurfer, Destrieux,
+  Tian); nl_tracts' ``.load_tract_atlas`` is gone.  ``nl.atlas_labels`` is
+  gone too: ``atlas_label_values`` reads the recorded atlas.
 
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and
@@ -333,6 +354,10 @@ Unreleased
   request's CI uploads its documentation without a REPL that can start, and
   no longer comments on how to run it; ``neurolang-repl-serve`` builds the
   REPL of a branch locally.
+
+* ``.load_atlas`` put a tuple of the region, not the region, in the second
+  column of its relation, ``Tuple[str, ExplicitVBR]``, and kept the labels
+  without voxels.  The background (label 0) is no region any more either.
 * Several probabilistic facts of a predicate written in a Datalog program
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
