@@ -1084,3 +1084,28 @@ def test_engines_change_the_settings_of_the_euclidean_join(tmp_path):
         engine_registry.build_engine("small", tmp_path, yaml_path=path)
         assert SETTINGS.kdtree_chunk_pairs == 11
         assert SETTINGS.block_pairs == 13
+
+
+def test_datalog_init_reads_files_relative_to_the_data_directory(
+    tmp_path, monkeypatch
+):
+    """The commands of ``datalog_init`` find the files ``downloads`` put in
+    the engine's data directory, wherever the program runs from, and the
+    working directory is left as it was."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils import engine_registry
+
+    data_dir = tmp_path / "data"
+    (data_dir / "e").mkdir(parents=True)
+    (data_dir / "e" / "pairs.csv").write_text("x,y\n1,a\n")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    nl = NeurolangPDL()
+    engine_registry._phase_datalog_init(
+        nl, {"datalog_init": '.load_csv(pair, "e/pairs.csv")\n'}, data_dir
+    )
+    assert "pair" in nl.symbol_table
+    import os
+
+    assert os.getcwd() == str(elsewhere)

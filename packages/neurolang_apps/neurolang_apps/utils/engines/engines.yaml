@@ -770,8 +770,8 @@ engines:
       tractogram and the atlas are of the same atlas, so in the same space),
       index the tractogram by it and import the bundles of tract_querier's
       freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view work
-      at the prompt. The files are read relative to the working directory,
-      which is the data directory. The entry tractogram tells the bundle of
+      at the prompt. The files are read relative to the data directory,
+      from which datalog_init runs. The entry tractogram tells the bundle of
       the REPL in the browser how to subsample the file it ships in its
       place, so that this program is the same there.
     # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain

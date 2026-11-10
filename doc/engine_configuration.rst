@@ -93,7 +93,10 @@ may specify the following keys, all of them optional:
   and ``memory``, that of the interactive REPL) hold the others; see
   :ref:`euclidean-join-settings`.  The mappings of an engine and of the
   engines it extends are merged
-- ``datalog_init`` — inline Datalog rules that are loaded at engine startup
+- ``datalog_init`` — inline Datalog rules that are loaded at engine startup,
+  run from the engine's data directory: the paths of its commands
+  (``.load_tractogram``, ``.load_atlas``...) are relative to it, where
+  ``downloads`` puts the files
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
