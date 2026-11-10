@@ -151,6 +151,16 @@
     return layer;
   }
 
+  // Size NiiVue's canvas to the pixels of the screen again when the browser
+  // zoom changes them: NiiVue does so only when the canvas changes size,
+  // which in a frame of a fixed width the zoom does not change.
+  function followZoom(nv) {
+    if (!window.matchMedia) return;
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener(
+      'change', function () { nv.resizeListener(); followZoom(nv); },
+      { once: true });
+  }
+
   async function load() {
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
@@ -163,6 +173,7 @@
       show3Dcrosshair: false, dragAndDropEnabled: false
     });
     await nv.attachTo('gl');
+    followZoom(nv);
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';

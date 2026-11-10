@@ -63,7 +63,8 @@
   .tk-number { color: var(--tk-number); }
   /* On the terminal's dark background, whatever the theme. */
   .agent-query { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
-  #question { flex: 1; min-width: 12rem; font-family: var(--sans); font-size: 14px; }
+  #ask { align-items: flex-start; }
+  #question { flex: 1; min-width: 12rem; width: auto; min-height: 2.4rem; height: 2.4rem; font: 14px/1.4 var(--sans); }
   button { background: var(--ok); color: var(--on-ok); border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-weight: 600; cursor: pointer; }
   button.ghost { background: var(--raised); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
   button:disabled, textarea:disabled, input:disabled { opacity: .5; cursor: default; }
@@ -199,7 +200,7 @@
   #llm button { flex: none; }
   #out.quiet { background: none; color: var(--muted); }
   #out.quiet summary { font-size: .85rem; }
-  #out.quiet details[open] > div { background: var(--term); color: #e6edf3; border-radius: 6px; margin-top: .25rem; }
+  #out.quiet details[open] > div { background: var(--term); color: #e6edf3; border-radius: 6px; margin-top: .25rem; padding: .5rem .75rem; }
   .rt-count:empty { display: none; }
   .rt-copy { margin-left: auto; }
   @media (max-width: 40rem) {
@@ -208,7 +209,7 @@
     input, select, textarea, .editor pre { font-size: 16px; }
     .rt-filter { flex-basis: 100%; }
   }
-  @media (hover: none) { #run-help { display: none; } }
+  @media (hover: none) { #run-help, #ask-help { display: none; } }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .guide-item:focus-visible, .rt-table th button:focus-visible { outline-offset: -2px; }
 </style>
@@ -233,9 +234,10 @@
   </section>
 
   <form id="ask" class="row">
-    <input id="question" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" disabled>
+    <textarea id="question" rows="1" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" aria-describedby="ask-help" disabled></textarea>
     <button id="ask-run" class="ghost" disabled title="Add an API key to use the assistant">Ask</button>
     <button id="key" type="button" class="ghost" title="Your API key">API key</button>
+    <span id="ask-help" class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> asks</span>
   </form>
   <p id="ask-note" class="note">Asking needs your own API key from an AI provider. It stays in this tab: click <em>API key</em>.</p>
   <details id="llm-details">
