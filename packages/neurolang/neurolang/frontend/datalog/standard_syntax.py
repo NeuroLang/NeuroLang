@@ -132,6 +132,11 @@ OR_SYMBOL : "|" | "\N{LOGICAL OR}"
 conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
 AND_SYMBOL : "\N{LOGICAL AND}"
 
+// In parentheses a comparison is a formula of its own, a disjunct or a
+// conjunct: (t == 'a' | t == 'b'), (x < 3, y > 2).
+?parenthesised_disjunction : parenthesised_conjunction (OR_SYMBOL parenthesised_conjunction)* -> disjunction
+parenthesised_conjunction : (predicate | comparison) (("," | "&" | AND_SYMBOL) (predicate | comparison))* -> conjunction
+
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
 // After "((f(x)" a "," or ")" cannot tell a parenthesised body formula
@@ -141,8 +146,7 @@ NEG_UNICODE : "\u00AC"
 predicate.2 : id_application
           | negated_predicate
           | existential_predicate
-          | "(" comparison ")"
-          | "(" disjunction ")"
+          | "(" parenthesised_disjunction ")"
           | logical_constant
           | prob_body_predicate
           | resample_body_predicate
@@ -956,6 +960,13 @@ class DatalogTransformer(Transformer):
         return Conjunction(conj)
 
     def disjunction(self, ast):
+        disjuncts = [c for c in ast if isinstance(c, Expression)]
+        if len(disjuncts) == 1:
+            # A formula in parentheses, (x < 3) or (a(x), b(x)): itself
+            formula = disjuncts[0]
+            if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+                formula = formula.formulas[0]
+            return formula
         return Disjunction(tuple(
             self._hide_anonymous(
                 c.formulas[0]

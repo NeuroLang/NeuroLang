@@ -403,6 +403,10 @@ Unreleased
 
 **Bug fixes:**
 
+* A comparison inside parentheses is a disjunct or conjunct of its own:
+  ``ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor
+  planning')`` parses; before, every comparison of the disjunction needed
+  parentheses of its own, ``((t == 'a') | (t == 'b'))``.
 * In the REPL in the browser, the Brain and Graph windows are as tall as
   their page, instead of 34 rem with scrollbars of their own within the
   page's (the readout and the colour bar of the viewer were cut off), and

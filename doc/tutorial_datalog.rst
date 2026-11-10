@@ -154,8 +154,13 @@ than ``|``, and parentheses group:
 
 stands for three rules, one per disjunct.  Each disjunct must bind the
 variables of the head, and those of its negated atoms.  ``a(x), b(x) | c(x)``
-is ``(a(x), b(x)) | c(x)``; a comparison in a disjunction keeps its
-parentheses: ``b(x), (a(x) | (x < 3))``.
+is ``(a(x), b(x)) | c(x)``.  Inside parentheses a comparison is a
+formula of its own, so that values are alternatives of a variable::
+
+    ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor planning')
+
+and ``b(x), (a(x) | x < 3)`` is ``b(x), (a(x) | (x < 3))``; outside
+parentheses a comparison keeps its own: ``b(x), (x < 3)``.
 
 .. note::
 
