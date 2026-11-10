@@ -40,9 +40,22 @@ may specify the following keys, all of them optional:
   other or missing spaces) are taken as MNI (``mni``, the default, as
   Neurosynth and NiMARE do), converted as Talairach (``tal``) or left out
   (``drop``); only the Talairach peaks are converted to MNI otherwise
-- ``downloads`` — list of ``{url, dest, extract}`` entries fetched into the
-  data directory (``extract: true`` uncompresses an archive, a list of
-  member names extracts only those members)
+- ``downloads`` — list of ``{url, dest, extract, name, md5}`` entries
+  fetched into the data directory (``extract: true`` uncompresses an
+  archive, a list of member names extracts only those members; ``name`` is
+  the file's name when the URL has none, ``md5`` its checksum)
+- ``tractogram`` — ``{path, subsample, step, seed}``, for an engine whose
+  ``datalog_init`` loads the whole-brain tractogram file ``path`` (relative
+  to the data directory; usually one of its ``downloads``) with
+  ``.load_tractogram(id, path)``: how the bundle of the browser's REPL
+  (``doc/make_repl_bundle.py``) reduces it to ship it.  It replaces the file
+  in the data it ships by its subsample, at the same path and in the same
+  format (``.tck`` or ``.trk``), ``subsample`` streamlines drawn at random
+  with the seed ``seed`` (default 0), each thinned to every ``step``-th point
+  (default 1) and its last, so that the engine's program is the same there.
+  The engine itself loads the file whole, wherever it runs; the entry is read
+  by the bundle only (``neurosynth_iit``: 15,000 of the 37,980 streamlines of
+  the IIT Human Brain Atlas v3's ``IIT3mean.tck``, ``step: 3``)
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
@@ -80,7 +93,10 @@ may specify the following keys, all of them optional:
   and ``memory``, that of the interactive REPL) hold the others; see
   :ref:`euclidean-join-settings`.  The mappings of an engine and of the
   engines it extends are merged
-- ``datalog_init`` — inline Datalog rules that are loaded at engine startup
+- ``datalog_init`` — inline Datalog rules that are loaded at engine startup,
+  run from the engine's data directory: the paths of its commands
+  (``.load_tractogram``, ``.load_atlas``...) are relative to it, where
+  ``downloads`` puts the files
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing

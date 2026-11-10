@@ -39,7 +39,8 @@ def test_the_bundle_is_built_once_unless_asked_again(
     def build(repl, embeddings, engines=None):
         built.append(embeddings)
         (repl / "bundle.json").write_text(
-            json.dumps({"engines": {"neurosynth": {}, "neurostore": {}}})
+            json.dumps({"engines": dict.fromkeys(
+                    ["neurosynth", "neurosynth_iit", "neurostore"], {})})
         )
 
     monkeypatch.setattr(serve, "build_bundle", build)
@@ -101,7 +102,8 @@ def test_a_bundle_lacking_an_engine_asked_for_is_built_again(
 
     def build(repl, embeddings, engines=None):
         built.append(engines)
-        names = engines or ["neurosynth", "neurostore"]
+        names = engines or [
+                "neurosynth", "neurosynth_iit", "neurostore"]
         (repl / "bundle.json").write_text(
             json.dumps({"engines": {name: {} for name in names}})
         )

@@ -42,8 +42,8 @@ ans(x) :- uncinate(x, "left")
 after three commands that load a FreeSurfer `wmparc` with its colour LUT
 (`.load_atlas("fs", "wmparc.mgz", "FreeSurferColorLUT.txt",
 kind="freesurfer", space="MNI152")`, the command of every engine of
-NeuroLang, see below), the whole-brain tractogram of the HCP842 atlas
-(downloaded, below), and index the one by the other. Edit the paths of the
+NeuroLang, see below), a whole-brain tractogram, for instance that of the HCP842
+atlas (downloaded, below), and index the one by the other. Edit the paths of the
 atlas in the file (they are read relative to where it runs), then, with the
 extra `tracts` of `neurolang-apps`:
 
@@ -115,6 +115,27 @@ contrasts there.
 ```sh
 neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
 ```
+
+The engine `neurosynth_iit` is `neurosynth_tracts` with what the browser's
+REPL (`doc/_static/repl`) needs to answer `ans(x) :- uf(x, "left")` at
+the prompt: its `downloads` fetch the whole-brain tractogram of the IIT Human
+Brain Atlas v3 (`IIT3mean.tck`, 37,980 streamlines, RAS+ mm, 88 MB) into
+`<data_dir>/tracts/iit`, its wmparc (`IIT3mean_desikan_2009.nii.gz`, labels of
+FreeSurfer's colour LUT) and `FreeSurferColorLUT.txt` into
+`<data_dir>/tracts/fs`, and its `datalog_init` loads the tractogram by its
+path (`.load_tractogram("iit", "tracts/iit/IIT3mean.tck", space="MNI152")`),
+loads that atlas, indexes the one by the other and imports
+`bundles/freesurfer_queries.dl` (the files are read relative to the working
+directory, which is the data directory). The tractogram and the atlas are of
+the same atlas, so in the same space (99.8 % of the points of the streamlines
+are in a labelled voxel). Its `tractogram: {path, subsample, step, seed}`
+entry tells the bundle of the page how to subsample that file, which it
+replaces in the data it ships by its subsample, in the same format (15,000
+streamlines at random, every third point): `doc/make_repl_bundle.py`. The
+tractogram and the atlas are under the IIT Human Brain Template License
+(non-commercial research and education, with attribution; Qi, Arfanakis et
+al.), from the OSF project of tract_querier's test files
+(<https://osf.io/ugyqa/>).
 
 ## Getting the data: the atlases of tractography of Yeh
 

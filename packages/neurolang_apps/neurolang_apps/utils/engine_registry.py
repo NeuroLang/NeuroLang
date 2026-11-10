@@ -97,6 +97,7 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
 import re
@@ -1475,8 +1476,14 @@ def _phase_downloads(cfg, data_dir, engine_name):
             files = [(m, url, {"uncompress": True}) for m in extract_members]
             _fetch_files(dl_dest, files, verbose=1)
         else:
-            file_name = Path(url).name
-            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
+            # a name for a URL that has none, and the checksum of the file
+            file_name = dl_entry.get("name", Path(url).name)
+            options = {}
+            if "md5" in dl_entry:
+                options["md5sum"] = dl_entry["md5"]
+            if "name" in dl_entry:
+                options["move"] = file_name
+            _fetch_files(dl_dest, [(file_name, url, options)], verbose=1)
 
 
 def _phase_templates(nl, cfg, data_dir, engine_name):
@@ -1494,10 +1501,17 @@ def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
         )
 
 
-def _phase_datalog_init(nl, cfg):
+def _phase_datalog_init(nl, cfg, data_dir):
+    """
+    Run the ``datalog_init`` program of the engine, from its data directory:
+    the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
+    relative to it, where ``downloads`` puts the files.
+    """
     datalog_init = cfg.get("datalog_init")
     if datalog_init:
-        nl.execute_datalog_program(datalog_init)
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        with contextlib.chdir(data_dir):
+            nl.execute_datalog_program(datalog_init)
 
 
 RELATION_FILE_SEPARATORS = {".csv": ",", ".tsv": "\t"}
@@ -1814,7 +1828,7 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg)
+    _phase_datalog_init(nl, cfg, data_dir)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)

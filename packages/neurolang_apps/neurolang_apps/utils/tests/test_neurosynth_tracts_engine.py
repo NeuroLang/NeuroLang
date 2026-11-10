@@ -2,6 +2,7 @@
 on fake data (no download), and its example, uncinate_cogat.dl of
 the engine tracts."""
 
+import shutil
 import warnings
 from pathlib import Path
 from unittest.mock import patch
@@ -67,14 +68,13 @@ def files(tmp_path):
         [temporal, insula, (frontal[0] + 0.04 * k,) + frontal[1:]]
         for k in range(20)
     ] + [[temporal, insula, LONE_END]]
-    nib.streamlines.save(
-        nib.streamlines.Tractogram(
-            uncinate_files.streamlines()
-            + [uncinate_files.polyline(w) for w in extra],
-            affine_to_rasmm=np.eye(4),
-        ),
-        str(tmp_path / "tracts.trk"),
+    tractogram = nib.streamlines.Tractogram(
+        uncinate_files.streamlines()
+        + [uncinate_files.polyline(w) for w in extra],
+        affine_to_rasmm=np.eye(4),
     )
+    nib.streamlines.save(tractogram, str(tmp_path / "tracts.trk"))
+    nib.streamlines.save(tractogram, str(tmp_path / "tracts.tck"))
     return uncinate_files
 
 
@@ -85,7 +85,12 @@ def expected(files, side):
 
 
 @pytest.fixture
-def engine(tmp_path, files, monkeypatch):
+def engine_name():
+    return "neurosynth_tracts"
+
+
+@pytest.fixture
+def engine(tmp_path, files, monkeypatch, engine_name):
     """The engine on three studies, 1001 with a peak in front of the left
     uncinate, 1002 of the right one and 1003 at LONE_END, and atlases of the
     space of the uncinate's files whose regions are its hemispheres, 1 the
@@ -114,6 +119,19 @@ def engine(tmp_path, files, monkeypatch):
         "term": ["memory", "language"], "tfidf": [0.5, 0.3],
     })
     mask = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4))
+    if engine_name == "neurosynth_iit":
+        # where the engine finds the whole-brain tractogram: no download
+        target = tmp_path / "data" / "tracts" / "iit"
+        target.mkdir(parents=True)
+        shutil.copy(tmp_path / "tracts.tck", target / "IIT3mean.tck")
+        # the atlas the engine downloads, and its colour LUT, read from the
+        # data directory
+        fs = tmp_path / "data" / "tracts" / "fs"
+        fs.mkdir()
+        shutil.copy(tmp_path / "labels.nii.gz",
+                    fs / "IIT3mean_desikan_2009.nii.gz")
+        shutil.copy(tmp_path / "lut.txt", fs / "FreeSurferColorLUT.txt")
+        monkeypatch.chdir(tmp_path / "data")
     with patch(f"{NS_INIT}.fetch_neurosynth_peak_data", return_value=peaks), \
             patch(f"{NS_INIT}.get_ns_term_study_associations",
                   return_value=terms), \
@@ -127,7 +145,7 @@ def engine(tmp_path, files, monkeypatch):
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask):
         yield engine_registry.build_engine(
-            "neurosynth_tracts", tmp_path / "data")
+            engine_name, tmp_path / "data")
 
 
 def rows(result):
@@ -221,3 +239,83 @@ def test_the_example_is_a_question_of_the_assistant():
     question = bank[-1]
     assert "uncinate" in question.question
     parser(question.queries["datalog"])
+
+
+def test_the_engine_of_the_page_loads_the_tractogram_and_the_bundles():
+    cfg = engine_registry.get_engine_config("neurosynth_iit")
+    # neurosynth_tracts, then the commands that load the tractogram and the
+    # wmparc, index the one by the other and import the bundles
+    assert cfg["python_init"] == [NS_INIT, TRACTS]
+    assert cfg["datalog_init"].rstrip().splitlines()[-4:] == [
+        '.load_tractogram("iit", "tracts/iit/IIT3mean.tck", '
+        'space="MNI152")',
+        '.load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", '
+        '"tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", '
+        'space="MNI152")',
+        '.index_tracts("iit", "fs")',
+        '.import("bundles/freesurfer_queries.dl")',
+    ]
+    # the tractogram and the atlas are downloaded, with the checksum of each
+    # file, into tracts/iit and tracts/fs
+    assert [(d["name"] if "name" in d else d["url"].rsplit("/", 1)[-1],
+             d["dest"]) for d in cfg["downloads"]] == [
+        ("IIT3mean.tck", "tracts/iit"),
+        ("IIT3mean_desikan_2009.nii.gz", "tracts/fs"),
+        ("FreeSurferColorLUT.txt", "tracts/fs")]
+    assert all(len(d["md5"]) == 32 for d in cfg["downloads"])
+    assert cfg["tractogram"] == {
+        "path": "tracts/iit/IIT3mean.tck", "subsample": 15000, "step": 3,
+        "seed": 0}
+    assert cfg["downloads"][0]["md5"] == "6e9703e4e331cfb26f3eb2e29526e225"
+    # the same studies as neurosynth: the same embeddings' cache key
+    assert cfg["text_embeddings"] == engine_registry.get_engine_config(
+        "neurosynth")["text_embeddings"]
+
+
+@pytest.mark.parametrize("engine_name", ["neurosynth_iit"])
+def test_the_engine_of_the_page_has_the_bundles_over_the_wmparc(
+    engine, files
+):
+    """The tractogram is loaded and indexed by the wmparc (a designed one
+    here, as the engine downloads it) and the uncinate of tract_querier
+    answers at the prompt, as in uncinate.dl."""
+    atlases = rows(engine.execute_datalog_program("ans(a) :- atlas(a)"))
+    assert atlases == {("fs",)}
+    assert {"uf", "af", "cst", "ilf", "ioff"} <= set(engine.symbols)
+    for side in ("left", "right"):
+        assert {x for x, in rows(engine.execute_datalog_program(
+            f'ans(x) :- uf(x, "{side}")'))} == expected(files, side)
+    # and the studies of Neurosynth are there
+    assert rows(engine.execute_datalog_program(
+        "ans(s) :- peak_reported(i, j, k, s)")) >= {(1001,), (1002,)}
+
+
+def test_the_engine_of_the_page_has_its_own_questions():
+    from neurolang_apps.utils.llm.examples import load_examples
+
+    bank = load_examples("neurosynth_iit")
+    assert bank[:-2] == load_examples("neurosynth_tracts")
+    assert "uncinate" in bank[-2].question
+    assert bank[-2].queries["datalog"] == 'ans(x) :- uf(x, "left")'
+
+
+def test_a_download_has_a_name_and_a_checksum(monkeypatch, tmp_path):
+    """The URL of the IIT atlas has no file name: ``name`` gives it, and
+    ``md5`` is the checksum nilearn's fetcher checks (the file is
+    moved to its name)."""
+    fetched = []
+    monkeypatch.setattr(
+        engine_registry, "_fetch_files",
+        lambda directory, files, **kw: fetched.append((directory, files)))
+    engine_registry._phase_downloads(
+        {"downloads": [
+            {"url": "https://osf.io/download/abc/", "name": "a.nii.gz",
+             "md5": "0" * 32, "dest": "tracts/fs"},
+            {"url": "https://x.org/b.txt", "dest": "tracts/fs"}]},
+        tmp_path, "e")
+    assert fetched == [
+        (str(tmp_path / "tracts/fs"),
+         [("a.nii.gz", "https://osf.io/download/abc/",
+           {"md5sum": "0" * 32, "move": "a.nii.gz"})]),
+        (str(tmp_path / "tracts/fs"), [("b.txt", "https://x.org/b.txt", {})]),
+    ]

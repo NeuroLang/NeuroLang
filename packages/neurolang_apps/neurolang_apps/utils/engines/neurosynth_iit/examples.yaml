@@ -1,0 +1,17 @@
+# Merged into the entry of neurosynth_iit in ../engines.yaml (see
+# doc/engine_configuration.rst).
+#
+# Questions on neurosynth_iit, added after those of neurosynth_tracts.
+# The engine has loaded a tractogram and imported the bundles of
+# tract_querier's freesurfer_queries.dl (uf, af, cst, ilf, ifof...): a
+# bundle is a predicate of a streamline x and a hemisphere h, "left" or
+# "right". The atlas is the wmparc of the IIT Human Brain Atlas, with the terms of
+# freesurfer_aseg_aparc.
+assistant_examples:
+  - question: Which streamlines form the left uncinate fasciculus?
+    datalog: |-
+      ans(x) :- uf(x, "left")
+
+  - question: Which streamlines form the right inferior longitudinal fasciculus?
+    datalog: |-
+      ans(x) :- ilf(x, "right")
