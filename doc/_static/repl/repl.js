@@ -474,12 +474,13 @@ function showGraph({ graph, tables }) {
   } else show("graph", ...nodes);
 }
 
-// The log of a query that gave a table is folded to its last line, which says how long it took.
+// The log of a query, under its last line, which folds it: folded when the
+// query gave a table, open otherwise.
 function showLog(log, fold) {
-  const last = fold && logSummary(log.textContent);
+  const last = logSummary(log.textContent);
   out.classList.toggle("quiet", Boolean(last));
   if (!last) return out.replaceChildren(log);
-  const details = document.createElement("details");
+  const details = Object.assign(document.createElement("details"), { open: !fold });
   details.append(Object.assign(document.createElement("summary"), { textContent: last }), log);
   out.replaceChildren(details);
 }
@@ -586,9 +587,20 @@ input.addEventListener("keydown", (event) => {
     run(input.value, { remember: true });
   }
 });
+// A dot-command is a line: the lines of the question are joined.
+const ask = () => {
+  const text = question.value.trim().replace(/\s*\n\s*/g, " ");
+  if (text) run(`.ask ${text}`);
+};
 $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
-  if (question.value.trim()) run(`.ask ${question.value}`);
+  ask();
+});
+question.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    ask();
+  }
 });
 $("share").addEventListener("click", async (event) => {
   const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;

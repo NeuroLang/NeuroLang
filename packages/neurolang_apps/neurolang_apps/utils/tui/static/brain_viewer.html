@@ -34,7 +34,8 @@
     display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
     margin-bottom: 10px;
   }
-  #controls label { display: inline-flex; gap: 6px; align-items: center; }
+  /* A control wraps within a page as narrow as a phone's. */
+  #controls label { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 6px; align-items: center; }
   #threshold { width: 7em; }
   #threshold-slider { width: 180px; }
   #opacity { width: 100px; }
@@ -49,7 +50,8 @@
     display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
     margin-bottom: 10px; color: var(--soft);
   }
-  #display label { display: inline-flex; gap: 6px; align-items: center; }
+  #display-options summary { color: var(--soft); cursor: pointer; margin-bottom: 6px; }
+  #display label { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 6px; align-items: center; }
   #crosshair-width { width: 3.5em; }
   #crosshair-color { padding: 0; width: 2.2em; height: 1.5em; }
   #gamma { width: 90px; }
@@ -60,7 +62,7 @@
   #readout { margin: 8px 0; font-variant-numeric: tabular-nums; }
   #readout b { color: var(--strong); font-weight: 600; }
   #message { color: var(--error); }
-  #colorbars canvas { display: block; }
+  #colorbars canvas { display: block; max-width: 100%; }
   .colorbar-name { color: var(--soft); margin-top: 4px; }
   #network { margin: 8px 0; color: var(--soft); }
   #edge-threshold { width: 7em; }
@@ -96,6 +98,7 @@
   </label>
   <button id="reset" type="button">Reset</button>
 </div>
+<details id="display-options" open><summary>Display</summary>
 <div id="display">
   <label>View <select id="slice-type">
     <option value="axial">axial</option>
@@ -142,6 +145,7 @@
     <input id="clip-plane" type="checkbox"> clip plane</label>
   <span id="hot-keys" title="With the views focused">keys: V view &middot; C clip plane</span>
 </div>
+</details>
 <div id="views"><canvas id="gl" tabindex="0"></canvas></div>
 <div id="readout">
   <span id="space">MNI</span> <b id="mm"></b> mm &middot; voxel <b id="voxel"></b>

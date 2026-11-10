@@ -30,9 +30,11 @@
   // transparent below the minimum.
   var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
 
-  // The display of NiiVue the page starts with, and Reset restores.
+  // The display of NiiVue the page starts with, and Reset restores: the 3
+  // slices in a row, or in a column on a screen as narrow as a phone's.
+  var NARROW = window.matchMedia && matchMedia('(max-width: 30rem)').matches;
   var DISPLAY = {
-    sliceType: 'multiplanar', layout: 'row', renderTile: false,
+    sliceType: 'multiplanar', layout: NARROW ? 'column' : 'row', renderTile: false,
     dragMode: 'contrast', crosshairColor: '#4fa1ff', crosshairWidth: 1,
     crosshair3D: false, gamma: 1, colorbar: false, orientationText: true,
     orientCube: false, ruler: false, radiological: false, smooth: true,
@@ -151,6 +153,16 @@
     return layer;
   }
 
+  // Size NiiVue's canvas to the pixels of the screen again when the browser
+  // zoom changes them: NiiVue does so only when the canvas changes size,
+  // which in a frame of a fixed width the zoom does not change.
+  function followZoom(nv) {
+    if (!window.matchMedia) return;
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener(
+      'change', function () { nv.resizeListener(); followZoom(nv); },
+      { once: true });
+  }
+
   async function load() {
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
@@ -163,6 +175,9 @@
       show3Dcrosshair: false, dragAndDropEnabled: false
     });
     await nv.attachTo('gl');
+    followZoom(nv);
+    // On a phone the options of the display start folded, the views close to the main controls.
+    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';
