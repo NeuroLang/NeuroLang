@@ -660,6 +660,19 @@ def test_neurolang_dl_datalog_code_disjunction():
     assert neurolang.solve_all()["uncinate"].to_unnamed() == {(2,)}
 
 
+@pytest.mark.parametrize("body", [
+    "r(x, t), (t == 'a' | t == 'b')",
+    "r(x, t), ((t == 'a') | (t == 'b'))",
+    "r(x, t), (t == 'a' | t == 'b', x > 1 | t == 'a')",
+])
+def test_neurolang_dl_datalog_code_disjunction_of_comparisons(body):
+    """In parentheses a comparison is a disjunct of its own."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="r")
+    res = neurolang.execute_datalog_program(f"ans(x) :- {body}")
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
 def test_neurolang_dl_datalog_code_disjunction_constant_query():
     neurolang = _tracts()
     res = neurolang.execute_datalog_program(
