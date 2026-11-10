@@ -164,11 +164,16 @@ function showHint() {
 }
 ["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
 
-// The examples of the engine and its predicates, which put their text in the box.
-let guide = { examples: {}, predicates: [], commands: [] };
+// The questions and examples of the engine and its predicates, which put their text in a box.
+let guide = { examples: {}, questions: [], predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
+  $("guide-questions-box").hidden = !guide.questions.length;
+  renderExamples($("guide-questions"), guide.questions, (text) => {
+    question.value = text;
+    question.focus();
+  }, "Put this question in the box of the assistant");
   renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
     editor.value = query;
     hideSummary();
@@ -362,8 +367,9 @@ const workerMessages = {
     $("banner").replaceChildren(html(data.banner));
     setProviders(data.providers ?? []);
     canRate = Boolean(data.canRate);
-    guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
+    $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
     showGuide();
     if (restore) return replay(restore);
     setBusy(false);

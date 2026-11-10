@@ -284,6 +284,7 @@ def rate(verdict, comment):
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
+  const questions = JSON.parse(pyodide.runPython("json.dumps(repl.questions() if hasattr(repl, 'questions') else [])"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
   const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
   // Where a rated answer goes (feedback.json next to the page); without a
@@ -297,7 +298,7 @@ def rate(verdict, comment):
   } catch {
     // the page works without ratings
   }
-  postMessage({ type: "ready", banner, source, providers, examples, predicates, commands, canRate });
+  postMessage({ type: "ready", banner, source, providers, examples, questions, predicates, commands, canRate });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   rateAnswer = pyodide.globals.get("rate");

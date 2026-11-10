@@ -205,3 +205,12 @@ def test_hidden_predicates_are_concatenated():
     assert resolve_engine_config(engines, "both")["hidden_predicates"] == [
         "p", "q", "r"
     ]
+
+
+@pytest.mark.parametrize("engine", list_engine_names())
+def test_the_questions_shown_are_those_of_the_assistant(engine):
+    """The questions the REPL lists first are in the assistant's bank,
+    whose queries the tests check on the engines."""
+    cfg = get_engine_config(engine)
+    bank = {e["question"] for e in cfg.get("assistant_examples", [])}
+    assert set(cfg.get("questions") or []) <= bank

@@ -132,6 +132,10 @@ may specify the following keys, all of them optional:
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
   obtaining the first declared predicate)
+- ``questions`` — questions in English that the REPL in the browser lists
+  first, a click putting one in the box of the query assistant; each is
+  one of the questions of ``assistant_examples``, of which the tests check
+  the queries.  The query examples are folded under them
 - ``assistant_examples`` — the bank of questions with their ``datalog``
   or ``squall`` queries from which the LLM query assistant takes its
   few-shot examples (see :doc:`query_assistant`)
