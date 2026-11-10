@@ -17,10 +17,10 @@ export function matches(predicate, filter) {
   return filter.toLowerCase().split(/\s+/).filter(Boolean).every((word) => text.includes(word));
 }
 
-// Fill *list* with a button per example; a click gives its text to *pick*.
-export function renderExamples(list, queries, pick) {
+// Fill *list* with a button per example, of the *title*; a click gives its text to *pick*.
+export function renderExamples(list, queries, pick, title = "Put this query in the box") {
   list.replaceChildren(...(queries ?? []).map((query) => {
-    const button = element("button", { type: "button", className: "guide-item", textContent: query, title: "Put this query in the box" });
+    const button = element("button", { type: "button", className: "guide-item", textContent: query, title });
     button.addEventListener("click", () => pick(query));
     return element("li", {}, button);
   }));

@@ -1,7 +1,15 @@
 # The example queries of coordinate_meta_analysis, merged into its
-# entry of ../engines.yaml (see doc/engine_configuration.rst): those
-# the REPL shows (examples) and the questions of the query assistant
-# (assistant_examples).
+# entry of ../engines.yaml (see doc/engine_configuration.rst): the
+# questions in English the REPL shows first (questions), each one of the
+# bank of the query assistant below, the queries it shows (examples) and
+# the questions of the query assistant (assistant_examples).
+questions:
+  - Which studies mention pain?
+  - Which gyri and sulci are activated by studies about language?
+  - Which subcortical regions are activated by studies about fear?
+  - What is the Bayes factor of fear for the activation of the left amygdala?
+  - Which cortical regions are co-activated with the left amygdala?
+  - Where in the brain is working memory, by its definition in the Cognitive Atlas?
 examples:
   datalog:
     - "ans(s) :- mentions(s, 'pain')"

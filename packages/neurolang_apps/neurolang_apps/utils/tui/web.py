@@ -550,6 +550,15 @@ class WebRepl:
         """Return the example queries of the engine, by language."""
         return engine_examples(self.app.settings.engine_name)
 
+    def questions(self) -> List[str]:
+        """Return the example questions in English of the engine, for the
+        query assistant."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        return list(config.get("questions") or [])
+
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the

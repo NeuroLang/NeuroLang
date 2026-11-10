@@ -156,6 +156,10 @@
   .guide-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
   .guide-cols h3 { margin: 0 0 .4rem; font-size: .9rem; color: var(--text); }
   .guide-cols h3 .note { font-weight: 400; margin-left: .4rem; }
+  #guide-questions .guide-item { font-family: var(--sans); }
+  #guide-queries > summary { cursor: pointer; }
+  #guide-queries > summary h3 { display: inline; }
+  #guide-queries #builder { margin: .4rem 0; }
   .guide-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
   .guide-list > li + li { border-top: 1px solid var(--border); }
   .guide-list > li { display: flex; flex-wrap: wrap; align-items: flex-start; }
@@ -293,15 +297,17 @@
 
   <details id="guide">
     <summary>Examples and relations</summary>
-    <form id="builder" class="row" hidden>
-      <strong>Ask a question</strong>
-      <select id="builder-template" aria-label="Question"></select>
-      <span id="builder-fields" class="row"></span>
-      <button class="ghost">Put in the box</button>
-      <span id="builder-error" class="agent-bad" role="alert"></span>
-    </form>
     <div class="guide-cols">
-      <div><h3>Examples <span class="note">click one to put it in the box</span></h3><ul id="guide-examples" class="guide-list"></ul></div>
+      <div id="guide-questions-box"><h3>Questions <span class="note">click one to put it in the box of the assistant, above</span></h3><ul id="guide-questions" class="guide-list"></ul></div>
+      <div><details id="guide-queries"><summary><h3>Queries <span class="note">Datalog or SQUALL, as the box: click one to put it in the box</span></h3></summary>
+        <form id="builder" class="row" hidden>
+          <strong>Build a query</strong>
+          <select id="builder-template" aria-label="Question"></select>
+          <span id="builder-fields" class="row"></span>
+          <button class="ghost">Put in the box</button>
+          <span id="builder-error" class="agent-bad" role="alert"></span>
+        </form>
+        <ul id="guide-examples" class="guide-list"></ul></details></div>
       <div><h3>Relations and rules <span class="note">click one to add it at the cursor, ⓘ for its documentation</span></h3>
         <input id="guide-filter" type="search" placeholder="Filter relations and commands…" aria-label="Filter the relations and the commands" spellcheck="false" autocomplete="off">
         <ul id="guide-relations" class="guide-list"></ul></div>
