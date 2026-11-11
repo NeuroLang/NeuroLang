@@ -122,6 +122,11 @@ Unreleased
 
 **New features:**
 
+* The rest of the documentation starts from the REPL as well: the queries of
+  the Cognitive Atlas page run on the ``neurostore`` engine from their link,
+  with its counts in the 2026-11 release; Concepts writes facts and rules as
+  the REPL takes them; the pages start the REPL as ``neurolang-query -i``;
+  the README leads with the REPL in the browser.
 * The SQUALL tutorial runs in the REPL too: its Bayes factor program is on the
   ``neurosynth`` engine and the Destrieux atlas, with the top 20 terms it
   gives, its aggregation examples on facts typed in the session and with the

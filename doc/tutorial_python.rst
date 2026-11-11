@@ -146,9 +146,35 @@ does:
 
 ``add_probabilistic_facts_from_tuples`` and
 ``add_probabilistic_choice_from_tuples`` add probabilistic facts and choices
-with probabilities of their own, the first column holding the probability;
+with probabilities of their own, the first column holding the probability.
+
+
+.. _python-ontology:
+
+An ontology
+...........
+
 ``load_ontology`` reads an OWL or RDF ontology into relations, as the
-``ontologies`` of an engine (:doc:`tutorial_cognitive_atlas`).
+``ontologies`` of an engine (:doc:`tutorial_cognitive_atlas`); the queries of
+that page then run on any frontend:
+
+.. code-block:: python
+
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        "cogat.v2.owl", individuals=True, names="prefixed"
+    )
+    nl.execute_datalog_program("""
+        cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
+        cogat_subclass_of(x, z) :-
+            cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+    """)
+    below = nl.execute_datalog_program(
+        "ans(l) :- rdfs:label(c, 'Working memory'),"
+        " cogat_subclass_of(x, c), rdfs:label(x, l)"
+    )
 
 
 .. _part-9-appendix-a:
