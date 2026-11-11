@@ -347,7 +347,8 @@ function start({ restore = null } = {}) {
   engineSelect.value = engine;
   Object.assign(version.elements.repo, { value: repo });
   Object.assign(version.elements.ref, { value: ref });
-  $("version-summary").textContent = ref ? `${repo} at ${ref}` : "the build of this page";
+  $("version-summary").textContent =
+    bundle.backend === "local" ? "the Python of this machine" : ref ? `${repo} at ${ref}` : "the build of this page";
   out.replaceChildren();
   out.classList.remove("quiet");
   results.classList.remove("has");
@@ -362,7 +363,15 @@ function start({ restore = null } = {}) {
   setStatus("Starting…", "busy");
   setBusy(true);
   input.disabled = false; // the query can be written while the engine loads
-  worker = new Worker("worker.js", { type: "module" });
+  // A page served with NeuroLang in the Python of this machine
+  // (neurolang-repl-serve --local) has it answer, not Pyodide: its
+  // assistant is that of the machine's configuration, unless a key is given.
+  const local = bundle.backend === "local";
+  worker = new Worker(local ? "local_worker.js" : "worker.js", { type: "module" });
+  if (local) {
+    $("ask-note").textContent =
+      "Asking uses the AI assistant configured on this machine, as neurolang-query does, or the API key you give.";
+  }
   worker.postMessage({ type: "start", repo, ref, full, engine });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {

@@ -4,6 +4,8 @@ import importlib.util
 import json
 import subprocess
 import threading
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -285,3 +287,103 @@ def test_main_serves_the_downloaded_site(serve, gh, tmp_path, monkeypatch):
     )
     serve.main(["--pr", "7", "--site", str(tmp_path), "--no-browser"])
     assert served[0][0] == tmp_path / "pr-7"
+
+
+class _FakeBackend:
+    """A backend of the page that records what it is asked."""
+
+    def __init__(self):
+        import queue
+
+        self.listener = queue.Queue()
+        self.asked = []
+
+    def listen(self):
+        return self.listener
+
+    def forget(self, listener):
+        self.asked.append(("forget",))
+
+    def stop(self):
+        return False
+
+    def start(self, engine):
+        self.listener.put(json.dumps({"type": "status", "message": "built"}))
+        return {"banner": f"<b>{engine}</b>"}
+
+    def submit(self, text):
+        if text == "boom":
+            raise ValueError("it broke")
+        return {"html": text, "failed": False, "tables": []}
+
+    def set_llm(self, **options):
+        self.asked.append(("llm", options))
+
+    def rate(self, verdict, comment=""):
+        return {"ok": True, "message": verdict}
+
+    def download(self, block, kind, value=""):
+        from neurolang_apps.utils.tui.web import Download
+
+        return Download("résultat 1.csv", "text/csv", b"a,b\n")
+
+
+def _post(port, action, body):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}/api/{action}",
+        data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    return urllib.request.urlopen(request)
+
+
+def test_the_local_site_has_the_page_answered_by_this_machine(
+    serve, tmp_path
+):
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    bundle = json.loads((page.parent / "bundle.json").read_text())
+    assert bundle == {
+        "backend": "local", "default": "neurosynth",
+        "engines": {"neurosynth": {"label": "Neurosynth"}},
+    }
+    assert (page.parent / "local_worker.js").is_file()
+    assert (page.parent / "highlight.json").is_file()
+    assert serve.parse_args(["--local"]).local
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--local", "--rebuild"])
+
+
+def test_the_local_server_answers_the_worker(serve, tmp_path):
+    backend = _FakeBackend()
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, backend)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    try:
+        events = urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/events"
+        )
+        with _post(port, "start", {"engine": "neurosynth"}) as response:
+            assert json.load(response) == {"banner": "<b>neurosynth</b>"}
+        assert events.readline() == (
+            b'data: {"type": "status", "message": "built"}\n'
+        )
+        with _post(port, "submit", {"text": "ans(x) :- r(x)"}) as response:
+            assert json.load(response)["html"] == "ans(x) :- r(x)"
+        with pytest.raises(urllib.error.HTTPError) as error:
+            _post(port, "submit", {"text": "boom"})
+        assert error.value.code == 500
+        assert json.load(error.value) == {"error": "ValueError: it broke"}
+        with _post(port, "download", {"block": 0, "kind": "csv"}) as response:
+            assert response.read() == b"a,b\n"
+            assert response.headers["Content-Type"] == "text/csv"
+            assert urllib.parse.unquote(
+                response.headers["X-File-Name"]
+            ) == "résultat 1.csv"
+        with _post(port, "llm", {"provider": "anthropic", "key": "k"}):
+            pass
+        assert ("llm", {"provider": "anthropic", "key": "k"}) in backend.asked
+        events.close()
+    finally:
+        server.shutdown()
+        server.server_close()
