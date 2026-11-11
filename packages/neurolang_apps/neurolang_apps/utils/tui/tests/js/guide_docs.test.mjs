@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { columnDocs, matchesCommand, showAllQuery } from "../../../../../../../doc/_static/repl/guide.js";
+import { columnDocs, matchesCommand, showAllQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
 
 const peaks = {
   name: "peak_reported", signature: "peak_reported(voxel(i, j, k), study(study_id))", kind: "stored",
@@ -30,4 +30,15 @@ test("a command matches by the words of its usage and its description", () => {
   assert.equal(matchesCommand(view, "brain view"), true);
   assert.equal(matchesCommand(view, "BRAIN"), true);
   assert.equal(matchesCommand(view, "sort"), false);
+});
+
+test("an example question is suggested when the assistant can answer", () => {
+  const questions = ["Which regions does pain activate?", "Where is reading?", "What about faces?"];
+  assert.equal(suggestedQuestion(questions, "", true, () => 0), questions[0]);
+  assert.equal(suggestedQuestion(questions, "", true, () => 0.5), questions[1]);
+  assert.equal(suggestedQuestion(questions, "", true, () => 0.9999), questions[2]);
+  // not without the assistant, over the visitor's question, nor without questions
+  assert.equal(suggestedQuestion(questions, "", false), "");
+  assert.equal(suggestedQuestion(questions, "my own question", true), "");
+  assert.equal(suggestedQuestion([], "", true), "");
 });

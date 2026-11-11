@@ -550,6 +550,18 @@ class WebRepl:
         """Return the example queries of the engine, by language."""
         return engine_examples(self.app.settings.engine_name)
 
+    def assistant_ready(self) -> bool:
+        """
+        Return whether the AI assistant can answer: its provider has its
+        key, the page's or that of the environment, or needs none.
+        """
+        state = self.app.assistant
+        try:
+            state.config().provider(state.provider).api_key()
+        except Exception:
+            return False
+        return True
+
     def questions(self) -> List[str]:
         """Return the example questions in English of the engine, for the
         query assistant."""
