@@ -17,8 +17,10 @@ Usage, from a checkout::
         [--embeddings DIR] [--site SITE] [--host 0.0.0.0] [--no-browser]
 
 the command of the workspace's root project, or ``python -m serve_repl``.
-The page offers the engines ``neurosynth`` and ``neurostore`` (a select at
-its top, or ``?engine=neurostore``): the bundle has the data of both, unless
+The page offers the engines ``neurosynth_iit`` (Neurosynth with the tracts
+of the IIT atlas, which it starts with), ``neurosynth`` and ``neurostore`` (a
+select at its top, or ``?engine=neurostore``): the bundle has the data of
+all, unless
 ``--engine`` names the ones to build, and is built again when it lacks one that
 is asked for. It opens the page in the browser. The text embeddings of
 ``query_similarity`` are kept in ``--embeddings`` (by default

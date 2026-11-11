@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* The REPL in the browser starts with the engine Neurosynth + tracts
+  (``neurosynth_iit``: Neurosynth with the tractogram and the bundles of the
+  IIT atlas); Neurosynth and NeuroStore are in its select, and
+  ``?engine=neurosynth`` starts with Neurosynth alone.  The bundle builds
+  Neurosynth first all the same, whose text embeddings the tracts' engine
+  shares (``DEFAULT_ENGINE`` of ``doc/make_repl_bundle.py``).
 * The brain viewer of a result on the regions of atlases names the region
   under the mouse, and under the cursor, and draws the regions in the
   colours of their atlas (*atlas colours*), as a result of regions alone

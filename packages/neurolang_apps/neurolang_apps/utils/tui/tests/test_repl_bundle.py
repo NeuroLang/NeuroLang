@@ -213,7 +213,9 @@ def test_the_downloads_are_kept_even_when_the_build_fails(
     monkeypatch.setattr(bundle, "build_engine", build)
     with pytest.raises(requests.HTTPError):
         bundle.main(tmp_path / "out", downloads=downloads)
-    assert found == [["fsl/atlas.nii.gz"]]
+    # neurosynth is left out, and the default, neurosynth_iit, stops the
+    # build: each found the downloads kept for it
+    assert found == [["fsl/atlas.nii.gz"], []]
     kept = downloads / "neurosynth"
     assert sorted(
         str(p.relative_to(kept)) for p in kept.rglob("*") if p.is_file()
@@ -253,16 +255,21 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     _fake_bundle(bundle, monkeypatch)
     bundle.main(tmp_path)
     described = json.loads((tmp_path / "bundle.json").read_text())
-    assert described["default"] == "neurosynth"
+    # the page starts with Neurosynth and the tracts, built after
+    # Neurosynth, whose text embeddings it shares
+    assert described["default"] == "neurosynth_iit"
     assert list(described["engines"]) == [
         "neurosynth", "neurosynth_iit", "neurostore"]
+    assert described["engines"]["neurosynth_iit"]["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
     assert described["engines"]["neurostore"] == {
         "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
         "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
     }
     # What a page of before the choice of the engine reads: the default's.
-    assert described["data"] == "neurolang-neurosynth-data.zip"
-    assert described["files"] == {"neurosynth/model.npz": ["neurosynth-model.npz"]}
+    assert described["data"] == "neurolang-neurosynth_iit-data.zip"
+    assert described["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
 
 
 def test_an_engine_of_shared_embeddings_is_built_alone(
@@ -303,9 +310,14 @@ def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
     described = json.loads((tmp_path / "bundle.json").read_text())
     assert list(described["engines"]) == ["neurosynth", "neurosynth_iit"]
     assert "neurostore is left out" in capsys.readouterr().out
-    _fake_bundle(bundle, monkeypatch, failing={"neurosynth"})
+    _fake_bundle(bundle, monkeypatch, failing={"neurosynth_iit"})
     with pytest.raises(RuntimeError):
         bundle.main(tmp_path / "again")
+    # without the tracts, the page starts with the first engine
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path / "plain", engines=("neurosynth", "neurostore"))
+    described = json.loads((tmp_path / "plain" / "bundle.json").read_text())
+    assert described["default"] == "neurosynth"
 
 
 def test_only_the_engines_asked_for_are_built(bundle, monkeypatch, tmp_path):
@@ -478,7 +490,7 @@ def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
     monkeypatch.setattr(bundle, "bundle_engine", with_keys)
     bundle.main(tmp_path, engines=("neurosynth", "neurosynth_iit"))
     described = json.loads((tmp_path / "bundle.json").read_text())
-    assert described["default"] == "neurosynth"
+    assert described["default"] == "neurosynth_iit"
     assert described["engines"]["neurosynth_iit"] == {
         "label": "Neurosynth + tracts",
         "data": "neurolang-neurosynth_iit-data.zip",
