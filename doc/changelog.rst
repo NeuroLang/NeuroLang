@@ -122,6 +122,13 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-query --mcp`` serves a session of the interactive REPL to an
+  MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``):
+  its tools run statements and dot-commands in the session (``repl``),
+  give the syntax, guidance and examples of the engine (``guide``) and are
+  those of the ReAct assistant (``list_predicates``,
+  ``describe_predicate``, ``search_values``, ``check_query``). See
+  *From an MCP client* in the LLM Query Assistant documentation.
 * The examples of the parcels the uncinate connects (``uncinate_cogat.dl`` of
   the engine tracts, its README and the assistant's example of
   ``neurosynth_tracts``) count the ends of the streamlines as the pairs

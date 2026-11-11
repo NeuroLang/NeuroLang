@@ -125,7 +125,7 @@ jobs:
 
     - name: Install all the packages
       run: |
-        uv sync --all-packages --extra dev --extra ras-polars --extra tui --extra llm
+        uv sync --all-packages --extra dev --extra ras-polars --extra tui --extra llm --extra mcp
         uv pip install pytest-timeout pytest-cov "genbadge[coverage]"
 
     - name: Run all the tests with coverage

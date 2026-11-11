@@ -26,7 +26,7 @@ import json
 import math
 import re
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, NamedTuple
@@ -121,10 +121,10 @@ class Reply:
     """
     The answer to a submission.
 
-    *html* is its output, *viewers* the HTML pages of the brain viewer
-    the submission made (``.view``), *tables* its results (see
-    :func:`table_payload`), *failed* tells whether a statement of it
-    failed, *prompt* is the query the assistant wrote, for the page
+    *html* is its output (text if the REPL is not of HTML), *viewers*
+    the HTML pages of the brain viewer the submission made (``.view``),
+    *tables* its results (see :func:`table_payload`), *failed* tells
+    whether a statement of it failed, *prompt* is the query the assistant wrote, for the page
     to put in its input, and *mode* the language of the REPL, ``datalog``
     or ``squall``, which the assistant may have switched, *predicates*
     those of the engine and the session (see :meth:`WebRepl.predicates`),
@@ -310,17 +310,20 @@ class WebRepl:
 
     def __init__(
         self, nl, engine_name: str = "", resolution=None, width: int = 100,
-        max_rows: int = MAX_ROWS, study_metadata=None,
+        max_rows: int = MAX_ROWS, study_metadata=None, html: bool = True,
     ):
         """
         Set up the REPL on *nl*, the engine *engine_name* at *resolution*.
 
-        The output is laid out on *width* columns, and at most *max_rows*
+        The output is laid out on *width* columns, as HTML or, unless
+        *html*, as plain text, with the pages of ``.view`` and ``.graph``
+        in files, as on a terminal, and at most *max_rows*
         rows of a result are sent to the page. The *study_metadata* (see
         :func:`study_records`) of the engine's studies, whose ids are
         those of PubMed, let the page link the studies of a result.
         """
         self.max_rows = max_rows
+        self.html = html
         self._studies = (
             study_records(study_metadata) if study_metadata is not None
             else None
@@ -353,9 +356,11 @@ class WebRepl:
         )
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
-        # and the graph of a query in a tab of its own.
+        # and the graph of a query in a tab of its own; as text, the pages
+        # of the graph and the viewer are files, as on a terminal.
         self._graph = ""
-        self.app.show_graph = self._show_graph
+        if html:
+            self.app.show_graph = self._show_graph
         try:
             # Until the visitor gives a key, the assistant asks for it.
             self.set_llm("anthropic", "")
@@ -472,7 +477,8 @@ class WebRepl:
         self._graph = ""
         answered = self.app.assistant.last_run
         query = self.app.last_query
-        with _viewers_returned() as viewers:
+        returned = _viewers_returned() if self.html else nullcontext([])
+        with returned as viewers:
             try:
                 self.app._run_line(text)
             except QuitRepl:
@@ -482,7 +488,7 @@ class WebRepl:
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
         ran = self.app.last_query  # a new tuple for each query run
-        if not self._graph and ran is not None and ran is not query:
+        if self.html and not self._graph and ran not in (None, query):
             try:
                 self._graph = query_graph.last_query_page(self.app)
             except Exception:  # a query that does not parse has no graph
@@ -664,10 +670,10 @@ class WebRepl:
         )
 
     def _output(self) -> str:
-        """Return the HTML of what was printed since last asked."""
+        """Return the HTML, or text, of what was printed since last asked."""
         html = self.console.export_html(
             clear=True, inline_styles=True, code_format=HTML_FORMAT
-        )
+        ) if self.html else self.console.export_text(clear=True)
         self.console.file.seek(0)
         self.console.file.truncate()
         return html

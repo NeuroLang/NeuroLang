@@ -613,6 +613,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "if one fails).",
     )
     parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Serve a session of the interactive REPL on the engine to an "
+        "MCP client (an LLM such as Claude) over stdin and stdout: its "
+        "tools run statements and dot-commands, list the predicates, find "
+        "values and check queries. A query given as argument or with "
+        "--file is run first.",
+    )
+    parser.add_argument(
         "--ask",
         metavar="QUESTION",
         default=None,
@@ -1343,12 +1352,12 @@ _NOT_INTERACTIVE_FLAGS = (
 )
 
 
-def _check_interactive_flags(args) -> None:
-    """Exit with an error when ``args`` combines -i with a listing flag."""
+def _check_interactive_flags(args, mode: str = "--interactive") -> None:
+    """Exit with an error when ``args`` combines *mode* with a listing flag."""
     for flag, dest in _NOT_INTERACTIVE_FLAGS:
         if getattr(args, dest):
             print(
-                f"Error: {flag} cannot be used with --interactive.",
+                f"Error: {flag} cannot be used with {mode}.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -1444,6 +1453,26 @@ def _run_interactive(args, argv=()) -> None:
     status = tui.main(nl, settings, initial_program=program)
     if status:
         sys.exit(status)
+
+
+def _run_mcp(args) -> None:
+    """Build the engine and serve the REPL on it to an MCP client."""
+    for flag, dest in (("--interactive", "interactive"), ("--ask", "ask")):
+        if getattr(args, dest):
+            print(f"Error: --mcp cannot be used with {flag}.", file=sys.stderr)
+            sys.exit(1)
+    _check_interactive_flags(args, "--mcp")
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    dependencies = ("mcp", "httpx", *TUI_DEPENDENCIES)
+    try:
+        from neurolang_apps.utils import mcp_server
+    except ImportError as exc:
+        _exit_missing(
+            exc, dependencies, "the MCP server needs the optional "
+            f"dependencies {', '.join(dependencies)}", "mcp",
+        )
+    mcp_server.main(args, _program_argument(args))
 
 
 def _ask_language(args, config) -> str:
@@ -1638,6 +1667,9 @@ def main(argv: Optional[list] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.mcp:
+        _run_mcp(args)
+        return
     if args.interactive:
         _run_interactive(args, sys.argv[1:] if argv is None else argv)
         return
