@@ -2,8 +2,8 @@
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
-- for each engine of the page (``neurosynth``, the page's default,
-  ``neurosynth_iit`` and ``neurostore``), the data it needs, as a zip in
+- for each engine of the page (``neurosynth``, ``neurosynth_iit``, the
+  page's default, and ``neurostore``), the data it needs, as a zip in
   the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
@@ -67,9 +67,12 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-# The engines the page offers, the first being its default.
+# The engines the page offers, in the order they are built: an engine
+# sharing the text embeddings of another (EMBEDDINGS_FROM) after it.
 ENGINES = ("neurosynth", "neurosynth_iit", "neurostore")
 ENGINE = ENGINES[0]
+# The engine the page starts with, when the bundle has it.
+DEFAULT_ENGINE = "neurosynth_iit"
 LABELS = {
     "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
     "neurosynth_iit": "Neurosynth + tracts",
@@ -478,6 +481,7 @@ def main(
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
     built = {}
+    default = DEFAULT_ENGINE if DEFAULT_ENGINE in engines else engines[0]
     for engine in engines:
         try:
             shared = EMBEDDINGS_FROM.get(engine) in built
@@ -489,12 +493,11 @@ def main(
                     engine, built[engine], built[EMBEDDINGS_FROM[engine]]
                 )
         except Exception as error:
-            if engine == engines[0]:
+            if engine == default:
                 raise  # the page's default: there is no page without it
             print(f"The engine {engine} is left out of the bundle: {error!r}")
     for entry in built.values():
         entry.pop("cache_keys", None)
-    default = engines[0]
     (output / "bundle.json").write_text(
         json.dumps({
             "wheels": wheels, "default": default, "engines": built,
@@ -533,6 +536,6 @@ def parse_args(argv=None):
 
 if __name__ == "__main__":
     args = parse_args()
-    # The default first, whatever the order of the options.
+    # In the order of ENGINES, whatever the order of the options.
     chosen = [e for e in ENGINES if e in (args.engines or ENGINES)]
     main(args.output, args.embedded, args.downloads, tuple(chosen))
