@@ -17,7 +17,7 @@ from neurolang.frontend.datalog.squall_syntax_lark import (  # noqa: E402
 )
 from neurolang_apps.utils.tui.commands import COMMANDS  # noqa: E402
 from neurolang_apps.utils.tui.statements import (  # noqa: E402
-    split_at_commands,
+    split_statements,
 )
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -62,7 +62,8 @@ def test_the_examples_of_the_documentation_parse(blocks):
     assert blocks
     nl = NeurolangPDL()
     for page, (code, mode, _) in blocks:
-        for part in split_at_commands(code):
+        # the statements as the REPL splits them, dot-commands apart
+        for part in split_statements(code.splitlines(), lambda: mode == "squall"):
             if part.startswith("."):
                 continue
             try:
