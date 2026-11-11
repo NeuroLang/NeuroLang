@@ -172,6 +172,10 @@ class LocalBackend:
             "predicates": repl.predicates(),
             "commands": repl.commands(),
             "canRate": can_rate,
+            # whether the assistant of this machine can answer, for the
+            # page to suggest a question (a version of the page that
+            # predates it leaves it out)
+            "assistant": getattr(repl, "assistant_ready", lambda: False)(),
         }
 
     def _repl(self) -> web.WebRepl:

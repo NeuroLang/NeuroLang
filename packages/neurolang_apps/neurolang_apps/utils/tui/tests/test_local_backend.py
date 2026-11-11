@@ -40,7 +40,7 @@ def test_start_builds_the_engine_and_tells_its_steps(backend):
     ready = backend.start("neurostore")
     assert "neurostore" in ready["banner"]
     assert {"banner", "providers", "examples", "questions", "predicates",
-            "commands", "canRate", "source"} <= set(ready)
+            "commands", "canRate", "source", "assistant"} <= set(ready)
     assert any(p["name"] == "person" for p in ready["predicates"])
     statuses = [m["message"] for m in _messages(listener)]
     assert statuses[0] == "Building neurostore…"
