@@ -122,6 +122,10 @@ Unreleased
 
 **New features:**
 
+* When the AI assistant can answer, with a key in the page or the one of the
+  REPL's configuration, the REPL in the browser starts with one of the engine's
+  example questions, at random, in the box of the assistant: selected, typing
+  replaces it, and *Ask* asks it.  ``WebRepl.assistant_ready`` tells the page.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are

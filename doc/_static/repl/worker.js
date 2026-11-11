@@ -287,6 +287,7 @@ def rate(verdict, comment):
   const questions = JSON.parse(pyodide.runPython("json.dumps(repl.questions() if hasattr(repl, 'questions') else [])"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
   const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
+  const assistant = pyodide.runPython("repl.assistant_ready() if hasattr(repl, 'assistant_ready') else False");
   // Where a rated answer goes (feedback.json next to the page); without a
   // document, or in a version without ratings, answers cannot be rated.
   let canRate = false;
@@ -298,7 +299,7 @@ def rate(verdict, comment):
   } catch {
     // the page works without ratings
   }
-  postMessage({ type: "ready", banner, source, providers, examples, questions, predicates, commands, canRate });
+  postMessage({ type: "ready", banner, source, providers, examples, questions, predicates, commands, canRate, assistant });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   rateAnswer = pyodide.globals.get("rate");

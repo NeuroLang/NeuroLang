@@ -699,3 +699,12 @@ def test_the_commands_are_json(repl):
     import json
 
     assert json.loads(json.dumps(repl.commands())) == repl.commands()
+
+
+def test_the_assistant_is_ready_with_a_key(repl):
+    pytest.importorskip("httpx")
+    assert not repl.assistant_ready()
+    repl.set_llm("anthropic", "a-key")
+    assert repl.assistant_ready()
+    repl.clear_llm()
+    assert not repl.assistant_ready()

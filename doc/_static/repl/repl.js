@@ -7,7 +7,7 @@ import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
-import { renderCommands, renderExamples, renderPredicates } from "./guide.js";
+import { renderCommands, renderExamples, renderPredicates, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -280,7 +280,21 @@ function showProvider() {
   llmForm.elements.baseUrl.required = !llmForm.elements.baseUrl.hidden;
 }
 
+// The assistant can answer: a key is in use, or the REPL has one.
+let assistantReady = false;
+// The example question put in the box, while it is left as it is.
+let suggested = "";
+
+// An example question of the engine, at random, in the box of the
+// assistant, when the box is empty and the assistant can answer.
+function suggestQuestion() {
+  const pick = suggestedQuestion(guide.questions, question.value, assistantReady);
+  if (pick) suggested = question.value = pick;
+}
+
 function useKey() {
+  assistantReady = true;
+  suggestQuestion();
   $("llm-error").hidden = true;
   const chosen = choices();
   worker.postMessage({ type: "llm", ...chosen });
@@ -368,6 +382,8 @@ const workerMessages = {
     setProviders(data.providers ?? []);
     canRate = Boolean(data.canRate);
     guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    if (data.assistant) assistantReady = true;
+    suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
     showGuide();
@@ -602,6 +618,11 @@ $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
   ask();
 });
+// The example question is selected when the box is entered: typing
+// replaces it, Ask asks it.
+question.addEventListener("focus", () => {
+  if (suggested && question.value === suggested) question.select();
+});
 question.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
@@ -661,6 +682,9 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign(llmForm.elements.key, { value: "" });
   llmForm.elements.remember.checked = false;
   worker.postMessage({ type: "llm", key: "" });
+  assistantReady = false;
+  if (suggested && question.value === suggested) question.value = "";
+  suggested = "";
   Object.assign($("ask-run"), { title: "Add an API key to use the assistant" }).classList.add("ghost");
   $("llm-error").hidden = true;
   $("llm-summary").textContent = "bring your own API key";
