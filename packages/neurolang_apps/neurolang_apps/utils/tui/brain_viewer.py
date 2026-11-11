@@ -438,6 +438,29 @@ def streamlines_state(lines, total: int) -> dict:
     }
 
 
+def regions_state(regions) -> dict:
+    """
+    Return the regions of a result (a :class:`~.nifti.RegionLayer`) as the
+    page reads them: the image of their numbers, which names the one under
+    the cursor, and that of their colours, RGBA, transparent elsewhere,
+    which the page draws.
+    """
+    numbers = np.asanyarray(regions.image.dataobj)
+    table = np.zeros(len(regions.names) + 1, dtype=RGBA)
+    for n, colour in enumerate(regions.colours, 1):
+        table[n] = (*bytes.fromhex(colour[1:7]), 255)
+    return {
+        "nifti": encode_nifti(numbers, regions.image.affine),
+        "colours": encode_nifti(table[numbers], regions.image.affine),
+        "names": [str(name) for name in regions.names],
+        "coloured": bool(regions.coloured),
+    }
+
+
+# The voxels of an RGBA image, as NIfTI stores them (its datatype 2304).
+RGBA = np.dtype([("R", "u1"), ("G", "u1"), ("B", "u1"), ("A", "u1")])
+
+
 def _script_json(state: dict) -> str:
     """Return *state* as JSON that cannot end the script element it is in."""
     return json.dumps(state, separators=(",", ":")).replace("<", "\\u003c")
@@ -445,7 +468,7 @@ def _script_json(state: dict) -> str:
 
 def viewer_html(
     img, background, *, title: str, threshold, cmap, symmetric: bool,
-    connectome=None, streamlines=None, space: str = "MNI",
+    connectome=None, streamlines=None, space: str = "MNI", regions=None,
 ) -> str:
     """
     Return the HTML page of an interactive viewer of the image *img*.
@@ -465,7 +488,9 @@ def viewer_html(
     direction, with a control of their visibility and opacity, on
     slices cut in millimetres, as they are drawn. *space* names the
     millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
-    a subject.
+    a subject. *regions*, a :class:`~.nifti.RegionLayer`, are the regions
+    of a result: the readout names the one under the cursor, and a
+    control shows them in their colours, those of their atlas.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
@@ -476,6 +501,8 @@ def viewer_html(
         state["streamlines"] = streamlines
     if connectome is not None:
         state["connectome"] = connectome
+    if regions is not None:
+        state["regions"] = regions_state(regions)
     if connectome is not None or streamlines is not None:
         state["initial"]["display"] = {"renderTile": True, "layout": "grid"}
         for layer in state["initial"]["layers"]:

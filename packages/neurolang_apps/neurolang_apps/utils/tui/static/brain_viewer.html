@@ -70,6 +70,9 @@
   #edges { margin: 4px 0; padding-left: 28px; font-size: 13px; }
   #streamlines { margin: 8px 0; color: #ccc; display: flex; gap: 18px; }
   #streamlines label { display: inline-flex; gap: 6px; align-items: center; }
+  #region-tip { position: fixed; pointer-events: none; z-index: 10;
+    padding: 2px 6px; border-radius: 3px; font-size: 12px;
+    background: rgba(0, 0, 0, 0.8); color: #fff; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -143,13 +146,17 @@
     <input id="smooth" type="checkbox"> smooth</label>
   <label title="Cut the 3D render">
     <input id="clip-plane" type="checkbox"> clip plane</label>
+  <label id="atlas-colours-control" title="The regions of the result in the colours of their atlas" hidden>
+    <input id="atlas-colours" type="checkbox"> atlas colours</label>
   <span id="hot-keys" title="With the views focused">keys: V view &middot; C clip plane</span>
 </div>
 </details>
 <div id="views"><canvas id="gl" tabindex="0"></canvas></div>
+<div id="region-tip" role="tooltip" hidden></div>
 <div id="readout">
   <span id="space">MNI</span> <b id="mm"></b> mm &middot; voxel <b id="voxel"></b>
   &middot; value <b id="value"></b>
+  <span id="region-readout" hidden>&middot; region <b id="region"></b></span>
 </div>
 <div id="colorbars"><canvas id="colorbar" width="480" height="44"></canvas></div>
 <div id="network" style="display: none">

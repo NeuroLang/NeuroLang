@@ -283,10 +283,46 @@ def test_fetch_the_atlases_of_the_engines(image_path, monkeypatch, tmp_path):
 
 def test_the_tian_fetcher_reads_its_label_file(monkeypatch, tmp_path):
     (tmp_path / "labels.txt").write_text("lAMY-lh\naPUT-rh\n")
+    # the authors' colours: a name, then its value, red, green, blue, alpha
+    (tmp_path / "colours.txt").write_text(
+        "aPUT-rh\n1 0 128 255 255\nlAMY-lh\n2 255 0 16 255\n"
+        "17Networks_LH_Vis_1\n3 1 2 3 255\n"
+    )
     calls = []
 
     def fetch_files(data_dir, files, **kwargs):
         calls.append((data_dir, [name for name, _, _ in files]))
+        if len(files) == 2:
+            return ["image.nii.gz", str(tmp_path / "labels.txt")]
+        return [str(tmp_path / "colours.txt")]
+
+    from neurolang.utils import nilearn_compat
+
+    monkeypatch.setattr(nilearn_compat, "fetch_files", fetch_files)
+    got = atlases.fetch_tian(scale=2, data_dir=str(tmp_path))
+    assert got["maps"] == "image.nii.gz"
+    assert got["labels"] == ["Background", "lAMY-lh", "aPUT-rh"]
+    assert atlases.label_colours(got["lut"]) == {
+        1: "#ff0010", 2: "#0080ff",
+    }
+    assert calls == [
+        (str(tmp_path / "tian"), [
+            "Tian_Subcortex_S2_3T_2009cAsym.nii.gz",
+            "Tian_Subcortex_S2_3T_label.txt",
+        ]),
+        (str(tmp_path / "tian"), [
+            "Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_S2_"
+            "label.txt",
+        ]),
+    ]
+
+
+def test_the_tian_fetcher_goes_without_colours(monkeypatch, tmp_path):
+    (tmp_path / "labels.txt").write_text("lAMY-lh\n")
+
+    def fetch_files(data_dir, files, **kwargs):
+        if len(files) == 1:
+            raise OSError("offline")
         return ["image.nii.gz", str(tmp_path / "labels.txt")]
 
     from neurolang.utils import nilearn_compat
@@ -294,11 +330,43 @@ def test_the_tian_fetcher_reads_its_label_file(monkeypatch, tmp_path):
     monkeypatch.setattr(nilearn_compat, "fetch_files", fetch_files)
     got = atlases.fetch_tian(scale=2, data_dir=str(tmp_path))
     assert got == {"maps": "image.nii.gz",
-                   "labels": ["Background", "lAMY-lh", "aPUT-rh"]}
-    assert calls == [(str(tmp_path / "tian"), [
-        "Tian_Subcortex_S2_3T_2009cAsym.nii.gz",
-        "Tian_Subcortex_S2_3T_label.txt",
-    ])]
+                   "labels": ["Background", "lAMY-lh"]}
+
+
+def test_the_colours_of_destrieux_are_freesurfers(monkeypatch, tmp_path):
+    (tmp_path / "FreeSurferColorLUT.txt").write_text(
+        "#No. Label Name: R G B A\n"
+        "11101  ctx_lh_G_and_S_frontomargin  23 220  60   0\n"
+        "12101  ctx_rh_G_and_S_frontomargin  23 220  61   0\n"
+    )
+
+    class Fetched(dict):
+        __getattr__ = dict.__getitem__
+        __setattr__ = dict.__setitem__
+
+    lut = pd.DataFrame({
+        "index": [0, 1, 2, 3],
+        "name": ["Background", "L G_and_S_frontomargin",
+                 "R G_and_S_frontomargin", "L Medial_wall"],
+    })
+
+    class Datasets:
+        @staticmethod
+        def fetch_atlas_destrieux_2009(**kwargs):
+            return Fetched(maps="maps.nii.gz", labels=lut, lut=lut)
+
+    from neurolang.utils import nilearn_compat
+
+    monkeypatch.setattr(nilearn_compat, "nilearn_datasets", Datasets)
+    monkeypatch.setattr(
+        nilearn_compat, "fetch_files",
+        lambda data_dir, files, **kwargs: [
+            str(tmp_path / "FreeSurferColorLUT.txt")
+        ],
+    )
+    got = atlases.fetch_destrieux(data_dir=str(tmp_path))
+    assert atlases.label_colours(got.lut) == {1: "#17dc3c", 2: "#17dc3d"}
+    assert atlases.label_colours(lut) == {}
 
 
 def test_the_module_needs_nothing_else_of_neurolang():

@@ -813,3 +813,55 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
     assert result["count"] == "3 of 7 streamlines shown"
     assert result["shown"] == "" and result["hidden"]
     assert result["opacity"] == 0.3
+
+
+_REGIONS_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv, canvas = document.getElementById('gl');
+  var tip = document.getElementById('region-tip');
+  // the mouse over every point of the slices, until a region is under it
+  var named = '', rect = canvas.getBoundingClientRect();
+  for (var x = 0; x < rect.width && !named; x += 12) {
+    for (var y = 0; y < rect.height && !named; y += 12) {
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: rect.left + x, clientY: rect.top + y, bubbles: true}));
+      if (!tip.hidden) named = tip.textContent;
+    }
+  }
+  var colours = nv.volumes[nv.volumes.length - 1];
+  var before = colours.opacity;
+  set('atlas-colours', true, 'change');
+  report({
+    named: named, before: before, after: colours.opacity,
+    control: !document.getElementById('atlas-colours-control').hidden,
+    readout: document.getElementById('region').textContent
+  });
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_regions_are_named_under_the_mouse(tmp_path):
+    """Check the page names the region of the result under the mouse, and
+    draws the regions in their colours when asked."""
+    from neurolang_apps.utils.tui.nifti import RegionLayer
+
+    numbers = np.zeros((4, 4, 4), dtype=np.int16)
+    numbers[:2] = 1
+    numbers[2:] = 2
+    regions = RegionLayer(
+        _image(numbers), ["left part", "right part"],
+        ["#ff0000", "#0000ff"], False,
+    )
+    html = brain_viewer.viewer_html(
+        _image(numbers.astype(np.float32)), None, title="regions",
+        threshold=0, cmap=None, symmetric=False, regions=regions,
+    )
+    result = _run_in_chrome(tmp_path, html, _REGIONS_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert result["named"] in ("left part", "right part")
+    assert result["readout"] in ("left part", "right part")
+    assert result["control"]
+    assert (result["before"], result["after"]) == (0, 1)
