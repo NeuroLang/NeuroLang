@@ -122,6 +122,11 @@ Unreleased
 
 **New features:**
 
+* The examples of the parcels the uncinate connects (``uncinate_cogat.dl`` of
+  the engine tracts, its README and the assistant's example of
+  ``neurosynth_tracts``) count the ends of the streamlines as the pairs
+  ``count(x, e)`` of a streamline and which of its ends, rather than as the
+  integers ``i == 2 * x + e``.
 * The REPL in the browser starts with the engine Neurosynth + tracts
   (``neurosynth_iit``: Neurosynth with the tractogram and the bundles of the
   IIT atlas); Neurosynth and NeuroStore are in its select, and
