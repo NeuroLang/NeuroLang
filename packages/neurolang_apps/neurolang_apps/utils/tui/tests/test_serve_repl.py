@@ -347,6 +347,11 @@ def test_the_local_site_has_the_page_answered_by_this_machine(
         "engines": {"neurosynth": {"label": "Neurosynth"}},
     }
     assert (page.parent / "local_worker.js").is_file()
+    page = serve.prepare_local_site(tmp_path, ["neurosynth", "neurosynth_iit"])
+    bundle = json.loads((page.parent / "bundle.json").read_text())
+    assert bundle["default"] == getattr(
+        serve.bundle_script(), "DEFAULT_ENGINE", "neurosynth"
+    )
     assert (page.parent / "highlight.json").is_file()
     assert serve.parse_args(["--local"]).local
     with pytest.raises(SystemExit):

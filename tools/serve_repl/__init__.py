@@ -164,6 +164,8 @@ def prepare_local_site(site: Path, engines=None) -> Path:
     """
     script = bundle_script()
     engines = list(engines or script.ENGINES)
+    # The engine the page starts with: that of the bundle's, if offered.
+    default = getattr(script, "DEFAULT_ENGINE", engines[0])
     page = copy_page(site)
     (page.parent / "bundle.json").write_text(json.dumps({
         "backend": "local",
@@ -171,7 +173,7 @@ def prepare_local_site(site: Path, engines=None) -> Path:
             name: {"label": script.LABELS.get(name, name)}
             for name in engines
         },
-        "default": engines[0],
+        "default": default if default in engines else engines[0],
     }) + "\n")
     script.write_highlight_words(page.parent)
     return page
