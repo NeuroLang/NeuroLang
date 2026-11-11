@@ -407,6 +407,15 @@ Unreleased
 
 **Bug fixes:**
 
+* The brain tab of the REPL in the browser no longer shows the viewer of an
+  earlier result for the last one: after a query, selecting the tab views
+  the new result (``.view``), and a view that fails ("The result has no
+  streamlines") takes the earlier viewer away rather than leaving it, as
+  a second query on tracts often did.
+* A query on tracts (``ans(x) :- af(x, "left")``) no longer prints notes about
+  predicates of the magic-sets rewriting (``endpoint_in^bfbb_0 has no facts or
+  rules``): the types of their rules are not resolved, as for those whose
+  functor is an ``AdornedSymbol``.
 * ``count(s)`` counts the distinct values of ``s`` in each group, not the
   rows of the rule's body (#1090): ``n(count(s)) :- schaefer_activated(l, s),
   startswith('17Networks LH Default', l)`` is 11,160 studies, not 50,655,

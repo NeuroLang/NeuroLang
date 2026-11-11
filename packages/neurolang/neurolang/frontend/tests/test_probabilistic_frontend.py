@@ -2871,3 +2871,24 @@ def test_probabilistic_facts_of_a_program_text():
     )
     rows = result.as_pandas_dataframe().itertuples(index=False, name=None)
     assert set(rows) == {(1, 0.5), (2, 0.2)}
+
+
+def test_the_rules_of_the_magic_sets_rewriting_are_not_warned_about():
+    """The rules of the magic-sets rewriting name their predicates after
+    the adorned ones (``p^bf_0``): they are not the visitor's, nor
+    predicates without rules to tell about."""
+    import warnings
+
+    from nl_expr.logic import Implication
+
+    nl = NeurolangPDL()
+    x = Symbol("x")
+    rule = Implication(Symbol("q")(x), Symbol("p^bf_0")(x))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        nl.program_ir.walk(rule)
+    assert not [w for w in caught if "symbol table" in str(w.message)]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        nl.program_ir.walk(Implication(Symbol("q2")(x), Symbol("p")(x)))
+    assert [w for w in caught if "symbol table" in str(w.message)]
