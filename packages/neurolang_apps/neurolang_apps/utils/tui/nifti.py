@@ -1714,12 +1714,16 @@ def _visits(lines, shape, affine: np.ndarray) -> np.ndarray:
 def streamline_background(nl):
     """Return the background of the streamlines of the engine *nl* and
     the name of its millimetres: its ``streamline_background()``, in
-    ``RAS``, else the MNI152 T1, in ``MNI``."""
+    ``RAS``, else, without one or if it gives None (streamlines in MNI
+    space), the MNI152 T1, in ``MNI``."""
     hook = getattr(nl, "streamline_background", None)
-    background = hook() if callable(hook) else brain_viewer.mni_background()
+    background = hook() if callable(hook) else None
+    if background is not None:
+        return background, "RAS"
+    background = brain_viewer.mni_background()
     if background is None:
         raise SaveError("No background to draw the streamlines on.")
-    return background, ("RAS" if callable(hook) else "MNI")
+    return background, "MNI"
 
 
 def last_result_streamlines(app, block):
@@ -1766,7 +1770,7 @@ def last_result_streamlines(app, block):
         f"Streamlines of the column {str(column)!r}: {len(lines)} of "
         f"{len(ids)} shown{subsampled}", style="green", markup=False,
     )
-    if space == "MNI":
+    if not callable(getattr(app._nl, "streamline_background", None)):
         app.console.print(
             "The engine has no streamline_background(): they are drawn on "
             "the MNI152 T1, where only streamlines in MNI space fall right.",

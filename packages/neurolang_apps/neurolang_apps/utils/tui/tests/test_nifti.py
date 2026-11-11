@@ -1256,6 +1256,25 @@ class TestViewStreamlines:
         # streamlines of a subject would be misplaced on it: say so
         assert "drawn on the MNI152 T1" in out
 
+    def test_streamlines_in_mni_space_are_on_the_mni_t1(
+        self, tracts, monkeypatch
+    ):
+        """An engine whose streamlines are in MNI space gives no background
+        of its own (None): they are drawn on the MNI152 T1, not on the
+        labels of its atlas, and that is not warned about."""
+        pytest.importorskip("nilearn")
+        calls = []
+        monkeypatch.setattr(
+            nifti.brain_viewer, "viewer_html",
+            lambda img, background, **kw: calls.append((background, kw))
+            or "",
+        )
+        tracts._nl.streamline_background = lambda: None
+        _, out = self._view(tracts, "ans(s) :- tract(s)", [])
+        assert calls[0][0].shape == (197, 233, 189)
+        assert calls[0][1].get("space", "MNI") == "MNI"
+        assert "drawn on the MNI152 T1" not in out
+
     def test_a_sort_streamline_without_the_hook(self, tracts, view_calls):
         del tracts._nl.streamline_points
         kwargs, out = self._view(tracts, "ans(s) :- tract(s)", view_calls)

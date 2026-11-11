@@ -62,10 +62,12 @@ def test_each_condition_of_the_uncinate_excludes_a_streamline(files):
 
 def test_the_hooks_give_the_points_of_the_streamlines(files):
     """``streamline_points`` of ``.view``, by id ``x``, and the label image
-    of the atlas as ``streamline_background``."""
+    of the atlas as ``streamline_background``, in a subject's space."""
     nl = tracts_engine()
     assert nl.streamline_background() is None
     nl.execute_datalog_program(example(files))
+    for atlas in nl.program_ir._tracts.atlases.values():
+        atlas.space = "subject:toy"
     lines = uncinate_files.streamlines()
     points = nl.streamline_points([3, 0, 9])
     for got, s in zip(points, (3, 0, 9)):
@@ -74,6 +76,16 @@ def test_the_hooks_give_the_points_of_the_streamlines(files):
     np.testing.assert_array_equal(
         np.asarray(background.dataobj), uncinate_files.labels())
     np.testing.assert_array_equal(background.affine, uncinate_files.AFFINE)
+
+
+def test_streamlines_in_mni_space_have_no_background_of_their_own(files):
+    """In MNI space the viewer draws them on its MNI152 T1, not on the
+    labels of their atlas."""
+    nl = tracts_engine()
+    nl.execute_datalog_program(example(files))
+    for atlas in nl.program_ir._tracts.atlases.values():
+        atlas.space = "MNI152"
+    assert nl.streamline_background() is None
 
 
 def test_the_hooks_with_two_tractograms(files, tmp_path):

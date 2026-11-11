@@ -98,14 +98,16 @@ def test_the_engine_runs_the_example(uncinate, tmp_path, offline_atlases):
     assert set(result.as_pandas_dataframe().iloc[:, 0]) == files.expected(
         "left")
     assert callable(nl.streamline_points)
-    assert nl.streamline_background() is not None
+    # in MNI space: the viewer's MNI152 T1, not the labels of the atlas
+    assert nl.streamline_background() is None
 
 
 def test_the_example_at_the_prompt_and_view(
     uncinate, tmp_path, monkeypatch, offline_atlases
 ):
     """Statement by statement, as typed or piped at the prompt, then
-    ``.view``: the streamlines of the answer, on the atlas."""
+    ``.view``: the streamlines of the answer, in MNI space, on the MNI152
+    T1."""
     from rich.console import Console
 
     from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings
@@ -134,9 +136,9 @@ def test_the_example_at_the_prompt_and_view(
     out = console.file.getvalue()
     assert "Streamlines of the column" in out, out
     background, kwargs = calls[-1]
-    assert kwargs["space"] == "RAS"
+    assert kwargs["space"] == "MNI"
     assert kwargs["streamlines"]["total"] == len(files.expected("left"))
-    assert background.shape == files.SHAPE
+    assert background.shape == (197, 233, 189)
     for prefix in ("image to: ", "viewer to: "):
         if prefix in out:
             Path(out.split(prefix)[-1].split()[0]).unlink(missing_ok=True)
