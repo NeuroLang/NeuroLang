@@ -53,7 +53,7 @@ them probabilistically.
 
       Type queries in a REPL, in the browser or in a terminal, on engines of
       ready-made data: Neurosynth, NeuroStore, atlases, ontologies, tracts.
-      Or embed NeuroLang in Python.
+      Or embed NeuroLang in Python (:doc:`tutorial_python`).
 
 ----
 
@@ -102,10 +102,10 @@ See :doc:`repl` for the REPL, :doc:`tutorial` for a first walkthrough, and
    inclusion_exclusion
    engine_configuration
    query_assistant
+   tutorial_python
    performance
    auto_examples/index
    api
-   tutorial_logic_programming
    changelog
    contributing
    authors

@@ -1,41 +1,46 @@
 Datalog: A Rule-Based Query Language for NeuroLang
 ====================================================
 
-In addition to the SQUALL controlled-English frontend, NeuroLang accepts a
-standard text Datalog syntax parsed by the ``standard_syntax.py`` module.
-This syntax is closer to the logical core of the system — it uses rule-based
-notation with ``:-`` (implication) instead of English sentences.
+Besides the SQUALL controlled English, NeuroLang reads Datalog: rules
+written with ``:-`` (implication) instead of English sentences, closer to
+the logical core of the system.
+
+Every example of this tutorial runs in the REPL (:doc:`repl`), in the
+browser or in ``neurolang-query -i --engine neurosynth``: type it at the
+prompt, or follow *Run in the browser REPL* under it. An example that uses
+the rules of earlier ones has no such link: type the earlier ones first.
 
 This tutorial mirrors the Bayes Factor decoding example from the
 :doc:`tutorial_squall` tutorial, showing the same problem expressed in text
 Datalog.  Read the two side by side to see how SQUALL sentences map to
 Datalog rules.
 
-The full program we will build:
+The full program we will build, on the studies of Neurosynth and the
+Destrieux atlas (it takes about 20 s):
 
-.. code-block:: none
+.. nl-repl::
 
-    active_region(r) :- region(r), selected_study(s), activates(s, r).
+    activates(s, r) :- destrieux_activated(r, s)
+    region(r) :- destrieux(r, x)
 
-    region_probability(r, p_r) :- PROB[active_region(r)] = p_r.
+    active_region(r) :- region(r), selected_study(s), activates(s, r)
+    region_probability(r, p_r) :- PROB[active_region(r)] = p_r
 
-    mentioned_term(t) :- term(t), selected_study(s), mentions(s, t).
-
-    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
+    mentioned_term(t) :- term(t), selected_study(s), mentions(s, t)
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
 
     cooccurrence(r, t) :-
         region(r), term(t), selected_study(s),
-        activates(s, r), mentions(s, t).
-
-    joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt.
+        activates(s, r), mentions(s, t)
+    joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt
 
     bayes_factor(r, t, bf) :-
         joint_probability(r, t, p_rt),
         region_probability(r, p_r),
         term_probability(t, p_t),
-        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))).
+        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
 
-    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'right fusiform gyrus').
+    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'R G oc temp lat fusifor')
 
 .. contents:: Contents
    :local:
@@ -73,36 +78,30 @@ NeuroLang with zero post-hoc pandas computation.
 1.2 The Data
 -------------
 
-The Datalog program works with six relations:
+The program uses four relations of the ``neurosynth`` engine (``.predicates``
+lists them all, with their columns):
 
 ``study(study_id)``
-    The set of all study identifiers.
-``activates(study_id, region)``
-    Activation foci from Neurosynth peaks, mapped to anatomical regions via
-    the Julich-Brain atlas.
+    The 14 371 studies of Neurosynth, by PubMed id.
 ``mentions(study_id, term)``
-    TF-IDF term associations from Neurosynth.
-``region(region)``
-    The set of all anatomical region names.
+    The terms each study mentions (TF-IDF above 0.03).
 ``term(term)``
-    The set of all cognitive term names.
+    The terms of Neurosynth's vocabulary.
 ``selected_study(study_id)``
-    A probabilistic uniform choice over all studies (registered from Python,
-    see Part 5).
+    A uniform probabilistic choice over the studies (see Part 5).
 
-These are registered in Python before running Datalog:
+and two it defines from the Destrieux atlas, the anatomical regions and the
+studies whose peaks fall in them:
 
-.. code-block:: python
+.. nl-repl::
 
-    from neurolang.frontend import NeurolangPDL
+    activates(s, r) :- destrieux_activated(r, s)
+    region(r) :- destrieux(r, x)
 
-    nl = NeurolangPDL()
-    nl.add_tuple_set(study_ids_df, name="study")
-    nl.add_tuple_set(study_activates_df, name="activates")
-    nl.add_tuple_set(study_mentions_df, name="mentions")
-    nl.add_tuple_set(region_df, name="region")
-    nl.add_tuple_set(term_df, name="term")
-    # selected_study is registered separately (see Part 5)
+The REPL answers ``defined activates/2`` and ``defined region/1``: the
+rules stay in the session, and the examples below use them. The region we
+look at is ``'R G oc temp lat fusifor'``, the right fusiform gyrus in the labels of
+the atlas, which 2 836 of the studies activate.
 
 
 Part 2: Datalog Preliminaries
@@ -115,7 +114,7 @@ A **predicate** in Datalog names a relation — it is the equivalent of a table
 name in SQL or a noun in SQUALL.  A predicate is written as an identifier
 followed by parenthesised arguments:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     region(x)
     study(s)
@@ -129,7 +128,7 @@ Arguments are **variables** — they bind to columns of the relation.
 
 A Datalog **rule** has the form:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     head(x, y, ...) :- body1(x, z), body2(z, y), ...
 
@@ -144,7 +143,7 @@ existentially quantified.
 A body may be a **disjunction**, written ``|`` (or ``∨``); ``,`` binds tighter
 than ``|``, and parentheses group:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     uncinate(x, h) :-
         (traverses(x, 'orbitofrontal_gyrus', h)
@@ -172,41 +171,32 @@ parentheses a comparison keeps its own: ``b(x), (x < 3)``.
 2.3 The Query Predicate — ``ans(...)``
 ----------------------------------------
 
-The special predicate ``ans(...)`` marks a **query** in a Datalog program.
-When ``execute_datalog_program`` encounters an ``ans`` rule, it runs the
-query immediately and returns the result as a ``RelationalAlgebraFrozenSet``:
+The special predicate ``ans(...)`` marks a **query**. The REPL runs it as
+soon as it is entered and shows its answer as a table:
 
-.. code-block:: python
+.. nl-repl::
+    :norun:
 
-    prog = """
-        ans(x) :- region(x).
-    """
-    result = nl.execute_datalog_program(prog)
-    # result is a RelationalAlgebraFrozenSet with all region names
+    ans(x) :- region(x)
 
-If the program contains multiple rules without an ``ans`` rule, you can
-retrieve results later with ``nl.solve_all()``.
+A rule without ``ans`` only defines a relation, for the queries to come.
 
-A program can hold several queries, each with a name in brackets,
-``ans[name](...)``. The result is then a dictionary from the names to the
-answers, and ``.view`` in the REPL shows them all at once, as one image per
-query, with the networks and streamlines of the others:
+A submission can hold several queries, each with a name in brackets,
+``ans[name](...)``; the REPL shows each answer under its name, and ``.view``
+shows them all at once, as one image per query, with the networks and
+streamlines of the others:
 
-.. code-block:: python
+.. code-block:: neurolang
 
-    prog = """
-        ans[left](x, y, z) :- activation(x, y, z, 'left hemisphere').
-        ans[tract](s) :- uncinate(s, 'left').
-        ans[network](r1, r2, p) :- coactivation(r1, r2, p).
-    """
-    results = nl.execute_datalog_program(prog)
-    results["left"], results["tract"], results["network"]
+    ans[left](x, y, z) :- activation(x, y, z, 'left hemisphere')
+    ans[tract](s) :- uncinate(s, 'left')
+    ans[network](r1, r2, p) :- coactivation(r1, r2, p)
 
-The queries of a program have each a name: ``ans`` stands for the one
-without brackets, and two queries cannot share a name. A program with one
-query returns its answer, not a dictionary. The queries are solved
+The queries of a submission have each a name: ``ans`` stands for the one
+without brackets, and two queries cannot share a name. They are solved
 together, which is faster than one after the other when they share
-predicates; see :ref:`several-queries`.
+predicates; see :ref:`several-queries`. In Python, a program's queries are
+returned by ``execute_datalog_program`` (:doc:`tutorial_python`).
 
 2.4 Variables
 --------------
@@ -216,7 +206,7 @@ Prolog, NeuroLang's text Datalog does **not** distinguish variables from
 constants by case — the same identifier can be used in predicate position
 (functor) or argument position (variable) and context determines its role:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     region(r)        % r is a variable in argument position
     term(t)          % t is a variable in argument position
@@ -232,7 +222,7 @@ correspond to columns (``r`` for region, ``t`` for term, ``s`` for study).
 To ignore a column, use a variable name that appears only once (the engine
 creates a fresh anonymous variable for each unique name):
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(r) :- activates(_study, r).
 
@@ -243,9 +233,9 @@ Here ``_study`` appears only once and is treated as a wildcard.
 
 Constants are written inline:
 
-.. code-block:: none
+.. code-block:: neurolang
 
-    ans(x) :- region(x), (x == 'right fusiform gyrus').
+    ans(x) :- region(x), (x == 'R G oc temp lat fusifor').
 
 String literals use single quotes ``'...'``.  Numeric constants are written
 directly: ``42``, ``3.14``.  The ``==`` operator tests equality and works for
@@ -264,7 +254,7 @@ fact documents its predicate.  Its first line may give the signature of the
 predicate, the names of its arguments and, after a ``:``, their sorts; the
 other lines are its description:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     %% uncinate(x: streamline, h: hemisphere)
     %% The uncinate fasciculus: streamlines joining the orbitofrontal
@@ -273,8 +263,7 @@ other lines are its description:
     uncinate(x, h) :- ...
 
 Without a signature, the whole block is the description.  The engine keeps
-the documentation (``nl.predicate_documentation()`` in Python,
-``nl.document_predicate(name, description, arguments)`` to set it): the
+the documentation (see :doc:`tutorial_python` for it in Python): the
 query assistant and the REPL's ``.predicates`` show it, and a column of the
 sort ``streamline`` is drawn as streamlines by ``.view``.  The rules are:
 
@@ -307,10 +296,10 @@ Part 3: Predicates and Simple Rules
 3.1 The Bayes Factor Relations
 -------------------------------
 
-The Bayes Factor problem needs two binary EDB relations, three unary EDB
-relations and one probabilistic choice:
+The Bayes Factor problem needs two binary relations, three unary ones and
+one probabilistic choice, of the engine or defined in 1.2:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     study(s)                % s is a study identifier
     region(r)               % r is an anatomical region name
@@ -320,8 +309,7 @@ relations and one probabilistic choice:
     selected_study(s)       % s is a probabilistically chosen study
 
 ``selected_study`` is a **probabilistic predicate** — it is not a regular
-EDB set but a uniform probabilistic choice over studies (registered from
-Python, see Part 5).
+relation but a uniform probabilistic choice over studies (see Part 5).
 
 3.2 Simple Unary Rules
 -----------------------
@@ -329,7 +317,7 @@ Python, see Part 5).
 The first step in the Bayes Factor program defines intermediate unary
 predicates that flatten the existential study quantifier:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     active_region(r) :- region(r), selected_study(s), activates(s, r).
 
@@ -348,7 +336,7 @@ In Datalog notation:
 
 Similarly for terms:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     mentioned_term(t) :- term(t), selected_study(s), mentions(s, t).
 
@@ -362,7 +350,7 @@ Part 4: Multi-Variable Rules
 To compute the joint distribution we need a **binary** relation —
 ``cooccurrence(region, term)`` — that links each study's region and term:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     cooccurrence(r, t) :-
         region(r), term(t), selected_study(s),
@@ -386,7 +374,7 @@ predicates.  ``s`` appears only in the body and is existentially quantified.
 Multiple conditions in a rule body are joined with commas ``,`` (or the
 ``&`` operator, which is a synonym):
 
-.. code-block:: none
+.. code-block:: neurolang
 
     cooccurrence(r, t) :-
         region(r) & term(t) & selected_study(s) &
@@ -398,7 +386,7 @@ literature.
 In the Bayes Factor program, the three intermediate deterministic rules
 are passed as a single program string:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     active_region(r) :- region(r), selected_study(s), activates(s, r).
     mentioned_term(t) :- term(t), selected_study(s), mentions(s, t).
@@ -415,20 +403,13 @@ Now we introduce probability — the core of the Bayes Factor computation.
 5.1 The Probabilistic Choice
 -----------------------------
 
-Before probabilistic queries work, the engine needs to know which predicate
-represents a probabilistic choice over studies.  This is registered from
-Python:
-
-.. code-block:: python
-
-    nl.add_uniform_probabilistic_choice_over_set(
-        study_ids_df, name="selected_study"
-    )
-
-This registers ``selected_study`` as a predicate where each study has equal
-probability :math:`1/N`.  Once registered, ``selected_study(s)`` can appear
-in rule bodies, and the PROB/MARG constructs can compute probabilities over
-it.
+Probabilistic queries need a predicate that is a probabilistic choice over
+the studies. The ``neurosynth`` engine has one, ``selected_study``: each of
+its :math:`N` studies is the selected one with probability :math:`1/N`, and
+exactly one is selected in each possible world. ``selected_study(s)`` can
+appear in rule bodies, and PROB and MARG compute probabilities over it. A
+choice of your own can be written in Datalog (10.6); the engine's comes
+from its configuration (:doc:`engine_configuration`).
 
 5.2 PROB — Marginal Probability
 ---------------------------------
@@ -436,7 +417,7 @@ it.
 The ``PROB[pred(x, ...)] = p`` body predicate computes the marginal
 probability of a predicate after marginalising over all unbound variables:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     region_probability(r, p_r) :- PROB[active_region(r)] = p_r.
 
@@ -445,7 +426,7 @@ the fraction of selected studies that activate region ``r``.
 
 The equivalent in the Bayes Factor program:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     region_probability(r, p_r) :- PROB[active_region(r)] = p_r.
     term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
@@ -454,7 +435,7 @@ The equivalent in the Bayes Factor program:
 A conditioning filter can be added with ``//`` (``|`` is a disjunction,
 not a conditioning, see 2.2):
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(r, p) :- PROB[active_region(r) // mentioned_term('face')] = p.
 
@@ -471,7 +452,7 @@ Either side of ``//`` may be a conjunction, in parentheses or not:
 ``MARG[...] = p`` computes the same probability as ``PROB``; it is mostly
 used with a conjunction inside the brackets:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(r, p) :- MARG[selected_study(s), activates(s, r)] = p.
 
@@ -479,7 +460,7 @@ This computes :math:`P(\exists s.\ \mathtt{selected\_study}(s) \land
 \mathtt{activates}(s, r))` for each region ``r``.  As with ``PROB``, adding
 ``//`` gives a conditional probability:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(r, p) :- MARG[active_region(r) // mentioned_term('face')] = p.
 
@@ -499,7 +480,7 @@ Part 6: Connectives
 
 Multiple body atoms are joined with ``,`` or ``&``:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     p(x, y) :- a(x), b(x, y).
     p(x, y) :- a(x) & b(x, y).
@@ -511,7 +492,7 @@ Both are equivalent.  The comma is the standard Datalog convention.
 
 Datalog expresses disjunction through multiple rules with the same head:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     p(x) :- a(x).
     p(x) :- b(x).
@@ -524,12 +505,15 @@ Datalog expresses disjunction through multiple rules with the same head:
 Negation-as-failure uses the ``~`` prefix (the grammar also lists the
 Unicode ``¬``, but ``~`` is the recommended form):
 
-.. code-block:: none
+.. code-block:: neurolang
 
-    not_playing(x) :- person(x), ~plays(x).
+    silent_region(r) :- region(r), ~activates(s, r).
 
-This reads: *x is not playing if x is a person and there is no proof that
-x plays* — standard negation-as-failure semantics.
+This reads: *r is a silent region if r is a region and there is no proof
+that a study activates it* — standard negation-as-failure semantics. Every
+variable of a negated atom must also appear in a positive atom of the rule,
+or, as ``s`` here, appear nowhere else: it is then existentially quantified
+inside the negation.
 
 
 Part 7: The Bayes Factor Formula
@@ -541,7 +525,7 @@ Part 7: The Bayes Factor Formula
 Datalog rules support arithmetic expressions with ``+``, ``-``, ``*``,
 ``/``, and ``**`` (exponentiation), with standard operator precedence:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
 
@@ -554,7 +538,7 @@ variable on the left.
 
 The BF formula combines the three probability distributions with arithmetic:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     bayes_factor(r, t, bf) :-
         joint_probability(r, t, p_rt),
@@ -573,27 +557,24 @@ Part 8: Querying and Optimization
 8.1 The ``ans`` Query Predicate
 ---------------------------------
 
-The ``ans`` predicate marks a query.  When the Datalog program is executed
-via ``nl.execute_datalog_program()``, any ``ans`` rule is evaluated
-immediately and its result returned:
+The ``ans`` predicate marks a query, run as soon as it is entered; with the
+rules of Parts 1–7 in the session:
 
-.. code-block:: none
+.. nl-repl::
+    :norun:
 
     ans(r, t, bf) :-
         bayes_factor(r, t, bf),
-        (r == 'right fusiform gyrus').
+        (r == 'R G oc temp lat fusifor')
+    .sort bf:desc
 
-.. code-block:: python
-
-    result = nl.execute_datalog_program(prog)
-    df = result.as_pandas_dataframe()
-    df.columns = ["region", "term", "bf"]
-    df.sort_values("bf", ascending=False).head()
+``.sort bf:desc`` shows the answer with the largest Bayes factors first; in
+the browser, a click on the column's header does it.
 
 8.2 Filtering with Comparisons
 --------------------------------
 
-The ``(r == 'right fusiform gyrus')`` filter uses the equality comparison
+The ``(r == 'R G oc temp lat fusifor')`` filter uses the equality comparison
 operator.  Text Datalog supports the full comparison suite (always written
 between parentheses in a rule body):
 
@@ -613,11 +594,11 @@ Comparisons work on both numeric and string arguments.
 8.3 Magic-Sets Optimization
 -----------------------------
 
-The ``(r == 'right fusiform gyrus')`` filter does more than just post-process
+The ``(r == 'R G oc temp lat fusifor')`` filter does more than just post-process
 — NeuroLang's **magic-sets** optimisation pushes the constant backwards
 through all the rules in the chain:
 
-1. The constant ``'right fusiform gyrus'`` is inlined into the
+1. The constant ``'R G oc temp lat fusifor'`` is inlined into the
    ``bayes_factor`` predicate before the SIPS (Sideways Information Passing
    Strategy) pass.
 2. The SIPS creates an adorned predicate with the first argument marked as
@@ -626,11 +607,11 @@ through all the rules in the chain:
    ``magic_joint_probability(r)``, ``magic_region_probability(r)``,
    ``magic_cooccurrence(r)``, ``magic_active_region(r)``.
 4. Each adorned rule filters its body with a magic predicate, so only rows
-   where ``r = 'right fusiform gyrus'`` are evaluated.
+   where ``r = 'R G oc temp lat fusifor'`` are evaluated.
 
-The result: with 12 000+ studies and 1 million term-study pairs, the query
-completes in approximately 30 seconds because only 4 298 studies activating
-the right fusiform gyrus are evaluated.
+The result: of the 14 371 studies, only the 2 836 that activate the right
+fusiform gyrus are evaluated for the joint probabilities, and the query
+completes in about 20 seconds.
 
 .. note::
 
@@ -646,36 +627,38 @@ the right fusiform gyrus are evaluated.
 Part 9: The Complete Program
 ==============================
 
-Putting it all together:
+Putting it all together, the program at the top of the page:
 
-.. code-block:: none
+.. nl-repl::
+
+    % The regions and the studies activating them, from the Destrieux atlas
+    activates(s, r) :- destrieux_activated(r, s)
+    region(r) :- destrieux(r, x)
 
     % Deterministic intermediate rules
-    active_region(r) :- region(r), selected_study(s), activates(s, r).
-    mentioned_term(t) :- term(t), selected_study(s), mentions(s, t).
-
+    active_region(r) :- region(r), selected_study(s), activates(s, r)
+    mentioned_term(t) :- term(t), selected_study(s), mentions(s, t)
     cooccurrence(r, t) :-
         region(r), term(t), selected_study(s),
-        activates(s, r), mentions(s, t).
+        activates(s, r), mentions(s, t)
 
     % Probabilistic rules — marginal probabilities
-    region_probability(r, p_r) :- PROB[active_region(r)] = p_r.
-    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
-    joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt.
+    region_probability(r, p_r) :- PROB[active_region(r)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt
 
     % Bayes Factor formula
     bayes_factor(r, t, bf) :-
         joint_probability(r, t, p_rt),
         region_probability(r, p_r),
         term_probability(t, p_t),
-        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))).
+        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
 
     % Query — filter for the target region
-    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'right fusiform gyrus').
+    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'R G oc temp lat fusifor')
+    .sort bf:desc
 
-Running this on real Neurosynth data produces the same results as the
-SQUALL program in :doc:`tutorial_squall` (Part 9); the top 10 terms are
-shown here:
+It answers 3 228 terms; the top 10:
 
 .. list-table:: Top terms by Bayes Factor for the right fusiform gyrus
    :header-rows: 1
@@ -683,25 +666,25 @@ shown here:
    * - Term
      - Bayes Factor
    * - ffa
-     - 11.69
+     - 8.92
    * - face ffa
-     - 11.06
-   * - fusiform face
-     - 11.02
+     - 8.43
    * - fusiform gyri
-     - 7.04
-   * - fusiform
-     - 6.43
-   * - fusiform gyrus
-     - 6.39
-   * - word form
-     - 6.20
-   * - visual word
-     - 5.99
-   * - occipito temporal
-     - 5.87
+     - 7.50
+   * - fusiform face
+     - 7.34
    * - visual stream
-     - 5.22
+     - 4.50
+   * - fusiform
+     - 4.18
+   * - face recognition
+     - 3.97
+   * - ventral visual
+     - 3.95
+   * - fusiform gyrus
+     - 3.88
+   * - occipital temporal
+     - 3.80
 
 All terms exceed the Jeffreys "substantial evidence" threshold of
 :math:`\sqrt{10} \approx 3.16`.  The top cluster — FFA, face, fusiform
@@ -720,7 +703,7 @@ example but available in the text Datalog syntax.
 Aggregations summarise a set of values into a single result per group using
 the ``AGGREGATE`` construct:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(x, cnt) :- AGGREGATE[x](body(x, y) @ count(y)) = cnt.
 
@@ -740,14 +723,14 @@ resampling averages all of them.
 
 Example — count studies per region:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     study_count(r, cnt) :-
         AGGREGATE[r](activates(s, r) @ count(s)) = cnt.
 
 Global aggregation (no group-by) uses empty brackets:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     total_studies(cnt) :-
         AGGREGATE[](study(s) @ count(s)) = cnt.
@@ -759,7 +742,7 @@ aggregation functions with constant parameters, such as
 ``[0, 100]``, ignoring NaN values.  It keeps, for instance, the top 10% of
 the scores of each query:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     cutoff(q, percentile(v, 90)) :- score(q, s, v).
     top_score(q, s) :- score(q, s, v), cutoff(q, t), (v >= t).
@@ -773,20 +756,20 @@ can hold slightly more than 10% of the rows.
 The ``exists`` construct asserts that there exists a tuple satisfying a set
 of conditions, without binding the existential variable in the rule head:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     has_activations(r) :- region(r), exists(s; activates(s, r)).
 
 This is equivalent to:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     has_activations(r) :- region(r), activates(s, r).
 
 The ``;`` separates the existential variable from the body predicates.
 Multiple existential variables can be stacked:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     ans(r) :- exists(s, t; activates(s, r), mentions(s, t)).
 
@@ -795,7 +778,7 @@ Multiple existential variables can be stacked:
 
 Besides equality (``==``), the full comparison suite is available:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     large_items(x) :- item(x), item_count(x, c), (c >= 2).
     not_empty(x) :- item_count(x, c), (c != 0).
@@ -810,7 +793,7 @@ Commands use the ``.`` prefix and follow the Prolog convention.  The text
 Datalog frontend executes two commands which load external data into a
 relation:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
@@ -828,7 +811,7 @@ atlas, a :class:`~neurolang.atlases.Atlas`, by name, in its ``atlases``.
 and ``.import``, which imports a *Datalog module*, a file of facts, rules
 and commands, as if its statements were written in its place:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     .import("bundles/uncinate.dl")
     .import("bundles/freesurfer_queries.dl")
@@ -855,16 +838,13 @@ and commands, as if its statements were written in its place:
   (``ans(...) :- ...``) is refused.  An error in a module names its file,
   with the line and column of a syntax error.
 
-From Python, ``nl.import_datalog_module("bundles/uncinate.dl")`` imports a
-module, and ``with nl.program_ir.importing_from("main.dl"):`` runs a
-program read from ``main.dl`` with its imports relative to the file's
-directory.
+:doc:`tutorial_python` imports modules from Python.
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend
 (``'pandas'`` or ``'polars'``) from Datalog code, use the SQUALL
-``#set_backend`` directive or, from Python,
-``neurolang.config.config.set_query_backend(...)``; see :doc:`performance`.
+``#set_backend`` directive, or Python (:doc:`tutorial_python`); see
+:doc:`performance`.
 Note that the backend is a process-wide setting.
 
 10.5 Probabilistic Facts
@@ -872,7 +852,7 @@ Note that the backend is a process-wide setting.
 
 Explicit probabilistic facts can be written inline:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     0.9 :: noisy_region('fusiform').
 
@@ -881,7 +861,7 @@ This creates a probabilistic fact with probability 0.9.
 Probabilistic rules (with a probability expression instead of a fixed
 probability) also exist:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     p(x) :: exp(-d / 5.0) :- a(x, d), (d < 0.8).
 
@@ -898,7 +878,7 @@ The choice operators are ``^`` and ``:~:`` (both are equivalent):
 
 **Choice fact** — a standalone choice with a fixed probability:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     0.3 ^ choice('a').
     0.7 ^ choice('b').
@@ -909,7 +889,7 @@ probabilities in a choice group must sum to 1.
 
 **Choice rule** — a choice whose head depends on a body:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     n_studies(n) :- AGGREGATE[](study(s) @ count(s)) = n.
     picked_study(s) ^ (1 / n) :- study(s), n_studies(n).
@@ -919,50 +899,58 @@ Here the probability expression ``(1 / n)`` is evaluated at runtime, with
 produces one arm of the choice, so ``picked_study`` is a uniform choice over
 studies.  The ``:~:`` operator can be used interchangeably:
 
-.. code-block:: none
+.. code-block:: neurolang
 
     picked_study(s) :~: (1 / n) :- study(s), n_studies(n).
 
-10.6 Confidence Intervals by Resampling
+10.7 Confidence Intervals by Resampling
 -----------------------------------------
 
 The Bayes factors of Part 9 are computed from one sample of studies.  How
 much they would change with another sample is answered by resampling the
 studies: a *resampling* of the choice ``selected_study`` is a set of
 replicates ``b``, each reweighting the studies as a bootstrap of them does.
-It is declared once, from Python or in the engine's YAML
-(:doc:`engine_configuration`):
-
-.. code-block:: python
-
-    nl.add_resampling(
-        "boot_studies", choice="selected_study", n=1000, scheme="bayesian"
-    )
+It is declared once, in the engine's configuration
+(:doc:`engine_configuration`) or from Python (:doc:`tutorial_python`): the
+``neurosynth`` engine has ``boot_studies``, 500 replicates of a Bayesian
+bootstrap of ``selected_study``.
 
 ``RESAMPLE[boot_studies](pred(x)) = b`` in a rule body is then
 ``pred(x)`` computed on replicate ``b``, for any ``pred`` defined over
 ``PROB`` of the choice, including the arithmetic over the probabilities.
 The confidence interval is the percentiles of the replicates:
 
-.. code-block:: none
+.. nl-repl::
+    :norun:
 
-    bf_rep(b, r, t, bf) :- RESAMPLE[boot_studies](bayes_factor(r, t, bf)) = b.
+    bf_rep(b, r, t, bf) :- RESAMPLE[boot_studies](bayes_factor(r, t, bf)) = b
 
     ans(t, bf, percentile(x, 2.5), percentile(x, 97.5)) :-
-        bayes_factor('right fusiform gyrus', t, bf),
-        bf_rep(b, 'right fusiform gyrus', t, x).
+        bayes_factor('R G oc temp lat fusifor', t, bf),
+        bf_rep(b, 'R G oc temp lat fusifor', t, x),
+        (bf > 4)
+
+With the rules of Part 9, this gives the 95% intervals of the six terms of
+Bayes factor above 4, in under a minute: ``ffa``, 8.92 [5.96, 13.64];
+``face ffa``, 8.43 [5.40, 13.23]; ``fusiform gyri``, 7.50 [4.90, 11.28];
+``fusiform face``, 7.34 [5.39, 10.23]; ``visual stream``, 4.50 [2.92, 7.09];
+``fusiform``, 4.18 [3.73, 4.69].
 
 The replicates of a resampling are the same in every query, so that two
 measures computed on them can be compared replicate by replicate, joining
 them on ``b``:
 
-.. code-block:: none
+.. nl-repl::
+    :norun:
 
     difference(b, d) :-
-        bf_rep(b, 'right fusiform gyrus', 'ffa', x),
-        bf_rep(b, 'right fusiform gyrus', 'visual word', y),
-        (d == log(x) - log(y)).
-    ans(percentile(d, 2.5), percentile(d, 97.5)) :- difference(b, d).
+        bf_rep(b, 'R G oc temp lat fusifor', 'ffa', x),
+        bf_rep(b, 'R G oc temp lat fusifor', 'navigation', y),
+        (d == log(x) - log(y))
+    ans(percentile(d, 2.5), percentile(d, 97.5)) :- difference(b, d)
+
+The interval of the log ratio, [0.30, 1.51], excludes 0: ``ffa`` is more
+specific to the region than ``navigation`` (3.57), in this sample of studies.
 
 The interval of a difference cannot be obtained from the intervals of the
 two measures, which are computed on the same studies and are correlated.
@@ -1012,178 +1000,10 @@ term rather than for every voxel.
 Appendix A: Running Datalog from Python
 =========================================
 
-All of the Datalog syntax shown in this tutorial can be executed from Python
-using the ``NeurolangPDL`` frontend.  The general workflow follows the same
-pattern as SQUALL (see :ref:`part-9-appendix-a`), but using
-``execute_datalog_program`` instead of ``execute_squall_program``.
-
-The steps are:
-
-1. Create a ``NeurolangPDL`` engine.
-2. Register EDB facts with ``add_tuple_set``.
-3. Optionally register probabilistic choices with
-   ``add_uniform_probabilistic_choice_over_set``.
-4. Execute a Datalog program string with ``execute_datalog_program``.
-5. Inspect results from the direct return value (when ``ans`` is used) or
-   with ``solve_all()``.
-
-Registering facts and running a simple rule
---------------------------------------------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("bob",), ("carol",)], name="person"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("carol",)], name="plays"
-    ... )
-    >>> nl.execute_datalog_program(
-    ...     "active(x) :- person(x), plays(x)."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(
-    ...     solution["active"].as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['alice', 'carol']
-
-Querying with ``ans`` (direct return)
---------------------------------------
-
-When the program contains an ``ans`` rule, ``execute_datalog_program``
-returns the result directly:
-
-.. code-block:: python
-
-    >>> result = nl.execute_datalog_program(
-    ...     "ans(x) :- person(x), plays(x)."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-Multiple rules
----------------
-
-Each rule goes on its own line:
-
-.. code-block:: python
-
-    >>> result = nl.execute_datalog_program(
-    ...     """
-    ...     player(x) :- person(x), plays(x).
-    ...     non_player(x) :- person(x), ~plays(x).
-    ...     ans(x) :- player(x).
-    ...     """
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-Binary predicates
-------------------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
-    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
-    >>> nl.execute_datalog_program(
-    ...     "performer(x) :- person(x), sings(x, g)."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["performer"]
-    ...     .as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['alice']
-
-Negation
----------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_datalog_program(
-    ...     "not_playing(x) :- person(x), ~plays(x)."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["not_playing"]
-    ...     .as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['bob']
-
-Filtering with comparisons
----------------------------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> nl.execute_datalog_program(
-    ...     "large(x) :- item(x), item_count(x, c), (c >= 2)."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["large"]
-    ...     .as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['b', 'c']
-
-Aggregation
-------------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> result = nl.execute_datalog_program(
-    ...     """
-    ...     max_count(x, m) :- AGGREGATE[x](item_count(x, c) @ max(c)) = m.
-    ...     ans(x, m) :- max_count(x, m).
-    ...     """
-    ... )
-    >>> sorted(
-    ...     result.as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [('a', 1), ('b', 2), ('c', 3)]
-
-Probabilistic query (PROB)
----------------------------
-
-.. code-block:: python
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates"
-    ... )
-    >>> _ = nl.add_uniform_probabilistic_choice_over_set(
-    ...     [("s1",), ("s2",), ("s3",)], name="selected_study"
-    ... )
-    >>> result = nl.execute_datalog_program(
-    ...     "ans(r, p) :- PROB[selected_study(s), activates(s, r)] = p."
-    ... )
-    >>> df = result.as_pandas_dataframe()
-    >>> sorted(df.itertuples(index=False, name=None))
-    [('A', 0.666...), ('B', 0.333...)]
-
-.. note::
-
-    Conjunctions inside ``PROB[...]`` use ``,`` as separator (same as Datalog
-    rule bodies).  The more common pattern in the Bayes Factor program is to
-    define an intermediate rule first and then query ``PROB[pred(x)] = p``
-    on the single predicate.
+Every program of this tutorial runs from Python too, as the text of
+``execute_datalog_program`` on a :class:`~neurolang.frontend.NeurolangPDL`,
+an engine of the registry or one with relations of your own: see
+:doc:`tutorial_python`.
 
 
 .. _appendix-b-datalog:
