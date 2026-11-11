@@ -586,9 +586,13 @@ class EmbeddingIndex:
         self.encoder = encoder
         self.cache_path = None if cache_path is None else Path(cache_path)
         self._matrix = None
-        # Per-index cache of the similarities to the 16 most recent
-        # queries: it lives and dies with the index.
+        self._positions = None
+        # Per-index caches, which live and die with the index: the
+        # similarities to the 16 most recent queries, and the embeddings
+        # of the 4096 most recent query texts (3 kB each), so that a rule
+        # over many texts, whose rows come in any order, embeds each once.
         self.similarities = lru_cache(maxsize=16)(self._similarities)
+        self.query_vector = lru_cache(maxsize=4096)(self._query_vector)
 
     @property
     def cache_key(self):
@@ -655,10 +659,22 @@ class EmbeddingIndex:
         np.savez(tmp, key=np.array(self.cache_key), matrix=self._matrix)
         os.replace(tmp, self.cache_path)
 
+    def _query_vector(self, query):
+        return _normalise(self.encoder.encode_query(query)[None])[0]
+
     def scores(self, query):
         """Cosine similarity of each document, in ``ids`` order, to a query."""
-        query_vector = _normalise(self.encoder.encode_query(query)[None])[0]
-        return self.matrix @ query_vector
+        return self.matrix @ self.query_vector(query)
+
+    def similarity(self, query, doc):
+        """Cosine similarity of the document *doc* to a query, ``nan`` if
+        *doc* is not in the index."""
+        if self._positions is None:
+            self._positions = {d: i for i, d in enumerate(self.ids)}
+        i = self._positions.get(doc)
+        if i is None:
+            return float("nan")
+        return float(self.matrix[i] @ self.query_vector(query))
 
     def _similarities(self, query):
         # Read-only mapping from document id to similarity, so that the
@@ -682,9 +698,8 @@ def make_similarity_function(index, id_type=None):
     """
     Build a NeuroLang function ``f(query, doc) -> similarity``.
 
-    The similarities of every document to a query text are computed once
-    and cached by :meth:`EmbeddingIndex.similarities` (the 16 most recent
-    queries per index), so each call is a dictionary lookup.
+    The embedding of a query text is computed once and cached by
+    :meth:`EmbeddingIndex.query_vector`, so each call is a dot product.
 
     Parameters
     ----------
@@ -712,7 +727,7 @@ def make_similarity_function(index, id_type=None):
                 f"query_similarity(query, doc) takes the query text first: "
                 f"got {query!r} as the query"
             )
-        return index.similarities(query).get(doc, float("nan"))
+        return index.similarity(query, doc)
 
     query_similarity.__annotations__ = {
         "query": str, "doc": id_type, "return": float

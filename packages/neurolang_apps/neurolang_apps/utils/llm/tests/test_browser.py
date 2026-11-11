@@ -5,7 +5,7 @@ import sys
 import httpx
 import pytest
 
-from ..browser import BrowserTransport
+from ..browser import BrowserTransport, browser_config
 from ..config import ProviderConfig
 from ..providers import LLMError, make_client
 from ..validation import _in_child, _with_timeout
@@ -116,3 +116,11 @@ def test_queries_run_inline_where_there_are_no_threads_nor_processes(
     monkeypatch.setattr("threading.Thread.start", no_threads)
     assert _with_timeout(lambda: 42, 5.0) == 42
     assert _in_child(lambda: 43, 5.0, 1024.0) == 43
+
+
+def test_the_anthropic_preset_leaves_room_for_thinking():
+    provider = browser_config("anthropic", "key").provider()
+    assert provider.max_tokens == 16000
+    assert browser_config("openai", "key").provider().max_tokens == (
+        ProviderConfig.max_tokens
+    )

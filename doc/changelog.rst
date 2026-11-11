@@ -19,6 +19,51 @@ Unreleased
 
 **Performance:**
 
+* A Euclidean distance bound between a set of voxels and a set of peaks
+  holds half the memory and takes about half the time: on 300 k peaks and
+  the 318 k voxels of a 2 mm brain mask, a radius of 6 voxels (120 M pairs)
+  peaks at 7.5 GB instead of 14.6 GB, and takes 18 s instead of 43 s, and
+  a radius of 3 at 1.1 GB instead of 2.8 GB, in 1.6 s instead of 5.5 s. An
+  integer join looked its neighbours up with the integer offsets of the
+  radius only when it needed few look-ups, and built k-d trees otherwise,
+  whose pairs are 5 to 10 times dearer than a look-up: it now looks them up
+  whenever the larger set fills at least one cell of the grid of its
+  coordinates in 40. The k-d trees are searched in chunks of the smaller
+  set, so that the pairs they return are never all alive at once; and the
+  distances, the 64-bit indices of the points and a copy of the pairs are
+  no longer kept when they are not needed. Float coordinates lying on a grid
+  (multiples of 1, 0.5, 0.25, 0.1, 0.05 or 0.01, as the millimetre
+  coordinates of peaks and voxels are) are joined the same way, as integers,
+  the pairs at the very radius being checked on the floats: they give the
+  same pairs and distances as before. The thresholds, the sizes of the chunks
+  and the other tunable values of the join are in
+  ``neurolang/utils/euclidean_join.yaml``, read with OmegaConf (a dependency
+  of ``neurolang`` now) and changed by the ``euclidean_join`` key of an
+  engine (see :ref:`euclidean-join-settings`), with a ``memory`` profile, which the
+  interactive REPL, in a terminal and in a browser, uses: it uses the
+  stencil up to a billion look-ups, counts the pairs before storing them and
+  searches the k-d trees in small chunks. The distinct pairs are decoded in
+  blocks into 32-bit indices: a radius of 6 voxels peaks at 6.6 GB, and
+  at 6.0 GB in the memory profile, instead of 14.6 GB.
+
+* ``query_similarity(q, s)`` keeps the embeddings of the last 4,096 query
+  texts and computes one dot product per call: a rule over many texts,
+  ``cogat_definition(t, d), similar_study(d, s)`` over the 615 definitions
+  of the Cognitive Atlas concepts, embedded a text again for nearly every
+  row, as the rows come in any order and only the similarities of the last
+  16 texts were kept.
+
+* A rule with many negated atoms compiles in a time linear in them: each
+  negation was joined with the difference of those before it, which put
+  that difference in both operands and doubled the relational algebra with
+  each negation (14 negations, as in the bundles of tract_querier
+  translated to the vocabulary of the engine tracts, took most of an hour;
+  now a
+  second).
+* The regions of a large atlas are found in a second rather than ten (1.5 s
+  instead of 12 s for the 180 labels of FreeSurfer's 256³ ``wmparc``): the
+  labels are searched for in the type of the image's values, all at once.
+
 * A selection by a Python function of a single column, as
   ``startswith('17Networks LH SalVentAttn', l)`` on ``schaefer_activated``
   (291,533 rows) in a probabilistic rule, applies the function to the column
@@ -77,13 +122,91 @@ Unreleased
 
 **New features:**
 
+* ``.graph`` draws where the answer of the last query comes from, and how:
+  the data of the engine, with their columns, its random choices and
+  probabilistic facts, the rules of the query and of the engine, which are
+  probabilistic, the probabilities ``PROB[...]`` and the answer, from left
+  to right. A rule lists the atoms of its body, each where the edge of the
+  relation it uses arrives, and says how it combines them: the variables
+  it joins them on, those it computes, keeps, or drops. A probability says
+  how it turns the random choices it depends on into a number for each
+  row (with one uniform choice, the share of the choices where its body
+  holds), and the answer shows the distribution of its probabilities. The
+  colour of an edge tells what goes through it: rows that hold for sure,
+  uncertain rows, or probabilities. The REPL in the browser shows it in a
+  *Graph* tab after each query, a query of the assistant's included.
+
 * A program holds several queries, each named in brackets,
   ``ans[name](...) :- ...``, and ``execute_datalog_program`` returns their
   answers in a dictionary by name. The queries are solved together: each is
   rewritten with magic sets for its own bindings, into one program that is
   run once, so that the predicates they share are computed once, for the
   bindings of all of them (four queries sharing a recursive predicate take
-  1.6 s instead of 2.5 s).
+  1.6 s instead of 2.5 s). ``.view`` of the REPL shows the results of all the
+  queries in one viewer: images, a network and streamlines, beside one
+  another.
+
+* One model of atlases, :class:`neurolang.atlases.Atlas`: a label image, a
+  label table (``id``, ``name``, ``hemi``), a space tag and a background,
+  with its loaders, the normalisation of label names, the hemisphere rules
+  and its regions.  ``.load_atlas(name, ...)`` loads any atlas into
+  ``name(label, region)``: ``kind="freesurfer"`` (a colour LUT),
+  ``"bids"`` (a ``dseg.tsv``) or ``"tsv"`` from local files, the atlases of
+  the engines (``kind="destrieux"``, ``"schaefer"``, ``"tian"``), a fetcher
+  of nilearn (``kind="nilearn", fetcher="harvard_oxford"``), and, without a
+  kind, an image and a CSV at URLs as before.  The engine records the atlas
+  by name (``nl.atlases``), as do ``add_atlas_set``, which also takes an
+  ``Atlas``, and the ``atlases:`` of an engine of ``engines.yaml``, whose
+  relations are unchanged.  The ``tracts`` engine indexes a tractogram by
+  any of them, ``.index_tracts(t, name, term_mapping=...)``, the term
+  mapping defaulting to that of the atlas's kind (FreeSurfer, Destrieux,
+  Tian); the engine's ``.load_tract_atlas`` is gone.  ``nl.atlas_labels`` is
+  gone too: ``atlas_label_values`` reads the recorded atlas.
+
+* The vocabulary of tractography (``vocabulary.dl`` of the engine
+  ``tracts``) and the shipped translations of tract_querier's queries
+  (its ``bundles``)
+  document each predicate with a ``%%`` block: its signature with the sorts
+  of its arguments, ``uf(x: streamline, h: hemisphere)``, and, for a bundle,
+  its full name (``uf`` of ``freesurfer_queries`` is the uncinate
+  fasciculus, from the engine's table ``tract_names.tsv``), a sentence on
+  what it selects and the WMQL statement it is translated from.  The engine
+  ``tracts`` declares the sorts (``streamline``, ``end``, ``term``,
+  ``hemisphere``, ``axis``...) with descriptions, so that the query assistant
+  lists ``uf``, ``cst``, ``cc_1``... by name, and ``.view`` draws a column of
+  the sort ``streamline``.  The description of the engine names the bundle
+  modules, so that the assistant imports one
+  (``.import('bundles/freesurfer_queries.dl')``) to answer with
+  ``uf``.
+
+* Tractography is the engine ``tracts`` of the apps,
+  ``neurolang_apps.utils.engines.tracts``, rather than the workspace package
+  ``nl_tracts``, which is gone: its modules, vocabulary, bundles, mappings,
+  examples and tests are those of the engine, its tools in
+  ``packages/neurolang_apps/tools/tracts`` (``wmql_to_datalog.py``, the
+  former command ``nl-tracts wmql``), and the extra ``tracts`` needs
+  nothing more than the apps.  ``frontend`` keeps the solver's mixin of the
+  commands and the ``python_init``, which imports the vocabulary; an engine
+  of the apps has them by extending ``tracts``.  ``register``,
+  ``relation_frames``, ``RELATION_NAMES``, ``TractsSolver``,
+  ``tracts_engine`` and the module ``vocabulary`` are gone
+  (``vocabulary_predicates()`` lists the predicates of the vocabulary).
+
+* The vocabulary of tractography can reproduce tract_querier where the two
+  differ by design (the engine ``tracts``, DESIGN.md 6.1, 6.1.1, 17.5).  With
+  ``.index_tracts(..., emit_background=1)`` (as before: rows of the
+  background label in ``streamline_label``) ``only_in``, hence ``only(...)``
+  of a translated query, is tract_querier's, which counts the background
+  among the labels of a streamline; the new option
+  ``.index_tracts(..., extent="centre")`` (``label_extent_relation(atlas,
+  extent)``, ``RelationStore.add_atlas(atlas, term_mapping, extent)``) gives
+  the boxes of the labels by the centres of their voxels, as tract_querier's
+  without scipy, instead of the voxel edges, the default, so that the
+  directional terms (``anterior_of``...) are its own.  On the whole brain of
+  HCP842 and ``wmparc``, the 58 bundles of ``freesurfer_queries.qry`` (both
+  sides) are the same streamlines as tract_querier's with both options (50
+  without) and the 43 translated of ``freesurfer_queries_bsf2016.qry`` and
+  of its ``_toad`` variant, too.
 
 * The query assistant votes with ReAct too: ``samples: N`` answers N
   times and keeps the answer whose rows most of them give, and
@@ -122,6 +245,11 @@ Unreleased
   ``nl.import_datalog_module(path)``.  In the REPL, what a query's imports
   define stays in the session although the query's own rules are local to
   it, and ``.clear`` forgets the imports with their rules.
+* ``.import`` looks for a module not found relative to the importing file
+  or the working directory in the directories the engine gives its modules,
+  ``module_directories`` of its solver: the engine ``tracts`` gives its
+  own, so that a program imports its bundles as
+  ``.import("bundles/freesurfer_queries.dl")``.
 * A rule body of the Datalog syntax may be a disjunction, ``|`` or ``∨``,
   which binds looser than ``,``; parentheses group: ``uncinate(x) :-
   (traverses(x, 'orbital') | traverses(x, 'middle')), temporal(x)``, rather
@@ -282,6 +410,40 @@ Unreleased
   other aggregations still take a value per row. In SQUALL too, and with
   the polars backend, where an aggregation of several columns without
   groups failed.
+* A comparison inside parentheses is a disjunct or conjunct of its own:
+  ``ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor
+  planning')`` parses; before, every comparison of the disjunction needed
+  parentheses of its own, ``((t == 'a') | (t == 'b'))``.
+* In the REPL in the browser, the Brain and Graph windows are as tall as
+  their page, instead of 34 rem with scrollbars of their own within the
+  page's (the readout and the colour bar of the viewer were cut off), and
+  they follow the light or dark theme of the REPL, switching with it: the
+  brain viewer was always dark, drawing the image on black, and the graph
+  followed the system's theme, not the REPL's. In the light theme the
+  viewer draws the image on white. Opened apart, as ``.view`` does in the
+  terminal, they follow the system's theme as before.
+* The query assistant's ``anthropic`` provider, in the terminal and in the
+  browser REPL, no longer sends ``temperature``, which current Claude models
+  reject (HTTP 400 "`temperature` is deprecated for this model"). It sends
+  back each reply's content blocks unchanged, so the thinking blocks of
+  Claude Sonnet 5.5 stay with its tool calls, and gives it 16000 output
+  tokens since its thinking counts in them.
+
+* The documentation's CI builds the REPL in the browser for ``master`` only,
+  with the Neurosynth engine only, and keeps the embeddings of its studies
+  between builds, saved whenever a build changed them: a build embedded the
+  studies again each time, an hour for Neurosynth's and four for
+  NeuroStore's, and some reached the six-hour limit of a job.  A pull
+  request's CI uploads its documentation without a REPL that can start, and
+  no longer comments on how to run it; ``neurolang-repl-serve`` builds the
+  REPL of a branch locally.
+
+* ``_`` in a negated atom or in a disjunct of a rule body is quantified
+  there: ``~traverses(x, _, h)`` is "no term", ``~∃t traverses(x, t, h)``,
+  instead of an error that the rule is not safe.
+* ``.load_atlas`` put a tuple of the region, not the region, in the second
+  column of its relation, ``Tuple[str, ExplicitVBR]``, and kept the labels
+  without voxels.  The background (label 0) is no region any more either.
 * Several probabilistic facts of a predicate written in a Datalog program
   (``0.5 :: p(1)`` and ``0.2 :: p(2)``) made a relation without the type of
   its columns, and a query over them failed with an ``IndexError`` when its
@@ -302,6 +464,18 @@ Unreleased
   b(x)``, merged a tuple of ``a`` and ``b`` with the same probability into one
   event: two facts of probability 0.5 gave 0.5 instead of 0.75.
 * A negation written ``¬a(x)`` in the Datalog syntax failed to parse.
+* Magic sets leave unbound a predicate whose binding would put an
+  aggregation or a negation in a cycle of the rewritten program, and bind
+  the others: a query over the vocabulary of tractography, whose
+  ``term_box_hi`` aggregates, was not rewritten at all, and a function of a
+  variable it bound, as ``query_similarity`` in ``similar_study``, was
+  refused as unbound.
+
+* Magic sets rewrite a query without a constant when a rule binds the
+  argument of another right of it, as ``d`` in ``ans(t, s) :-
+  cogat_definition(t, d), close(d, s)``: a function of ``d`` in ``close``
+  was refused as unbound.
+
 * A Datalog rule whose head starts with a constant, ``n('VisCent', l) :-
   schaefer(l, r), ...``, failed to parse: the parser read it as a fact
   and stopped at the variable.  A fact is now parsed as a head and checked

@@ -10,6 +10,7 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
+from neurolang.atlases import Atlas  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils import cli, engine_registry  # noqa: E402
 from neurolang_apps.utils.tui import brain_viewer  # noqa: E402
@@ -165,8 +166,8 @@ def atlas(engine):
     labels = np.zeros(SHAPE, dtype=np.int16)
     labels[:2], labels[2:] = 1, 2
     engine.grids["schaefer"] = nib.Nifti1Image(labels, AFFINE)
-    engine_registry._register_atlas_labels(
-        engine, "schaefer", {1: "A", 2: "B"}
+    engine.atlases["schaefer"] = Atlas.from_labels(
+        "schaefer", engine.grids["schaefer"], {1: "A", 2: "B"}
     )
     engine.add_tuple_set(
         [("A", "s1"), ("B", "s1"), ("A", "s2")], name="schaefer_activated"

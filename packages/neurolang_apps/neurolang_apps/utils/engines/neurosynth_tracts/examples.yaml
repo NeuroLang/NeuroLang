@@ -1,0 +1,26 @@
+# Merged into the entry of neurosynth_tracts in ../engines.yaml (see
+# doc/engine_configuration.rst).
+#
+# Questions on neurosynth_tracts, added after the bank of
+# coordinate_meta_analysis. They are about a tractogram the program has
+# loaded and indexed, as the commands of
+# examples/uncinate_cogat.dl of the engine tracts do: an atlas "fs" with the
+# terms of the vocabulary of tractography (a wmparc of FreeSurfer) and the
+# Schaefer atlas of the engine, whose points the ends of the streamlines
+# (endpoint_point) are joined to. A bundle is the rules of the vocabulary
+# (traverses, endpoint_in...), as the uncinate of uncinate.dl.
+assistant_examples:
+  - question: Which Cognitive Atlas concepts are most probably studied by the studies that activate the cortical parcels connected by the left uncinate fasciculus?
+    datalog: |-
+      uncinate(x, h) :- (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h) | traverses(x, "inferior_frontal_gyrus", h)), endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h), ~traverses(x, "occipital", h), ~traverses(x, "parietal", h), ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h), opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+      uf_end_near(i, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez), schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3), (i == 2 * x + e)
+      uf_parcel_ends(n, count(i)) :- uf_end_near(i, n)
+      uf_ends(count(i)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez), (i == 2 * x + e)
+      uf_parcel(n) :- uf_parcel_ends(n, c), uf_ends(t), (c >= 0.05 * t)
+      uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
+      measuring(c) :- cogat_measures(c, x)
+      cogat_concept(c, t) :- cogat_term(c, t), cogat_subclass_of(c, <http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001>), ~measuring(c)
+      concept_definition(t, d) :- cogat_concept(c, t), skos:definition(c, d)
+      about(t, s) :- concept_definition(t, d), similar_study(d, s), selected_study(s)
+      p_concept_given_uf(t, PROB) :- about(t, s) // uf_study(s)
+      ans(t, p) :- p_concept_given_uf(t, p)

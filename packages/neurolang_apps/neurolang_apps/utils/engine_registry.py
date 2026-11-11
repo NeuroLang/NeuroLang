@@ -6,9 +6,11 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``), whose
-  ``init_engine`` is also given the keyword arguments of
-  ``python_init_options``;
+* **Python initialisation scripts** (``python_init``): a module name, or
+  a list of them, whose ``init_engine(nl, mask, data_dir, **options)``
+  run in order, each given all the keyword arguments of
+  ``python_init_options`` (an ``init_engine`` takes ``**options`` for
+  those of the others);
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -44,7 +46,9 @@ define:
 * ``atlases`` — brain atlases downloaded via nilearn (e.g. ``destrieux``,
   ``schaefer``, ``difumo``) and registered as predicates with
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
-  use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
+  are :class:`~neurolang.atlases.Atlas` objects, fetched as
+  ``.load_atlas(name, kind=...)`` fetches them, added by ``add_atlas_set``
+  and recorded in the engine's ``atlases``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
@@ -93,9 +97,11 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
 import re
+import warnings
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
@@ -107,6 +113,7 @@ import numpy as np
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
+from neurolang.utils import euclidean_join_settings
 from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
@@ -304,7 +311,10 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
+    "python_init", "hidden_predicates",
 })
+# Keys whose value is a list, or a single item standing for a list of one.
+_LIST_KEYS = frozenset({"python_init"})
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
@@ -344,7 +354,10 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     * any other value replaces the inherited one.
     """
     configs = [
-        {k: v for k, v in c.items() if k not in _NON_INHERITED_KEYS}
+        {
+            k: [v] if k in _LIST_KEYS and isinstance(v, str) else v
+            for k, v in c.items() if k not in _NON_INHERITED_KEYS
+        }
         for c in configs
     ]
     merged = OmegaConf.to_container(OmegaConf.merge(*configs))
@@ -355,13 +368,40 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     return _without_nulls(merged)
 
 
-def resolve_engine_config(
+def _linearized(
     engines: Dict[str, Dict[str, Any]],
     name: str,
     _stack: Tuple[str, ...] = (),
+) -> List[str]:
+    """
+    Return *name* after its bases, depth first in the order of their
+    ``extends``, each engine once: a base two of them extend is merged
+    once, where it is first reached.
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    order = []
+    for base in _extends(engines[name]):
+        for engine in _linearized(engines, base, _stack + (name,)):
+            if engine not in order:
+                order.append(engine)
+    return order + [name]
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
 ) -> Dict[str, Any]:
     """
-    Return the configuration of *name* with all ``extends`` resolved.
+    Return the configuration of *name* with all ``extends`` resolved: the
+    configurations of its bases and its own, merged in the order of
+    :func:`_linearized`.
 
     Parameters
     ----------
@@ -377,19 +417,9 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    if name in _stack:
-        chain = " -> ".join(_stack + (name,))
-        raise ValueError(f"Cyclic engine inheritance: {chain}")
-    if name not in engines:
-        available = ", ".join(engines.keys())
-        raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
-        )
-    raw = engines[name] or {}
     return _merge_engine_configs(*(
-        resolve_engine_config(engines, base, _stack + (name,))
-        for base in _extends(raw)
-    ), raw)
+        engines[engine] or {} for engine in _linearized(engines, name)
+    ))
 
 
 @functools.lru_cache(maxsize=None)
@@ -802,6 +832,21 @@ def get_signatures(
     return signatures
 
 
+def get_euclidean_join_settings(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """
+    Return the settings of the Euclidean join an engine changes.
+
+    They are the ``euclidean_join`` mapping of the engine, merged with that
+    of the engines it extends: settings of
+    :class:`~neurolang.utils.euclidean_join_settings.JoinSettings`, as
+    ``kdtree_chunk_pairs``.
+    """
+    cfg = get_engine_config(name, yaml_path)
+    return dict(cfg.get("euclidean_join") or {})
+
+
 def get_hidden_predicates(
     name: str, yaml_path: Optional[Path] = None
 ) -> frozenset:
@@ -980,90 +1025,33 @@ def _load_template(
 # Atlas helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_atlas_destrieux(**kwargs):
-    return _nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
-
-
-def _fetch_atlas_schaefer(**kwargs):
-    return _nilearn_datasets().fetch_atlas_schaefer_2018(**kwargs)
-
-
 def _fetch_atlas_difumo(**kwargs):
     return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
-TIAN_URL = (
-    "https://raw.githubusercontent.com/yetianmed/subcortex/master/"
-    "Group-Parcellation/3T/Subcortex-Only/"
-)
+def _atlas_fetcher(kind: str) -> Callable[..., Any]:
+    """The fetcher of the deterministic atlas *kind*, as ``.load_atlas(name,
+    kind=...)`` fetches it (:data:`neurolang.atlases.FETCHERS`), imported
+    when called: ``neurolang.atlases`` imports pandas."""
 
+    def fetch(**kwargs):
+        from neurolang.atlases import FETCHERS
 
-def _fetch_atlas_tian(scale: int = 2, data_dir: str = "", **kwargs):
-    """
-    Fetch the Melbourne subcortex atlas (Tian et al., 2020, Nat Neurosci,
-    doi:10.1038/s41593-020-00711-6), 3T, at *scale* 1 to 4 (16, 32, 50 or
-    54 regions), on the 2 mm grid of the MNI152 2009c asymmetric template,
-    from the authors' repository. Its label file names the region of value
-    *n* on its line *n*; region names end with the hemisphere (``-lh``,
-    ``-rh``).
-    """
-    base = f"Tian_Subcortex_S{int(scale)}_3T"
-    image, labels = _fetch_files(
-        str(Path(data_dir) / "tian"),
-        [
-            (f"{base}_2009cAsym.nii.gz",
-             f"{TIAN_URL}{base}_2009cAsym.nii.gz", {}),
-            (f"{base}_label.txt", f"{TIAN_URL}{base}_label.txt", {}),
-        ],
-        verbose=0,
-    )
-    names = Path(labels).read_text().split()
-    return {"maps": image, "labels": ["Background", *names]}
+        return FETCHERS[kind](**kwargs)
+
+    return fetch
 
 
 _ATLAS_REGISTRY = {
-    "destrieux": {
-        "fetch": _fetch_atlas_destrieux,
-        "probabilistic": False,
-    },
-    "schaefer": {
-        "fetch": _fetch_atlas_schaefer,
-        "probabilistic": False,
-    },
-    "tian": {
-        "fetch": _fetch_atlas_tian,
-        "probabilistic": False,
+    **{
+        kind: {"fetch": _atlas_fetcher(kind), "probabilistic": False}
+        for kind in ("destrieux", "schaefer", "tian")
     },
     "difumo": {
         "fetch": _fetch_atlas_difumo,
         "probabilistic": True,
     },
 }
-
-
-def _parse_labels(raw_labels):
-    """
-    Yield ``(index, name)`` pairs from a nilearn labels value.
-
-    Handles the three formats returned by different nilearn versions:
-    ``dict``, ``list``, and numpy structured array.
-
-    """
-    if isinstance(raw_labels, dict):
-        yield from raw_labels.items()
-    elif isinstance(raw_labels, list):
-        yield from enumerate(raw_labels)
-    else:
-        # numpy structured array with two columns
-        yield from raw_labels
-
-
-def _label_name(val: Any) -> str:
-    """Normalise a label value to a clean string."""
-    if isinstance(val, bytes):
-        val = val.decode("utf8")
-    name = str(val).replace("-", " ").replace("_", " ")
-    return name
 
 
 def _register_grid(nl, name: str, img) -> None:
@@ -1078,28 +1066,17 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
-def _register_atlas_labels(nl, name: str, labels: dict) -> None:
-    """
-    Register the values of the image of the atlas *name* labelling each
-    of its regions, *labels* mapping each value to the region's name.
-    """
-    if getattr(nl, "atlas_labels", None) is None:
-        nl.atlas_labels = {}
-    values = {}
-    for value, label in labels.items():
-        values.setdefault(label, []).append(int(value))
-    nl.atlas_labels[name] = values
-
-
 def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
     """
     Return the values labelling each region of the atlas *name* of *nl*
     in the image of its grid (``nl.grids[name]``), by region name.
 
     The names are those of the atlas's relation, ``{}`` for an atlas the
-    engine did not load.
+    engine did not load: the atlas is the one *nl* records, by name
+    (``nl.atlases``, :class:`~neurolang.atlases.Atlas`).
     """
-    return (getattr(nl, "atlas_labels", None) or {}).get(name, {})
+    atlas = (getattr(nl, "atlases", None) or {}).get(name)
+    return {} if atlas is None else atlas.label_values()
 
 
 def atlas_activation(
@@ -1219,35 +1196,48 @@ def _register_atlas_activation(
     nl.symbol_table[name].value.might_have_duplicates = False
 
 
+def _register_atlas_points(nl, atlas, settings: dict) -> None:
+    """
+    Register ``{predicate_name}(x, y, z, label)``: the centre of every
+    voxel of a region of *atlas*, in millimetres through its affine, with
+    the name of its region (:meth:`~neurolang.atlases.Atlas.points`);
+    stored, so that ``EUCLIDEAN`` joins it with a tree.
+    """
+    nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
-    predicates: ``{predicate_name}(label, region)``, and with ``activated``
-    the studies activating each region (see
+    predicates: ``{predicate_name}(label, region)``, with ``points`` its
+    voxels in millimetres (see :func:`_register_atlas_points`), and with
+    ``activated`` the studies activating each region (see
     :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
     which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
     """
+    from neurolang.atlases import Atlas, label_table
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated")
+        if k not in ("predicate_name", "activated", "points")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
     def fetch():
         atl_data = info["fetch"](**fetch_kw)
         maps = Path(atl_data["maps"])
+        table = label_table(atl_data["labels"])
         return {
             "maps": str(
                 maps.relative_to(data_dir)
                 if maps.is_relative_to(data_dir) else maps
             ),
             "labels": [
-                [int(k), v.decode("utf8") if isinstance(v, bytes) else str(v)]
-                for k, v in _parse_labels(atl_data["labels"])
+                [int(k), v] for k, v in zip(table["id"], table["name"])
             ],
         }
 
@@ -1263,26 +1253,23 @@ def _load_deterministic_atlas(
         found = fetch()
         maps = Path(data_dir) / found["maps"]
 
-    from neurolang.regions import ExplicitVBR
-
-    img = nib.load(str(maps))
-    _register_grid(nl, atlas_name, img)
-    pred_name = params.get("predicate_name", atlas_name)
-    labels = [(k, v) for k, v in found["labels"] if k != 0]
-    regions = ExplicitVBR.from_spatial_image_labels(
-        img, [k for k, _ in labels]
-    )
     # A label of the look-up table may have no voxel in the image (the
-    # medial walls of Destrieux): it is no region.
-    labels = [(k, v) for k, v in labels if hasattr(regions[k], "voxels")]
-    rows = [(_label_name(v), regions[k]) for k, v in labels]
-    names = {k: _label_name(v) for k, v in labels}
-
-    nl.add_tuple_set(rows, name=pred_name)
-    _register_atlas_labels(nl, atlas_name, names)
+    # medial walls of Destrieux): it is no region, as the background.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        atlas = Atlas.from_labels(
+            atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
+            normalise=True, kind=atlas_name,
+        )
+    _register_grid(nl, atlas_name, atlas.image)
+    pred_name = params.get("predicate_name", atlas_name)
+    nl.add_atlas_set(pred_name, atlas)
+    if params.get("points"):
+        _register_atlas_points(nl, atlas, params["points"])
     if params.get("activated"):
         _register_atlas_activation(
-            nl, names, img, params["activated"], pred_name, cache_dir,
+            nl, atlas.region_names(), atlas.image, params["activated"],
+            pred_name, cache_dir,
         )
 
 
@@ -1301,6 +1288,8 @@ def _load_probabilistic_atlas(
       ``prob_threshold``, default 0.01, to keep the set size manageable).
 
     """
+    from neurolang.atlases import label_name
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
     fetch_kw["data_dir"] = str(data_dir)
@@ -1327,7 +1316,7 @@ def _load_probabilistic_atlas(
     prob_frames = []
     for i in range(n_components):
         prob_map = np.asarray(img.dataobj[..., i])
-        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
+        label = label_name(labels[i] if i < len(labels) else f"component_{i}")
 
         # ── Binary region predicate (thresholded) ──
         mask = prob_map > threshold
@@ -1428,13 +1417,23 @@ def _phase_base_symbols(nl, cfg, mask):
 
 
 def _phase_python_init(nl, cfg, mask, data_dir):
-    py_init = cfg.get("python_init")
-    if not py_init:
-        return
-    import importlib
+    """
+    Run the ``init_engine`` of each ``python_init`` module, in order.
 
-    mod = importlib.import_module(py_init)
-    mod.init_engine(nl, mask, data_dir, **cfg.get("python_init_options", {}))
+    An init that takes a ``cache_dir`` is given the directory where the
+    tables of the engine are kept (see
+    :mod:`~neurolang_apps.utils.engine_cache`), or None without cache.
+    """
+    import importlib
+    import inspect
+
+    py_init = cfg.get("python_init") or []
+    for module in [py_init] if isinstance(py_init, str) else py_init:
+        mod = importlib.import_module(module)
+        kwargs = dict(cfg.get("python_init_options", {}))
+        if "cache_dir" in inspect.signature(mod.init_engine).parameters:
+            kwargs["cache_dir"] = nl.engine_cache_dir
+        mod.init_engine(nl, mask, data_dir, **kwargs)
 
 
 def _solver_mixins(cfg, engine_name) -> list:
@@ -1449,6 +1448,11 @@ def _solver_mixins(cfg, engine_name) -> list:
             problem = None if isinstance(mixin, type) else "is not a class"
         except (ImportError, AttributeError) as error:
             problem = f"cannot be loaded: {error}"
+            if isinstance(error, ModuleNotFoundError):
+                problem += (
+                    "; install the package that provides it (the "
+                    "engine's description, --list-engines, says which)"
+                )
         if not colon:
             problem = "is not of the form module:Class"
         if problem:
@@ -1472,8 +1476,14 @@ def _phase_downloads(cfg, data_dir, engine_name):
             files = [(m, url, {"uncompress": True}) for m in extract_members]
             _fetch_files(dl_dest, files, verbose=1)
         else:
-            file_name = Path(url).name
-            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
+            # a name for a URL that has none, and the checksum of the file
+            file_name = dl_entry.get("name", Path(url).name)
+            options = {}
+            if "md5" in dl_entry:
+                options["md5sum"] = dl_entry["md5"]
+            if "name" in dl_entry:
+                options["move"] = file_name
+            _fetch_files(dl_dest, [(file_name, url, options)], verbose=1)
 
 
 def _phase_templates(nl, cfg, data_dir, engine_name):
@@ -1491,10 +1501,17 @@ def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
         )
 
 
-def _phase_datalog_init(nl, cfg):
+def _phase_datalog_init(nl, cfg, data_dir):
+    """
+    Run the ``datalog_init`` program of the engine, from its data directory:
+    the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
+    relative to it, where ``downloads`` puts the files.
+    """
     datalog_init = cfg.get("datalog_init")
     if datalog_init:
-        nl.execute_datalog_program(datalog_init)
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        with contextlib.chdir(data_dir):
+            nl.execute_datalog_program(datalog_init)
 
 
 RELATION_FILE_SEPARATORS = {".csv": ",", ".tsv": "\t"}
@@ -1757,6 +1774,7 @@ def build_engine(
     from neurolang.frontend import NeurolangPDL
 
     cfg = get_engine_config(name, yaml_path)
+    euclidean_join_settings.override(cfg.get("euclidean_join"))
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     cache_dir = (
@@ -1792,7 +1810,6 @@ def build_engine(
 
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
-    nl.atlas_labels = {}
     # Where the Python init of the engine may keep its tables (None: nowhere).
     nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
@@ -1811,7 +1828,7 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg)
+    _phase_datalog_init(nl, cfg, data_dir)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)

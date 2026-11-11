@@ -154,8 +154,13 @@ than ``|``, and parentheses group:
 
 stands for three rules, one per disjunct.  Each disjunct must bind the
 variables of the head, and those of its negated atoms.  ``a(x), b(x) | c(x)``
-is ``(a(x), b(x)) | c(x)``; a comparison in a disjunction keeps its
-parentheses: ``b(x), (a(x) | (x < 3))``.
+is ``(a(x), b(x)) | c(x)``.  Inside parentheses a comparison is a
+formula of its own, so that values are alternatives of a variable::
+
+    ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor planning')
+
+and ``b(x), (a(x) | x < 3)`` is ``b(x), (a(x) | (x < 3))``; outside
+parentheses a comparison keeps its own: ``b(x), (x < 3)``.
 
 .. note::
 
@@ -184,7 +189,8 @@ retrieve results later with ``nl.solve_all()``.
 
 A program can hold several queries, each with a name in brackets,
 ``ans[name](...)``. The result is then a dictionary from the names to the
-answers:
+answers, and ``.view`` in the REPL shows them all at once, as one image per
+query, with the networks and streamlines of the others:
 
 .. code-block:: python
 
@@ -808,6 +814,16 @@ relation:
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
+    .load_atlas(fs, "aparc+aseg.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+    .load_atlas(schaefer, kind="schaefer", n_rois=100)
+
+``.load_atlas`` adds the relation ``name(label, region)`` of an atlas: an
+image and a CSV of its labels at URLs (the first form, downloaded to
+``~/neurolang_data``), local files of ``kind`` ``"freesurfer"`` (a colour
+LUT), ``"bids"`` (a ``dseg.tsv``) or ``"tsv"``, the atlases of the engines
+(``"destrieux"``, ``"schaefer"``, ``"tian"``) or a fetcher of nilearn
+(``kind="nilearn", fetcher="harvard_oxford"``).  The engine records the
+atlas, a :class:`~neurolang.atlases.Atlas`, by name, in its ``atlases``.
 
 and ``.import``, which imports a *Datalog module*, a file of facts, rules
 and commands, as if its statements were written in its place:
@@ -815,12 +831,15 @@ and commands, as if its statements were written in its place:
 .. code-block:: none
 
     .import("bundles/uncinate.dl")
-    .import("nl_tracts:bundles/freesurfer_queries.dl")
+    .import("bundles/freesurfer_queries.dl")
     ans(x) :- uf(x, "left").
 
 * The path of a module is relative to the directory of the importing file:
   the program run with ``neurolang-query --file``, or the module importing
-  another; otherwise it is relative to the working directory.
+  another; otherwise it is relative to the working directory.  A module not
+  found there is looked for in the directories an engine gives its modules
+  (``module_directories`` of its solver): with the engine ``tracts``,
+  ``.import("bundles/freesurfer_queries.dl")`` is one of its modules.
   ``package:path`` is the file ``path`` shipped in the Python package
   ``package``, found with :mod:`importlib.resources`, so that an engine or
   a package can ship modules without their users knowing where it is
@@ -1254,6 +1273,25 @@ mentioning reading activates both regions of a pair::
          ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p"
 
 Both work with ``--ask``, which then runs the query it writes.
+
+Where an answer comes from
+--------------------------
+
+In the interactive mode, ``.graph`` draws the last query, run or written by
+the assistant with ``.ask``, in a page opened in the browser; the REPL in
+the browser shows it in its *Graph* tab after each query. It reads from left
+to right: the data of the engine (its relations, its random choices, such as
+``selected_study``, and its probabilistic facts), the rules of the query and
+of the engine they go through, and the answer. A rule lists the atoms of its
+body, where the edges of the relations they use arrive, and how it combines
+them: the variables it joins them on, and those it keeps or drops. A rule
+using a random choice is probabilistic: its rows hold for some choices only
+(orange edges). ``PROB[...]`` turns it into the probability of each of its
+rows, given the condition after ``//`` (dashed edges): with one uniform
+choice, such as ``selected_study``, the share of the studies where the body
+and the condition hold among those where the condition holds. After a run,
+the answer shows the distribution of its probabilities. Clicking a node
+shows its rules and what it depends on.
 
 Inspecting query plans
 ----------------------

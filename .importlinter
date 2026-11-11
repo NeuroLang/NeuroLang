@@ -1,6 +1,7 @@
 # The packages of NeuroLang, from the top: each imports only the packages
 # below it. Tests are checked as part of their package.
-#   neurolang_apps  the command line, terminal interface, engines, assistant
+#   neurolang_apps  the command line, terminal interface, engines (among
+#                   them tracts, tractography), assistant
 #   neurolang       the language: parsers, frontends, regions, neuroimaging
 #   nl_core         relational algebra and its sets, Datalog, probabilistic
 #   nl_expr         the expression engine: expressions, walkers, types, logic
@@ -44,3 +45,39 @@ forbidden_modules =
     lark
     nibabel
     nilearn
+
+[importlinter:contract:atlases-dependencies]
+name = The atlases of neurolang need nothing else of NeuroLang
+type = forbidden
+source_modules =
+    neurolang.atlases
+forbidden_modules =
+    neurolang.*
+    nl_core
+    nl_expr
+    lark
+# but the lazy access to nilearn, to fetch atlases
+ignore_imports =
+    neurolang.atlases -> neurolang.utils.nilearn_compat
+
+[importlinter:contract:tracts-core-dependencies]
+name = The core of the engine tracts needs neither NeuroLang, but its atlases, nor the parsers
+type = forbidden
+source_modules =
+    neurolang_apps.utils.engines.tracts.terms
+    neurolang_apps.utils.engines.tracts.atlas
+    neurolang_apps.utils.engines.tracts.tractogram
+    neurolang_apps.utils.engines.tracts.indexing
+    neurolang_apps.utils.engines.tracts.cache
+    neurolang_apps.utils.engines.tracts.wmql_vocab
+    neurolang_apps.utils.engines.tracts.ids
+    neurolang_apps.utils.engines.tracts.fetch
+forbidden_modules =
+    neurolang
+    nl_core
+    nl_expr
+    lark
+    nilearn
+# but neurolang.atlases, whose own contract is the one above
+ignore_imports =
+    neurolang_apps.utils.engines.tracts.* -> neurolang.atlases

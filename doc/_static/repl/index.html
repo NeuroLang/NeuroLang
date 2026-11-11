@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroLang interactive query REPL, in your browser</title>
-<meta name="description" content="NeuroLang's interactive query REPL, neurolang-query -i, running entirely in your browser: Datalog and probabilistic logic programming over the Neurosynth database, with nothing to install.">
+<meta name="description" content="NeuroLang's interactive query REPL, neurolang-query -i, running entirely in your browser: Datalog and probabilistic logic programming over the Neurosynth and NeuroStore databases, with nothing to install.">
 <meta name="theme-color" content="#0b1220">
 <script>
   // The theme before the first paint: the saved choice, or the system's.
@@ -16,7 +16,7 @@
   })();
 </script>
 <meta property="og:title" content="NeuroLang interactive query REPL, in your browser">
-<meta property="og:description" content="Datalog and probabilistic logic programming over the Neurosynth database, running entirely in your browser.">
+<meta property="og:description" content="Datalog and probabilistic logic programming over the Neurosynth and NeuroStore databases, running entirely in your browser.">
 <link rel="icon" href="../logo/favicon/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../logo/favicon/favicon.ico" sizes="48x48">
 <link rel="apple-touch-icon" href="../logo/favicon/apple-touch-icon.png">
@@ -29,7 +29,7 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
   a { color: var(--accent); text-decoration: none; }
-  main { max-width: 60rem; margin: 0 auto; padding: 1rem; display: grid; gap: .75rem; }
+  main { max-width: 60rem; margin: 0 auto; padding: 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; } /* a wide result scrolls in its box, not the page */
   header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
   header img { height: 2rem; display: block; }
   header nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
@@ -63,7 +63,8 @@
   .tk-number { color: var(--tk-number); }
   /* On the terminal's dark background, whatever the theme. */
   .agent-query { --tk-comment: #8b949e; --tk-keyword: #d2a8ff; --tk-operator: #79c0ff; --tk-predicate: #58a6ff; --tk-string: #7ee787; --tk-number: #56d4dd; }
-  #question { flex: 1; min-width: 12rem; font-family: var(--sans); font-size: 14px; }
+  #ask { align-items: flex-start; }
+  #question { flex: 1; min-width: 12rem; width: auto; min-height: 2.4rem; height: 2.4rem; font: 14px/1.4 var(--sans); }
   button { background: var(--ok); color: var(--on-ok); border: 0; border-radius: 6px; padding: .4rem .9rem; font: inherit; font-weight: 600; cursor: pointer; }
   button.ghost { background: var(--raised); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
   button:disabled, textarea:disabled, input:disabled { opacity: .5; cursor: default; }
@@ -113,10 +114,10 @@
   #results.has { display: block; }
   #tabs { display: flex; gap: .25rem; margin-bottom: .5rem; }
   #tabs button { background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; font-weight: 400; }
-  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain { color: var(--text); border-bottom-color: var(--accent); }
-  #results[data-tab=table] #brain, #results[data-tab=brain] #table { display: none; }
+  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); }
+  #results:not([data-tab=table]) #table, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
   #table { display: grid; gap: .75rem; }
-  iframe { width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: 6px; background: #000; }
+  iframe { display: block; width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); } /* 34rem until the page in it says how tall it is */
   kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; font: .8em var(--mono); }
   #version input { width: 12rem; }
   #theme { display: flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; background: var(--raised); }
@@ -155,6 +156,10 @@
   .guide-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
   .guide-cols h3 { margin: 0 0 .4rem; font-size: .9rem; color: var(--text); }
   .guide-cols h3 .note { font-weight: 400; margin-left: .4rem; }
+  #guide-questions .guide-item { font-family: var(--sans); }
+  #guide-queries > summary { cursor: pointer; }
+  #guide-queries > summary h3 { display: inline; }
+  #guide-queries #builder { margin: .4rem 0; }
   .guide-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
   .guide-list > li + li { border-top: 1px solid var(--border); }
   .guide-list > li { display: flex; flex-wrap: wrap; align-items: flex-start; }
@@ -199,16 +204,16 @@
   #llm button { flex: none; }
   #out.quiet { background: none; color: var(--muted); }
   #out.quiet summary { font-size: .85rem; }
-  #out.quiet details[open] > div { background: var(--term); color: #e6edf3; border-radius: 6px; margin-top: .25rem; }
+  #out.quiet details[open] > div { background: var(--term); color: #e6edf3; border-radius: 6px; margin-top: .25rem; padding: .5rem .75rem; }
   .rt-count:empty { display: none; }
   .rt-copy { margin-left: auto; }
   @media (max-width: 40rem) {
     header nav { margin-left: 0; width: 100%; }
-    #code .row select { flex: 1; }
+    #code .row select { flex: 1; min-width: 0; }
     input, select, textarea, .editor pre { font-size: 16px; }
     .rt-filter { flex-basis: 100%; }
   }
-  @media (hover: none) { #run-help { display: none; } }
+  @media (hover: none), (pointer: coarse) { #run-help, #ask-help { display: none; } }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .guide-item:focus-visible, .rt-table th button:focus-visible { outline-offset: -2px; }
 </style>
@@ -218,6 +223,7 @@
   <header>
     <a href="https://neurolang.github.io/" aria-label="NeuroLang"><img class="logo-dark" src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"><img class="logo-light" src="../logo/svg/neurolang-lockup.svg" alt="NeuroLang"></a>
     <span id="status" class="busy" role="status">Starting…</span>
+    <select id="engine" aria-label="Engine" title="The database to query" hidden></select>
     <nav><div id="theme" role="group" aria-label="Theme">
         <button type="button" data-theme="system" title="System theme" aria-label="System theme"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
         <button type="button" data-theme="light" title="Light" aria-label="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
@@ -232,9 +238,10 @@
   </section>
 
   <form id="ask" class="row">
-    <input id="question" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" disabled>
+    <textarea id="question" rows="1" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" aria-describedby="ask-help" disabled></textarea>
     <button id="ask-run" class="ghost" disabled title="Add an API key to use the assistant">Ask</button>
     <button id="key" type="button" class="ghost" title="Your API key">API key</button>
+    <span id="ask-help" class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> asks</span>
   </form>
   <p id="ask-note" class="note">Asking needs your own API key from an AI provider. It stays in this tab: click <em>API key</em>.</p>
   <details id="llm-details">
@@ -285,20 +292,22 @@
       <span id="run-help" class="note"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
     </div>
   </form>
-  <p id="boot" class="note">The first start takes about 30 s: it loads Python, the engine and the Neurosynth data, which the browser keeps for the next visit.</p>
+  <p id="boot" class="note">The first start takes about 30 s: it loads Python, the engine and its data (Neurosynth, Neurosynth + tracts or NeuroStore, as the selector at the top says), which the browser keeps for the next visit.</p>
   <p id="hint" class="note" aria-live="polite"></p>
 
   <details id="guide">
     <summary>Examples and relations</summary>
-    <form id="builder" class="row" hidden>
-      <strong>Ask a question</strong>
-      <select id="builder-template" aria-label="Question"></select>
-      <span id="builder-fields" class="row"></span>
-      <button class="ghost">Put in the box</button>
-      <span id="builder-error" class="agent-bad" role="alert"></span>
-    </form>
     <div class="guide-cols">
-      <div><h3>Examples <span class="note">click one to put it in the box</span></h3><ul id="guide-examples" class="guide-list"></ul></div>
+      <div id="guide-questions-box"><h3>Questions <span class="note">click one to put it in the box of the assistant, above</span></h3><ul id="guide-questions" class="guide-list"></ul></div>
+      <div><details id="guide-queries"><summary><h3>Queries <span class="note">Datalog or SQUALL, as the box: click one to put it in the box</span></h3></summary>
+        <form id="builder" class="row" hidden>
+          <strong>Build a query</strong>
+          <select id="builder-template" aria-label="Question"></select>
+          <span id="builder-fields" class="row"></span>
+          <button class="ghost">Put in the box</button>
+          <span id="builder-error" class="agent-bad" role="alert"></span>
+        </form>
+        <ul id="guide-examples" class="guide-list"></ul></details></div>
       <div><h3>Relations and rules <span class="note">click one to add it at the cursor, ⓘ for its documentation</span></h3>
         <input id="guide-filter" type="search" placeholder="Filter relations and commands…" aria-label="Filter the relations and the commands" spellcheck="false" autocomplete="off">
         <ul id="guide-relations" class="guide-list"></ul></div>
@@ -318,14 +327,16 @@
     <span class="note">A rating sends the query with its first rows or its error, and for an answer of the assistant the question and its steps, to the NeuroLang feedback table.</span>
   </section>
   <section id="results" data-tab="table">
-    <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button></div>
+    <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
     <div id="table" role="tabpanel" aria-labelledby="tab-table"></div>
     <div id="brain" role="tabpanel" aria-labelledby="tab-brain"></div>
+    <div id="graph" role="tabpanel" aria-labelledby="tab-graph"></div>
   </section>
 
   <details>
     <summary>Engine and version</summary>
     <p class="note">The engine here leaves out the precomputed analyses <code>lift</code>, <code>relative_risk</code>, <code>uniformity</code> and <code>ratios</code>: they need several GB, more than a browser tab is given. Add <code>?engine=full</code> to the address to build them on a machine with the memory; the terminal command has them. The first query using <code>query_similarity</code> downloads the SPECTER2 query model and the embeddings of the studies, about 310 MB.</p>
+    <p class="note"><strong>Neurosynth + tracts</strong> (<code>?engine=neurosynth_iit</code>) adds to the studies of Neurosynth the whole-brain tractogram of the IIT Human Brain Atlas v3, 15,000 of its 37,980 streamlines chosen at random and thinned, indexed by the atlas's Desikan&ndash;Killiany wmparc (labels of FreeSurfer's colour LUT), and tract_querier's bundles (<code>uf</code>, <code>af</code>, <code>cst</code>&hellip;) as Datalog rules. The tractogram and the wmparc are those of the IIT Human Brain Atlas (Illinois Institute of Technology; Qi, Arfanakis et al.), under the <a href="https://www.nitrc.org/projects/iit/">IIT Human Brain Template License</a> (non-commercial educational and research use, with attribution); the colour LUT is FreeSurfer's.</p>
     <div id="banner"></div>
     <form id="version" class="row">
       NeuroLang from <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">

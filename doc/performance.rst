@@ -176,6 +176,64 @@ of it.
    <https://dl.acm.org/doi/10.1145/1989323.1989393>`_).
 
 
+.. _euclidean-join-settings:
+
+Memory and time of Euclidean distance bounds
+--------------------------------------------
+
+A rule bounding the distance between two points, such as
+``close(i, j, k, s) :- voxel(i, j, k), peak(a, b, c, s), (EUCLIDEAN(i, j, k,
+a, b, c) < 5)``, is rewritten to join a relation of the pairs of points
+within the distance, found once by
+:func:`~neurolang.utils.euclidean_join.euclidean_join`. The pairs of a few
+hundred thousand peaks and a brain mask are tens to hundreds of millions,
+so the memory the join holds is the memory of a query. There are two ways
+to find them:
+
+* with integer coordinates, or floats on a grid (multiples of 1, 0.5, 0.25,
+  0.1, 0.05 or 0.01, as millimetre coordinates are), a *stencil* looks up in
+  a grid of the larger set the points at each integer offset within the
+  radius of each point of the smaller set. A look-up costs a few
+  nanoseconds and a pair no more memory than its two indices;
+* with other coordinates, *k-d trees* are searched, in chunks of the smaller
+  set. A pair they return costs about 200 ns and 100 bytes of temporaries.
+
+The stencil is used whenever the larger set fills at least one cell in 40
+of the grid of its coordinates, and up to a number of look-ups otherwise.
+On 300 000 peaks and the 318 000 voxels of a 2 mm mask, a radius of 6 voxels
+(120 million pairs) takes 18 s and 6.6 GB, a radius of 3 takes 1.6 s and
+1.0 GB; about half the memory and time of the k-d trees. The result alone
+(four 64-bit columns) is 3.7 GB at radius 6: that is the floor.
+
+The thresholds, the sizes of the chunks and the other tunable values are
+in ``neurolang/utils/euclidean_join.yaml``, with the meaning of each. The
+file defines *profiles*, which change some of them:
+
+``default``
+    balances time and memory;
+
+``memory``
+    uses the stencil up to a billion look-ups (the default one up to 20
+    million, or when the larger set is dense), counts the pairs before
+    storing them so that they are held once, searches the k-d trees in
+    chunks of 250 000 pairs and uses small blocks. It saves
+    about 10 % of the memory of ``default`` with the stencil (6.0 GB instead
+    of 6.6 GB at radius 6) and 30 % with the k-d trees (4.5 GB instead of
+    6.5 GB, in the same time, for floats off a grid at radius 5); it is the profile of the interactive REPL, in a
+    terminal and in a browser (``TuiSettings.join_profile``).
+
+Choose a profile with the environment variable
+``NEUROLANG_EUCLIDEAN_JOIN_PROFILE``, in Python with
+:func:`neurolang.utils.euclidean_join_settings.use_profile` or, for a
+block of code, :func:`~neurolang.utils.euclidean_join_settings.profile`,
+and read another file of the same layout with
+``NEUROLANG_EUCLIDEAN_JOIN_CONFIG``. The file is read with OmegaConf, as
+the engines' configuration is, and an unknown setting or a value of the
+wrong type is an error. An engine changes some settings with its
+``euclidean_join`` key (see :doc:`engine_configuration`); they are applied
+when the engine is built and, over the ``memory`` profile, in the
+interactive REPL.
+
 Practical tips
 --------------
 

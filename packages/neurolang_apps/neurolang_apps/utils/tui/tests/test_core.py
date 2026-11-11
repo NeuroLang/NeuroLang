@@ -859,3 +859,48 @@ def test_what_the_commands_of_a_query_load_stays(greeting_engine, tmp_path):
     app._execute_and_display("ans(x) :- pairs(x, y)")
     assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
     assert "twice" not in {s.name for s in app._nl.symbol_table}
+
+
+class TestEuclideanJoinProfile:
+    """The REPL joins within a distance with the least memory."""
+
+    @pytest.fixture(autouse=True)
+    def restore_profile(self):
+        from neurolang.utils.euclidean_join_settings import profile
+
+        with profile("default"):
+            yield
+
+    def test_a_session_uses_the_memory_profile(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        assert not SETTINGS.stencil_count_first
+        InteractiveTuiApp(NeurolangDL(), console=_console())
+        assert SETTINGS.stencil_count_first
+
+    def test_a_session_applies_the_settings_of_its_engine(self, monkeypatch):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+        from neurolang_apps.utils import engine_registry
+
+        monkeypatch.setattr(
+            engine_registry, "get_euclidean_join_settings",
+            lambda name, yaml_path=None: {"kdtree_chunk_pairs": 77},
+        )
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(engine_name="neurosynth"),
+            console=_console(),
+        )
+        assert SETTINGS.kdtree_chunk_pairs == 77
+        assert SETTINGS.stencil_count_first
+
+    def test_the_profile_is_a_setting_of_the_session(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(join_profile="default"),
+            console=_console(),
+        )
+        assert not SETTINGS.stencil_count_first

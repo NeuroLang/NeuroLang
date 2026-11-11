@@ -30,9 +30,11 @@
   // transparent below the minimum.
   var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
 
-  // The display of NiiVue the page starts with, and Reset restores.
+  // The display of NiiVue the page starts with, and Reset restores: the 3
+  // slices in a row, or in a column on a screen as narrow as a phone's.
+  var NARROW = window.matchMedia && matchMedia('(max-width: 30rem)').matches;
   var DISPLAY = {
-    sliceType: 'multiplanar', layout: 'row', renderTile: false,
+    sliceType: 'multiplanar', layout: NARROW ? 'column' : 'row', renderTile: false,
     dragMode: 'contrast', crosshairColor: '#4fa1ff', crosshairWidth: 1,
     crosshair3D: false, gamma: 1, colorbar: false, orientationText: true,
     orientCube: false, ruler: false, radiological: false, smooth: true,
@@ -44,6 +46,32 @@
   // its values; the state holds the cursor, the active layer, the order
   // the layers are drawn in and the settings of each layer.
   var viewer = {layers: [], luts: {}, state: null, nv: null};
+
+  /* The theme: that the page showing this one sends (see frame_hooks.js),
+   * else the system's. The image is drawn on white in the light theme and
+   * on black in the dark one; the other colours are those of the page. */
+  function isLight() {
+    var chosen = document.documentElement.dataset.theme;
+    return chosen ? chosen === 'light' :
+      matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function backColor() {
+    var c = isLight() ? 1 : 0;
+    return [c, c, c, 1];
+  }
+
+  /* The empty voxels of the template are black: transparent on the white
+   * of the light theme. */
+  function setBackdrop(nv) {
+    nv.opts.backColor = backColor();
+    nv.opts.isAlphaClipDark = isLight();
+  }
+
+  function themeColour(name) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -125,18 +153,31 @@
     return layer;
   }
 
+  // Size NiiVue's canvas to the pixels of the screen again when the browser
+  // zoom changes them: NiiVue does so only when the canvas changes size,
+  // which in a frame of a fixed width the zoom does not change.
+  function followZoom(nv) {
+    if (!window.matchMedia) return;
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener(
+      'change', function () { nv.resizeListener(); followZoom(nv); },
+      { once: true });
+  }
+
   async function load() {
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
     }
     var nv = new niivue.Niivue({
-      backColor: [0, 0, 0, 1], crosshairColor: [0.31, 0.63, 1, 0.85],
+      isAlphaClipDark: isLight(), backColor: backColor(), crosshairColor: [0.31, 0.63, 1, 0.85],
       crosshairWidth: 1, isColorbar: false, isRadiologicalConvention: false,
       multiplanarShowRender: niivue.SHOW_RENDER.NEVER,
       multiplanarLayout: niivue.MULTIPLANAR_TYPE.ROW,
       show3Dcrosshair: false, dragAndDropEnabled: false
     });
     await nv.attachTo('gl');
+    followZoom(nv);
+    // On a phone the options of the display start folded, the views close to the main controls.
+    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';
@@ -522,12 +563,14 @@
       context.fillStyle = 'rgb(' + lut[c] + ',' + lut[c + 1] + ',' + lut[c + 2] + ')';
       context.fillRect(left + x, 2, 1, 16);
       if (!s.shown(v)) {  // hidden values are greyed out
-        context.fillStyle = 'rgba(17, 17, 17, 0.75)';
+        context.globalAlpha = 0.75;
+        context.fillStyle = themeColour('--bg');
         context.fillRect(left + x, 2, 1, 16);
+        context.globalAlpha = 1;
       }
     }
     var ticks = ticksOf(s, l).map(format);
-    context.fillStyle = '#ddd';
+    context.fillStyle = themeColour('--soft');
     context.font = '12px system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'top';
@@ -588,6 +631,17 @@
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
   }
+
+  // The theme changed: the background of the image and the colour bars.
+  function applyTheme() {
+    if (!viewer.nv || !viewer.state) return;
+    setBackdrop(viewer.nv);
+    viewer.nv.updateGLVolume();
+    viewer.layers.forEach(function (layer, l) { drawColourBar(scale(l), l); });
+  }
+  window.addEventListener('neurolang-theme', applyTheme);
+  matchMedia('(prefers-color-scheme: light)').addEventListener(
+    'change', applyTheme);
 
   function redraw() {
     var scales = viewer.layers.map(function (layer, l) { return scale(l); });

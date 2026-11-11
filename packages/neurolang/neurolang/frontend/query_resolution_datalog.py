@@ -1132,7 +1132,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.add_tuple_set(solution_set.value, name=functor_orig.name)
             return fe.Symbol(self, out_symbol.name)
         elif len(head) == 0:
-            return len(solution_set) > 0
+            return not (dry_run or show_ra) and len(solution_set) > 0
         else:
             return solution_set
 

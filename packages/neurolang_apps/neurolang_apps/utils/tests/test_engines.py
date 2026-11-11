@@ -416,23 +416,27 @@ _FAKE_ATLASES = {
 def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
-    with the studies activating them, as ``_phase_atlases``.
+    with the studies activating them and the points *cfg* asks for, as
+    ``_phase_atlases``.
     """
     import nibabel as nib
 
-    from neurolang.regions import ExplicitVBR
+    from neurolang.atlases import Atlas
     from neurolang_apps.utils import engine_registry
 
     voxels = np.array([[1, 1, 1], [1, 2, 1]])
     data = np.zeros((4, 4, 4), dtype=np.int16)
     data[tuple(voxels.T)] = 1
     image = nib.Nifti1Image(data, np.eye(4))
-    for atlas, label in _FAKE_ATLASES.items():
-        region = ExplicitVBR(voxels, np.eye(4), image_dim=(4, 4, 4))
-        nl.add_tuple_set([(label, region)], name=atlas)
+    for name, label in _FAKE_ATLASES.items():
+        atlas = Atlas.from_labels(name, image, {1: label}, "MNI152")
+        nl.add_atlas_set(name, atlas)
         engine_registry._register_atlas_activation(
-            nl, {1: label}, image, {"radius_mm": 3}, atlas
+            nl, {1: label}, image, {"radius_mm": 3}, name
         )
+        points = cfg["atlases"][name].get("points")
+        if points:
+            engine_registry._register_atlas_points(nl, atlas, points)
 
 
 # The predicates of a free-text query: computed for the text a query gives
@@ -1045,3 +1049,63 @@ def test_python_init_is_given_the_python_init_options():
     init_engine.assert_called_once_with(
         "nl", "mask", DATA_DIR, unknown_space="drop"
     )
+
+
+def test_engines_change_the_settings_of_the_euclidean_join(tmp_path):
+    """
+    The ``euclidean_join`` mapping of an engine is merged with those of the
+    engines it extends, and changes the settings of the Euclidean join when
+    the engine is built.
+    """
+    import dataclasses
+
+    from neurolang.utils.euclidean_join_settings import SETTINGS, profile
+    from neurolang_apps.utils import engine_registry
+
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n"
+        "  base:\n"
+        "    abstract: true\n"
+        "    euclidean_join: {kdtree_chunk_pairs: 11, block_pairs: 12}\n"
+        "  small:\n"
+        "    extends: base\n"
+        "    euclidean_join: {block_pairs: 13}\n"
+        "  plain: {}\n"
+    )
+    assert engine_registry.get_euclidean_join_settings("small", path) == {
+        "kdtree_chunk_pairs": 11, "block_pairs": 13,
+    }
+    assert engine_registry.get_euclidean_join_settings("plain", path) == {}
+    with profile("default"):
+        before = dataclasses.replace(SETTINGS)
+        engine_registry.build_engine("plain", tmp_path, yaml_path=path)
+        assert SETTINGS == before
+        engine_registry.build_engine("small", tmp_path, yaml_path=path)
+        assert SETTINGS.kdtree_chunk_pairs == 11
+        assert SETTINGS.block_pairs == 13
+
+
+def test_datalog_init_reads_files_relative_to_the_data_directory(
+    tmp_path, monkeypatch
+):
+    """The commands of ``datalog_init`` find the files ``downloads`` put in
+    the engine's data directory, wherever the program runs from, and the
+    working directory is left as it was."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils import engine_registry
+
+    data_dir = tmp_path / "data"
+    (data_dir / "e").mkdir(parents=True)
+    (data_dir / "e" / "pairs.csv").write_text("x,y\n1,a\n")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    nl = NeurolangPDL()
+    engine_registry._phase_datalog_init(
+        nl, {"datalog_init": '.load_csv(pair, "e/pairs.csv")\n'}, data_dir
+    )
+    assert "pair" in nl.symbol_table
+    import os
+
+    assert os.getcwd() == str(elsewhere)

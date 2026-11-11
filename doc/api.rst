@@ -54,6 +54,15 @@ Intermediate Language Representations
    relational_algebra_provenance 
 
 
+Atlases
+-------
+
+.. autosummary::
+   :toctree: gen_api
+
+   atlases
+
+
 Command-line Interface & Engine Registry
 -----------------------------------------
 

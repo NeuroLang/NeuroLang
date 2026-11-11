@@ -1,4 +1,4 @@
-# NeuroLang's repository is a uv workspace of four packages, each of which
+# NeuroLang's repository is a uv workspace of five packages, each of which
 # imports only those before it (see .importlinter):
 #
 #   packages/nl_expr         the expression engine
@@ -29,6 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 apps = ["neurolang-apps"]
+tracts = ["neurolang-apps"]
 tui = ["neurolang-apps[tui]"]
 llm = ["neurolang-apps[llm]"]
 embeddings = ["neurolang-apps[embeddings]"]
@@ -72,6 +73,9 @@ neurolang-apps = { workspace = true }
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
 addopts = "--doctest-glob=doc/tutorial_squall.rst"
+markers = [
+    "network: fetches data (nilearn atlases); skipped if the fetch fails",
+]
 
 [tool.coverage.run]
 omit = [

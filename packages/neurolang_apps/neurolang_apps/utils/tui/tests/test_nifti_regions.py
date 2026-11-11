@@ -16,6 +16,7 @@ pytest.importorskip("rich")
 import nibabel as nib  # noqa: E402
 from rich.console import Console  # noqa: E402
 
+from neurolang.atlases import Atlas  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils import engine_registry  # noqa: E402
 from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
@@ -84,10 +85,9 @@ def tiny(monkeypatch, tmp_path):
         "cortex": nib.Nifti1Image(_cortex_labels(), CORTEX_AFFINE),
         "deep": nib.Nifti1Image(deep, DEEP_AFFINE),
     }
-    engine_registry._register_atlas_labels(
-        nl, "cortex", {1: "A", 5: "A", 2: "B"}
-    )
-    engine_registry._register_atlas_labels(nl, "deep", {7: "C"})
+    for name, labels in (("cortex", {1: "A", 5: "A", 2: "B"}),
+                         ("deep", {7: "C"})):
+        nl.atlases[name] = Atlas.from_labels(name, nl.grids[name], labels)
     nl.add_tuple_set(
         [("A", 1), ("B", 1), ("A", 2), ("B", 3)], name="cortex_activated"
     )

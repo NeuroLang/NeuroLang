@@ -132,6 +132,11 @@ OR_SYMBOL : "|" | "\N{LOGICAL OR}"
 conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
 AND_SYMBOL : "\N{LOGICAL AND}"
 
+// In parentheses a comparison is a formula of its own, a disjunct or a
+// conjunct: (t == 'a' | t == 'b'), (x < 3, y > 2).
+?parenthesised_disjunction : parenthesised_conjunction (OR_SYMBOL parenthesised_conjunction)* -> disjunction
+parenthesised_conjunction : (predicate | comparison) (("," | "&" | AND_SYMBOL) (predicate | comparison))* -> conjunction
+
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
 // After "((f(x)" a "," or ")" cannot tell a parenthesised body formula
@@ -141,8 +146,7 @@ NEG_UNICODE : "\u00AC"
 predicate.2 : id_application
           | negated_predicate
           | existential_predicate
-          | "(" comparison ")"
-          | "(" disjunction ")"
+          | "(" parenthesised_disjunction ")"
           | logical_constant
           | prob_body_predicate
           | resample_body_predicate
@@ -331,6 +335,17 @@ class DatalogTransformer(Transformer):
 
         self.locals = locals
         self.globals = globals
+        # the variables written "_", each a fresh symbol
+        self.anonymous = set()
+
+    def _hide_anonymous(self, formula):
+        """``∃`` the anonymous variables of a formula: in a negation or a
+        disjunct, ``_`` is quantified there, ``~p(x, _)`` is ``~∃y p(x, y)``.
+        """
+        for v in extract_logic_free_variables(formula):
+            if v in self.anonymous:
+                formula = ExistentialPredicate(v, formula)
+        return formula
 
     def start(self, ast):
         return ast[0]
@@ -945,9 +960,18 @@ class DatalogTransformer(Transformer):
         return Conjunction(conj)
 
     def disjunction(self, ast):
+        disjuncts = [c for c in ast if isinstance(c, Expression)]
+        if len(disjuncts) == 1:
+            # A formula in parentheses, (x < 3) or (a(x), b(x)): itself
+            formula = disjuncts[0]
+            if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+                formula = formula.formulas[0]
+            return formula
         return Disjunction(tuple(
-            c.formulas[0]
-            if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            self._hide_anonymous(
+                c.formulas[0]
+                if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            )
             for c in ast if isinstance(c, Expression)
         ))
 
@@ -973,7 +997,7 @@ class DatalogTransformer(Transformer):
         if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
             # A formula in parentheses: ~(a(x))
             formula = formula.formulas[0]
-        return Negation(formula)
+        return Negation(self._hide_anonymous(formula))
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1].value])
@@ -1146,7 +1170,9 @@ class DatalogTransformer(Transformer):
         ast = ast[0]
         if isinstance(ast, Expression):
             if isinstance(ast, Symbol) and ast.name == "_":
-                return Symbol.fresh()
+                fresh = Symbol.fresh()
+                self.anonymous.add(fresh)
+                return fresh
             return ast
         else:
             return Symbol.fresh()
