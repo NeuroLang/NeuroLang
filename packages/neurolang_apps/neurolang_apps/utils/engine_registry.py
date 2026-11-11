@@ -1066,6 +1066,23 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
+def _register_colours(nl, name: str, colours) -> None:
+    """Register the colours of the atlas *name* of *nl*, ``(value,
+    "#rrggbb")`` pairs, those its authors gave its regions."""
+    if getattr(nl, "atlas_colours", None) is None:
+        nl.atlas_colours = {}
+    nl.atlas_colours[name] = {int(value): colour for value, colour in colours}
+
+
+def atlas_colours(nl, name: str) -> Dict[int, str]:
+    """
+    Return the colour, ``#rrggbb``, of each value labelling a region of
+    the atlas *name* of *nl* in the image of its grid, as its authors
+    coloured it; ``{}`` for an atlas without colours.
+    """
+    return (getattr(nl, "atlas_colours", None) or {}).get(name, {})
+
+
 def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
     """
     Return the values labelling each region of the atlas *name* of *nl*
@@ -1218,7 +1235,7 @@ def _load_deterministic_atlas(
     which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
     """
-    from neurolang.atlases import Atlas, label_table
+    from neurolang.atlases import Atlas, label_colours, label_table
 
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
@@ -1239,11 +1256,16 @@ def _load_deterministic_atlas(
             "labels": [
                 [int(k), v] for k, v in zip(table["id"], table["name"])
             ],
+            "colors": sorted(label_colours(
+                atl_data.get("lut") if isinstance(atl_data, dict)
+                else getattr(atl_data, "lut", None)
+            ).items()),
         }
 
     found = engine_cache.keep_json(
         cache_dir, "fetched", engine_cache.digest(
-            atlas_name, sorted(
+            # what is kept: the place of the atlas, its labels and colours
+            atlas_name, "colours", sorted(
                 (k, repr(v)) for k, v in fetch_kw.items() if k != "data_dir"
             ),
         ), fetch,
@@ -1262,6 +1284,7 @@ def _load_deterministic_atlas(
             normalise=True, kind=atlas_name,
         )
     _register_grid(nl, atlas_name, atlas.image)
+    _register_colours(nl, atlas_name, found.get("colors", ()))
     pred_name = params.get("predicate_name", atlas_name)
     nl.add_atlas_set(pred_name, atlas)
     if params.get("points"):

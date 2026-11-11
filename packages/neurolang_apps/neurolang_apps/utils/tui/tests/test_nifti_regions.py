@@ -1,5 +1,7 @@
 """Tests for saving and viewing results on the regions of atlases."""
 
+import base64
+import gzip
 import io
 import json
 import re
@@ -242,6 +244,64 @@ class TestViewRegions:
         tiny._handle_dot_command(".view")
         assert view_calls[-1][1]["threshold"] == "95%"
         _remove_view_files(_output(tiny))
+
+
+class TestViewRegionNames:
+    """Check .view gives the viewer the regions of the result, by name and
+    in the colours of their atlas."""
+
+    def test_the_regions_of_a_result_with_values(self, tiny, view_calls):
+        engine_registry._register_colours(
+            tiny._nl, "cortex", [(1, "#ff0000"), (2, "#00ff00")]
+        )
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        img, kwargs = view_calls[-1]
+        regions = kwargs["regions"]
+        assert regions.names == ["A", "B"]
+        assert regions.colours == ["#ff0000", "#00ff00"]
+        # the values are shown, the colours of the atlas asked for
+        assert not regions.coloured
+        numbers = _data(regions.image)
+        assert numbers.shape == _data(img).shape
+        assert set(np.unique(numbers[_cortex_labels() == 1])) == {1}
+        assert set(np.unique(numbers[_cortex_labels() == 2])) == {2}
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_in_their_colours(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert regions.coloured
+        # an atlas without colours: those of the palette
+        assert regions.colours == list(nifti.REGION_PALETTE[:2])
+        _remove_view_files(_output(tiny))
+
+    def test_regions_of_two_atlases(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(l) :- cortex_activated(l, s) | deep_activated(l, s)"
+        )
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert sorted(regions.names) == ["A", "B", "C"]
+        assert regions.image.shape == (8, 8, 8)
+        _remove_view_files(_output(tiny))
+
+    def test_the_page_draws_the_colours(self):
+        image = nib.Nifti1Image(
+            np.array([[[0, 1], [2, 0]]], dtype=np.int16), np.eye(4)
+        )
+        state = brain_viewer.regions_state(nifti.RegionLayer(
+            image, ["A", "B"], ["#ff0000", "#0000ff"], True,
+        ))
+        assert state["names"] == ["A", "B"] and state["coloured"]
+        colours = nib.Nifti1Image.from_bytes(
+            gzip.decompress(base64.b64decode(state["colours"]))
+        )
+        rgba = np.asanyarray(colours.dataobj)
+        assert tuple(rgba[0, 0, 1]) == (255, 0, 0, 255)
+        assert tuple(rgba[0, 1, 0]) == (0, 0, 255, 255)
+        assert rgba[0, 0, 0]["A"] == 0
 
 
 class TestViewNetworks:

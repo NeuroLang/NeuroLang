@@ -122,6 +122,13 @@ Unreleased
 
 **New features:**
 
+* The brain viewer of a result on the regions of atlases names the region
+  under the mouse, and under the cursor, and draws the regions in the
+  colours of their atlas (*atlas colours*), as a result of regions alone
+  starts: Schaefer's (from its label file), FreeSurfer's for Destrieux
+  (``FreeSurferColorLUT.txt``, fetched into the data directory) and Tian's
+  (the label file of its authors).  The engine keeps the colours of its
+  atlases (``engine_registry.atlas_colours``).
 * When the AI assistant can answer, with a key in the page or the one of the
   REPL's configuration, the REPL in the browser starts with one of the engine's
   example questions, at random, in the box of the assistant: selected, typing
