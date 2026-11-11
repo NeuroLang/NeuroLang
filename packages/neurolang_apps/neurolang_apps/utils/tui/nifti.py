@@ -35,7 +35,7 @@ import tempfile
 import warnings
 import webbrowser
 from pathlib import Path
-from typing import NamedTuple, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -706,36 +706,103 @@ def regions_to_nifti(
     per_label = _region_values(df, column, value)
     lookup = region_lookup(nl, _region_atlases(nl, sorts, points.grid))
     found = [label for label in per_label.index if label in lookup]
-    atlases = sorted({lookup[label][0] for label in found}) or [points.grid]
-    if len(atlases) == 1:
-        grid, target = atlases[0], None
-        template = engine_grid(nl, grid)
-    else:
-        grid = engine_registry.TEMPLATE_GRID
-        target = template = engine_template(nl)
+    grid, template, index = _region_index(nl, lookup, found, points.grid)
     values = per_label[found].to_numpy()
     dtype = _image_dtype(values)
     fill = request.fill if value is not None else 0
     if dtype != np.float32 and float(fill) != int(fill):
         dtype = np.float32
     data = np.full(template.shape[:3], fill, dtype=dtype)
-    painted = np.zeros(template.shape[:3], dtype=bool)
+    painted = index >= 0
+    data[painted] = values[index[painted]]
+    if data.dtype.kind == "f":
+        data[np.isnan(data)] = fill
+    return SavedImage(
+        nib.Nifti1Image(data, template.affine), value, int(painted.sum()),
+        len(per_label) - len(found), grid, len(found),
+    )
+
+
+def _region_index(nl, lookup: dict, found: list, grid: str) -> tuple:
+    """
+    Return the grid, its template and the position in *found* of the
+    region of each voxel, -1 outside them, of the regions *found* of the
+    atlases of *lookup* (:func:`region_lookup`): on the grid of their
+    atlas, else, of several, on the template's; on *grid* without any.
+    """
+    atlases = sorted({lookup[label][0] for label in found}) or [grid]
+    if len(atlases) == 1:
+        grid, target = atlases[0], None
+        template = engine_grid(nl, grid)
+    else:
+        grid = engine_registry.TEMPLATE_GRID
+        target = template = engine_template(nl)
+    index = np.full(template.shape[:3], -1, dtype=np.int64)
     for atlas in atlases:
         labels = _label_volume(nl, atlas, target)
         lut = np.full(max(int(labels.max()), 0) + 1, -1, dtype=np.int64)
         for n, label in enumerate(found):
             if lookup[label][0] == atlas:
                 lut[[v for v in lookup[label][1] if v < len(lut)]] = n
-        index = lut[np.clip(labels, 0, None)]
-        index[labels <= 0] = -1
-        inside = index >= 0
-        data[inside] = values[index[inside]]
-        painted |= inside
-    if data.dtype.kind == "f":
-        data[np.isnan(data)] = fill
-    return SavedImage(
-        nib.Nifti1Image(data, template.affine), value, int(painted.sum()),
-        len(per_label) - len(found), grid, len(found),
+        at = lut[np.clip(labels, 0, None)]
+        at[labels <= 0] = -1
+        index[at >= 0] = at[at >= 0]
+    return grid, template, index
+
+
+# The colours of the regions of an atlas without colours of its own: those
+# of matplotlib's tab20, in turn.
+REGION_PALETTE = (
+    "#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a",
+    "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94",
+    "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d",
+    "#17becf", "#9edae5",
+)
+
+
+class RegionLayer(NamedTuple):
+    """
+    The regions of a result on the regions of atlases, as the viewer
+    names them and colours them: in *image*, ``n + 1`` at the voxels of
+    the region *names[n]*, whose colour, ``#rrggbb``, is *colours[n]*.
+    The viewer starts with them in their colours if *coloured*.
+    """
+
+    image: nib.Nifti1Image
+    names: List[str]
+    colours: List[str]
+    #: whether the viewer starts with the regions in their colours: those
+    #: of a result without values, the regions alone
+    coloured: bool = False
+
+
+def regions_layer(
+    nl, df: pd.DataFrame, sorts: dict, request: SaveRequest,
+) -> RegionLayer:
+    """
+    Return the regions of the result *df* as the viewer names and colours
+    them (:class:`RegionLayer`): those of the labels of the *request*'s
+    points (see :func:`regions_to_nifti`), each of the colour its atlas
+    gives it (:func:`~neurolang_apps.utils.engine_registry.atlas_colours`),
+    else of :data:`REGION_PALETTE`.
+    """
+    points = request.points
+    column = _column(df, points.columns[0])
+    lookup = region_lookup(nl, _region_atlases(nl, sorts, points.grid))
+    found = [
+        label for label in dict.fromkeys(df[column].astype(str))
+        if label in lookup
+    ]
+    _, template, index = _region_index(nl, lookup, found, points.grid)
+    colours = []
+    for n, label in enumerate(found):
+        atlas, values = lookup[label]
+        colour = engine_registry.atlas_colours(nl, atlas).get(values[0])
+        colours.append(colour or REGION_PALETTE[n % len(REGION_PALETTE)])
+    dtype = np.int16 if len(found) < np.iinfo(np.int16).max else np.int32
+    return RegionLayer(
+        nib.Nifti1Image((index + 1).astype(dtype), template.affine),
+        found, colours,
     )
 
 
@@ -1730,7 +1797,10 @@ def _one_of_a_kind(extra: dict, found: dict, console, title: str) -> bool:
                 style="yellow", markup=False,
             )
             return False
-    extra.update(found)
+    # The regions named on the views are those of the first block of
+    # regions.
+    for key, value in found.items():
+        extra.setdefault(key, value)
     return True
 
 
@@ -1753,7 +1823,32 @@ def _block_layers(app, block, request: ViewRequest):
     else:
         layers = last_result_images(app, block, request.save)
         built = None if layers is None else (layers, {})
+        if built is not None and kind == "regions":
+            regions = result_regions(app, block, request.save)
+            if regions is not None:
+                masks = all(name == "mask" for name, _ in layers)
+                built = (layers, {"regions": regions._replace(
+                    coloured=masks
+                )})
     return None if built is None else (kind, *built)
+
+
+def result_regions(app, block, request: SaveRequest):
+    """
+    Return the regions of the result *block* of *app*, on the regions of
+    atlases, as the viewer names and colours them (:func:`regions_layer`),
+    or None if they cannot be found.
+    """
+    sorts = _engine_sorts(app.settings.engine_name)
+    try:
+        points = request.points or point_columns(
+            block.frame, sorts, block.sorts
+        )
+        return regions_layer(
+            app._nl, block.frame, sorts, request._replace(points=points)
+        )
+    except Exception:  # the result is shown without its regions' names
+        return None
 
 
 def last_results_layers(app, request: ViewRequest):

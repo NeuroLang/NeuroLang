@@ -37,6 +37,7 @@ __all__ = [
     "SpaceMismatchError",
     "check_same_space",
     "infer_hemispheres",
+    "label_colours",
     "label_name",
     "label_table",
     "label_voxel_indices",
@@ -256,6 +257,23 @@ def label_table(labels: Any) -> pd.DataFrame:
     })
 
 
+def label_colours(labels: Any) -> Dict[int, str]:
+    """The colour, ``#rrggbb``, of each label id of a look-up table with a
+    ``color`` column, as nilearn's fetchers (and those of :data:`FETCHERS`)
+    give it in ``lut``; ``{}`` for labels without colours."""
+    if not (isinstance(labels, pd.DataFrame) and "color" in labels.columns):
+        return {}
+    return {
+        int(index): colour
+        for index, colour in zip(labels["index"], labels["color"])
+        if isinstance(colour, str) and colour.startswith("#")
+    }
+
+
+def _hex(red, green, blue) -> str:
+    return f"#{int(red):02x}{int(green):02x}{int(blue):02x}"
+
+
 def _strings(values: Iterable[Any]) -> list:
     return [v.decode() if isinstance(v, bytes) else str(v) for v in values]
 
@@ -340,11 +358,64 @@ def _read_image(image: Union[Path_, Any]):
 
 # --- the fetchers of the atlases of the engines ---------------------------
 
+#: FreeSurfer's colours of its labels, those of the Destrieux atlas
+#: (``aparc.a2009s``, ``ctx_lh_G_and_S_frontomargin``...) among them.
+FREESURFER_LUT_URL = (
+    "https://raw.githubusercontent.com/freesurfer/freesurfer/v7.4.1/"
+    "distribution/FreeSurferColorLUT.txt"
+)
+
+
+def freesurfer_colours(data_dir: Path_) -> Dict[str, str]:
+    """The colour of each label of FreeSurfer's look-up table, by name,
+    fetched into *data_dir*/``freesurfer``."""
+    from .utils.nilearn_compat import fetch_files
+
+    [path] = fetch_files(
+        str(Path(data_dir) / "freesurfer"),
+        [("FreeSurferColorLUT.txt", FREESURFER_LUT_URL, {})], verbose=0,
+    )
+    table = pd.read_csv(
+        path, sep=r"\s+", comment="#", header=None, usecols=range(5),
+        names=["id", "name", "r", "g", "b"],
+    )
+    return {
+        name: _hex(r, g, b)
+        for name, r, g, b in zip(table["name"], table["r"], table["g"],
+                                 table["b"])
+    }
+
+
+def _freesurfer_destrieux_name(name: str) -> str:
+    """FreeSurfer's name of the Destrieux region *name* of nilearn:
+    ``L G_and_S_frontomargin`` is ``ctx_lh_G_and_S_frontomargin``."""
+    side, _, region = name.partition(" ")
+    if not region:
+        side, region = "L", name
+    return f"ctx_{'rh' if side == 'R' else 'lh'}_{region}"
+
+
 def fetch_destrieux(**kwargs):
-    """The Destrieux 2009 atlas of nilearn: ``maps`` and ``labels``."""
+    """
+    The Destrieux 2009 atlas of nilearn: ``maps``, ``labels`` and ``lut``,
+    with FreeSurfer's colours of its regions in its ``color`` column when
+    they can be fetched (:func:`freesurfer_colours`).
+    """
     from .utils.nilearn_compat import nilearn_datasets
 
-    return nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
+    atlas = nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
+    lut = getattr(atlas, "lut", None)
+    if lut is None or not kwargs.get("data_dir"):
+        return atlas
+    try:
+        colours = freesurfer_colours(kwargs["data_dir"])
+    except Exception:  # the atlas goes without its colours
+        return atlas
+    atlas.lut = lut.assign(color=[
+        colours.get(_freesurfer_destrieux_name(str(name)))
+        for name in lut["name"]
+    ])
+    return atlas
 
 
 def fetch_schaefer(**kwargs):
@@ -382,7 +453,46 @@ def fetch_tian(scale: int = 2, data_dir: str = "", **kwargs):
         verbose=0,
     )
     names = Path(labels).read_text().split()
-    return {"maps": image, "labels": ["Background", *names]}
+    fetched = {"maps": image, "labels": ["Background", *names]}
+    try:
+        colours = _tian_colours(scale, data_dir)
+    except Exception:  # the atlas goes without its colours
+        return fetched
+    fetched["lut"] = pd.DataFrame({
+        "index": range(len(names) + 1), "name": ["Background", *names],
+        "color": [None] + [colours.get(name) for name in names],
+    })
+    return fetched
+
+
+#: The label files of the authors with the colours of the regions: those of
+#: the atlases of the cortex and the subcortex together.
+TIAN_COLOURS_URL = (
+    "https://raw.githubusercontent.com/yetianmed/subcortex/master/"
+    "Group-Parcellation/3T/Cortex-Subcortex/"
+)
+
+
+def _tian_colours(scale: int, data_dir: str) -> Dict[str, str]:
+    """The colours of the regions of the Melbourne subcortex atlas at
+    *scale*, by name, from the label file of the authors (in Workbench's
+    format: a name, then its value and its red, green, blue and alpha)."""
+    from .utils.nilearn_compat import fetch_files
+
+    base = (
+        f"Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_"
+        f"S{int(scale)}_label.txt"
+    )
+    [path] = fetch_files(
+        str(Path(data_dir) / "tian"), [(base, TIAN_COLOURS_URL + base, {})],
+        verbose=0,
+    )
+    lines = Path(path).read_text().split("\n")
+    return {
+        name.strip(): _hex(*values.split()[1:4])
+        for name, values in zip(lines[::2], lines[1::2])
+        if len(values.split()) >= 4
+    }
 
 
 #: The fetchers of the deterministic atlases of the engines, by the kind of

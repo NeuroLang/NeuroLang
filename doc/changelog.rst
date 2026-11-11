@@ -128,6 +128,13 @@ Unreleased
   ``?engine=neurosynth`` starts with Neurosynth alone.  The bundle builds
   Neurosynth first all the same, whose text embeddings the tracts' engine
   shares (``DEFAULT_ENGINE`` of ``doc/make_repl_bundle.py``).
+* The brain viewer of a result on the regions of atlases names the region
+  under the mouse, and under the cursor, and draws the regions in the
+  colours of their atlas (*atlas colours*), as a result of regions alone
+  starts: Schaefer's (from its label file), FreeSurfer's for Destrieux
+  (``FreeSurferColorLUT.txt``, fetched into the data directory) and Tian's
+  (the label file of its authors).  The engine keeps the colours of its
+  atlases (``engine_registry.atlas_colours``).
 * When the AI assistant can answer, with a key in the page or the one of the
   REPL's configuration, the REPL in the browser starts with one of the engine's
   example questions, at random, in the box of the assistant: selected, typing
@@ -145,6 +152,11 @@ Unreleased
   colour of an edge tells what goes through it: rows that hold for sure,
   uncertain rows, or probabilities. The REPL in the browser shows it in a
   *Graph* tab after each query, a query of the assistant's included.
+* The graph of a query draws the relations that come from an ontology (the
+  triples and classes of the Cognitive Atlas, such as ``rdfs:label``) as
+  teal hexagons, apart from the blue cylinders of the regular tables, and
+  its legend says so. ``NeurolangPDL.ontology_predicates`` holds the names
+  of the predicates the loaded ontologies define.
 
 * A program holds several queries, each named in brackets,
   ``ans[name](...) :- ...``, and ``execute_datalog_program`` returns their
@@ -413,6 +425,15 @@ Unreleased
 
 **Bug fixes:**
 
+* The brain tab of the REPL in the browser no longer shows the viewer of an
+  earlier result for the last one: after a query, selecting the tab views
+  the new result (``.view``), and a view that fails ("The result has no
+  streamlines") takes the earlier viewer away rather than leaving it, as
+  a second query on tracts often did.
+* A query on tracts (``ans(x) :- af(x, "left")``) no longer prints notes about
+  predicates of the magic-sets rewriting (``endpoint_in^bfbb_0 has no facts or
+  rules``): the types of their rules are not resolved, as for those whose
+  functor is an ``AdornedSymbol``.
 * ``count(s)`` counts the distinct values of ``s`` in each group, not the
   rows of the rule's body (#1090): ``n(count(s)) :- schaefer_activated(l, s),
   startswith('17Networks LH Default', l)`` is 11,160 studies, not 50,655,

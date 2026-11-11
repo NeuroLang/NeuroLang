@@ -189,6 +189,7 @@
       viewer.layers.push(summarise(data.overlays[l].name, volume));
     }
     background.colorbarVisible = false;
+    if (data.regions) await loadRegions(nv, data.regions);
     if (data.connectome) {
       // The network shows through the 3D render, and on a slice only
       // within a few millimetres of it.
@@ -209,6 +210,53 @@
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
+  }
+
+  // The regions of a result: the one under the cursor is named, from the
+  // image of their numbers (n + 1 at the voxels of the n-th region), and
+  // the control "atlas colours" draws them in the colours of their atlas,
+  // an RGBA image transparent elsewhere.
+  async function loadRegions(nv, regions) {
+    var numbers = await loadVolume(regions, 'regions.nii.gz');
+    var colours = await loadVolume({nifti: regions.colours}, 'regions-colours.nii.gz');
+    numbers.opacity = 0;
+    colours.opacity = regions.coloured ? 1 : 0;
+    nv.addVolume(numbers);
+    nv.addVolume(colours);
+    viewer.regions = {volume: numbers, names: regions.names};
+    var box = $('atlas-colours');
+    box.checked = regions.coloured;
+    $('atlas-colours-control').hidden = false;
+    $('region-readout').hidden = false;
+    box.addEventListener('change', function () {
+      colours.opacity = box.checked ? 1 : 0;
+      nv.updateGLVolume();
+    });
+    followRegions(nv);
+  }
+
+  // The region of the result under the mouse, on a slice, named beside it.
+  function followRegions(nv) {
+    var canvas = $('gl'), tip = $('region-tip');
+    canvas.addEventListener('mousemove', function (event) {
+      var rect = canvas.getBoundingClientRect();
+      var ratio = canvas.width / rect.width;
+      var frac = nv.canvasPos2frac([
+        (event.clientX - rect.left) * ratio, (event.clientY - rect.top) * ratio]);
+      var name = frac[0] < 0 ? '–' : regionAt(Array.from(nv.frac2mm(frac)).slice(0, 3));
+      tip.hidden = name === '–';
+      tip.textContent = name;
+      tip.style.left = event.clientX + 14 + 'px';
+      tip.style.top = event.clientY + 14 + 'px';
+    });
+    canvas.addEventListener('mouseleave', function () { tip.hidden = true; });
+  }
+
+  // The name of the region of the result under the cursor, at *mm*.
+  function regionAt(mm) {
+    var regions = viewer.regions, vox = regions.volume.mm2vox(mm);
+    var n = Math.round(regions.volume.getValue(vox[0], vox[1], vox[2]));
+    return n > 0 ? regions.names[n - 1] : '–';
   }
 
   // The strongest edges of the network, listed under the views, how
@@ -630,6 +678,7 @@
       value = String(Number(Number(value).toPrecision(6)));
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
+    if (viewer.regions) $('region').textContent = regionAt(mm);
   }
 
   // The theme changed: the background of the image and the colour bars.

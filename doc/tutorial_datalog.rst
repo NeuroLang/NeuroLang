@@ -1255,6 +1255,13 @@ activates each Destrieux region::
          term_association(s, t) :- mentions(s, t), selected_study(s)
          ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p"
 
+The viewer names the region of the result under the mouse, and under the
+cursor below the views; its control *atlas colours* draws the regions in
+the colours their atlas gives them: Schaefer's networks, FreeSurfer's for
+Destrieux (``aparc.a2009s``), those of Tian's subcortex.  A result of
+regions alone, ``ans(l) :- schaefer_label(l), startswith('17Networks LH
+Default', l)``, starts in them.
+
 A result of pairs of regions, or of points (``x1, y1, z1, x2, y2, z2``),
 with a value is a network: ``--view`` draws a node at the centre of each
 region and an edge per pair, its colour and thickness the value, from
@@ -1291,7 +1298,9 @@ rows, given the condition after ``//`` (dashed edges): with one uniform
 choice, such as ``selected_study``, the share of the studies where the body
 and the condition hold among those where the condition holds. After a run,
 the answer shows the distribution of its probabilities. Clicking a node
-shows its rules and what it depends on.
+shows its rules and what it depends on. The relations that come from an
+ontology, such as the triples of the Cognitive Atlas (``rdfs:label``), are
+teal hexagons, apart from the blue cylinders of the regular tables.
 
 Inspecting query plans
 ----------------------

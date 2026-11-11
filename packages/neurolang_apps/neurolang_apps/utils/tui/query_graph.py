@@ -96,6 +96,10 @@ class QueryGraph(NamedTuple):
 # The kinds of nodes, in the order of the legend, with what they are.
 KINDS = {
     "data": ("Data", "a relation of the engine's data, as stored"),
+    "ontology": (
+        "Ontology", "a relation of an ontology (OWL/RDF): its triples and "
+        "classes, whose subclasses are included",
+    ),
     "choice": (
         "Random choice", "one of its rows is chosen at random, each as "
         "likely as given (e.g. one study of all)",
@@ -186,6 +190,7 @@ class _Builder:
         self.ir = nl.program_ir
         self.table = nl.program_ir.symbol_table
         self.descriptions = descriptions
+        self.ontology = getattr(nl, "ontology_predicates", ())
         self.columns = columns
         self.program_rules = {}
         for rule in rules:
@@ -253,7 +258,8 @@ class _Builder:
         """Add the predicate *name* and what it uses; return its id."""
         if name in self.nodes:
             return name
-        found = self.rules(name)
+        found = self.table.get(Symbol(name)) if name in self.ontology \
+            else self.rules(name)
         if isinstance(found, list):
             stored = self._stored_copy(found)
             if stored is None:
@@ -275,6 +281,8 @@ class _Builder:
             kind = "choice"
         elif symbol in getattr(self.ir, "pfact_pred_symbs", ()):
             kind = "facts"
+        elif name in self.ontology:
+            kind = "ontology"
         else:
             kind = "data"
         lines = [self.descriptions.get(name, "")]
@@ -872,6 +880,13 @@ def _shape(kind: str, box: tuple) -> str:
             f'<path class="rim" d="M{x},{y + e} a{w / 2},{e} 0 0 1 {w},0 '
             f'a{w / 2},{e} 0 0 1 {-w},0"/>'
         )
+    if kind == "ontology":  # a hexagon, as a concept map's nodes
+        s = 14
+        points = (
+            f"{x + s},{y} {x + w - s},{y} {x + w},{y + h / 2} "
+            f"{x + w - s},{y + h} {x + s},{y + h} {x},{y + h / 2}"
+        )
+        return f'<polygon class="shape" points="{points}"/>'
     if kind == "probability":  # corners cut
         s = 10
         points = (
@@ -1099,13 +1114,14 @@ def _legend(graph: QueryGraph) -> str:
 # system's.
 _DARK = (
     "color-scheme: dark; --bg: #0d1117; --text: #e6edf3; --muted: #9198a1; "
-    "--edge: #6e7681; --data: #172554; --rand: #431407; --rule: #082f49; "
+    "--edge: #6e7681; --data: #172554; --onto: #042f2e; --rand: #431407; --rule: #082f49; "
     "--prob: #2e1065; --ans: #052e16; --neg: #f87171;"
 )
 
 _STYLE = """
 :root { color-scheme: light; --bg: #fff; --text: #1f2328; --muted: #59636e;
-  --edge: #8c959f; --data: #dbeafe; --data-b: #2563eb; --rand: #ffedd5;
+  --edge: #8c959f; --data: #dbeafe; --data-b: #2563eb; --onto: #ccfbf1;
+  --onto-b: #0f766e; --rand: #ffedd5;
   --rand-b: #ea580c; --rule: #e0f2fe; --rule-b: #0369a1; --prob: #ede9fe;
   --prob-b: #7c3aed; --ans: #dcfce7; --ans-b: #15803d; --neg: #dc2626; }
 :root[data-theme=dark] { __DARK__ }
@@ -1119,6 +1135,7 @@ p { margin: 0 0 .5rem; color: var(--muted); max-width: 60rem; }
 svg { display: block; }
 .shape, .rim { stroke-width: 1.5; }
 .data .shape, .data .rim { fill: var(--data); stroke: var(--data-b); }
+.ontology .shape { fill: var(--onto); stroke: var(--onto-b); }
 .choice .shape, .facts .shape { fill: var(--rand); stroke: var(--rand-b); }
 .facts .shape { stroke-dasharray: 5 3; }
 .rule .shape { fill: var(--rule); stroke: var(--rule-b); }
@@ -1158,6 +1175,8 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
   margin-right: .4rem; vertical-align: middle; border: 1.5px solid; }
 .swatch.data { background: var(--data); border-color: var(--data-b);
   border-radius: 40%/25%; }
+.swatch.ontology { background: var(--onto); border-color: var(--onto-b);
+  clip-path: polygon(15% 0, 85% 0, 100% 50%, 85% 100%, 15% 100%, 0 50%); }
 .swatch.choice, .swatch.facts, .swatch.probabilistic {
   background: var(--rand); border-color: var(--rand-b); }
 .swatch.facts, .swatch.probabilistic { border-style: dashed; }

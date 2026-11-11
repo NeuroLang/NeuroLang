@@ -429,6 +429,8 @@ const workerMessages = {
     if (data.tables?.length) showTables(data);
     showGraph(data);
     if (data.viewers?.length) showViewer(data.viewers.at(-1));
+    else if (data.tables?.length) markViewerStale();
+    else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
   },
 };
@@ -460,6 +462,32 @@ function showTables({ tables, prompt }) {
 function showViewer(page) {
   const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(page, theme()), title: "NeuroLang brain viewer" });
   show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
+  setViewerStale(false);
+}
+
+// The viewer shown is of an earlier result once a query gives a new one:
+// selecting its tab then views the new result (.view), rather than the old.
+let viewerStale = false;
+function setViewerStale(stale) {
+  viewerStale = stale;
+  $("tab-brain").title = stale ? "View the last result in the brain" : "";
+}
+function markViewerStale() {
+  if (!$("tab-brain").hidden) setViewerStale(true);
+}
+
+// No viewer: that of an earlier result is not to be taken for the last one's.
+function dropViewer() {
+  $("brain").replaceChildren();
+  $("tab-brain").hidden = true;
+  setViewerStale(false);
+  if (results.dataset.tab === "brain") selectTab("table");
+}
+
+// Open the tab *tab* of the results: the brain tab of an earlier result views the last one.
+function openTab(tab) {
+  if (tab === "brain" && viewerStale && !$("run").disabled) return run(".view");
+  selectTab(tab);
 }
 
 let graphUrl = null; // the address of the page of the graph shown
@@ -660,13 +688,13 @@ history_.addEventListener("change", () => {
   history_.value = "";
   input.focus();
 });
-for (const tab of TABS) $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+for (const tab of TABS) $(`tab-${tab}`).addEventListener("click", () => openTab(tab));
 $("tabs").addEventListener("keydown", (event) => {
   const shown = TABS.filter((tab) => !$(`tab-${tab}`).hidden);
   const next = tabAfter(shown, results.dataset.tab, event.key);
   if (!next) return;
   event.preventDefault();
-  selectTab(next);
+  openTab(next);
   $(`tab-${next}`).focus();
 });
 $("retry").addEventListener("click", start);
