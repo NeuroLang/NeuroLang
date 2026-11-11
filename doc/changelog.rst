@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+- ``neurolang-query --mcp`` serves a session of the interactive REPL to an
+  MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``):
+  its tools run statements and dot-commands in the session (``repl``),
+  give the syntax, guidance and examples of the engine (``guide``) and are
+  those of the ReAct assistant (``list_predicates``,
+  ``describe_predicate``, ``search_values``, ``check_query``). See
+  *From an MCP client* in the LLM Query Assistant documentation.
+
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the

@@ -33,6 +33,7 @@ tracts = ["neurolang-apps"]
 tui = ["neurolang-apps[tui]"]
 llm = ["neurolang-apps[llm]"]
 dashboard = ["neurolang-apps[dashboard]"]
+mcp = ["neurolang-apps[mcp]"]
 embeddings = ["neurolang-apps[embeddings]"]
 ras-polars = ["nl-core[ras-polars]"]
 dev = [
