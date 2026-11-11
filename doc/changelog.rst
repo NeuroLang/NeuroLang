@@ -419,6 +419,11 @@ Unreleased
 
 **Bug fixes:**
 
+* The streamlines of a tractogram in MNI space (``neurosynth_iit``'s IIT
+  tractogram) are drawn on the MNI152 T1, not on the labels of the atlas
+  they are indexed by: the engine's ``streamline_background()`` gives that
+  of a subject's space only, None in MNI space, and the viewer then draws
+  them on its template, without warning that they may be misplaced.
 * The brain tab of the REPL in the browser no longer shows the viewer of an
   earlier result for the last one: after a query, selecting the tab views
   the new result (``.view``), and a view that fails ("The result has no
