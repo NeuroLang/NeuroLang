@@ -1277,3 +1277,56 @@ class TestViewStreamlines:
         out = _output(tiny)
         assert "streamline_points" in out
         assert "streamline_background" in out
+
+
+class TestImage:
+    """Check .image loads a NIfTI image as relations of the session."""
+
+    @pytest.fixture
+    def zmap(self, tmp_path):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 2, 3], data[0, 0, 0], data[3, 3, 3] = 5.0, 3.0, -2.0
+        path = tmp_path / "z.nii.gz"
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        return path
+
+    def test_loads_the_voxels_and_the_chosen_ones(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --threshold 3")
+        assert "loaded image(i, j, k, value): 3 voxels" in " ".join(_output(tiny).split())
+        assert "image_voxel(i, j, k): the 2 voxels" in " ".join(_output(tiny).split())
+        tiny._execute_and_display("ans(i, j, k, v) :- image(i, j, k, v)")
+        assert "-2" in " ".join(_output(tiny).split())
+        assert {
+            tuple(row[1:]) for row in tiny._nl.symbols["image_voxel"].value
+        } == {(1, 2, 3), (0, 0, 0)}
+
+    def test_the_percentile_and_the_name(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --name z --threshold 90%")
+        assert "z_voxel(i, j, k): the 1 voxels with a value of 4.6" in " ".join(
+            _output(tiny).split()
+        )
+
+    def test_loading_again_replaces_it_when_named(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap}")
+        assert "already loaded" in " ".join(_output(tiny).split())
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        assert _output(tiny).count("loaded image(i, j, k, value)") == 2
+
+    def test_errors(self, tiny, zmap, tmp_path):
+        tiny._handle_dot_command(f".image {tmp_path / 'none.nii'}")
+        tiny._handle_dot_command(f".image {zmap} --threshold 100")
+        tiny._handle_dot_command(".image")
+        assert "Cannot load" in " ".join(_output(tiny).split())
+        assert "No voxel reaches the threshold" in " ".join(_output(tiny).split())
+        assert "Usage: .image PATH" in " ".join(_output(tiny).split())
+
+    def test_an_image_on_another_grid_is_resampled(self, tiny, tmp_path):
+        data = np.zeros((8, 8, 8), dtype=np.float32)
+        data[2:6, 2:6, 2:6] = 4.0
+        affine = TINY_AFFINE.copy()
+        affine[:3, :3] *= 0.5
+        path = tmp_path / "fine.nii.gz"
+        nib.save(nib.Nifti1Image(data, affine), path)
+        tiny._handle_dot_command(f".image {path}")
+        assert "loaded image(i, j, k, value)" in " ".join(_output(tiny).split())

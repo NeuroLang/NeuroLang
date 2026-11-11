@@ -358,3 +358,18 @@ assistant_examples:
       p_term_given_close(q, t, PROB) :- term_association(s, t) // close(q, s)
       ans(t, p) :- p_term_given_close('cortical response to noxious heat applied to the skin', t, p)
 
+
+  # After ``.image PATH`` (an image on the grid of the engine, such as a
+  # z-map), the relation image(i, j, k, value) holds its voxels and the
+  # uniform choice image_voxel(i, j, k) those above its threshold: the
+  # probability that a study of a term reports a peak in a voxel chosen in
+  # the image, over the same for all the studies, decodes the image. A
+  # probabilistic query needs the term as a constant: one query per concept
+  # (cogat_term lists them).
+  - question: Which is the lift of the studies about working memory in the image I loaded, a z-map? Decode the image with the term working memory.
+    datalog: |-
+      in_image(s) :- activated(i, j, k, s), image_voxel(i, j, k), selected_study(s)
+      with_term(t, s) :- term_in_study(s, t), selected_study(s)
+      p_image_given_t(t, PROB) :- in_image(s) // with_term(t, s)
+      p_image(PROB) :- in_image(s)
+      ans(p, q, lift) :- p_image_given_t('working memory', p), p_image(q), (lift == p / q)

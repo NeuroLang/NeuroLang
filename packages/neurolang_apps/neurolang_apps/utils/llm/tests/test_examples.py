@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from ..examples import (
@@ -86,6 +87,11 @@ def test_bank_queries_are_valid_on_the_engine(engine):
     from neurolang_apps.utils import engine_registry
 
     nl = engine_registry.build_engine(engine, Path(DATA_DIR), None)
+    # What .image loads: the questions on an image need one.
+    voxels = pd.DataFrame(list(nl.symbols["brain_mask"].value)[:10],
+                          columns=["i", "j", "k"])
+    nl.add_tuple_set(voxels.assign(value=1.0), name="image")
+    nl.add_uniform_probabilistic_choice_over_set(voxels, name="image_voxel")
     failures = []
     for example in load_examples(engine):
         for language, query in example.queries.items():

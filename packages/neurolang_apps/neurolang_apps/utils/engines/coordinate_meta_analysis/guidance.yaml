@@ -90,3 +90,9 @@ assistant_guidance: >
   measures join their replicates on the same b.  Ask it for one
   region or term at a time, never for voxels or every term: each
   replicate recomputes the measure.
+  An image loaded with .image (a z-map, say) is the relation
+  image(i, j, k, value) and the uniform choice image_voxel(i, j, k) of
+  its voxels above a threshold: decode it with the probability that a
+  study of a term reports a peak in image_voxel, over the same for all
+  the studies (see the examples), one query per term as the term is a
+  constant.

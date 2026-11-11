@@ -118,7 +118,7 @@ async function installSource(pyodide, repo, ref) {
 
 async function start({ repo, ref, full, engine }) {
   status("Loading Python…");
-  const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
+  const pyodide = (runtime = await loadPyodide({ indexURL: PYODIDE_URL }));
 
   status("Loading numpy, scipy, pandas, scikit-learn and pyarrow…");
   await pyodide.loadPackage(PYODIDE_PACKAGES);
@@ -302,6 +302,7 @@ def rate(verdict, comment):
 // The page starts the worker with the version to run, then submits.
 let submit = null;
 let repl = null;
+let runtime = null; // Pyodide, whose file system gets the uploads
 let makeFile = null; // the file of a result, for a download
 let rateAnswer = null; // shares the last answer of the assistant with its rating
 
@@ -342,6 +343,18 @@ onmessage = async ({ data }) => {
     } catch (error) {
       const message = String(error.message ?? error).trim().split("\n").at(-1);
       postMessage({ type: "rated", ok: false, message });
+    }
+    return;
+  }
+  if (data.type === "upload") {
+    try {
+      // The name keeps no character a command line would split on.
+      const path = `/tmp/uploads/${data.name.replace(/[^\w.-]/g, "_")}`;
+      runtime.FS.mkdirTree("/tmp/uploads");
+      runtime.FS.writeFile(path, data.bytes);
+      postMessage({ type: "uploaded", path });
+    } catch (error) {
+      postMessage({ type: "uploaded", error: String(error.message ?? error) });
     }
     return;
   }

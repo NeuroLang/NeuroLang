@@ -24,7 +24,7 @@ const [statusBox, out, input, question, history_] = ["status", "out", "input", "
 const llmForm = $("llm");
 const results = $("results");
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
-const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
+const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open"), $("image-open")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
 loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
@@ -367,6 +367,13 @@ const workerMessages = {
     setBusy(false);
     restoreShared();
   },
+  uploaded: (data) => {
+    if (data.error) {
+      setBusy(false);
+      return setStatus(`The image could not be loaded: ${data.error}`, "error");
+    }
+    run(`.image ${data.path}`);
+  },
   file: (data) => {
     setBusy(false);
     if (data.error) return setStatus(`The file could not be made: ${data.error}`, "error");
@@ -623,6 +630,16 @@ $("session-save").addEventListener("click", () => {
   saveFile({ name: "neurolang-session.json", mime: "application/json", bytes: session.serialise(editor.value, $("mode").value) });
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
+// An image is written in the worker's file system, which the .image command reads.
+$("image-open").addEventListener("click", () => $("image-file").click());
+$("image-file").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  event.target.value = "";
+  if (!file) return;
+  setBusy(true);
+  setStatus(`Loading ${file.name}…`, "busy");
+  worker.postMessage({ type: "upload", name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+});
 $("session-file").addEventListener("change", async (event) => {
   const [file] = event.target.files;
   event.target.value = "";

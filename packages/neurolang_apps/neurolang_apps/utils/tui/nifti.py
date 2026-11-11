@@ -1781,3 +1781,132 @@ def _view_title(app, request: ViewRequest, path: Path) -> str:
         return path.name
     block = app.results[-1].title
     return f"Last result: {block}" if block else "Last result"
+
+
+IMAGE_USAGE = ".image PATH [--name NAME] [--threshold T|P%]"
+
+IMAGE_HELP = """\
+[bold cyan].image PATH [--name NAME][/bold cyan] loads a NIfTI image, a z-map for
+instance, as the relation [bold]NAME(i, j, k, value)[/bold] (NAME is
+[bold]image[/bold] by default): the voxels of the brain with a value other
+than 0, on the grid of the engine (the image is resampled to it if it has
+another), and shows it in the brain viewer.
+
+The voxels whose value is at least the [bold]--threshold[/bold] (a value, or a
+percentile of the values such as 95%, the default) are also a uniform
+probabilistic choice, [bold]NAME_voxel(i, j, k)[/bold]: the probability of
+a study to report a peak in a voxel chosen in the image decodes the image
+(see the questions on decoding an image).
+
+    in_image(s) :- activated(i, j, k, s), image_voxel(i, j, k), selected_study(s)
+    with_term(t, s) :- term_in_study(s, t), selected_study(s)
+    p_image_given_t(t, PROB) :- in_image(s) // with_term(t, s)
+    p_image(PROB) :- in_image(s)
+    ans(p, q, lift) :- p_image_given_t('working memory', p), p_image(q), (lift == p / q)
+
+A term is a constant in a probabilistic query: decode the image with one
+query per concept of the Cognitive Atlas (cogat_term).
+
+Load it again with --name and the same NAME to replace it. In the web REPL, the
+Image button uploads the file and runs the command; the page needs
+?engine=full for the predicate activated."""
+
+HELP_TOPICS["image"] = IMAGE_HELP
+
+
+def _image_values(image: nib.Nifti1Image, template: nib.Nifti1Image):
+    """Return the (first volume of) *image* on the grid of *template*."""
+    if image.shape[:3] != template.shape[:3] or not np.allclose(
+        image.affine, template.affine
+    ):
+        from nibabel.processing import resample_from_to
+
+        image = resample_from_to(image, template, order=1)
+    data = np.asanyarray(image.dataobj, dtype=float)
+    return np.nan_to_num(data[..., 0] if data.ndim == 4 else data)
+
+
+def _image_threshold(threshold, values: np.ndarray) -> float:
+    """Return the value of *threshold*, or its percentile of *values*."""
+    if isinstance(threshold, str):
+        return float(np.percentile(values, float(threshold[:-1])))
+    return float(threshold)
+
+
+@command(
+    ".image", "Load a NIfTI image as a relation NAME(i, j, k, value) and "
+    "show it (.help image)", IMAGE_USAGE,
+)
+def cmd_image(app, arg: str) -> None:
+    """Load the NIfTI image of *arg* as relations of the session."""
+    from nl_expr.expressions import Symbol
+
+    from .session import _load_failed, _name_problem
+
+    try:
+        paths, options = split_args(
+            arg, {"--threshold": 1, "--name": 1}, IMAGE_USAGE
+        )
+        if len(paths) != 1:
+            raise SaveError(f"Usage: {IMAGE_USAGE}")
+        threshold = view_threshold(options.get("--threshold", [None])[0])
+        path = Path(paths[0]).expanduser()
+        name = options.get("--name", ["image"])[0]
+        for relation in (name, f"{name}_voxel"):
+            problem = _name_problem(app, relation, "--name" in options)
+            if problem:
+                raise SaveError(
+                    problem.replace(".load PATH", ".image PATH --name")
+                )
+        template = engine_template(app._nl)
+        data = _image_values(read_nifti(path), template)
+    except SaveError as exc:
+        _load_failed(app, str(exc))
+        return
+    except Exception as exc:
+        _load_failed(app, f"Cannot load {arg}: {exc}", exc)
+        return
+    if "brain_mask" in app._nl.symbols:
+        brain = np.array(list(app._nl.symbols["brain_mask"].value), dtype=int)
+    else:
+        brain = np.argwhere(np.asanyarray(template.dataobj) != 0)
+    index = tuple(brain.T)
+    values = data[index]
+    keep = values != 0
+    rows = pd.DataFrame(
+        {"i": brain[keep, 0], "j": brain[keep, 1], "k": brain[keep, 2],
+         "value": values[keep]}
+    )
+    if rows.empty:
+        _load_failed(app, f"{path} has no value other than 0 in the brain.")
+        return
+    cutoff = _image_threshold(threshold, rows["value"].to_numpy())
+    chosen = rows[rows["value"] >= cutoff][["i", "j", "k"]]
+    if chosen.empty:
+        _load_failed(app, f"No voxel reaches the threshold {cutoff:.3g}.")
+        return
+    for relation in (name, f"{name}_voxel"):
+        if relation in app.loaded_relations:
+            del app._nl.program_ir.symbol_table[Symbol(relation)]
+    app._nl.add_tuple_set(rows, name=name)
+    app._nl.add_uniform_probabilistic_choice_over_set(
+        chosen, name=f"{name}_voxel"
+    )
+    app.loaded_relations[name] = ["i", "j", "k", "value"]
+    app.loaded_relations[f"{name}_voxel"] = ["i", "j", "k"]
+    app.console.print(
+        f"loaded {name}(i, j, k, value): {len(rows)} voxels from {path}; "
+        f"{name}_voxel(i, j, k): the {len(chosen)} voxels with a value of "
+        f"{cutoff:.3g} or more", style="green", markup=False,
+    )
+    shown = np.zeros(template.shape[:3], dtype=np.float32)
+    shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
+    fd, shown_path = tempfile.mkstemp(
+        suffix=".nii.gz", prefix="neurolang_view_"
+    )
+    os.close(fd)
+    write_nifti(nib.Nifti1Image(shown, template.affine), shown_path)
+    request = parse_view_args("")._replace(
+        threshold=cutoff, threshold_given=True
+    )
+    _view_nifti(app, [(name, Path(shown_path))], request, name)

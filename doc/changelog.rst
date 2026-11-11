@@ -17,6 +17,17 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+**Added:**
+
+* ``.image PATH`` (the Image button of the REPL in the browser) loads a NIfTI
+  image, a z-map for instance, as the relation ``image(i, j, k, value)`` on the
+  grid of the engine, and the voxels above ``--threshold`` as the uniform
+  probabilistic choice ``image_voxel(i, j, k)``, and shows it in the brain
+  viewer.  The probability that a study of a term reports a peak in a voxel
+  chosen in the image, over the same for all the studies, decodes the image
+  towards the Cognitive Atlas terms: the question bank of the coordinate-based
+  engines, and so the query assistant, has the query.
+
 **Performance:**
 
 * A selection by a Python function of a single column, as
