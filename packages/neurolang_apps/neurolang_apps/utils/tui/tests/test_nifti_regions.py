@@ -228,8 +228,22 @@ class TestViewRegions:
         tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
         tiny._handle_dot_command(".view")
         img, kwargs = view_calls[-1]
-        assert kwargs["threshold"] == 0.0 and "connectome" not in kwargs
+        assert "connectome" not in kwargs
         assert _data(img).max() == 0.75
+        _remove_view_files(_output(tiny))
+
+    def test_regions_with_a_value_keep_their_top_5_percent(
+        self, tiny, view_calls
+    ):
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == "95%"
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_all_shown(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == 0.0
         _remove_view_files(_output(tiny))
 
     def test_a_threshold_given(self, tiny, view_calls):
