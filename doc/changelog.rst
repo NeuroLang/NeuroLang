@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* The SQUALL tutorial runs in the REPL too: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the top 20 terms it
+  gives, its aggregation examples on facts typed in the session and with the
+  results they give, and its Python moves to :doc:`tutorial_python`, where
+  it is tested. SQUALL has no ``#`` comments: the examples that had them use
+  ``%`` lines.
 * The Datalog tutorial runs in the REPL: its Bayes factor program is on the
   ``neurosynth`` engine and the Destrieux atlas, with the results and
   confidence intervals it gives, and its Python moves to a new page,
