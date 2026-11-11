@@ -260,6 +260,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.current_program_rewritten = None
+        # The names of the predicates the loaded ontologies define.
+        self.ontology_predicates = set()
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -315,6 +317,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             load_format=format, individuals=individuals, names=names,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
+        self.ontology_predicates.update(constraints)
+        self.ontology_predicates.update(s.name for s in est_knowledge)
+        self.ontology_predicates.update(s.name for s in entity_rules)
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
@@ -331,6 +336,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         if individuals:
             for name, rows in onto.parse_individuals().items():
                 self.add_tuple_set(rows, name=name)
+                self.ontology_predicates.add(name)
 
         self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol

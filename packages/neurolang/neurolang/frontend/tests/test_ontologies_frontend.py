@@ -439,6 +439,18 @@ def test_load_individuals_with_subclass_reasoning():
     )
 
 
+def test_ontology_predicates_are_recorded():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a", 1)], name="table")
+    assert nl.ontology_predicates == set()
+    nl.load_ontology(
+        io.StringIO(KNOWLEDGE_GRAPH), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    assert {"pv:Employee", "pv:name", "pv:manages"} <= nl.ontology_predicates
+    assert "table" not in nl.ontology_predicates
+
+
 def test_negation_beside_a_class_with_subclasses():
     nl = NeurolangPDL()
     nl.load_ontology(

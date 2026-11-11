@@ -139,6 +139,11 @@ Unreleased
   colour of an edge tells what goes through it: rows that hold for sure,
   uncertain rows, or probabilities. The REPL in the browser shows it in a
   *Graph* tab after each query, a query of the assistant's included.
+* The graph of a query draws the relations that come from an ontology (the
+  triples and classes of the Cognitive Atlas, such as ``rdfs:label``) as
+  teal hexagons, apart from the blue cylinders of the regular tables, and
+  its legend says so. ``NeurolangPDL.ontology_predicates`` holds the names
+  of the predicates the loaded ontologies define.
 
 * A program holds several queries, each named in brackets,
   ``ans[name](...) :- ...``, and ``execute_datalog_program`` returns their
