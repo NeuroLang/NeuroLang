@@ -990,7 +990,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         func = aggregation.functor
         func = getattr(func, 'value', func)
         name = getattr(func, '__name__', getattr(func, 'name', str(func)))
-        name = {'len': 'count', 'mean': 'average'}.get(name, name)
+        name = {
+            'len': 'count', 'count_distinct': 'count', 'mean': 'average'
+        }.get(name, name)
         name = name[:1].upper() + name[1:]
         noun = functor.name[:1].upper() + functor.name[1:]
         blanks = '; '.join(['_'] * (arity - 1))

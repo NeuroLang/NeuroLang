@@ -407,6 +407,13 @@ Unreleased
 
 **Bug fixes:**
 
+* ``count(s)`` counts the distinct values of ``s`` in each group, not the
+  rows of the rule's body (#1090): ``n(count(s)) :- schaefer_activated(l, s),
+  startswith('17Networks LH Default', l)`` is 11,160 studies, not 50,655,
+  one per parcel each activates. ``count(x, y)`` counts distinct pairs; the
+  other aggregations still take a value per row. In SQUALL too, and with
+  the polars backend, where an aggregation of several columns without
+  groups failed.
 * A comparison inside parentheses is a disjunct or conjunct of its own:
   ``ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor
   planning')`` parses; before, every comparison of the disjunction needed

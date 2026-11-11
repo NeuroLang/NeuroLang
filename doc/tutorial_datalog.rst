@@ -730,6 +730,14 @@ the body from the aggregation function call.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``mean``,
 ``avg``, ``std``.
 
+``count(y)`` counts the distinct values of ``y`` in each group, and
+``count(y, z)`` the distinct pairs: ``count(s)`` over
+``schaefer_activated(l, s)`` counts each study once, however many parcels
+``l`` it activates.  The other functions take a value per row of the body:
+``sum(w)`` over ``weight(s, w)`` adds the weights of all the studies ``s``,
+equal or not, and ``mean(v)`` over the replicates ``rep(b, v)`` of a
+resampling averages all of them.
+
 Example — count studies per region:
 
 .. code-block:: none

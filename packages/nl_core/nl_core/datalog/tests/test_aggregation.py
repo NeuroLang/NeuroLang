@@ -326,6 +326,33 @@ def test_builtin_aggregations():
     assert result == expected
 
 
+def test_count_counts_distinct_values():
+    """``count(s)`` counts the values of ``s``, not the rows of the body
+    (#1090), and ``sum`` sums the rows."""
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+    P, Q, R, T = S_('P'), S_('Q'), S_('R'), S_('T')
+    l, s, w = S_('l'), S_('s'), S_('w')
+    dl.walk(Eb_(tuple(
+        F_(P(C_(a), C_(b), C_(1.0)))
+        for a, b in (("x", 1), ("y", 1), ("x", 2))
+    )))
+    dl.walk(Imp_(Q(Fa_(S_('count'), (s,))), P(l, s, w)))
+    dl.walk(Imp_(R(l, Fa_(S_('count'), (s,))), P(l, s, w)))
+    dl.walk(Imp_(T(Fa_(S_('count'), (l, s)), Fa_(S_('sum'), (w,))), P(l, s, w)))
+    solution = Chase(dl).build_chase_solution()
+    assert solution[Q] == Constant[AbstractSet]({(2,)})
+    assert solution[R] == Constant[AbstractSet]({("x", 2), ("y", 1)})
+    assert set(solution[T].value) == {(3, 3.0)}
+
+
 def test_multiple_aggregations():
     class DatalogWithBuiltinAggregation(
         BuiltinAggregationMixin,
