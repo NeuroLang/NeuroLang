@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* The Datalog tutorial runs in the REPL: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the results and
+  confidence intervals it gives, and its Python moves to a new page,
+  *NeuroLang in Python* (:doc:`tutorial_python`), which also takes
+  *NeuroLang for Logic Programmers* (its address now leads there). The
+  page's examples are run by the tests.
 * The documentation starts from the REPL: a page on the REPL, in the browser
   and in a terminal (:doc:`repl`), a Quick Start and a Get Started whose
   examples are queries of the ``neurosynth`` engine, and, under each example
@@ -696,7 +702,7 @@ Unreleased
   ``neurostore`` engines have ``boot_studies``, 500 and 200 replicates of
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
-  :doc:`tutorial_datalog`, section 10.6.
+  :doc:`tutorial_datalog`, section 10.7.
 * An engine is built from the tables it kept, instead of finding them again.
   The studies activating the regions of its atlases took 48 s of the 58 s of
   the ``neurosynth`` engine's build, and nilearn, imported to find the MNI

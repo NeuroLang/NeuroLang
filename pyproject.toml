@@ -72,7 +72,7 @@ neurolang-apps = { workspace = true }
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
-addopts = "--doctest-glob=doc/tutorial_squall.rst"
+addopts = "--doctest-glob=doc/tutorial_squall.rst --doctest-glob=doc/tutorial_python.rst"
 markers = [
     "network: fetches data (nilearn atlases); skipped if the fetch fails",
 ]
