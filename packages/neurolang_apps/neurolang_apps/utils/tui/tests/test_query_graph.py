@@ -375,3 +375,35 @@ def test_the_page_gets_the_graph_of_a_query_it_runs(nl):
     assert 'class="histogram"' in reply.graph
     assert not repl.submit(".help").graph
     assert ">activated" in repl.submit(".graph").graph
+
+
+def _ontology_engine():
+    """The engine with the triples of an ontology beside a regular table."""
+    from neurolang_apps.utils import conftest
+
+    nl = _engine()
+    nl.load_ontology(
+        str(conftest.MINI_COGAT), individuals=True, names="prefixed"
+    )
+    return nl
+
+
+ONTOLOGY_QUERY = "ans(l, s) :- rdfs:label(x, l), tfidf(s, l, v)"
+
+
+def test_a_relation_from_an_ontology_is_not_a_regular_table():
+    graph = query_graph(_ontology_engine(), ONTOLOGY_QUERY)
+    nodes = _nodes(graph)
+    assert nodes["rdfs:label"].kind == "ontology"
+    assert nodes["tfidf"].kind == "data"
+
+
+def test_the_page_draws_ontologies_apart_and_explains_them():
+    nl = _ontology_engine()
+    page = graph_page(query_graph(nl, ONTOLOGY_QUERY), "q")
+    assert 'class="node ontology' in page
+    assert 'class="node data' in page
+    assert "swatch ontology" in page
+    # With no ontology in the query, its kind is not in the legend.
+    plain = graph_page(query_graph(_engine(), "ans(s) :- tfidf(s, t, v)"), "q")
+    assert "swatch ontology" not in plain

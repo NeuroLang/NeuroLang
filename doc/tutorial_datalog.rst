@@ -1291,7 +1291,9 @@ rows, given the condition after ``//`` (dashed edges): with one uniform
 choice, such as ``selected_study``, the share of the studies where the body
 and the condition hold among those where the condition holds. After a run,
 the answer shows the distribution of its probabilities. Clicking a node
-shows its rules and what it depends on.
+shows its rules and what it depends on. The relations that come from an
+ontology, such as the triples of the Cognitive Atlas (``rdfs:label``), are
+teal hexagons, apart from the blue cylinders of the regular tables.
 
 Inspecting query plans
 ----------------------
