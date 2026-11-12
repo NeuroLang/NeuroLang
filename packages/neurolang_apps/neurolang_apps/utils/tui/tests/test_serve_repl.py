@@ -385,9 +385,9 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
             assert json.load(response)["html"] == "ans(x) :- r(x)"
         with pytest.raises(urllib.error.HTTPError) as error:
             _post(port, "submit", {"text": "boom"})
-        assert error.value.code == 500
-        assert json.load(error.value) == {"error": "ValueError: it broke"}
-        error.value.close()
+        with error.value:  # closed, not left to the collector to warn
+            assert error.value.code == 500
+            assert json.load(error.value) == {"error": "ValueError: it broke"}
         with _post(port, "download", {"block": 0, "kind": "csv"}) as response:
             assert response.read() == b"a,b\n"
             assert response.headers["Content-Type"] == "text/csv"
@@ -759,8 +759,8 @@ def _status(port, path, headers=None, method="GET", body=None):
                 response.read()
             return response.status
     except urllib.error.HTTPError as error:
-        error.close()
-        return error.code
+        with error:
+            return error.code
 
 
 @pytest.mark.parametrize("password", ["s3cret", "mot de passe é"])

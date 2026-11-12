@@ -40,33 +40,36 @@ class SessionEnded(RuntimeError):
 
 def _builder(conn, address, authkey, options: dict, build) -> None:
     """Build the engines asked for, once each, and fork a session's
-    process from them for each ``("fork", key, engine, env)`` of *conn*;
-    end when the server does."""
+    process from them for each ``("fork", key, start, engine, env)`` of
+    *conn* (*start* numbering the starts of the session *key*); end when the
+    server does."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     backend = LocalBackend(build=build, **options)
     engines = {}
     while True:
         try:
-            _, key, engine, env = conn.recv()
+            _, key, start, engine, env = conn.recv()
         except (EOFError, OSError):
             return
         try:
             if engine not in engines:
                 engines[engine] = backend._build(
-                    engine, lambda text: conn.send(("status", key, text))
+                    engine,
+                    lambda text: conn.send(("status", key, start, text)),
                 )
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
         except Exception as error:
             traceback.print_exc()
-            conn.send(("failed", key, f"{type(error).__name__}: {error}"))
+            conn.send(("failed", key, start,
+                       f"{type(error).__name__}: {error}"))
             continue
         pid = os.fork()
         if pid == 0:
             conn.close()
             code = 1
             try:
-                _session(address, authkey, key, env, options,
+                _session(address, authkey, key, start, env, options,
                          engines[engine])
                 code = 0
             except BaseException:
@@ -75,7 +78,7 @@ def _builder(conn, address, authkey, options: dict, build) -> None:
                 sys.stdout.flush()
                 sys.stderr.flush()
                 os._exit(code)
-        conn.send(("forked", key, pid))
+        conn.send(("forked", key, start, pid))
 
 
 def _warn_of_threads(engine: str) -> None:
@@ -92,7 +95,8 @@ def _warn_of_threads(engine: str) -> None:
               flush=True)
 
 
-def _session(address, authkey, key, env: dict, options: dict, nl) -> None:
+def _session(address, authkey, key, start: int, env: dict, options: dict,
+             nl) -> None:
     """Serve the session *key* on the engine *nl*, with the variables
     *env* (the key of its user's assistant), until the server ends it."""
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
@@ -105,7 +109,7 @@ def _session(address, authkey, key, env: dict, options: dict, nl) -> None:
         with sending:
             conn.send(message)
 
-    send(("hello", key, os.getpid()))
+    send(("hello", key, start, os.getpid()))
     events = backend.listen()
 
     def forward():
@@ -146,6 +150,9 @@ class Session:
         self.env = env
         self.used = time.monotonic()
         self.busy = 0  # the requests at work, which an idle end waits for
+        # The number of the latest start: a process, or a message of the
+        # builder, of an earlier one is not this session's.
+        self.starts = 0
         self.pid: Optional[int] = None
         self._conn = None
         self._sending = threading.Lock()
@@ -184,11 +191,12 @@ class Session:
         """Start the session anew, in a new process, on *engine*."""
         with self._starting:
             self.end()
+            self.starts += 1
             self._forked.clear()
             self._failure = None
             self.busy += 1
             try:
-                self.sessions._fork(self, engine)
+                self.sessions._fork(self, engine, self.starts)
                 self._forked.wait()
                 if self._failure:
                     raise RuntimeError(self._failure)
@@ -354,8 +362,9 @@ class Sessions:
         self._listener.close()
 
     def _end_idlest(self) -> None:
-        idlest = min(self._sessions.values(), key=lambda s: s.used)
-        if idlest.pid is not None and \
+        idle = [s for s in self._sessions.values() if not s.busy]
+        idlest = min(idle, key=lambda s: s.used) if idle else None
+        if idlest is None or idlest.pid is not None and \
                 time.monotonic() - idlest.used < 60:
             raise RuntimeError(
                 f"The server has {self.most} sessions at work: close a tab "
@@ -364,37 +373,44 @@ class Sessions:
         idlest.end()
         del self._sessions[idlest.key]
 
-    def _fork(self, session: Session, engine: str) -> None:
+    def _fork(self, session: Session, engine: str, start: int) -> None:
+        if self.dead:
+            raise RuntimeError(self.dead)
         with self._forking:
             self._builder_conn.send(
-                ("fork", session.key, engine, session.env)
+                ("fork", session.key, start, engine, session.env)
             )
 
-    def _owner(self, key) -> Optional[Session]:
+    def _owner(self, key, start: int) -> Optional[Session]:
+        """Return the session *key* if its latest start is *start*."""
         with self._lock:
-            return self._sessions.get(tuple(key))
+            session = self._sessions.get(tuple(key))
+        return session if session and session.starts == start else None
 
     def _accept(self) -> None:
         while not self._closed:
             try:
                 conn = self._listener.accept()
-                _, key, pid = conn.recv()
+                _, key, start, pid = conn.recv()
             except (OSError, EOFError):
                 continue
-            session = self._owner(key)
-            if session is None:
-                conn.close()
-                os.kill(pid, signal.SIGKILL)
+            session = self._owner(key, start)
+            if session is None or session._forked.is_set():
+                conn.close()  # of a start given up, or an ended session
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             else:
                 session._attach(conn, pid)
 
     def _read_builder(self) -> None:
         while True:
             try:
-                kind, key, value = self._builder_conn.recv()
+                kind, key, start, value = self._builder_conn.recv()
             except (EOFError, OSError):
-                return
-            session = self._owner(key)
+                break
+            session = self._owner(key, start)
             if session is None:
                 continue
             if kind == "status":
@@ -404,15 +420,28 @@ class Sessions:
             elif kind == "failed":
                 session._failed(value)
             elif kind == "forked":  # its process says hello at once
-                threading.Timer(self.HELLO_SECONDS, self._late, args=(
-                    session, value)).start()
+                timer = threading.Timer(self.HELLO_SECONDS, self._late,
+                                        args=(session, start, value))
+                timer.daemon = True
+                timer.start()
+
+        # The builder is gone: no session starts any more.
+        self.dead = "The builder of the engines ended: see the server's log"
+        with self._lock:
+            sessions = list(self._sessions.values())
+        for session in sessions:
+            if not session._forked.is_set():
+                session._failed(self.dead)
+
+    #: Why no session starts any more, if the builder ended.
+    dead: Optional[str] = None
 
     #: How long a session's process may take to connect, in seconds.
     HELLO_SECONDS = 60.0
 
     @staticmethod
-    def _late(session: Session, pid: int) -> None:
-        if not session._forked.is_set():
+    def _late(session: Session, start: int, pid: int) -> None:
+        if session.starts == start and not session._forked.is_set():
             session._failed(f"The process of the session ({pid}) did not "
                             "start: see the server's log")
 

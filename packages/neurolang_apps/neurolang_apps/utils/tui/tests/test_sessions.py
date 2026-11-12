@@ -2,6 +2,8 @@
 
 import os
 import signal
+import subprocess
+import threading
 import time
 
 import pytest
@@ -21,8 +23,10 @@ from neurolang_apps.utils.tui.sessions import (  # noqa: E402
 
 def build(name, say):
     """An engine of the registry's name with a test's relations (imported
-    by name in the builder, which is started anew)."""
+    by name in the builder, which is started anew); neurosynth takes 2 s."""
     say(f"Building {name}")
+    if name == "neurosynth":
+        time.sleep(2)
     nl = NeurolangPDL()
     nl.add_tuple_set([("alice", 3), ("bob", 5)], name="person")
     return nl
@@ -52,6 +56,22 @@ def _alive(pid):
     except ProcessLookupError:
         return False
     return True
+
+
+def _ends(pid, seconds=10.0):
+    """Return whether the process *pid* ends within *seconds*."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not _alive(pid):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _children(pid):
+    found = subprocess.run(["pgrep", "-P", str(pid)], capture_output=True,
+                           text=True).stdout.split()
+    return {int(child) for child in found}
 
 
 def _rows(reply):
@@ -87,8 +107,7 @@ def test_a_stop_ends_one_session_only(sessions):
         session.start("neurostore")
     pid = ann.pid
     assert ann.stop()
-    time.sleep(0.2)
-    assert not _alive(pid)
+    assert _ends(pid)
     with pytest.raises(SessionEnded):
         ann.submit("ans(x) :- person(x, a)")
     assert _rows(bob.submit("ans(x) :- person(x, a)"))
@@ -99,8 +118,12 @@ def test_a_stop_ends_one_session_only(sessions):
 def test_a_dead_process_ends_its_session(sessions):
     ann = sessions.session("ann", "1")
     ann.start("neurostore")
-    os.kill(ann.pid, signal.SIGKILL)
-    time.sleep(0.5)
+    pid = ann.pid
+    os.kill(pid, signal.SIGKILL)
+    assert _ends(pid)
+    deadline = time.monotonic() + 10
+    while ann._conn is not None and time.monotonic() < deadline:
+        time.sleep(0.05)
     with pytest.raises(SessionEnded):
         ann.submit("ans(x) :- person(x, a)")
 
@@ -121,8 +144,7 @@ def test_no_process_is_left_when_the_server_ends(tmp_path):
     ann.start("neurostore")
     pid, builder = ann.pid, sessions._builder
     sessions.close()
-    time.sleep(0.5)
-    assert not _alive(pid) and not builder.is_alive()
+    assert _ends(pid) and _ends(builder.pid)
 
 
 def test_an_idle_session_ends(tmp_path):
@@ -131,8 +153,7 @@ def test_an_idle_session_ends(tmp_path):
         ann = sessions.session("ann", "1")
         ann.start("neurostore")
         pid = ann.pid
-        time.sleep(1.5)
-        assert not _alive(pid)
+        assert _ends(pid)
         assert sessions.session("ann", "1") is not ann
     finally:
         sessions.close()
@@ -146,3 +167,52 @@ def test_the_sessions_are_at_most_so_many(tmp_path):
             sessions.session("bob", "1")
     finally:
         sessions.close()
+
+
+def test_a_start_given_up_leaves_no_process(sessions):
+    """A page reloaded while its engine builds starts again: the process of
+    the start it gave up is not the session's, and ends."""
+    ann = sessions.session("ann", "1")
+    first = []
+    thread = threading.Thread(target=lambda: first.append(
+        pytest.raises(RuntimeError, ann.start, "neurosynth")))
+    thread.start()
+    time.sleep(0.5)  # building
+    ann.stop()
+    thread.join(10)
+    assert first, "the start given up still waits"
+    ann.start("neurosynth")
+    assert _rows(ann.submit("ans(x) :- person(x, a)"))
+    builder = sessions._builder.pid
+    deadline = time.monotonic() + 10
+    while _children(builder) != {ann.pid} and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert _children(builder) == {ann.pid}
+
+
+def test_a_session_downloads_and_rates(sessions):
+    ann = sessions.session("ann", "1")
+    ann.start("neurostore")
+    ann.submit("ans(x) :- person(x, a)")
+    file = ann.download(block=0, kind="csv")
+    assert file.name.endswith(".csv") and b"alice" in file.data
+    assert "ok" in ann.rate(verdict="good")
+
+
+def test_a_busy_session_is_not_ended_for_another(tmp_path):
+    sessions = Sessions(tmp_path, build=build, most=1)
+    try:
+        ann = sessions.session("ann", "1")
+        ann.busy += 1  # at work
+        ann.used -= 3600
+        with pytest.raises(RuntimeError, match="1 sessions"):
+            sessions.session("bob", "1")
+    finally:
+        sessions.close()
+
+
+def test_without_the_builder_a_start_fails(sessions):
+    sessions._builder.kill()
+    sessions._builder.join(10)
+    with pytest.raises(RuntimeError, match="builder"):
+        sessions.session("ann", "1").start("neurostore")
