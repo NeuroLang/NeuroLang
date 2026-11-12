@@ -122,6 +122,23 @@ Unreleased
 
 **New features:**
 
+* The rest of the documentation starts from the REPL as well: the queries of
+  the Cognitive Atlas page run on the ``neurostore`` engine from their link,
+  with its counts in the 2026-11 release; Concepts writes facts and rules as
+  the REPL takes them; the pages start the REPL as ``neurolang-query -i``;
+  the README leads with the REPL in the browser.
+* The SQUALL tutorial runs in the REPL too: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the top 20 terms it
+  gives, its aggregation examples on facts typed in the session and with the
+  results they give, and its Python moves to :doc:`tutorial_python`, where
+  it is tested. SQUALL has no ``#`` comments: the examples that had them use
+  ``%`` lines.
+* The Datalog tutorial runs in the REPL: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the results and
+  confidence intervals it gives, and its Python moves to a new page,
+  *NeuroLang in Python* (:doc:`tutorial_python`), which also takes
+  *NeuroLang for Logic Programmers* (its address now leads there). The
+  page's examples are run by the tests.
 * The documentation starts from the REPL: a page on the REPL, in the browser
   and in a terminal (:doc:`repl`), a Quick Start and a Get Started whose
   examples are queries of the ``neurosynth`` engine, and, under each example
@@ -718,7 +735,7 @@ Unreleased
   ``neurostore`` engines have ``boot_studies``, 500 and 200 replicates of
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
-  :doc:`tutorial_datalog`, section 10.6.
+  :doc:`tutorial_datalog`, section 10.7.
 * An engine is built from the tables it kept, instead of finding them again.
   The studies activating the regions of its atlases took 48 s of the 58 s of
   the ``neurosynth`` engine's build, and nilearn, imported to find the MNI
