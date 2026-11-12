@@ -236,10 +236,15 @@ class TestEngineRegistry:
             )
 
     def test_datalog_init_in_config(self):
-        """Every engine with python_init should have inline datalog_init."""
+        """Every engine of this package with python_init should have
+        inline datalog_init; an engine of another package (tracts, of
+        the engine tracts) brings its rules with its python_init."""
         for name in engine_registry.list_engine_names():
             cfg = engine_registry.get_engine_config(name)
-            if "python_init" in cfg:
+            if any(
+                module.startswith("neurolang_apps.")
+                for module in cfg.get("python_init", [])
+            ):
                 code = cfg.get("datalog_init")
                 assert code, (
                     f"Engine {name!r} has python_init but no datalog_init"
@@ -623,6 +628,14 @@ class TestExecuteProgram:
     def test_multiple_queries_raises(self, nl):
         with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
+
+    def test_named_queries_give_a_result_each(self, nl):
+        result = _execute_program(
+            nl, "ans[x_of_r](x) :- R(x, y)\nans[z_of_s](z) :- S(z, w)"
+        )
+        assert list(result) == ["x_of_r", "z_of_s"]
+        assert result["x_of_r"].columns == ("x",)
+        assert result["z_of_s"].columns == ("z",)
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
@@ -1426,6 +1439,50 @@ def test_query_with_aggregation_in_head(aggregate, rows, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
+class TestImportFromFile:
+    """``.import`` in a program run with ``--file``."""
+
+    @staticmethod
+    def _engine(monkeypatch):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        monkeypatch.setattr(
+            engine_registry, "build_engine", lambda *args, **kwargs: nl
+        )
+        return nl
+
+    def test_modules_are_relative_to_the_file(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from neurolang_apps.utils.cli import main
+
+        self._engine(monkeypatch)
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "sides.dl").write_text(
+            'side("left")\nside("right")\n'
+        )
+        main_dl = tmp_path / "main.dl"
+        main_dl.write_text('.import("lib/sides.dl")\nans(x) :- side(x)\n')
+        main(["--format", "csv", "--file", str(main_dl)])
+        out = capsys.readouterr().out
+        assert "left" in out and "right" in out
+
+    def test_an_error_in_a_module_names_it(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        from neurolang_apps.utils.cli import main
+
+        self._engine(monkeypatch)
+        (tmp_path / "bad.dl").write_text("r(1)\nq(x) :- r(x\n")
+        main_dl = tmp_path / "main.dl"
+        main_dl.write_text('.import("bad.dl")\nans(x) :- q(x)\n')
+        with pytest.raises(SystemExit):
+            main(["--file", str(main_dl)])
+        err = capsys.readouterr().err
+        assert f"{tmp_path.resolve() / 'bad.dl'}, line 2" in err
+
+
 class TestErrorReporting:
     """Errors are reported as formatted messages with exit status 1."""
 
@@ -1902,3 +1959,48 @@ class TestSortHints:
             debug=False, file=stream, engine_name="neurosynth",
         )
         assert _REPORTS_NOTE in stream.getvalue()
+
+
+class TestListDocumentedPredicates:
+    """--list-predicates lists the predicates a program documents."""
+
+    PROGRAM = (
+        "%% uncinate(x: streamline, h)\n"
+        "%% The uncinate fasciculus.\n"
+        "%% Second line.\n"
+        "uncinate(x, h) :- tract(x, h)\n"
+        "ans(x) :- uncinate(x, 'left')\n"
+    )
+
+    def test_program_file(self, tmp_path, capsys, monkeypatch):
+        from neurolang_apps.utils import cli
+
+        monkeypatch.setattr(
+            cli, "_list_predicates",
+            lambda engine, program="": print(f"engine={engine}\n{program}"),
+        )
+        path = tmp_path / "q.dl"
+        path.write_text(self.PROGRAM)
+        cli.main(["--list-predicates", "-e", "neurosynth", "-f", str(path)])
+        assert capsys.readouterr().out.startswith(
+            "engine=neurosynth\n%% uncinate"
+        )
+
+    def test_documented_predicates_are_listed(self, capsys):
+        from neurolang_apps.utils.cli import _list_documented_predicates
+
+        _list_documented_predicates(self.PROGRAM)
+        assert capsys.readouterr().out == (
+            "\nPredicates documented in the program:\n"
+            "\n  uncinate(x: streamline, h)\n"
+            "    The uncinate fasciculus.\n"
+            "    Second line.\n"
+        )
+
+    def test_nothing_without_documentation(self, capsys):
+        from neurolang_apps.utils.cli import _list_documented_predicates
+
+        _list_documented_predicates("ans(x) :- p(x)")
+        _list_documented_predicates("ans(x) :- p(x")
+        _list_documented_predicates("")
+        assert capsys.readouterr().out == ""

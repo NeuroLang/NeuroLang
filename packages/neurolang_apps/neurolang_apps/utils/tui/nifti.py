@@ -16,6 +16,16 @@ of an atlas whose voxel indices a sort names with ``grid`` (the engine's
 gave it (:mod:`~.provenance`), else their names, tell which columns are
 the voxels (:func:`point_columns`) and :func:`value_column` which column
 holds their value; see :data:`SAVE_HELP`.
+
+``.view`` of a result of streamline ids draws the streamlines, with an
+engine that has them: one with the method ``streamline_points(ids)``,
+returning a list of (n_i, 3) float arrays, the points of each id in
+millimetres (RAS+), and optionally ``streamline_background()``, a
+nibabel image in their space (a subject's anatomy or labels) to draw
+them on, the MNI152 T1 otherwise. The column of the ids is the one of
+the sort :data:`STREAMLINE_SORT` in the query, else the one column of
+integers of unknown sort (:func:`streamline_column`), when the result
+has no voxel columns: ``ans(x, y, z)`` stays millimetres.
 """
 
 import gzip
@@ -25,7 +35,7 @@ import tempfile
 import warnings
 import webbrowser
 from pathlib import Path
-from typing import NamedTuple, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -696,36 +706,103 @@ def regions_to_nifti(
     per_label = _region_values(df, column, value)
     lookup = region_lookup(nl, _region_atlases(nl, sorts, points.grid))
     found = [label for label in per_label.index if label in lookup]
-    atlases = sorted({lookup[label][0] for label in found}) or [points.grid]
-    if len(atlases) == 1:
-        grid, target = atlases[0], None
-        template = engine_grid(nl, grid)
-    else:
-        grid = engine_registry.TEMPLATE_GRID
-        target = template = engine_template(nl)
+    grid, template, index = _region_index(nl, lookup, found, points.grid)
     values = per_label[found].to_numpy()
     dtype = _image_dtype(values)
     fill = request.fill if value is not None else 0
     if dtype != np.float32 and float(fill) != int(fill):
         dtype = np.float32
     data = np.full(template.shape[:3], fill, dtype=dtype)
-    painted = np.zeros(template.shape[:3], dtype=bool)
+    painted = index >= 0
+    data[painted] = values[index[painted]]
+    if data.dtype.kind == "f":
+        data[np.isnan(data)] = fill
+    return SavedImage(
+        nib.Nifti1Image(data, template.affine), value, int(painted.sum()),
+        len(per_label) - len(found), grid, len(found),
+    )
+
+
+def _region_index(nl, lookup: dict, found: list, grid: str) -> tuple:
+    """
+    Return the grid, its template and the position in *found* of the
+    region of each voxel, -1 outside them, of the regions *found* of the
+    atlases of *lookup* (:func:`region_lookup`): on the grid of their
+    atlas, else, of several, on the template's; on *grid* without any.
+    """
+    atlases = sorted({lookup[label][0] for label in found}) or [grid]
+    if len(atlases) == 1:
+        grid, target = atlases[0], None
+        template = engine_grid(nl, grid)
+    else:
+        grid = engine_registry.TEMPLATE_GRID
+        target = template = engine_template(nl)
+    index = np.full(template.shape[:3], -1, dtype=np.int64)
     for atlas in atlases:
         labels = _label_volume(nl, atlas, target)
         lut = np.full(max(int(labels.max()), 0) + 1, -1, dtype=np.int64)
         for n, label in enumerate(found):
             if lookup[label][0] == atlas:
                 lut[[v for v in lookup[label][1] if v < len(lut)]] = n
-        index = lut[np.clip(labels, 0, None)]
-        index[labels <= 0] = -1
-        inside = index >= 0
-        data[inside] = values[index[inside]]
-        painted |= inside
-    if data.dtype.kind == "f":
-        data[np.isnan(data)] = fill
-    return SavedImage(
-        nib.Nifti1Image(data, template.affine), value, int(painted.sum()),
-        len(per_label) - len(found), grid, len(found),
+        at = lut[np.clip(labels, 0, None)]
+        at[labels <= 0] = -1
+        index[at >= 0] = at[at >= 0]
+    return grid, template, index
+
+
+# The colours of the regions of an atlas without colours of its own: those
+# of matplotlib's tab20, in turn.
+REGION_PALETTE = (
+    "#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a",
+    "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94",
+    "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d",
+    "#17becf", "#9edae5",
+)
+
+
+class RegionLayer(NamedTuple):
+    """
+    The regions of a result on the regions of atlases, as the viewer
+    names them and colours them: in *image*, ``n + 1`` at the voxels of
+    the region *names[n]*, whose colour, ``#rrggbb``, is *colours[n]*.
+    The viewer starts with them in their colours if *coloured*.
+    """
+
+    image: nib.Nifti1Image
+    names: List[str]
+    colours: List[str]
+    #: whether the viewer starts with the regions in their colours: those
+    #: of a result without values, the regions alone
+    coloured: bool = False
+
+
+def regions_layer(
+    nl, df: pd.DataFrame, sorts: dict, request: SaveRequest,
+) -> RegionLayer:
+    """
+    Return the regions of the result *df* as the viewer names and colours
+    them (:class:`RegionLayer`): those of the labels of the *request*'s
+    points (see :func:`regions_to_nifti`), each of the colour its atlas
+    gives it (:func:`~neurolang_apps.utils.engine_registry.atlas_colours`),
+    else of :data:`REGION_PALETTE`.
+    """
+    points = request.points
+    column = _column(df, points.columns[0])
+    lookup = region_lookup(nl, _region_atlases(nl, sorts, points.grid))
+    found = [
+        label for label in dict.fromkeys(df[column].astype(str))
+        if label in lookup
+    ]
+    _, template, index = _region_index(nl, lookup, found, points.grid)
+    colours = []
+    for n, label in enumerate(found):
+        atlas, values = lookup[label]
+        colour = engine_registry.atlas_colours(nl, atlas).get(values[0])
+        colours.append(colour or REGION_PALETTE[n % len(REGION_PALETTE)])
+    dtype = np.int16 if len(found) < np.iinfo(np.int16).max else np.int32
+    return RegionLayer(
+        nib.Nifti1Image((index + 1).astype(dtype), template.affine),
+        found, colours,
     )
 
 
@@ -1098,9 +1175,12 @@ in a browser.
 Without a path, the last result is converted into an image as .save
 converts it, with its options --value, --voxel and --mm. A result with
 several value columns, numeric ones that are neither of the voxels nor
-of an entity, gives an overlay per column, unless --value picks one;
-the voxels without a value, not in the result or NaN, take the value of
---fill (default: 0, no value: hidden). A nonzero fill is a value of
+of an entity, gives an overlay per column, unless --value picks one.
+A program with several queries, ans[name](...) :- ..., gives the layers
+of all its results, each named after its query, which the viewer shows
+together: images, a network and streamlines, one network and one set of
+streamlines at most. The voxels without a value, not in the result or
+NaN, take the value of --fill (default: 0, no value: hidden). A nonzero fill is a value of
 every other voxel of the grid, which the percentiles count. The viewer
 is an HTML page, saved to a temporary file and opened in the browser when
 the REPL runs on a terminal; it needs no network, but a browser with
@@ -1133,7 +1213,21 @@ edge per pair, drawn in the 3D render and on the slices near them, and
 an overlay of the strength of each node, the sum of its edges. The
 edges shown are those of |value| at least --threshold, by default the
 top 5% (20 at least); a pair given both ways keeps its largest value,
-and the strongest edges are listed under the views."""
+and the strongest edges are listed under the views.
+
+A result of streamline ids, of an engine of tractograms, shows the
+streamlines, coloured by their direction, in the 3D render and on the
+slices near them, over the engine's background, and an overlay of the
+number of streamlines through each voxel; 20000 at most are drawn,
+evenly subsampled. A column holds streamline ids when, without voxel
+columns, it is of the sort streamline (engines.yaml), or, the engine
+having streamlines, it is the one column of integers of unknown sort:
+  ans(x) :- uncinate(x, "left")
+ans(x, y, z) stays millimetres. An engine has streamlines when it has
+the method streamline_points(ids), giving the points of each id, an
+(n, 3) array in millimetres (RAS+); its streamline_background(), if
+any, gives the image they are drawn on, in their space, else the MNI152
+T1 is."""
 
 
 HELP_TOPICS["view"] = VIEW_HELP
@@ -1278,7 +1372,7 @@ def _check_cmap(name: Optional[str]) -> None:
 
 
 def _viewer_page(
-    app, layers: list, request: ViewRequest, title: str, connectome=None
+    app, layers: list, request: ViewRequest, title: str, **extra
 ) -> str:
     """
     Return the viewer page, entitled *title*, of the images *layers*.
@@ -1287,8 +1381,10 @@ def _viewer_page(
     shown without its name. The page starts as *request* asks. The images
     are drawn over the MNI152 T1 template of nilearn, whatever the
     engine's template, a mask, is; nilearn's warnings are kept off the
-    prompt. A *connectome*, of :func:`~.brain_viewer.connectome_state`,
-    is drawn over them, in the 3D render.
+    prompt. The *extra* keyword arguments of
+    :func:`~.brain_viewer.viewer_html`, a ``connectome`` or
+    ``streamlines``, are drawn over them, in the 3D render; a
+    ``background`` replaces the MNI152 T1.
     """
     _check_cmap(request.cmap)
     images = [(name, read_nifti(path)) for name, path in layers]
@@ -1301,29 +1397,29 @@ def _viewer_page(
     ]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        extra = {} if connectome is None else {"connectome": connectome}
+        background = extra.pop("background", None)
         return brain_viewer.viewer_html(
             images if several else images[0][1],
-            brain_viewer.mni_background(), title=title,
+            background or brain_viewer.mni_background(), title=title,
             threshold=request.threshold, cmap=request.cmap,
             symmetric=symmetric if several else symmetric[0], **extra,
         )
 
 
 def _view_nifti(
-    app, layers: list, request: ViewRequest, title: str, connectome=None
+    app, layers: list, request: ViewRequest, title: str, **extra
 ) -> None:
     """
     Show the NIfTI images *layers* in the brain viewer, as *request* asks.
 
-    *layers* are (name, path) pairs, an overlay each, and *connectome* a
-    network drawn over them, if any. The viewer page, entitled *title*,
-    is saved as an HTML file whose path is printed, and opened in a
-    browser when the REPL runs on a terminal.
+    *layers* are (name, path) pairs, an overlay each, and *extra* what
+    is drawn over them, if any (see :func:`_viewer_page`). The viewer
+    page, entitled *title*, is saved as an HTML file whose path is
+    printed, and opened in a browser when the REPL runs on a terminal.
     """
     try:
         html = _html_file(
-            _viewer_page(app, layers, request, title, connectome)
+            _viewer_page(app, layers, request, title, **extra)
         )
     except Exception as exc:
         app.console.print(
@@ -1463,23 +1559,15 @@ def cmd_save(app, arg: str) -> None:
         _save_block(app, block, request._replace(path=path))
 
 
-def last_result_images(app, request: SaveRequest) -> Optional[list]:
+def last_result_images(app, block, request: SaveRequest) -> Optional[list]:
     """
-    Save the last result as NIfTI images in temporary files.
+    Save the result *block* as NIfTI images in temporary files.
 
-    The result, the last ``obtain`` block of a SQUALL program with
-    several, is converted as ``.save`` converts it, as *request* asks,
+    The block is converted as ``.save`` converts it, as *request* asks,
     into an image per value column (:func:`value_columns`). Return the
-    (column name, path) of each, or None, telling why, if there is no
-    result or it has no voxels.
+    (column name, path) of each, or None, telling why, if it has no
+    voxels.
     """
-    if not app.results:
-        app.console.print(
-            "[yellow]Nothing to view — run a query first, or give a NIfTI "
-            "file.[/yellow]"
-        )
-        return None
-    block = app.results[-1]
     try:
         saved = [
             result_image(app, block, request._replace(value=column))
@@ -1505,15 +1593,14 @@ def _view_image_file(app, image: SavedImage) -> Path:
     return Path(name)
 
 
-def _last_result_kind(app, request: SaveRequest) -> str:
+def _result_kind(app, block, request: SaveRequest) -> str:
     """
-    Return what the last result of *app* holds: ``network`` for pairs of
-    regions or points, ``regions`` for regions of an atlas, else
-    ``voxels``.
+    Return what the result *block* of *app* holds: ``network`` for pairs
+    of regions or points, ``regions`` for regions of an atlas, else
+    ``voxels``; without voxel columns, ``streamlines`` for streamline ids
+    (:func:`streamline_column`), of the sort :data:`STREAMLINE_SORT` or,
+    the engine having streamlines (:func:`has_streamlines`), integers.
     """
-    if not app.results:
-        return "voxels"
-    block = app.results[-1]
     sorts = _engine_sorts(app.settings.engine_name)
     if request.points is not None:
         return "voxels"
@@ -1522,20 +1609,22 @@ def _last_result_kind(app, request: SaveRequest) -> str:
     try:
         points = point_columns(block.frame, sorts, block.sorts)
     except SaveError:
-        return "voxels"
+        column = streamline_column(
+            block.frame, block.sorts, integers=has_streamlines(app._nl)
+        )
+        return "voxels" if column is None else "streamlines"
     return "regions" if points.space == LABEL_SPACE else "voxels"
 
 
-def last_result_network(app, request: ViewRequest):
+def last_result_network(app, block, request: ViewRequest):
     """
-    Return the last result of *app*, of pairs, as a network to view.
+    Return the result *block*, of pairs, as a network to view.
 
     Return the layer of the strength of its nodes, (name, path) of a
     temporary NIfTI file, and the network as the viewer draws it
     (:func:`~.brain_viewer.connectome_state`), or None, telling why, if
     it cannot be built.
     """
-    block = app.results[-1]
     sorts = _engine_sorts(app.settings.engine_name)
     try:
         network = result_network(
@@ -1556,12 +1645,13 @@ def last_result_network(app, request: ViewRequest):
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
-    shown = len(connectome["edges"])
+    shown = len(brain_viewer.shown_edges(connectome))
     value = repr(str(network.value)) if network.value else "1 (pairs)"
     message = (
         f"Network of {len(network.names)} nodes and {len(network.edges)} "
         f"edges, value: {value}; {shown} shown, those of values from "
-        f"{connectome['edgeMin']:g} (--threshold)"
+        f"{connectome['threshold']:g} (--threshold, or the edge threshold "
+        "of the viewer)"
     )
     if network.merged:
         message += (
@@ -1575,6 +1665,240 @@ def last_result_network(app, request: ViewRequest):
     return [("node strength", path)], connectome
 
 
+# The sort of the columns of streamline ids.
+STREAMLINE_SORT = "streamline"
+
+
+def has_streamlines(nl) -> bool:
+    """Return whether the engine *nl* has streamlines: its hook
+    ``streamline_points``."""
+    return callable(getattr(nl, "streamline_points", None))
+
+
+def streamline_column(
+    df: pd.DataFrame, provenance: Optional[tuple] = None,
+    integers: bool = True,
+):
+    """
+    Return the column of *df* holding streamline ids, or None.
+
+    It is the column of the sort :data:`STREAMLINE_SORT` in the
+    *provenance* of *df*, else, with *integers*, its one column of
+    integers of unknown sort, as ``ans(x) :- uncinate(x, "left")`` gives
+    when the query's predicates declare no arguments.
+    """
+    if provenance is None or len(provenance) != len(df.columns):
+        provenance = (None,) * len(df.columns)
+    for column, sort in zip(df.columns, provenance):
+        if sort is not None and sort.sort == STREAMLINE_SORT:
+            return column
+    found = [
+        column for column, sort in zip(df.columns, provenance)
+        if sort is None and pd.api.types.is_integer_dtype(df[column])
+    ]
+    return found[0] if integers and len(found) == 1 else None
+
+
+def _visits(lines, shape, affine: np.ndarray) -> np.ndarray:
+    """Return the number of the streamlines *lines* through each voxel of
+    the grid (*shape*, *affine*)."""
+    counts = np.zeros(shape[:3], dtype=np.int32)
+    inverse = np.linalg.inv(affine)
+    for line in lines:
+        voxels = np.rint(nib.affines.apply_affine(inverse, line)).astype(int)
+        inside = np.all((voxels >= 0) & (voxels < shape[:3]), axis=1)
+        counts[tuple(np.unique(voxels[inside], axis=0).T)] += 1
+    return counts
+
+
+def streamline_background(nl):
+    """Return the background of the streamlines of the engine *nl* and
+    the name of its millimetres: its ``streamline_background()``, in
+    ``RAS``, else, without one or if it gives None (streamlines in MNI
+    space), the MNI152 T1, in ``MNI``."""
+    hook = getattr(nl, "streamline_background", None)
+    background = hook() if callable(hook) else None
+    if background is not None:
+        return background, "RAS"
+    background = brain_viewer.mni_background()
+    if background is None:
+        raise SaveError("No background to draw the streamlines on.")
+    return background, "MNI"
+
+
+def last_result_streamlines(app, block):
+    """
+    Return the result *block*, of streamline ids, as streamlines.
+
+    The engine's ``streamline_points`` gives the points of
+    :data:`~.brain_viewer.MAX_STREAMLINES` of them at most, evenly
+    subsampled (:func:`~.brain_viewer.shown_streamlines`). Return the
+    layer of the number of the streamlines drawn through each voxel of
+    the background, (name, path) of a temporary NIfTI file, and the
+    keyword arguments of the viewer: the streamlines
+    (:func:`~.brain_viewer.streamlines_state`) and the background
+    (:func:`streamline_background`); or None, telling why, if they cannot
+    be built.
+    """
+    column = streamline_column(block.frame, block.sorts)
+    try:
+        if not has_streamlines(app._nl):
+            raise SaveError(
+                f"The column {str(column)!r} holds streamline ids, but the "
+                "engine has no streamlines: it gives their points with "
+                "streamline_points(ids) (.help view)."
+            )
+        ids = sorted(int(s) for s in pd.unique(block.frame[column]))
+        if not ids:
+            raise SaveError("The result has no streamlines.")
+        shown = brain_viewer.shown_streamlines(ids)
+        lines = [
+            np.asarray(points, dtype=np.float32).reshape(-1, 3)
+            for points in app._nl.streamline_points(shown)
+        ]
+        background, space = streamline_background(app._nl)
+        counts = _visits(lines, background.shape, background.affine)
+        state = brain_viewer.streamlines_state(lines, len(ids))
+    except Exception as exc:
+        app.console.print(f"View failed: {exc}", style="red", markup=False)
+        return None
+    subsampled = (
+        f", evenly subsampled to {brain_viewer.MAX_STREAMLINES} at most"
+        if len(lines) < len(ids) else ""
+    )
+    app.console.print(
+        f"Streamlines of the column {str(column)!r}: {len(lines)} of "
+        f"{len(ids)} shown{subsampled}", style="green", markup=False,
+    )
+    if not callable(getattr(app._nl, "streamline_background", None)):
+        app.console.print(
+            "The engine has no streamline_background(): they are drawn on "
+            "the MNI152 T1, where only streamlines in MNI space fall right.",
+            style="yellow", markup=False,
+        )
+    path = _view_image_file(app, SavedImage(
+        nib.Nifti1Image(counts, background.affine), "streamlines",
+        int((counts > 0).sum()), 0, "background",
+    ))
+    return (
+        [("streamlines", path)],
+        {"streamlines": state, "background": background, "space": space},
+    )
+
+
+def _one_of_a_kind(extra: dict, found: dict, console, title: str) -> bool:
+    """
+    Add what a block draws, *found*, to *extra*, the viewer's keyword
+    arguments, and return whether it was added: the viewer draws one
+    network and one set of streamlines, so those of a later block are
+    left out, telling it on *console*.
+    """
+    for key in ("connectome", "streamlines"):
+        if key in found and key in extra:
+            console.print(
+                f"Only one {'network' if key == 'connectome' else key} is "
+                f"drawn: that of {title or 'the result'} is left out.",
+                style="yellow", markup=False,
+            )
+            return False
+    # The regions named on the views are those of the first block of
+    # regions.
+    for key, value in found.items():
+        extra.setdefault(key, value)
+    return True
+
+
+def _block_layers(app, block, request: ViewRequest):
+    """
+    Return the layers of the result *block* for the viewer, as
+    (kind, layers, extra), or None, telling why, if it cannot be shown.
+
+    *kind* is what the block holds (:func:`_result_kind`), *layers* are
+    (name, path) pairs of temporary NIfTI files and *extra* the keyword
+    arguments of the viewer that the block draws, if any.
+    """
+    kind = _result_kind(app, block, request.save)
+    if kind == "network":
+        built = last_result_network(app, block, request)
+        if built is not None:
+            built = (built[0], {"connectome": built[1]})
+    elif kind == "streamlines":
+        built = last_result_streamlines(app, block)
+    else:
+        layers = last_result_images(app, block, request.save)
+        built = None if layers is None else (layers, {})
+        if built is not None and kind == "regions":
+            regions = result_regions(app, block, request.save)
+            if regions is not None:
+                masks = all(name == "mask" for name, _ in layers)
+                built = (layers, {"regions": regions._replace(
+                    coloured=masks
+                )})
+    return None if built is None else (kind, *built)
+
+
+def result_regions(app, block, request: SaveRequest):
+    """
+    Return the regions of the result *block* of *app*, on the regions of
+    atlases, as the viewer names and colours them (:func:`regions_layer`),
+    or None if they cannot be found.
+    """
+    sorts = _engine_sorts(app.settings.engine_name)
+    try:
+        points = request.points or point_columns(
+            block.frame, sorts, block.sorts
+        )
+        return regions_layer(
+            app._nl, block.frame, sorts, request._replace(points=points)
+        )
+    except Exception:  # the result is shown without its regions' names
+        return None
+
+
+def last_results_layers(app, request: ViewRequest):
+    """
+    Return the layers of all the results of *app*, as (layers, extra,
+    request), or None, telling why, if they cannot be shown.
+
+    Each block of the last result, a query's or an ``obtain``'s or the
+    ``ans[name]`` of a program with several, gives its images, network
+    or streamlines; the viewer shows them together, the layers of a
+    result of several named after its block. The *request*'s threshold
+    (the top 5% by default) is 0 for results neither of voxels nor of
+    regions with a value (regions alone, networks, streamlines), unless
+    it is given: the one the viewer starts all the layers with.
+    """
+    if not app.results:
+        app.console.print(
+            "[yellow]Nothing to view — run a query first, or give a NIfTI "
+            "file.[/yellow]"
+        )
+        return None
+    several = len(app.results) > 1
+    layers, extra, kinds = [], {}, set()
+    for block in app.results:
+        built = _block_layers(app, block, request)
+        if built is None:
+            return None
+        kind, block_layers, found = built
+        if not _one_of_a_kind(extra, found, app.console, block.title):
+            continue
+        kinds.add(kind)
+        # regions with a value, not a mask: their top 5% as voxels'
+        if kind == "regions" and any(
+            name != "mask" for name, _ in block_layers
+        ):
+            kinds.add("values")
+        layers += [
+            (f"{block.title}: {name}" if several and block.title else name,
+             path)
+            for name, path in block_layers
+        ]
+    if not kinds & {"voxels", "values"} and not request.threshold_given:
+        request = request._replace(threshold=0.0)
+    return layers, extra, request
+
+
 @command(
     ".view", "Show a NIfTI image, or the last result, in an interactive "
     "viewer in the browser (.help view)", VIEW_USAGE,
@@ -1585,27 +1909,20 @@ def cmd_view(app, arg: str) -> None:
 
     Without a path, the last result is converted as ``.save`` would, its
     options included, into temporary ``.nii.gz`` files, an overlay per
-    value column.
+    value column; those of all the results of a program with several
+    queries are shown together.
     """
     try:
         request = parse_view_args(arg)
     except SaveError as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return
-    connectome = None
+    extra = {}
     if request.path is None:
-        kind = _last_result_kind(app, request.save)
-        if kind == "network":
-            network = last_result_network(app, request)
-            if network is None:
-                return
-            layers, connectome = network
-        else:
-            layers = last_result_images(app, request.save)
-        if layers is None:
+        shown = last_results_layers(app, request)
+        if shown is None:
             return
-        if kind != "voxels" and not request.threshold_given:
-            request = request._replace(threshold=0.0)
+        layers, extra, request = shown
     elif not request.path.is_file():
         app.console.print(
             f"File not found: {request.path}", style="red", markup=False
@@ -1615,7 +1932,7 @@ def cmd_view(app, arg: str) -> None:
         layers = [(request.path.name, request.path)]
     _view_nifti(
         app, layers, request, _view_title(app, request, layers[0][1]),
-        connectome,
+        **extra,
     )
 
 
@@ -1623,5 +1940,7 @@ def _view_title(app, request: ViewRequest, path: Path) -> str:
     """Return the title of the viewer: the image's name, or the result's."""
     if request.path is not None:
         return path.name
-    block = app.results[-1].title
-    return f"Last result: {block}" if block else "Last result"
+    titles = [block.title for block in app.results if block.title]
+    if len(titles) > 1:
+        return f"Last results: {', '.join(titles)}"
+    return f"Last result: {titles[0]}" if titles else "Last result"

@@ -3,14 +3,34 @@ name: Deploy Documentation
 on:
   push:
     branches: [master]
+  # Every pull request, whatever its base: a pull request stacked on the
+  # branch of another one is checked too.
   pull_request:
-    branches: [master]
+
+# A push to a pull request cancels its runs still going; each run of master
+# is a group of its own, never cancelled nor kept waiting.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+# A pull request's site, its documentation, is the artifact repl-pr-NUMBER;
+# that of master is the artifact documentation-html, deployed to GitHub
+# Pages. The REPL in the browser is built for master only: its bundle (the
+# engine's data and the embeddings of the studies) takes an hour on the
+# runner's CPU when its embeddings are not kept, and a pull request's site
+# has no REPL that can start (`neurolang-repl-serve` builds one locally).
+env:
+  ARTIFACT: ${{ github.event_name == 'pull_request' && format('repl-pr-{0}', github.event.pull_request.number) || 'documentation-html' }}
+  BUILD_REPL: ${{ github.event_name == 'push' }}
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      complete: ${{ steps.check.outputs.complete }}
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
 
     steps:
       - name: Checkout repository
@@ -39,35 +59,103 @@ jobs:
       # SPECTER2 for numpy and to embed the studies: the CPU build, much
       # smaller than the default one. Without it the REPL goes without them.
       - name: Install torch, for the REPL's text embeddings
+        if: env.BUILD_REPL == 'true'
         continue-on-error: true
         run: |
           uv pip install --index-url https://download.pytorch.org/whl/cpu torch
           uv pip install adapters
 
-      # The studies' embeddings take their abstracts from PubMed and a long
-      # while on a CPU: they are kept from one build to the next.
+      # The studies' embeddings take their abstracts from PubMed and an hour
+      # on a CPU for Neurosynth's: they are
+      # kept from one build to the next. The newest saved ones are restored;
+      # each index checks that they are its own (EmbeddingIndex.cache_key)
+      # and embeds again those that are not. They are saved below under the
+      # hash of their files, whenever the build changed them.
       - name: Restore the REPL's text embeddings
-        uses: actions/cache@v4
+        id: embeddings
+        if: env.BUILD_REPL == 'true'
+        uses: actions/cache/restore@v4
         with:
           path: ~/repl-embeddings
-          key: repl-embeddings-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/specter2_numpy.py') }}
+          key: repl-embeddings-
           restore-keys: repl-embeddings-
+
+      - name: Hash the restored text embeddings
+        id: embeddings-before
+        if: env.BUILD_REPL == 'true'
+        run: echo "hash=$(.github/hash_tree.sh ~/repl-embeddings)" >> "$GITHUB_OUTPUT"
+
+      # What the engine downloads to be built (the Neurosynth tables, the
+      # atlases), kept from one build to the next: a data host that is down
+      # (a 504 of GitHub's raw files) does not stop the build. Saved below
+      # only when the bundle was built, so that it is never what a failed
+      # build had downloaded.
+      - name: Restore the engine's downloads
+        id: downloads
+        if: env.BUILD_REPL == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/repl-downloads
+          key: repl-downloads-${{ hashFiles('packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml', 'packages/neurolang_apps/neurolang_apps/utils/engines/neurosynth/init.py', 'packages/neurolang/neurolang/frontend/neurosynth_utils.py') }}
+          restore-keys: repl-downloads-
 
       # The in-browser REPL (doc/_static/repl) downloads NeuroLang's wheels and
       # the data of the neurosynth engine from beside its page. The step builds
       # the engine, which keeps in its data directory the tables the page
       # would take a minute and a half to find (neurolang_apps.utils.
       # engine_cache), so that they are in the data zip, and stops if it kept
-      # none. If this step fails, the documentation is still deployed, with
-      # the REPL's page telling that it could not start.
+      # none. If this step fails, the documentation is still uploaded and
+      # deployed, with the REPL's page telling that it could not start, and
+      # the job repl fails, telling it.
       - name: Build the in-browser REPL's bundle
+        id: bundle
+        if: env.BUILD_REPL == 'true'
         continue-on-error: true
-        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings
+        # leaves the time to save what it embedded before the job's limit
+        timeout-minutes: 300
+        # Neurosynth, and Neurosynth with tracts, which takes the embeddings of
+        # Neurosynth's studies (the same ones), but not NeuroStore, whose
+        # studies take four hours to embed on the runner's CPU
+        # (make_repl_bundle.py builds all of them by default).
+        run: uv run --no-sync python doc/make_repl_bundle.py doc/_build/html/_static/repl ~/repl-embeddings --downloads ~/repl-downloads --engine neurosynth --engine neurosynth_iit
 
-      - name: Upload documentation artifact
+      - name: Check the in-browser REPL's bundle
+        id: check
+        if: env.BUILD_REPL == 'true'
+        run: |
+          if test -f doc/_build/html/_static/repl/bundle.json; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start (see the step Build the in-browser REPL's bundle)."
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Even when the bundle failed or timed out: the embeddings of an
+      # engine are kept as soon as they are made, and are its own.
+      - name: Hash the text embeddings
+        id: embeddings-after
+        if: always() && env.BUILD_REPL == 'true'
+        run: echo "hash=$(.github/hash_tree.sh ~/repl-embeddings)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the REPL's text embeddings
+        if: always() && env.BUILD_REPL == 'true' && steps.embeddings-after.outputs.hash != steps.embeddings-before.outputs.hash
+        uses: actions/cache/save@v4
+        with:
+          path: ~/repl-embeddings
+          key: repl-embeddings-${{ steps.embeddings-after.outputs.hash }}
+
+      - name: Save the engine's downloads
+        if: env.BUILD_REPL == 'true' && steps.check.outputs.complete == 'true' && steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/repl-downloads
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+
+      - name: Upload the site
+        id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: documentation-html
+          name: ${{ env.ARTIFACT }}
           path: doc/_build/html
           retention-days: 30
 
@@ -80,3 +168,17 @@ jobs:
           publish_branch: master
           publish_dir: ./doc/_build/html
           force_orphan: true
+
+  # Tells whether master's REPL bundle was built, failing if not (the
+  # documentation is deployed all the same).
+  repl:
+    name: REPL bundle
+    if: github.event_name == 'push'
+    needs: build-docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if the REPL's bundle was not built
+        if: needs.build-docs.outputs.complete != 'true'
+        run: |
+          echo "::error title=REPL bundle::The in-browser REPL's bundle was not built: its page cannot start. See the step Build the in-browser REPL's bundle of the job build-docs."
+          exit 1

@@ -135,6 +135,29 @@ from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
 
+CI builds the REPL in the browser for ``master`` only, deployed with the
+documentation: its bundle takes an hour on a runner's CPU when the
+embeddings of the studies are not kept.  A pull request's CI uploads its
+documentation, the artifact ``repl-pr-NUMBER`` (kept 30 days), without a
+REPL that can start; to try the REPL of a branch, build it locally with
+``neurolang-repl-serve``, as above.
+
+The same page can run NeuroLang in the Python of this machine rather than
+in the browser::
+
+   uv run --extra apps neurolang-repl-serve --local --data-dir neurolang_data
+
+builds no bundle: the page's worker (``local_worker.js``) sends what it is
+asked to the server, which builds the engine from ``--data-dir`` (by default
+``neurolang_data``, as ``neurolang-query``), with all of its analyses
+(``lift``, ``ratios``...) unless ``--light``, and runs the page's REPL
+(``neurolang_apps.utils.tui.local_backend``).  Queries take the time and the
+memory they take in ``neurolang-query``; *Stop* interrupts the query on the
+server, and the AI assistant is the one configured on this machine, unless a
+key is given in the page.  The server answers this machine only, unless
+``--host``: whoever it answers runs queries, and saves files, with its
+Python.
+
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in
 :file:`~/.cache/neurolang/repl-embeddings` (``--embeddings``) and made
@@ -155,6 +178,12 @@ Submitting a Pull Request
 5. Add a changelog entry under *Unreleased* in ``doc/changelog.rst``.
 6. Update docstrings for any changed public API.
 7. Push your branch and open a pull request against ``master``.
+
+CI runs on every pull request, also one whose base is the branch of another
+pull request (a stacked pull request): the tests are those of the packages
+it changes with respect to its base.  Its documentation is the artifact
+``repl-pr-NUMBER``; the REPL in the browser of a branch is built locally
+(see `Running the REPL in the Browser Locally`_).
 
 **PR checklist:**
 

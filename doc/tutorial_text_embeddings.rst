@@ -70,11 +70,13 @@ Here with the ``neurolang-query`` command line
             & (sim > 0.78)"
 
 The query text can also be a variable of a rule, as long as the rule is
-queried, or called, with a constant for it: magic sets pass the constant
-to the rule.  In the ``neurolang-query`` interactive mode::
+queried, or called, with a constant for it, or with a variable bound by a
+rule left of it: magic sets pass the constant, or the values of that
+rule, to the rule.  In the ``neurolang-query`` interactive mode::
 
     close(w, s) :- study(s) & (sim == query_similarity(w, s)) & (sim > .78)
     ans(s) :- close('visual word form reading', s)
+    ans(t, s) :- cogat_definition(t, d), close(d, s)
 
 Querying ``close(w, s)`` without a constant for ``w`` fails with an
 :class:`~neurolang.exceptions.UnboundVariablesError`: the similarity

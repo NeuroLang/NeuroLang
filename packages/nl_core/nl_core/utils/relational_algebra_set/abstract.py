@@ -1,8 +1,19 @@
 from abc import abstractmethod, abstractproperty
-from collections.abc import MutableSet, Set
+from collections.abc import Iterable, MutableSet, Set
 
 class RelationalAlgebraColumn:
     pass
+
+
+def count_distinct(*columns: Iterable) -> int:
+    """
+    Return the number of distinct tuples of the values of *columns*, the
+    aggregation ``count``: ``P(x, count(y)) :- Q(x, y, z)`` counts the
+    ``y`` of each ``x``, not the pairs ``(y, z)``.
+    """
+    if len(columns) == 1:
+        return len(set(columns[0]))
+    return len(set(zip(*columns)))
 
 
 class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):

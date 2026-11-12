@@ -40,7 +40,7 @@ from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import _declared_columns
 from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
 
-from . import nifti
+from . import nifti, query_graph
 from .app import InteractiveTuiApp, TuiSettings
 from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
@@ -128,8 +128,10 @@ class Reply:
     to put in its input, and *mode* the language of the REPL, ``datalog``
     or ``squall``, which the assistant may have switched, *predicates*
     those of the engine and the session (see :meth:`WebRepl.predicates`),
-    and *ratable* whether it was a query or an answer of the assistant,
-    which :meth:`WebRepl.rate_answer` can share.
+    *ratable* whether it was a query or an answer of the assistant,
+    which :meth:`WebRepl.rate_answer` can share, and *graph* the HTML page
+    of the graph of the query it ran, or that ``.graph`` showed (see
+    :mod:`~neurolang_apps.utils.tui.query_graph`).
     """
 
     html: str
@@ -140,6 +142,7 @@ class Reply:
     mode: str = "datalog"
     predicates: List[dict] = field(default_factory=list)
     ratable: bool = False
+    graph: str = ""
 
 
 class Download(NamedTuple):
@@ -283,6 +286,25 @@ def _study_links(frame: pd.DataFrame, sorts: list, studies) -> dict:
     }
 
 
+def _arguments(info, described: dict) -> list:
+    """
+    Return the arguments of the predicate *info*, those of its ``%%``
+    documentation or else those the engine declares (*described*): the
+    ``columns``, ``sort`` and ``type`` of each.
+    """
+    if info.arguments:
+        return [
+            {"columns": list(argument.columns), "sort": argument.sort,
+             "type": argument.type}
+            for argument in info.arguments
+        ]
+    return [
+        {"columns": list(argument["columns"]),
+         "sort": argument["sort"], "type": argument["type"]}
+        for argument in described.get(info.name, {}).get("arguments", [])
+    ]
+
+
 class WebRepl:
     """A REPL on the engine *nl*, which a web page submits input to."""
 
@@ -331,6 +353,9 @@ class WebRepl:
         )
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
+        # and the graph of a query in a tab of its own.
+        self._graph = ""
+        self.app.show_graph = self._show_graph
         try:
             # Until the visitor gives a key, the assistant asks for it.
             self.set_llm("anthropic", "")
@@ -444,7 +469,9 @@ class WebRepl:
         self.app.failed = False
         self._tables = []
         self._frames = []
+        self._graph = ""
         answered = self.app.assistant.last_run
+        query = self.app.last_query
         with _viewers_returned() as viewers:
             try:
                 self.app._run_line(text)
@@ -454,14 +481,24 @@ class WebRepl:
                     "start a new one.[/dim]"
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
+        ran = self.app.last_query  # a new tuple for each query run
+        if not self._graph and ran is not None and ran is not query:
+            try:
+                self._graph = query_graph.last_query_page(self.app)
+            except Exception:  # a query that does not parse has no graph
+                pass
         self._rated = self._what_is_rated(
             text, self.app.assistant.last_run is not answered
         )
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(), self._rated is not None,
+            self.predicates(), self._rated is not None, self._graph,
         )
+
+    def _show_graph(self, page: str) -> None:
+        """Keep the *page* of the graph of a query for the reply."""
+        self._graph = page
 
     def _what_is_rated(self, text: str, answered: bool):
         """
@@ -513,15 +550,37 @@ class WebRepl:
         """Return the example queries of the engine, by language."""
         return engine_examples(self.app.settings.engine_name)
 
+    def assistant_ready(self) -> bool:
+        """
+        Return whether the AI assistant can answer: its provider has its
+        key, the page's or that of the environment, or needs none.
+        """
+        state = self.app.assistant
+        try:
+            state.config().provider(state.provider).api_key()
+        except Exception:
+            return False
+        return True
+
+    def questions(self) -> List[str]:
+        """Return the example questions in English of the engine, for the
+        query assistant."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        return list(config.get("questions") or [])
+
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the
         page to list, but for the IRIs of an ontology's own classes and
         properties that the engine does not declare: ``name``,
         ``kind`` (stored, derived, session...),
-        ``signature`` as ``.predicates`` shows it, and the engine's
+        ``signature`` as ``.predicates`` shows it, and its
         ``description``, if any, with its ``arguments``: the ``columns``,
-        ``sort`` and ``type`` of each.
+        ``sort`` and ``type`` of each. Those of the ``%%`` documentation
+        of the predicate in the program win over the engine's.
         """
         engine = self.app.settings.engine_name
         signatures = engine_registry.get_signatures(engine) if engine else {}
@@ -537,14 +596,10 @@ class WebRepl:
         return [
             {"name": info.name, "kind": info.kind,
              "signature": info.signature(),
-             "description": described.get(info.name, {}).get("description", ""),
-             "arguments": [
-                 {"columns": list(argument["columns"]),
-                  "sort": argument["sort"], "type": argument["type"]}
-                 for argument in described.get(info.name, {}).get(
-                     "arguments", []
-                 )
-             ]}
+             "description": info.description or described.get(
+                 info.name, {}
+             ).get("description", ""),
+             "arguments": _arguments(info, described)}
             for info in infos
         ]
 

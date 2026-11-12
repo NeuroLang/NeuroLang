@@ -1,6 +1,7 @@
 """Tests for the script that builds the bundle of the REPL in the browser."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -181,3 +182,318 @@ def test_the_files_of_the_embeddings_have_plain_names(bundle):
         Path("neurosynth/embeddings/models/a--base+a--query.npz")
     )
     assert name == "neurosynth-a--base_a--query.npz"
+
+
+def test_the_downloads_are_kept_even_when_the_build_fails(
+    bundle, monkeypatch, tmp_path
+):
+    """A data host that is down (a 504) does not stop the next build, which
+    finds what this one downloaded; the engine's kept tables and its
+    embeddings are made by each build, not kept with the downloads. Each
+    engine's downloads are kept apart from the others'."""
+    downloads = tmp_path / "downloads"
+    (downloads / "neurosynth" / "fsl").mkdir(parents=True)
+    (downloads / "neurosynth" / "fsl" / "atlas.nii.gz").write_bytes(b"atlas")
+    (downloads / "neurostore").mkdir()
+    (downloads / "neurostore" / "release.parquet").write_bytes(b"other")
+    found = []
+
+    def build(data_dir, use_cache=True, engine="neurosynth"):
+        found.append(sorted(
+            str(p.relative_to(data_dir)) for p in data_dir.rglob("*")
+            if p.is_file()
+        ))
+        (data_dir / "peaks.tsv.gz").write_bytes(b"peaks")
+        for kept in ("engine_cache", "embeddings"):
+            (data_dir / "neurosynth" / kept).mkdir(parents=True)
+            (data_dir / "neurosynth" / kept / "table.npz").write_bytes(b"t")
+        raise requests.HTTPError("504 Gateway Time-out")
+
+    monkeypatch.setattr(bundle, "build_wheels", lambda output: [])
+    monkeypatch.setattr(bundle, "build_engine", build)
+    with pytest.raises(requests.HTTPError):
+        bundle.main(tmp_path / "out", downloads=downloads)
+    # neurosynth is left out, and the default, neurosynth_iit, stops the
+    # build: each found the downloads kept for it
+    assert found == [["fsl/atlas.nii.gz"], []]
+    kept = downloads / "neurosynth"
+    assert sorted(
+        str(p.relative_to(kept)) for p in kept.rglob("*") if p.is_file()
+    ) == ["fsl/atlas.nii.gz", "peaks.tsv.gz"]
+
+
+def test_the_downloads_directory_is_an_option(bundle, tmp_path):
+    args = bundle.parse_args([str(tmp_path), "emb", "--downloads", "dl"])
+    assert (args.output, args.embedded, args.downloads) == (
+        tmp_path, "emb", Path("dl")
+    )
+    assert bundle.parse_args([str(tmp_path)]).downloads is None
+
+
+def _fake_bundle(bundle, monkeypatch, failing=()):
+    """Stub the slow steps of the script: the wheels and the engines."""
+    monkeypatch.setattr(bundle, "build_wheels", lambda out: ["w.whl"])
+    monkeypatch.setattr(bundle, "write_highlight_words", lambda out: None)
+
+    def bundle_engine(engine, output, embedded=None, downloads=None,
+                      shared=False):
+        if engine in failing:
+            raise RuntimeError("no network")
+        return {
+            "label": bundle.LABELS[engine], "data": bundle.data_zip(engine),
+            "files": {} if shared else {
+                f"{engine}/model.npz": [f"{engine}-model.npz"]},
+            "cache_keys": {},
+        }
+
+    monkeypatch.setattr(bundle, "bundle_engine", bundle_engine)
+
+
+def test_the_bundle_names_the_data_and_files_of_each_engine(
+    bundle, monkeypatch, tmp_path
+):
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path)
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    # the page starts with Neurosynth and the tracts, built after
+    # Neurosynth, whose text embeddings it shares
+    assert described["default"] == "neurosynth_iit"
+    assert list(described["engines"]) == [
+        "neurosynth", "neurosynth_iit", "neurostore"]
+    assert described["engines"]["neurosynth_iit"]["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
+    assert described["engines"]["neurostore"] == {
+        "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
+        "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
+    }
+    # What a page of before the choice of the engine reads: the default's.
+    assert described["data"] == "neurolang-neurosynth_iit-data.zip"
+    assert described["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
+
+
+def test_an_engine_of_shared_embeddings_is_built_alone(
+    bundle, monkeypatch, tmp_path
+):
+    """Without the engine whose studies it has in the bundle, the engine has
+    its own embeddings files (taken from those kept for the other)."""
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path, engines=("neurosynth_iit",))
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert described["default"] == "neurosynth_iit"
+    assert described["engines"]["neurosynth_iit"]["files"] == {
+        "neurosynth_iit/model.npz": ["neurosynth_iit-model.npz"]}
+
+
+def test_the_embeddings_of_an_engine_are_kept_as_those_of_another(
+    bundle, tmp_path, monkeypatch
+):
+    """``kept_as`` reads and saves the embeddings under the other engine's
+    directory of the kept data."""
+    seen = []
+    monkeypatch.setattr(bundle.shutil, "copytree",
+                        lambda src, dst, **kw: seen.append(Path(src)))
+    kept = tmp_path / "kept" / "neurosynth" / "embeddings"
+    kept.mkdir(parents=True)
+    (tmp_path / "data").mkdir()
+    bundle.export_embeddings(
+        tmp_path / "data", tmp_path, tmp_path / "kept", "neurosynth_iit",
+        "neurosynth")
+    assert kept in seen
+
+
+def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
+    bundle, monkeypatch, tmp_path, capsys
+):
+    _fake_bundle(bundle, monkeypatch, failing={"neurostore"})
+    bundle.main(tmp_path)
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert list(described["engines"]) == ["neurosynth", "neurosynth_iit"]
+    assert "neurostore is left out" in capsys.readouterr().out
+    _fake_bundle(bundle, monkeypatch, failing={"neurosynth_iit"})
+    with pytest.raises(RuntimeError):
+        bundle.main(tmp_path / "again")
+    # without the tracts, the page starts with the first engine
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path / "plain", engines=("neurosynth", "neurostore"))
+    described = json.loads((tmp_path / "plain" / "bundle.json").read_text())
+    assert described["default"] == "neurosynth"
+
+
+def test_only_the_engines_asked_for_are_built(bundle, monkeypatch, tmp_path):
+    _fake_bundle(bundle, monkeypatch)
+    bundle.main(tmp_path, engines=("neurostore",))
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert list(described["engines"]) == ["neurostore"]
+    assert described["default"] == "neurostore"
+
+
+def test_the_files_of_the_embeddings_are_named_for_their_engine(bundle):
+    name = bundle.bundle_name(Path("a+b.npz"), "neurostore")
+    assert name == "neurostore-a_b.npz"
+
+
+def test_a_neurostore_release_keeps_the_tables_and_columns_the_engine_reads(
+    bundle, tmp_path
+):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    release = tmp_path / "neurostore" / "2026-10"
+    release.mkdir(parents=True)
+    pd.DataFrame(
+        {"study_id": ["s"], "x": [1.0], "y": [2.0], "z": [3.0],
+         "space": ["MNI"], "t_stat": [1.0], "p": [0.1]}
+    ).to_parquet(release / "coordinates.parquet")
+    pd.DataFrame(
+        {"study_id": ["s"], "name": ["n"], "description": ["d"],
+         "authors": ["a"]}
+    ).to_parquet(release / "studies.parquet")
+    pd.DataFrame(
+        {"study_id": ["s"], "TaskExtractor.fMRITasks[0].Concepts": ["[]"],
+         "TaskExtractor.fMRITasks[0].Domain": ["[]"],
+         "TaskExtractor.fMRITasks[0].TaskName": ["n-back"]}
+    ).to_parquet(release / "annotations.parquet")
+    for name in ("analyses", "images", "metadata", "texts"):
+        (release / f"{name}.parquet").write_bytes(b"x")
+    (release / "studyset.json").write_text("{}")
+    bundle.trim(tmp_path, "neurostore")
+    assert sorted(p.name for p in release.iterdir()) == [
+        "annotations.parquet", "coordinates.parquet", "studies.parquet"
+    ]
+    assert list(pd.read_parquet(release / "coordinates.parquet")) == [
+        "study_id", "x", "y", "z", "space"
+    ]
+    assert list(pd.read_parquet(release / "annotations.parquet")) == [
+        "study_id", "TaskExtractor.fMRITasks[0].Concepts",
+        "TaskExtractor.fMRITasks[0].Domain",
+    ]
+    assert list(pd.read_parquet(release / "studies.parquet")) == [
+        "study_id", "name", "description"
+    ]
+
+
+def test_the_data_of_an_engine_is_written_in_parts_when_it_is_large(
+    bundle, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(bundle, "PART_SIZE", 10)
+    monkeypatch.setattr(bundle, "build_engine", lambda *a, **k: None)
+    monkeypatch.setattr(bundle, "check_engine_cache", lambda *a: None)
+    monkeypatch.setattr(bundle, "trim", lambda *a: None)
+    monkeypatch.setattr(bundle, "export_embeddings", lambda *a: {})
+    monkeypatch.setattr(
+        bundle, "zip_directory",
+        lambda directory, archive: archive.write_bytes(b"x" * 25),
+    )
+    entry = bundle.bundle_engine("neurostore", tmp_path)
+    assert entry["data"] == [f"neurolang-neurostore-data.zip.{n}" for n in range(3)]
+    assert b"".join((tmp_path / name).read_bytes() for name in entry["data"]) == b"x" * 25
+    monkeypatch.setattr(bundle, "PART_SIZE", 100)
+    entry = bundle.bundle_engine("neurostore", tmp_path)
+    assert entry["data"] == "neurolang-neurostore-data.zip"
+
+
+def test_the_tractogram_of_the_page_is_a_seeded_thinned_draw(bundle, tmp_path):
+    """15,000 of the IIT atlas's in the page; here 5 of 8 streamlines (one
+    of a point, never drawn) of a ``.tck``, in the order of the file, every
+    second point and the last: the same draw for the same seed, in the same
+    format."""
+    import nibabel as nib
+    import numpy as np
+
+    lines = [
+        np.cumsum(np.ones((n, 3)), axis=0).astype(np.float32) + k
+        for k, n in enumerate([5, 1, 6, 2, 9, 3, 4, 7])
+    ]
+    source = tmp_path / "whole_brain.tck"
+    nib.streamlines.save(
+        nib.streamlines.Tractogram(lines, affine_to_rasmm=np.eye(4)),
+        str(source),
+    )
+    drawn = []
+    for name in ("a.tck", "b.tck"):
+        bundle.subsample_tractogram(source, tmp_path / name, 5, 2, seed=1)
+        drawn.append(nib.streamlines.load(str(tmp_path / name)).streamlines)
+    assert [list(map(len, d)) for d in drawn] == 2 * [list(map(len, drawn[0]))]
+    assert len(drawn[0]) == 5
+    for one, other in zip(*drawn):
+        np.testing.assert_array_equal(one, other)
+    # each is a thinned streamline of the source, ends included
+    for line in drawn[0]:
+        origin = next(
+            full for full in lines
+            if len(full) > 1 and (full[0] == line[0]).all()
+        )
+        assert (line[-1] == origin[-1]).all()
+        assert len(line) == len(range(0, len(origin), 2)) + (
+            0 if (len(origin) - 1) % 2 == 0 else 1)
+
+
+def test_the_tractogram_entry_of_the_engine_tells_how_to_subsample(
+    bundle, monkeypatch, tmp_path
+):
+    """engines.yaml: ``tractogram: {path, subsample, step, seed}``. The file
+    of the data directory at ``path`` is replaced by its subsample."""
+    entry = bundle.tractogram_entry("neurosynth_iit")
+    assert dict(entry) == {
+        "path": "tracts/iit/IIT3mean.tck", "subsample": 15000, "step": 3,
+        "seed": 0}
+    assert bundle.tractogram_entry("neurosynth") is None
+    drawn = {}
+
+    def subsample(source, target, count, step, seed):
+        drawn.update(source=source, target=target, count=count, step=step,
+                     seed=seed)
+        target.write_bytes(b"x")
+
+    monkeypatch.setattr(bundle, "subsample_tractogram", subsample)
+    data = tmp_path / "data"
+    (data / "tracts" / "iit").mkdir(parents=True)
+    path = data / "tracts" / "iit" / "IIT3mean.tck"
+    path.write_bytes(b"full")
+    bundle.reduce_tractogram(
+        data, {"path": "tracts/iit/IIT3mean.tck", "subsample": 7, "step": 3,
+               "seed": 5})
+    assert drawn == {
+        "source": path, "target": path, "count": 7, "step": 3, "seed": 5}
+    assert path.read_bytes() == b"x"
+
+
+def test_an_engine_with_the_studies_of_another_shares_its_embeddings(bundle):
+    donor = {
+        "cache_keys": {"study_abstracts": "k"},
+        "files": {
+            "neurosynth/embeddings/study_abstracts.npz": ["a.0", "a.1"],
+            "neurosynth/embeddings/models/m.npz": ["m"],
+        },
+    }
+    entry = {"cache_keys": {"study_abstracts": "k"}, "files": {}}
+    bundle.share_embeddings("neurosynth_iit", entry, donor)
+    assert entry["files"] == {
+        "neurosynth_iit/embeddings/study_abstracts.npz": ["a.0", "a.1"],
+        "neurosynth_iit/embeddings/models/m.npz": ["m"],
+    }
+    entry = {"cache_keys": {"study_abstracts": "other"}, "files": {}}
+    with pytest.raises(ValueError, match="cache_key"):
+        bundle.share_embeddings("neurosynth_iit", entry, donor)
+
+
+def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
+    bundle, monkeypatch, tmp_path
+):
+    _fake_bundle(bundle, monkeypatch)
+    original = bundle.bundle_engine
+
+    def with_keys(engine, *args):
+        entry = original(engine, *args)
+        return {**entry, "cache_keys": {"study_abstracts": "k"}}
+
+    monkeypatch.setattr(bundle, "bundle_engine", with_keys)
+    bundle.main(tmp_path, engines=("neurosynth", "neurosynth_iit"))
+    described = json.loads((tmp_path / "bundle.json").read_text())
+    assert described["default"] == "neurosynth_iit"
+    assert described["engines"]["neurosynth_iit"] == {
+        "label": "Neurosynth + tracts",
+        "data": "neurolang-neurosynth_iit-data.zip",
+        "files": {"neurosynth_iit/model.npz": ["neurosynth-model.npz"]},
+    }
+    assert all("cache_keys" not in e for e in described["engines"].values())

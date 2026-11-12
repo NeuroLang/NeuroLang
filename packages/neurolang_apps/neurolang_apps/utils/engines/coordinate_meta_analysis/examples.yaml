@@ -1,7 +1,15 @@
 # The example queries of coordinate_meta_analysis, merged into its
-# entry of ../engines.yaml (see doc/engine_configuration.rst): those
-# the REPL shows (examples) and the questions of the query assistant
-# (assistant_examples).
+# entry of ../engines.yaml (see doc/engine_configuration.rst): the
+# questions in English the REPL shows first (questions), each one of the
+# bank of the query assistant below, the queries it shows (examples) and
+# the questions of the query assistant (assistant_examples).
+questions:
+  - Which studies mention pain?
+  - Which gyri and sulci are activated by studies about language?
+  - Which subcortical regions are activated by studies about fear?
+  - What is the Bayes factor of fear for the activation of the left amygdala?
+  - Which cortical regions are co-activated with the left amygdala?
+  - Where in the brain is working memory, by its definition in the Cognitive Atlas?
 examples:
   datalog:
     - "ans(s) :- mentions(s, 'pain')"
@@ -23,11 +31,14 @@ examples:
 # query is checked against the engines by the tests
 # (NEUROLANG_TEST_DATA_DIR).
 #
-# As the engines' assistant_guidance asks, every question but a count
-# (how many) is answered with probabilistic query answering over
-# selected_study, the uniform choice of a study: a study is chosen at
-# random and the answer is the probability of what the question asks,
-# conditioned on the term it names. A study activates a point when one
+# As the engines' assistant_guidance asks, a list (which studies, list
+# ...) is answered with the entities themselves, without probabilities,
+# and a count (how many) with AGGREGATE; every other question, and the
+# activations, co-activations and co-occurrences of a term or region, with
+# probabilistic query answering over selected_study, the uniform choice
+# of a study: a study is chosen at random and the answer is the
+# probability of what the question asks, conditioned on the term it
+# names. A study activates a point when one
 # of its peaks is within 3 mm:
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
@@ -49,8 +60,7 @@ examples:
 assistant_examples:
   - question: Which studies mention pain?
     datalog: |-
-      pain_study(s) :- mentions(s, 'pain'), selected_study(s)
-      ans(p) :- PROB[pain_study(s)] = p
+      ans(s) :- mentions(s, 'pain')
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -61,18 +71,15 @@ assistant_examples:
     datalog: |-
       language_or_speech(s) :- mentions(s, 'language')
       language_or_speech(s) :- mentions(s, 'speech')
-      chosen(s) :- language_or_speech(s), selected_study(s)
-      ans(p) :- PROB[chosen(s)] = p
+      ans(s) :- language_or_speech(s)
 
   - question: Which studies mention both pain and emotion?
     datalog: |-
-      pain_and_emotion(s) :- mentions(s, 'pain'), mentions(s, 'emotion'), selected_study(s)
-      ans(p) :- PROB[pain_and_emotion(s)] = p
+      ans(s) :- mentions(s, 'pain'), mentions(s, 'emotion')
 
   - question: Which studies do not mention pain?
     datalog: |-
-      no_pain(s) :- selected_study(s), ~mentions(s, 'pain')
-      ans(p) :- PROB[no_pain(s)] = p
+      ans(s) :- study(s), ~mentions(s, 'pain')
 
   - question: Which terms co-occur with fear in a study?
     datalog: |-
@@ -87,9 +94,7 @@ assistant_examples:
 
   - question: Which studies report an activation within 3 mm of the left amygdala, MNI (-24, -4, -20)?
     datalog: |-
-      near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
-      active(s) :- near(s), selected_study(s)
-      ans(p) :- PROB[active(s)] = p
+      ans(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
 
   - question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions fear?
     datalog: |-
@@ -294,11 +299,11 @@ assistant_examples:
 
   - question: Which studies are about the visual word form area? Give their titles.
     datalog: |-
-      ans(s, title, v) :- similar_study('visual word form area', s), study_similarity('visual word form area', s, v), study_title(s, title)
+      ans(s, title) :- similar_study('visual word form area', s), study_title(s, title)
 
   - question: Which studies are about the Cognitive Atlas concept response inhibition, with their titles?
     datalog: |-
-      ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+      ans(s, title) :- cogat_definition('response inhibition', d), similar_study(d, s), study_title(s, title)
 
   - question: Which voxels do the studies about holding information in mind over a delay activate?
     datalog: |-
@@ -319,9 +324,7 @@ assistant_examples:
 
   - question: Which studies are about fear, by its Cognitive Atlas definition, without mentioning fear?
     datalog: |-
-      close(q, s) :- similar_study(q, s), selected_study(s), ~mentions(s, 'fear')
-      p_close(q, PROB) :- close(q, s)
-      ans(p) :- cogat_definition('fear', d), p_close(d, p)
+      ans(s) :- cogat_definition('fear', d), similar_study(d, s), ~mentions(s, 'fear')
 
   - question: How likely is a study about pain, by its Cognitive Atlas definition, to report an activation of the insula?
     datalog: |-
@@ -363,3 +366,228 @@ assistant_examples:
       p_term_given_close(q, t, PROB) :- term_association(s, t) // close(q, s)
       ans(t, p) :- p_term_given_close('cortical response to noxious heat applied to the skin', t, p)
 
+
+  # Distilled from Sonnet 5.5's ReAct answers on generated questions (terms, Cognitive
+  # Atlas concepts, networks, regions and titles of the engine), kept when the
+  # query returned rows and a judge (Opus 5.5) accepted it.
+
+  - question: "Which studies are about people mentally rotating three-dimensional objects?"
+    datalog: |-
+      ans(s, title) :- similar_study('people mentally rotating three-dimensional objects', s), study_title(s, title)
+
+  - question: "Which studies mention passive viewing?"
+    datalog: |-
+      ans(s) :- mentions(s, 'passive viewing')
+
+  - question: "What are the subclasses of lexicon in the Cognitive Atlas?"
+    datalog: |-
+      ans(x, t) :- cogat_term(c, 'lexicon'), cogat_subclass_of(x, c), cogat_term(x, t)
+
+  - question: "Which Schaefer networks are activated by studies that mention cerebellum?"
+    datalog: |-
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'cerebellum')] = p
+
+  - question: "Which gyri and sulci are activated by studies that mention lesions?"
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'lesions')] = p
+
+  - question: "What is the probability that a study mentions motor cortex?"
+    datalog: |-
+      ms(s) :- mentions(s, 'motor cortex'), selected_study(s)
+      ans(p) :- PROB[ms(s)] = p
+
+  - question: "How many studies mention ventral striatum?"
+    datalog: |-
+      ans(n) :- AGGREGATE[](mentions(s, 'ventral striatum') @ count(s)) = n
+
+  - question: "Which study titles describe watching strangers' faces while lying in the scanner?"
+    datalog: |-
+      ans(s, title) :- similar_study('viewing unfamiliar faces while lying in the scanner', s), study_title(s, title)
+
+  - question: "Which Cognitive Atlas concepts are kinds of mental representation?"
+    datalog: |-
+      ans(t) :- cogat_term(c, 'mental representation'), cogat_subclass_of(x, c), cogat_term(x, t)
+
+  - question: "Is right middle occipital sulcus and lunate sulcus activated by studies on emotions?"
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active('R S oc middle and Lunatus', s) // term_association(s, 'emotions')] = p
+
+  - question: "What fraction of studies mention perceptual?"
+    datalog: |-
+      m(s) :- mentions(s, 'perceptual'), selected_study(s)
+      ans(p) :- PROB[m(s)] = p
+
+  - question: "How many studies mention both cognitive functions and visual stimuli?"
+    datalog: |-
+      both(s) :- mentions(s, 'cognitive functions'), mentions(s, 'visual stimuli')
+      ans(n) :- AGGREGATE[](both(s) @ count(s)) = n
+
+  - question: "Which studies mention either atrophy or somatosensory?"
+    datalog: |-
+      a_or_s(s) :- mentions(s, 'atrophy')
+      a_or_s(s) :- mentions(s, 'somatosensory')
+      ans(s) :- a_or_s(s)
+
+  - question: "Which brain regions are activated by studies of tasting bitter drinks?"
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      close(s) :- similar_study('tasting bitter drinks', s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // close(s)] = p
+
+  - question: "Which studies mention speech and activate left occipital pole?"
+    datalog: |-
+      ans(s) :- mentions(s, 'speech'), destrieux_activated('L Pole occipital', s)
+
+  - question: "How likely is it that a study mentions error?"
+    datalog: |-
+      m(s) :- mentions(s, 'error'), selected_study(s)
+      ans(p) :- PROB[m(s)] = p
+
+  - question: "How many studies mention either inferior frontal or cingulate gyrus?"
+    datalog: |-
+      either(s) :- mentions(s, 'inferior frontal')
+      either(s) :- mentions(s, 'cingulate gyrus')
+      ans(n) :- AGGREGATE[](either(s) @ count(s)) = n
+
+  - question: "How many studies mention both attention deficit and symptoms?"
+    datalog: |-
+      both(s) :- mentions(s, 'attention deficit'), mentions(s, 'symptoms')
+      ans(n) :- AGGREGATE[](both(s) @ count(s)) = n
+
+  - question: "Which cortical networks are activated by studies on daydreaming during rest?"
+    datalog: |-
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(l, p) :- p_active_given_close('daydreaming during rest', l, p)
+
+  - question: "What is the probability that a study activates right lateral orbital sulcus, given that it mentions linguistic?"
+    datalog: |-
+      active(s) :- destrieux_activated('R S orbital lateral', s), selected_study(s)
+      ta(s) :- mentions(s, 'linguistic'), selected_study(s)
+      ans(p) :- PROB[active(s) // ta(s)] = p
+
+  - question: "What is the probability that a study mentions object, given that it mentions movement?"
+    datalog: |-
+      ta(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[ta(s, 'object') // ta(s, 'movement')] = p
+
+  - question: "How many studies do not mention long term?"
+    datalog: |-
+      no_m(s) :- study(s), ~mentions(s, 'long term')
+      ans(n) :- AGGREGATE[](no_m(s) @ count(s)) = n
+
+  - question: "Which studies report an activation in hippocampus?"
+    datalog: |-
+      hip(l) :- tian(l, r), startswith('aHIP', l)
+      hip(l) :- tian(l, r), startswith('pHIP', l)
+      ans(s) :- hip(l), tian_activated(l, s)
+
+  - question: "Which regions are co-activated with right lateral occipitotemporal sulcus across studies?"
+    datalog: |-
+      seed(s) :- destrieux_activated('R S oc temp lat', s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: "Which studies do not mention learning?"
+    datalog: |-
+      ans(s) :- study(s), ~mentions(s, 'learning')
+
+  - question: "What is the title of study 21932266?"
+    datalog: |-
+      ans(t) :- study_title(21932266, t)
+
+  - question: "Which studies do not mention feedback?"
+    datalog: |-
+      ans(s) :- study(s), ~mentions(s, 'feedback')
+
+  - question: "Which parcels of the limbic network are activated by studies about naming?"
+    datalog: |-
+      limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+      limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+      active(l, s) :- limbic_label(l), schaefer_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'naming')] = p
+
+  - question: "Which studies activate both globus pallidus and thalamus?"
+    datalog: |-
+      gp_label(l) :- tian(l, r), startswith('aGP', l)
+      gp_label(l) :- tian(l, r), startswith('pGP', l)
+      tha_label(l) :- tian(l, r), startswith('THA', l)
+      gp(s) :- gp_label(l), tian_activated(l, s)
+      tha(s) :- tha_label(l), tian_activated(l, s)
+      ans(s) :- gp(s), tha(s)
+
+  - question: "Which subcortical regions are co-activated with caudate?"
+    datalog: |-
+      caudate(s) :- tian_activated('aCAU rh', s)
+      caudate(s) :- tian_activated('pCAU rh', s)
+      caudate(s) :- tian_activated('aCAU lh', s)
+      caudate(s) :- tian_activated('pCAU lh', s)
+      seed(s) :- caudate(s), selected_study(s)
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: "How many studies mention sustained attention?"
+    datalog: |-
+      ans(n) :- AGGREGATE[](mentions(s, 'sustained attention') @ count(s)) = n
+
+  - question: "Is the peripheral visual network activated by studies on cognition?"
+    datalog: |-
+      vp(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+      vp(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+      active(s) :- vp(l), schaefer_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active(s) // term_association(s, 'cognition')] = p
+
+  - question: "Is caudate activated by studies that mention consciousness?"
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s), tian(l, r), startswith('aCAU', l)
+      active(l, s) :- tian_activated(l, s), selected_study(s), tian(l, r), startswith('pCAU', l)
+      term_association(s) :- mentions(s, 'consciousness'), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s)] = p
+
+  - question: "Which networks are co-activated with peripheral visual in the same studies?"
+    datalog: |-
+      vp(s) :- schaefer_activated(l, s), schaefer(l, r), startswith('17Networks LH VisPeri', l)
+      vp(s) :- schaefer_activated(l, s), schaefer(l, r), startswith('17Networks RH VisPeri', l)
+      seed(s) :- vp(s), selected_study(s)
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // seed(s)] = p
+
+  - question: "Which terms are mentioned by studies that do not mention attentional?"
+    datalog: |-
+      mentioned_term(t) :- mentions(s, t), selected_study(s), ~mentions(s, 'attentional')
+      ans(t, p) :- PROB[mentioned_term(t)] = p
+
+  - question: "What is the definition of episodic memory?"
+    datalog: |-
+      ans(d) :- cogat_definition('episodic memory', d)
+
+  - question: "What is the probability that a study activates the salience ventral attention network, given that it mentions angular gyrus?"
+    datalog: |-
+      net(s) :- schaefer_activated(l, s), startswith('17Networks LH SalVentAttn', l)
+      net(s) :- schaefer_activated(l, s), startswith('17Networks RH SalVentAttn', l)
+      active(s) :- net(s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(p) :- PROB[active(s) // term_association(s, 'angular gyrus')] = p
+
+  - question: "Which subcortical structures are activated by studies about precentral gyrus?"
+    datalog: |-
+      active(l, s) :- tian_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // term_association(s, 'precentral gyrus')] = p
+
+  - question: "Which gyri and sulci are co-activated with right fusiform gyrus (lateral occipitotemporal gyrus) in studies that mention pain?"
+    datalog: |-
+      seed(s) :- destrieux_activated('R G oc temp lat fusifor', s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      cond(s) :- seed(s), term_association(s, 'pain')
+      ans(l, p) :- PROB[active(l, s) // cond(s)] = p

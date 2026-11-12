@@ -3,7 +3,7 @@
 import sys
 import time
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
@@ -14,6 +14,9 @@ from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 
 from neurolang.frontend.show_ra import ShowRAOptions
+from neurolang.utils.euclidean_join_settings import (
+    use_profile as use_join_profile,
+)
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import (
     _emit,
@@ -90,7 +93,12 @@ class TuiSettings:
     transcript. *llm_config* and *llm_provider* are the configuration
     file and the provider of the LLM assistant (``.ask``), by default
     those the configuration gives. With *scope_queries* (``.scope``),
-    the rules defined with a query are local to it.
+    the rules defined with a query are local to it. *program_file* is the
+    file of the program run first, if any (``--file``): the modules it
+    imports are relative to its directory. *join_profile* is the profile of
+    the settings of the Euclidean join (``euclidean_join.yaml``) the session
+    uses: ``memory`` by default, as a session holds its results and, in a
+    browser, has little memory.
     """
 
     engine_name: str = ""
@@ -109,6 +117,8 @@ class TuiSettings:
     llm_config: Optional[str] = None
     llm_provider: Optional[str] = None
     scope_queries: bool = True
+    program_file: Optional[str] = None
+    join_profile: str = "memory"
 
 
 class AgentRun(NamedTuple):
@@ -142,6 +152,10 @@ class InteractiveTuiApp:
         """
         self._nl = nl
         self.settings = settings or TuiSettings()
+        use_join_profile(
+            self.settings.join_profile,
+            overrides=self._engine_join_settings(),
+        )
         self.transcript = Transcript(self.settings)
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
@@ -150,6 +164,8 @@ class InteractiveTuiApp:
         self.session = None
         self.completer = None
         self.last_query = None
+        # The query whose result is in results, for the graph of its rows.
+        self.results_query = None
         # The rules added by the submission of the last query, by symbol.
         self.last_added_rules: dict = {}
         self.failed = False
@@ -172,6 +188,20 @@ class InteractiveTuiApp:
             self._history = FileHistory(self.settings.history_path)
         else:
             self._history = InMemoryHistory()
+
+    def _engine_join_settings(self) -> dict:
+        """
+        Return the settings of the Euclidean join the engine changes.
+
+        They are those of the ``euclidean_join`` key of the engine's
+        configuration, none for an engine that is not registered.
+        """
+        try:
+            return engine_registry.get_euclidean_join_settings(
+                self.settings.engine_name
+            )
+        except ValueError:
+            return {}
 
     def _tee_consoles(self, *consoles) -> None:
         """
@@ -295,6 +325,21 @@ class InteractiveTuiApp:
         self.agent_run = AgentRun(program, self.settings.squall, frames)
         self.last_query = (program, self.settings.squall)
         self.last_added_rules = {}
+        self.results_query = self.last_query
+
+    def show_graph(self, page: str) -> None:
+        """
+        Show the HTML *page* of the graph of a query (``.graph``): save
+        it, print its path and open it in a browser on a terminal.
+        """
+        from .nifti import _html_file, _open_in_browser
+
+        path = _html_file(page)
+        self.console.print(
+            f"Saved the graph to: {path}", style="green", markup=False,
+            highlight=False,
+        )
+        _open_in_browser(self.console, path)
 
     def print_block(self, block: ResultBlock) -> None:
         """
@@ -474,6 +519,7 @@ class InteractiveTuiApp:
             self.last_query = (program, self.settings.squall)
             self.last_added_rules = {}
             self.show_frames(run.frames, program)
+            self.results_query = self.last_query
             self.err_console.print(
                 "[dim]The assistant ran this query: its result, not run "
                 "again.[/dim]"
@@ -485,6 +531,7 @@ class InteractiveTuiApp:
             self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         if self._run_submission(program, query, facts) and query:
+            self.results_query = self.last_query
             elapsed = time.perf_counter() - t0
             self.err_console.print(
                 f"[dim]Query completed in {elapsed:.2f} s[/dim]"
@@ -611,9 +658,14 @@ class InteractiveTuiApp:
 
     def _run_initial_program(self, program: str) -> None:
         """Run the query *program* given on the command line, if any."""
-        if program.strip():
-            with self._recording(program.strip(), "statement"):
-                self._execute_and_display(program.strip())
+        if not program.strip():
+            return
+        importing = (
+            self._nl.program_ir.importing_from(self.settings.program_file)
+            if self.settings.program_file else nullcontext()
+        )
+        with importing, self._recording(program.strip(), "statement"):
+            self._execute_and_display(program.strip())
 
     def run(self, session=None, initial_program: str = "") -> None:
         """

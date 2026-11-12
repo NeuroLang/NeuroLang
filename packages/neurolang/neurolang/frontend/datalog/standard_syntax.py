@@ -20,7 +20,10 @@ from nl_expr.expressions import (
     Statement,
     Symbol,
 )
-from nl_expr.logic import ExistentialPredicate
+from nl_expr.exceptions import NeuroLangFrontendException, ParserError
+from nl_expr.expression_pattern_matching import add_match
+from nl_expr.expression_walker import PatternWalker
+from nl_expr.logic import Disjunction, ExistentialPredicate
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
     PROB,
@@ -37,6 +40,37 @@ from .lark_errors import lark_errors_as_neurolang
 AGGREGATION_FUNCS = frozenset(
     {"count", "sum", "max", "min", "mean", "avg", "std", "percentile"}
 )
+
+
+ANS = "ans"
+
+
+def query_symbol(name=None):
+    """
+    Return the head symbol of a query: ``ans``, or ``ans[name]`` of the
+    query ``ans[name](...) :- ...`` that is named, which a program holds
+    several of.
+    """
+    return Symbol(ANS if name is None else f"{ANS}[{name}]")
+
+
+def is_query_head(head):
+    """Return whether *head* is the head of a query, named or not."""
+    functor = getattr(head, "functor", None)
+    return isinstance(functor, Symbol) and (
+        functor.name == ANS or (
+            functor.name.startswith(f"{ANS}[") and functor.name.endswith("]")
+        )
+    )
+
+
+def query_name(head):
+    """
+    Return the name of the query of *head*, that of ``ans[name](...)``;
+    ``ans`` for a query that is not named.
+    """
+    name = head.functor.name
+    return name[len(ANS) + 1:-1] if name != ANS else ANS
 
 
 GRAMMAR = u"""
@@ -75,10 +109,10 @@ prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
                | "PROB" "[" predicate PROB_SEP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
+      | "ans" "[" cmd_identifier "]" "(" [ arguments ] ")" -> named_query
 
 condition : composite_predicate PROB_SEP composite_predicate
-?composite_predicate : "(" conjunction ")"
-                        | predicate
+?composite_predicate : predicate
 
 constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
@@ -90,17 +124,29 @@ SUCH_THAT_WORD : "st"
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
-?body : conjunction
+// "|" (or "\N{LOGICAL OR}") is a disjunction; "," binds tighter than it.
+?body : disjunction
+?disjunction : conjunction (OR_SYMBOL conjunction)*
+OR_SYMBOL : "|" | "\N{LOGICAL OR}"
 //conjunction : predicate ("," predicate)*
 conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
 AND_SYMBOL : "\N{LOGICAL AND}"
 
+// In parentheses a comparison is a formula of its own, a disjunct or a
+// conjunct: (t == 'a' | t == 'b'), (x < 3, y > 2).
+?parenthesised_disjunction : parenthesised_conjunction (OR_SYMBOL parenthesised_conjunction)* -> disjunction
+parenthesised_conjunction : (predicate | comparison) (("," | "&" | AND_SYMBOL) (predicate | comparison))* -> conjunction
+
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
-predicate : id_application
+// After "((f(x)" a "," or ")" cannot tell a parenthesised body formula
+// from a parenthesised argument or tuple of a comparison (an LALR
+// reduce/reduce collision): the priority reads it as a body formula, so
+// write "(f(x) < 3)" rather than "((f(x)) < 3)".
+predicate.2 : id_application
           | negated_predicate
           | existential_predicate
-          | "(" comparison ")"
+          | "(" parenthesised_disjunction ")"
           | logical_constant
           | prob_body_predicate
           | resample_body_predicate
@@ -111,10 +157,9 @@ predicate : id_application
 prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
                     | "PROB" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
 
-// Inside PROB[...] and MARG[...], a conjunction may be in parentheses, as in
+// Inside PROB[...] and MARG[...], a formula may be in parentheses, as in
 // a rule's condition: PROB[(a(x), (x < y)) // (b(x), c(x))] = p
-?bracketed_conjunction : conjunction
-                       | "(" conjunction ")"
+?bracketed_conjunction : disjunction
 
 // RESAMPLE[boot](pred(x)) = b  —  pred(x) on each replicate b of the resampling boot
 resample_body_predicate : "RESAMPLE" "[" cmd_identifier "]" "(" id_application ")" "=" argument
@@ -128,8 +173,8 @@ marg_body_predicate : "MARG" "[" bracketed_conjunction "]" "=" argument
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
 SUCC_INNER : /[a-zA-Z_*+.,()&@\\/ \t-]+/
 
-// Separator inside PROB/MARG for the conditional form: accepts both // and |
-PROB_SEP : "//" | "|"
+// Separator of the conditional form, in a rule body and inside PROB/MARG
+PROB_SEP : "//"
 
 // MARG head rule  —  declare a marginal probability rule
 marg_head_rule : "MARG" "[" bracketed_conjunction "]" IMPLICATION (condition | body)
@@ -188,7 +233,7 @@ factor : exponent             -> sing_factor
 POW : "**"
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
-fact : constant_predicate
+fact : head_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
@@ -256,8 +301,13 @@ OPERATOR = {
 
 @functools.lru_cache(maxsize=None)
 def compiled_grammar():
-    """Compile the Datalog grammar on first use (it takes ~0.15 s)."""
-    return Lark(GRAMMAR, parser='lalr')
+    """
+    Compile the Datalog grammar on first use (it takes ~0.15 s).
+
+    The nodes of its trees have their lines, which attach a ``%%``
+    documentation block to the statement it precedes.
+    """
+    return Lark(GRAMMAR, parser='lalr', propagate_positions=True)
 
 
 def __getattr__(name):
@@ -285,6 +335,17 @@ class DatalogTransformer(Transformer):
 
         self.locals = locals
         self.globals = globals
+        # the variables written "_", each a fresh symbol
+        self.anonymous = set()
+
+    def _hide_anonymous(self, formula):
+        """``∃`` the anonymous variables of a formula: in a negation or a
+        disjunct, ``_`` is quantified there, ``~p(x, _)`` is ``~∃y p(x, y)``.
+        """
+        for v in extract_logic_free_variables(formula):
+            if v in self.anonymous:
+                formula = ExistentialPredicate(v, formula)
+        return formula
 
     def start(self, ast):
         return ast[0]
@@ -314,7 +375,6 @@ class DatalogTransformer(Transformer):
     def prob_head_rule(self, ast):
         # PROB[pred] :- body              → [pred, IMPLICATION_token, body]
         # PROB[pred // cond] :- body      → [pred, SEP_token, cond, IMPLICATION_token, body]
-        # PROB[pred | cond] :- body       → same ast shape
         if len(ast) >= 4:
             # Conditional form: PROB[pred // cond] :- body
             pred = ast[0]
@@ -458,7 +518,7 @@ class DatalogTransformer(Transformer):
                 result = self._build_prob_rule(head, prob_specs, new_body)
                 return self._ans_main_rule_as_query(head, result)
 
-        if isinstance(head, Expression) and head.functor == Symbol("ans"):
+        if is_query_head(head):
             return Query(ast[0], body_or_cond)
         else:
             return Implication(ast[0], body_or_cond)
@@ -473,9 +533,7 @@ class DatalogTransformer(Transformer):
         ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
         queried as ``ans(t, n) :- fresh(t, n)``.
         """
-        if not (
-            isinstance(head, Expression) and head.functor == Symbol("ans")
-        ):
+        if not is_query_head(head):
             return result
         if isinstance(result, Implication):
             result = Union((result,))
@@ -507,7 +565,7 @@ class DatalogTransformer(Transformer):
         """
         if isinstance(pred, FunctionApplication):
             return pred.args, pred, False
-        elif isinstance(pred, Conjunction):
+        elif isinstance(pred, (Conjunction, Disjunction)):
             return (), pred, True
         elif isinstance(pred, Negation):
             inner = pred.formula
@@ -523,6 +581,13 @@ class DatalogTransformer(Transformer):
                 return prob_vars, pred, False
             return None
         return None
+
+    @staticmethod
+    def _is_compound(subject):
+        """A disjunction, or a conjunction of several formulas."""
+        return isinstance(subject, Disjunction) or (
+            isinstance(subject, Conjunction) and len(subject.formulas) > 1
+        )
 
     @staticmethod
     def _filter_prob_vars_outside(prob_vars, outside_connect):
@@ -614,7 +679,7 @@ class DatalogTransformer(Transformer):
                     subject, cond_body, outside_connect
                 )
                 fresh_body = Condition(subject, cond_body)
-            elif is_marg and isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+            elif is_marg and self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
             elif is_marg:
@@ -642,7 +707,7 @@ class DatalogTransformer(Transformer):
                     if result_var not in head_args:
                         head_args.append(result_var)
                     continue
-            elif isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+            elif self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
             else:
@@ -661,13 +726,7 @@ class DatalogTransformer(Transformer):
             if result_var not in head_args:
                 head_args.append(result_var)
 
-        if isinstance(head, Query) or (
-            isinstance(head, Expression)
-            and hasattr(head, 'functor')
-            and head.functor == Symbol("ans")
-        ):
-            new_head = head.functor(*head_args)
-        elif hasattr(head, 'functor'):
+        if hasattr(head, 'functor'):
             new_head = head.functor(*head_args)
         else:
             new_head = head
@@ -823,7 +882,6 @@ class DatalogTransformer(Transformer):
     def prob_body_predicate(self, ast):
         # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
         # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
-        # PROB[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]   # ast[1] is the separator token
@@ -844,7 +902,6 @@ class DatalogTransformer(Transformer):
     def marg_body_predicate(self, ast):
         # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
         # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
-        # MARG[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]
@@ -890,10 +947,33 @@ class DatalogTransformer(Transformer):
                         and c.functor.name == "__SUCC__"):
                     # SUCC markers are no-ops — discard at conjunction level
                     continue
-                conj.append(c)
+                if isinstance(c, Conjunction):
+                    # A parenthesised conjunction: (a(x), b(x))
+                    conj.extend(c.formulas)
+                else:
+                    conj.append(c)
         if len(conj) == 0:
             return Constant(True)
+        if len(conj) == 1 and isinstance(conj[0], Disjunction):
+            # A parenthesised disjunction alone: (a(x) | b(x))
+            return conj[0]
         return Conjunction(conj)
+
+    def disjunction(self, ast):
+        disjuncts = [c for c in ast if isinstance(c, Expression)]
+        if len(disjuncts) == 1:
+            # A formula in parentheses, (x < 3) or (a(x), b(x)): itself
+            formula = disjuncts[0]
+            if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+                formula = formula.formulas[0]
+            return formula
+        return Disjunction(tuple(
+            self._hide_anonymous(
+                c.formulas[0]
+                if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            )
+            for c in ast if isinstance(c, Expression)
+        ))
 
     def existential_predicate(self, ast):
         ast1 = ast[1].children
@@ -913,7 +993,11 @@ class DatalogTransformer(Transformer):
         return exp
 
     def negated_predicate(self, ast):
-        return Negation(ast[0])
+        formula = ast[-1]  # after the "¬" token, if any
+        if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+            # A formula in parentheses: ~(a(x))
+            formula = formula.formulas[0]
+        return Negation(self._hide_anonymous(formula))
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1].value])
@@ -978,18 +1062,18 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        arguments_raw = ast[0]
-        if arguments_raw is not None:
-            if isinstance(arguments_raw, tuple):
-                arguments = list(arguments_raw)
-            else:
-                arguments = list(arguments_raw) if arguments_raw else []
+        return self._query_head(query_symbol(), ast[0])
 
-            arguments = self._wrap_aggregation_args(arguments)
-            arguments = self._expand_implicit_prob(arguments)
-            return Symbol("ans")(*arguments)
-        else:
-            return Symbol("ans")()
+    def named_query(self, ast):
+        return self._query_head(query_symbol(ast[0].name), ast[1])
+
+    def _query_head(self, symbol, arguments_raw):
+        if arguments_raw is None:
+            return symbol()
+        arguments = list(arguments_raw) if arguments_raw else []
+        arguments = self._wrap_aggregation_args(arguments)
+        arguments = self._expand_implicit_prob(arguments)
+        return symbol(*arguments)
 
     def statement(self, ast):
         return Statement(ast[0], ast[2])
@@ -1086,7 +1170,9 @@ class DatalogTransformer(Transformer):
         ast = ast[0]
         if isinstance(ast, Expression):
             if isinstance(ast, Symbol) and ast.name == "_":
-                return Symbol.fresh()
+                fresh = Symbol.fresh()
+                self.anonymous.add(fresh)
+                return fresh
             return ast
         else:
             return Symbol.fresh()
@@ -1189,6 +1275,16 @@ class DatalogTransformer(Transformer):
             return 0
 
     def fact(self, ast):
+        args = ast[0].args
+        if not all(isinstance(a, (Constant, ExternalSymbol)) for a in args):
+            written = ", ".join(
+                a.name if isinstance(a, Symbol) else repr(a.value)
+                for a in args
+            )
+            raise NeuroLangFrontendException(
+                f"{ast[0].functor.name}({written}) is read as a fact, which "
+                "has only constants: is a ',' or ':-' missing?"
+            )
         return Fact(ast[0])
 
     def constant_predicate(self, ast):
@@ -1300,18 +1396,189 @@ def _preprocess(code):
     return '\n'.join(processed)
 
 
-def parser(code, locals=None, globals=None, interactive=False):
+# The command a ``%%`` documentation block is read as.
+DOCUMENT_COMMAND = Symbol("document")
 
+_DOC_LINE = re.compile(r"\s*%%(?P<text>.*)")
+_DOC_ARGUMENT = re.compile(
+    r"\s*(?P<name>[A-Za-z_]\w*)\s*(?::\s*(?P<sort>[A-Za-z_][\w-]*)\s*)?"
+)
+
+
+def _doc_blocks(code):
+    """
+    Return the ``%%`` documentation blocks of *code*, by the line they
+    document.
+
+    A block is a run of lines starting with ``%%``, each without the
+    ``%%`` and the space after it; it documents the statement starting
+    on the line right after it, numbered from 1. A block followed by a
+    blank line, a ``%`` comment or the end of the code documents
+    nothing: it is a comment.
+    """
+    blocks = {}
+    block = []
+    for number, line in enumerate(code.split('\n'), start=1):
+        doc = _DOC_LINE.match(line)
+        if doc:
+            text = doc.group("text").rstrip()
+            block.append(text[1:] if text.startswith(" ") else text)
+            continue
+        if block and strip_comment(line).strip():
+            blocks[number] = block
+        block = []
+    return blocks
+
+
+class _DocumentedHead(PatternWalker):
+    """
+    Return the name and the arity of the predicate a statement defines,
+    or None: a query, a command and a constraint define none. A
+    statement ``x := ...`` defines ``x``, of no arity.
+    """
+
+    @add_match(Union)
+    def union(self, union):
+        heads = (self.walk(formula) for formula in union.formulas)
+        return next((head for head in heads if head is not None), None)
+
+    @add_match(Implication(ProbabilisticFact(..., FunctionApplication), ...))
+    def probabilistic_fact(self, implication):
+        return self.walk(
+            Implication(implication.consequent.body, Constant(True))
+        )
+
+    @add_match(
+        Implication(ProbabilisticChoice(..., FunctionApplication), ...)
+    )
+    def probabilistic_choice(self, implication):
+        return self.walk(
+            Implication(implication.consequent.body, Constant(True))
+        )
+
+    @add_match(Implication(FunctionApplication(Symbol, ...), ...))
+    def rule(self, implication):
+        head = implication.consequent
+        return head.functor.name, len(head.args)
+
+    @add_match(Statement(Symbol, ...))
+    def statement(self, statement):
+        return statement.lhs.name, None
+
+    @add_match(Expression)
+    def other(self, expression):
+        return None
+
+
+def _doc_signature(lines, name, arity, line):
+    """
+    Return the arguments of the signature *lines* start with, or None.
+
+    The signature is the first line when it reads ``name(a, b: sort)``
+    for the predicate *name*; it must give its *arity* arguments, if
+    known. *line* is the number of that line, for the errors.
+    """
+    signature = re.fullmatch(
+        rf"\s*{re.escape(name)}\s*\((?P<args>[^()]*)\)\s*", lines[0]
+    )
+    if signature is None:
+        return None
+    texts = signature.group("args").split(",")
+    if len(texts) == 1 and not texts[0].strip():
+        texts = []
+    arguments = []
+    for text in texts:
+        argument = _DOC_ARGUMENT.fullmatch(text)
+        if argument is None:
+            raise ParserError(
+                f"The documentation of {name} gives the argument "
+                f"{text.strip()!r}: write name or name: sort",
+                line=line,
+            )
+        arguments.append(
+            (argument.group("name"), argument.group("sort") or "")
+        )
+    if arity is not None and len(arguments) != arity:
+        raise ParserError(
+            f"The documentation of {name} gives {len(arguments)} "
+            f"arguments, its statement has {arity}",
+            line=line,
+        )
+    return tuple(arguments)
+
+
+def documentation_command(name, description, arguments=()):
+    """
+    Return the command documenting the predicate *name*: its
+    *description* and its *arguments*, ``(name, sort)`` pairs, the sort
+    ``""`` when not given.
+    """
+    return Command(DOCUMENT_COMMAND, (
+        Symbol(name), Constant[str](description),
+        Constant[Tuple](
+            tuple(tuple(a) for a in arguments),
+            auto_infer_type=False, verify_type=False,
+        ),
+    ), ())
+
+
+def _documentation(expression, lines, line):
+    """
+    Return the commands documenting the statement *expression* with the
+    ``%%`` *lines*, which end before the *line* it starts on.
+    """
+    head = _DocumentedHead().walk(expression)
+    if head is None:
+        return ()
+    name, arity = head
+    arguments = _doc_signature(lines, name, arity, line - len(lines))
+    if arguments is not None:
+        lines = lines[1:]
+    description = "\n".join(lines).strip()
+    if not description and not arguments:
+        return ()
+    return (documentation_command(name, description, arguments or ()),)
+
+
+def _transform(tree, docs):
+    """
+    Return the expressions of the parse *tree*, each statement preceded
+    by the command documenting it when *docs* has a block for its line.
+    """
+    transformer = DatalogTransformer()
+    if not docs:
+        return transformer.transform(tree)
+    formulas = []
+    for statement in tree.children[0].children:
+        expression = transformer.transform(statement)
+        lines = docs.get(statement.meta.line)
+        if lines:
+            formulas.extend(
+                _documentation(expression, lines, statement.meta.line)
+            )
+        formulas.append(expression)
+    return transformer.expressions(formulas)
+
+
+def parser(code, locals=None, globals=None, interactive=False):
+    """
+    Return the expressions of the Datalog program *code*.
+
+    A ``%%`` block documenting a statement (see :func:`_doc_blocks`) is
+    read as a ``.document`` command before it (see
+    :func:`documentation_command`).
+    """
     with lark_errors_as_neurolang():
         if (interactive):
             completer = LarkCompleter(compiled_grammar())
             res = completer.complete(code.strip())
             return res.token_options
         else:
+            docs = _doc_blocks(code)
             code = _preprocess(code)
             # Keep leading blank lines so error positions match the input.
             jp = compiled_grammar().parse(code.rstrip())
-            return DatalogTransformer().transform(jp)
+            return _transform(jp, docs)
 
 
 def parse_rules():

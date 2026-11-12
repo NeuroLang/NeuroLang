@@ -7,7 +7,7 @@ import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
-import { renderCommands, renderExamples, renderPredicates } from "./guide.js";
+import { renderCommands, renderExamples, renderPredicates, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -16,12 +16,15 @@ import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
 import { Session, parseSession, replayTexts } from "./session.js";
 import { PmcLookup } from "./study_links.js";
+import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
+import { bundleEngines, engineChoice, withEngine } from "./engines.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
 const llmForm = $("llm");
 const results = $("results");
+const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
 // The code box colours its text as the language of the mode select.
@@ -39,6 +42,10 @@ const history = new History(store("localStorage"));
 const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage"));
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
+// What the page downloads (bundle.json): the engines it offers, chosen with
+// the select of the header or ?engine=NAME.
+let bundle = {};
+const engineSelect = $("engine");
 
 // The work of the AI assistant, shown as it comes from the worker.
 const agentLog = new AgentLog();
@@ -157,11 +164,16 @@ function showHint() {
 }
 ["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
 
-// The examples of the engine and its predicates, which put their text in the box.
-let guide = { examples: {}, predicates: [], commands: [] };
+// The questions and examples of the engine and its predicates, which put their text in a box.
+let guide = { examples: {}, questions: [], predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
+  $("guide-questions-box").hidden = !guide.questions.length;
+  renderExamples($("guide-questions"), guide.questions, (text) => {
+    question.value = text;
+    question.focus();
+  }, "Put this question in the box of the assistant");
   renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
     editor.value = query;
     hideSummary();
@@ -239,7 +251,7 @@ function show(tab, ...nodes) {
 // The tab shown of the results, as the tab list tells it.
 function selectTab(tab) {
   results.dataset.tab = tab;
-  for (const name of ["table", "brain"]) {
+  for (const name of TABS) {
     $(`tab-${name}`).setAttribute("aria-selected", name === tab);
     $(`tab-${name}`).tabIndex = name === tab ? 0 : -1;
   }
@@ -268,7 +280,21 @@ function showProvider() {
   llmForm.elements.baseUrl.required = !llmForm.elements.baseUrl.hidden;
 }
 
+// The assistant can answer: a key is in use, or the REPL has one.
+let assistantReady = false;
+// The example question put in the box, while it is left as it is.
+let suggested = "";
+
+// An example question of the engine, at random, in the box of the
+// assistant, when the box is empty and the assistant can answer.
+function suggestQuestion() {
+  const pick = suggestedQuestion(guide.questions, question.value, assistantReady);
+  if (pick) suggested = question.value = pick;
+}
+
 function useKey() {
+  assistantReady = true;
+  suggestQuestion();
   $("llm-error").hidden = true;
   const chosen = choices();
   worker.postMessage({ type: "llm", ...chosen });
@@ -296,15 +322,33 @@ function setProviders(list) {
   if (list.length && saved.key) useKey();
 }
 
-// The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH.
+// Offer the engines of the bundle: a select, when there are several.
+async function loadEngines() {
+  try {
+    bundle = await (await fetch("bundle.json", { cache: "no-store" })).json();
+  } catch {
+    bundle = {}; // the worker tells that the bundle is missing
+  }
+  const engines = Object.entries(bundleEngines(bundle));
+  engineSelect.replaceChildren(
+    ...engines.map(([name, entry]) => Object.assign(document.createElement("option"), { value: name, textContent: entry.label })),
+  );
+  engineSelect.hidden = engines.length < 2;
+}
+
+// The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH,
+// and the engine: ?engine=NAME.
 function start({ restore = null } = {}) {
   if (!restore) session.replace([]); // a new engine has none of the rules
   worker?.terminate();
   const params = new URLSearchParams(location.search);
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
+  const { name: engine, full } = engineChoice(params, bundle);
+  engineSelect.value = engine;
   Object.assign(version.elements.repo, { value: repo });
   Object.assign(version.elements.ref, { value: ref });
-  $("version-summary").textContent = ref ? `${repo} at ${ref}` : "the build of this page";
+  $("version-summary").textContent =
+    bundle.backend === "local" ? "the Python of this machine" : ref ? `${repo} at ${ref}` : "the build of this page";
   out.replaceChildren();
   out.classList.remove("quiet");
   results.classList.remove("has");
@@ -319,8 +363,16 @@ function start({ restore = null } = {}) {
   setStatus("Starting…", "busy");
   setBusy(true);
   input.disabled = false; // the query can be written while the engine loads
-  worker = new Worker("worker.js", { type: "module" });
-  worker.postMessage({ type: "start", repo, ref, full: params.get("engine") === "full" });
+  // A page served with NeuroLang in the Python of this machine
+  // (neurolang-repl-serve --local) has it answer, not Pyodide: its
+  // assistant is that of the machine's configuration, unless a key is given.
+  const local = bundle.backend === "local";
+  worker = new Worker(local ? "local_worker.js" : "worker.js", { type: "module" });
+  if (local) {
+    $("ask-note").textContent =
+      "Asking uses the AI assistant configured on this machine, as neurolang-query does, or the API key you give.";
+  }
+  worker.postMessage({ type: "start", repo, ref, full, engine });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "reply" && replaying) replayStep(data);
@@ -338,8 +390,11 @@ const workerMessages = {
     $("banner").replaceChildren(html(data.banner));
     setProviders(data.providers ?? []);
     canRate = Boolean(data.canRate);
-    guide = { examples: data.examples ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    if (data.assistant) assistantReady = true;
+    suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
+    $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
     showGuide();
     if (restore) return replay(restore);
     setBusy(false);
@@ -381,7 +436,10 @@ const workerMessages = {
     // A failure without a table hides the last result, not to be taken for its own.
     if (data.failed && !data.tables?.length) results.classList.remove("has");
     if (data.tables?.length) showTables(data);
+    showGraph(data);
     if (data.viewers?.length) showViewer(data.viewers.at(-1));
+    else if (data.tables?.length) markViewerStale();
+    else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
   },
 };
@@ -411,16 +469,77 @@ function showTables({ tables, prompt }) {
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
 function showViewer(page) {
-  const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: page, title: "NeuroLang brain viewer" });
+  const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(page, theme()), title: "NeuroLang brain viewer" });
   show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
+  setViewerStale(false);
 }
 
-// The log of a query that gave a table is folded to its last line, which says how long it took.
+// The viewer shown is of an earlier result once a query gives a new one:
+// selecting its tab then views the new result (.view), rather than the old.
+let viewerStale = false;
+function setViewerStale(stale) {
+  viewerStale = stale;
+  $("tab-brain").title = stale ? "View the last result in the brain" : "";
+}
+function markViewerStale() {
+  if (!$("tab-brain").hidden) setViewerStale(true);
+}
+
+// No viewer: that of an earlier result is not to be taken for the last one's.
+function dropViewer() {
+  $("brain").replaceChildren();
+  $("tab-brain").hidden = true;
+  setViewerStale(false);
+  if (results.dataset.tab === "brain") selectTab("table");
+}
+
+// Open the tab *tab* of the results: the brain tab of an earlier result views the last one.
+function openTab(tab) {
+  if (tab === "brain" && viewerStale && !$("run").disabled) return run(".view");
+  selectTab(tab);
+}
+
+let graphUrl = null; // the address of the page of the graph shown
+
+// The pages in frames, the brain viewer and the graph: they are as tall as
+// they say, so that they have no scrollbars within the page, and have its theme.
+const resultFrames = () => [...document.querySelectorAll("#brain iframe, #graph iframe")];
+const theme = () => document.documentElement.dataset.theme;
+window.addEventListener("message", (event) => {
+  const asked = frameHeight(event, resultFrames());
+  if (!asked) return;
+  const { frame, height } = asked;
+  frame.style.height = `${height + frame.offsetHeight - frame.clientHeight}px`; // its border too
+});
+
+// The graph of the query a reply ran, in the graph tab, shown when the reply
+// has no table (.graph); a query that has no graph hides that of the last one.
+function showGraph({ graph, tables }) {
+  const shown = tables?.length > 0;
+  if (!graph) {
+    if (shown) $("tab-graph").hidden = true;
+    return;
+  }
+  const page = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(graph, theme()), title: "Graph of the query" });
+  // The graph is often wider than the page: it can open in a tab of its own.
+  if (graphUrl) URL.revokeObjectURL(graphUrl);
+  graphUrl = URL.createObjectURL(new Blob([themed(graph, theme())], { type: "text/html" }));
+  const open = Object.assign(document.createElement("a"), { href: graphUrl, target: "_blank", rel: "noopener", textContent: "Open the graph in a new tab" });
+  const nodes = [Object.assign(document.createElement("p"), { className: "note" }), page];
+  nodes[0].append(open);
+  if (shown) {
+    $("graph").replaceChildren(...nodes);
+    $("tab-graph").hidden = false;
+  } else show("graph", ...nodes);
+}
+
+// The log of a query, under its last line, which folds it: folded when the
+// query gave a table, open otherwise.
 function showLog(log, fold) {
-  const last = fold && logSummary(log.textContent);
+  const last = logSummary(log.textContent);
   out.classList.toggle("quiet", Boolean(last));
   if (!last) return out.replaceChildren(log);
-  const details = document.createElement("details");
+  const details = Object.assign(document.createElement("details"), { open: !fold });
   details.append(Object.assign(document.createElement("summary"), { textContent: last }), log);
   out.replaceChildren(details);
 }
@@ -497,6 +616,7 @@ function applyTheme(choice) {
   document.documentElement.dataset.theme = light ? "light" : "dark";
   document.documentElement.dataset.themeChoice = choice;
   themeButtons.forEach((button) => button.setAttribute("aria-pressed", button.dataset.theme === choice));
+  for (const frame of resultFrames()) frame.contentWindow?.postMessage(themeMessage(theme()), "*");
 }
 const chosen = () => store("localStorage")?.getItem(THEME) || "system";
 for (const button of themeButtons) {
@@ -526,9 +646,25 @@ input.addEventListener("keydown", (event) => {
     run(input.value, { remember: true });
   }
 });
+// A dot-command is a line: the lines of the question are joined.
+const ask = () => {
+  const text = question.value.trim().replace(/\s*\n\s*/g, " ");
+  if (text) run(`.ask ${text}`);
+};
 $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
-  if (question.value.trim()) run(`.ask ${question.value}`);
+  ask();
+});
+// The example question is selected when the box is entered: typing
+// replaces it, Ask asks it.
+question.addEventListener("focus", () => {
+  if (suggested && question.value === suggested) question.select();
+});
+question.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    ask();
+  }
 });
 $("share").addEventListener("click", async (event) => {
   const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;
@@ -561,13 +697,13 @@ history_.addEventListener("change", () => {
   history_.value = "";
   input.focus();
 });
-for (const tab of ["table", "brain"]) $(`tab-${tab}`).addEventListener("click", () => selectTab(tab));
+for (const tab of TABS) $(`tab-${tab}`).addEventListener("click", () => openTab(tab));
 $("tabs").addEventListener("keydown", (event) => {
-  const shown = ["table", "brain"].filter((tab) => !$(`tab-${tab}`).hidden);
+  const shown = TABS.filter((tab) => !$(`tab-${tab}`).hidden);
   const next = tabAfter(shown, results.dataset.tab, event.key);
   if (!next) return;
   event.preventDefault();
-  selectTab(next);
+  openTab(next);
   $(`tab-${next}`).focus();
 });
 $("retry").addEventListener("click", start);
@@ -583,6 +719,9 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign(llmForm.elements.key, { value: "" });
   llmForm.elements.remember.checked = false;
   worker.postMessage({ type: "llm", key: "" });
+  assistantReady = false;
+  if (suggested && question.value === suggested) question.value = "";
+  suggested = "";
   Object.assign($("ask-run"), { title: "Add an API key to use the assistant" }).classList.add("ghost");
   $("llm-error").hidden = true;
   $("llm-summary").textContent = "bring your own API key";
@@ -619,6 +758,8 @@ version.addEventListener("submit", (event) => {
   event.preventDefault();
   const params = new URLSearchParams();
   const { repo, ref } = Object.fromEntries(new FormData(version));
+  const engine = new URLSearchParams(location.search).get("engine");
+  if (engine) params.set("engine", engine);
   if (ref.trim()) {
     params.set("ref", ref.trim());
     if (repo.trim() !== DEFAULT_REPO) params.set("repo", repo.trim());
@@ -626,5 +767,10 @@ version.addEventListener("submit", (event) => {
   window.history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
   start();
 });
+engineSelect.addEventListener("change", () => {
+  const params = withEngine(new URLSearchParams(location.search), engineSelect.value, bundle);
+  window.history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
+  start();
+});
 showHistory();
-start();
+loadEngines().then(() => start());

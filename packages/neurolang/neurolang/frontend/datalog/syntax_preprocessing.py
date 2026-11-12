@@ -72,5 +72,5 @@ class ProbFol2DatalogMixin(PatternWalker):
                 imp.consequent, imp.antecedent
             )
         except NeuroLangException as e:
-            raise Fol2DatalogTranslationException from e
+            raise Fol2DatalogTranslationException(str(e)) from e
         return self.walk(program)

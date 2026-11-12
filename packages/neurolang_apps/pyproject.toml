@@ -51,6 +51,9 @@ tui = [
 llm = [
     "httpx>=0.27",
 ]
+# The engine tracts needs nothing more than the apps: the extra is kept
+# for the commands that name it.
+tracts = []
 embeddings = [
     "torch",
     "transformers",

@@ -90,7 +90,10 @@ def test_unknown_base_and_cycle():
 
 
 def test_builtin_engines():
-    assert list_engine_names() == ["destrieux", "neurostore", "neurosynth"]
+    assert list_engine_names() == [
+        "destrieux", "neurostore", "neurosynth", "neurosynth_iit",
+        "neurosynth_tracts", "tracts",
+    ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
         assert cfg["requires_mni_mask"] and cfg["use_base_symbols"]
@@ -99,9 +102,9 @@ def test_builtin_engines():
             cfg["predicates"]
         )
         assert "extends" not in cfg and "abstract" not in cfg
-    assert get_engine_config("neurostore")["python_init"].endswith(
-        "neurostore.init"
-    )
+    assert get_engine_config("neurostore")["python_init"] == [
+        "neurolang_apps.utils.engines.neurostore.init"
+    ]
     with pytest.raises(ValueError, match="abstract"):
         get_engine_config("coordinate_meta_analysis")
 
@@ -131,3 +134,83 @@ def test_engine_files_are_merged_into_their_engine(
     assert cfg["description"] == "child" and "c(x) :- a(x)" in cfg[
         "datalog_init"
     ]
+
+
+@pytest.fixture
+def init_modules(tmp_path, monkeypatch):
+    """Two modules ``init_a`` and ``init_b`` whose ``init_engine`` appends
+    their name and options to the list they return."""
+    calls = []
+    for name in ("init_a", "init_b"):
+        (tmp_path / f"{name}.py").write_text(textwrap.dedent(f"""
+            def init_engine(nl, mask, data_dir, **options):
+                nl.append(({name!r}, options))
+        """))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return calls
+
+
+def test_python_init_is_a_list_parent_first():
+    engines = {
+        "one": {"python_init": "init_a"},
+        "two": {"python_init": ["init_b"]},
+        "child": {"extends": "one", "python_init": "init_b"},
+        "both": {"extends": ["one", "two"], "python_init": ["init_a"]},
+    }
+    assert resolve_engine_config(engines, "one")["python_init"] == ["init_a"]
+    assert resolve_engine_config(engines, "child")["python_init"] == [
+        "init_a", "init_b"
+    ]
+    assert resolve_engine_config(engines, "both")["python_init"] == [
+        "init_a", "init_b"
+    ]
+
+
+def test_python_inits_run_in_order_with_the_options(init_modules):
+    from neurolang_apps.utils.engine_registry import _phase_python_init
+
+    cfg = {
+        "python_init": ["init_b", "init_a"],
+        "python_init_options": {"opt": 1},
+    }
+    _phase_python_init(init_modules, cfg, "mask", "data")
+    assert init_modules == [("init_b", {"opt": 1}), ("init_a", {"opt": 1})]
+    del init_modules[:]
+    _phase_python_init(init_modules, {"python_init": "init_a"}, None, None)
+    assert init_modules == [("init_a", {})]
+
+
+def test_a_base_reached_twice_is_merged_once():
+    engines = {
+        "root": {"abstract": True, "datalog_init": "r(x) :- s(x)\n",
+                 "atlases": {"a": {"n": 1}}},
+        "left": {"extends": "root", "datalog_init": "l(x) :- r(x)\n"},
+        "right": {"extends": "root", "datalog_init": "q(x) :- r(x)\n",
+                  "atlases": {"a": {"n": 2}}},
+        "both": {"extends": ["left", "right"]},
+    }
+    cfg = resolve_engine_config(engines, "both")
+    assert cfg["datalog_init"].splitlines() == [
+        "r(x) :- s(x)", "l(x) :- r(x)", "q(x) :- r(x)",
+    ]
+    assert cfg["atlases"] == {"a": {"n": 2}}
+
+
+def test_hidden_predicates_are_concatenated():
+    engines = {
+        "a": {"hidden_predicates": ["p", "q"]},
+        "b": {"hidden_predicates": ["q", "r"]},
+        "both": {"extends": ["a", "b"]},
+    }
+    assert resolve_engine_config(engines, "both")["hidden_predicates"] == [
+        "p", "q", "r"
+    ]
+
+
+@pytest.mark.parametrize("engine", list_engine_names())
+def test_the_questions_shown_are_those_of_the_assistant(engine):
+    """The questions the REPL lists first are in the assistant's bank,
+    whose queries the tests check on the engines."""
+    cfg = get_engine_config(engine)
+    bank = {e["question"] for e in cfg.get("assistant_examples", [])}
+    assert set(cfg.get("questions") or []) <= bank

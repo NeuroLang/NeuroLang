@@ -184,6 +184,12 @@ def test_index_cache_reload_and_invalidation(index, tmp_path):
     np.testing.assert_array_equal(reloaded.matrix, index.matrix)
     assert reloaded.encoder.document_calls == 0
 
+    reordered = te.EmbeddingIndex(
+        [4, 2, 3, 1, 2], load_documents, FakeEncoder(), index.cache_path
+    )
+    np.testing.assert_array_equal(reordered.matrix, index.matrix)
+    assert reordered.encoder.document_calls == 0
+
     changed = te.EmbeddingIndex(
         [1, 2, 3], load_documents, FakeEncoder(), index.cache_path
     )
@@ -285,7 +291,7 @@ def test_similarity_function():
     assert [query_similarity("visual word reading", d) for d in index.ids] \
         == pytest.approx(scores.tolist())
     assert np.isnan(query_similarity("visual word reading", 5))
-    assert index.encoder.query_calls == 2
+    assert index.encoder.query_calls == 1
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
@@ -381,7 +387,9 @@ def test_query_texts_from_a_relation(index):
 def test_similarity_function_is_cached(index):
     query_similarity = te.make_similarity_function(index)
     similarities = index.similarities("visual word reading")
-    assert query_similarity("visual word reading", 1) == similarities[1]
+    assert query_similarity("visual word reading", 1) == pytest.approx(
+        similarities[1]
+    )
     assert index.similarities("visual word reading") is similarities
     with pytest.raises(TypeError):
         similarities[1] = 0.
@@ -392,8 +400,20 @@ def test_similarity_function_is_cached(index):
     for i in range(16):
         query_similarity(f"query {i}", 1)
     query_similarity("visual word reading", 1)
-    assert index.encoder.query_calls == 19
-    assert index.similarities.cache_info().currsize == 16
+    assert index.encoder.query_calls == 18
+    assert query_similarity("motor hand", 99) != query_similarity(
+        "motor hand", 99
+    )   # nan: not in the index
+
+
+def test_similarity_function_encodes_each_query_once(index):
+    """Rows of a rule come in any order: the similarities of many query
+    texts, document by document, encode each text once."""
+    query_similarity = te.make_similarity_function(index)
+    for doc in index.ids:
+        for i in range(40):
+            query_similarity(f"query {i}", doc)
+    assert index.encoder.query_calls == 40
 
 
 def test_similarity_function_is_lazy(tmp_path):

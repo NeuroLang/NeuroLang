@@ -384,12 +384,14 @@ class PushInSelections(ew.PatternWalker):
             FunctionApplication(EQ, (Constant[ColumnStr], Constant[ColumnStr]))
         ),
         lambda exp: (
-            (
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) and (
-                get_expression_columns(exp.formula) &
+            get_expression_columns(exp.formula) & (
+                get_expression_columns(exp.relation.relation_left) -
                 get_expression_columns(exp.relation.relation_right)
+            )
+        ) and (
+            get_expression_columns(exp.formula) & (
+                get_expression_columns(exp.relation.relation_right) -
+                get_expression_columns(exp.relation.relation_left)
             )
         )
     )
@@ -403,7 +405,10 @@ class PushInSelections(ew.PatternWalker):
         ).pop()
         column_right = (
             get_expression_columns(expression.formula) &
-            get_expression_columns(expression.relation.relation_right)
+            (
+                get_expression_columns(expression.relation.relation_right) -
+                get_expression_columns(expression.relation.relation_left)
+            )
         ).pop()
 
         if column_left != column_right:

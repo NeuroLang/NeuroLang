@@ -836,7 +836,9 @@ class ReplaceColumns(ew.ReplaceExpressionWalker):
         return constant
 
 
-class RelationalAlgebraSolver(ew.ExpressionWalker):
+class RelationalAlgebraSolver(
+    ew.WalkSharedExpressionsOnceMixin, ew.ExpressionWalker
+):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations.
@@ -897,6 +899,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         compiled_formula = self._compile_function_application_to_sql_fun_exp(
             selection.formula
         )
+        if callable(compiled_formula):
+            fun, args = self._fa_2_lambda.walk(
+                self._rccsbs.walk(selection.formula)
+            )
+            if len(args) == 1:
+                # a function of one column is applied to the column
+                compiled_formula = {next(iter(args)): fun}
         selected_relation = relation.value.selection(compiled_formula)
         return self._build_relation_constant(selected_relation)
 
@@ -1232,6 +1241,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             Difference: "__sub__",
         }.get(type(ra_op))
         new_relation = getattr(left.value, binary_op_fun_name)(right.value)
+        if isinstance(new_relation, NamedRelationalAlgebraFrozenSet):
+            type_ = _unsort_named_relation_type(type_, new_relation.columns)
         return self._build_relation_constant(new_relation, type_=type_)
 
 
@@ -1273,6 +1284,39 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
     return AbstractSet[Tuple[sorted_tuple_args]]
 
 
+def _sort_named_relation_type(type_, columns):
+    """
+    Return the type `AbstractSet[Tuple[...]]` *type_* of a named relation,
+    whose tuple types are in the order of its *columns*, in the alphabetical
+    order of the columns (the inverse of :func:`_unsort_named_relation_type`).
+    A type without tuple types is returned as it is.
+    """
+    tuple_args = type_system.get_args(type_system.get_args(type_)[0])
+    if len(tuple_args) != len(columns):
+        return type_
+    order = sorted(range(len(columns)), key=lambda i: columns[i])
+    return AbstractSet[Tuple[tuple(tuple_args[i] for i in order)]]
+
+
+def _unsort_named_relation_type(type_, columns):
+    """
+    Return the type `AbstractSet[Tuple[...]]` *type_* of a named relation,
+    whose tuple types are in the alphabetical order of its *columns* (as
+    :func:`_sort_typed_const_named_relation_tuple_type_args` gives them), in
+    the order of the *columns*. A type without tuple types is returned as
+    it is.
+    """
+    tuple_args = type_system.get_args(type_system.get_args(type_)[0])
+    if len(tuple_args) != len(columns):
+        return type_
+    position = {
+        column: i for i, column in enumerate(sorted(columns))
+    }
+    return AbstractSet[Tuple[tuple(
+        tuple_args[position[column]] for column in columns
+    )]]
+
+
 def _infer_relation_type(relation):
     """
     Infer the type of the tuples in the relation based on its first tuple. If
@@ -1304,4 +1348,11 @@ def _get_const_relation_type(const_relation):
         else:
             return const_relation.type
     else:
-        return _infer_relation_type(const_relation.value)
+        type_ = _infer_relation_type(const_relation.value)
+        if isinstance(const_relation.value, NamedRelationalAlgebraFrozenSet):
+            # inferred in the order of the columns, as the other branch has
+            # the types of a named relation: in the order of their names
+            type_ = _sort_named_relation_type(
+                type_, const_relation.value.columns
+            )
+        return type_

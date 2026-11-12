@@ -30,15 +30,20 @@ def reachable_code_from_query(query, program):
     part of the program.
 
     This is useful if the query is formulated as a rule instead of simply a
-    query predicate (e.g. `ans(x, y) :- P(x, z), P(y, z)`).
+    query predicate (e.g. `ans(x, y) :- P(x, z), P(y, z)`). A list of
+    queries gives the code needed to answer all of them.
 
     """
     if query is None:
         return Union(tuple(get_list_of_intensional_rules(program)))
 
-    predicates = [query.consequent] + list(
-        extract_logic_atoms(query.antecedent)
-    )
+    queries = query if isinstance(query, (list, tuple)) else [query]
+    predicates = [
+        predicate for q in queries
+        for predicate in [q.consequent] + list(
+            extract_logic_atoms(q.antecedent)
+        )
+    ]
     reachable = set()
     for pred in predicates:
         for rule in iter_implications(
@@ -61,8 +66,9 @@ def stratify_program(query, program):
 
     Parameters
     ----------
-    query : Implication
-        Query defining the part of the program that needs to be stratified.
+    query : Implication or list of Implication
+        Query defining the part of the program that needs to be stratified,
+        or the queries that are stratified together.
     program : CPLogicProgram
         Program that will be stratified.
 

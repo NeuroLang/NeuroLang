@@ -24,26 +24,79 @@ may specify the following keys, all of them optional:
   available names are ``exp``, ``log`` and ``startswith``
 - ``python_init`` — dotted path of a Python *module* (not of a function)
   which must define ``init_engine(nl, mask, data_dir)``; it registers
-  extensional data (predicates, regions, atlases) into the engine
-- ``downloads`` — list of ``{url, dest, extract}`` entries fetched into the
-  data directory (``extract: true`` uncompresses an archive, a list of
-  member names extracts only those members)
+  extensional data (predicates, regions, atlases) into the engine.  It may
+  be a list of modules, whose ``init_engine`` run in order; an engine
+  extending others runs theirs first (the lists are concatenated, parent
+  first)
+- ``solver_mixins`` — classes, as ``"module:Class"`` strings, put before
+  the solver of the engine, e.g. to add Datalog commands ``.name(...)``
+  (the ``tracts`` engine, below)
+- ``python_init_options`` — keyword arguments given to every
+  ``init_engine`` of ``python_init`` (one that has no use for the options
+  of another takes them with ``**options``). The ``neurosynth`` and
+  ``neurostore`` engines take ``unknown_space``, set once in
+  ``coordinate_meta_analysis``: the peaks whose space is neither MNI nor
+  Talairach (Neurosynth's ``UNKNOWN``, 10.6% of its peaks; NeuroStore's
+  other or missing spaces) are taken as MNI (``mni``, the default, as
+  Neurosynth and NiMARE do), converted as Talairach (``tal``) or left out
+  (``drop``); only the Talairach peaks are converted to MNI otherwise
+- ``downloads`` — list of ``{url, dest, extract, name, md5}`` entries
+  fetched into the data directory (``extract: true`` uncompresses an
+  archive, a list of member names extracts only those members; ``name`` is
+  the file's name when the URL has none, ``md5`` its checksum)
+- ``tractogram`` — ``{path, subsample, step, seed}``, for an engine whose
+  ``datalog_init`` loads the whole-brain tractogram file ``path`` (relative
+  to the data directory; usually one of its ``downloads``) with
+  ``.load_tractogram(id, path)``: how the bundle of the browser's REPL
+  (``doc/make_repl_bundle.py``) reduces it to ship it.  It replaces the file
+  in the data it ships by its subsample, at the same path and in the same
+  format (``.tck`` or ``.trk``), ``subsample`` streamlines drawn at random
+  with the seed ``seed`` (default 0), each thinned to every ``step``-th point
+  (default 1) and its last, so that the engine's program is the same there.
+  The engine itself loads the file whole, wherever it runs; the entry is read
+  by the bundle only (``neurosynth_iit``: 15,000 of the 37,980 streamlines of
+  the IIT Human Brain Atlas v3's ``IIT3mean.tck``, ``step: 3``)
 - ``templates`` — MNI templates fetched with nilearn or TemplateFlow,
   optionally registered as a ``predicate(i, j, k)`` of non-zero voxels
 - ``atlases`` — declarative atlas loading (``destrieux``, ``schaefer``,
   ``tian``, ``difumo``) as region predicates ``name(label, region)``.  A
-  deterministic atlas with ``activated: {predicate_name, radius_mm,
+  deterministic atlas is a :class:`~neurolang.atlases.Atlas`, fetched and
+  read as ``.load_atlas(name, kind="destrieux")`` (``"schaefer"``,
+  ``"tian"``) reads it, its label names normalised (``-`` and ``_`` are
+  spaces), and recorded in the engine's ``atlases`` by its key, where
+  ``.index_tracts`` of the ``tracts`` engine finds it (the probabilistic
+  DiFuMo is thresholded into regions).  A deterministic atlas with ``activated: {predicate_name, radius_mm,
   peaks}`` also registers ``predicate_name(label, study)``: the studies
   with a peak within ``radius_mm`` (3 by default) of a voxel of the
   region, the peaks being the millimetre coordinates of the relation
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
   not be the template's, and the pairs are kept in the data directory once
-  found (see :ref:`engine-cache`).  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
+  found (see :ref:`engine-cache`).  With ``points: {predicate_name}`` a
+  deterministic atlas also registers ``predicate_name(x, y, z, label)``:
+  the centre of each voxel of each region, in millimetres through the
+  atlas's affine, a stored relation, so that a rule bounding the distance
+  of these points to those of another stored relation,
+  ``EUCLIDEAN(x, y, z, x2, y2, z2) <= r``, finds the pairs with a k-d
+  tree instead of comparing every pair; the engines extending
+  ``mni_atlases`` have ``schaefer_points``, ``destrieux_points`` and
+  ``tian_points`` (236,000 rows, 13 MB).
+  ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
   downloaded from the authors' repository
-- ``datalog_init`` — inline Datalog rules that are loaded at engine startup
+- ``euclidean_join`` — settings of the Euclidean join that finds the pairs
+  of points of a ``EUCLIDEAN(...) < r`` bound that differ from the profile
+  in use (``kdtree_chunk_pairs: 500000``): the thresholds, the sizes of the
+  chunks and the other values of
+  ``neurolang/utils/euclidean_join.yaml``, whose profiles (``default``,
+  and ``memory``, that of the interactive REPL) hold the others; see
+  :ref:`euclidean-join-settings`.  The mappings of an engine and of the
+  engines it extends are merged
+- ``datalog_init`` — inline Datalog rules that are loaded at engine startup,
+  run from the engine's data directory: the paths of its commands
+  (``.load_tractogram``, ``.load_atlas``...) are relative to it, where
+  ``downloads`` puts the files
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
@@ -79,6 +132,10 @@ may specify the following keys, all of them optional:
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
   obtaining the first declared predicate)
+- ``questions`` — questions in English that the REPL in the browser lists
+  first, a click putting one in the box of the query assistant; each is
+  one of the questions of ``assistant_examples``, of which the tests check
+  the queries.  The query examples are folded under them
 - ``assistant_examples`` — the bank of questions with their ``datalog``
   or ``squall`` queries from which the LLM query assistant takes its
   few-shot examples (see :doc:`query_assistant`)
@@ -222,9 +279,9 @@ the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
 atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),
 and ``.view`` shows a result with two such columns, pairs of regions and
 a value, as a network over the brain, a node at the centre of each
-region and an edge per pair (see ``.help view``).  The engine keeps the
-values labelling each region in the image of the atlas, by name, in
-``nl.atlas_labels`` (see
+region and an edge per pair (see ``.help view``).  The values labelling
+each region in the image of the atlas, by name, are those of the atlas
+the engine records under that key, ``nl.atlases`` (see
 :func:`~neurolang.utils.engine_registry.atlas_label_values`).
 
 The interactive REPL completes SQUALL from the sorts: after ``every`` it
@@ -330,13 +387,35 @@ Sharing configuration between engines
 Settings common to several engines live in an ``abstract`` engine that the
 concrete ones pull in with ``extends``.  The built-in ``neurosynth`` and
 ``neurostore`` engines both extend ``coordinate_meta_analysis``, which
-provides the MNI mask, the base symbols, the Schaefer atlas, the sorts, the
-predicates and their Datalog rules, and the text embeddings; each engine
-adds its ``python_init`` and what is specific to its database::
+provides the MNI mask, the base symbols, the sorts, the predicates and
+their Datalog rules, and the text embeddings; it extends ``mni_atlases``,
+the atlases Destrieux, Schaefer and Tian with the sorts, predicates and
+rules of their labels and regions, and adds to each atlas the studies that
+activate its regions (``activated``), which need the peaks.  The ``tracts``
+engine extends ``mni_atlases`` too, and so has the same atlases, loaded the
+same way.  Each engine adds its ``python_init`` and what is specific to its
+database::
 
     engines:
+      mni_atlases:
+        abstract: true
+        atlases:
+          destrieux:
+            predicate_name: destrieux
+            points: {predicate_name: destrieux_points}
+          tian:
+            predicate_name: tian
+            scale: 2
+            points: {predicate_name: tian_points}
+
       coordinate_meta_analysis:
         abstract: true
+        extends: mni_atlases
+        atlases:      # merged into those of mni_atlases, atlas by atlas
+          destrieux:
+            activated: {predicate_name: destrieux_activated, radius_mm: 3}
+          tian:
+            activated: {predicate_name: tian_activated, radius_mm: 3}
         requires_mni_mask: true
         use_base_symbols: true
         datalog_init: |
@@ -357,17 +436,21 @@ and the engine's own entries override all of them.  Merging works per key:
 
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
-  ``dimension_type_predicates`` and ``assistant_examples`` are
-  concatenated without duplicates;
+  ``dimension_type_predicates``, ``assistant_examples``,
+  ``hidden_predicates``, ``solver_mixins`` and ``python_init`` (a single
+  module is a list of one) are concatenated without duplicates;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
   setting an entry to ``null`` removes the inherited one (a list cannot
   replace a mapping, nor a mapping a list);
-- every other value, lists included (``python_init``, ``description``,
-  ``hidden_predicates``, ...), is replaced.
+- every other value is replaced (``description``, ``requires_mni_mask``,
+  ...).
 
-Unknown bases and cyclic ``extends`` chains raise ``ValueError``.
+A base reached by two paths (``extends: [a, b]`` where both ``a`` and
+``b`` extend ``c``) is merged once, where it is first reached: its rules
+are not defined twice.  Unknown bases and cyclic ``extends`` chains raise
+``ValueError``.
 
 Files of an engine
 ------------------
@@ -432,6 +515,71 @@ facts and constraints that queries use with the engine's data, in the
 open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
 ``datalog_init``, the rules of an engine can use the ontology's predicates,
 as ``cogat_subclass_of`` and ``cogat_measures`` do.
+
+The ``tracts`` engine
+---------------------
+
+``tracts`` is tractography, ``neurolang_apps.utils.engines.tracts`` (the extra
+``tracts`` of ``neurolang-apps``; without it the engine fails to build,
+with a message that says so).  It extends ``mni_atlases``: its atlases are
+those of ``neurosynth`` (Destrieux, Schaefer, Tian, about 270 KB downloaded
+on the first build), without the studies that activate them and without
+the MNI mask.  A program loads its tractograms with the commands
+``.load_tractogram`` and ``.index_tracts``, which its ``solver_mixins``
+entry,
+``neurolang_apps.utils.engines.tracts.frontend:TractsCommandsMixin``, adds
+to the solver;
+``.index_tracts(t, "destrieux")`` indexes a tractogram in MNI152 by an
+atlas of the engine, whose label names are those of its relation:
+``label("destrieux", l, name, h)`` joins ``destrieux(name, region)``.  An
+atlas of its own is loaded as any engine loads one, ``.load_atlas("fs",
+"wmparc.mgz", "FreeSurferColorLUT.txt", kind="freesurfer",
+space="MNI152")``, and indexed by its name; ``.index_tracts`` gives its
+labels the terms of the vocabulary by the term mapping of its kind
+(FreeSurfer, Destrieux, Tian) or by ``term_mapping=...``.  It
+asks where the streamlines go in the vocabulary of
+tractography, Datalog rules that its ``python_init``
+(``neurolang_apps.utils.engines.tracts.frontend``) gives the engine:
+``traverses(x, term, h)``,
+``endpoint_in(x, e, term, h)``, ``anterior_of(x, term, h)`` and the like
+(the engine's ``DESIGN.md``, section 16).  The same ``init_engine``
+gives it the hooks with which ``.view`` draws a result of streamline ids
+``x`` on the label image of the atlas.  The ends of the streamlines are
+also points in millimetres, ``endpoint_point(x, e, px, py, pz)``, stored
+as the points of the atlases are, so that the parcels near the ends are
+found with a tree::
+
+   near(x, e, n) :- endpoint_point(x, e, ex, ey, ez),
+       schaefer_points(mx, my, mz, n),
+       (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+
+The uncinate fasciculus of
+tract_querier is the engine's ``examples/uncinate.dl``::
+
+   neurolang-query --engine tracts --file uncinate.dl
+   neurolang-query --engine tracts -i --file uncinate.dl   # then .view
+
+The ``neurosynth_tracts`` engine
+--------------------------------
+
+``neurosynth_tracts`` is both, ``extends: [neurosynth, tracts]``: the
+studies, terms, peaks and Cognitive Atlas of ``neurosynth``, its atlases
+with the studies that activate their regions (``schaefer_activated(label,
+study)``...) and the centres of their voxels in millimetres
+(``schaefer_points(x, y, z, label)``...), and the commands, vocabulary and
+``.view`` of ``tracts``.  Their common base ``mni_atlases`` is merged once,
+and both ``python_init`` run, ``neurosynth``'s then
+``neurolang_apps.utils.engines.tracts.frontend``.
+It needs the extra ``tracts``, and ``embeddings`` for ``similar_study``
+(SPECTER2; without it a query that uses it fails with a message saying what
+to install).  The ends of the streamlines of a bundle, ``endpoint_point(x,
+e, x, y, z)``, join the points of the parcels within a distance, and the
+parcels the studies that activate them:
+The engine's ``examples/uncinate_cogat.dl`` asks which Cognitive Atlas
+concepts the studies of the parcels the uncinate fasciculus connects are
+about::
+
+   neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

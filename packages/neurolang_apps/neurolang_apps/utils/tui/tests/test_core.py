@@ -736,3 +736,171 @@ def test_a_pasted_statement_on_several_lines_is_one(small_app, pipe_session):
     calls = _recording_execute(small_app)
     small_app.run(pipe_session(PASTE.format("ans(x) :-\n  P(x)") + "\r\x04"))
     assert calls == ["ans(x) :-\n  P(x)"]
+
+
+@pytest.fixture
+def module(tmp_path):
+    """Return a Datalog module of a fact and a rule over ``P``."""
+    path = tmp_path / "lib" / "module.dl"
+    path.parent.mkdir()
+    path.write_text('side("left")\ntwice(x) :- P(x)\n')
+    return path
+
+
+def test_what_a_query_imports_stays_in_the_session(engine, module):
+    """The rules of a query are local to it; those of the modules it
+    imports are the session's, imported once."""
+    app = _app(engine)
+    app._execute_and_display(
+        f'.import("{module}")\nlocal(x) :- twice(x)\nans(x) :- local(x)'
+    )
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    symbols = {s.name for s in app._nl.symbol_table}
+    assert {"twice", "side"} <= symbols and "local" not in symbols
+    app._execute_and_display(f'.import("{module}")')
+    app._execute_and_display("ans(x) :- twice(x)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    assert len(app._nl.symbol_table["twice"].formulas) == 1
+
+
+def test_a_module_is_imported_again_after_clear(engine, module):
+    app = _app(engine)
+    app._execute_and_display(f'.import("{module}")')
+    app._handle_dot_command(".clear")
+    assert "twice" not in app._nl.symbol_table
+    app._execute_and_display(f'.import("{module}")')
+    assert "twice" in app._nl.symbol_table
+
+
+def test_the_initial_program_imports_beside_its_file(engine, module):
+    """The program of ``--file`` imports the modules beside the file."""
+    main = module.parent.parent / "main.dl"
+    main.write_text('.import("lib/module.dl")\nans(x) :- twice(x)\n')
+    app = _app(engine, program_file=str(main))
+    app._run_initial_program(main.read_text())
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+
+
+def test_help_tells_import():
+    from neurolang_apps.utils.tui.commands import help_text
+
+    assert ".import(" in help_text()
+
+
+@pytest.fixture
+def greeting_engine():
+    """An engine whose solver has the command ``.greet``."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang.frontend.probabilistic_frontend import (
+        RegionFrontendCPLogicSolver,
+    )
+    from neurolang_apps.utils.tests.toy_commands import GreetingMixin
+
+    class Solver(GreetingMixin, RegionFrontendCPLogicSolver):
+        pass
+
+    return NeurolangPDL(solver_class=Solver)
+
+
+def test_a_command_of_the_engine_runs_at_the_prompt(greeting_engine):
+    """``.name(...)``, not a command of the REPL, is a command of the
+    engine's Datalog."""
+    app = _app(greeting_engine)
+    app._run_line('.greet("ada")')
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    assert "Unknown command" not in _output(app)
+
+
+def test_load_csv_runs_at_the_prompt(engine, tmp_path):
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(engine)
+    app._run_line(f'.load_csv(pairs, "{tmp_path}/t.csv")')
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+
+
+def test_an_unknown_command_of_the_engine_is_its_error(engine):
+    app = _app(engine)
+    app._run_line(".nope(1)")
+    out = _output(app)
+    assert "not supported" in out
+    assert "Unknown command" not in out
+    assert app.failed
+
+
+def test_a_dot_line_without_brackets_is_still_a_repl_command(engine):
+    app = _app(engine)
+    app._run_line(".nope")
+    assert "Unknown command .nope" in _output(app)
+
+
+def test_a_command_of_the_engine_runs_in_squall_mode(greeting_engine):
+    app = _app(greeting_engine, squall=True)
+    app._run_line('.greet("ada")')
+    assert app.settings.squall and not app.failed
+    app.settings.squall = False
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+
+
+def test_what_the_commands_of_a_query_load_stays(greeting_engine, tmp_path):
+    """The rules and facts of a query are local to it; the relations its
+    commands loaded are the session's, as the state of the commands is."""
+    (tmp_path / "t.csv").write_text("x,y\n1,a\n2,b\n")
+    app = _app(greeting_engine)
+    app._execute_and_display(
+        f'.greet("ada")\n.load_csv(pairs, "{tmp_path}/t.csv")\n'
+        'twice(x) :- greeted(x)\nans(x) :- twice(x)'
+    )
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- greeted(x)")
+    assert list(app.results[-1].frame.iloc[:, 0]) == ["ada"]
+    app._execute_and_display("ans(x) :- pairs(x, y)")
+    assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
+    assert "twice" not in {s.name for s in app._nl.symbol_table}
+
+
+class TestEuclideanJoinProfile:
+    """The REPL joins within a distance with the least memory."""
+
+    @pytest.fixture(autouse=True)
+    def restore_profile(self):
+        from neurolang.utils.euclidean_join_settings import profile
+
+        with profile("default"):
+            yield
+
+    def test_a_session_uses_the_memory_profile(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        assert not SETTINGS.stencil_count_first
+        InteractiveTuiApp(NeurolangDL(), console=_console())
+        assert SETTINGS.stencil_count_first
+
+    def test_a_session_applies_the_settings_of_its_engine(self, monkeypatch):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+        from neurolang_apps.utils import engine_registry
+
+        monkeypatch.setattr(
+            engine_registry, "get_euclidean_join_settings",
+            lambda name, yaml_path=None: {"kdtree_chunk_pairs": 77},
+        )
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(engine_name="neurosynth"),
+            console=_console(),
+        )
+        assert SETTINGS.kdtree_chunk_pairs == 77
+        assert SETTINGS.stencil_count_first
+
+    def test_the_profile_is_a_setting_of_the_session(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(join_profile="default"),
+            console=_console(),
+        )
+        assert not SETTINGS.stencil_count_first

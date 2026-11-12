@@ -19,6 +19,8 @@ def symbols(nl):
 
 @pytest.mark.parametrize("query, language", [
     ("ans(s) :- mentions(s, 'pain')", "datalog"),
+    ("ans[pain](s) :- mentions(s, 'pain')", "datalog"),
+    ("ans() :- mentions(1, 'pain')", "datalog"),
     ("obtain every Study that mentions 'pain'.", "squall"),
 ])
 def test_valid_queries(nl, query, language):
@@ -153,8 +155,9 @@ def test_schema_summary_uses_the_engine_configuration(nl, monkeypatch):
         lambda name: declared,
     )
     context = EngineContext(nl, "neurosynth")
+    # the sort of a column not named after it follows it
     assert (
-        "- mentions(study_id, term) — Studies and terms "
+        "- mentions(study_id: study, term) — Studies and terms "
         "[stored, 4 rows]" in context.schema_summary()
     )
     assert "mentions(1, 'pain')" in context.search_values(

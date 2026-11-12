@@ -49,6 +49,9 @@ class Reply:
     text: str = ""
     tool_calls: list = field(default_factory=list)
     usage: dict = field(default_factory=dict)
+    # The content blocks of an Anthropic reply, sent back as they are:
+    # its thinking blocks must stay with its tool calls.
+    blocks: list = field(default_factory=list)
 
 
 def _parse_arguments(arguments) -> dict:
@@ -271,6 +274,11 @@ class AnthropicChatClient(ChatClient):
                          "_tool_results": True}
                     )
                 continue
+            if role == "assistant" and message.get("blocks"):
+                converted.append(
+                    {"role": "assistant", "content": message["blocks"]}
+                )
+                continue
             if role == "assistant" and message.get("tool_calls"):
                 content = []
                 if message.get("content"):
@@ -295,10 +303,10 @@ class AnthropicChatClient(ChatClient):
         system = "\n\n".join(
             m["content"] for m in messages if m["role"] == "system"
         )
+        # No temperature: current Claude models reject sampling parameters.
         payload = {
             "model": self.provider.model,
             "messages": self._messages(messages),
-            "temperature": temperature,
             "max_tokens": self.provider.max_tokens,
         }
         if system:
@@ -333,6 +341,7 @@ class AnthropicChatClient(ChatClient):
                 "input": usage.get("input_tokens", 0),
                 "output": usage.get("output_tokens", 0),
             },
+            data["content"],
         )
 
 

@@ -8,20 +8,25 @@ literature:
   the language, the predicates of the engine and the examples closest to
   the question; the query the model writes is checked on the engine and,
   when it fails, the error is sent back for a correction (validation and
-  reprompting). With several samples, the query most candidates agree on
-  is kept (self-consistency).
+  reprompting).
 * :class:`ReactAgent`, ReAct: the model reasons and calls tools to look
   at the predicates and their values, check and run its query, until it
   gives its final answer. The tools are called with the provider's
   native tool calls or with a Thought / Action / Observation text
   protocol that any chat model can follow.
+
+With several ``samples``, either agent answers that many times and keeps
+the answer whose result most of them give (self-consistency). Without a
+majority, more than half of the answers giving the same rows, or when
+none is valid, the ``fallback_provider`` of the configuration, if any,
+answers once instead.
 """
 
 import json
 import re
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
 from neurolang_apps.utils import engine_registry
@@ -32,7 +37,9 @@ from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
 from .providers import LLMError, make_client
-from .validation import check_query, run_preview
+from .validation import (
+    QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
+)
 
 MAX_OBSERVATION = 2000
 EXAMPLE_QUERIES = {
@@ -52,10 +59,11 @@ _THOUGHT = re.compile(
 _FINAL = re.compile(r"^\s*Final\s+Answer\s*:", re.MULTILINE | re.IGNORECASE)
 _OBSERVATION = re.compile(r"^\s*Observation\s*:", re.MULTILINE)
 _VERDICT = re.compile(r"VERDICT\s*:\s*\**\s*(yes|no)\b", re.IGNORECASE)
-# A keyword line as models write it, emphasis included: **Action:** x
+# A keyword line as models write it, emphasis or tags included:
+# **Action:** x, <Action: x>, <Action>x</Action>
 _KEYWORD_LINE = re.compile(
-    r"^[\s*_`#>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
-    r"[*_`\s]*:[*_`\s]*(.*)$",
+    r"^[\s*_`#<>-]*(Thought|Action[ _]Input|Action|Final[ _]Answer)"
+    r"[*_`\s]*[:>][*_`\s]*(.*?)\s*(?:</[\w ]+>|>)?\s*$",
     re.IGNORECASE,
 )
 
@@ -170,15 +178,13 @@ def parse_text_action(text: str, language: str) -> TextAction:
     """
     Parse the Thought / Action / Action Input of a text protocol reply.
 
-    A reply hallucinating its own ``Observation:`` is cut there. A
-    ``Final Answer:`` or a lone fenced query is read as a call of
-    ``final_answer``. On a malformed reply, *error* tells the model
-    how to write its action.
+    A reply hallucinating its own ``Observation:`` is cut there (see
+    :func:`_reply_end`). A ``Final Answer:`` or a lone fenced query is
+    read as a call of ``final_answer``. On a malformed reply, *error*
+    tells the model how to write its action.
     """
-    observed = _OBSERVATION.search(text)
-    if observed:
-        text = text[:observed.start()]
     text = _normalise_keywords(text)
+    text = text[:_reply_end(text)]
     thought = _THOUGHT.search(text)
     thought = thought.group(1).strip() if thought else ""
     action = _ACTION.search(text)
@@ -215,15 +221,43 @@ def parse_text_action(text: str, language: str) -> TextAction:
             except ValueError:
                 pass
         return TextAction(thought, name, {})
+    rest = text[arguments_start.end():]
     try:
-        arguments = _json_object(text[arguments_start.end():])
+        arguments = _json_object(rest)
     except ValueError:
+        # A lone JSON string is the argument of a tool taking one.
+        required = next((
+            tool["parameters"].get("required", [])
+            for tool in prompts.TOOLS if tool["name"] == name
+        ), [])
+        try:
+            value = json.loads(rest.strip().split("\n", 1)[0])
+        except ValueError:
+            value = None
+        if isinstance(value, str) and len(required) == 1:
+            return TextAction(thought, name, {required[0]: value})
         return TextAction(
             thought, name,
             error="The Action Input is not a JSON object, e.g. Action Input: "
             + json.dumps({"query": EXAMPLE_QUERIES[language]}),
         )
     return TextAction(thought, name, arguments)
+
+
+def _reply_end(text: str) -> int:
+    """
+    Return where a text protocol reply, its keywords normalised, ends: at
+    the ``Observation:`` it hallucinates after its action (or final
+    answer), if any; one before it, the echo of the last observation, is
+    kept.
+    """
+    starts = [
+        m.start() for m in (
+            _ACTION.search(text), _FINAL.search(text), _FENCE.search(text)
+        ) if m
+    ]
+    observed = _OBSERVATION.search(text, min(starts, default=0))
+    return observed.start() if observed else len(text)
 
 
 def _atom_count(query: str) -> int:
@@ -262,8 +296,28 @@ class Toolbox:
         # whole result (see validation.Preview.frames).
         self.answer_rows = ""
         self.answer_frames = None
+        # The observations of the calls, by tool and arguments.
+        self.observations = {}
 
     def call(self, name: str, arguments: dict):
+        """
+        Run the tool *name* with *arguments*: (observation, final). A call
+        made already, but final_answer, is not run again: a model in a
+        loop is told so, with the result it had.
+        """
+        key = (name, json.dumps(arguments, sort_keys=True, default=str))
+        if key in self.observations and name != "final_answer":
+            return (
+                f"You already called {name} with these arguments, which "
+                f"gave:\n{truncate(self.observations[key], 500)}\n"
+                "Do not call it again: use that result and take the next "
+                "step."
+            ), None
+        observation, final = self._call(name, arguments)
+        self.observations[key] = observation
+        return observation, final
+
+    def _call(self, name: str, arguments: dict):
         """Run the tool *name* with *arguments*: (observation, final)."""
         handler = getattr(self, f"tool_{name}", None)
         if handler is None:
@@ -282,7 +336,17 @@ class Toolbox:
         return self.context.schema_summary(), None
 
     def tool_describe_predicate(self, name: str):
-        return self.context.describe(name), None
+        # Its sample rows run the rules: as long as any query may.
+        try:
+            return _in_child(
+                lambda: self.context.describe(name),
+                self.query_timeout, self.query_memory_mb,
+            ), None
+        except (QueryTimeout, QueryTooLarge):
+            return (
+                f"Computing the rows of {name} takes too long, they are "
+                f"not listed.\n{self.context._bound_usage(name)}"
+            ), None
 
     def tool_search_values(self, pattern: str, predicate=None, column=None):
         return self.context.search_values(pattern, predicate, column), None
@@ -350,9 +414,11 @@ class Agent:
     Base of the agents: the engine, the model and the prompt.
 
     *client* is the chat client of *provider* (by default made from its
-    configuration), *on_step* is called with each :class:`AgentStep` as
-    it ends, and the examples whose question is *exclude_question* are
-    left out of the prompt (to evaluate on the example bank).
+    configuration), and *fallback_client* that of the configuration's
+    ``fallback_provider``; *on_step* is called with each
+    :class:`AgentStep` as it ends, and the examples whose question is
+    *exclude_question* are left out of the prompt (to evaluate on the
+    example bank).
 
     The examples of the prompt are chosen among *examples*, a list of
     :class:`~.examples.Example`, by default the engine's bank, and the
@@ -368,7 +434,7 @@ class Agent:
         language: str, engine_name: str = "", client=None, loaded=None,
         on_step: Optional[Callable] = None, exclude_question: str = "",
         examples: Optional[list] = None, description: Optional[str] = None,
-        guidance: Optional[str] = None,
+        guidance: Optional[str] = None, fallback_client=None,
     ):
         self.nl = nl
         self.provider = provider
@@ -376,6 +442,7 @@ class Agent:
         self.language = language
         self.engine_name = engine_name
         self.client = client or make_client(provider, config.timeout)
+        self.fallback_client = fallback_client
         self.context = EngineContext(nl, engine_name, loaded)
         self.on_step = on_step or (lambda step: None)
         self.exclude_question = exclude_question
@@ -413,13 +480,20 @@ class Agent:
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):
-        """Return the model's reply to *messages*, counting its usage."""
-        reply = self.client.complete(
-            messages, tools,
-            self.config.temperature if temperature is None else temperature,
-        )
-        result.calls += 1
-        result.usage.update(reply.usage)
+        """
+        Return the model's reply to *messages*, counting its usage. An
+        empty reply (all the tokens spent on reasoning, or a glitch of
+        the provider) is asked for again once.
+        """
+        for _ in range(2):
+            reply = self.client.complete(
+                messages, tools, self.config.temperature
+                if temperature is None else temperature,
+            )
+            result.calls += 1
+            result.usage.update(reply.usage)
+            if reply.text.strip() or reply.tool_calls:
+                break
         return reply
 
     def _step(self, result: AgentResult, step: AgentStep) -> None:
@@ -457,8 +531,93 @@ class Agent:
         return result
 
     def _run(self, question: str) -> AgentResult:
-        """Return the query answering *question*, as the strategy finds it."""
+        """
+        Return the query answering *question*: the answer of the vote of
+        the samples, or else of the fallback provider (see the module).
+        """
+        samples = max(1, self.config.samples)
+        fallback = self.config.fallback_provider
+        if samples == 1 and fallback is None:
+            return self._attempt(question, self.config.temperature)
+        temperature = self.config.temperature
+        if samples > 1:
+            temperature = max(temperature, 0.7)
+        chosen, majority = self._vote([
+            self._sample(question, temperature) for _ in range(samples)
+        ])
+        if majority or fallback is None:
+            return chosen
+        self._step(chosen, AgentStep(
+            "", "fallback", {
+                "provider": fallback.name,
+                "voted": chosen.query if chosen.valid else "",
+            },
+            f"No majority of the {samples} answers: {fallback.name} answers.",
+        ))
+        answer = self._fallback(question, fallback)
+        answer.steps[:0] = chosen.steps
+        answer.usage.update(chosen.usage)
+        answer.calls += chosen.calls
+        return answer
+
+    def _attempt(self, question: str, temperature: float) -> AgentResult:
+        """Return an answer to *question*, as the strategy finds it."""
         raise NotImplementedError
+
+    def _sample(self, question: str, temperature: float) -> AgentResult:
+        """Return an answer to *question*, failed if the model failed."""
+        try:
+            return self._attempt(question, temperature)
+        except LLMError as exc:
+            return AgentResult(language=self.language, error=str(exc))
+
+    def _fallback(self, question: str, fallback: ProviderConfig):
+        """Return the answer of the provider *fallback* to *question*."""
+        if self.fallback_client is None:
+            self.fallback_client = make_client(fallback, self.config.timeout)
+        state = self.provider, self.client, self.config
+        self.provider, self.client = fallback, self.fallback_client
+        self.config = replace(self.config, samples=1, fallback_provider=None)
+        try:
+            return self._sample(question, self.config.temperature)
+        finally:
+            self.provider, self.client, self.config = state
+
+    def _fingerprint(self, candidate: AgentResult):
+        """Return what identifies the result of *candidate*, for the vote."""
+        frame = candidate.frames[0][1] if candidate.frames else None
+        if frame is None:
+            preview = run_preview(
+                self.nl, candidate.query, self.language, 0,
+                timeout=self.config.query_timeout,
+                memory_mb=self.config.query_memory_mb,
+            )
+            frame = preview.frame if preview.ok else None
+        if frame is not None:
+            rows = frame.astype(str).itertuples(index=False)
+            return ("rows", frozenset(map(tuple, rows)))
+        return ("text", " ".join(candidate.query.split()))
+
+    def _vote(self, candidates: list):
+        """
+        Return the valid candidate whose result most candidates give, or
+        the first, with the usage of all, and whether more than half of
+        the candidates give that result.
+        """
+        valid = [c for c in candidates if c.valid]
+        chosen, votes = candidates[0], 0
+        if valid:
+            fingerprints = [self._fingerprint(c) for c in valid]
+            counts = Counter(fingerprints)
+            chosen, fingerprint = max(
+                zip(valid, fingerprints), key=lambda pair: counts[pair[1]]
+            )
+            votes = counts[fingerprint]
+        for candidate in candidates:
+            if candidate is not chosen:
+                chosen.usage.update(candidate.usage)
+                chosen.calls += candidate.calls
+        return chosen, votes > len(candidates) / 2
 
     def _comment(self, result: AgentResult, question: str) -> None:
         """
@@ -489,16 +648,6 @@ class IclAgent(Agent):
     """In-context learning, then validation and repair of the query."""
 
     strategy = "icl"
-
-    def _run(self, question: str) -> AgentResult:
-        samples = max(1, self.config.samples)
-        if samples == 1:
-            return self._attempt(question, self.config.temperature)
-        temperature = max(self.config.temperature, 0.7)
-        candidates = [
-            self._attempt(question, temperature) for _ in range(samples)
-        ]
-        return self._vote(candidates)
 
     def _attempt(self, question: str, temperature: float) -> AgentResult:
         """Ask for a query and correct it until it passes the checks."""
@@ -535,34 +684,6 @@ class IclAgent(Agent):
                 )},
             ]
         return result
-
-    def _fingerprint(self, query: str):
-        """Return what identifies the result of *query*, for the vote."""
-        preview = run_preview(
-            self.nl, query, self.language, 0,
-            timeout=self.config.query_timeout,
-            memory_mb=self.config.query_memory_mb,
-        )
-        if preview.ok and preview.frame is not None:
-            rows = preview.frame.astype(str).itertuples(index=False)
-            return ("rows", frozenset(map(tuple, rows)))
-        return ("text", " ".join(query.split()))
-
-    def _vote(self, candidates: list) -> AgentResult:
-        """Return the valid candidate whose result most candidates give."""
-        valid = [c for c in candidates if c.valid]
-        chosen = candidates[0]
-        if valid:
-            fingerprints = [self._fingerprint(c.query) for c in valid]
-            counts = Counter(fingerprints)
-            chosen = max(
-                zip(valid, fingerprints), key=lambda pair: counts[pair[1]]
-            )[0]
-        for candidate in candidates:
-            if candidate is not chosen:
-                chosen.usage.update(candidate.usage)
-                chosen.calls += candidate.calls
-        return chosen
 
 
 def parse_verdict(text: str):
@@ -605,7 +726,7 @@ class ReactAgent(Agent):
         """Whether the provider's native tool calls are used."""
         return self.provider.tool_calling == "native"
 
-    def _run(self, question: str) -> AgentResult:
+    def _attempt(self, question: str, temperature: float) -> AgentResult:
         result = AgentResult(language=self.language)
         toolbox = Toolbox(
             self.context, self.language, self.config.preview_rows,
@@ -620,7 +741,7 @@ class ReactAgent(Agent):
         turn = self._native_turn if self.native else self._text_turn
         rejections = 0
         for _ in range(self.config.max_steps):
-            final = turn(result, messages, toolbox)
+            final = turn(result, messages, toolbox, temperature)
             if final is None:
                 continue
             rejection = None
@@ -717,9 +838,9 @@ class ReactAgent(Agent):
         self._step(result, AgentStep(thought, name, arguments, observation))
         return observation, final
 
-    def _native_turn(self, result, messages, toolbox):
+    def _native_turn(self, result, messages, toolbox, temperature):
         """Run one turn with the provider's tool calls."""
-        reply = self._complete(result, messages, prompts.TOOLS)
+        reply = self._complete(result, messages, prompts.TOOLS, temperature)
         if not reply.tool_calls:
             query = extract_query(reply.text, self.language)
             messages.append({"role": "assistant", "content": reply.text})
@@ -740,7 +861,7 @@ class ReactAgent(Agent):
             return None
         messages.append({
             "role": "assistant", "content": reply.text,
-            "tool_calls": reply.tool_calls,
+            "tool_calls": reply.tool_calls, "blocks": reply.blocks,
         })
         accepted = None
         for call in reply.tool_calls:
@@ -754,12 +875,12 @@ class ReactAgent(Agent):
             accepted = accepted or final
         return accepted
 
-    def _text_turn(self, result, messages, toolbox):
+    def _text_turn(self, result, messages, toolbox, temperature):
         """Run one turn of the Thought / Action / Observation protocol."""
-        reply = self._complete(result, messages)
+        reply = self._complete(result, messages, temperature=temperature)
         action = parse_text_action(reply.text, self.language)
-        observed = _OBSERVATION.search(reply.text)
-        content = reply.text[:observed.start()] if observed else reply.text
+        content = _normalise_keywords(reply.text)
+        content = content[:_reply_end(content)]
         error = action.error
         if error and reply.usage.get("output", 0) >= self.provider.max_tokens:
             # A reply cut at the token limit, often a loop the model

@@ -6,11 +6,13 @@ import pandas
 import pytest
 import scipy.spatial
 
+from .. import euclidean_join as euclidean_join_module
 from ..euclidean_join import (
     euclidean_distance,
     euclidean_join,
     euclidean_pairs,
 )
+from ..euclidean_join_settings import SETTINGS
 
 
 def _brute_force(first, second, radius, strict):
@@ -260,3 +262,165 @@ def test_join_holds_little_more_than_its_result():
         tracemalloc.stop()
     assert len(result) > 1_000_000
     assert peak < 1.8 * result.memory_usage(index=False).sum()
+
+
+def _force_kdtree(monkeypatch):
+    monkeypatch.setattr(SETTINGS, "stencil_min_work", 0)
+    monkeypatch.setattr(SETTINGS, "stencil_work_per_point", 0)
+    monkeypatch.setattr(SETTINGS, "stencil_grid_cells_per_point", 0)
+
+
+@pytest.mark.parametrize("integers", [True, False])
+@pytest.mark.parametrize("strict", [True, False])
+def test_kdtree_chunks_give_the_pairs_of_one_search(
+    monkeypatch, integers, strict
+):
+    rng = numpy.random.default_rng(1)
+    first = rng.integers(0, 12, size=(120, 3))
+    second = rng.integers(0, 12, size=(300, 3))
+    if not integers:
+        first, second = first + 0.25, second - 0.5
+    first, second = numpy.unique(first, axis=0), numpy.unique(second, axis=0)
+    _force_kdtree(monkeypatch)
+    expected = _found(first, second, 2, strict)
+    assert expected == _brute_force(first, second, 2, strict)
+    for chunk_pairs in (1, 200, 10 ** 9):
+        monkeypatch.setattr(SETTINGS, "kdtree_chunk_pairs", chunk_pairs)
+        assert _found(first, second, 2, strict) == expected
+
+
+@pytest.mark.parametrize("force_kdtree", [True, False])
+def test_distances_are_not_returned_when_not_asked_for(
+    monkeypatch, force_kdtree
+):
+    if force_kdtree:
+        _force_kdtree(monkeypatch)
+    with_distances = euclidean_join_module._pairs(
+        GRID.to_numpy(), PEAKS[PEAK_POINT].drop_duplicates().to_numpy(), 2,
+        numpy.less,
+    )
+    without = euclidean_join_module._pairs(
+        GRID.to_numpy(), PEAKS[PEAK_POINT].drop_duplicates().to_numpy(), 2,
+        numpy.less, with_distances=False,
+    )
+    assert without[2] is None
+    for found, other in zip(with_distances[:2], without[:2]):
+        numpy.testing.assert_array_equal(found, other)
+    assert len(with_distances[2]) == len(with_distances[0]) > 0
+
+
+def _count_kdtrees(monkeypatch):
+    built = []
+    build = scipy.spatial.cKDTree
+    monkeypatch.setattr(
+        scipy.spatial, "cKDTree",
+        lambda *args, **kwargs: built.append(1) or build(*args, **kwargs),
+    )
+    return built
+
+
+def test_dense_integer_sets_are_joined_with_a_stencil(monkeypatch):
+    """
+    A stencil look-up costs far less than a pair found by a k-d tree, so
+    that a dense set is searched with a stencil however many look-ups.
+    """
+    monkeypatch.setattr(SETTINGS, "stencil_min_work", 0)
+    monkeypatch.setattr(SETTINGS, "stencil_work_per_point", 0)
+    built = _count_kdtrees(monkeypatch)
+    axis = numpy.arange(12)
+    large = numpy.stack(numpy.meshgrid(axis, axis, axis), -1).reshape(-1, 3)
+    small = large[::7] + 1
+    pairs = _found(small, large, 3, True)
+    assert not built
+    assert pairs == _brute_force(small, large, 3, True)
+
+
+def test_sparse_integer_sets_are_joined_with_k_d_trees(monkeypatch):
+    monkeypatch.setattr(SETTINGS, "stencil_min_work", 0)
+    monkeypatch.setattr(SETTINGS, "stencil_work_per_point", 0)
+    built = _count_kdtrees(monkeypatch)
+    rng = numpy.random.default_rng(2)
+    large = numpy.unique(rng.integers(0, 300, size=(200, 3)), axis=0)
+    small = numpy.unique(rng.integers(0, 300, size=(100, 3)), axis=0)
+    pairs = _found(small, large, 40, True)
+    assert built
+    assert pairs == _brute_force(small, large, 40, True)
+
+
+def _join_peak_memory(grid, peaks, radius):
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        result = euclidean_join(
+            (grid, ["i", "j", "k"]), (peaks, ["i1", "j1", "k1"]), radius,
+            True, ["i", "j", "k", "s"], "d",
+        )
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    return result, peak
+
+
+def test_k_d_tree_join_holds_little_more_than_its_result(monkeypatch):
+    """
+    The pairs the k-d trees return are searched in chunks: the arrays of
+    the trees' pairs, which are more than the result's, are never all alive.
+    """
+    _force_kdtree(monkeypatch)
+    monkeypatch.setattr(SETTINGS, "kdtree_chunk_pairs", 200_000)
+    rng = numpy.random.default_rng(0)
+    axis = numpy.arange(40)
+    grid = pandas.DataFrame(
+        numpy.stack(numpy.meshgrid(axis, axis, axis), -1).reshape(-1, 3),
+        columns=["i", "j", "k"],
+    )
+    peaks = pandas.DataFrame(
+        rng.integers(0, 40, size=(20_000, 3)), columns=["i1", "j1", "k1"]
+    ).assign(s=rng.integers(0, 2_000, 20_000)).drop_duplicates()
+    result, peak = _join_peak_memory(grid, peaks, 3)
+    assert len(result) > 1_000_000
+    assert peak < 1.8 * result.memory_usage(index=False).sum()
+
+
+@pytest.mark.parametrize("strict", [True, False])
+@pytest.mark.parametrize("step,radius", [(0.5, 1.5), (0.1, 0.3), (0.25, 1.0)])
+def test_float_grids_are_joined_with_a_stencil(
+    monkeypatch, strict, step, radius
+):
+    """
+    Float points on a grid, ties at the radius included, are joined as
+    integers, with the distances of the floats.
+    """
+    built = _count_kdtrees(monkeypatch)
+    rng = numpy.random.default_rng(3)
+    first = numpy.unique(rng.integers(-8, 9, size=(60, 3)), axis=0) * step
+    second = numpy.unique(rng.integers(-8, 9, size=(200, 3)), axis=0) * step
+    pairs = _found(first, second, radius, strict)
+    assert not built
+    assert pairs == _brute_force(first, second, radius, strict)
+    assert any(
+        euclidean_distance(*p[:3], *p[3:]) == radius for p in pairs
+    ) or strict
+
+
+def test_float_points_off_a_grid_are_joined_with_k_d_trees(monkeypatch):
+    built = _count_kdtrees(monkeypatch)
+    rng = numpy.random.default_rng(4)
+    first = rng.uniform(0, 5, size=(30, 3))
+    second = rng.uniform(0, 5, size=(80, 3))
+    assert _found(first, second, 1.5, True) == _brute_force(
+        first, second, 1.5, True
+    )
+    assert built
+
+
+def test_float_grid_distances_are_those_of_the_floats():
+    first = numpy.array([[0.1, 0.2, 0.3]])
+    second = numpy.array([[0.4, 0.6, 0.3], [0.1, 0.2, 0.6]])
+    first_index, second_index, distances = euclidean_pairs(
+        first, second, 0.6, False
+    )
+    assert len(distances) == 2
+    for i, j, dist in zip(first_index, second_index, distances):
+        assert dist == euclidean_distance(*first[i], *second[j])

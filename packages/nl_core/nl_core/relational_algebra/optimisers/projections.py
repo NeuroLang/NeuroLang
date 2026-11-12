@@ -28,6 +28,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from .columns import _project_onto_operand, _ra_columns
+from .join_ordering import _has_join_operand
 
 
 def _is_trivial_nary_projection(expression):
@@ -495,7 +496,11 @@ class PushProjectionsDown(ew.PatternWalker):
     Only fires when at least one child can drop a column.
     """
 
-    @ew.add_match(Projection(NaturalJoin, ...))
+    @ew.add_match(
+        Projection(NaturalJoin, ...),
+        # A join of joins is flattened first, to be ordered as a whole.
+        lambda expression: not _has_join_operand(expression.relation)
+    )
     def push_through_join(self, expression):
         result = self._push_through_pair(expression, NaturalJoin)
         if result is not expression:

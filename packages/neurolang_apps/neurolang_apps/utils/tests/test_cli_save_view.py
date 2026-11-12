@@ -10,6 +10,7 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
+from neurolang.atlases import Atlas  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils import cli, engine_registry  # noqa: E402
 from neurolang_apps.utils.tui import brain_viewer  # noqa: E402
@@ -165,8 +166,8 @@ def atlas(engine):
     labels = np.zeros(SHAPE, dtype=np.int16)
     labels[:2], labels[2:] = 1, 2
     engine.grids["schaefer"] = nib.Nifti1Image(labels, AFFINE)
-    engine_registry._register_atlas_labels(
-        engine, "schaefer", {1: "A", 2: "B"}
+    engine.atlases["schaefer"] = Atlas.from_labels(
+        "schaefer", engine.grids["schaefer"], {1: "A", 2: "B"}
     )
     engine.add_tuple_set(
         [("A", "s1"), ("B", "s1"), ("A", "s2")], name="schaefer_activated"
@@ -182,7 +183,8 @@ def test_view_the_regions_of_a_result(atlas, viewer, capsys):
     [(image, options)] = viewer
     data = np.asanyarray(image.dataobj)
     assert np.all(data[:2] == 2) and np.all(data[2:] == 1)
-    assert options["threshold"] == 0.0
+    # a value of each region: its top 5%, as for voxels
+    assert options["threshold"] == "95%"
     assert "2 regions" in capsys.readouterr().err
 
 
@@ -195,7 +197,7 @@ def test_view_a_network_of_regions(atlas, viewer, capsys):
     [(image, options)] = viewer
     network = options["connectome"]
     assert [n["name"] for n in network["nodes"]] == ["A", "B"]
-    assert [e["colorValue"] for e in network["edges"]] == [1.0]
+    assert [e["value"] for e in network["edges"]] == [1.0]
     assert "Network of 2 nodes and 1 edges" in capsys.readouterr().err
 
 

@@ -175,7 +175,12 @@ def test_non_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x2, x1), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p') for symbol in (R, S)
+    }
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(
+        convert_rule_to_ucq(cq), symbol_table
+    )
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
 
@@ -411,8 +416,12 @@ def test_intractable_queries():
             ),
         )
     )
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, S1, S2, S3, T)
+    }
     for h in (h0, h1, h2, h3):
-        plan = dalvi_suciu_lift.dalvi_suciu_lift(h, {})
+        plan = dalvi_suciu_lift.dalvi_suciu_lift(h, symbol_table)
         assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
 
 

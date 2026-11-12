@@ -141,6 +141,34 @@ Variables that appear in the head must also appear in the body (the
 *range-restriction* property).  Variables used only in the body are
 existentially quantified.
 
+A body may be a **disjunction**, written ``|`` (or ``∨``); ``,`` binds tighter
+than ``|``, and parentheses group:
+
+.. code-block:: none
+
+    uncinate(x, h) :-
+        (traverses(x, 'orbitofrontal_gyrus', h)
+         | traverses(x, 'middle_frontal_gyrus', h)
+         | traverses(x, 'inferior_frontal_gyrus', h)),
+        endpoint_in(x, e, 'temporal', h).
+
+stands for three rules, one per disjunct.  Each disjunct must bind the
+variables of the head, and those of its negated atoms.  ``a(x), b(x) | c(x)``
+is ``(a(x), b(x)) | c(x)``.  Inside parentheses a comparison is a
+formula of its own, so that values are alternatives of a variable::
+
+    ans(i, t) :- cogat_term(i, t), (t == 'motor execution' | t == 'motor planning')
+
+and ``b(x), (a(x) | x < 3)`` is ``b(x), (a(x) | (x < 3))``; outside
+parentheses a comparison keeps its own: ``b(x), (x < 3)``.
+
+.. note::
+
+   ``|`` is a disjunction everywhere, also inside ``PROB[...]`` and
+   ``MARG[...]``: ``PROB[a(x) | b(x)] = p`` is the probability of
+   ``a(x) | b(x)``.  A conditional probability is written with ``//`` only.
+   Before, ``|`` was a synonym of ``//``.
+
 2.3 The Query Predicate — ``ans(...)``
 ----------------------------------------
 
@@ -158,6 +186,27 @@ query immediately and returns the result as a ``RelationalAlgebraFrozenSet``:
 
 If the program contains multiple rules without an ``ans`` rule, you can
 retrieve results later with ``nl.solve_all()``.
+
+A program can hold several queries, each with a name in brackets,
+``ans[name](...)``. The result is then a dictionary from the names to the
+answers, and ``.view`` in the REPL shows them all at once, as one image per
+query, with the networks and streamlines of the others:
+
+.. code-block:: python
+
+    prog = """
+        ans[left](x, y, z) :- activation(x, y, z, 'left hemisphere').
+        ans[tract](s) :- uncinate(s, 'left').
+        ans[network](r1, r2, p) :- coactivation(r1, r2, p).
+    """
+    results = nl.execute_datalog_program(prog)
+    results["left"], results["tract"], results["network"]
+
+The queries of a program have each a name: ``ans`` stands for the one
+without brackets, and two queries cannot share a name. A program with one
+query returns its answer, not a dictionary. The queries are solved
+together, which is faster than one after the other when they share
+predicates; see :ref:`several-queries`.
 
 2.4 Variables
 --------------
@@ -202,6 +251,54 @@ String literals use single quotes ``'...'``.  Numeric constants are written
 directly: ``42``, ``3.14``.  The ``==`` operator tests equality and works for
 both strings and numbers (see Part 8 for more comparisons).  Comparisons in a
 rule body must be enclosed in parentheses.
+
+
+.. _datalog-doc-comments:
+
+2.6 Comments and Documentation
+-------------------------------
+
+A ``%`` starts a comment, to the end of the line, unless it is in a string
+or an IRI.  A block of lines starting with ``%%`` right before a rule or a
+fact documents its predicate.  Its first line may give the signature of the
+predicate, the names of its arguments and, after a ``:``, their sorts; the
+other lines are its description:
+
+.. code-block:: none
+
+    %% uncinate(x: streamline, h: hemisphere)
+    %% The uncinate fasciculus: streamlines joining the orbitofrontal
+    %% cortex to the anterior temporal lobe through the temporal stem,
+    %% in hemisphere h.
+    uncinate(x, h) :- ...
+
+Without a signature, the whole block is the description.  The engine keeps
+the documentation (``nl.predicate_documentation()`` in Python,
+``nl.document_predicate(name, description, arguments)`` to set it): the
+query assistant and the REPL's ``.predicates`` show it, and a column of the
+sort ``streamline`` is drawn as streamlines by ``.view``.  The rules are:
+
+* The block must be right before the statement: a block followed by a blank
+  line, a ``%`` comment or nothing is a comment, as a header of a file.  A
+  ``%%`` after the start of a line, or inside a rule, is a comment too.
+* It documents the predicate of the rule, fact, probabilistic fact or
+  choice, or ``name := ...`` statement after it, and the following rules of
+  that predicate need none; it documents nothing before a query or a
+  command.
+* The signature is the first line only if it reads ``name(...)`` with the
+  name of that predicate, and then it must give its number of arguments.
+  Each argument is a column: the three columns of a voxel are written
+  ``i: voxel, j: voxel, k: voxel``.
+* The blocks of a predicate add up: their descriptions follow one another,
+  each once, and the arguments of the last signature are kept.
+* The documentation follows the scopes of the program, as its rules do:
+  that of a rule defined in ``with nl.scope:``, or in the REPL's session
+  that ``.clear`` empties, goes with it.  A module imported with
+  ``.import`` documents its predicates as the program does.
+* The documentation of a predicate in the program wins over its
+  description in the engine's configuration.
+
+``.document(name, "description")`` in a program documents a predicate too.
 
 
 Part 3: Predicates and Simple Rules
@@ -354,8 +451,8 @@ The equivalent in the Bayes Factor program:
     term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
     joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt.
 
-A conditioning filter can be added with ``//`` (``|`` is accepted as a
-synonym):
+A conditioning filter can be added with ``//`` (``|`` is a disjunction,
+not a conditioning, see 2.2):
 
 .. code-block:: none
 
@@ -633,6 +730,14 @@ the body from the aggregation function call.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``mean``,
 ``avg``, ``std``.
 
+``count(y)`` counts the distinct values of ``y`` in each group, and
+``count(y, z)`` the distinct pairs: ``count(s)`` over
+``schaefer_activated(l, s)`` counts each study once, however many parcels
+``l`` it activates.  The other functions take a value per row of the body:
+``sum(w)`` over ``weight(s, w)`` adds the weights of all the studies ``s``,
+equal or not, and ``mean(v)`` over the replicates ``rep(b, v)`` of a
+resampling averages all of them.
+
 Example — count studies per region:
 
 .. code-block:: none
@@ -702,13 +807,58 @@ Comparisons can be combined with conjunction in the same rule body.
 -----------------------------
 
 Commands use the ``.`` prefix and follow the Prolog convention.  The text
-Datalog frontend currently executes two commands, which load external data
-into a relation:
+Datalog frontend executes two commands which load external data into a
+relation:
 
 .. code-block:: none
 
     .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
     .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
+    .load_atlas(fs, "aparc+aseg.mgz", "FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+    .load_atlas(schaefer, kind="schaefer", n_rois=100)
+
+``.load_atlas`` adds the relation ``name(label, region)`` of an atlas: an
+image and a CSV of its labels at URLs (the first form, downloaded to
+``~/neurolang_data``), local files of ``kind`` ``"freesurfer"`` (a colour
+LUT), ``"bids"`` (a ``dseg.tsv``) or ``"tsv"``, the atlases of the engines
+(``"destrieux"``, ``"schaefer"``, ``"tian"``) or a fetcher of nilearn
+(``kind="nilearn", fetcher="harvard_oxford"``).  The engine records the
+atlas, a :class:`~neurolang.atlases.Atlas`, by name, in its ``atlases``.
+
+and ``.import``, which imports a *Datalog module*, a file of facts, rules
+and commands, as if its statements were written in its place:
+
+.. code-block:: none
+
+    .import("bundles/uncinate.dl")
+    .import("bundles/freesurfer_queries.dl")
+    ans(x) :- uf(x, "left").
+
+* The path of a module is relative to the directory of the importing file:
+  the program run with ``neurolang-query --file``, or the module importing
+  another; otherwise it is relative to the working directory.  A module not
+  found there is looked for in the directories an engine gives its modules
+  (``module_directories`` of its solver): with the engine ``tracts``,
+  ``.import("bundles/freesurfer_queries.dl")`` is one of its modules.
+  ``package:path`` is the file ``path`` shipped in the Python package
+  ``package``, found with :mod:`importlib.resources`, so that an engine or
+  a package can ship modules without their users knowing where it is
+  installed.
+* A module is imported once in a program (by its resolved path): importing
+  it again, from the program or from another module, does nothing.  The
+  imports belong to the scope they are made in: leaving a ``with
+  nl.scope:`` block, or ``.clear`` in the REPL, forgets them with the
+  rules they defined, and the module can be imported again.
+* A module imported while it is being imported is an import cycle, an error
+  naming the modules of the cycle.
+* A module defines; it does not query: a module with a query
+  (``ans(...) :- ...``) is refused.  An error in a module names its file,
+  with the line and column of a syntax error.
+
+From Python, ``nl.import_datalog_module("bundles/uncinate.dl")`` imports a
+module, and ``with nl.program_ir.importing_from("main.dl"):`` runs a
+program read from ``main.dl`` with its imports relative to the file's
+directory.
 
 Any other command (for instance ``.set_backend('polars')``) is rejected with
 an ``UnsupportedProgramError``.  To change the relational algebra backend
@@ -1096,8 +1246,9 @@ report each voxel::
 
 A result on the regions of an atlas, a column of region labels such as
 ``l`` of ``destrieux_activated(l, s)``, is painted region by region, on
-the atlas's grid, with the value of its rows; ``--view`` shows every
-region of the result.  The probability that a study mentioning language
+the atlas's grid, with the value of its rows; ``--view`` starts with the
+regions of the top 5% of the values, as for voxels (``--threshold`` changes
+it), and with every region of a result without values.  The probability that a study mentioning language
 activates each Destrieux region::
 
     neurolang-query --engine neurosynth --view \
@@ -1105,11 +1256,21 @@ activates each Destrieux region::
          term_association(s, t) :- mentions(s, t), selected_study(s)
          ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p"
 
+The viewer names the region of the result under the mouse, and under the
+cursor below the views; its control *atlas colours* draws the regions in
+the colours their atlas gives them: Schaefer's networks, FreeSurfer's for
+Destrieux (``aparc.a2009s``), those of Tian's subcortex.  A result of
+regions alone, ``ans(l) :- schaefer_label(l), startswith('17Networks LH
+Default', l)``, starts in them.
+
 A result of pairs of regions, or of points (``x1, y1, z1, x2, y2, z2``),
 with a value is a network: ``--view`` draws a node at the centre of each
-region and an edge per pair, its thickness and colour the value, the
-strongest 5% by default, in the 3D render of the brain and on the
-slices, and lists the strongest edges.  The co-activation of the
+region and an edge per pair, its colour and thickness the value, from
+the thinnest at the edge threshold to the thickest at the largest value,
+in the 3D render of the brain and on the slices, and lists the strongest
+edges.  The edge threshold, the strongest 5% by default (``--threshold``),
+is changed in the viewer, under the views: "Edges from" and its slider
+draw the network again with the edges above it.  The co-activation of the
 Schaefer regions by studies about reading, the probability that a study
 mentioning reading activates both regions of a pair::
 
@@ -1120,6 +1281,27 @@ mentioning reading activates both regions of a pair::
          ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p"
 
 Both work with ``--ask``, which then runs the query it writes.
+
+Where an answer comes from
+--------------------------
+
+In the interactive mode, ``.graph`` draws the last query, run or written by
+the assistant with ``.ask``, in a page opened in the browser; the REPL in
+the browser shows it in its *Graph* tab after each query. It reads from left
+to right: the data of the engine (its relations, its random choices, such as
+``selected_study``, and its probabilistic facts), the rules of the query and
+of the engine they go through, and the answer. A rule lists the atoms of its
+body, where the edges of the relations they use arrive, and how it combines
+them: the variables it joins them on, and those it keeps or drops. A rule
+using a random choice is probabilistic: its rows hold for some choices only
+(orange edges). ``PROB[...]`` turns it into the probability of each of its
+rows, given the condition after ``//`` (dashed edges): with one uniform
+choice, such as ``selected_study``, the share of the studies where the body
+and the condition hold among those where the condition holds. After a run,
+the answer shows the distribution of its probabilities. Clicking a node
+shows its rules and what it depends on. The relations that come from an
+ontology, such as the triples of the Cognitive Atlas (``rdfs:label``), are
+teal hexagons, apart from the blue cylinders of the regular tables.
 
 Inspecting query plans
 ----------------------

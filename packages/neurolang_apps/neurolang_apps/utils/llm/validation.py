@@ -36,7 +36,7 @@ from neurolang_apps.utils.predicate_catalog import predicate_catalog
 
 LANGUAGE_NAMES = {"squall": "SQUALL", "datalog": "Datalog"}
 CHILD_POLL_SECONDS = 0.25
-_DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*\(")
+_DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*(\[\s*\w+\s*\]\s*)?\(")
 _CALL = re.compile(
     r"(?<![\w.:'\"])([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_-]*)?)"
     r"\s*\("

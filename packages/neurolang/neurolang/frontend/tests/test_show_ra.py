@@ -217,7 +217,8 @@ def forward_inference_output(capsys, show_ra=True):
 
 
 def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
-    """Check that fresh columns that are no rule variable are c₀, c₁, …."""
+    """Check that fresh columns are not shown with their fresh names, nor
+    with those of the rule variables they are not."""
     blocks = rule_blocks(forward_inference_output(capsys))
     probabilistic = [
         (header, plan) for header, plan in blocks if "PROB" in header
@@ -228,7 +229,6 @@ def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
         assert rule_vars
         assert set(re.findall(r"s[₀-₉]+", plan)) <= rule_vars
         assert "fresh_" not in plan
-        assert re.search(r"c[₀-₉]+", plan)
 
 
 def test_probability_columns_labelled_by_role(capsys):
@@ -695,6 +695,16 @@ def test_analyze_does_not_change_evaluation():
 def test_show_ra_returns_empty_without_running_query(show_ra):
     res = build_engine().execute_datalog_program(THREE_WAY_JOIN, show_ra=show_ra)
     assert res.value.is_empty()
+
+
+@pytest.mark.parametrize("option", ["dry_run", "show_ra"])
+@pytest.mark.parametrize("engine_class", [NeurolangDL, NeurolangPDL])
+def test_yes_no_query_is_not_run(option, engine_class):
+    """A query without answer variables is planned, not run, either."""
+    nl = engine_class()
+    nl.add_tuple_set([(1,)], name="p")
+    answer = nl.execute_datalog_program("ans() :- p(1).", **{option: True})
+    assert answer is False
 
 
 def test_relation_rows_of_expensive_values_is_an_upper_bound():

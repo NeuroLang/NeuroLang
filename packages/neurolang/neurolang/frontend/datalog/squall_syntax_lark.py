@@ -67,6 +67,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow as op_pow, sub, trued
 
 from nl_core.datalog import Conjunction, Fact, Implication, Negation, Union
 from nl_core.datalog.expressions import AggregationApplication as _AggApp
+from nl_core.utils.relational_algebra_set import count_distinct
 from nl_expr.exceptions import SquallSemanticError
 from nl_expr.expressions import (
     Constant,
@@ -232,7 +233,7 @@ COMPARISON_OPS = {
 # the AGG_FUNC grammar terminal) to their corresponding Constant-wrapped
 # callables.  Grammar-valid names: count, sum, max, min, average.
 _AGG_FUNC_MAP = {
-    "count":   Constant(len),
+    "count":   Constant(count_distinct),
     "sum":     Constant(sum),
     "max":     Constant(max),
     "min":     Constant(min),

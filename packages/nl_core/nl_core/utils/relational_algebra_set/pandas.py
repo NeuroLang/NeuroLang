@@ -6,6 +6,7 @@ from uuid import uuid1
 import numpy as np
 import pandas as pd
 from . import abstract as abc
+from .abstract import count_distinct
 
 
 NA = pd.NA
@@ -1229,10 +1230,13 @@ class NamedRelationalAlgebraFrozenSet(
         Python's ``sum``, ``max`` and ``min`` are pandas' on a column of
         numbers without missing values (Python's give NaN, or an order
         dependent result, on one with them), and ``len`` is the size of
-        each group.
+        each group. ``count_distinct`` is pandas' ``nunique`` on a column
+        without missing values.
         """
         if fun is len:
             return "size"
+        if fun is count_distinct and not self._container[column].hasnans:
+            return "nunique"
         if fun not in _BUILTIN_REDUCTIONS:
             return fun
         values = self._container[column]

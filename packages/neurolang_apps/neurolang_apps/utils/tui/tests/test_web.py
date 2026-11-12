@@ -78,7 +78,7 @@ def test_view_pages_are_returned_not_opened(repl, monkeypatch, tmp_path):
     monkeypatch.setattr(nifti.tempfile, "tempdir", str(tmp_path))
     repl.submit("ans(x) :- person(x, n)")
     monkeypatch.setattr(
-        nifti, "last_result_images", lambda app, save: [("layer", Path("a"))]
+        nifti, "last_result_images", lambda app, block, save: [("layer", Path("a"))]
     )
     monkeypatch.setattr(
         nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"
@@ -309,6 +309,21 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     assert reply.prompt.splitlines()[-1] == "ans(x) :- person(x, n)"
     assert "Asking anthropic" in reply.html
     assert repl.submit("1").prompt == ""
+
+
+def test_the_query_the_assistant_wrote_comes_with_its_graph(repl):
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([
+        [("check_query", {"query": "ans(x) :- person(x, n)"})],
+        [("final_answer", {
+            "query": "ans(x) :- person(x, n)", "explanation": "Everyone.",
+        })],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    reply = repl.submit(".ask --react Who is there?")
+    assert ">person<" in reply.graph and ">ans<" in reply.graph
 
 
 def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
@@ -684,3 +699,12 @@ def test_the_commands_are_json(repl):
     import json
 
     assert json.loads(json.dumps(repl.commands())) == repl.commands()
+
+
+def test_the_assistant_is_ready_with_a_key(repl):
+    pytest.importorskip("httpx")
+    assert not repl.assistant_ready()
+    repl.set_llm("anthropic", "a-key")
+    assert repl.assistant_ready()
+    repl.clear_llm()
+    assert not repl.assistant_ready()

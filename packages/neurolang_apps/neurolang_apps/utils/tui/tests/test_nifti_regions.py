@@ -1,5 +1,7 @@
 """Tests for saving and viewing results on the regions of atlases."""
 
+import base64
+import gzip
 import io
 import json
 import re
@@ -16,6 +18,7 @@ pytest.importorskip("rich")
 import nibabel as nib  # noqa: E402
 from rich.console import Console  # noqa: E402
 
+from neurolang.atlases import Atlas  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils import engine_registry  # noqa: E402
 from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
@@ -84,10 +87,9 @@ def tiny(monkeypatch, tmp_path):
         "cortex": nib.Nifti1Image(_cortex_labels(), CORTEX_AFFINE),
         "deep": nib.Nifti1Image(deep, DEEP_AFFINE),
     }
-    engine_registry._register_atlas_labels(
-        nl, "cortex", {1: "A", 5: "A", 2: "B"}
-    )
-    engine_registry._register_atlas_labels(nl, "deep", {7: "C"})
+    for name, labels in (("cortex", {1: "A", 5: "A", 2: "B"}),
+                         ("deep", {7: "C"})):
+        nl.atlases[name] = Atlas.from_labels(name, nl.grids[name], labels)
     nl.add_tuple_set(
         [("A", 1), ("B", 1), ("A", 2), ("B", 3)], name="cortex_activated"
     )
@@ -226,8 +228,22 @@ class TestViewRegions:
         tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
         tiny._handle_dot_command(".view")
         img, kwargs = view_calls[-1]
-        assert kwargs["threshold"] == 0.0 and "connectome" not in kwargs
+        assert "connectome" not in kwargs
         assert _data(img).max() == 0.75
+        _remove_view_files(_output(tiny))
+
+    def test_regions_with_a_value_keep_their_top_5_percent(
+        self, tiny, view_calls
+    ):
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == "95%"
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_all_shown(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == 0.0
         _remove_view_files(_output(tiny))
 
     def test_a_threshold_given(self, tiny, view_calls):
@@ -242,6 +258,64 @@ class TestViewRegions:
         tiny._handle_dot_command(".view")
         assert view_calls[-1][1]["threshold"] == "95%"
         _remove_view_files(_output(tiny))
+
+
+class TestViewRegionNames:
+    """Check .view gives the viewer the regions of the result, by name and
+    in the colours of their atlas."""
+
+    def test_the_regions_of_a_result_with_values(self, tiny, view_calls):
+        engine_registry._register_colours(
+            tiny._nl, "cortex", [(1, "#ff0000"), (2, "#00ff00")]
+        )
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        img, kwargs = view_calls[-1]
+        regions = kwargs["regions"]
+        assert regions.names == ["A", "B"]
+        assert regions.colours == ["#ff0000", "#00ff00"]
+        # the values are shown, the colours of the atlas asked for
+        assert not regions.coloured
+        numbers = _data(regions.image)
+        assert numbers.shape == _data(img).shape
+        assert set(np.unique(numbers[_cortex_labels() == 1])) == {1}
+        assert set(np.unique(numbers[_cortex_labels() == 2])) == {2}
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_in_their_colours(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert regions.coloured
+        # an atlas without colours: those of the palette
+        assert regions.colours == list(nifti.REGION_PALETTE[:2])
+        _remove_view_files(_output(tiny))
+
+    def test_regions_of_two_atlases(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(l) :- cortex_activated(l, s) | deep_activated(l, s)"
+        )
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert sorted(regions.names) == ["A", "B", "C"]
+        assert regions.image.shape == (8, 8, 8)
+        _remove_view_files(_output(tiny))
+
+    def test_the_page_draws_the_colours(self):
+        image = nib.Nifti1Image(
+            np.array([[[0, 1], [2, 0]]], dtype=np.int16), np.eye(4)
+        )
+        state = brain_viewer.regions_state(nifti.RegionLayer(
+            image, ["A", "B"], ["#ff0000", "#0000ff"], True,
+        ))
+        assert state["names"] == ["A", "B"] and state["coloured"]
+        colours = nib.Nifti1Image.from_bytes(
+            gzip.decompress(base64.b64decode(state["colours"]))
+        )
+        rgba = np.asanyarray(colours.dataobj)
+        assert tuple(rgba[0, 0, 1]) == (255, 0, 0, 255)
+        assert tuple(rgba[0, 1, 0]) == (0, 0, 255, 255)
+        assert rgba[0, 0, 0]["A"] == 0
 
 
 class TestViewNetworks:
@@ -259,7 +333,7 @@ class TestViewNetworks:
         }
         np.testing.assert_allclose(centre["A"], [-3.0, -1.0, -1.0])
         # A–B given both ways keeps 0.75; A–A is left out
-        assert [e["colorValue"] for e in network["edges"]] == [0.75]
+        assert [e["value"] for e in network["edges"]] == [0.75]
         # the overlay is the strength of each node, on the atlas's grid
         np.testing.assert_allclose(_data(img)[0, 0, 0], 0.75)
         out = _output(tiny)
@@ -274,7 +348,7 @@ class TestViewNetworks:
         """)
         tiny._handle_dot_command(".view")
         network = view_calls[-1][1]["connectome"]
-        assert [e["colorValue"] for e in network["edges"]] == [1.0]
+        assert [e["value"] for e in network["edges"]] == [1.0]
         _remove_view_files(_output(tiny))
 
     def test_pairs_of_points_named_with_a_suffix(self, tiny, view_calls):
@@ -312,18 +386,26 @@ class TestConnectomeState:
         state = brain_viewer.connectome_state(
             self.NAMES, self.COORDINATES, self.EDGES, 0.15
         )
-        assert [e["colorValue"] for e in state["edges"]] == [0.2, 0.4]
-        assert state["edgeMin"] == 0.15 and state["edgeMax"] == 0.4
-        # the edges index the nodes kept: b and c, and a
-        strength = {n["name"]: n["colorValue"] for n in state["nodes"]}
-        assert strength == pytest.approx({"a": 0.4, "b": 0.2, "c": 0.6})
-        assert max(n["sizeValue"] for n in state["nodes"]) == 1.0
+        # all the edges, the largest first, for the page to threshold
+        assert [e["value"] for e in state["edges"]] == [0.4, 0.2, 0.1]
+        assert state["threshold"] == 0.15
+        assert [e["value"] for e in brain_viewer.shown_edges(state)] == [
+            0.4, 0.2
+        ]
+        assert [n["name"] for n in state["nodes"]] == self.NAMES
 
     def test_a_percentile_shows_a_few_edges_at_least(self):
         state = brain_viewer.connectome_state(
             self.NAMES, self.COORDINATES, self.EDGES, "95%"
         )
-        assert len(state["edges"]) == 3
+        assert len(brain_viewer.shown_edges(state)) == 3
+
+    def test_the_page_is_given_the_largest_edges(self, monkeypatch):
+        monkeypatch.setattr(brain_viewer, "MAX_EDGES", 2)
+        state = brain_viewer.connectome_state(
+            self.NAMES, self.COORDINATES, self.EDGES + [(0, 1, np.nan)], 0
+        )
+        assert [e["value"] for e in state["edges"]] == [0.4, 0.2]
 
     def test_a_percentile_of_many_edges(self):
         edges = [(0, 1, float(v)) for v in range(1, 101)]

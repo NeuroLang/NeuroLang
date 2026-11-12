@@ -121,9 +121,37 @@ def test_anthropic_request_and_tool_calls(monkeypatch):
     results = body["messages"][2]["content"]
     assert [r["tool_use_id"] for r in results] == ["c1", "c2"]
     assert body["tools"][0]["input_schema"]["type"] == "object"
+    assert "temperature" not in body
     assert reply.text == "Running it."
     assert reply.tool_calls[0].arguments == {"query": "obtain every Study."}
     assert reply.usage == {"input": 20, "output": 4}
+
+
+def test_anthropic_reply_blocks_are_sent_back_unchanged(monkeypatch):
+    """Thinking blocks go back with the tool calls they came with."""
+    blocks = [
+        {"type": "thinking", "thinking": "", "signature": "sig"},
+        {"type": "tool_use", "id": "t1", "name": "check_query",
+         "input": {"query": "ans(s) :- study(s)"}},
+    ]
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "content": blocks, "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
+    llm = client("anthropic", handler, monkeypatch)
+    reply = llm.complete(CONVERSATION[:2], TOOLS)
+    assert reply.blocks == blocks
+    llm.complete(CONVERSATION[:2] + [
+        {"role": "assistant", "content": reply.text,
+         "tool_calls": reply.tool_calls, "blocks": reply.blocks},
+        {"role": "tool", "tool_call_id": "t1", "name": "check_query",
+         "content": "valid"},
+    ], TOOLS)
+    assert bodies[1]["messages"][1] == {"role": "assistant", "content": blocks}
 
 
 def test_invalid_tool_arguments_are_kept(monkeypatch):

@@ -12,7 +12,8 @@
  * the crosshair, the gamma, NiiVue's colour bar, labels, orientation
  * cube and ruler, the radiological convention, the interpolation and
  * the clip plane; its hot keys V and C, on the views, change the view
- * and the clip plane. The colormaps of the page are given to NiiVue so
+ * and the clip plane. A network, or streamlines, are NiiVue meshes,
+ * drawn in the 3D render and on the slices near them. The colormaps of the page are given to NiiVue so
  * that it colours a value as the colour bars do:
  *
  * - one-sided, the colormap spans the threshold to the maximum, and the
@@ -29,9 +30,11 @@
   // transparent below the minimum.
   var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
 
-  // The display of NiiVue the page starts with, and Reset restores.
+  // The display of NiiVue the page starts with, and Reset restores: the 3
+  // slices in a row, or in a column on a screen as narrow as a phone's.
+  var NARROW = window.matchMedia && matchMedia('(max-width: 30rem)').matches;
   var DISPLAY = {
-    sliceType: 'multiplanar', layout: 'row', renderTile: false,
+    sliceType: 'multiplanar', layout: NARROW ? 'column' : 'row', renderTile: false,
     dragMode: 'contrast', crosshairColor: '#4fa1ff', crosshairWidth: 1,
     crosshair3D: false, gamma: 1, colorbar: false, orientationText: true,
     orientCube: false, ruler: false, radiological: false, smooth: true,
@@ -43,6 +46,32 @@
   // its values; the state holds the cursor, the active layer, the order
   // the layers are drawn in and the settings of each layer.
   var viewer = {layers: [], luts: {}, state: null, nv: null};
+
+  /* The theme: that the page showing this one sends (see frame_hooks.js),
+   * else the system's. The image is drawn on white in the light theme and
+   * on black in the dark one; the other colours are those of the page. */
+  function isLight() {
+    var chosen = document.documentElement.dataset.theme;
+    return chosen ? chosen === 'light' :
+      matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function backColor() {
+    var c = isLight() ? 1 : 0;
+    return [c, c, c, 1];
+  }
+
+  /* The empty voxels of the template are black: transparent on the white
+   * of the light theme. */
+  function setBackdrop(nv) {
+    nv.opts.backColor = backColor();
+    nv.opts.isAlphaClipDark = isLight();
+  }
+
+  function themeColour(name) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -124,18 +153,31 @@
     return layer;
   }
 
+  // Size NiiVue's canvas to the pixels of the screen again when the browser
+  // zoom changes them: NiiVue does so only when the canvas changes size,
+  // which in a frame of a fixed width the zoom does not change.
+  function followZoom(nv) {
+    if (!window.matchMedia) return;
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener(
+      'change', function () { nv.resizeListener(); followZoom(nv); },
+      { once: true });
+  }
+
   async function load() {
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
     }
     var nv = new niivue.Niivue({
-      backColor: [0, 0, 0, 1], crosshairColor: [0.31, 0.63, 1, 0.85],
+      isAlphaClipDark: isLight(), backColor: backColor(), crosshairColor: [0.31, 0.63, 1, 0.85],
       crosshairWidth: 1, isColorbar: false, isRadiologicalConvention: false,
       multiplanarShowRender: niivue.SHOW_RENDER.NEVER,
       multiplanarLayout: niivue.MULTIPLANAR_TYPE.ROW,
       show3Dcrosshair: false, dragAndDropEnabled: false
     });
     await nv.attachTo('gl');
+    followZoom(nv);
+    // On a phone the options of the display start folded, the views close to the main controls.
+    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';
@@ -147,38 +189,210 @@
       viewer.layers.push(summarise(data.overlays[l].name, volume));
     }
     background.colorbarVisible = false;
+    if (data.regions) await loadRegions(nv, data.regions);
     if (data.connectome) {
       // The network shows through the 3D render, and on a slice only
       // within a few millimetres of it.
       nv.opts.meshXRay = NETWORK_XRAY;
       nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
-      nv.loadConnectome(data.connectome);
-      listEdges(data.connectome);
+      viewer.network = data.connectome;
+      setUpEdgeThreshold(nv, data.connectome);
+    }
+    $('space').textContent = data.space || 'MNI';
+    if (data.streamlines) {
+      // Slices cut in mm, as the streamlines are: NiiVue otherwise
+      // straightens an oblique background (a subject's) under them.
+      nv.setSliceMM(true);
+      nv.opts.meshXRay = NETWORK_XRAY;
+      nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
+      await loadStreamlines(nv, data.streamlines);
     }
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
   }
 
-  // The strongest edges of the network, listed under the views, how
-  // much the network shows through the 3D render, and the thickness of
-  // the slab of a slice it is drawn in, in millimetres.
-  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6;
+  // The regions of a result: the one under the cursor is named, from the
+  // image of their numbers (n + 1 at the voxels of the n-th region), and
+  // the control "atlas colours" draws them in the colours of their atlas,
+  // an RGBA image transparent elsewhere.
+  async function loadRegions(nv, regions) {
+    var numbers = await loadVolume(regions, 'regions.nii.gz');
+    var colours = await loadVolume({nifti: regions.colours}, 'regions-colours.nii.gz');
+    numbers.opacity = 0;
+    colours.opacity = regions.coloured ? 1 : 0;
+    nv.addVolume(numbers);
+    nv.addVolume(colours);
+    viewer.regions = {volume: numbers, names: regions.names};
+    var box = $('atlas-colours');
+    box.checked = regions.coloured;
+    $('atlas-colours-control').hidden = false;
+    $('region-readout').hidden = false;
+    box.addEventListener('change', function () {
+      colours.opacity = box.checked ? 1 : 0;
+      nv.updateGLVolume();
+    });
+    followRegions(nv);
+  }
 
-  function listEdges(network) {
-    var edges = network.edges.slice().sort(function (a, b) {
-      return Math.abs(b.colorValue) - Math.abs(a.colorValue);
+  // The region of the result under the mouse, on a slice, named beside it.
+  function followRegions(nv) {
+    var canvas = $('gl'), tip = $('region-tip');
+    canvas.addEventListener('mousemove', function (event) {
+      var rect = canvas.getBoundingClientRect();
+      var ratio = canvas.width / rect.width;
+      var frac = nv.canvasPos2frac([
+        (event.clientX - rect.left) * ratio, (event.clientY - rect.top) * ratio]);
+      var name = frac[0] < 0 ? '–' : regionAt(Array.from(nv.frac2mm(frac)).slice(0, 3));
+      tip.hidden = name === '–';
+      tip.textContent = name;
+      tip.style.left = event.clientX + 14 + 'px';
+      tip.style.top = event.clientY + 14 + 'px';
+    });
+    canvas.addEventListener('mouseleave', function () { tip.hidden = true; });
+  }
+
+  // The name of the region of the result under the cursor, at *mm*.
+  function regionAt(mm) {
+    var regions = viewer.regions, vox = regions.volume.mm2vox(mm);
+    var n = Math.round(regions.volume.getValue(vox[0], vox[1], vox[2]));
+    return n > 0 ? regions.names[n - 1] : '–';
+  }
+
+  // The strongest edges of the network, listed under the views, how
+  // much the network shows through the 3D render, the thickness of the
+  // slab of a slice it is drawn in, in millimetres, and the thickness of
+  // the edge at the threshold, a share of that of the largest edge.
+  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6,
+    THINNEST_EDGE = 0.2;
+
+  // The network as NiiVue draws it, of the edges of |value| at least
+  // *threshold* and the nodes they join. The colour and the size of a
+  // node is its strength, the sum of the values of its edges; the colour
+  // and the thickness of an edge its value, from the threshold (the
+  // thinnest, THINNEST_EDGE of the thickest) to the largest value. NiiVue
+  // makes an edge as thick as its value: the values it is given are
+  // those above the threshold, plus that of the thinnest edge.
+  function networkState(network, threshold) {
+    var edges = network.edges.filter(function (e) {
+      return e.value !== 0 && Math.abs(e.value) >= threshold;
+    });
+    var top = 0, strength = {}, kept = [];
+    edges.forEach(function (e) {
+      top = Math.max(top, Math.abs(e.value));
+      [e.first, e.second].forEach(function (n) {
+        if (!(n in strength)) { strength[n] = 0; kept.push(n); }
+        strength[n] += e.value;
+      });
+    });
+    kept.sort(function (a, b) { return a - b; });
+    var position = {}, topNode = 0;
+    kept.forEach(function (n, p) {
+      position[n] = p;
+      topNode = Math.max(topNode, Math.abs(strength[n]));
+    });
+    topNode = topNode || 1;
+    var low = Math.min(threshold, top), span = top - low;
+    var base = span > 0 ? span * THINNEST_EDGE / (1 - THINNEST_EDGE) : (top || 1);
+    return {
+      name: 'network',
+      nodeColormap: 'winter', nodeColormapNegative: 'cool',
+      nodeMinColor: 0, nodeMaxColor: topNode, nodeScale: network.nodeRadius,
+      edgeColormap: 'warm', edgeColormapNegative: 'cool',
+      edgeMin: base, edgeMax: span + base,
+      edgeScale: network.edgeRadius / (span + base),
+      legendLineThickness: 0, showLegend: false,
+      nodes: kept.map(function (n) {
+        var node = network.nodes[n];
+        return {
+          name: node.name, x: node.x, y: node.y, z: node.z,
+          colorValue: strength[n],
+          sizeValue: Math.max(Math.abs(strength[n]) / topNode, 0.4)
+        };
+      }),
+      edges: edges.map(function (e) {
+        var magnitude = Math.abs(e.value) - low + base;
+        return {
+          first: position[e.first], second: position[e.second],
+          colorValue: e.value < 0 ? -magnitude : magnitude, value: e.value
+        };
+      })
+    };
+  }
+
+  // Draw the edges of the network of |value| at least *threshold*, and
+  // list the strongest.
+  function drawNetwork(nv, threshold) {
+    var state = networkState(viewer.network, threshold);
+    nv.meshes.slice().forEach(function (mesh) { nv.removeMesh(mesh); });
+    if (state.edges.length) nv.addMesh(nv.loadConnectomeAsMesh(state));
+    nv.drawScene();
+    listEdges(state);
+  }
+
+  // The edge threshold, a value and a slider from the smallest |value|
+  // of the edges to the largest, which draws the network again.
+  function setUpEdgeThreshold(nv, network) {
+    var values = network.edges.map(function (e) { return Math.abs(e.value); });
+    var lo = values.length ? Math.min.apply(null, values) : 0;
+    var hi = values.length ? Math.max.apply(null, values) : 0;
+    var input = $('edge-threshold'), slider = $('edge-slider');
+    var toSlider = function (v) {
+      return hi > lo ? Math.round(1000 * (v - lo) / (hi - lo)) : 0;
+    };
+    input.value = format(network.threshold);
+    slider.value = toSlider(network.threshold);
+    input.addEventListener('input', function () {
+      var v = parseFloat(input.value);
+      if (!isFinite(v)) return;
+      slider.value = toSlider(v);
+      drawNetwork(nv, v);
+    });
+    slider.addEventListener('input', function () {
+      var v = lo + (hi - lo) * slider.value / 1000;
+      input.value = format(v);
+      drawNetwork(nv, v);
+    });
+    drawNetwork(nv, network.threshold);
+  }
+
+  function listEdges(state) {
+    var edges = state.edges.slice().sort(function (a, b) {
+      return Math.abs(b.value) - Math.abs(a.value);
     }).slice(0, LISTED_EDGES);
     var list = $('edges');
+    list.replaceChildren();
     $('network').style.display = '';
-    $('network-count').textContent = network.nodes.length + ' nodes, ' +
-      network.edges.length + ' edges shown' +
-      (network.edges.length > edges.length ? ', the strongest ' + edges.length : '');
+    $('network-count').textContent = state.nodes.length + ' nodes, ' +
+      state.edges.length + ' edges shown' +
+      (state.edges.length > edges.length ? ', the strongest ' + edges.length : '');
     edges.forEach(function (e) {
       var item = document.createElement('li');
-      item.textContent = network.nodes[e.first].name + ' — ' +
-        network.nodes[e.second].name + ': ' + format(e.colorValue);
+      item.textContent = state.nodes[e.first].name + ' — ' +
+        state.nodes[e.second].name + ': ' + format(e.value);
       list.appendChild(item);
+    });
+  }
+
+  // The streamlines, a .trk file NiiVue reads as a mesh of fibres,
+  // coloured by the direction of each segment, and the controls of their
+  // visibility and opacity.
+  async function loadStreamlines(nv, streamlines) {
+    var mesh = await niivue.NVMesh.loadFromUrl({
+      url: 'streamlines.trk', buffer: await inflate(streamlines.trk),
+      gl: nv.gl
+    });
+    nv.addMesh(mesh);
+    nv.setMeshProperty(mesh.id, 'fiberColor', 'Local');
+    viewer.streamlines = mesh;
+    $('streamlines').style.display = '';
+    $('streamline-count').textContent = streamlines.shown + ' of ' +
+      streamlines.total + ' streamlines shown';
+    $('streamlines-visible').addEventListener('change', function (e) {
+      nv.setMeshProperty(mesh.id, 'visible', e.target.checked);
+    });
+    $('streamline-opacity').addEventListener('input', function (e) {
+      nv.setMeshProperty(mesh.id, 'opacity', parseFloat(e.target.value));
     });
   }
 
@@ -397,12 +611,14 @@
       context.fillStyle = 'rgb(' + lut[c] + ',' + lut[c + 1] + ',' + lut[c + 2] + ')';
       context.fillRect(left + x, 2, 1, 16);
       if (!s.shown(v)) {  // hidden values are greyed out
-        context.fillStyle = 'rgba(17, 17, 17, 0.75)';
+        context.globalAlpha = 0.75;
+        context.fillStyle = themeColour('--bg');
         context.fillRect(left + x, 2, 1, 16);
+        context.globalAlpha = 1;
       }
     }
     var ticks = ticksOf(s, l).map(format);
-    context.fillStyle = '#ddd';
+    context.fillStyle = themeColour('--soft');
     context.font = '12px system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'top';
@@ -462,7 +678,19 @@
       value = String(Number(Number(value).toPrecision(6)));
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
+    if (viewer.regions) $('region').textContent = regionAt(mm);
   }
+
+  // The theme changed: the background of the image and the colour bars.
+  function applyTheme() {
+    if (!viewer.nv || !viewer.state) return;
+    setBackdrop(viewer.nv);
+    viewer.nv.updateGLVolume();
+    viewer.layers.forEach(function (layer, l) { drawColourBar(scale(l), l); });
+  }
+  window.addEventListener('neurolang-theme', applyTheme);
+  matchMedia('(prefers-color-scheme: light)').addEventListener(
+    'change', applyTheme);
 
   function redraw() {
     var scales = viewer.layers.map(function (layer, l) { return scale(l); });

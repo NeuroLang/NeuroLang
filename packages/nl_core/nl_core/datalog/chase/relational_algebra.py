@@ -324,14 +324,22 @@ class ChaseNamedRelationalAlgebraMixin:
             predicate.functor for predicate in predicates
             if isinstance(predicate, FunctionApplication)
         }
+        used = set().union(*(predicate._symbols for predicate in predicates))
         # Differential evaluation: a positive body predicate is bound to the
         # delta alone, without merging it with the instance, which would
-        # cost as much as the relation; negated predicates are bound to both
-        # so that set-difference (RA difference) computes correctly.
+        # cost as much as the relation; the other predicates of the rule
+        # (negated ones) are bound to both so that set-difference (RA
+        # difference) computes correctly. A predicate the rule does not use
+        # is left as it is: merging it would cost as much as the relation,
+        # at every step of the chase, for nothing.
         for k, v in restriction_instance.items():
-            if k in symbol_table and k not in positive:
-                v = v.apply(symbol_table[k].value | v.value)
-            symbol_table[k] = v
+            if k in positive or k not in symbol_table:
+                symbol_table[k] = v
+            elif k in used:
+                symbol_table[k] = Constant[v.type](
+                    symbol_table[k].value | v.value,
+                    auto_infer_type=False, verify_type=False,
+                )
         return symbol_table
 
     def _rule_substitutions(

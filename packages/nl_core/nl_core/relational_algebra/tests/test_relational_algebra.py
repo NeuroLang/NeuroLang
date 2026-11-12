@@ -37,6 +37,7 @@ from ...utils.relational_algebra_set import (
 from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
 from ..relational_algebra import (
     EVAL_OP_TO_STR,
+    Difference,
     FullOuterNaturalJoin,
     LeftNaturalJoin,
     ReplaceNull,
@@ -81,6 +82,32 @@ def test_selection_general(R1):
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == r1_named.selection(lambda t: t.x > 5)
+
+
+def test_selection_by_a_function_of_one_column():
+    """A Python function of one column is applied to the column, not to
+    each row: a startswith on a relation of 300,000 rows took 4 s."""
+    selections = []
+
+    class Relation(NamedRelationalAlgebraFrozenSet):
+        def selection(self, select_criteria):
+            selections.append(select_criteria)
+            return super().selection(select_criteria)
+
+    def starts(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    relation = Relation(('l', 's'), [('ab', 1), ('ba', 2), ('ac', 3)])
+    s = Selection(
+        C_[AbstractSet[Tuple[str, int]]](relation),
+        C_(starts)(C_('a'), str2columnstr_constant('l'))
+    )
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == NamedRelationalAlgebraFrozenSet(
+        ('l', 's'), [('ab', 1), ('ac', 3)]
+    )
+    assert isinstance(selections[0], dict)
 
 
 def test_projections(R1):
@@ -320,6 +347,23 @@ def test_sort_typed_const_named_relation_tuple_type_args():
         )
         is sorted_type
     )
+
+
+def test_difference_of_named_relations_one_of_a_known_type():
+    """A named relation of no known type has its type inferred in the order
+    of its columns; the type of another is known in the order of their
+    names: both are in the order of the names, so that they unify."""
+    left = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(1, "a"), (2, "b")])
+    )
+    right = Constant[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(2, "b")])
+    )
+    solution = RelationalAlgebraSolver().walk(Difference(left, right))
+    assert solution.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "h"), [(1, "a")]
+    )
+    assert solution.type is AbstractSet[Tuple[int, str]]
 
 
 def test_infer_relation_type():
@@ -809,3 +853,25 @@ def test_replace_null_in_an_empty_relation():
     )
     assert result.value.is_empty()
     assert result.value.columns == (a, b)
+
+
+@pytest.mark.parametrize("operation", ["Difference", "Union", "Intersection"])
+def test_the_type_of_a_set_operation_follows_the_columns_of_its_result(
+    operation
+):
+    """The two named relations have their columns in different orders, and
+    those of the left one are not sorted: the type of the result is in the
+    order of its own columns."""
+    op = {"Difference": Difference, "Union": Union,
+          "Intersection": Intersection}[operation]
+    left = C_[AbstractSet[Tuple[int, str]]](NamedRelationalAlgebraFrozenSet(
+        ("x", "h"), [(1, "left"), (2, "right")]
+    ))
+    right = C_[AbstractSet[Tuple[str, int]]](NamedRelationalAlgebraFrozenSet(
+        ("h", "x"), [("right", 2)]
+    ))
+    result = RelationalAlgebraSolver().walk(op(left, right))
+    column_types = {"x": int, "h": str}
+    assert result.type == AbstractSet[Tuple[tuple(
+        column_types[c] for c in result.value.columns
+    )]]

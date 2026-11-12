@@ -109,7 +109,11 @@ from .datalog.sugar.spatial import (
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import ProbabilisticTypeResolutionMixin
-from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
+from .datalog.squall import (
+    CheckPredicateArities,
+    ResolveInvertedFunctionApplicationMixin,
+    StripDimensionTypePredicatesMixin,
+)
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .show_ra import (
@@ -256,6 +260,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.current_program_rewritten = None
+        # The names of the predicates the loaded ontologies define.
+        self.ontology_predicates = set()
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -311,6 +317,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             load_format=format, individuals=individuals, names=names,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
+        self.ontology_predicates.update(constraints)
+        self.ontology_predicates.update(s.name for s in est_knowledge)
+        self.ontology_predicates.update(s.name for s in entity_rules)
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
@@ -327,6 +336,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         if individuals:
             for name, rows in onto.parse_individuals().items():
                 self.add_tuple_set(rows, name=name)
+                self.ontology_predicates.add(name)
 
         self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol
@@ -629,6 +639,83 @@ class NeurolangPDL(QueryBuilderDatalog):
             {v.expression.name: name for v, name in zip(variables, names)}
         ), None
 
+    def _solve_queries(self, queries, show_rewritten=False, dry_run=False):
+        """
+        Solve the *queries* together, each rewritten with magic sets for
+        its own bindings: the program of all of them is stratified and
+        solved once, so that what they share is computed once.
+
+        Each query is the rule ``fresh(head) :- body`` of a fresh
+        predicate, as in :meth:`_execute_query_computing_terms`, so that
+        heads computing terms and probabilities are solved as any other.
+        See :meth:`QueryBuilderDatalog._solve_queries`.
+        """
+        with self.scope:
+            prepared = []
+            for head, body in queries:
+                if is_probabilistic_predicate_symbol(
+                    getattr(body.expression, "functor", None),
+                    self.program_ir
+                ):
+                    raise UnsupportedQueryError(
+                        "Queries on probabilistic predicates are not "
+                        "supported"
+                    )
+                fresh = self.new_symbol()
+                self._declare_query(fresh(*head), body)
+                variables = tuple(self.new_symbol() for _ in head)
+                rule = self.program_ir.symbol_table[
+                    fresh.expression
+                ].formulas[0]
+                prepared.append((head, variables, rule))
+            rewritten = [
+                self._rewrite_or_keep(rule) for _, _, rule in prepared
+            ]
+            with self.scope:
+                self.program_ir.walk(
+                    self._union_of_rules(rules for _, rules in rewritten)
+                )
+                goals = [goal for goal, _ in rewritten]
+                if self._handle_rewritten_output(
+                    goals, show_rewritten, dry_run
+                ):
+                    return None
+                solution = self._solve(goals)
+            return [
+                self._joint_answer(head, variables, rule, goal, solution)
+                for (head, variables, rule), (goal, _)
+                in zip(prepared, rewritten)
+            ]
+
+    def _rewrite_or_keep(self, query):
+        """
+        Return ``query`` rewritten with magic sets, and the magic rules it
+        needs, or ``query`` itself, without rules, if it cannot be.
+        """
+        try:
+            return self._magic_rewrite_query(query)
+        except (
+            InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
+        ):
+            return query, Union(())
+
+    def _joint_answer(self, head, variables, rule, goal, solution):
+        """
+        Return the answer of the query *head*, whose rule is *rule*,
+        rewritten as *goal*, from the *solution* of the queries.
+        """
+        symbols = tuple(v.expression for v in variables)
+        answer = self._restrict_to_query_solution(
+            symbols, goal.consequent.functor, symbols, solution
+        )
+        names = self._parameter_names(h.expression for h in head)
+        answer = answer.value.rename_columns(
+            dict(zip(answer.value.columns, names))
+        )
+        if len(head) == 0:
+            return len(answer) > 0
+        return answer
+
     def _depends_on_probabilistic_queries(self, predicate):
         """Whether the rules ``predicate`` depends on have probabilistic
         queries, which the deterministic chase does not solve."""
@@ -888,6 +975,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
+        CheckPredicateArities(self.program_ir).walk(prob_idb)
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
         det_solution = with_empty_relations(

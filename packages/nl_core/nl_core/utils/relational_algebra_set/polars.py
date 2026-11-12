@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from . import abstract as abc
+from .abstract import count_distinct
 
 NA = None
 _SENTINEL = "__ras_dee__"
@@ -176,7 +177,28 @@ def _concat_safe(dfs):
             for i, df in enumerate(non_null):
                 if col_schemas[i].get(col) == pl.Null:
                     non_null[i] = df.with_columns(pl.lit(None, dtype=target_type).alias(col))
-    return pl.concat(non_null, how="vertical")
+    return _vertical_concat(non_null)
+
+
+def _vertical_concat(frames):
+    """Stack frames; columns that differ only in the type of their numbers
+    (an Int32 literal and an Int64 column, an integer and a float) are
+    brought to their common type, as the pandas backend does. Other
+    differences are left to polars."""
+    frames = list(frames)
+    if len(frames) > 1:
+        schemas = [
+            f.collect_schema() if isinstance(f, pl.LazyFrame) else f.schema
+            for f in frames
+        ]
+        for column in schemas[0]:
+            types = {
+                s[column] for s in schemas
+                if column in s and s[column] != pl.Null
+            }
+            if len(types) > 1 and all(t.is_numeric() for t in types):
+                return pl.concat(frames, how="vertical_relaxed")
+    return pl.concat(frames, how="vertical")
 
 
 def _has_sentinel(df):
@@ -1414,7 +1436,13 @@ class NamedRelationalAlgebraFrozenSet(
                     values_dict = {col: eager_c[col].to_list() for col in all_cols}
                     for dst, fun in aggs_multi_column.items():
                         agg_val = fun(_AggRowProxy(values_dict))
-                        eager_result = eager_result.with_columns(pl.Series(name=dst, values=[agg_val]))
+                        column = pl.Series(name=dst, values=[agg_val])
+                        # Without other aggregations the result has no
+                        # columns and so no row: it is made of this one.
+                        eager_result = (
+                            eager_result.with_columns(column)
+                            if eager_result.width else column.to_frame()
+                        )
                 else:
                     for dst, fun in aggs_multi_column.items():
                         groups = eager_c.group_by(group_columns, maintain_order=True)
@@ -1794,7 +1822,7 @@ class RelationalAlgebraSet(
             eager = self._eager()
             if eager is not None and new_row is not None:
                 new_eager = new_row.collect() if isinstance(new_row, pl.LazyFrame) else new_row
-                self._container = pl.concat([eager, new_eager], how="vertical").lazy()
+                self._container = _vertical_concat([eager, new_eager]).lazy()
             elif eager is not None:
                 self._container = eager.lazy()
 
@@ -1834,7 +1862,7 @@ class RelationalAlgebraSet(
             sc = _strip_sentinel(self_eager)
             oc = _strip_sentinel(other_eager)
             if sc is not None and oc is not None:
-                new_eager = pl.concat([sc, oc], how="vertical")
+                new_eager = _vertical_concat([sc, oc])
                 new_eager = new_eager.unique(maintain_order=True)
                 self._container = new_eager.lazy()
             self._might_have_duplicates = True
@@ -1958,6 +1986,8 @@ def _map_agg_function(fun):
         return lambda col: pl.min(col)
     if fun is len:
         return lambda col: pl.len()
+    if fun is count_distinct:
+        return lambda col: pl.col(col).n_unique()
     # Check for numpy functions used in BuiltinAggregationMixin constants
     try:
         import numpy as np
@@ -1973,11 +2003,5 @@ def _map_agg_function(fun):
             return lambda col: pl.std(col)
     except ImportError:
         pass
-    # Check for bound methods from BuiltinAggregationMixin (e.g., function_count)
-    import types
-    if isinstance(fun, types.MethodType):
-        func_name = getattr(fun, '__name__', None)
-        if func_name == 'function_count':
-            return lambda col: pl.len()
     # For unknown functions, return None to signal eager fallback
     return None
