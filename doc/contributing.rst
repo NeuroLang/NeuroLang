@@ -248,15 +248,18 @@ their assistant answers with (their own, the server's, or none: they give
 theirs in the page; a key itself is never shown), adds a user, changes a
 password, groups or key, removes a user (and ends their sessions), and
 lists the sessions, which it can end.  Its changes are written in the users
-file at once (comments in it are lost), and reach a user's sessions when
-they restart; the file is read again when you edit it by hand.
+file at once (comments in it are lost), and reach the open pages of the
+users they change at once; the file is read again when you edit it by hand
+or from the command line, which reaches a user's pages at their next start.
 
 Every user has an account page, ``/account``, linked from the REPL's
 page: their name and groups, whose assistant they have, a form that saves
 their own (provider, model and key, kept on the server and never shown
 again), if they may, and a form that changes their password (the
-current one first; the new one of 8 characters at least), after which the
-browser asks for the new one.  A forgotten password is reset by an admin.
+current one first; the new one of 8 characters at least, as in the console
+and from the command line), after which they stay logged in in that
+browser, and log in again in the others.  A forgotten password is reset by
+an admin.
 
 The users are managed from the command line too, which makes the file for
 the first one, the first admin; each asks the password or the key, which
@@ -281,11 +284,17 @@ that another site cannot have a logged-in browser change anything.
 With ``--feedback-db feedback.sqlite``, the ratings of the page are stored
 on the server, in a SQLite database (that of ``neurolang-feedback-server``),
 with the name and the groups of the user who rates; the console shows the
-latest and exports the rated queries as YAML (the examples of the
-assistant).  The sessions write it at once (WAL mode), which needs it on a
+latest and exports, for each engine, the rated answers of the assistant
+as YAML (its examples).  It needs ``--local``.  The sessions write it at once (WAL mode), which needs it on a
 local disk, not a network one.
 
-The browser asks a name and its password.  With ``--local``, each tab of a
+With ``--users``, a page opened without a login leads to a login page,
+``/login``, which gives a login cookie, until *Log out* (``/logout``, at
+the top of the REPL with ``--local``, beside the user's name, linked to
+their account page); behind a proxy of HTTPS, ``--secure-cookie`` sends
+that cookie over HTTPS only.  With ``--guests`` (and ``--local``), the
+login page lets visitors in as guests, who bring their own key; see
+:doc:`repl_server`.  With ``--local``, each tab of a
 user has a session of its own, in a process of its own: a builder process
 builds each engine once and forks a session's process from it, so that the
 sessions share the memory of the engine's data until they write it, and
@@ -323,9 +332,9 @@ first, where you see it; the service runs the Python of the environment
 that installs it (with ``uv run``, the checkout's :file:`.venv/bin/python`;
 ``--python PATH`` chooses another), with that environment's ``PATH`` and the
 paths made absolute, but not the other variables of your shell (API keys).  It uses that environment as it is: a
-later ``uv run`` or ``uv sync`` without ``--extra apps`` (and the other
-extras it was installed with) removes their packages from it, and the
-service then fails to start until they are back.  A port below
+later ``uv sync`` without ``--extra apps`` (and the other extras it was
+installed with) removes their packages from it, and the service then fails
+to start until they are back (``uv run`` removes nothing).  A port below
 1024 needs a service of the system, which this does not install.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2

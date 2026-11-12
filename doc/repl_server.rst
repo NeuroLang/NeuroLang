@@ -58,10 +58,11 @@ Requirements
 
 - Python 3.12 or later, and the workspace's extras ``apps``, ``tui`` (the
   REPL) and ``llm`` (the AI assistant): ``uv sync --extra apps --extra tui
-  --extra llm``.  Use the same extras with every ``uv run`` and ``uv sync``
-  in that checkout: one without them removes their packages from its
-  environment, which the service runs, and the service then fails to
-  start.
+  --extra llm``.  Use the same extras with every ``uv sync`` in that
+  checkout: one without them removes their packages from its environment,
+  which the service runs, and the service then fails to start (``uv run``
+  without them leaves the packages there: it installs what it lacks, and
+  removes nothing).
 - Memory for the engines: several GB for Neurosynth with all its analyses
   (``lift``, ``relative_risk``...; ``--light`` leaves them out, as the page
   in the browser does).  The sessions of the users share the memory of the
@@ -98,6 +99,14 @@ Serving
    Where it listens: ``127.0.0.1`` by default, this machine only; ``0.0.0.0``
    for the network.  A port below 1024 needs root, which the service does
    not have: use a port above, or a reverse proxy.
+``--server-name NAME``
+   Without ``--users`` nor ``--password-file``, the server answers only the
+   requests sent to (whose ``Host`` is) ``localhost``, ``127.0.0.1``,
+   ``::1``, ``--host`` (unless ``0.0.0.0`` or ``::``) and the names of
+   ``--server-name`` (repeat it): another site whose name it made lead here
+   (DNS rebinding) would otherwise use it.  Give the name, or the address,
+   by which the other machines reach it.  With users or a password, any
+   name is answered.
 ``--site DIR``
    Where the page is put (default :file:`~/.cache/neurolang/repl-site`).
 ``--no-browser``
@@ -118,7 +127,9 @@ HTTPS
 
 If they cannot serve, the server says why: the certificate's file has no
 key (give ``--key``), the key is not that of the certificate, the passphrase
-is not that one, a file is missing, or they are not PEM.  To check them::
+is not that one, a file is missing, or they are not PEM.  Without users nor
+a password, give the name of the certificate with ``--server-name`` too
+(see `Serving`_).  To check them::
 
    head -1 cert.pem    # -----BEGIN CERTIFICATE-----
    head -1 key.pem     # -----BEGIN PRIVATE KEY----- (or RSA / EC PRIVATE KEY);
@@ -153,11 +164,14 @@ Who may use it
    Instead of users, one password (the first line of FILE), with any user
    name; the visitors share one session.
 ``--max-sessions N``, ``--idle-minutes M``
-   With ``--users``: the sessions at most at once (8), and the minutes after
-   which an unused one ends (120).
+   With ``--users`` and ``--local``: the sessions at most at once (8, at
+   least 1), and the minutes after which an unused one ends (120, above 0).
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
+``--secure-cookie``
+   With ``--users`` behind a reverse proxy of HTTPS (no ``--cert``): the
+   login cookie goes over HTTPS only, as it does with ``--cert``.
 
 Without either, anyone who reaches the server uses it.
 
@@ -167,14 +181,15 @@ The AI assistant
 ``--env-file llm.env``
    ``NAME=VALUE`` lines put in the server's environment: the key of the
    provider of the server's AI configuration (see `The AI assistant's
-   keys`_), the default of those who log in.  It needs ``--users`` or
-   ``--password-file``.
+   keys`_), the default of those who log in.  It needs ``--local``, and
+   ``--users`` or ``--password-file``.
 
 Storing the ratings
 ~~~~~~~~~~~~~~~~~~~
 
 ``--feedback-db feedback.sqlite``
-   Store the ratings of the page on the server (see `Feedback`_).
+   With ``--local``, store the ratings of the page on the server (see
+   `Feedback`_).
 
 Running as a service
 ~~~~~~~~~~~~~~~~~~~~
@@ -231,7 +246,9 @@ A user has:
 ``llm``
    Their own assistant: a ``provider`` of the page's form (``anthropic``,
    ``openai``, ``openrouter``, or ``custom``, an OpenAI-compatible API at
-   ``base_url``), its ``model`` (the provider's by default) and its ``key``.
+   ``base_url``, which it needs), its ``model`` (the provider's by default)
+   and its ``key``.  A change that gives no key keeps the one before, for
+   the same provider and ``base_url`` only.
 ``own_key``
    Whether they may give their own key, in the page and on their account
    page.
@@ -244,8 +261,11 @@ A group has ``llm``, ``own_key`` and ``env`` too, which its users have.
 The server reads the file again when it changes: an edit by hand, or by the
 command line, reaches it without a restart, and the open pages of a user
 take a new assistant at their next start (the console's and the account
-page's changes reach them at once).  The console and the command line write the file anew
-(its comments are lost).  A file of the users alone, without ``users:`` and
+page's changes reach them at once).  The console and the command line write
+the file anew (its comments are lost), holding a lock of it
+(:file:`users.yaml.lock`), so that their changes all stay; they refuse to
+write over a file edited by hand that the server cannot read (it says
+why), and keep a user in it.  A file of the users alone, without ``users:`` and
 ``groups:``, as an older server wrote it, is read as well.
 
 
@@ -292,21 +312,28 @@ refusal (403).  It shows:
 - **Sessions**: the user and tab of each, how long it has been unused,
   whether it works; it ends one.
 - **Feedback**: the latest 200 rated answers, with the user and their
-  groups, and a link exporting the rated queries as YAML.
+  groups, and a link for each engine exporting the rated answers of its
+  assistant as its examples, in YAML.
 
-A change applies at once to the file and to the users' open pages.
+A change applies at once to the file and to the open pages of the users
+it changes.  A password has 8 characters at least, here, on the account
+page and from the command line.
 
 
 Logging in
 ----------
 
 With ``--users``, the server has a login page, ``/login``: a page opened
-without a login leads there, and back once logged in.  A login is a cookie
-signed by the server (HttpOnly, SameSite=Lax, Secure over HTTPS), good for 7
-days; it ends when the user logs out (*Log out*, at the top of the REPL,
-``/logout``), when their password changes (the browser that changed it
-stays logged in), when they are removed, and when the server restarts (it
-signs with a key made at its start).  Scripts may still give a user's name
+without a login leads there, and back once logged in (to a page of the
+server only).  A login is a cookie signed by the server (HttpOnly,
+SameSite=Lax, Secure over HTTPS or with ``--secure-cookie``), good for 7
+days; it ends when the user logs out (*Log out*, at the top of the REPL
+with ``--local``, ``/logout``), for every copy of the cookie made before,
+when their password changes (the browser that changed it stays logged in),
+when they are removed, and when the server restarts (it signs with a key
+made at its start).  Logging out, and opening the login page, forget the
+API keys the REPL kept in the browser.  A page whose login expired opens
+the login page.  Scripts may still give a user's name
 and password with HTTP Basic (``curl -u ann:...``).  With
 ``--password-file``, the browser asks the password itself, and cannot log
 out.
@@ -323,15 +350,17 @@ page: their sessions have no key of the server, of a group or of a user
 has no account page, no console, and their ratings are signed by their
 guest's name and the group ``guest``.  The guests have at most
 ``--max-guest-sessions`` sessions at once (2), so that they cannot take
-those of the users.  A guest's login ends as a user's does, and when the
-server restarts.
+those of the users.  A guest's login ends when they log out, after 7
+days, and when the server restarts; a guest who logs in again is another
+guest, with sessions of their own.
 
 Accounts
 --------
 
-The REPL shows the name of the user logged in at its top, linked to their
-account page, ``/account``, their name and groups, whose assistant they have, a form that saves
-their own (provider, model, key; the key kept on the server and never shown
+With ``--local``, the REPL shows the name of the user logged in at its top,
+linked to their account page, ``/account``: their name and groups, whose
+assistant they have, a form that saves their own (provider, model, its
+address for ``custom``, key; the key kept on the server and never shown
 again; it answers in their open pages at once), if they may give their own,
 and a form that changes their password (the current one first; the new one
 of 8 characters at least).  A forgotten password is reset by an admin, in
@@ -375,7 +404,7 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   time as those of the others) and files; *Stop* and *Restart* end that
   session's process only, and the page starts it again.
 - A session is that of a user and a tab: another user cannot reach it.  A
-  reload keeps the tab's session; a duplicated tab shares it.
+  reload keeps the tab's session; a duplicated tab has one of its own.
 - At most ``--max-sessions`` run at once: past them, the one unused the
   longest ends, unless it is at work or was used in the last minute (then
   the new tab is told to wait).  One unused for ``--idle-minutes`` ends;
@@ -393,8 +422,10 @@ its first rows or its error, and, for an answer of the assistant, the
 question and its steps, signed by the user's name and groups.  The database
 is that of ``neurolang-feedback-server`` (SQLite, in WAL mode, which
 sessions write at once): keep it on a local disk, not a network one.  The
-console shows the latest ratings and exports the rated queries as YAML, in
-the form of the assistant's examples (:doc:`query_assistant`).  Without it,
+console shows the latest ratings and exports, for each engine, the rated
+answers of the assistant as YAML, in the form of its examples
+(:doc:`query_assistant`): one per question, the query approved by most
+ratings.  Without it,
 the page sends its ratings where its ``feedback.json`` says, if anywhere.
 
 
@@ -417,14 +448,17 @@ with that environment's ``PATH``, the paths of the options made absolute,
 ``--no-browser``, and nothing built again.  ``install`` first checks that
 this Python can import what it serves with (it says which extras to add),
 checks the certificate, the password file and the keys, and builds the
-bundle (without ``--local``), here, where you see the errors.  It does not
+bundle (without ``--local``), here, where you see the errors; ``reinstall``
+does all that before it removes the service installed, which a failure
+leaves as it was.  It does not
 copy your shell's other variables: an API key in your ``~/.bashrc`` does not
 reach it; put it in ``--env-file`` or the users file.
 
 ::
 
    neurolang-repl-serve --daemon install   OPTIONS   # refuses if one is installed
-   neurolang-repl-serve --daemon reinstall OPTIONS   # replaces it, with these options
+   neurolang-repl-serve --daemon reinstall OPTIONS   # replaces it, with these options,
+                                                     # once they are checked and built
    neurolang-repl-serve --daemon remove              # stops and removes it
 
    systemctl --user status neurolang-repl            # Linux
@@ -465,9 +499,13 @@ front, e.g. Caddy::
    }
 
 with the server on ``--host 127.0.0.1 --port 8766`` (no ``--cert``: the
-proxy has it).  The proxy must pass the ``Authorization`` header and the
-``Host`` header unchanged, and not buffer ``/api/events`` (a stream of
-server-sent events).
+proxy has it) and ``--secure-cookie``, so that the login cookie goes over
+HTTPS only.  The proxy must pass the ``Authorization``, ``Cookie``,
+``Origin`` and ``Host`` headers unchanged (a POST whose ``Origin`` is not
+the ``Host`` is refused), and not buffer ``/api/events`` (a stream of
+server-sent events).  Without ``--users`` nor ``--password-file``, give
+the proxy's name with ``--server-name repl.example.org``: the server
+answers only the names it knows (see `Serving`_).
 
 
 Troubleshooting
