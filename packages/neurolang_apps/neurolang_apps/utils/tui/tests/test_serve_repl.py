@@ -9,6 +9,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -1206,11 +1207,11 @@ def test_a_user_whose_variables_give_no_key_is_told(
     )
     monkeypatch.setenv("NEUROLANG_LLM_CONFIG", str(config))
     monkeypatch.delenv("TEST_LLM_KEY", raising=False)
-    assistants = serve.users_assistants({
-        "ann": {"env": {"TEST_LLM_KEY": "k"}},
-        "bob": {"env": {"MY_VAR": "x"}},
-        "carl": {"env": {}},
-    })
+    users = _users(serve, tmp_path, ann=("a", ["admin"]), bob=("b", []),
+                   carl=("c", []))
+    users.change("ann", env={"TEST_LLM_KEY": "k"})
+    users.change("bob", env={"MY_VAR": "x"})
+    assistants = serve.users_assistants(users)
     assert assistants == {"ann": "test (m)", "bob": None, "carl": None}
     assert "The variables of bob" in capsys.readouterr().err
 
@@ -1259,7 +1260,7 @@ def test_the_console_is_the_admins(console):
 def test_another_sites_post_is_refused(console):
     port, _ = console
     form = {**_basic("ann-pw", "ann"), "Content-Type": "text/plain"}
-    body = {"name": "eve", "password": "x", "create": True}
+    body = {"name": "eve", "password": "eve-password", "create": True}
     assert _status(port, "/admin/api/user", form, "POST", body) == 403
     elsewhere = {**_basic("ann-pw", "ann"), "Origin": "https://evil.test"}
     assert _status(port, "/admin/api/user", elsewhere, "POST", body) == 403
@@ -1270,9 +1271,9 @@ def test_another_sites_post_is_refused(console):
 def test_the_console_adds_changes_and_removes_users(console):
     port, users = console
     _json_of(port, "/admin/api/user", "ann", "ann-pw",
-             {"name": "eve", "password": "eve-pw", "groups": ["lab"],
+             {"name": "eve", "password": "eve-password", "groups": ["lab"],
               "create": True})
-    assert _status(port, "/bundle.json", _basic("eve-pw", "eve")) == 200
+    assert _status(port, "/bundle.json", _basic("eve-password", "eve")) == 200
     assert oct(users.path.stat().st_mode & 0o777) == "0o600"
     _json_of(port, "/admin/api/user", "ann", "ann-pw",
              {"name": "eve", "env": {"TEST_LLM_KEY": "k-9"}})
@@ -1283,7 +1284,7 @@ def test_the_console_adds_changes_and_removes_users(console):
     assert "k-9" not in json.dumps(state)
     _json_of(port, "/admin/api/remove-user", "ann", "ann-pw",
              {"name": "eve"})
-    assert _status(port, "/bundle.json", _basic("eve-pw", "eve")) == 401
+    assert _status(port, "/bundle.json", _basic("eve-password", "eve")) == 401
 
 
 def test_the_users_keep_an_admin(serve, tmp_path):
@@ -1333,21 +1334,23 @@ def test_the_users_are_managed_from_the_command_line(
     answers = []
     monkeypatch.setattr(serve.getpass, "getpass",
                         lambda prompt: answers.pop(0))
-    answers[:] = ["ann-pw", "ann-pw"]  # the first admin makes the file
+    # The first admin makes the file.
+    answers[:] = ["ann-password", "ann-password"]
     serve.main(["--users", str(path), "--add-user", "ann",
                 "--groups", "admin,lab"])
     assert oct(path.stat().st_mode & 0o777) == "0o600"
-    answers[:] = ["bob-pw", "bob-pw"]
+    answers[:] = ["bob-password", "bob-password"]
     serve.main(["--users", str(path), "--add-user", "bob"])
     answers[:] = ["k-1"]
     serve.main(["--users", str(path), "--set-key", "bob", "TEST_LLM_KEY"])
     serve.main(["--users", str(path), "--set-groups", "bob",
                 "--groups", "lab"])
-    answers[:] = ["new-pw", "new-pw"]
+    answers[:] = ["new-password", "new-password"]
     serve.main(["--users", str(path), "--set-password", "bob"])
     users = serve.Users(path)
-    assert users.check("ann", b"ann-pw") and users.is_admin("ann")
-    assert users.check("bob", b"new-pw") and not users.check("bob", b"bob-pw")
+    assert users.check("ann", b"ann-password") and users.is_admin("ann")
+    assert users.check("bob", b"new-password")
+    assert not users.check("bob", b"bob-password")
     assert users.identity("bob") == ({"TEST_LLM_KEY": "k-1"}, "lab")
     capsys.readouterr()
     serve.main(["--users", str(path), "--list-users"])
@@ -1741,3 +1744,215 @@ def test_a_guests_sessions_have_no_key_of_the_server(serve):
     from neurolang_apps.utils.tui import local_backend
 
     assert serve.BRING_KEY_ENV == local_backend.BRING_KEY_ENV
+
+
+def test_writers_of_the_users_file_in_two_processes_lose_nothing(
+    serve, tmp_path
+):
+    users = _users(serve, tmp_path, ann=("ann-password", ["admin"]))
+    script = (
+        "import importlib.util, sys\n"
+        "spec = importlib.util.spec_from_file_location('serve_repl', "
+        "sys.argv[1])\n"
+        "serve = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(serve)\n"
+        "users = serve.Users(sys.argv[2])\n"
+        "for i in range(6):\n"
+        "    users.change(sys.argv[3] + str(i), password='long-enough',\n"
+        "                 create=True)\n"
+    )
+    writers = [subprocess.Popen([sys.executable, "-c", script, str(SCRIPT),
+                                 str(users.path), who]) for who in "pq"]
+    assert [writer.wait(120) for writer in writers] == [0, 0]
+    assert len(serve.Users(users.path).current()) == 13
+    assert len(users.current()) == 13  # the server reads them again
+
+
+def test_a_change_of_the_users_file_within_a_tick_is_read(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-password", ["admin"]))
+    before = users.path.stat()
+    users.path.write_text(users.path.read_text() + (
+        f"bob:\n  password: {serve.hash_password('bob-password')}\n"))
+    os.utime(users.path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert users.check("bob", b"bob-password")
+
+
+def test_the_users_file_keeps_a_user_and_starts_empty(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-password", []))
+    with pytest.raises(ValueError, match="keeps a user"):
+        users.remove("ann")
+    assert users.check("ann", b"ann-password")
+    for text in ("", "users: {}\n"):  # a file made empty by hand
+        users.path.write_text(text)
+        new = serve.Users(users.path, new=True)
+        new.change("bob", password="bob-password", groups=["admin"],
+                   create=True)
+        assert list(serve.Users(users.path).current()) == ["bob"]
+
+
+@pytest.mark.parametrize("edit", [
+    "  groups: 5\n", "  groups: [lab, [x]]\n", "  groups: {lab: 1}\n",
+])
+def test_a_malformed_users_file_is_told_and_kept(serve, tmp_path, edit):
+    users = _users(serve, tmp_path, ann=("ann-password", ["admin"]))
+    users.path.write_text(
+        f"ann:\n  password: {serve.hash_password('ann-password')}\n{edit}")
+    with pytest.raises(SystemExit, match="groups"):
+        serve.read_users(users.path)
+    assert users.check("ann", b"ann-password")  # the users as they were
+    with pytest.raises(ValueError, match="groups"):  # no write over it
+        users.change("ann", env={"X": "1"})
+    assert edit in users.path.read_text()
+
+
+def test_a_group_given_as_a_list_is_told(serve, tmp_path):
+    path = tmp_path / "users.yaml"
+    path.write_text(f"users:\n  ann:\n    password: "
+                    f"{serve.hash_password('a')}\ngroups:\n  lab: [a]\n")
+    with pytest.raises(SystemExit, match="the group lab"):
+        serve.read_users(path)
+
+
+def test_passwords_have_eight_characters_everywhere(
+    serve, console, monkeypatch
+):
+    port, users = console
+    with pytest.raises(ValueError, match="8 characters"):
+        users.change("bob", password="short")
+    assert _status(port, "/admin/api/user", _basic("ann-pw", "ann"), "POST",
+                   {"name": "eve", "password": "short", "create": True}) \
+        == 400
+    monkeypatch.setattr(serve.getpass, "getpass", lambda prompt: "short")
+    with pytest.raises(SystemExit, match="8 characters"):
+        serve.main(["--users", str(users.path), "--set-password", "bob"])
+    assert users.check("bob", b"bob-pw")
+
+
+def test_a_key_kept_is_for_the_same_provider_and_address(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("a", ["admin"]))
+    users.change("ann", llm={"provider": "openai", "key": "admin-set"})
+    with pytest.raises(ValueError, match="needs its key"):
+        users.change("ann", llm={"provider": "openai",
+                                 "base_url": "https://evil.test/v1"})
+    users.change("ann", llm={"provider": "openai", "model": "m"})
+    assert users.assistant("ann")["key"] == "admin-set"
+    with pytest.raises(ValueError, match="base_url"):
+        users.change("ann", llm={"provider": "custom", "key": "k"})
+    users.change("ann", llm={"provider": "custom", "key": "k",
+                             "base_url": "https://mine.test/v1"})
+    with pytest.raises(ValueError, match="needs its key"):
+        users.change("ann", llm={"provider": "custom",
+                                 "base_url": "https://other.test/v1"})
+
+
+def test_the_summary_of_the_assistants_is_that_of_the_users(
+    serve, tmp_path, monkeypatch, capsys
+):
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    monkeypatch.setenv("NEUROLANG_LLM_CONFIG", str(config))
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    users = _users(serve, tmp_path, ann=("a", ["admin"]), bob=("b", ["lab"]),
+                   eve=("e", ["zoo"]), carl=("c", []))
+    users.change("ann", llm={"provider": "anthropic", "model": "m-a",
+                             "key": "k"})
+    users.change_group("lab", llm={"provider": "openai", "key": "k"})
+    users.change_group("zoo", {"TEST_LLM_KEY": "zoo-key"})
+    assistants = serve.users_assistants(users)
+    assert assistants["ann"] == "anthropic (m-a)"
+    assert assistants["bob"].startswith("openai")
+    assert assistants["eve"] == "test (m)" and assistants["carl"] is None
+    assert "TEST_LLM_KEY" not in os.environ
+
+
+def test_a_logout_ends_the_login_of_a_copied_cookie(serve, guests):
+    port, _ = guests
+    for status, cookie in (_login(port, "ann", "ann-pw"), _guest(port)):
+        assert status == 200
+        assert _http(port, "GET", "/bundle.json", {"Cookie": cookie})[0] \
+            == 200
+        assert _http(port, "GET", "/logout", {"Cookie": cookie})[0] == 303
+        assert _http(port, "GET", "/bundle.json", {"Cookie": cookie})[0] \
+            == 401
+    # A login after it, in the same second, is good.
+    status, cookie = _login(port, "ann", "ann-pw")
+    assert _http(port, "GET", "/bundle.json", {"Cookie": cookie})[0] == 200
+
+
+def test_the_login_cookie_is_secure_behind_a_proxy(serve, tmp_path):
+    args = serve.parse_args(["--local", "--users", "u", "--secure-cookie",
+                             "--daemon", "install"])
+    assert "--secure-cookie" in serve.service_command(args)
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users,
+                               secure_cookie=True)
+    with _serving(server) as port:
+        status, headers = _http(port, "POST", "/login", {},
+                                {"name": "ann", "password": "ann-pw"})
+        assert status == 200 and "; Secure" in headers["Set-Cookie"]
+
+
+@pytest.mark.parametrize("before", [
+    "x=a b", 'x={"a":1}', "neurolang_login=é", "neurolang_login=bad.sig",
+    "x", "",
+])
+def test_the_login_cookie_is_found_among_others(console, before):
+    port, _ = console
+    _, cookie = _login(port, "bob", "bob-pw")
+    header = f"{before}; {cookie}; y=\"z\""
+    assert _http(port, "GET", "/bundle.json", {"Cookie": header})[0] == 200
+    assert _http(port, "GET", "/bundle.json",
+                 {"Cookie": before or "x=1"})[0] == 401
+
+
+@pytest.mark.parametrize("path", [
+    "/login", "/login/guest", "/account/api/llm", "/account/api/password",
+    "/admin/api/user",
+])
+def test_the_bodies_of_the_login_account_and_console_are_checked(
+    serve, guests, path, capsys
+):
+    port, _ = guests
+    _, cookie = _login(port, "ann", "ann-pw")
+    for body, status in ((b"[]", 400), (b"{bad", 400), (b"", 413)):
+        headers = ("Content-Length: 2000000" if status == 413
+                   else f"Content-Length: {len(body)}")
+        answered, text = _raw(port, (
+            f"POST {path} HTTP/1.1\r\nHost: localhost\r\n"
+            f"Content-Type: application/json\r\nCookie: {cookie}\r\n"
+            f"Connection: close\r\n{headers}\r\n\r\n"
+        ).encode() + body)
+        assert answered == status, (body, text)
+        assert json.loads(text)["error"]
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_a_failing_change_of_the_account_is_told_and_logged(
+    console, monkeypatch, capsys
+):
+    port, users = console
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("the secret detail")
+
+    monkeypatch.setattr(users, "change", fail)
+    _, cookie = _login(port, "bob", "bob-pw")
+    for path, body in (("/account/api/llm", {"provider": "anthropic",
+                                             "key": "k"}),
+                       ("/account/api/password",
+                        {"current": "bob-pw", "new": "long-enough"})):
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}", method="POST",
+            headers={"Cookie": cookie, "Content-Type": "application/json"},
+            data=json.dumps(body).encode())
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(request, timeout=10)
+        with refused.value:
+            assert refused.value.code == 500
+            assert json.load(refused.value) == {"error": "RuntimeError"}
+    assert "the secret detail" in capsys.readouterr().err

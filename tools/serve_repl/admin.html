@@ -54,6 +54,7 @@
   <label>User <input name="name" required autocomplete="off" list="names"></label>
   <label>Provider <select name="provider" class="providers"></select></label>
   <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
   <label>Key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
   <label><span><input name="drop" type="checkbox"> remove</span></label>
   <button>Set their assistant</button>
@@ -70,6 +71,7 @@
   <datalist id="group-names"></datalist>
   <label>Provider <select name="provider" class="providers"></select></label>
   <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
   <label>Key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
   <label><span><input name="drop" type="checkbox"> remove the assistant</span></label>
   <label>Its users' own key <select name="own_key">
@@ -215,11 +217,12 @@ $("change").addEventListener("submit", (event) => {
     .then(() => { event.target.password.value = ""; });
 });
 
-// The assistant of a user or a group: a provider, its model and its key
-// (kept if not given again for the same provider), or none.
+// The assistant of a user or a group: a provider, its model, its address
+// (custom's) and its key (kept if not given again for the same provider and
+// address), or none.
 function llmOf(form) {
   if (form.get("drop")) return false;
-  return { provider: form.get("provider"), model: form.get("model").trim(), key: form.get("key") };
+  return { provider: form.get("provider"), model: form.get("model").trim(), base_url: form.get("base_url").trim(), key: form.get("key") };
 }
 
 $("user-llm").addEventListener("submit", (event) => {
@@ -235,7 +238,7 @@ $("group").addEventListener("submit", (event) => {
   const form = new FormData(event.target);
   const name = form.get("name").trim();
   const body = { name };
-  if (form.get("drop") || form.get("key") || form.get("model").trim()) body.llm = llmOf(form);
+  if (form.get("drop") || form.get("key") || form.get("model").trim() || form.get("base_url").trim()) body.llm = llmOf(form);
   const own = form.get("own_key");
   if (own) body.own_key = own === "yes";
   change("/admin/api/group", body, `The group ${name} is changed.`)

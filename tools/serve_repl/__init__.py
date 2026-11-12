@@ -130,10 +130,10 @@ send), and from this site if the browser gives its ``Origin``.
 
 import argparse
 import base64
+import contextlib
 import getpass
 import hashlib
 import hmac
-import http.cookies
 import http.server
 import importlib.util
 import json
@@ -510,6 +510,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _account(self, path: str):
         """The page of the user's account, ``/account``: who they are, and
         a new password they give themselves (the current one first)."""
+        self._guarded(self._account_answer, path)
+
+    def _guarded(self, answer, path: str):
+        """Answer the request to *path* with *answer*; a ValueError is told
+        (the request's, or the console's own messages), another error by
+        its kind only, its traceback in the log."""
+        try:
+            return answer(path)
+        except ValueError as error:
+            return self._reply_json(
+                {"error": str(error)},
+                413 if isinstance(error, TooLarge) else 400)
+        except Exception as error:
+            traceback.print_exc()
+            return self._reply_json({"error": type(error).__name__}, 500)
+
+    def _account_answer(self, path: str):
         if self.users is None:
             return self._reply_json({"error": "no users"}, 404)
         if path in ("/account", "/account/"):
@@ -536,24 +553,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not self.users.own_key(self.user):
                 return self._reply_json({"error": "Your assistant's key is "
                                          "the one your admin set"}, 403)
-            length = int(self.headers.get("Content-Length") or 0)
-            try:
-                body = json.loads(self.rfile.read(length) or b"{}")
-                self.users.change(self.user, llm=False if body.get("remove")
-                                  else {k: body.get(k) for k in (
-                                      "provider", "model", "base_url", "key")})
-            except ValueError as error:
-                return self._reply_json({"error": str(error)}, 400)
-            self._refresh_sessions()
+            body = self._body()
+            self.users.change(self.user, llm=False if body.get("remove")
+                              else {k: body.get(k) for k in (
+                                  "provider", "model", "base_url", "key")})
+            self._refresh_sessions([self.user])
             return self._reply_json({"ok": True})
         if path == "/account/api/password" and self.command == "POST":
-            length = int(self.headers.get("Content-Length") or 0)
-            try:
-                body = json.loads(self.rfile.read(length) or b"{}")
-                current = str(body.get("current", "")).encode()
-                new = str(body.get("new", ""))
-            except ValueError:
-                return self._reply_json({"error": "not JSON"}, 400)
+            body = self._body()
+            current = str(body.get("current", "")).encode()
+            new = str(body.get("new", ""))
             if not self.users.check(self.user, current):
                 return self._reply_json(
                     {"error": "The current password is not that one"}, 403)
@@ -586,33 +595,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         of the group admin only."""
         if self.users is None or not self.users.is_admin(self.user):
             return self._reply_json({"error": "for the admins only"}, 403)
-        try:
-            if self.command == "POST":
-                length = int(self.headers.get("Content-Length") or 0)
-                body = json.loads(self.rfile.read(length) or b"{}")
-                return self._reply_json(self._admin_change(path, body))
-            if path in ("/admin", "/admin/"):
-                return self._reply(200, ADMIN_PAGE.read_bytes(),
-                                   "text/html; charset=utf-8")
-            if path == "/admin/api/state":
-                return self._reply_json(self._admin_state())
-            if path == "/admin/api/feedback":
-                return self._reply_json(self._admin_feedback())
-            if path == "/admin/feedback.yaml" and self.feedback_db:
-                from neurolang_apps.utils.llm.feedback_server import (
-                    FeedbackStore, examples_yaml,
-                )
+        self._guarded(self._admin_answer, path)
 
-                text = examples_yaml(FeedbackStore(self.feedback_db))
-                return self._reply(200, text.encode(), "application/yaml", [
-                    ("Content-Disposition",
-                     'attachment; filename="feedback.yaml"')])
-            return self._reply_json({"error": "not found"}, 404)
-        except ValueError as error:  # told: the console's own messages
-            return self._reply_json({"error": str(error)}, 400)
-        except Exception as error:
-            traceback.print_exc()
-            return self._reply_json({"error": type(error).__name__}, 500)
+    def _admin_answer(self, path: str):
+        if self.command == "POST":
+            return self._reply_json(self._admin_change(path, self._body()))
+        if path in ("/admin", "/admin/"):
+            return self._reply(200, ADMIN_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if path == "/admin/api/state":
+            return self._reply_json(self._admin_state())
+        if path == "/admin/api/feedback":
+            return self._reply_json(self._admin_feedback())
+        if path == "/admin/feedback.yaml" and self.feedback_db:
+            from neurolang_apps.utils.llm.feedback_server import (
+                FeedbackStore, examples_yaml,
+            )
+
+            text = examples_yaml(FeedbackStore(self.feedback_db))
+            return self._reply(200, text.encode(), "application/yaml", [
+                ("Content-Disposition",
+                 'attachment; filename="feedback.yaml"')])
+        return self._reply_json({"error": "not found"}, 404)
 
     def _admin_state(self) -> dict:
         users = self.users.current()
@@ -649,14 +653,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 for answer in FeedbackStore(self.feedback_db).answers(
                     limit=200)]
 
-    def _refresh_sessions(self) -> None:
-        """Give the running sessions their users as they are now."""
+    def _refresh_sessions(self, names) -> None:
+        """Give the sessions of the users *names* their user as they are
+        now."""
         if self.sessions is not None and hasattr(self.sessions, "refresh"):
-            self.sessions.refresh()
+            self.sessions.refresh(names)
 
     def _admin_change(self, path: str, body: dict) -> dict:
         answer = self._admin_changed(path, body)
-        self._refresh_sessions()
+        name = str(body.get("name", ""))
+        if path == "/admin/api/user":
+            self._refresh_sessions([name])
+        elif path == "/admin/api/group":  # its members
+            self._refresh_sessions([n for n, e in self.users.current().items()
+                                    if name in e["groups"]])
         return answer
 
     def _admin_changed(self, path: str, body: dict) -> dict:
@@ -687,6 +697,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     #: go over HTTPS only.
     login_secret = None
     secure = False
+    #: When each user (or guest) logged out last, by name: a login cookie
+    #: made before is out (make_server gives each server its own).
+    logged_out = {}
     #: Whether a visitor may come in as a guest (--guests).
     guests = False
 
@@ -696,6 +709,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/login/guest":
             return self._guest()
         if path == "/logout":
+            if self._authorised():
+                now = time.time()
+                for name, when in list(self.logged_out.items()):
+                    if when < now - LOGIN_DAYS * 86400:  # expired anyway
+                        del self.logged_out[name]
+                self.logged_out[self.user] = now
             return self._reply(303, b"", "text/plain", [
                 ("Location", "/login"),
                 ("Set-Cookie", self._cookie("", 0))])
@@ -705,13 +724,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not self._same_site():
             return self._reply_json(
                 {"error": "A request of this site's page only"}, 403)
-        length = int(self.headers.get("Content-Length") or 0)
-        try:
-            body = json.loads(self.rfile.read(length) or b"{}")
-            name = str(body.get("name", ""))
-            password = str(body.get("password", "")).encode()
-        except ValueError:
-            return self._reply_json({"error": "not JSON"}, 400)
+        body = self._request_body()
+        if body is None:
+            return
+        name = str(body.get("name", ""))
+        password = str(body.get("password", "")).encode()
         if not self.users.check(name, password):
             return self._reply_json(
                 {"error": "That name and password are not a user's"}, 403)
@@ -728,9 +745,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not self._same_site():
             return self._reply_json(
                 {"error": "A request of this site's page only"}, 403)
+        if self._request_body() is None:
+            return
         name = GUEST_PREFIX + secrets.token_hex(6)
         return self._reply_json({"ok": True}, 200, [
             ("Set-Cookie", self._cookie(name, LOGIN_DAYS * 86400))])
+
+    def _request_body(self):
+        """Return the JSON object of the request's body, or None once told
+        why not (see :meth:`_body`)."""
+        try:
+            return self._body()
+        except ValueError as error:
+            self._reply_json({"error": str(error)},
+                             413 if isinstance(error, TooLarge) else 400)
+            return None
 
     def _cookie(self, name: str, seconds: int) -> str:
         """The login cookie of *name* for *seconds* (0: none)."""
@@ -741,14 +770,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _authorised(self) -> bool:
         if self.users is not None:
-            cookies = http.cookies.SimpleCookie(self.headers.get("Cookie"))
-            if LOGIN_COOKIE in cookies:
-                name = check_login(self.login_secret,
-                                   cookies[LOGIN_COOKIE].value, self.users,
-                                   self.guests)
-                if name is not None:
-                    self.user = name
-                    return True
+            # Each login cookie, read by hand: another cookie of the host
+            # that the standard library cannot parse does not hide it.
+            for header in self.headers.get_all("Cookie") or ():
+                for cookie in header.split(";"):
+                    key, _, value = cookie.strip().partition("=")
+                    name = None if key != LOGIN_COOKIE else check_login(
+                        self.login_secret, value, self.users, self.guests,
+                        self.logged_out)
+                    if name is not None:
+                        self.user = name
+                        return True
         scheme, _, encoded = (
             self.headers.get("Authorization") or ""
         ).partition(" ")
@@ -985,12 +1017,13 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 def make_server(site: Path, host: str, port: int, backend=None,
                 tls=None, password=None, names=(), users=None,
                 feedback_db=None, guests: bool = False,
-                max_guest_sessions: int = 2):
+                max_guest_sessions: int = 2, secure_cookie: bool = False):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
     only, if given, else to those sent to this machine's names, *host*
-    or one of *names*."""
+    or one of *names*. The login cookie goes over HTTPS only with *tls*,
+    or *secure_cookie* (behind a proxy of HTTPS)."""
     base = Handler if backend is None else LocalHandler
     names = {*LOCAL_NAMES, *names, host} - {"0.0.0.0", "::", ""}
     handler = type("Handler", (base,), {
@@ -999,7 +1032,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
         "names": frozenset(name.lower().strip("[]") for name in names),
         "users": users,
         "login_secret": os.urandom(32) if users is not None else None,
-        "secure": tls is not None,
+        "secure": tls is not None or secure_cookie, "logged_out": {},
         "guests": guests, "max_guest_sessions": max_guest_sessions,
         "sessions": backend if hasattr(backend, "info") else None,
         "feedback_db": feedback_db,
@@ -1103,7 +1136,7 @@ def _env(path, owner, env) -> dict:
     return {str(k): str(v) for k, v in env.items()}
 
 
-def read_users_file(path: Path) -> tuple:
+def read_users_file(path: Path, new: bool = False) -> tuple:
     """
     Return the users and the groups of the YAML file *path*. The users, by
     name: the ``password`` hash of each (``neurolang-repl-serve
@@ -1126,7 +1159,9 @@ def read_users_file(path: Path) -> tuple:
             env:
               ALBERT_API_KEY: ...
 
-    A file of the users alone, without ``users:``, is read as well.
+    A file of the users alone, without ``users:``, is read as well; an
+    empty one, or one without users, is that of no users if *new* (its first
+    is added).
     """
     import yaml
 
@@ -1141,7 +1176,7 @@ def read_users_file(path: Path) -> tuple:
         and all(isinstance(e, dict) for e in data["users"].values())
     users = data["users"] if sections else data
     groups = (data.get("groups") or {}) if sections else {}
-    if not users:
+    if not (users or new):
         sys.exit(f"The users file {path} has no users")
     if not isinstance(groups, dict):
         sys.exit(f"{path}: groups is not a mapping of the groups")
@@ -1155,9 +1190,16 @@ def read_users_file(path: Path) -> tuple:
         member = entry.get("groups") or []
         if isinstance(member, str):
             member = [member]
+        if not isinstance(member, list) or \
+                not all(isinstance(group, str) for group in member):
+            sys.exit(f"{path}: the groups of the user {name} are a list of "
+                     "names")
         entry["groups"] = sorted({str(group) for group in member})
     kept = {}
     for name, entry in groups.items():
+        if not isinstance(entry or {}, dict):
+            sys.exit(f"{path}: the group {name} is not a mapping (env, llm, "
+                     "own_key)")
         entry = dict(entry or {})
         group = {"env": _env(path, f"the group {name}", entry.get("env"))}
         _read_assistant(path, f"the group {name}", entry)
@@ -1191,35 +1233,63 @@ class Users:
     The users of the users file *path* as it is now: read again when it
     changes (an edit by hand), and written by the admin console, at once
     (a new file in its place), readable by its owner only. Those of the
-    group ``admin`` have the console.
+    group ``admin`` have the console. A change reads the file again and
+    writes it holding a lock of the file (``users.yaml.lock``), so that the
+    changes of the server and of the command line all stay.
     """
 
     ADMIN = "admin"
 
     def __init__(self, path: Path, new: bool = False):
-        """*new*: the file may not be there yet (its first user is added
-        from the command line)."""
+        """*new*: the file may not be there yet, or be empty (its first
+        user is added from the command line)."""
         self.path = Path(path)
+        self.new = new
         self._lock = threading.RLock()
-        self._users, self._groups = ({}, {}) \
-            if new and not self.path.exists() \
-            else read_users_file(self.path)
-        self._seen = self._mtime()
+        self._users, self._groups = {}, {}
+        self._seen = None
+        self._read()
 
-    def _mtime(self):
+    def _stamp(self, stat=None):
+        """What changes when the file does, even within a tick of its
+        file system's clock."""
         try:
-            return self.path.stat().st_mtime_ns
+            stat = stat or self.path.stat()
         except OSError:
             return None
+        return stat.st_ino, stat.st_mtime_ns, stat.st_size
+
+    def _read(self) -> None:
+        """Read the file as it is now (stop, telling why, if it cannot)."""
+        stamp = self._stamp()  # before: a write meanwhile is read later
+        if stamp is None and self.new:
+            self._users, self._groups = {}, {}
+        else:
+            self._users, self._groups = read_users_file(self.path, self.new)
+        self._seen = stamp
+
+    @contextlib.contextmanager
+    def _changing(self):
+        """Hold the lock of the file, with the users read again."""
+        import fcntl
+
+        with self._lock, open(f"{self.path}.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                self._read()
+            except SystemExit as error:  # an edit by hand to fix first
+                raise ValueError(str(error)) from None
+            yield
 
     def current(self) -> dict:
         """Return the users, read again if the file changed."""
         with self._lock:
-            mtime = self._mtime()
-            if mtime is not None and mtime != self._seen:
-                self._seen = mtime
+            stamp = self._stamp()
+            if stamp is not None and stamp != self._seen:
+                self._seen = stamp
                 try:
-                    self._users, self._groups = read_users_file(self.path)
+                    self._users, self._groups = read_users_file(
+                        self.path, self.new)
                 except SystemExit as error:  # kept as they were
                     print(f"The users file is not read again: {error}",
                           file=sys.stderr, flush=True)
@@ -1320,8 +1390,7 @@ class Users:
         one), its assistant *llm* and whether its users may give their own
         key, *own_key* (see :meth:`change`); a group left with nothing is
         forgotten."""
-        with self._lock:
-            self.current()
+        with self._changing():
             if not group or not group.strip():
                 raise ValueError("A group's name is not empty")
             groups = {n: {**g, "env": dict(g["env"])}
@@ -1331,7 +1400,7 @@ class Users:
             _change_assistant(entry, llm, own_key)
             if not entry["env"] and set(entry) == {"env"}:
                 del groups[group]
-            self._write(self.current(), groups)
+            self._write(self._users, groups)
 
     def change(self, name: str, password=None, groups=None, env=None,
                create: bool = False, llm=None, own_key=None) -> None:
@@ -1340,9 +1409,13 @@ class Users:
         assistant *llm* (see :func:`_change_assistant`), whether they may
         give their own key, *own_key* (``"inherit"``: as their groups say).
         """
-        with self._lock:
+        if password and len(password) < SHORTEST_PASSWORD:
+            raise ValueError(f"A password has at least {SHORTEST_PASSWORD} "
+                             "characters")
+        hashed = password and hash_password(password)  # slow: not locked
+        with self._changing():
             users = {n: dict(e, env=dict(e["env"]))
-                     for n, e in self.current().items()}
+                     for n, e in self._users.items()}
             if create == (name in users):
                 raise ValueError(f"The user {name} "
                                  + ("exists" if create else "does not exist"))
@@ -1351,8 +1424,8 @@ class Users:
             entry = users.setdefault(name, {"env": {}, "groups": []})
             if create and not password:
                 raise ValueError("A new user needs a password")
-            if password:
-                entry["password"] = hash_password(password)
+            if hashed:
+                entry["password"] = hashed
             if groups is not None:
                 entry["groups"] = sorted({str(g).strip() for g in groups
                                           if str(g).strip()})
@@ -1362,10 +1435,12 @@ class Users:
             self._write(users)
 
     def remove(self, name: str) -> None:
-        with self._lock:
-            users = dict(self.current())
+        with self._changing():
+            users = dict(self._users)
             if users.pop(name, None) is None:
                 raise ValueError(f"The user {name} does not exist")
+            if not users:
+                raise ValueError("The users file keeps a user")
             self._keep_an_admin(users)
             self._write(users)
 
@@ -1391,19 +1466,25 @@ class Users:
             with os.fdopen(handle, "w") as file:  # mkstemp's mode: 600
                 yaml.safe_dump(kept, file, sort_keys=True,
                                allow_unicode=True)
+            try:  # a file the server reads, or nothing
+                written = read_users_file(Path(temporary))
+            except SystemExit as error:
+                raise ValueError(str(error)) from None
+            stamp = self._stamp(os.stat(temporary))  # a rename keeps it
             os.replace(temporary, self.path)
         except BaseException:
             os.unlink(temporary)
             raise
-        self._users, self._groups = read_users_file(self.path)
-        self._seen = self._mtime()
+        self._users, self._groups = written
+        self._seen = stamp
 
 
 def _change_assistant(entry: dict, llm, own_key) -> None:
     """Change the assistant of a user's or group's *entry*: *llm*, a
-    provider of the page's form with its ``model``, ``base_url`` and
-    ``key`` (the key it had kept if none is given), or False to remove it,
-    None to leave it; *own_key* True, False, ``"inherit"`` or None."""
+    provider of the page's form with its ``model``, ``base_url`` (that of
+    ``custom``) and ``key`` (the key it had kept if none is given, for the
+    same provider and address only), or False to remove it, None to leave
+    it; *own_key* True, False, ``"inherit"`` or None."""
     if llm is False:
         entry.pop("llm", None)
     elif llm:
@@ -1415,14 +1496,19 @@ def _change_assistant(entry: dict, llm, own_key) -> None:
         if not provider or PROVIDERS is not None and provider not in PROVIDERS:
             raise ValueError(f"No provider {provider!r}: one of "
                              f"{', '.join(PROVIDERS or [])}")
+        base_url = llm.get("base_url") or ""
+        if PROVIDERS and not PROVIDERS[provider]["base_url"] and not base_url:
+            raise ValueError(f"The assistant of {provider} needs its address, "
+                             "base_url")
         old = entry.get("llm") or {}
-        key = llm.get("key") or (old.get("key")
-                                 if old.get("provider") == provider else "")
+        same = (old.get("provider"), old.get("base_url") or "") == \
+            (provider, base_url)
+        key = llm.get("key") or (old.get("key") if same else "")
         if not key:
             raise ValueError(f"The assistant of {provider} needs its key")
         entry["llm"] = {k: str(v) for k, v in {
             "provider": provider, "model": llm.get("model"),
-            "base_url": llm.get("base_url"), "key": key}.items() if v}
+            "base_url": base_url, "key": key}.items() if v}
     if own_key == "inherit":
         entry.pop("own_key", None)
     elif own_key is not None:
@@ -1508,18 +1594,26 @@ def key_status(entry: dict, groups=None) -> dict:
     return {**status, "assistant": "none"}
 
 
-def users_assistants(users: dict) -> dict:
-    """Return, by user, the provider and model their assistant answers
-    with by default, or None if it has no key (they give theirs in the
-    page); warn if the variables of a user give no key."""
+def users_assistants(users: "Users") -> dict:
+    """Return, by user of *users*, the provider and model their assistant
+    answers with by default (their ``llm``, their groups', else the
+    server's configuration with their variables and their groups'), or
+    None if it has no key (they give theirs in the page); warn if the
+    variables of a user give no key."""
     assistants = {}
-    for name, entry in users.items():
+    for name in users.current():
+        assistant = users.assistant(name)
+        if assistant:
+            assistants[name] = (f"{assistant['provider']} "
+                                f"({assistant.get('model') or 'its model'})")
+            continue
+        env = users.env(name)
         saved = dict(os.environ)
-        os.environ.update(entry["env"])
+        os.environ.update(env)
         try:
             assistants[name] = default_assistant(quiet=True)
         except SystemExit as error:
-            if entry["env"]:
+            if env:
                 print(f"The variables of {name} give their assistant no "
                       f"key: {error}", file=sys.stderr, flush=True)
             assistants[name] = None
@@ -1538,7 +1632,7 @@ def _fingerprint(entry: dict) -> str:
 def sign_login(secret: bytes, name: str, users, seconds: int) -> str:
     """Return the value of the login cookie of *name* (a user, or a guest),
     good for *seconds*, signed with *secret*."""
-    login = {"u": name, "e": int(time.time()) + seconds}
+    login = {"u": name, "e": int(time.time()) + seconds, "i": time.time()}
     if name.startswith(GUEST_PREFIX):
         login["g"] = 1
     else:
@@ -1548,13 +1642,15 @@ def sign_login(secret: bytes, name: str, users, seconds: int) -> str:
     return f"{payload}.{signature}"
 
 
-def check_login(secret: bytes, value: str, users, guests: bool = False):
+def check_login(secret: bytes, value: str, users, guests: bool = False,
+                logged_out=None):
     """Return the user of the login cookie *value* if it is good: signed
-    with *secret*, not expired, of a user who is still there with the same
+    with *secret*, not expired, made after its user last logged out (as
+    *logged_out* says, by name), of a user who is still there with the same
     password, or of a guest if *guests* are let in; else None."""
     payload, _, signature = value.partition(".")
     good = hmac.new(secret, payload.encode(), "sha256").hexdigest()
-    if not hmac.compare_digest(signature, good):
+    if not hmac.compare_digest(signature.encode(), good.encode()):
         return None
     try:
         login = json.loads(base64.urlsafe_b64decode(payload.encode()))
@@ -1563,6 +1659,8 @@ def check_login(secret: bytes, value: str, users, guests: bool = False):
     if not isinstance(login, dict) or login.get("e", 0) < time.time():
         return None
     name = str(login.get("u", ""))
+    if login.get("i", 0) <= (logged_out or {}).get(name, -1):
+        return None
     if login.get("g"):
         return name if guests and name.startswith(GUEST_PREFIX) else None
     entry = users.current().get(name)
@@ -1667,6 +1765,8 @@ def service_command(args) -> list:
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes)]
+    if args.secure_cookie:
+        command += ["--secure-cookie"]
     if args.guests:
         command += ["--guests", "--max-guest-sessions",
                     str(args.max_guest_sessions)]
@@ -1902,6 +2002,11 @@ def parse_args(argv=None):
         "their own",
     )
     parser.add_argument(
+        "--secure-cookie", action="store_true",
+        help="with --users behind a reverse proxy of HTTPS (no --cert), "
+        "send the login cookie over HTTPS only",
+    )
+    parser.add_argument(
         "--max-guest-sessions", type=int, default=2, metavar="N",
         help="with --guests, the sessions the guests have at most at once "
         "(default: %(default)s)",
@@ -2038,6 +2143,8 @@ def parse_args(argv=None):
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
                      "certificate")
+    if args.secure_cookie and not args.users:
+        parser.error("--secure-cookie is that of the login of --users")
     if args.guests and not (args.users and args.local):
         parser.error("--guests needs --users and --local")
     if args.feedback_db and not args.local:
@@ -2124,7 +2231,9 @@ def manage_users(args) -> None:
             target, provider, model = (words + [""])[:3]
             key = getpass.getpass(f"The key of {provider} for {target} "
                                   "(empty: none): ")
-            llm = {"provider": provider, "model": model, "key": key} \
+            llm = {"provider": provider, "model": model, "key": key,
+                   "base_url": input("The address of its API (base_url): ")
+                   if key and provider == "custom" else ""} \
                 if key else False
             if args.set_llm:
                 users.change(target, llm=llm)
@@ -2190,7 +2299,7 @@ def main(argv=None) -> None:
               "those who log in", flush=True)
     users = Users(args.users) if args.users else None
     if users and args.local:
-        for name, assistant in users_assistants(users.current()).items():
+        for name, assistant in users_assistants(users).items():
             print(f"{name}: the AI assistant answers with "
                   f"{assistant or 'the key their page gives'}", flush=True)
     if args.daemon:
@@ -2249,7 +2358,7 @@ def main(argv=None) -> None:
     server = make_server(args.site, args.host, args.port, backend, tls,
                          password, args.server_names or (), users,
                          args.feedback_db, args.guests,
-                         args.max_guest_sessions)
+                         args.max_guest_sessions, args.secure_cookie)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"

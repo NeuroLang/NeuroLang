@@ -28,6 +28,7 @@
 <form id="llm">
   <label>Provider <select name="provider"></select></label>
   <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
   <label>API key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
   <button>Save my assistant</button>
   <button type="button" id="llm-remove">Remove mine</button>
@@ -79,7 +80,7 @@ async function saveLlm(body, done) {
 $("llm").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
-  saveLlm({ provider: form.get("provider"), model: form.get("model").trim(), key: form.get("key") },
+  saveLlm({ provider: form.get("provider"), model: form.get("model").trim(), base_url: form.get("base_url").trim(), key: form.get("key") },
     "Your assistant is saved: it answers in your open REPL pages at once.");
 });
 $("llm-remove").addEventListener("click", () => saveLlm({ remove: true }, "Your assistant is removed."));
