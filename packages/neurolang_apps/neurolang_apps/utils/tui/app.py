@@ -554,11 +554,10 @@ class InteractiveTuiApp:
             "[bold yellow]NeuroLang interactive query REPL[/bold yellow]"
         )
         if name:
-            description = " ".join(
-                engine_registry.get_engine_config(name)
-                .get("description", "").split()
-            )
+            config = engine_registry.get_engine_config(name)
+            description = " ".join(config.get("description", "").split())
             self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
+            self._print_kernel(config)
         self.console.print(
             f"Mode: {mode} · [green].help[/green] for help · "
             "[green]Tab[/green] completes · "
@@ -572,6 +571,22 @@ class InteractiveTuiApp:
         examples = engine_examples(name).get(mode.lower())
         if examples:
             self.console.print(f"Try: {examples[0]}", markup=False)
+
+    def _print_kernel(self, config: dict) -> None:
+        """
+        Print the size of the voxels of the engine's grid and the radius
+        around a peak that a study activates, ``kernel_radius_mm`` of the
+        engine *config*, if it has both.
+        """
+        grid = getattr(self._nl, "template", None)
+        if grid is None or "kernel_radius_mm" not in config:
+            return
+        radius = engine_registry.kernel_radius_voxels(config, grid)
+        self.console.print(
+            f"Grid: {abs(float(grid.affine[0, 0])):g} mm voxels · a study "
+            f"activates within {config['kernel_radius_mm']:g} mm "
+            f"({radius:g} voxels) of its peaks", highlight=False,
+        )
 
     def _make_session(self, **kwargs) -> PromptSession:
         """

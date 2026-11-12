@@ -1109,3 +1109,82 @@ def test_datalog_init_reads_files_relative_to_the_data_directory(
     import os
 
     assert os.getcwd() == str(elsewhere)
+
+
+def _activated_mm(voxel_mm, data_dir):
+    """
+    Return the MNI points, in millimetres, of the voxels ``activated``
+    (its rule in the neurosynth engine) by a peak at the origin, on a grid
+    of *voxel_mm* millimetres spanning 12 mm around it.
+    """
+    import nibabel as nib
+
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils import engine_registry
+
+    cfg = engine_registry.get_engine_config("neurosynth")
+    rule = next(
+        line for line in cfg["datalog_init"].splitlines()
+        if line.startswith("activated(")
+    )
+    side = 24 // voxel_mm + 1
+    affine = np.diag([voxel_mm] * 3 + [1]).astype(float)
+    affine[:3, 3] = -12
+    mask = nib.Nifti1Image(np.ones((side,) * 3, dtype=np.uint8), affine)
+    nl = NeurolangPDL()
+    nl.add_tuple_set(np.argwhere(mask.get_fdata() > 0), name="brain_mask")
+    peak = 12 // voxel_mm
+    nl.add_tuple_set([(peak, peak, peak, 1)], name="peak_reported")
+    engine_registry._phase_datalog_init(
+        nl, {**cfg, "datalog_init": rule}, data_dir, mask
+    )
+    voxels = nl.solve_all()["activated"].as_pandas_dataframe()
+    return {
+        tuple(int(c) for c in nib.affines.apply_affine(affine, voxel))
+        for voxel in voxels.iloc[:, :3].to_numpy()
+    }
+
+
+def test_activated_is_within_the_kernel_radius_in_mm_at_every_resolution(
+    tmp_path,
+):
+    """
+    ``activated`` holds the voxels within ``kernel_radius_mm`` millimetres
+    of a peak whatever the size of the voxels: the same MNI neighbourhood
+    on the 1 mm and the 2 mm grids, the 2 mm voxels being the 1 mm ones
+    on its lattice (about 8 times fewer).
+    """
+    from neurolang_apps.utils import engine_registry
+
+    radius = engine_registry.get_engine_config("neurosynth")[
+        "kernel_radius_mm"
+    ]
+    one, two = (_activated_mm(size, tmp_path) for size in (1, 2))
+    offsets = np.argwhere(np.ones((25, 25, 25))) - 12
+    ball = {
+        tuple(int(c) for c in point) for point in offsets
+        if np.linalg.norm(point) <= radius
+    }
+    assert one == ball
+    assert two == {point for point in ball if not np.any(np.mod(point, 2))}
+
+
+def test_the_kernel_radius_is_written_in_the_atlases_and_the_guidance():
+    """
+    The ``kernel_radius_mm`` of an engine is the ``radius_mm`` of the
+    activations of its atlases and the radius its texts give, those of the
+    assistant, also when an engine extending it sets its own.
+    """
+    from neurolang_apps.utils import engine_registry
+
+    engines = engine_registry._load_yaml_config()["engines"]
+    engines["wide"] = {"extends": "neurosynth", "kernel_radius_mm": 10}
+    for name, radius in (("neurosynth", 6), ("wide", 10)):
+        cfg = engine_registry.resolve_engine_config(engines, name)
+        assert cfg["kernel_radius_mm"] == radius
+        assert {
+            atlas["activated"]["radius_mm"]
+            for atlas in cfg["atlases"].values() if "activated" in atlas
+        } == {radius}
+        assert f"<= {radius})" in cfg["assistant_guidance"]
+        assert "{kernel_radius_mm}" not in str(cfg)

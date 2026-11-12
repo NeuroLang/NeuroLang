@@ -56,8 +56,9 @@ HTML_FORMAT = (
 )
 
 # The precomputed analyses of the meta-analysis engines: ``activated``
-# materialises every voxel within 3 mm of a reported peak, which takes
-# gigabytes, more than a browser tab is given, and what is defined from it.
+# materialises every voxel within kernel_radius_mm of a reported peak, which
+# takes gigabytes, more than a browser tab is given, and what is defined
+# from it.
 HEAVY_PREDICATES = frozenset({
     "activated", "p_a", "p_a_given_t", "p_any_voxel_given_t", "lift",
     "relative_risk", "uniformity", "ratios", "p_a_given_similar",

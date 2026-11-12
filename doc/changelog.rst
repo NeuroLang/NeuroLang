@@ -442,6 +442,18 @@ Unreleased
 
 **Bug fixes:**
 
+* The radius of the activation of a study around its peaks is one
+  ``kernel_radius_mm`` of the meta-analysis engines, 6 mm, the same at every
+  resolution: ``activated`` was within 3 voxels (3 mm on the default 1 mm
+  grid, 6 mm on the 2 mm one), and the atlases (``destrieux_activated``...)
+  and the assistant within 3 mm.  ``activated`` takes it in voxels of the
+  grid (``{kernel_radius_voxels}`` in ``datalog_init``), the atlases as
+  their default ``radius_mm``, and the descriptions, the guidance and the
+  examples of the assistant where they say ``{kernel_radius_mm}``; the
+  banner of the REPL gives it with the size of the voxels.  On the 1 mm grid
+  ``activated`` now holds about 8 times as many pairs (6 voxels instead of
+  3; :doc:`performance` measured 6.6 GB and 18 s for 6 voxels on the 2 mm
+  grid), and the atlases' activations, 6 mm instead of 3, change (#1070).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and

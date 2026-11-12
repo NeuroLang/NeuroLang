@@ -69,6 +69,20 @@ def test_the_banner_names_the_engine_and_the_session_command_line():
     assert "neurolang-query -i --engine neurosynth --resolution 2" in banner
 
 
+def test_the_banner_gives_the_kernel_radius_and_the_voxel_size():
+    """The banner tells how far from a peak a study activates, in
+    millimetres and in voxels of the engine's grid."""
+    import nibabel as nib
+
+    nl = NeurolangPDL()
+    nl.template = nib.Nifti1Image(
+        np.ones((2, 2, 2), dtype=np.uint8), np.diag([2.0, 2.0, 2.0, 1.0])
+    )
+    banner = WebRepl(nl, engine_name="neurosynth", resolution=2).banner()
+    assert "Grid: 2 mm voxels" in banner
+    assert "within 6 mm (3 voxels) of its peaks" in banner
+
+
 def test_quit_does_not_end_the_page(repl):
     reply = repl.submit(".quit")
     assert "reload" in reply.html.lower()

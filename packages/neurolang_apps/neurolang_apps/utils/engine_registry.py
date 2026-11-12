@@ -417,9 +417,43 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    return _merge_engine_configs(*(
+    return _with_kernel_radius(_merge_engine_configs(*(
         engines[engine] or {} for engine in _linearized(engines, name)
-    ))
+    )))
+
+
+def _with_kernel_radius(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return *config* with its ``kernel_radius_mm``, if it has one, written
+    where its texts say ``{kernel_radius_mm}`` (the descriptions, the
+    guidance and the examples of the assistant), and as the ``radius_mm``
+    of the activations of its atlases that do not set theirs.
+    """
+    radius = config.get("kernel_radius_mm")
+    if radius is None:
+        return config
+    for atlas in (config.get("atlases") or {}).values():
+        if isinstance(atlas.get("activated"), dict):
+            atlas["activated"].setdefault("radius_mm", radius)
+
+    def fill(value):
+        if isinstance(value, str):
+            return value.replace("{kernel_radius_mm}", f"{radius:g}")
+        if isinstance(value, dict):
+            return {k: fill(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [fill(v) for v in value]
+        return value
+
+    return fill(config)
+
+
+def kernel_radius_voxels(cfg: Dict[str, Any], mask) -> float:
+    """
+    Return the ``kernel_radius_mm`` of the engine configuration *cfg* in
+    voxels of the grid of *mask*, whose voxels are cubes.
+    """
+    return cfg["kernel_radius_mm"] / abs(float(mask.affine[0, 0]))
 
 
 @functools.lru_cache(maxsize=None)
@@ -1525,13 +1559,19 @@ def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
         )
 
 
-def _phase_datalog_init(nl, cfg, data_dir):
+def _phase_datalog_init(nl, cfg, data_dir, mask=None):
     """
     Run the ``datalog_init`` program of the engine, from its data directory:
     the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
-    relative to it, where ``downloads`` puts the files.
+    relative to it, where ``downloads`` puts the files. Its
+    ``{kernel_radius_voxels}`` is the ``kernel_radius_mm`` of the engine in
+    voxels of the grid of *mask*, the distances between voxel indices.
     """
     datalog_init = cfg.get("datalog_init")
+    if datalog_init and "{kernel_radius_voxels}" in datalog_init:
+        datalog_init = datalog_init.replace(
+            "{kernel_radius_voxels}", f"{kernel_radius_voxels(cfg, mask):g}"
+        )
     if datalog_init:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         with contextlib.chdir(data_dir):
@@ -1852,7 +1892,7 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg, data_dir)
+    _phase_datalog_init(nl, cfg, data_dir, mask)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
