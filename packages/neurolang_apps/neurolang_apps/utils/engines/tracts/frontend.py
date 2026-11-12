@@ -364,10 +364,15 @@ def init_engine(engine, mask=None, data_dir=None, **options) -> None:
         return lines
 
     def streamline_background():
+        # The labels of the atlas the streamlines are indexed by, in their
+        # space: that of a subject has no other image of the engine. In
+        # MNI space, None: the viewer's MNI152 T1.
         atlases = state.store.relations.get("atlas")
         if atlases is None:
             return None
         atlas = state.atlases[atlases["a"].iloc[0]]
+        if str(atlas.space).upper().startswith("MNI"):
+            return None
         return nib.Nifti1Image(atlas.labels, atlas.affine)
 
     engine.streamline_points = streamline_points

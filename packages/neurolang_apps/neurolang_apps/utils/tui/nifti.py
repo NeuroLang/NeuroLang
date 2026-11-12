@@ -1714,12 +1714,16 @@ def _visits(lines, shape, affine: np.ndarray) -> np.ndarray:
 def streamline_background(nl):
     """Return the background of the streamlines of the engine *nl* and
     the name of its millimetres: its ``streamline_background()``, in
-    ``RAS``, else the MNI152 T1, in ``MNI``."""
+    ``RAS``, else, without one or if it gives None (streamlines in MNI
+    space), the MNI152 T1, in ``MNI``."""
     hook = getattr(nl, "streamline_background", None)
-    background = hook() if callable(hook) else brain_viewer.mni_background()
+    background = hook() if callable(hook) else None
+    if background is not None:
+        return background, "RAS"
+    background = brain_viewer.mni_background()
     if background is None:
         raise SaveError("No background to draw the streamlines on.")
-    return background, ("RAS" if callable(hook) else "MNI")
+    return background, "MNI"
 
 
 def last_result_streamlines(app, block):
@@ -1766,7 +1770,7 @@ def last_result_streamlines(app, block):
         f"Streamlines of the column {str(column)!r}: {len(lines)} of "
         f"{len(ids)} shown{subsampled}", style="green", markup=False,
     )
-    if space == "MNI":
+    if not callable(getattr(app._nl, "streamline_background", None)):
         app.console.print(
             "The engine has no streamline_background(): they are drawn on "
             "the MNI152 T1, where only streamlines in MNI space fall right.",
@@ -1860,8 +1864,9 @@ def last_results_layers(app, request: ViewRequest):
     ``ans[name]`` of a program with several, gives its images, network
     or streamlines; the viewer shows them together, the layers of a
     result of several named after its block. The *request*'s threshold
-    is 0 for results that are not of voxels, unless it is given: the
-    one the viewer starts all the layers with.
+    (the top 5% by default) is 0 for results neither of voxels nor of
+    regions with a value (regions alone, networks, streamlines), unless
+    it is given: the one the viewer starts all the layers with.
     """
     if not app.results:
         app.console.print(
@@ -1879,12 +1884,17 @@ def last_results_layers(app, request: ViewRequest):
         if not _one_of_a_kind(extra, found, app.console, block.title):
             continue
         kinds.add(kind)
+        # regions with a value, not a mask: their top 5% as voxels'
+        if kind == "regions" and any(
+            name != "mask" for name, _ in block_layers
+        ):
+            kinds.add("values")
         layers += [
             (f"{block.title}: {name}" if several and block.title else name,
              path)
             for name, path in block_layers
         ]
-    if "voxels" not in kinds and not request.threshold_given:
+    if not kinds & {"voxels", "values"} and not request.threshold_given:
         request = request._replace(threshold=0.0)
     return layers, extra, request
 

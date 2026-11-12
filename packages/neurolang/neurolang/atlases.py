@@ -395,15 +395,51 @@ def _freesurfer_destrieux_name(name: str) -> str:
     return f"ctx_{'rh' if side == 'R' else 'lh'}_{region}"
 
 
+#: The millimetres of nilearn's Destrieux atlas to those of the MNI152
+#: template: derived from FreeSurfer's fsaverage, it is 1.3 to 2.6% smaller
+#: than the template and off by about a millimetre. A scale and a shift per
+#: axis, fitted to the grey matter of the template by
+#: ``tools/fit_destrieux_mni152.py`` (the grey-matter probability of its
+#: cortex goes from 0.627 to 0.649, that of Schaefer's being 0.636).
+DESTRIEUX_TO_MNI152 = np.array([
+    [1.0179, 0.0, 0.0, -0.6292],
+    [0.0, 1.0256, 0.0, 1.2415],
+    [0.0, 0.0, 1.013, -0.8922],
+    [0.0, 0.0, 0.0, 1.0],
+])
+
+
+def registered_image(path: Path_, transform: np.ndarray) -> str:
+    """
+    The image *path* with its millimetres moved by *transform*, a 4×4
+    matrix, in a file of its own next to it (``x_mni152.nii.gz``), written
+    once: its voxels are those of *path*, only its affine changes.
+    """
+    path = Path(path)
+    name = path.name.split(".")[0]
+    registered = path.with_name(f"{name}_mni152.nii.gz")
+    if not registered.exists():
+        image = nib.load(str(path))
+        moved = nib.Nifti1Image(
+            np.asanyarray(image.dataobj), transform @ image.affine
+        )
+        temporary = registered.with_name(f".{os.getpid()}.{registered.name}")
+        nib.save(moved, str(temporary))
+        os.replace(temporary, registered)
+    return str(registered)
+
+
 def fetch_destrieux(**kwargs):
     """
-    The Destrieux 2009 atlas of nilearn: ``maps``, ``labels`` and ``lut``,
-    with FreeSurfer's colours of its regions in its ``color`` column when
-    they can be fetched (:func:`freesurfer_colours`).
+    The Destrieux 2009 atlas of nilearn, on the MNI152 template
+    (:data:`DESTRIEUX_TO_MNI152`): ``maps``, ``labels`` and ``lut``, with
+    FreeSurfer's colours of its regions in its ``color`` column when they
+    can be fetched (:func:`freesurfer_colours`).
     """
     from .utils.nilearn_compat import nilearn_datasets
 
     atlas = nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
+    atlas.maps = registered_image(atlas.maps, DESTRIEUX_TO_MNI152)
     lut = getattr(atlas, "lut", None)
     if lut is None or not kwargs.get("data_dir"):
         return atlas

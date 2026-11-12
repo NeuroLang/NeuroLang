@@ -1246,8 +1246,9 @@ report each voxel::
 
 A result on the regions of an atlas, a column of region labels such as
 ``l`` of ``destrieux_activated(l, s)``, is painted region by region, on
-the atlas's grid, with the value of its rows; ``--view`` shows every
-region of the result.  The probability that a study mentioning language
+the atlas's grid, with the value of its rows; ``--view`` starts with the
+regions of the top 5% of the values, as for voxels (``--threshold`` changes
+it), and with every region of a result without values.  The probability that a study mentioning language
 activates each Destrieux region::
 
     neurolang-query --engine neurosynth --view \

@@ -36,15 +36,14 @@ uncinate(x, h) :-
     ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h),
     opposite_hemisphere(h, o), ~in_hemisphere(x, o)
 
-% the ends i of the streamlines of the left uncinate ("right" for the
-% other) with a point of the Schaefer parcel n within 3 mm; an end is the
-% integer i = 2 x + e, e being 0 or 1, the end e of the streamline x
-uf_end_near(i, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
+% the ends (x, e) of the streamlines x of the left uncinate ("right" for
+% the other), e being 0 or 1, with a point of the Schaefer parcel n within
+% 3 mm; count(x, e) counts the ends, pairs of a streamline and its end
+uf_end_near(x, e, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
     schaefer_points(mx, my, mz, n),
-    (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3), (i == 2 * x + e)
-uf_parcel_ends(n, count(i)) :- uf_end_near(i, n)
-uf_ends(count(i)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez),
-    (i == 2 * x + e)
+    (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+uf_parcel_ends(n, count(x, e)) :- uf_end_near(x, e, n)
+uf_ends(count(x, e)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez)
 
 % the parcels of the uncinate: those near at least 5 % of its ends. A parcel
 % near a handful of ends only (an insula next to the frontal ends) would

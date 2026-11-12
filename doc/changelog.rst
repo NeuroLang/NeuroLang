@@ -127,6 +127,15 @@ Unreleased
   examples are queries of the ``neurosynth`` engine, and, under each example
   of a page, a link that opens the REPL in the browser with it in its box
   (``.. nl-repl::``). The examples are coloured as the REPL colours them.
+
+* ``.view`` of a result with a value on the regions of an atlas (``ans(l,
+  p) :- PROB[...]``) starts at the top 5% of its values, as a result of voxels
+  does; regions alone, networks and streamlines start with all of them.
+* The examples of the parcels the uncinate connects (``uncinate_cogat.dl`` of
+  the engine tracts, its README and the assistant's example of
+  ``neurosynth_tracts``) count the ends of the streamlines as the pairs
+  ``count(x, e)`` of a streamline and which of its ends, rather than as the
+  integers ``i == 2 * x + e``.
 * The REPL in the browser starts with the engine Neurosynth + tracts
   (``neurosynth_iit``: Neurosynth with the tractogram and the bundles of the
   IIT atlas); Neurosynth and NeuroStore are in its select, and
@@ -430,6 +439,20 @@ Unreleased
 
 **Bug fixes:**
 
+* The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
+  derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
+  template and off by about a millimetre, and is now moved by the scales and
+  shifts fitted to the template's grey matter (``DESTRIEUX_TO_MNI152`` of
+  ``neurolang.atlases``, ``tools/fit_destrieux_mni152.py``): the
+  grey-matter probability of its cortex goes from 0.627 to 0.649, that of
+  Schaefer's being 0.636.  Its voxels are unchanged, its affine is moved;
+  the studies activating its regions (``destrieux_activated``) are found
+  again, and change a little.
+* The streamlines of a tractogram in MNI space (``neurosynth_iit``'s IIT
+  tractogram) are drawn on the MNI152 T1, not on the labels of the atlas
+  they are indexed by: the engine's ``streamline_background()`` gives that
+  of a subject's space only, None in MNI space, and the viewer then draws
+  them on its template, without warning that they may be misplaced.
 * The brain tab of the REPL in the browser no longer shows the viewer of an
   earlier result for the last one: after a query, selecting the tab views
   the new result (``.view``), and a view that fails ("The result has no
