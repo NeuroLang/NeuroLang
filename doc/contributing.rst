@@ -202,10 +202,38 @@ server answers no request without it.  Over the network it needs
 assistant: ENV's ``NAME=VALUE`` lines are put in the server's environment,
 where the provider of :file:`~/.config/neurolang/llm.yaml` reads its key (the
 variable its ``api_key_env`` names, e.g. ``ALBERT_API_KEY=...``).  The key
-stays on the server; a key given in the page replaces it.  The visitors
-share one session of the REPL, its rules and a key one of them gives, and a
-restart restarts it for all.  The site's main page, ``/``, leads to the
-REPL.
+stays on the server; a key given in the page replaces it.  With a password,
+the visitors share one session of the REPL, its rules and a key one of them
+gives, and a restart restarts it for all.  The site's main page, ``/``, leads
+to the REPL.
+
+For several users, each with sessions of their own, give a users file
+instead of a password, ``--users users.yaml``, readable by you only::
+
+   ann:
+     password: scrypt$16384$8$1$...     # neurolang-repl-serve --hash-password
+     env:                               # optional: the key of her assistant
+       ALBERT_API_KEY: ...
+   bob:
+     password: scrypt$16384$8$1$...     # no env: the --env-file key, or his own
+
+The browser asks a name and its password.  With ``--local``, each tab of a
+user has a session of its own, in a process of its own: a builder process
+builds each engine once and forks a session's process from it, so that the
+sessions share the memory of the engine's data until they write it, and
+each has its own rules, AI assistant and queries, which run at the same
+time; a stop or a restart is that of the tab's session only (a reload
+keeps it, a duplicated tab has a new one).  A user's
+``env`` is put in the environment of their sessions only: the key of their
+assistant, over that of ``--env-file``, and a key their page gives over
+both.  At most ``--max-sessions`` (8, at least 1) run at once: a tab
+starting one more ends the idlest session of its user, or another's unused
+for a minute.  A session unused for ``--idle-minutes`` (120, above 0) ends
+(its page says to restart it).  The users can
+read what the server's account can, and their sessions share the data
+directory, where the files they save by a relative name may collide; give
+it to people you trust.  The feedback server, where the sessions' rated
+answers may go, takes their writes at once (SQLite in WAL mode).
 
 To keep it serving, as a service of your user started now and at each login,
 add ``--daemon install`` to the options it serves with; ``--daemon
@@ -215,7 +243,7 @@ as it was), and ``--daemon remove``, with no other option, stops and
 removes it; if systemd or launchd fails to start it, it is removed and the
 error told::
 
-   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --password-file password --env-file llm.env
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --users users.yaml --env-file llm.env
 
 On Linux it is a unit of systemd's user manager,
 :file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user

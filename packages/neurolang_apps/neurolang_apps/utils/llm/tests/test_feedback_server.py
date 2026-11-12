@@ -195,3 +195,30 @@ def test_examples_export(tmp_path, capsys):
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 4
     assert all("steps" in json.loads(line) for line in lines)
+
+
+def _rate_answers(path, writer, count):
+    """Add *count* answers to the store at *path*, each rated (in a process
+    of its own)."""
+    store = FeedbackStore(path)
+    for number in range(count):
+        answer = store.add_answer({"question": f"q{writer}-{number}"})
+        store.add_feedback(answer, {"verdict": "correct"})
+
+
+def test_concurrent_writers_lose_nothing(tmp_path):
+    import multiprocessing
+
+    path = tmp_path / "feedback.sqlite"
+    FeedbackStore(path)
+    context = multiprocessing.get_context("spawn")
+    writers = [context.Process(target=_rate_answers, args=(path, w, 25))
+               for w in range(4)]
+    for writer in writers:
+        writer.start()
+    for writer in writers:
+        writer.join(120)
+        assert writer.exitcode == 0
+    answers = FeedbackStore(path).answers()
+    assert len(answers) == 100
+    assert len({answer["question"] for answer in answers}) == 100

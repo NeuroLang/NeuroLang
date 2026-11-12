@@ -19,6 +19,7 @@ import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
 import { bundleEngines, engineChoice, withEngine } from "./engines.js";
+import { tabSession } from "./tab_session.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -336,6 +337,9 @@ async function loadEngines() {
   engineSelect.hidden = engines.length < 2;
 }
 
+// The id of this tab's session, on a server that keeps one per tab, once found.
+let tabId = null;
+
 // The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH,
 // and the engine: ?engine=NAME.
 function start({ restore = null } = {}) {
@@ -372,12 +376,17 @@ function start({ restore = null } = {}) {
     $("ask-note").textContent =
       "Asking uses the AI assistant configured on this machine, as neurolang-query does, or the API key you give.";
   }
-  worker.postMessage({ type: "start", repo, ref, full, engine });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "reply" && replaying) replayStep(data);
     else workerMessages[data.type]?.(data, restore);
   };
+  const message = { type: "start", repo, ref, full, engine };
+  if (!local) return worker.postMessage(message);
+  // The server keeps a session per tab: this tab's, unless restarted since.
+  const current = worker;
+  tabId ??= tabSession(store("sessionStorage"));
+  tabId.then((session) => worker === current && current.postMessage({ ...message, session }));
 }
 
 // What the page does with each kind of message of the worker; *restore* is what a stop gave to give back.

@@ -385,9 +385,9 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
             assert json.load(response)["html"] == "ans(x) :- r(x)"
         with pytest.raises(urllib.error.HTTPError) as error:
             _post(port, "submit", {"text": "boom"})
-        assert error.value.code == 500
-        assert json.load(error.value) == {"error": "ValueError: it broke"}
-        error.value.close()
+        with error.value:  # closed, not left to the collector to warn
+            assert error.value.code == 500
+            assert json.load(error.value) == {"error": "ValueError: it broke"}
         with _post(port, "download", {"block": 0, "kind": "csv"}) as response:
             assert response.read() == b"a,b\n"
             assert response.headers["Content-Type"] == "text/csv"
@@ -759,8 +759,8 @@ def _status(port, path, headers=None, method="GET", body=None):
                 response.read()
             return response.status
     except urllib.error.HTTPError as error:
-        error.close()
-        return error.code
+        with error:
+            return error.code
 
 
 @pytest.mark.parametrize("password", ["s3cret", "mot de passe é"])
@@ -1070,3 +1070,130 @@ def test_a_post_of_another_site_is_refused(serve, tmp_path, password):
             )
             with urllib.request.urlopen(request, timeout=10) as response:
                 assert json.load(response)["html"] == "ok"
+
+
+def test_a_password_hash_checks_its_password_only(serve):
+    stored = serve.hash_password("s3cret é")
+    assert stored.startswith("scrypt$") and "s3cret" not in stored
+    users = {"ann": {"password": stored}}
+    assert serve.check_password(users, "ann", "s3cret é".encode())
+    assert serve.check_password(users, "ann", "s3cret é".encode())  # cached
+    assert not serve.check_password(users, "ann", b"wrong")
+    assert not serve.check_password(users, "bob", "s3cret é".encode())
+    assert not serve._verify("scrypt$bad", b"x")
+
+
+def test_the_users_file_is_read_and_checked(serve, tmp_path):
+    path = tmp_path / "users.yaml"
+    path.write_text(
+        f"ann:\n  password: {serve.hash_password('a')}\n"
+        "  env:\n    TEST_LLM_KEY: k-1\n"
+        f"bob:\n  password: {serve.hash_password('b')}\n"
+    )
+    users = serve.read_users(path)
+    assert users["ann"]["env"] == {"TEST_LLM_KEY": "k-1"}
+    assert users["bob"]["env"] == {}
+    path.write_text("ann:\n  password: a\n")  # not a hash
+    with pytest.raises(SystemExit, match="hash-password"):
+        serve.read_users(path)
+
+
+class _FakeSessions:
+    """Sessions that record the user and the tab of each request."""
+
+    def __init__(self):
+        self.asked = []
+
+    def session(self, user, tab):
+        self.asked.append((user, tab))
+        return _FakeBackend()
+
+
+def test_each_user_and_tab_has_its_session(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    users = {name: {"password": serve.hash_password(name * 3), "env": {}}
+             for name in ("ann", "bob")}
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        start = ("/api/start?session=t1", "POST", {"engine": "neurosynth"})
+        assert _status(port, *start[:1], _basic("ann", "ann"), *start[1:]) \
+            == 401
+        assert _status(port, start[0], _basic("annannann", "ann"),
+                       *start[1:]) == 200
+        assert _status(port, "/api/submit?session=t2", _basic("bobbobbob",
+                       "bob"), "POST", {"text": "x"}) == 200
+        assert _status(port, "/api/submit", _basic("bobbobbob", "bob"),
+                       "POST", {"text": "x"}) == 200
+        assert _status(port, "/bundle.json", _basic("annannann", "bob")) \
+            == 401
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert sessions.asked == [("ann", "t1"), ("bob", "t2"),
+                              ("bob", "default")]
+
+
+def test_users_options(serve, tmp_path, monkeypatch):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--users", "u", "--password-file", "p"])
+    with pytest.raises(SystemExit):  # in clear over the network
+        serve.parse_args(["--users", "u", "--host", "0.0.0.0"])
+    assert serve.parse_args(["--local", "--users", "u", "--env-file", "e"])
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(serve.parse_args([
+        "--local", "--users", "users.yaml", "--max-sessions", "3",
+        "--idle-minutes", "30", "--daemon", "install",
+    ]))
+    after = dict(zip(command, command[1:]))
+    assert after["--users"] == str(tmp_path / "users.yaml")
+    assert (after["--max-sessions"], after["--idle-minutes"]) == ("3", "30.0")
+
+
+def test_hash_password_prints_a_hash(serve, monkeypatch, capsys):
+    monkeypatch.setattr(serve.getpass, "getpass", lambda prompt: "s3cret")
+    serve.main(["--hash-password"])
+    stored = capsys.readouterr().out.strip()
+    assert serve._verify(stored, b"s3cret")
+
+
+def test_an_unknown_user_is_checked_as_long_as_a_user(serve, monkeypatch):
+    users = {"ann": {"password": serve.hash_password("a")}}
+    verified = []
+    verify = serve._verify
+    monkeypatch.setattr(serve, "_verify", lambda stored, password: (
+        verified.append(stored), verify(stored, password))[1])
+    assert not serve.check_password(users, "nobody", b"a")
+    assert not serve.check_password(users, "nobody", b"a")
+    assert len(verified) == 2 and verified[0].startswith("scrypt$")
+    assert verified[0] != users["ann"]["password"]
+
+
+def test_the_sessions_options_are_checked(serve):
+    for options in (["--max-sessions", "0"], ["--idle-minutes", "0"],
+                    ["--idle-minutes", "-1"]):
+        with pytest.raises(SystemExit):
+            serve.parse_args(["--local", "--users", "u", *options])
+
+
+def test_a_user_whose_variables_give_no_key_is_told(
+    serve, tmp_path, monkeypatch, capsys
+):
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    monkeypatch.setenv("NEUROLANG_LLM_CONFIG", str(config))
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    assistants = serve.users_assistants({
+        "ann": {"env": {"TEST_LLM_KEY": "k"}},
+        "bob": {"env": {"MY_VAR": "x"}},
+        "carl": {"env": {}},
+    })
+    assert assistants == {"ann": "test (m)", "bob": None, "carl": None}
+    assert "The variables of bob" in capsys.readouterr().err

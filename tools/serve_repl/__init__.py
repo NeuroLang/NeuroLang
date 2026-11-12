@@ -84,6 +84,14 @@ put in the server's environment, so that the key never reaches a browser::
 The site's main page, ``/``, leads to the REPL (unless the site has its own,
 the documentation's).
 
+Users, each with a password, rather than one password: ``--users FILE``, a
+YAML file of their password hashes (``--hash-password`` prints one) and,
+for each, the variables of their sessions (``env``: the key of their
+assistant). With ``--local``, each tab of a user has a session of its own,
+in a process forked from a builder's that builds each engine once
+(``neurolang_apps.utils.tui.sessions``), at most ``--max-sessions`` at once,
+ended after ``--idle-minutes`` unused.
+
 As a service of this user, started now and at each login, serving as the
 other options say::
 
@@ -114,6 +122,7 @@ send), and from this site if the browser gives its ``Origin``.
 import argparse
 import base64
 import getpass
+import hashlib
 import hmac
 import http.server
 import importlib.util
@@ -366,6 +375,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     timeout = 60
     #: The longest body of a request, in bytes.
     MAX_BODY = 1 << 20
+    #: Or the users, each with the hash of their password (see
+    #: :func:`hash_password`); None: none.
+    users = None
+    #: The user of the request, once authorised ("" without users).
+    user = ""
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -381,7 +395,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         no further, whatever its method."""
         if not super().parse_request():
             return False
-        if self.password is None:
+        if self.password is None and self.users is None:
             try:
                 host = urllib.parse.urlsplit(
                     "//" + (self.headers.get("Host") or "")).hostname
@@ -429,8 +443,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             credentials = base64.b64decode(encoded.strip(), validate=True)
         except ValueError:
             return False
-        given = credentials.partition(b":")[2]
-        return hmac.compare_digest(given, self.password)
+        name, _, given = credentials.partition(b":")
+        if self.users is None:
+            return hmac.compare_digest(given, self.password)
+        try:
+            self.user = name.decode()
+        except UnicodeDecodeError:
+            return False
+        return check_password(self.users, self.user, given)
 
     def _body(self) -> dict:
         """Return the JSON object of the request's body, {} if it has none;
@@ -491,13 +511,26 @@ class LocalHandler(Handler):
     def _json(self, value, status: int = 200):
         self._send(status, json.dumps(value).encode(), "application/json")
 
+    def _backend(self):
+        """Return the backend of the request: with sessions (``--users``),
+        that of the user and of the tab (``?session=ID``) asking."""
+        if not hasattr(self.backend, "session"):
+            return self.backend
+        query = urllib.parse.urlsplit(self.path).query
+        tab = urllib.parse.parse_qs(query).get("session", ["default"])[0]
+        return self.backend.session(self.user, tab[:64])
+
     def do_GET(self):
-        if self.path != "/api/events":
+        if urllib.parse.urlsplit(self.path).path != "/api/events":
             return super().do_GET()
+        try:
+            backend = self._backend()
+        except RuntimeError as error:  # too many sessions
+            return self._json({"error": str(error)}, 503)
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
-        listener = self.backend.listen()
+        listener = backend.listen()
         try:
             while True:
                 try:
@@ -509,12 +542,13 @@ class LocalHandler(Handler):
         except OSError:  # gone, or reads nothing for Handler.timeout
             pass
         finally:
-            self.backend.forget(listener)
+            backend.forget(listener)
 
     def do_POST(self):
-        if not self.path.startswith("/api/"):
+        path = urllib.parse.urlsplit(self.path).path
+        if not path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
-        action = self.path[len("/api/"):]
+        action = path[len("/api/"):]
         try:
             body = self._body()
         except ValueError as error:
@@ -527,7 +561,7 @@ class LocalHandler(Handler):
             self._json({"error": f"{type(error).__name__}: {error}"}, 500)
 
     def _answer(self, action: str, body: dict):
-        backend = self.backend
+        backend = self._backend()
         if action == "stop":
             return self._json({"stopped": backend.stop()})
         if action == "start":
@@ -623,7 +657,7 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 
 
 def make_server(site: Path, host: str, port: int, backend=None,
-                tls=None, password=None, names=()):
+                tls=None, password=None, names=(), users=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
@@ -635,6 +669,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
         "backend": backend,
         "password": None if password is None else password.encode(),
         "names": frozenset(name.lower().strip("[]") for name in names),
+        "users": users,
     })
     server = Server(
         (host, port),
@@ -674,6 +709,115 @@ def read_file(path: Path) -> str:
         sys.exit(f"{path} cannot be read: {error.strerror or error}")
 
 
+# The cost of the scrypt hash of a password (RFC 7914's interactive
+# parameters).
+SCRYPT = {"n": 2 ** 14, "r": 8, "p": 1}
+
+
+def hash_password(password: str) -> str:
+    """Return the hash of *password* that a users file keeps."""
+    salt = os.urandom(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, **SCRYPT)
+    encode = base64.b64encode
+    return (f"scrypt${SCRYPT['n']}${SCRYPT['r']}${SCRYPT['p']}$"
+            f"{encode(salt).decode()}${encode(digest).decode()}")
+
+
+def _verify(stored: str, password: bytes) -> bool:
+    try:
+        kind, n, r, p, salt, digest = stored.split("$")
+        digest = base64.b64decode(digest)
+        given = hashlib.scrypt(
+            password, salt=base64.b64decode(salt), n=int(n), r=int(r),
+            p=int(p), dklen=len(digest),
+        )
+    except ValueError:
+        return False
+    return kind == "scrypt" and hmac.compare_digest(given, digest)
+
+
+# The credentials checked already, by a hash of their own: Basic sends them
+# with each request, which a hash of scrypt each would slow down.
+_checked = set()
+# A hash an unknown user's password is checked against, to take as long as
+# a known user's: the time does not tell who is a user.
+_unknown = []
+
+
+def check_password(users: dict, user: str, password: bytes) -> bool:
+    """Return whether *password* is that of *user* among *users*."""
+    entry = users.get(user)
+    if entry is None:
+        if not _unknown:
+            _unknown.append(hash_password(os.urandom(16).hex()))
+        _verify(_unknown[0], password)
+        return False
+    seen = hashlib.sha256(
+        b"\0".join([user.encode(), password, entry["password"].encode()])
+    ).digest()
+    if seen in _checked:
+        return True
+    if not _verify(entry["password"], password):
+        return False
+    _checked.add(seen)
+    return True
+
+
+def read_users(path: Path) -> dict:
+    """
+    Return the users of the YAML file *path*: by name, the ``password``
+    hash of each (``neurolang-repl-serve --hash-password``) and, if they
+    have one, the variables of their sessions, ``env`` (the key of their
+    AI assistant)::
+
+        ann:
+          password: scrypt$16384$8$1$...
+          env:
+            ALBERT_API_KEY: ...
+        bob:
+          password: scrypt$16384$8$1$...
+    """
+    import yaml
+
+    try:
+        users = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError) as error:
+        sys.exit(f"The users file {path} cannot be read: {error}")
+    if not isinstance(users, dict) or not users:
+        sys.exit(f"The users file {path} has no users")
+    for name, entry in users.items():
+        if not isinstance(entry, dict) or \
+                not str(entry.get("password", "")).startswith("scrypt$"):
+            sys.exit(f"{path}: the user {name} has no password hash "
+                     "(neurolang-repl-serve --hash-password makes one)")
+        env = entry.setdefault("env", {}) or {}
+        if not isinstance(env, dict):
+            sys.exit(f"{path}: the env of {name} is not NAME: VALUE lines")
+        entry["env"] = {str(k): str(v) for k, v in env.items()}
+    return {str(name): entry for name, entry in users.items()}
+
+
+def users_assistants(users: dict) -> dict:
+    """Return, by user, the provider and model their assistant answers
+    with by default, or None if it has no key (they give theirs in the
+    page); warn if the variables of a user give no key."""
+    assistants = {}
+    for name, entry in users.items():
+        saved = dict(os.environ)
+        os.environ.update(entry["env"])
+        try:
+            assistants[name] = default_assistant(quiet=True)
+        except SystemExit as error:
+            if entry["env"]:
+                print(f"The variables of {name} give their assistant no "
+                      f"key: {error}", file=sys.stderr, flush=True)
+            assistants[name] = None
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
+    return assistants
+
+
 def read_password(path: Path) -> str:
     """Return the password in the first line of the file *path*, as it is
     but for its line ending."""
@@ -705,7 +849,7 @@ def read_env_file(path: Path) -> dict:
     return variables
 
 
-def default_assistant() -> str:
+def default_assistant(quiet: bool = False) -> str:
     """Return the provider and the model the assistant answers with by
     default, with the keys of the environment; stop, telling why, if it
     cannot (its key is not there)."""
@@ -715,7 +859,8 @@ def default_assistant() -> str:
         provider = load_config().provider()
         provider.api_key()
     except Exception as error:
-        sys.exit(f"The assistant cannot answer with --env-file: {error}")
+        sys.exit(f"{error}" if quiet else
+                 f"The assistant cannot answer with --env-file: {error}")
     return f"{provider.name} ({provider.model})"
 
 
@@ -766,6 +911,9 @@ def service_command(args) -> list:
         command += ["--local", "--data-dir", str(args.data_dir.resolve()),
                     "--resolution", str(args.resolution)]
         command += ["--light"] if args.light else []
+    if args.users:
+        command += ["--max-sessions", str(args.max_sessions),
+                    "--idle-minutes", str(args.idle_minutes)]
     for option, value in (("--pr", args.pr), ("--run-id", args.run_id)):
         if value is not None:
             command += [option, str(value), "--repo", args.repo]
@@ -773,6 +921,7 @@ def service_command(args) -> list:
         ("--cert", args.cert), ("--key", args.key),
         ("--key-password-file", args.key_password_file),
         ("--password-file", args.password_file), ("--env-file", args.env_file),
+        ("--users", args.users),
     ):
         if path is not None:
             command += [option, str(path.resolve())]
@@ -984,11 +1133,32 @@ def parse_args(argv=None):
         "with --cert unless on this machine",
     )
     parser.add_argument(
+        "--users", type=Path, metavar="FILE",
+        help="ask every visitor the name and the password of a user of the "
+        "YAML FILE (their hashes, --hash-password); with --local, each tab "
+        "of a user has a session of its own, in a process of its own, "
+        "with the variables (the assistant's key) FILE gives the user",
+    )
+    parser.add_argument(
+        "--max-sessions", type=int, default=8, metavar="N",
+        help="with --users and --local, the sessions at most at once "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--idle-minutes", type=float, default=120, metavar="M",
+        help="with --users and --local, end a session unused for M minutes "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--hash-password", action="store_true",
+        help="ask a password and print its hash, for a users file",
+    )
+    parser.add_argument(
         "--env-file", type=Path, metavar="FILE",
-        help="with --local and --password-file, put the NAME=VALUE lines of "
-        "FILE in the server's environment: the key of the AI assistant's "
-        "provider (its api_key_env), which those with the password then "
-        "use unless their page gives one",
+        help="with --local and --password-file or --users, put the "
+        "NAME=VALUE lines of FILE in the server's environment: the key of "
+        "the AI assistant's provider (its api_key_env), which those who "
+        "log in use unless their page, or their user, gives one",
     )
     parser.add_argument(
         "--python", metavar="PATH",
@@ -1045,13 +1215,18 @@ def parse_args(argv=None):
         parser.error("--key and --key-password-file are those of --cert")
     if args.python and not args.daemon:
         parser.error("--python is that of the service: with --daemon")
-    if (args.password_file and not args.cert
+    if args.password_file and args.users:
+        parser.error("--password-file or --users, not both")
+    if args.max_sessions < 1 or not args.idle_minutes > 0:
+        parser.error("--max-sessions is at least 1, --idle-minutes above 0")
+    if ((args.password_file or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
-        parser.error("--password-file sends the password in clear without "
-                     "--cert: give a certificate")
-    if args.env_file and not (args.local and args.password_file):
-        parser.error("--env-file is the key of those with the password: "
-                     "with --local and --password-file")
+        parser.error("a password goes in clear without --cert: give a "
+                     "certificate")
+    if args.env_file and not (args.local
+                              and (args.password_file or args.users)):
+        parser.error("--env-file is the key of those who log in: with "
+                     "--local and --password-file or --users")
     return args
 
 
@@ -1073,8 +1248,18 @@ def daemon(args) -> None:
     install_service(command)
 
 
+def ask_password_hash() -> None:
+    """Ask a password twice and print its hash, for a users file."""
+    password = getpass.getpass("Password: ")
+    if not password or password != getpass.getpass("Again: "):
+        sys.exit("The passwords are empty or differ")
+    print(hash_password(password))
+
+
 def main(argv=None) -> None:
     args = parse_args(argv)
+    if args.hash_password:
+        return ask_password_hash()
     if args.daemon == "remove":  # whatever the other options
         return remove_service()
     # A certificate, a password or a key that cannot serve fails now, not
@@ -1086,7 +1271,12 @@ def main(argv=None) -> None:
     if args.env_file:
         os.environ.update(read_env_file(args.env_file))
         print(f"The AI assistant answers with {default_assistant()} for "
-              "those with the password", flush=True)
+              "those who log in", flush=True)
+    users = read_users(args.users) if args.users else None
+    if users and args.local:
+        for name, assistant in users_assistants(users).items():
+            print(f"{name}: the AI assistant answers with "
+                  f"{assistant or 'the key their page gives'}", flush=True)
     if args.daemon:
         return daemon(args)
     backend = None
@@ -1095,10 +1285,18 @@ def main(argv=None) -> None:
 
         args.site = args.site / "local"
         page = prepare_local_site(args.site, args.engines)
-        backend = LocalBackend(
-            args.data_dir, args.resolution, light=args.light,
-            feedback=feedback_target(),
-        )
+        options = dict(resolution=args.resolution, light=args.light,
+                       feedback=feedback_target())
+        if users:
+            from neurolang_apps.utils.tui.sessions import Sessions
+
+            backend = Sessions(
+                args.data_dir, env={n: u["env"] for n, u in users.items()},
+                most=args.max_sessions, idle=args.idle_minutes * 60,
+                **options,
+            )
+        else:
+            backend = LocalBackend(args.data_dir, **options)
         print(f"NeuroLang runs in {sys.executable}, on the data of "
               f"{args.data_dir.resolve()}", flush=True)
     elif args.pr is not None or args.run_id is not None:
@@ -1110,13 +1308,14 @@ def main(argv=None) -> None:
         )
     write_index(args.site, page)
     server = make_server(args.site, args.host, args.port, backend, tls,
-                         password, args.server_names or ())
+                         password, args.server_names or (), users)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"
            f"{page.relative_to(args.site).as_posix()}")
     print(f"The REPL is at {url} (Ctrl+C stops it)"
-          + (", for those with the password" if password else ""),
+          + (", for those with the password" if password else "")
+          + (f", for its {len(users)} users" if users else ""),
           flush=True)
     if not args.no_browser:
         webbrowser.open(url)
@@ -1126,6 +1325,8 @@ def main(argv=None) -> None:
         pass
     finally:
         server.server_close()
+        if hasattr(backend, "close"):
+            backend.close()
 
 
 if __name__ == "__main__":

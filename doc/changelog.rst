@@ -171,6 +171,14 @@ Unreleased
   without, a POST only from the page of the site (in JSON, from its
   ``Origin``); a silent connection is closed after a minute, and a
   request's body is a JSON object of 1 MB at most.
+* ``neurolang-repl-serve --users FILE`` asks a user's name and password
+  (scrypt hashes, ``--hash-password``); with ``--local`` each tab of a user
+  has a session in a process of its own, forked from a builder that builds
+  each engine once, with the variables (the AI assistant's key) the file
+  gives the user (``--max-sessions``, ``--idle-minutes``); a duplicated
+  tab has a session of its own.  The feedback
+  server's SQLite database is in WAL mode, for the writes of concurrent
+  sessions.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are
