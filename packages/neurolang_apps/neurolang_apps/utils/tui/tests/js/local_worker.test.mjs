@@ -24,8 +24,10 @@ globalThis.EventSource = class {
   }
   close() {}
 };
+const urls = [];
 globalThis.fetch = async (url, { body }) => {
-  const action = url.replace("/api/", "");
+  urls.push(url);
+  const action = url.replace("/api/", "").split("?")[0];
   const data = JSON.parse(body);
   asked.push([action, data]);
   const answer = answers[action](data);
@@ -83,4 +85,25 @@ test("a file of the server is given to the page", async () => {
 
 test("a rating is told back", async () => {
   assert.deepEqual(await send({ type: "rate", verdict: "good" }), [{ type: "rated", ok: true, message: "good" }]);
+});
+
+test("the session of the page's tab goes with each request", async () => {
+  urls.length = 0;
+  await send({ type: "start", engine: "neurosynth", session: "tab 1" });
+  await send({ type: "submit", id: 9, text: "ans(x) :- p(x)" });
+  assert.ok(urls.length >= 3);
+  assert.ok(urls.every((url) => url.endsWith("?session=tab%201")), urls.join());
+  assert.equal(events.url, "/api/events?session=tab%201");
+});
+
+test("an expired login has the page log in again", async () => {
+  const submit = answers.submit;
+  answers.submit = () => ({ status: 401, body: { error: "log in first: /login" } });
+  try {
+    const messages = await send({ id: 10, text: "ans(x) :- p(x)" });
+    assert.deepEqual(messages[0], { type: "login" });
+    assert.equal(messages[1].failed, true);
+  } finally {
+    answers.submit = submit;
+  }
 });

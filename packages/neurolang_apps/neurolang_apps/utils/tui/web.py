@@ -401,6 +401,18 @@ class WebRepl:
             url, doc, api_key_env="", transport=transport
         ) if doc else None
 
+    def set_feedback_store(
+        self, path, user: str = "", groups: str = "",
+    ) -> None:
+        """
+        Let the page store a rated answer in the feedback database *path*
+        of this machine, signed by the *user* and their *groups* (see
+        :class:`~neurolang_apps.utils.llm.feedback.StoreFeedbackClient`).
+        """
+        from neurolang_apps.utils.llm.feedback import StoreFeedbackClient
+
+        self._rating = StoreFeedbackClient(path, user, groups)
+
     def can_rate(self) -> bool:
         """Whether the page can send the rating of an answer."""
         return self._rating is not None

@@ -40,6 +40,8 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "sphinx_design",
     "squall_lexer",
+    "neurolang_lexer",
+    "nl_repl",
 ]
 
 templates_path = ["_templates"]
