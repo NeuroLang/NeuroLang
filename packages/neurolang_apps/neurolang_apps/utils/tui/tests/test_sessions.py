@@ -204,12 +204,14 @@ def test_a_busy_session_is_not_ended_for_another(tmp_path):
     sessions = Sessions(tmp_path, build=build, most=1)
     try:
         ann = sessions.session("ann", "1")
-        ann.pid = os.getpid()  # running, and at work
-        ann.busy += 1
+        ann.busy += 1  # at work
         ann.used -= 3600
+        bob = sessions.session("bob", "1")
+        bob.starts = 1000  # an earlier start, given up
         with pytest.raises(RuntimeError, match="1 sessions"):
-            sessions.session("bob", "1").start("neurostore")
-        ann.pid = None
+            bob.start("neurostore")
+        # The start refused leaves its process not the session's.
+        assert sessions._owner(bob.key, 1000) is None
         ann.busy -= 1
     finally:
         sessions.close()
@@ -315,6 +317,9 @@ def test_a_wrong_client_does_not_stop_the_sessions(sessions):
 
     with pytest.raises(AuthenticationError):
         Client(sessions._listener.address, authkey=b"wrong")
+    with Client(sessions._listener.address,
+                authkey=sessions._listener._authkey) as conn:
+        conn.send(("not a hello",))
     ann = sessions.session("ann", "1")
     done, waiting = _start(ann, "neurostore")
     assert not waiting and not isinstance(done[0], Exception), done

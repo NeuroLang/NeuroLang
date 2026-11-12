@@ -405,10 +405,11 @@ class Sessions:
         if self.dead:
             raise RuntimeError(self.dead)
         with self._lock:
+            # A new number first: no earlier start's process is this one's.
+            session.starts = start = next(self._starts)
             if self._sessions.get(session.key) is not session:
                 raise SessionEnded("This session ended: restart it")
             self._end_idlest(session)
-            session.starts = start = next(self._starts)
         try:
             with self._forking:
                 self._builder_conn.send(
