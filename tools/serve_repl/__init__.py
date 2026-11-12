@@ -89,6 +89,7 @@ import socketserver
 import ssl
 import subprocess
 import sys
+import traceback
 import urllib.parse
 import webbrowser
 from pathlib import Path
@@ -374,7 +375,8 @@ class LocalHandler(Handler):
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
             self._answer(action, body)
-        except Exception as error:  # told to the page
+        except Exception as error:  # told to the page, and in the log
+            traceback.print_exc()
             self._json({"error": f"{type(error).__name__}: {error}"}, 500)
 
     def _answer(self, action: str, body: dict):
