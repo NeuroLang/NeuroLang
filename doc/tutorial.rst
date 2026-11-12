@@ -8,10 +8,18 @@ First Steps With NeuroLang
 NeuroLang is a unifying formalism to perform complex queries and explorations using heterogeneous data sources like tabular data,
 volumetric images, and ontologies. To perform this in a sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_.
 
+The examples of this page run in the REPL, in the browser or in a terminal
+(:doc:`repl`), on the ``neurosynth`` engine: type them at the prompt, or
+follow *Run in the browser REPL* under each one. They use the Destrieux
+atlas of the engine, ``destrieux(label, region)``, whose labels are written
+``"L G front sup"`` (left superior frontal gyrus) or ``"R S central"`` (right
+central sulcus).
+
 .. note::
 
    If you are already familiar with logic programming, see
-   :doc:`tutorial_logic_programming` for a more technical walkthrough.
+   :doc:`tutorial_logic_programming` for a more technical walkthrough, in
+   Python.
 
 
 The whole idea of logic programming is to be able to make assertions of the style:
@@ -40,30 +48,44 @@ Finally, for notation convenience, we will drop the quantifiers, assuming that a
    \operatorname{left\_hemisphere\_gyrus}(x) \leftarrow  \operatorname{destrieux\_atlas}(l, x) \wedge \operatorname{startswith}('L\,G', l)
 
 
-which we formalise in Python, where ``nl`` is a
-:class:`~neurolang.frontend.NeurolangDL` instance, as:
+which is written in NeuroLang, ``:-`` standing for the arrow and ``&`` for
+the conjunction, and keeping the label rather than the region:
 
-.. code-block:: python
+.. nl-repl::
 
-  with nl.scope as e:
-      e.left_hemisphere_gyrus[e.x] = e.destrieux_atlas(e.l, e.x) & e.startswith('L G', e.l)
+   left_hemisphere_gyrus(l) :- destrieux(l, x) & startswith("L G", l)
 
+The REPL answers ``defined left_hemisphere_gyrus/1``: the rule is in the
+session. A query, whose head is ``ans``, asks for its rows:
 
-the full example is in our gallery in :ref:`sphx_glr_auto_examples_plot_load_destrieux_left_hemisphere_gyri.py`.
+.. nl-repl::
+   :norun:
+
+   ans(l) :- left_hemisphere_gyrus(l)
+
+.. code-block:: text
+
+   ╭────────────────────────────╮
+   │ l                          │
+   ├────────────────────────────┤
+   │ L G and S frontomargin     │
+   │ L G and S occipital inf    │
+   │ L G and S paracentral      │
+   │ …                          │
+   ╰────────────────────────────╯
+   38 rows · showing 1–20 · .more for next
 
 
 Negation can also be used in NeuroLang, through the ``~`` operator. For
-instance, the regions of the atlas which are not left hemisphere gyri are
+instance, the labels of the atlas which are not left hemisphere gyri are
 
-.. code-block:: python
+.. nl-repl::
+   :norun:
 
-  with nl.scope as e:
-      e.not_left_hemisphere_gyrus[e.x] = (
-          e.destrieux_atlas(e.l, e.x) & ~e.left_hemisphere_gyrus(e.x)
-      )
+   not_left_hemisphere_gyrus(l) :- destrieux(l, x) & ~left_hemisphere_gyrus(l)
 
 Note that every variable of a negated atom must also appear in a positive atom
-of the same rule (here ``e.x`` is bound by ``destrieux_atlas``).
+of the same rule (here ``l`` is bound by ``destrieux``).
 
 
 Disjunctions in Logic Programming
@@ -91,22 +113,26 @@ alternatively, this can be written as a set of two propositions
  \end{cases}
 
 
-which we formalise in NeuroLang in the classical logical programming syntax:
+which we write in NeuroLang as two rules of the same head, with the left
+sulci defined as the gyri were:
 
-.. code-block:: python
+.. nl-repl::
+   :norun:
 
-  with nl.scope as e:
-      e.left_hemisphere_region[e.x] = e.left_hemisphere_sulcus(e.x)
-      e.left_hemisphere_region[e.x] = e.left_hemisphere_gyrus(e.x)
+   left_hemisphere_sulcus(l) :- destrieux(l, x) & startswith("L S", l)
+   left_hemisphere_region(l) :- left_hemisphere_sulcus(l)
+   left_hemisphere_region(l) :- left_hemisphere_gyrus(l)
 
+or in a less verbose manner, with ``|``:
 
+.. nl-repl::
+   :norun:
 
-or in a less verbose manner:
+   left_hemisphere_region(l) :- left_hemisphere_sulcus(l) | left_hemisphere_gyrus(l)
 
-.. code-block:: python
-
-  with nl.scope as e:
-      e.left_hemisphere_region[e.x] = e.left_hemisphere_sulcus(e.x) | e.left_hemisphere_gyrus(e.x)
+The second form defines the same relation; typed after the first, it adds
+rules of the same meaning, which change nothing. ``.idb`` lists the rules of
+the session, and ``.drop left_hemisphere_region`` removes them.
 
 
 Aggregations
@@ -121,12 +147,39 @@ Aggregations combine information from a set of tuples. A good example of an aggr
   (\exists province)(\exists pop)\operatorname{population\_per\_country\_province}(country, province, pop)
   \end{split}
 
-which in NeuroLang is expressed as
+which in NeuroLang is expressed as a rule whose head applies the aggregation
+to a variable of its body:
 
-.. code-block:: python
+.. code-block:: none
 
-   with nl.scope as e:
-       e.max_population_per_country[e.country, e.max(e.pop)] = e.population_per_country_province(e.country, e.province, e.pop)
+   max_population_per_country(country, max(pop)) :- population_per_country_province(country, province, pop)
+
+On the engine, ``destrieux_activated(label, study)`` holds the regions that
+the peaks of each study fall in; the number of studies activating each region
+is a count:
+
+.. nl-repl::
+
+   studies_per_region(l, count(s)) :- destrieux_activated(l, s)
+   ans(l, n) :- studies_per_region(l, n)
+
+and ``.sort n:desc`` puts the regions most often activated first:
+
+.. code-block:: text
+
+   ╭─────────────────────────────┬──────╮
+   │ l                           │ n    │
+   ├─────────────────────────────┼──────┤
+   │ L G front sup               │ 6939 │
+   │ R G front sup               │ 6389 │
+   │ R G front middle            │ 4953 │
+   │ L G front middle            │ 4892 │
+   │ …                           │      │
+   ╰─────────────────────────────┴──────╯
+   148 rows · showing 1–20 · .more for next
+
+The next steps are :doc:`tutorial_datalog`, the whole language through a
+complete analysis of the literature, and :doc:`repl`, the REPL itself.
 
 .. [abiteboul1995] Abiteboul, S., Hull, R. & Vianu, V. Foundations of databases. (Addison Wesley, 1995).
 .. [maier2018] Maier, D., Tekle, K. T., Kifer, M. & Warren, D. S. Datalog: concepts, history, and outlook. in Declarative Logic Programming (eds. Kifer, M. & Liu, Y. A.) 3–100 (Association for Computing Machinery and Morgan & Claypool, 2018). doi:10.1145/3191315.3191317.

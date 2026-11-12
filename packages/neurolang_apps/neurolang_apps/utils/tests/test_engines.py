@@ -948,6 +948,104 @@ class TestEngineTemplate:
         assert np.array_equal(grid.affine, affine)
 
 
+# GH-1075: the template of the engines below, a 2 mm grid whose voxel
+# (i, j, k) is at (2 i - 6, 2 j, 2 k) mm, and two atlases of the same
+# regions, L (x < 0) and R (x >= 0), on other grids: one with its x axis
+# flipped, as FSL's, and one with another shape and origin.
+TEMPLATE_1075 = np.diag([2.0, 2.0, 2.0, 1.0])
+TEMPLATE_1075[0, 3] = -6
+FLIPPED_1075 = np.array([
+    [-1.0, 0, 0, 5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]
+])
+SHIFTED_1075 = np.array([
+    [1.0, 0, 0, -9], [0, 1, 0, -2], [0, 0, 1, -1], [0, 0, 0, 1]
+])
+
+
+def _hemisphere_atlas(affine, shape):
+    """A label image on the grid *affine*, *shape*: 1 (L) where x < 0,
+    2 (R) elsewhere, in millimetres."""
+    import nibabel as nib
+
+    ijk = np.indices(shape).reshape(3, -1).T
+    x = nib.affines.apply_affine(affine, ijk)[:, 0]
+    return nib.Nifti1Image(
+        np.where(x < 0, 1, 2).astype(np.int16).reshape(shape), affine
+    )
+
+
+@pytest.fixture
+def engine_1075(tmp_path, monkeypatch):
+    """An engine with the template above and Schaefer and Tian on their
+    own grids, with ``at_<atlas>(l, i, j, k)`` the label of each of their
+    voxels (i, j, k), as ``labels`` of the engines."""
+    import nibabel as nib
+
+    from neurolang_apps.utils import engine_registry
+
+    template = nib.Nifti1Image(np.ones((6, 4, 4), np.float32), TEMPLATE_1075)
+    monkeypatch.setattr(
+        engine_registry, "_get_mni_mask", lambda data_dir: template
+    )
+    for kind, affine, shape in (
+        ("schaefer", FLIPPED_1075, (12, 8, 8)),
+        ("tian", SHIFTED_1075, (16, 10, 9)),
+    ):
+        nib.save(_hemisphere_atlas(affine, shape), tmp_path / f"{kind}.nii")
+        monkeypatch.setitem(engine_registry._ATLAS_REGISTRY, kind, {
+            "fetch": lambda kind=kind, **kw: {
+                "maps": str(tmp_path / f"{kind}.nii"),
+                "labels": ["Background", "L", "R"],
+            },
+            "probabilistic": False,
+        })
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n  e:\n    requires_mni_mask: true\n    atlases:\n"
+        "      schaefer: {predicate_name: schaefer}\n"
+        "      tian: {predicate_name: tian}\n"
+        "    datalog_init: |\n"
+        "      at_schaefer(l, i, j, k) :- schaefer(l, r), "
+        "contains(r, (i, j, k)).\n"
+        "      at_tian(l, i, j, k) :- tian(l, r), contains(r, (i, j, k)).\n"
+    )
+    return engine_registry.build_engine(
+        "e", tmp_path / "data", yaml_path=path
+    )
+
+
+def _labelled_voxels(nl, name):
+    return {
+        (i, j, k): label for label, i, j, k
+        in nl.execute_datalog_program(f"ans(l, i, j, k) :- {name}(l, i, j, k)")
+    }
+
+
+@pytest.mark.parametrize("atlas", ["schaefer", "tian"])
+def test_an_atlas_labels_the_voxels_of_the_template(engine_1075, atlas):
+    """GH-1075: the voxel (i, j, k) of an atlas is that of the template, as
+    those of ``voxel`` and the peaks: its label is the one of the atlas at
+    the same point in millimetres."""
+    import nibabel as nib
+
+    labelled = _labelled_voxels(engine_1075, f"at_{atlas}")
+    grid = engine_1075.grids[atlas]
+    assert grid.shape == (6, 4, 4)
+    assert np.array_equal(grid.affine, TEMPLATE_1075)
+    assert set(labelled) == set(np.ndindex(6, 4, 4))
+    for ijk, label in labelled.items():
+        x = nib.affines.apply_affine(TEMPLATE_1075, ijk)[0]
+        assert label == ("L" if x < 0 else "R"), ijk
+
+
+def test_the_atlases_label_a_template_voxel_alike(engine_1075):
+    """GH-1075: the atlases of the same regions on different grids give a
+    voxel of the template the same region."""
+    assert _labelled_voxels(engine_1075, "at_schaefer") == (
+        _labelled_voxels(engine_1075, "at_tian")
+    )
+
+
 def test_resamplings_of_a_choice(tmp_path):
     """Check ``resamplings`` adds replicates of a choice, for RESAMPLE."""
     from neurolang_apps.utils import engine_registry

@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* The documentation starts from the REPL: a page on the REPL, in the browser
+  and in a terminal (:doc:`repl`), a Quick Start and a Get Started whose
+  examples are queries of the ``neurosynth`` engine, and, under each example
+  of a page, a link that opens the REPL in the browser with it in its box
+  (``.. nl-repl::``). The examples are coloured as the REPL colours them.
+
 * ``.view`` of a result with a value on the regions of an atlas (``ans(l,
   p) :- PROB[...]``) starts at the top 5% of its values, as a result of voxels
   does; regions alone, networks and streamlines start with all of them.
@@ -508,6 +514,28 @@ Unreleased
   ``contains`` with a tuple of constants is a membership test, not the
   explosion of the set into columns named by the constants, which only a
   tuple of variables, ``contains(r, (i, j, k))``, is (#1074).
+* The atlases of an engine with a template (Schaefer, Destrieux, Tian) are
+  on its grid: their label images are resampled to the template by nearest
+  neighbour when they are loaded (and kept in the engine's cache, by the
+  grid of the template), so that the voxel (i, j, k) of ``labels`` and of
+  ``contains(r, (i, j, k))`` on an atlas region is that of ``voxel`` and
+  ``reports``.  With ``-r 2``, the template voxel (68, 77, 37), MNI (38,
+  20, 2) in the right insula, was labelled by Schaefer's 2 mm FSL grid as
+  a parcel of the left hemisphere (``17Networks LH DefaultB PFCv 2``); it
+  is now ``17Networks RH SalVentAttnA Ins 1``, and ``R G insular short`` of
+  Destrieux.  The points of the atlases (``*_points``) and the studies
+  activating their regions, in millimetres, stay those of the atlases'
+  own grids (GH-1075).
+* A string constant spelled as a variable is a value, not that variable's
+  column (#1086): ``h(u) :- act(u, y) & (u == 'u')`` keeps only the rows of
+  ``act`` whose first column is ``'u'``, instead of every row, in
+  ``NeurolangDL`` and ``NeurolangPDL``, and ``h(u, z) :- act(u, y) &
+  (z == 'z')`` gives ``z`` the value ``'z'`` instead of failing. A constant
+  is equal to a column of the same value (``Constant[str]('u') ==
+  Constant[ColumnStr]('u')``): the translation to relational algebra dropped
+  such an equality as trivially true, and an extended projection
+  ``'z' → z`` was read as keeping the column ``z``, on provenance sets and
+  when moving computed columns above a join.
 * A query of the probabilistic frontend binding a variable with a constant,
   as ``d`` in ``cogat_definition('working memory', d)``, next to a literal
   sharing no variable with the others, such as a second ``PROB[...] = pa``,
