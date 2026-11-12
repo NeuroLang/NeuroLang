@@ -29,6 +29,7 @@ def build(name, say):
         time.sleep(2)
     nl = NeurolangPDL()
     nl.add_tuple_set([("alice", 3), ("bob", 5)], name="person")
+    nl.add_tuple_set([(name,)], name="engine")
     return nl
 
 
@@ -164,7 +165,7 @@ def test_the_sessions_are_at_most_so_many(tmp_path):
     try:
         sessions.session("ann", "1").start("neurostore")
         with pytest.raises(RuntimeError, match="1 sessions"):
-            sessions.session("bob", "1")
+            sessions.session("bob", "1").start("neurostore")
     finally:
         sessions.close()
 
@@ -203,10 +204,13 @@ def test_a_busy_session_is_not_ended_for_another(tmp_path):
     sessions = Sessions(tmp_path, build=build, most=1)
     try:
         ann = sessions.session("ann", "1")
-        ann.busy += 1  # at work
+        ann.pid = os.getpid()  # running, and at work
+        ann.busy += 1
         ann.used -= 3600
         with pytest.raises(RuntimeError, match="1 sessions"):
-            sessions.session("bob", "1")
+            sessions.session("bob", "1").start("neurostore")
+        ann.pid = None
+        ann.busy -= 1
     finally:
         sessions.close()
 
@@ -216,3 +220,115 @@ def test_without_the_builder_a_start_fails(sessions):
     sessions._builder.join(10)
     with pytest.raises(RuntimeError, match="builder"):
         sessions.session("ann", "1").start("neurostore")
+
+
+def _start(session, engine):
+    """Start *session* in a thread; return what it gave, or raised, and
+    whether it still waits after 30 s."""
+    done = []
+
+    def run():
+        try:
+            done.append(session.start(engine))
+        except Exception as error:
+            done.append(error)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(30)
+    return done, thread.is_alive()
+
+
+def test_a_start_of_a_session_ended_does_not_wait(sessions):
+    ann = sessions.session("ann", "t")
+    with sessions._lock:  # as the reaper does
+        del sessions._sessions[ann.key]
+    ann.end()
+    done, waiting = _start(ann, "neurostore")
+    assert not waiting
+    assert isinstance(done[0], SessionEnded)
+
+
+def test_a_new_session_does_not_take_the_process_of_the_one_it_replaces(
+        sessions):
+    """The session ended while its engine builds, a new one of its key
+    starts: the process forked for the first is not the second's."""
+    first = sessions.session("ann", "t")
+    thread = threading.Thread(target=_start, args=(first, "neurosynth"))
+    thread.start()
+    time.sleep(0.5)  # building
+    with sessions._lock:
+        del sessions._sessions[first.key]
+    first.end()
+    second = sessions.session("ann", "t")
+    done, waiting = _start(second, "neurostore")
+    thread.join(30)
+    assert not waiting and not isinstance(done[0], Exception), done
+    assert _rows(second.submit("ans(x) :- engine(x)")) == [["neurostore"]]
+
+
+def test_the_sessions_without_a_process_take_no_room(tmp_path):
+    """Of *most* sessions, those of tabs that run none do not count; a
+    user's start ends their idlest session first, another's only after a
+    minute unused."""
+    sessions = Sessions(tmp_path, build=build, most=1)
+    try:
+        sessions.session("carl", "1")  # its page listens, runs nothing
+        ann = sessions.session("ann", "1")
+        ann.start("neurostore")
+        again = sessions.session("ann", "2")
+        again.start("neurostore")
+        assert ann.pid is None and again.pid is not None
+        bob = sessions.session("bob", "1")
+        with pytest.raises(RuntimeError, match="1 sessions"):
+            bob.start("neurostore")
+        again.used -= 120
+        bob.start("neurostore")
+        assert again.pid is None and bob.pid is not None
+    finally:
+        sessions.close()
+
+
+class _Conn:
+    def send(self, message):
+        raise OSError("closed")
+
+
+def test_a_process_ending_fails_its_replies_only(sessions):
+    ann = sessions.session("ann", "1")
+    old, new = object(), object()
+    ann._replies = {1: [threading.Event(), False, "", old],
+                    2: [threading.Event(), False, "", new]}
+    ann._fail_replies(old)
+    assert ann._replies[1][0].is_set() and not ann._replies[2][0].is_set()
+    ann._replies.clear()
+    ann._conn = _Conn()
+    with pytest.raises(OSError):
+        ann.submit("ans(x) :- person(x, a)")
+    assert ann._replies == {}
+    ann._conn = None
+
+
+def test_a_wrong_client_does_not_stop_the_sessions(sessions):
+    from multiprocessing.connection import Client
+    from multiprocessing import AuthenticationError
+
+    with pytest.raises(AuthenticationError):
+        Client(sessions._listener.address, authkey=b"wrong")
+    ann = sessions.session("ann", "1")
+    done, waiting = _start(ann, "neurostore")
+    assert not waiting and not isinstance(done[0], Exception), done
+
+
+def test_a_process_late_to_connect_is_killed(sessions):
+    child = subprocess.Popen(["sleep", "60"])
+    try:
+        ann = sessions.session("ann", "1")
+        ann.starts = 99
+        ann._forked.clear()
+        Sessions._late(ann, 99, child.pid)
+        assert child.wait(10) == -signal.SIGKILL
+        assert "did not start" in ann._failure
+    finally:
+        child.kill()
+        child.wait()

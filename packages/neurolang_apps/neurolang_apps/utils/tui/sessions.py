@@ -36,12 +36,19 @@ class SessionEnded(RuntimeError):
     """The process of a session is gone: the page starts it again."""
 
 
+def _kill(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 # -- In the builder's process ---------------------------------------------
 
 def _builder(conn, address, authkey, options: dict, build) -> None:
     """Build the engines asked for, once each, and fork a session's
     process from them for each ``("fork", key, start, engine, env)`` of
-    *conn* (*start* numbering the starts of the session *key*); end when the
+    *conn* (*start* numbering each start of a session once); end when the
     server does."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     backend = LocalBackend(build=build, **options)
@@ -152,13 +159,14 @@ class Session:
         self.env = env
         self.used = time.monotonic()
         self.busy = 0  # the requests at work, which an idle end waits for
-        # The number of the latest start: a process, or a message of the
-        # builder, of an earlier one is not this session's.
+        # The number of the latest start, unique among the sessions: a
+        # process, or a message of the builder, of another is not this one's.
         self.starts = 0
         self.pid: Optional[int] = None
         self._conn = None
         self._sending = threading.Lock()
         self._starting = threading.Lock()
+        self._lock = threading.Lock()  # a process attaches, or it ends
         self._forked = threading.Event()
         self._failure: Optional[str] = None
         self._replies = {}
@@ -193,13 +201,15 @@ class Session:
         """Start the session anew, in a new process, on *engine*."""
         with self._starting:
             self.end()
-            self.starts += 1
             self._forked.clear()
             self._failure = None
             self.busy += 1
             try:
-                self.sessions._fork(self, engine, self.starts)
-                self._forked.wait()
+                self.sessions._fork(self, engine)
+                # The build may take minutes; the session may end meanwhile.
+                while not self._forked.wait(5):
+                    if self.sessions.dead or not self.sessions._owns(self):
+                        self.end()
                 if self._failure:
                     raise RuntimeError(self._failure)
                 return self._call("start", engine=engine)
@@ -228,17 +238,15 @@ class Session:
 
     def end(self) -> None:
         """Kill the session's process, if any; what waits on it fails."""
-        pid, conn, self.pid, self._conn = self.pid, self._conn, None, None
-        if pid is not None:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        if conn is not None:
-            conn.close()
-        self._fail_replies()
-        if not self._forked.is_set():  # a start waiting for its process
-            self._failed("The session ended")
+        with self._lock:
+            pid, conn, self.pid, self._conn = self.pid, self._conn, None, None
+            if pid is not None:
+                _kill(pid)
+            if conn is not None:
+                conn.close()
+                self._fail_replies(conn)
+            if not self._forked.is_set():  # a start waiting for its process
+                self._failed("The session ended")
 
     # Its process.
 
@@ -251,16 +259,19 @@ class Session:
             )
         request = next(self._requests)
         done = threading.Event()
-        self._replies[request] = [done, False, "The session ended"]
+        # The reply, of this process only: another's end does not fail it.
+        reply = self._replies[request] = [done, False, "The session ended",
+                                          conn]
         self.busy += 1
         try:
             with self._sending:
                 conn.send(("call", request, method, arguments))
             done.wait()
         finally:
+            self._replies.pop(request, None)
             self.busy -= 1
             self.used = time.monotonic()
-        _, ok, value = self._replies.pop(request)
+        _, ok, value, _ = reply
         if not ok:
             raise RuntimeError(value)
         return value
@@ -282,15 +293,17 @@ class Session:
                 _, request, ok, value = message
                 reply = self._replies.get(request)
                 if reply is not None:
-                    reply[1:] = [ok, value]
+                    reply[1:3] = [ok, value]
                     reply[0].set()
         if self._conn is conn:  # its process died
             self._conn = self.pid = None
-        self._fail_replies()
+        self._fail_replies(conn)
 
-    def _fail_replies(self) -> None:
-        for done, *_ in list(self._replies.values()):
-            done.set()
+    def _fail_replies(self, conn) -> None:
+        """Fail the replies awaited from the process of *conn*."""
+        for done, _, _, of in list(self._replies.values()):
+            if of is conn:
+                done.set()
 
     def _failed(self, message: str) -> None:
         self._failure = message
@@ -300,7 +313,7 @@ class Session:
 class Sessions:
     """
     The sessions of the users of the server, each in a process forked
-    from the builder's, at most *most* at once; one unused for *idle*
+    from the builder's, at most *most* running at once; one unused for *idle*
     seconds ends. *env* gives, by user, the variables of their sessions
     (the key of their AI assistant). The other options are those of a
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`; *build*
@@ -318,6 +331,7 @@ class Sessions:
         self.idle = idle
         self._sessions = {}
         self._lock = threading.Lock()
+        self._starts = itertools.count(1)  # numbers every start once
         self._forking = threading.Lock()
         authkey = os.urandom(32)
         self._listener = Listener(family="AF_UNIX", authkey=authkey)
@@ -341,8 +355,6 @@ class Sessions:
         with self._lock:
             session = self._sessions.get(key)
             if session is None:
-                if len(self._sessions) >= self.most:
-                    self._end_idlest()
                 session = self._sessions[key] = Session(
                     self, key, self.env.get(user, {})
                 )
@@ -364,21 +376,39 @@ class Sessions:
             self._builder.join(5)
         self._listener.close()
 
-    def _end_idlest(self) -> None:
-        idle = [s for s in self._sessions.values() if not s.busy]
-        idlest = min(idle, key=lambda s: s.used) if idle else None
-        if idlest is None or idlest.pid is not None and \
-                time.monotonic() - idlest.used < 60:
+    def _owns(self, session: Session) -> bool:
+        """Return whether *session* is still that of its key."""
+        with self._lock:
+            return self._sessions.get(session.key) is session
+
+    def _end_idlest(self, starting: Session) -> None:
+        """Make room for *starting*, if *most* sessions run or start: end
+        the idlest of its user's, or another's unused for a minute."""
+        running = [s for s in self._sessions.values()
+                   if s is not starting and (s.pid is not None or s.busy)]
+        if len(running) < self.most:
+            return
+        now = time.monotonic()
+        idle = [s for s in running if not s.busy]
+        idle = [s for s in idle if s.key[0] == starting.key[0]] or \
+            [s for s in idle if now - s.used >= 60]
+        if not idle:
             raise RuntimeError(
                 f"The server has {self.most} sessions at work: close a tab "
                 "or wait"
             )
-        idlest.end()
-        del self._sessions[idlest.key]
+        min(idle, key=lambda s: s.used).end()
 
-    def _fork(self, session: Session, engine: str, start: int) -> None:
+    def _fork(self, session: Session, engine: str) -> None:
+        """Number a start of *session* and ask the builder for its
+        process."""
         if self.dead:
             raise RuntimeError(self.dead)
+        with self._lock:
+            if self._sessions.get(session.key) is not session:
+                raise SessionEnded("This session ended: restart it")
+            self._end_idlest(session)
+            session.starts = start = next(self._starts)
         try:
             with self._forking:
                 self._builder_conn.send(
@@ -396,20 +426,25 @@ class Sessions:
 
     def _accept(self) -> None:
         while not self._closed:
+            conn = None
             try:
                 conn = self._listener.accept()
                 _, key, start, pid = conn.recv()
-            except (OSError, EOFError):
+                session = self._owner(key, start)
+            except Exception:  # not a session's process, or the end
+                if conn is not None:
+                    conn.close()
                 continue
-            session = self._owner(key, start)
-            if session is None or session._forked.is_set():
+            if session is None:
                 conn.close()  # of a start given up, or an ended session
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                session._attach(conn, pid)
+                _kill(pid)
+                continue
+            with session._lock:  # not after it ended
+                if session._forked.is_set():
+                    conn.close()
+                    _kill(pid)
+                else:
+                    session._attach(conn, pid)
 
     def _read_builder(self) -> None:
         while True:
@@ -448,9 +483,11 @@ class Sessions:
 
     @staticmethod
     def _late(session: Session, start: int, pid: int) -> None:
-        if session.starts == start and not session._forked.is_set():
-            session._failed(f"The process of the session ({pid}) did not "
-                            "start: see the server's log")
+        with session._lock:
+            if session.starts == start and not session._forked.is_set():
+                _kill(pid)
+                session._failed(f"The process of the session ({pid}) did "
+                                "not start: see the server's log")
 
     def _reap(self) -> None:
         while not self._closed:
