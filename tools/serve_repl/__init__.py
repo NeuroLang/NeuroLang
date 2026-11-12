@@ -638,6 +638,9 @@ def parse_args(argv=None):
 def daemon(args) -> None:
     """Install, reinstall or remove the service, as *args* say; the bundle
     of the page in the browser is built now, its errors told here."""
+    if args.daemon == "install" and service_file().exists():
+        sys.exit(f"A service of the REPL is installed ({service_file()}): "
+                 "--daemon reinstall replaces it")
     if args.daemon != "install":
         remove_service()
     if args.daemon == "remove":

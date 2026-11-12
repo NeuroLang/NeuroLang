@@ -446,6 +446,18 @@ def test_a_key_in_the_certificate_file_serves(serve, tmp_path, certificate):
     assert serve.tls_context(both)
 
 
+def test_a_key_with_a_passphrase_is_refused(serve, tmp_path, certificate):
+    cert, key = certificate
+    locked = tmp_path / "locked.pem"
+    subprocess.run(
+        ["openssl", "pkey", "-in", str(key), "-out", str(locked),
+         "-aes256", "-passout", "pass:secret"],
+        check=True, capture_output=True,
+    )
+    with pytest.raises(SystemExit, match="passphrase"):
+        serve.tls_context(cert, locked)
+
+
 def test_key_needs_cert(serve):
     with pytest.raises(SystemExit):
         serve.parse_args(["--key", "key.pem"])
@@ -520,6 +532,8 @@ def test_the_service_is_installed_reinstalled_and_removed(
                 "--cert", "cert.pem"])
     assert path.is_file() and len(built) == 1
     assert "--cert" in path.read_bytes().decode()
+    with pytest.raises(SystemExit, match="reinstall"):
+        serve.main(["--daemon", "install"])
     serve.main(["--daemon", "reinstall", "--site", str(tmp_path / "site")])
     assert path.is_file() and len(built) == 2
     assert "--cert" not in path.read_bytes().decode()
