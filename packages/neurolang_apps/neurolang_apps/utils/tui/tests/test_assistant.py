@@ -91,6 +91,20 @@ def test_ask_puts_the_query_in_the_prompt(app):
     assert "Datalog syntax" in system
 
 
+def test_ask_is_told_what_the_engine_leaves_out(app):
+    """The assistant is told the predicates the engine leaves out, and
+    is shown none of the examples using them."""
+    app.settings.engine_name = "neurosynth"
+    app.left_out_predicates = frozenset({"uniformity", "uniformity_llm"})
+    client = script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
+    app._run_line(
+        ".ask --datalog What is the uniformity map of pain in the brain?"
+    )
+    system = client.requests[0]["messages"][0]["content"]
+    assert "not available" in system and "uniformity_llm" in system
+    assert "uniformity('" not in system and "uniformity_llm('" not in system
+
+
 def test_ask_follows_the_mode_or_the_flag(app):
     script(app, f"```squall\n{PAIN}\n```")
     app.settings.squall = True

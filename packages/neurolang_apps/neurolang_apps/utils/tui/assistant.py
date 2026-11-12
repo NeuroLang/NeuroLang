@@ -27,7 +27,7 @@ from rich.text import Text
 
 from neurolang_apps.utils import query_highlight
 
-from .commands import HELP_TOPICS, command
+from .commands import HELP_TOPICS, command, uses_predicates
 from .interrupt import call_interruptibly
 
 LLM_DEPENDENCIES = ("httpx",)
@@ -387,8 +387,39 @@ def _make_agent(app, provider, assistant, language, strategy, **options):
     return make_agent(
         app._nl, provider, assistant, language, strategy,
         engine_name=app.settings.engine_name, loaded=app.loaded_relations,
-        **options,
+        **_without_left_out(app), **options,
     )
+
+
+def _without_left_out(app) -> dict:
+    """
+    Return the guidance and the examples of the assistant on an engine
+    leaving out predicates (``left_out_predicates``): the engine's, told
+    that they are not available, and without the examples using them.
+    """
+    from neurolang_apps.utils import engine_registry
+    from neurolang_apps.utils.llm.examples import load_examples
+
+    left_out, engine = app.left_out_predicates, app.settings.engine_name
+    if not (left_out and engine):
+        return {}
+    guidance = engine_registry.get_engine_config(engine).get(
+        "assistant_guidance", ""
+    )
+    return {
+        "guidance": (
+            f"{guidance}\nThese predicates are not available in this "
+            f"engine, which leaves them out: {', '.join(sorted(left_out))}."
+            "  Never use them: answer with the other predicates."
+        ),
+        "examples": [
+            example for example in load_examples(engine)
+            if not any(
+                uses_predicates(query, left_out)
+                for query in example.queries.values()
+            )
+        ],
+    }
 
 
 def _run_assistant(

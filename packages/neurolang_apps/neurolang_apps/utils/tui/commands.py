@@ -101,24 +101,38 @@ def engine_relations(engine_name: str) -> list:
     ]
 
 
-def engine_examples(engine_name: str) -> dict:
+def uses_predicates(query: str, names) -> bool:
+    """
+    Whether *query* uses one of the predicates *names*: as ``name(`` in
+    Datalog (a query with ``:-``), as the word, in any case, in SQUALL.
+    """
+    pattern = r"\b({})\s*\(" if ":-" in query else r"(?i)\b({})\b"
+    return bool(names) and re.search(
+        pattern.format("|".join(map(re.escape, names))), query
+    ) is not None
+
+
+def engine_examples(engine_name: str, left_out=frozenset()) -> dict:
     """
     Return example queries on the engine for each language.
 
     The result is a dict from ``"datalog"`` and ``"squall"`` to a list
     of queries, the first being the one to try first. They are those of
-    the engine's ``examples`` in its configuration, or else the query
-    obtaining the first relation it declares. It is empty when the
-    engine declares neither.
+    the engine's ``examples`` in its configuration, but for those using
+    the predicates *left_out*, or else the query obtaining the first
+    relation it declares. It is empty when the engine declares neither.
     """
     if not engine_name:
         return {}
     config = engine_registry.get_engine_config(engine_name)
     declared = config.get("examples") or {}
     examples = {
-        language: list(declared[language])
+        language: queries
         for language in ("datalog", "squall")
-        if declared.get(language)
+        if (queries := [
+            query for query in declared.get(language) or ()
+            if not uses_predicates(query, left_out)
+        ])
     }
     return {**_relation_examples(engine_name), **examples}
 

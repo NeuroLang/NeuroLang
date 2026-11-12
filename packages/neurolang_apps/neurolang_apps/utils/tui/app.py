@@ -1,5 +1,6 @@
 """The interactive REPL loop and the execution of the queries it reads."""
 
+import re
 import sys
 import time
 import warnings
@@ -50,6 +51,9 @@ from .statements import (
     split_statements,
 )
 from .transcript import Transcript, is_transcript_command
+
+# The symbol a warning or an error on an undefined predicate names.
+_UNDEFINED = re.compile(r"Symbol (?:not found\s+)?(\w+)")
 
 
 def _input_bindings(is_squall) -> KeyBindings:
@@ -171,6 +175,11 @@ class InteractiveTuiApp:
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
+        # The predicates of the engine its build left out, such as the
+        # analyses that need gigabytes in the browser (see web.WebRepl).
+        self.left_out_predicates: frozenset = frozenset()
+        # Those of them the warnings of the last query were on.
+        self._left_out_used: set = set()
         # Where the events of the assistant are sent as they happen (a
         # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
         self.agent_events = None
@@ -247,17 +256,53 @@ class InteractiveTuiApp:
         )
 
     def _print_notes(self, caught) -> None:
-        """Print one note per distinct warning in *caught*."""
+        """
+        Print one note per distinct warning in *caught*, but for those on
+        the predicates the engine leaves out, which are not available.
+        """
         known = _known_symbol_names(self._nl)
+        messages = [str(w.message) for w in caught]
+        self._left_out_used = {
+            self._left_out(message) for message in messages
+        } - {""}
         notes = dict.fromkeys(
-            warning_note(str(w.message), known) for w in caught
+            warning_note(message, known) for message in messages
+            if not self._left_out(message)
         )
         for note in notes:
             self.err_console.print(note, style="yellow", markup=False)
+        for name in sorted(self._left_out_used):
+            self._print_not_available(name)
+
+    def _left_out(self, message: str) -> str:
+        """Return the predicate left out of the engine that the warning or
+        error *message* is on, or ""."""
+        match = _UNDEFINED.search(message)
+        name = match.group(1) if match else ""
+        return name if name in self.left_out_predicates else ""
+
+    def _print_not_available(self, name: str) -> None:
+        """Print that the predicate *name* is left out of the engine."""
+        self.failed = True
+        command = self.settings.command_line
+        self.err_console.print(
+            f"Error: {name} is not available in the browser, whose engine "
+            "leaves out the analyses that need gigabytes: run the REPL on "
+            "your machine for it" + (f" ({command})." if command else "."),
+            style="red", markup=False, highlight=False,
+        )
 
     def _report_error(self, exc: Exception, program: str) -> None:
-        """Print the error *exc* of *program* as the CLI does."""
+        """
+        Print the error *exc* of *program* as the CLI does, or that the
+        predicate it does not find is one the engine leaves out.
+        """
         self.failed = True
+        missing = self._left_out(str(exc))
+        if missing:
+            if missing not in self._left_out_used:
+                self._print_not_available(missing)
+            return
         report_error(
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
@@ -564,12 +609,17 @@ class InteractiveTuiApp:
             "[green]Tab[/green] completes · "
             "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
         )
-        relations = engine_relations(name)
+        relations = [
+            relation for relation in engine_relations(name)
+            if relation.split("(")[0] not in self.left_out_predicates
+        ]
         if relations:
             self.console.print("Relations:")
             for relation in relations:
                 self.console.print(f"  {relation}", markup=False)
-        examples = engine_examples(name).get(mode.lower())
+        examples = engine_examples(name, self.left_out_predicates).get(
+            mode.lower()
+        )
         if examples:
             self.console.print(f"Try: {examples[0]}", markup=False)
 

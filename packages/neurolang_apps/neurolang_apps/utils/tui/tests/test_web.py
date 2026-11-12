@@ -475,6 +475,68 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     ) == engine_registry.list_engine_names()
 
 
+
+def _text(html):
+    """Return the text of the HTML *html*, without its tags."""
+    import re
+
+    return re.sub("<[^>]+>", "", html)
+
+
+def test_the_rules_defined_from_a_heavy_predicate_are_left_out():
+    from neurolang_apps.utils.tui.web import left_out
+
+    heavy = left_out(
+        "near(s) :- activated(i, j, k, s)\n"
+        "nearer(s) :- near(s), study(s)\n"
+        "mentioned(s) :- mentions(s, t)"
+    )
+    assert {"activated", "near", "nearer"} <= heavy
+    assert not {"mentioned", "mentions", "study"} & heavy
+
+
+def test_the_predicates_the_engine_leaves_out_are_named(repl):
+    """The browser engine (here: one defining none of them) lacks the
+    analyses that need gigabytes and what is defined from them."""
+    left_out = repl.app.left_out_predicates
+    assert {"activated", "uniformity", "uniformity_llm", "lift"} <= left_out
+    assert not {"mentions", "destrieux_activated", "person"} & left_out
+    full = NeurolangPDL()
+    for name in ("activated", "uniformity"):
+        full.add_tuple_set([(1,)], name=name)
+    defined = WebRepl(full, engine_name="neurosynth").app.left_out_predicates
+    assert not {"activated", "uniformity"} & defined
+
+
+def test_the_examples_leave_out_the_missing_predicates(repl):
+    examples = repl.examples()
+    assert examples["datalog"] and examples["squall"]
+    for query in examples["datalog"] + examples["squall"]:
+        assert "uniformity" not in query and "activated(" not in query
+    assert "ans(s) :- mentions(s, 'pain')" in examples["datalog"]
+
+
+def test_the_banner_says_what_the_engine_leaves_out(repl):
+    banner = _text(repl.banner())
+    missing = next(
+        line for line in banner.splitlines() if "not in the browser" in line
+    )
+    assert "activated" in missing and "uniformity_llm" in missing
+    assert "  uniformity(" not in banner and "  activated(" not in banner
+    assert "  mentions(" in banner
+
+
+def test_a_missing_predicate_is_not_available_rather_than_unknown(repl):
+    reply = repl.submit("ans(i, j, k, u) :- uniformity('pain', i, j, k, u)")
+    text = _text(reply.html)
+    assert reply.failed
+    assert "uniformity is not available in the browser" in text
+    assert "Undefined symbol" not in text
+    reply = repl.submit("ans(x) :- nobody(x)")
+    assert "predicate nobody has no facts or rules" in _text(reply.html)
+    assert "not available" not in _text(reply.html)
+
+
 STUDIES = [
     {"id": 9065511, "doi": "10.1523/JNEUROSCI.17-07-02512.1997",
      "title": "Environmental knowledge.", "authors": "Aguirre GK",

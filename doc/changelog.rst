@@ -442,6 +442,13 @@ Unreleased
 
 **Bug fixes:**
 
+* The REPL in the browser, whose engine leaves out the analyses that need
+  gigabytes (``activated``, ``uniformity``, ``lift``... and the rules
+  defined from them), says so: its banner lists them, its examples and the
+  examples of its assistant leave out those using them, the assistant is
+  told never to use them, and a query using one fails with "is not
+  available in the browser" and the command of the REPL that has them,
+  rather than with an unknown predicate or an empty result (#1068).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
