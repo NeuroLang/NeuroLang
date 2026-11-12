@@ -15,8 +15,10 @@ engines:
   # The atlases of the MNI152 brain: the classical (gyral and sulcal)
   # anatomy of the cortex, Destrieux, and the functional anatomy, Schaefer
   # (cortical networks) and Tian (subcortex), each a relation (label,
-  # region) of the engines that extend this one; their label images are
-  # the grids of the engine (``grids``), and each is recorded, by name, in
+  # region) of the engines that extend this one; their label images,
+  # resampled to the template of an engine that has one (nearest
+  # neighbour), are the grids of the engine (``grids``), so that a voxel
+  # (i, j, k) of an atlas is that of ``voxel``; each is recorded, by name, in
   # its ``atlases`` (neurolang.atlases.Atlas), as .load_atlas records one.
   mni_atlases:
     abstract: true
@@ -55,7 +57,7 @@ engines:
         type: int
         space: voxel
         grid: schaefer
-        description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
+        description: "a voxel of the Schaefer atlas grid, the template's, in 3D"
       label:
         columns: [label]
         type: str
@@ -101,14 +103,14 @@ engines:
           - region
       schaefer_voxels:
         description: >-
-          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
+          Voxels (i, j, k) of the Schaefer atlas grid in each parcel
         arguments:
           - atlas_voxel
           - label
       labels:
         description: >-
-          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
-          grid (not the grid of voxel and reports)
+          Schaefer parcel labelling each voxel (i, j, k) of the atlas grid,
+          that of voxel and reports
         arguments:
           - label
           - atlas_voxel
@@ -250,7 +252,7 @@ engines:
     # the inverse of its affine.  A result's columns take the sort of the
     # argument of the predicate their variable comes from in the query,
     # else of the sort they are named as.  ``atlas_voxel`` (mni_atlases)
-    # indexes the grid of the 2 mm Schaefer atlas, not the template's.
+    # indexes the grid of the Schaefer atlas, resampled to the template's.
     # A sort named ``streamline`` holds streamline ids, which ``.view``
     # draws with an engine giving their points (``streamline_points``).
     sorts:

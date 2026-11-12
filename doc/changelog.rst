@@ -508,6 +508,18 @@ Unreleased
 
 **Bug fixes:**
 
+* The atlases of an engine with a template (Schaefer, Destrieux, Tian) are
+  on its grid: their label images are resampled to the template by nearest
+  neighbour when they are loaded (and kept in the engine's cache, by the
+  grid of the template), so that the voxel (i, j, k) of ``labels`` and of
+  ``contains(r, (i, j, k))`` on an atlas region is that of ``voxel`` and
+  ``reports``.  With ``-r 2``, the template voxel (68, 77, 37), MNI (38,
+  20, 2) in the right insula, was labelled by Schaefer's 2 mm FSL grid as
+  a parcel of the left hemisphere (``17Networks LH DefaultB PFCv 2``); it
+  is now ``17Networks RH SalVentAttnA Ins 1``, and ``R G insular short`` of
+  Destrieux.  The points of the atlases (``*_points``) and the studies
+  activating their regions, in millimetres, stay those of the atlases'
+  own grids (GH-1075).
 * A string constant spelled as a variable is a value, not that variable's
   column (#1086): ``h(u) :- act(u, y) & (u == 'u')`` keeps only the rows of
   ``act`` whose first column is ``'u'``, instead of every row, in
