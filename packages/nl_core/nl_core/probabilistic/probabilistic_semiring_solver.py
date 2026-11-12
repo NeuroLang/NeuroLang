@@ -186,7 +186,7 @@ class ProbSemiringSolverMixin(
             member.dst_column.value
             for member in proj_list
             if member.dst_column.value in non_prov_cols
-            and member.fun_exp == member.dst_column
+            and member.keeps_its_column()
         )
         if non_prov_cols.symmetric_difference(found_cols):
             raise ValueError(

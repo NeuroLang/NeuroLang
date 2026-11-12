@@ -27,7 +27,10 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ..chase.relational_algebra import NamedRelationalAlgebraOptimiser
-from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ...utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
 
@@ -660,6 +663,42 @@ def test_only_equalities_to_constants():
 
     assert res.value == NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(3, "a")]
+    )
+
+
+@pytest.mark.parametrize(
+    "equality, expected",
+    [
+        (C_(eq)(S_("u"), C_("u")), {("u", "a")}),
+        (C_(eq)(C_("u"), S_("u")), {("u", "a")}),
+        (C_(eq)(S_("y"), C_("y")), {("y", "y")}),
+        (C_(eq)(S_("u"), C_("y")), {("y", "y")}),
+    ],
+)
+def test_equality_to_a_string_constant_spelled_as_its_variable(
+    equality, expected
+):
+    """GH-1086: in ``R(u, y), u = 'u'`` the constant 'u' is not the column
+    u, the equality is a selection."""
+    r = C_[AbstractSet[Tuple[str, str]]](
+        RelationalAlgebraFrozenSet([("u", "a"), ("a", "u"), ("y", "y")])
+    )
+    exp = Conjunction((r(S_("u"), S_("y")), equality))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(("u", "y"), expected)
+
+
+def test_equality_defining_a_variable_by_a_string_constant_spelled_as_it():
+    """GH-1086: ``R(u), z = 'z'`` defines the column z as the value 'z'."""
+    r = C_[AbstractSet[Tuple[str]]](RelationalAlgebraFrozenSet([("a",)]))
+    exp = Conjunction((r(S_("u")), C_(eq)(S_("z"), C_("z"))))
+
+    res = RelationalAlgebraSolver().walk(TranslateToNamedRA().walk(exp))
+
+    assert res.value == NamedRelationalAlgebraFrozenSet(
+        ("u", "z"), [("a", "z")]
     )
 
 

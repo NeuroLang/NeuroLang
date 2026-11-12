@@ -508,6 +508,16 @@ Unreleased
 
 **Bug fixes:**
 
+* A string constant spelled as a variable is a value, not that variable's
+  column (#1086): ``h(u) :- act(u, y) & (u == 'u')`` keeps only the rows of
+  ``act`` whose first column is ``'u'``, instead of every row, in
+  ``NeurolangDL`` and ``NeurolangPDL``, and ``h(u, z) :- act(u, y) &
+  (z == 'z')`` gives ``z`` the value ``'z'`` instead of failing. A constant
+  is equal to a column of the same value (``Constant[str]('u') ==
+  Constant[ColumnStr]('u')``): the translation to relational algebra dropped
+  such an equality as trivially true, and an extended projection
+  ``'z' → z`` was read as keeping the column ``z``, on provenance sets and
+  when moving computed columns above a join.
 * A query of the probabilistic frontend binding a variable with a constant,
   as ``d`` in ``cogat_definition('working memory', d)``, next to a literal
   sharing no variable with the others, such as a second ``PROB[...] = pa``,

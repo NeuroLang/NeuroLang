@@ -337,7 +337,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         self, formula, classified_formulas
     ):
         if formula.functor == EQ:
-            if formula.args[0] == formula.args[1]:
+            if self.is_column_equal_to_itself(formula):
                 pass
             elif isinstance(formula.args[1], (Constant, Symbol)):
                 classified_formulas["eq_formulas"].append(formula)
@@ -350,6 +350,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             classified_formulas["destroy_formulas"].append(formula)
         else:
             classified_formulas["selection_formulas"].append(formula)
+
+    @staticmethod
+    def is_column_equal_to_itself(formula):
+        """`x = x`: a constant equal to the column, as in `x = 'x'`, is
+        not the column."""
+        return (
+            isinstance(formula.args[1], Constant[ColumnStr])
+            and formula.args[0] == formula.args[1]
+        )
 
     @staticmethod
     def process_positive_formulas(classified_formulas):
