@@ -293,15 +293,22 @@ function suggestQuestion() {
   if (pick) suggested = question.value = pick;
 }
 
-// Whether the page gives a key of its own, rather than the server's.
+// Whether the page gives a key of its own, rather than the server's, and
+// whether the user may (a server of users may forbid it).
 let pageKey = false;
+let ownKeyAllowed = true;
 
 // What the server's assistant is: *ready* to answer (the key of the user's
 // account, their group or the server), and whether the user may give their
 // own key; a key the page gives stays in use.
 function serverAssistant(ready, ownKey) {
-  $("key").hidden = !ownKey;
-  if (!ownKey) pageKey = false;
+  ownKeyAllowed = ownKey;
+  $("key").hidden = $("llm-details").hidden = !ownKey;
+  if (!ownKey) {
+    pageKey = $("llm-details").open = false;
+    $("llm-summary").textContent = "bring your own API key";
+    $("key").textContent = "API key";
+  }
   if (pageKey) return;
   assistantReady = Boolean(ready);
   Object.assign($("ask-run"), { title: ready ? "" : "Add an API key to use the assistant" }).classList.toggle("ghost", !ready);
@@ -311,7 +318,9 @@ function serverAssistant(ready, ownKey) {
     $("ask-note").textContent = `Asking uses the AI assistant ${ownKey ? "set for you on this server, unless you give your own API key" : "your admin set for you"}.`;
     suggestQuestion();
   } else if (bundle.users) {
-    $("ask-note").textContent = "Asking needs an API key from an AI provider: click API key, or save one on your Account page.";
+    $("ask-note").textContent = ownKey
+      ? "Asking needs an API key from an AI provider: click API key, or save one on your Account page."
+      : "Asking needs an AI assistant, which your admin has not set for you.";
   }
 }
 
@@ -343,7 +352,7 @@ function setProviders(list) {
   llmForm.querySelector("button").disabled = !list.length;
   showProvider();
   $("llm-summary").textContent = list.length ? "bring your own API key" : "not in this version of NeuroLang";
-  if (list.length && saved.key) useKey();
+  if (list.length && saved.key && ownKeyAllowed) useKey();
 }
 
 // Offer the engines of the bundle: a select, when there are several.
@@ -424,16 +433,19 @@ function start({ restore = null } = {}) {
 const workerMessages = {
   // The assistant of the user changed on the server (their account page, an admin).
   assistant: (data) => serverAssistant(data.ready, data.ownKey !== false),
+  // The login expired: the login page, then back here.
+  login: () => location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`),
   status: (data) => setStatus(data.message, "busy"),
   error: (data) => fail(data.message),
   ready: (data, restore) => {
     setStatus("Ready.");
     $("boot").hidden = true;
     $("banner").replaceChildren(html(data.banner));
+    ownKeyAllowed = data.ownKey !== false; // before a saved key is sent
     setProviders(data.providers ?? []);
-    if ("assistant" in data) serverAssistant(data.assistant, data.ownKey !== false);
+    if ("assistant" in data) serverAssistant(data.assistant, ownKeyAllowed);
     canRate = Boolean(data.canRate);
-    if (data.ratingNote) $("rate").querySelector(".note").textContent = data.ratingNote;
+    if (data.ratingNote) $("rate-disclosure").textContent = data.ratingNote;
     guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
@@ -774,6 +786,8 @@ $("llm-forget").addEventListener("click", () => {
   $("explain").hidden = true;
 });
 $("restart").addEventListener("click", () => start());
+// The next user of this browser does not have this one's key.
+$("logout").addEventListener("click", () => llmSettings.forget());
 $("stop").addEventListener("click", () => {
   const entries = session.entries.map((entry) => ({ ...entry }));
   worker.terminate();

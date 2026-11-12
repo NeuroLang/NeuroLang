@@ -95,3 +95,15 @@ test("the session of the page's tab goes with each request", async () => {
   assert.ok(urls.every((url) => url.endsWith("?session=tab%201")), urls.join());
   assert.equal(events.url, "/api/events?session=tab%201");
 });
+
+test("an expired login has the page log in again", async () => {
+  const submit = answers.submit;
+  answers.submit = () => ({ status: 401, body: { error: "log in first: /login" } });
+  try {
+    const messages = await send({ id: 10, text: "ans(x) :- p(x)" });
+    assert.deepEqual(messages[0], { type: "login" });
+    assert.equal(messages[1].failed, true);
+  } finally {
+    answers.submit = submit;
+  }
+});

@@ -30,11 +30,19 @@
   <button type="button" id="guest-in">Continue as a guest</button>
 </div>
 <script>
-// Where to go once logged in: a page of this site only.
+// Where to go once logged in: a page of this site only (read as the browser
+// reads an address, which drops tabs and line breaks).
 function next() {
-  const target = new URLSearchParams(location.search).get("next") || "/";
-  return target.startsWith("/") && !target.startsWith("//") && !target.startsWith("/\\") ? target : "/";
+  const target = new URL(new URLSearchParams(location.search).get("next") || "/", location.origin);
+  return target.origin === location.origin ? target.pathname + target.search + target.hash : "/";
 }
+// The API keys the REPL kept in this browser are those of who logged in
+// before: forgotten.
+try {
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const name of Object.keys(storage)) if (name.startsWith("neurolang-repl-llm")) storage.removeItem(name);
+  }
+} catch {} // no storage here
 // Guests, if the server lets them in.
 fetch("/login/guest").then((response) => response.json()).then(({ guests }) => {
   document.getElementById("guest").hidden = !guests;
