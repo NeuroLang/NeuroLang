@@ -50,7 +50,9 @@ def _builder(conn, address, authkey, options: dict, build) -> None:
         try:
             _, key, start, engine, env = conn.recv()
         except (EOFError, OSError):
-            return
+            # The server ended: so does the builder, at once, rather than
+            # wait for threads that building an engine may have left.
+            os._exit(0)
         try:
             if engine not in engines:
                 engines[engine] = backend._build(
@@ -359,6 +361,7 @@ class Sessions:
         self._builder.join(5)
         if self._builder.is_alive():
             self._builder.kill()
+            self._builder.join(5)
         self._listener.close()
 
     def _end_idlest(self) -> None:
@@ -376,10 +379,14 @@ class Sessions:
     def _fork(self, session: Session, engine: str, start: int) -> None:
         if self.dead:
             raise RuntimeError(self.dead)
-        with self._forking:
-            self._builder_conn.send(
-                ("fork", session.key, start, engine, session.env)
-            )
+        try:
+            with self._forking:
+                self._builder_conn.send(
+                    ("fork", session.key, start, engine, session.env)
+                )
+        except OSError:  # the builder is gone, its reader may not know yet
+            raise RuntimeError("The builder of the engines ended: see the "
+                               "server's log")
 
     def _owner(self, key, start: int) -> Optional[Session]:
         """Return the session *key* if its latest start is *start*."""
