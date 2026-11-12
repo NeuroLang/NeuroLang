@@ -67,7 +67,8 @@ other options say::
 a unit of systemd's user manager (``~/.config/systemd/user/``; ``loginctl
 enable-linger`` keeps it running after logout), or a launchd agent on macOS
 (``~/Library/LaunchAgents/``). ``install`` builds the bundle first, here;
-the service runs this Python, ``python -m serve_repl``, with no browser and
+the service runs the Python of this environment (``.venv/bin/python``),
+``python -m serve_repl``, with no browser and
 the paths made absolute, but not the environment of this shell. A port
 below 1024 needs a service of the system, which this does not install.
 """
@@ -450,11 +451,21 @@ def service_file() -> Path:
             / f"{SERVICE}.service")
 
 
+def interpreter() -> str:
+    """Return the Python of this environment: that of its virtual one
+    (uv's .venv), whose ``bin/python`` is a link to the Python it was made
+    from, which ``sys.executable`` may name instead, without its packages."""
+    venv = Path(sys.prefix) / "bin" / "python"
+    if sys.prefix != sys.base_prefix and venv.exists():
+        return str(venv)
+    return sys.executable
+
+
 def service_command(args) -> list:
     """Return the command the service runs: this one serving as *args*
     say, with no browser, nothing to build again and absolute paths."""
     command = [
-        sys.executable, "-m", "serve_repl", "--no-browser",
+        interpreter(), "-m", "serve_repl", "--no-browser",
         "--host", args.host, "--port", str(args.port),
         "--site", str(args.site.resolve()),
         "--embeddings", str(args.embeddings.resolve()),

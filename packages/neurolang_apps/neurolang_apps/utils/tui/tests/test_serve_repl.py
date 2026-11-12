@@ -487,6 +487,20 @@ def test_the_service_serves_as_asked_with_absolute_paths(
     assert "--local" in command
 
 
+def test_the_service_runs_the_python_of_the_virtual_environment(
+    serve, tmp_path, monkeypatch
+):
+    venv = tmp_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").touch()
+    # The Python the virtual environment links to, without its packages.
+    monkeypatch.setattr(serve.sys, "executable", "/usr/bin/python3.12")
+    monkeypatch.setattr(serve.sys, "prefix", str(venv))
+    monkeypatch.setattr(serve.sys, "base_prefix", "/usr")
+    command = serve.service_command(_daemon_args(serve, tmp_path))
+    assert command[0] == str(venv / "bin" / "python")
+
+
 def test_the_service_builds_nothing_again(serve, tmp_path):
     command = serve.service_command(_daemon_args(
         serve, tmp_path, "--rebuild", "--clear", "--daemon", "install",

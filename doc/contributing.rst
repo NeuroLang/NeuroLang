@@ -176,8 +176,12 @@ On Linux it is a unit of systemd's user manager,
 running after you log out); on macOS a launchd agent,
 :file:`~/Library/LaunchAgents/org.neurolang.repl.plist`, logging to
 :file:`~/Library/Logs/neurolang-repl.log`.  ``install`` builds the bundle
-first, where you see it; the service runs this checkout's Python with the
-paths made absolute, but without your shell's environment.  A port below
+first, where you see it; the service runs the Python of this checkout's
+virtual environment, :file:`.venv/bin/python`, with the paths made absolute,
+but without your shell's environment.  It uses that environment as it is: a
+later ``uv run`` or ``uv sync`` without ``--extra apps`` (and the other
+extras it was installed with) removes their packages from it, and the
+service then fails to start until they are back.  A port below
 1024 needs a service of the system, which this does not install.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
