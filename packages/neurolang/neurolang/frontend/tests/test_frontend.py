@@ -1282,6 +1282,36 @@ def test_equality_with_expression_on_bound_variable(
 @pytest.mark.parametrize(
     "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
 )
+@pytest.mark.parametrize(
+    "rule, expected",
+    [
+        ("ans(u) :- act(u, y) & (u == 'u')", {("u",)}),
+        ("ans(u) :- act(u, y) & ('u' == u)", {("u",)}),
+        ("ans(y) :- act(u, y) & (u == 'u')", {(1,)}),
+        ("ans(u, y) :- act(u, y) & (u == 'y')", {("y", 4)}),
+        ("ans(u) :- act(u, y) & other(u) & (u == 'u')", {("u",)}),
+        ("ans(u, x) :- pair(u, x) & (x == 'x')", {("u", "x")}),
+        ("ans(u, x) :- pair(u, x) & (u == 'x')", set()),
+        ("ans(u) :- act(u, y) & ~other(u) & (u == 'u')", set()),
+        ("ans(u) :- act(u, y) & ~other(u) & (u == 'y')", {("y",)}),
+        ("ans(u, z) :- other(u) & (z == 'z')", {("u", "z"), ("a", "z")}),
+    ],
+)
+def test_equality_to_a_string_constant_spelled_as_a_variable(
+    frontend_class, rule, expected
+):
+    """GH-1086: the constant 'u' is a value, not the column of `u`."""
+    nl = frontend_class()
+    nl.add_tuple_set([("u", 1), ("a", 2), ("b", 3), ("y", 4)], name="act")
+    nl.add_tuple_set([("u",), ("a",)], name="other")
+    nl.add_tuple_set([("u", "x"), ("a", "u"), ("y", "y")], name="pair")
+    res = nl.execute_datalog_program(rule)
+    assert set(res.to_unnamed()) == expected
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
 def test_equality_with_expression_3d_neighbourhood(frontend_class):
     nl = frontend_class()
     grid = [(i, j, k) for i in range(4) for j in range(4) for k in range(4)]

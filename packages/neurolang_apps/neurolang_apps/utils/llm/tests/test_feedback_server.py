@@ -1,5 +1,6 @@
 """Tests of the feedback server, run in a thread on an ephemeral port."""
 
+import contextlib
 import json
 import threading
 import urllib.error
@@ -195,3 +196,135 @@ def test_examples_export(tmp_path, capsys):
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 4
     assert all("steps" in json.loads(line) for line in lines)
+
+
+def _rate_answers(path, writer, count):
+    """Add *count* answers to the store at *path*, each rated (in a process
+    of its own)."""
+    store = FeedbackStore(path)
+    for number in range(count):
+        answer = store.add_answer({"question": f"q{writer}-{number}"})
+        store.add_feedback(answer, {"verdict": "correct"})
+
+
+def test_concurrent_writers_lose_nothing(tmp_path):
+    import multiprocessing
+
+    path = tmp_path / "feedback.sqlite"
+    FeedbackStore(path)
+    context = multiprocessing.get_context("spawn")
+    writers = [context.Process(target=_rate_answers, args=(path, w, 25))
+               for w in range(4)]
+    for writer in writers:
+        writer.start()
+    for writer in writers:
+        writer.join(120)
+        assert writer.exitcode == 0
+    answers = FeedbackStore(path).answers()
+    assert len(answers) == 100
+    assert len({answer["question"] for answer in answers}) == 100
+
+
+def _old_database(path):
+    """A database of the tables as they were before the groups."""
+    import sqlite3
+
+    db = sqlite3.connect(path)
+    with db:
+        db.executescript(
+            "CREATE TABLE answers (id TEXT PRIMARY KEY, created TEXT,"
+            " client_version TEXT, engine TEXT, provider TEXT, model TEXT,"
+            " strategy TEXT, language TEXT, question TEXT NOT NULL,"
+            " query TEXT, explanation TEXT, steps TEXT, rows TEXT,"
+            " valid INTEGER, error TEXT, seconds REAL, calls INTEGER,"
+            " tokens INTEGER, user TEXT);"
+            "CREATE TABLE feedback (id TEXT PRIMARY KEY, answer_id TEXT NOT"
+            " NULL REFERENCES answers(id), created TEXT, user TEXT, verdict"
+            " TEXT NOT NULL, comment TEXT, corrected_query TEXT,"
+            " corrected_query_checked INTEGER, corrected_rows TEXT);"
+            "INSERT INTO answers (id, question) VALUES ('a1', 'old one');"
+        )
+    db.close()
+
+
+def test_a_database_made_before_the_groups_is_kept(tmp_path):
+    path = tmp_path / "old.sqlite"
+    _old_database(path)
+    store = FeedbackStore(path)
+    store.add_answer({"question": "new one", "user": "ann", "groups": "lab"})
+    answers = {a["question"]: a for a in store.answers()}
+    assert answers["old one"]["groups"] is None
+    assert answers["new one"]["groups"] == "lab"
+
+
+def test_a_rating_of_the_page_is_stored_signed(tmp_path):
+    from ..feedback import StoreFeedbackClient, query_record
+
+    path = tmp_path / "feedback.sqlite"
+    client = StoreFeedbackClient(path, "ann", "admin,lab")
+    client.share_record(
+        query_record("ans(x) :- p(x)", "1 row", "", "neurosynth"),
+        "bad", "wrong rows",
+    )
+    [answer] = FeedbackStore(path).answers()
+    assert (answer["user"], answer["groups"], answer["status"]) == (
+        "ann", "admin,lab", "incorrect")
+    [rating] = answer["feedback"]
+    assert (rating["user"], rating["comment"]) == ("ann", "wrong rows")
+
+
+def _open_at(path, when):
+    """Open the store *path* at the time *when* (in a process of its own)."""
+    import time
+
+    while time.time() < when:
+        pass
+    FeedbackStore(path)
+
+
+@pytest.mark.parametrize("old", [True, False])
+def test_processes_opening_a_database_at_once_all_open_it(tmp_path, old):
+    import multiprocessing
+    import time
+
+    context = multiprocessing.get_context("spawn")
+    for round in range(4):
+        path = tmp_path / f"feedback-{round}.sqlite"
+        if old:
+            _old_database(path)
+        when = time.time() + 2  # once all are spawned
+        openers = [context.Process(target=_open_at, args=(path, when))
+                   for _ in range(6)]
+        for opener in openers:
+            opener.start()
+        for opener in openers:
+            opener.join(60)
+        assert [opener.exitcode for opener in openers] == [0] * 6
+        store = FeedbackStore(path)
+        store.add_answer({"question": "q", "groups": "lab"})
+
+
+def test_a_read_only_database_is_read_and_exported(tmp_path, capsys):
+    import sqlite3
+
+    path = tmp_path / "feedback.sqlite"
+    _old_database(path)  # made before the groups: not as they are now
+    with contextlib.closing(sqlite3.connect(path)) as db, db:
+        db.execute("INSERT INTO feedback (id, answer_id, verdict) VALUES "
+                   "('f1', 'a1', 'correct')")
+    path.chmod(0o444)
+    try:
+        assert [a["question"] for a in FeedbackStore(path).answers()] == [
+            "old one"]
+        main(["export", "--db", str(path)])
+        assert "old one" in capsys.readouterr().out
+    finally:
+        path.chmod(0o644)
+
+
+def test_the_store_lists_its_engines(tmp_path):
+    store = FeedbackStore(tmp_path / "feedback.sqlite")
+    for engine in ("neurosynth", "neurostore", "neurosynth"):
+        store.add_answer({**ANSWER, "engine": engine})
+    store.add_answer({"question": "no engine"})
+    assert store.engines() == ["neurostore", "neurosynth"]

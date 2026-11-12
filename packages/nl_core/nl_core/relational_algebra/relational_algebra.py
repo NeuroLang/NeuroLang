@@ -561,6 +561,14 @@ class FunctionApplicationListMember(Definition):
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
 
+    def keeps_its_column(self):
+        """Whether the member is `c -> c`: a constant equal to the column
+        `c`, as the string `'c'` in `'c' -> c`, does not keep it."""
+        return (
+            isinstance(self.fun_exp, Constant[Column])
+            and self.fun_exp == self.dst_column
+        )
+
 
 class Destroy(UnaryRelationalAlgebraOperation):
     """

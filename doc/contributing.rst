@@ -130,7 +130,8 @@ the ``neurosynth`` engine, a few minutes) in
 bundle built before and then builds it from nothing (the text embeddings
 below are kept).  The page opens at
 ``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
-from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
+from its CDN.  ``--host 0.0.0.0 --server-name NAME`` serves the other
+machines of the network, which reach it by NAME (see below),
 ``--port`` changes the port, ``--no-browser`` does not open the page, and
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
@@ -143,9 +144,10 @@ REPL that can start; to try the REPL of a branch, build it locally with
 ``neurolang-repl-serve``, as above.
 
 The same page can run NeuroLang in the Python of this machine rather than
-in the browser::
+in the browser (:doc:`repl_server` tells how to serve it to a group of
+users, with HTTPS, accounts, the AI assistant's keys and a service)::
 
-   uv run --extra apps neurolang-repl-serve --local --data-dir neurolang_data
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --data-dir neurolang_data
 
 builds no bundle: the page's worker (``local_worker.js``) sends what it is
 asked to the server, which builds the engine from ``--data-dir`` (by default
@@ -157,6 +159,184 @@ server, and the AI assistant is the one configured on this machine, unless a
 key is given in the page.  The server answers this machine only, unless
 ``--host``: whoever it answers runs queries, and saves files, with its
 Python.
+
+Without a password (below), the server answers only the requests sent to
+``localhost``, ``127.0.0.1``, ``::1``, the ``--host`` it is given (unless
+``0.0.0.0`` or ``::``), and the names of ``--server-name NAME`` (repeat it
+for several): a page of another site whose name it made lead to your
+machine (DNS rebinding) would otherwise run queries in its Python.  The
+other machines of the network need ``--server-name`` with the name, or the
+address, by which they reach it, e.g. ``--host 0.0.0.0 --server-name
+repl.lab.org``; the server's answer to another name says so.  With a
+password, any name is answered.  With a password or without, a POST is
+answered only if it is the page's: in JSON (``Content-Type:
+application/json``, which a form of another site cannot send), and from
+this site if the browser gives its ``Origin``; otherwise any site you visit
+could run queries here.  A connection that says nothing for a minute (its
+TLS handshake, its request) is closed, and the body of a request to
+``/api/`` is a JSON object of 1 MB at most.
+
+To serve it over HTTPS, give a certificate and its private key, PEM files
+(the key may be in the certificate's file)::
+
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --server-name repl.lab.org --cert cert.pem --key key.pem
+
+A key with a passphrase is opened with the first line of
+``--key-password-file FILE`` (readable by you only; the line as it is, but
+for its line ending), else the passphrase is
+asked in the terminal; a service needs the file.  If they cannot serve, the
+server says why: the certificate's file has no key, the key is not that of
+the certificate, or the passphrase is not that one.  A PEM file is text,
+its first line ``-----BEGIN CERTIFICATE-----`` or ``-----BEGIN PRIVATE
+KEY-----`` (``ENCRYPTED PRIVATE KEY``: with a passphrase); ``openssl x509
+-in cert.pem -noout -subject`` and ``openssl pkey -in key.pem -noout`` read
+them, and ``openssl x509 -inform DER -in cert.der -out cert.pem`` converts a
+binary (DER) one.
+
+To have it ask a password, put one on the first line of a file (readable by
+you only: ``chmod 600``; the line as it is, spaces included, but for its
+line ending) and give ``--password-file FILE``: the browser asks
+for it (any user name will do) before the site's first file, and the
+server answers no request without it.  Over the network it needs
+``--cert``, as the password goes with each request.  With ``--local``,
+``--env-file ENV`` gives those with the password the key of the AI
+assistant: ENV's ``NAME=VALUE`` lines are put in the server's environment,
+where the provider of :file:`~/.config/neurolang/llm.yaml` reads its key (the
+variable its ``api_key_env`` names, e.g. ``ALBERT_API_KEY=...``).  The key
+stays on the server; a key given in the page replaces it.  With a password,
+the visitors share one session of the REPL, its rules and a key one of them
+gives, and a restart restarts it for all.  The site's main page, ``/``, leads
+to the REPL.
+
+For several users, each with sessions of their own, give a users file
+instead of a password, ``--users users.yaml``, readable by you only::
+
+   users:
+     ann:
+       password: scrypt$16384$8$1$...   # neurolang-repl-serve --add-user
+       groups: [admin, lab]
+       env:                             # optional: the key of her assistant
+         ALBERT_API_KEY: ...
+     bob:
+       password: scrypt$16384$8$1$...
+       groups: [lab]                    # the key of the group lab
+   groups:
+     lab:
+       llm:                             # the assistant of the group's users
+         provider: openrouter           # anthropic, openai, openrouter, custom
+         model: anthropic/claude-sonnet-5.5
+         key: ...
+       own_key: false                   # its users may not give their own key
+     guest:
+       env:                             # or a variable the server's
+         ALBERT_API_KEY: ...            # configuration (llm.yaml) reads
+
+A user's assistant answers with the key their page gives (unless they may
+not give their own), else their own ``llm`` (which an admin sets, or they
+save on their account page), else that of their groups (the first by name
+that has one), else the variables (``env``) of theirs and of their groups
+with the server's configuration, else the server's (``--env-file``), else
+none: they give theirs in the page.  Whether a user may give their own key
+(in the page or on their account page) is their ``own_key``, else no if one
+of their groups says no, else yes.  A file of the users alone, without
+``users:`` and ``groups:``, is read as well.
+
+A user's ``groups`` are labels (``groups: [admin, lab]``); those of the
+group ``admin`` have the admin console, at ``/admin``: there for them only
+(any other user is refused), it lists the users, their groups and whose key
+their assistant answers with (their own, the server's, or none: they give
+theirs in the page; a key itself is never shown), adds a user, changes a
+password, groups or key, removes a user (and ends their sessions), and
+lists the sessions, which it can end.  Its changes are written in the users
+file at once (comments in it are lost), and reach the open pages of the
+users they change at once; the file is read again when you edit it by hand
+or from the command line, which reaches a user's pages at their next start.
+
+Every user has an account page, ``/account``, linked from the REPL's
+page: their name and groups, whose assistant they have, a form that saves
+their own (provider, model and key, kept on the server and never shown
+again), if they may, and a form that changes their password (the
+current one first; the new one of 8 characters at least, as in the console
+and from the command line), after which they stay logged in in that
+browser, and log in again in the others.  A forgotten password is reset by
+an admin.
+
+The users are managed from the command line too, which makes the file for
+the first one, the first admin; each asks the password or the key, which
+it does not echo::
+
+   neurolang-repl-serve --users users.yaml --add-user ann --groups admin,lab
+   neurolang-repl-serve --users users.yaml --set-password ann
+   neurolang-repl-serve --users users.yaml --set-groups bob --groups lab
+   neurolang-repl-serve --users users.yaml --set-key bob ALBERT_API_KEY   # empty: removes it
+   neurolang-repl-serve --users users.yaml --set-group-key lab ALBERT_API_KEY
+   neurolang-repl-serve --users users.yaml --set-group-llm lab openrouter anthropic/claude-sonnet-5.5
+   neurolang-repl-serve --users users.yaml --set-llm ann anthropic          # empty key: removes it
+   neurolang-repl-serve --users users.yaml --own-key group:lab no          # or NAME yes|no|inherit
+   neurolang-repl-serve --users users.yaml --remove-user bob
+   neurolang-repl-serve --users users.yaml --list-users
+
+(with ``uv run --extra apps`` before them from a checkout); a server
+running reads the file again.  The
+server takes a POST only from its own page (in JSON, from its origin), so
+that another site cannot have a logged-in browser change anything.
+
+With ``--feedback-db feedback.sqlite``, the ratings of the page are stored
+on the server, in a SQLite database (that of ``neurolang-feedback-server``),
+with the name and the groups of the user who rates; the console shows the
+latest and exports, for each engine, the rated answers of the assistant
+as YAML (its examples).  It needs ``--local``.  The sessions write it at once (WAL mode), which needs it on a
+local disk, not a network one.
+
+With ``--users``, a page opened without a login leads to a login page,
+``/login``, which gives a login cookie, until *Log out* (which ends the
+user's logins in every browser; ``/logout``, at
+the top of the REPL with ``--local``, beside the user's name, linked to
+their account page); behind a proxy of HTTPS, ``--secure-cookie`` sends
+that cookie over HTTPS only.  With ``--guests`` (and ``--local``), the
+login page lets visitors in as guests, who bring their own key; see
+:doc:`repl_server`.  With ``--local``, each tab of a
+user has a session of its own, in a process of its own: a builder process
+builds each engine once and forks a session's process from it, so that the
+sessions share the memory of the engine's data until they write it, and
+each has its own rules, AI assistant and queries, which run at the same
+time; a stop or a restart is that of the tab's session only (a reload
+keeps it, a duplicated tab has a new one).  A user's
+``env`` is put in the environment of their sessions only: the key of their
+assistant, over that of ``--env-file``, and a key their page gives over
+both.  At most ``--max-sessions`` (8, at least 1) run at once: a tab
+starting one more ends the idlest session of its user, or another's unused
+for a minute.  A session unused for ``--idle-minutes`` (120, above 0) ends
+(its page says to restart it).  The users can
+read what the server's account can, and their sessions share the data
+directory, where the files they save by a relative name may collide; give
+it to people you trust.  The feedback server, where the sessions' rated
+answers may go, takes their writes at once (SQLite in WAL mode).
+
+To keep it serving, as a service of your user started now and at each login,
+add ``--daemon install`` to the options it serves with; ``--daemon
+reinstall`` replaces it with the new options (once their bundle is built
+and the service's Python can serve, so that a failure leaves the service
+as it was), and ``--daemon remove``, with no other option, stops and
+removes it; if systemd or launchd fails to start it, it is removed and the
+error told::
+
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --users users.yaml --env-file llm.env --feedback-db feedback.sqlite
+
+On Linux it is a unit of systemd's user manager,
+:file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user
+-u neurolang-repl`` shows its log; ``loginctl enable-linger`` keeps it
+running after you log out); on macOS a launchd agent,
+:file:`~/Library/LaunchAgents/org.neurolang.repl.plist`, logging to
+:file:`~/Library/Logs/neurolang-repl.log`.  ``install`` builds the bundle
+first, where you see it; the service runs the Python of the environment
+that installs it (with ``uv run``, the checkout's :file:`.venv/bin/python`;
+``--python PATH`` chooses another), with that environment's ``PATH`` and the
+paths made absolute, but not the other variables of your shell (API keys).  It uses that environment as it is: a
+later ``uv sync`` without ``--extra apps`` (and the other extras it was
+installed with) removes their packages from it, and the service then fails
+to start until they are back (``uv run`` removes nothing).  A port below
+1024 needs a service of the system, which this does not install.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in

@@ -19,6 +19,7 @@ import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
 import { bundleEngines, engineChoice, withEngine } from "./engines.js";
+import { tabSession } from "./tab_session.js";
 
 const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
@@ -292,7 +293,39 @@ function suggestQuestion() {
   if (pick) suggested = question.value = pick;
 }
 
+// Whether the page gives a key of its own, rather than the server's, and
+// whether the user may (a server of users may forbid it).
+let pageKey = false;
+let ownKeyAllowed = true;
+
+// What the server's assistant is: *ready* to answer (the key of the user's
+// account, their group or the server), and whether the user may give their
+// own key; a key the page gives stays in use.
+function serverAssistant(ready, ownKey) {
+  ownKeyAllowed = ownKey;
+  $("key").hidden = $("llm-details").hidden = !ownKey;
+  if (!ownKey) {
+    pageKey = $("llm-details").open = false;
+    $("llm-summary").textContent = "bring your own API key";
+    $("key").textContent = "API key";
+  }
+  if (pageKey) return;
+  assistantReady = Boolean(ready);
+  Object.assign($("ask-run"), { title: ready ? "" : "Add an API key to use the assistant" }).classList.toggle("ghost", !ready);
+  $("explain").hidden = !ready;
+  $("ask-note").hidden = false;
+  if (ready) {
+    $("ask-note").textContent = `Asking uses the AI assistant ${ownKey ? "set for you on this server, unless you give your own API key" : "your admin set for you"}.`;
+    suggestQuestion();
+  } else if (bundle.users) {
+    $("ask-note").textContent = ownKey
+      ? "Asking needs an API key from an AI provider: click API key, or save one on your Account page."
+      : "Asking needs an AI assistant, which your admin has not set for you.";
+  }
+}
+
 function useKey() {
+  pageKey = true;
   assistantReady = true;
   suggestQuestion();
   $("llm-error").hidden = true;
@@ -319,7 +352,7 @@ function setProviders(list) {
   llmForm.querySelector("button").disabled = !list.length;
   showProvider();
   $("llm-summary").textContent = list.length ? "bring your own API key" : "not in this version of NeuroLang";
-  if (list.length && saved.key) useKey();
+  if (list.length && saved.key && ownKeyAllowed) useKey();
 }
 
 // Offer the engines of the bundle: a select, when there are several.
@@ -335,6 +368,9 @@ async function loadEngines() {
   );
   engineSelect.hidden = engines.length < 2;
 }
+
+// The id of this tab's session, on a server that keeps one per tab, once found.
+let tabId = null;
 
 // The version to run, from the page's address: ?repo=OWNER/NAME&ref=BRANCH,
 // and the engine: ?engine=NAME.
@@ -367,31 +403,50 @@ function start({ restore = null } = {}) {
   // (neurolang-repl-serve --local) has it answer, not Pyodide: its
   // assistant is that of the machine's configuration, unless a key is given.
   const local = bundle.backend === "local";
+  // A server of users (--users): who is logged in, their account, logging out.
+  $("account").hidden = $("logout").hidden = !bundle.users;
+  if (bundle.users) {
+    fetch("/account/api/me").then((response) => response.ok && response.json()).then((me) => {
+      if (me?.name) $("account").textContent = me.name;
+      if (me?.guest) $("account").removeAttribute("href"); // a guest has no account
+    }).catch(() => {});
+  }
   worker = new Worker(local ? "local_worker.js" : "worker.js", { type: "module" });
   if (local) {
     $("ask-note").textContent =
       "Asking uses the AI assistant configured on this machine, as neurolang-query does, or the API key you give.";
   }
-  worker.postMessage({ type: "start", repo, ref, full, engine });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "reply" && replaying) replayStep(data);
     else workerMessages[data.type]?.(data, restore);
   };
+  const message = { type: "start", repo, ref, full, engine };
+  if (!local) return worker.postMessage(message);
+  // The server keeps a session per tab: this tab's, unless restarted since.
+  const current = worker;
+  tabId ??= tabSession(store("sessionStorage"));
+  tabId.then((session) => worker === current && current.postMessage({ ...message, session }));
 }
 
 // What the page does with each kind of message of the worker; *restore* is what a stop gave to give back.
 const workerMessages = {
+  // The assistant of the user changed on the server (their account page, an admin).
+  assistant: (data) => serverAssistant(data.ready, data.ownKey !== false),
+  // The login expired: the login page, then back here.
+  login: () => location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`),
   status: (data) => setStatus(data.message, "busy"),
   error: (data) => fail(data.message),
   ready: (data, restore) => {
     setStatus("Ready.");
     $("boot").hidden = true;
     $("banner").replaceChildren(html(data.banner));
+    ownKeyAllowed = data.ownKey !== false; // before a saved key is sent
     setProviders(data.providers ?? []);
+    if ("assistant" in data) serverAssistant(data.assistant, ownKeyAllowed);
     canRate = Boolean(data.canRate);
+    if (data.ratingNote) $("rate-disclosure").textContent = data.ratingNote;
     guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
-    if (data.assistant) assistantReady = true;
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
@@ -719,6 +774,7 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign(llmForm.elements.key, { value: "" });
   llmForm.elements.remember.checked = false;
   worker.postMessage({ type: "llm", key: "" });
+  pageKey = false;
   assistantReady = false;
   if (suggested && question.value === suggested) question.value = "";
   suggested = "";
@@ -730,6 +786,8 @@ $("llm-forget").addEventListener("click", () => {
   $("explain").hidden = true;
 });
 $("restart").addEventListener("click", () => start());
+// The next user of this browser does not have this one's key.
+$("logout").addEventListener("click", () => llmSettings.forget());
 $("stop").addEventListener("click", () => {
   const entries = session.entries.map((entry) => ({ ...entry }));
   worker.terminate();
