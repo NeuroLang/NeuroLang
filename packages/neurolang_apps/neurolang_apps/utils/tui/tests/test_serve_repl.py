@@ -1956,3 +1956,23 @@ def test_a_failing_change_of_the_account_is_told_and_logged(
             assert refused.value.code == 500
             assert json.load(refused.value) == {"error": "RuntimeError"}
     assert "the secret detail" in capsys.readouterr().err
+
+
+def test_a_change_refreshes_the_sessions_of_its_users_only(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]), eve=("eve-pw", []))
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    refreshed = []
+    sessions.refresh = refreshed.append
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    with _serving(server) as port:
+        llm = {"provider": "openai", "key": "k"}
+        _json_of(port, "/admin/api/group", "ann", "ann-pw",
+                 {"name": "lab", "llm": llm})
+        _json_of(port, "/admin/api/user", "ann", "ann-pw",
+                 {"name": "eve", "llm": llm})
+        _json_of(port, "/account/api/llm", "bob", "bob-pw", llm)
+    assert refreshed == [["bob"], ["eve"], ["bob"]]

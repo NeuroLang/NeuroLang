@@ -29,7 +29,7 @@ import traceback
 from multiprocessing.connection import Client, Listener
 from typing import Callable, Optional
 
-from neurolang_apps.utils.tui.local_backend import LocalBackend, apply_env
+from neurolang_apps.utils.tui.local_backend import LocalBackend
 
 
 class SessionEnded(RuntimeError):
@@ -111,8 +111,8 @@ def _session(address, authkey, key, start: int, env: dict, options: dict,
     """Serve the session *key* on the engine *nl*, with the variables
     *env* (the key of its user's assistant), until the server ends it."""
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
-    apply_env(env)
     backend = LocalBackend(build=lambda name, say: nl, **options)
+    backend.use_identity(env)
     conn = Client(address, authkey=authkey)
     sending = threading.Lock()
 
@@ -164,6 +164,8 @@ class Session:
         # process, or a message of the builder, of another is not this one's.
         self.starts = 0
         self.pid: Optional[int] = None
+        # The identity of its user its process has: (variables, groups).
+        self.identity = None
         self._conn = None
         self._sending = threading.Lock()
         self._starting = threading.Lock()
@@ -213,6 +215,11 @@ class Session:
                         self.end()
                 if self._failure:
                     raise RuntimeError(self._failure)
+                identity = self.sessions.identity(self.key[0])
+                if identity != self.identity:  # changed while it was forked
+                    self._call("use_identity", env=identity[0],
+                               groups=identity[1])
+                    self.identity = identity
                 return self._call("start", engine=engine)
             finally:
                 self.busy -= 1
@@ -251,7 +258,10 @@ class Session:
 
     # Its process.
 
-    def _call(self, method: str, **arguments):
+    def _call(self, method: str, *, timeout: Optional[float] = None,
+              **arguments):
+        """Return what the session's process answers to *method* with
+        *arguments*; raise TimeoutError past *timeout* seconds, if given."""
         conn = self._conn
         if conn is None:
             raise SessionEnded(
@@ -267,7 +277,8 @@ class Session:
         try:
             with self._sending:
                 conn.send(("call", request, method, arguments))
-            done.wait()
+            if not done.wait(timeout):
+                raise TimeoutError(f"The session did not answer {method}")
         finally:
             self._replies.pop(request, None)
             self.busy -= 1
@@ -428,7 +439,7 @@ class Sessions:
             self._end_idlest(session)
         # The user as they are now: their variables and groups may have
         # changed since their last start.
-        env, groups = self.identity(session.key[0])
+        env, groups = session.identity = self.identity(session.key[0])
         feedback = None
         if self.feedback_db:
             feedback = {"path": str(self.feedback_db),
@@ -458,20 +469,35 @@ class Sessions:
                  "idle": round(now - s.used), "running": s.pid is not None,
                  "busy": bool(s.busy)} for s in sessions]
 
-    def refresh(self) -> None:
-        """Give the running sessions their user as they are now (an admin
-        or the user changed their assistant): see
+    #: How long a refresh waits for a session's process, in seconds.
+    REFRESH_SECONDS = 10.0
+
+    def refresh(self, users=None) -> None:
+        """Give the running sessions of *users* (all by default) their
+        user as they are now, if it changed (an admin or the user changed
+        their assistant): see
         :meth:`~neurolang_apps.utils.tui.local_backend.LocalBackend.use_identity`.
+        Each is given it by a thread, which waits for it REFRESH_SECONDS at
+        most; a session starting takes it once its process is there.
         """
         with self._lock:
             sessions = [s for s in self._sessions.values()
-                        if s.pid is not None]
+                        if s.pid is not None
+                        and (users is None or s.key[0] in users)]
         for session in sessions:
-            env, _ = self.identity(session.key[0])
-            try:
-                session._call("use_identity", env=env)
-            except Exception:  # an ended session takes it at its start
-                pass
+            threading.Thread(target=self._refresh, args=(session,),
+                             daemon=True).start()
+
+    def _refresh(self, session: Session) -> None:
+        identity = self.identity(session.key[0])
+        if identity == session.identity:
+            return
+        try:
+            session._call("use_identity", timeout=self.REFRESH_SECONDS,
+                          env=identity[0], groups=identity[1])
+            session.identity = identity
+        except Exception:  # an ended session takes it at its start
+            pass
 
     def end(self, user: str, tab: Optional[str] = None) -> int:
         """End the sessions of *user* (that of the tab *tab* only, if

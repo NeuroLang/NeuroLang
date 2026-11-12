@@ -441,3 +441,79 @@ def test_a_guests_session_has_no_key_of_the_server(tmp_path, monkeypatch):
         assert "the-servers" not in environ
     finally:
         sessions.close()
+
+
+def _config(tmp_path):
+    config = tmp_path / "llm.yaml"  # a configuration without its key
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    return {"NEUROLANG_LLM_CONFIG": str(config)}
+
+
+def _told(listener, seconds):
+    """The messages of *listener* within *seconds*."""
+    told = []
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        while not listener.empty():
+            told.append(listener.get())
+        time.sleep(0.05)
+    return told
+
+
+def test_a_refresh_is_that_of_the_users_changed_and_waits_for_none(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    monkeypatch.setattr(Sessions, "REFRESH_SECONDS", 1.0)
+    env = {"ann": _config(tmp_path), "bob": _config(tmp_path)}
+    sessions = Sessions(tmp_path, build=build,
+                        identity=lambda user: (dict(env[user]), ""))
+    try:
+        ann, bob = (sessions.session(user, "1") for user in ("ann", "bob"))
+        for session in (ann, bob):
+            session.start("neurostore")
+        heard = {"ann": ann.listen(), "bob": bob.listen()}
+        for user in env:
+            env[user]["TEST_LLM_KEY"] = "k"
+        sessions.refresh(["bob"])
+        assert any('"ready": true' in m for m in _told(heard["bob"], 3))
+        assert not _told(heard["ann"], 0.5)
+        # A session that answers nothing holds no request of the server.
+        os.kill(bob.pid, signal.SIGSTOP)
+        try:
+            env["bob"]["TEST_LLM_KEY"] = "k2"
+            begun = time.monotonic()
+            sessions.refresh(["bob"])
+            assert time.monotonic() - begun < 0.5
+            time.sleep(1.5)
+            assert not bob.busy  # given up
+        finally:
+            os.kill(bob.pid, signal.SIGCONT)
+    finally:
+        sessions.close()
+
+
+def test_a_change_during_a_start_reaches_the_session(tmp_path, monkeypatch):
+    """The identity of a session is read when its process is forked; one
+    changed while the engine builds is given to it once it is there."""
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    env = _config(tmp_path)
+    sessions = Sessions(tmp_path, build=build,
+                        identity=lambda user: (dict(env), "lab"))
+    try:
+        ann = sessions.session("ann", "1")
+        ready = []
+        starting = threading.Thread(
+            target=lambda: ready.append(ann.start("neurosynth")))
+        starting.start()
+        time.sleep(0.5)  # building neurosynth: 2 s
+        env["TEST_LLM_KEY"] = "k"
+        sessions.refresh()  # not running yet: nothing to refresh
+        starting.join(30)
+        assert ready and ready[0]["assistant"]
+    finally:
+        sessions.close()

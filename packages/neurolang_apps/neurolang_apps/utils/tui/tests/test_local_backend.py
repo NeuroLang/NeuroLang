@@ -1,6 +1,7 @@
 """Tests of the REPL of the page run by this machine's Python."""
 
 import json
+import os
 import threading
 import time
 
@@ -160,3 +161,51 @@ def test_the_users_new_assistant_keeps_the_pages_key(backend, monkeypatch):
     backend.use_identity({local_backend.ASSISTANT_ENV: user,
                           local_backend.OWN_KEY_ENV: "0"})
     assert backend.repl.app.assistant.config().provider().name == "anthropic"
+
+
+def test_a_variable_the_users_identity_no_longer_has_is_taken_out(
+    backend, monkeypatch
+):
+    """A key an admin revoked leaves the session; a variable the builder
+    had is as it was."""
+    monkeypatch.setenv("TEST_REVOKED", "")
+    monkeypatch.delenv("TEST_REVOKED")
+    monkeypatch.setenv("TEST_BUILDERS", "the-builders")
+    backend.use_identity({"TEST_REVOKED": "k", "TEST_BUILDERS": "the-users"})
+    assert os.environ["TEST_REVOKED"] == "k"
+    backend.use_identity({"TEST_BUILDERS": "the-users-new"})
+    assert "TEST_REVOKED" not in os.environ
+    assert os.environ["TEST_BUILDERS"] == "the-users-new"
+    backend.use_identity({"TEST_BUILDERS": None})  # withheld (a guest's)
+    assert "TEST_BUILDERS" not in os.environ
+    backend.use_identity({})
+    assert os.environ["TEST_BUILDERS"] == "the-builders"
+
+
+def test_the_same_identity_keeps_the_assistant_chosen(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    for name in (local_backend.ASSISTANT_ENV, local_backend.OWN_KEY_ENV):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    user = {local_backend.ASSISTANT_ENV: json.dumps(
+        {"provider": "anthropic", "key": "k", "model": "m"})}
+    backend.use_identity(user)
+    backend.start("neurostore")
+    backend.repl.app.assistant.provider = "chosen"  # .llm provider NAME
+    backend.use_identity(dict(user))
+    assert backend.repl.app.assistant.provider == "chosen"
+    user[local_backend.ASSISTANT_ENV] = json.dumps(
+        {"provider": "openai", "key": "k2"})
+    backend.use_identity(user)  # changed: the user's new one
+    assert backend.repl.app.assistant.provider == "openai"
+    backend.use_identity({})
+
+
+def test_the_ratings_are_signed_by_the_groups_of_now(backend, tmp_path):
+    backend.feedback = {"path": str(tmp_path / "f.sqlite"), "user": "ann",
+                        "groups": "lab"}
+    backend.start("neurostore")
+    backend.use_identity({}, "lab,zoo")
+    assert backend.feedback["groups"] == "lab,zoo"
+    assert backend.repl._rating.groups == "lab,zoo"

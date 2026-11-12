@@ -95,6 +95,9 @@ class LocalBackend:
         self._build = build or self._build_engine
         self.repl: Optional[web.WebRepl] = None
         self._page_key = False  # whether the page gave the assistant's key
+        # The values the variables of the user's identity had before it
+        # (see use_identity).
+        self._before_identity = {}
         # One request at a time works on the REPL; the thread of the one
         # that does, for a stop to interrupt it.
         self._lock = threading.Lock()
@@ -256,19 +259,27 @@ class LocalBackend:
             self._page_key = True
         self._tell_assistant()
 
-    def use_identity(self, env: dict) -> dict:
+    def use_identity(self, env: dict, groups=None) -> dict:
         """
         Take the variables *env* of the user as they are now (their
         assistant, whether they may give their own key, the keys of the
         server's configuration), which an admin or the user changed while
-        the session runs: the assistant is theirs at once, unless the page
-        gives a key that they may still give. Return what the page is told.
+        the session runs, and their *groups*, which sign their ratings, if
+        given. A variable of the identity before that *env* lacks is as it
+        was before it (a key revoked is taken out). If they changed, the
+        assistant is theirs at once, unless the page gives a key that they
+        may still give. Return what the page is told.
         """
-        for name in (ASSISTANT_ENV, OWN_KEY_ENV, BRING_KEY_ENV):
-            if name not in env:
-                os.environ.pop(name, None)
+        before = dict(os.environ)
+        apply_env(self._before_identity)
+        self._before_identity = {name: os.environ.get(name) for name in env}
         apply_env(env)
-        if self.repl is not None and (
+        if groups is not None and isinstance(self.feedback, dict) and \
+                groups != self.feedback.get("groups"):
+            self.feedback = {**self.feedback, "groups": groups}
+            if self.repl is not None:
+                self.repl.set_feedback_store(**self.feedback)
+        if self.repl is not None and dict(os.environ) != before and (
             not self._page_key or os.environ.get(OWN_KEY_ENV) == "0"
         ):
             self._page_key = False
