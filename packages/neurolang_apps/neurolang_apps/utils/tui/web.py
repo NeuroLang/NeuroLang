@@ -391,8 +391,9 @@ class WebRepl:
             TuiSettings(engine_name=engine_name, command_line=command),
             console=self.console, err_console=errors,
         )
-        # Those of a lightweight engine (lightweight_engines_yaml).
-        self.app.left_out_predicates = left_out_predicates(nl, engine_name)
+        # Those of a lightweight engine (lightweight_engines_yaml), which
+        # the REPL and its assistant tell are not available.
+        nl.left_out_predicates = left_out_predicates(nl, engine_name)
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
         # and the graph of a query in a tab of its own.

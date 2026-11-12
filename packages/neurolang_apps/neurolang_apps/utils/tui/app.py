@@ -1,6 +1,5 @@
 """The interactive REPL loop and the execution of the queries it reads."""
 
-import re
 import sys
 import time
 import warnings
@@ -24,6 +23,8 @@ from neurolang_apps.utils.cli import (
     _execute_program,
     _execute_squall_program,
     _known_symbol_names,
+    left_out_symbol,
+    not_available,
     warning_note,
     report_error,
     result_to_dataframe,
@@ -51,9 +52,6 @@ from .statements import (
     split_statements,
 )
 from .transcript import Transcript, is_transcript_command
-
-# The symbol a warning or an error on an undefined predicate names.
-_UNDEFINED = re.compile(r"Symbol (?:not found\s+)?(\w+)")
 
 
 def _input_bindings(is_squall) -> KeyBindings:
@@ -175,10 +173,8 @@ class InteractiveTuiApp:
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
-        # The predicates of the engine its build left out, such as the
-        # analyses that need gigabytes in the browser (see web.WebRepl).
-        self.left_out_predicates: frozenset = frozenset()
-        # Those of them the warnings of the last query were on.
+        # The predicates left out of the engine the warnings of the last
+        # query were on.
         self._left_out_used: set = set()
         # Where the events of the assistant are sent as they happen (a
         # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
@@ -263,32 +259,28 @@ class InteractiveTuiApp:
         known = _known_symbol_names(self._nl)
         messages = [str(w.message) for w in caught]
         self._left_out_used = {
-            self._left_out(message) for message in messages
+            left_out_symbol(self._nl, message) for message in messages
         } - {""}
         notes = dict.fromkeys(
             warning_note(message, known) for message in messages
-            if not self._left_out(message)
+            if not left_out_symbol(self._nl, message)
         )
         for note in notes:
             self.err_console.print(note, style="yellow", markup=False)
         for name in sorted(self._left_out_used):
             self._print_not_available(name)
 
-    def _left_out(self, message: str) -> str:
-        """Return the predicate left out of the engine that the warning or
-        error *message* is on, or ""."""
-        match = _UNDEFINED.search(message)
-        name = match.group(1) if match else ""
-        return name if name in self.left_out_predicates else ""
+    @property
+    def left_out_predicates(self) -> frozenset:
+        """The predicates the engine leaves out, as the analyses that need
+        gigabytes in the browser (see web.WebRepl)."""
+        return getattr(self._nl, "left_out_predicates", frozenset())
 
     def _print_not_available(self, name: str) -> None:
         """Print that the predicate *name* is left out of the engine."""
         self.failed = True
-        command = self.settings.command_line
         self.err_console.print(
-            f"Error: {name} is not available in the browser, whose engine "
-            "leaves out the analyses that need gigabytes: run the REPL on "
-            "your machine for it" + (f" ({command})." if command else "."),
+            "Error: " + not_available(name, self.settings.command_line),
             style="red", markup=False, highlight=False,
         )
 
@@ -298,7 +290,7 @@ class InteractiveTuiApp:
         predicate it does not find is one the engine leaves out.
         """
         self.failed = True
-        missing = self._left_out(str(exc))
+        missing = left_out_symbol(self._nl, str(exc))
         if missing:
             if missing not in self._left_out_used:
                 self._print_not_available(missing)

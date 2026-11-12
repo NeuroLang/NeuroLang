@@ -499,6 +499,7 @@ def test_the_predicates_the_engine_leaves_out_are_named(repl):
     """The browser engine (here: one defining none of them) lacks the
     analyses that need gigabytes and what is defined from them."""
     left_out = repl.app.left_out_predicates
+    assert repl.app._nl.left_out_predicates == left_out
     assert {"activated", "uniformity", "uniformity_llm", "lift"} <= left_out
     assert not {"mentions", "destrieux_activated", "person"} & left_out
     full = NeurolangPDL()
@@ -506,6 +507,21 @@ def test_the_predicates_the_engine_leaves_out_are_named(repl):
         full.add_tuple_set([(1,)], name=name)
     defined = WebRepl(full, engine_name="neurosynth").app.left_out_predicates
     assert not {"activated", "uniformity"} & defined
+
+
+def test_the_full_engine_leaves_out_nothing():
+    """The rules of the analyses define them in the engine of the
+    terminal, or of ``?engine=full``."""
+    from unittest.mock import patch
+
+    from neurolang_apps.utils.tests import test_engines
+
+    with patch(
+        f"{test_engines.NS_INIT}.fetch_study_metadata",
+        return_value=test_engines.FAKE_METADATA,
+    ):
+        nl = test_engines._build_small_neurosynth()
+    assert WebRepl(nl, "neurosynth").app.left_out_predicates == frozenset()
 
 
 def test_the_examples_leave_out_the_missing_predicates(repl):

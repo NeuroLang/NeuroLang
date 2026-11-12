@@ -95,7 +95,7 @@ def test_ask_is_told_what_the_engine_leaves_out(app):
     """The assistant is told the predicates the engine leaves out, and
     is shown none of the examples using them."""
     app.settings.engine_name = "neurosynth"
-    app.left_out_predicates = frozenset({"uniformity", "uniformity_llm"})
+    app._nl.left_out_predicates = frozenset({"uniformity", "uniformity_llm"})
     client = script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
     app._run_line(
         ".ask --datalog What is the uniformity map of pain in the brain?"
