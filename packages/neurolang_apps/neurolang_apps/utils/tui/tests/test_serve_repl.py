@@ -561,11 +561,15 @@ def test_the_service_is_installed_reinstalled_and_removed(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(serve.sys, "platform", platform)
     monkeypatch.setattr(serve.shutil, "which", lambda name: name)
-    managed = []
-    monkeypatch.setattr(
-        serve.subprocess, "run",
-        lambda command, check=True: managed.append(command[1:]),
-    )
+    managed, checked = [], []
+
+    def run(command, check=True, **kwargs):
+        if command[1] == "-c":  # the check of the service's Python
+            checked.append(command[2])
+            return subprocess.CompletedProcess(command, 0, "", "")
+        managed.append(command[1:])
+
+    monkeypatch.setattr(serve.subprocess, "run", run)
     built = []
     monkeypatch.setattr(serve, "prepare_site",
                         lambda *args, **kwargs: built.append(args))
@@ -585,6 +589,7 @@ def test_the_service_is_installed_reinstalled_and_removed(
     serve.main(["--daemon", "remove"])
     assert not path.exists()
     serve.main(["--daemon", "remove"])  # nothing installed: nothing done
+    assert checked == ["import serve_repl"] * 2
     verbs = [command[1] if command[0] == "--user" else command[0]
              for command in managed]
     if platform == "linux":
@@ -593,3 +598,14 @@ def test_the_service_is_installed_reinstalled_and_removed(
                          "disable", "daemon-reload"]
     else:
         assert verbs == ["bootstrap", "bootout", "bootstrap", "bootout"]
+
+
+def test_a_service_python_lacking_the_extras_is_told(
+    serve, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(serve.subprocess, "run", lambda command, **kw: (
+        subprocess.CompletedProcess(
+            command, 1, "", "ModuleNotFoundError: No module named 'rich'")))
+    with pytest.raises(SystemExit, match="--extra tui") as stop:
+        serve.check_service_python(["/venv/bin/python", "-m", "x"], True)
+    assert "No module named 'rich'" in str(stop.value)

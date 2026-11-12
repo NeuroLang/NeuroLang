@@ -30,7 +30,8 @@ which takes a while the first time; otherwise the page goes without.
 
 The REPL with NeuroLang in the Python of this machine::
 
-    uv run --extra apps neurolang-repl-serve --local [--data-dir DIR]
+    uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local
+        [--data-dir DIR]
         [--resolution MM] [--light] [--engine NAME ...]
 
 builds no bundle: the page's worker sends what it is asked to this server,
@@ -540,10 +541,36 @@ def service_manager(*args, check=True):
     subprocess.run([*manager, *args], check=check)
 
 
+# What the service imports, by mode, and the extras of the workspace that
+# have it.
+SERVICE_IMPORTS = "serve_repl"
+LOCAL_IMPORTS = "neurolang_apps.utils.tui.local_backend"
+LOCAL_EXTRAS = "--extra apps --extra tui --extra llm"
+
+
+def check_service_python(command: list, local: bool) -> None:
+    """Stop, telling which extras to install with, if the Python of the
+    service *command* cannot import what it serves with."""
+    modules = SERVICE_IMPORTS + (f", {LOCAL_IMPORTS}" if local else "")
+    result = subprocess.run(
+        [command[0], "-c", f"import {modules}"], capture_output=True,
+        text=True, env=service_environment(command[0]), cwd="/",
+    )
+    if result.returncode:
+        error = (result.stderr.strip().splitlines() or ["?"])[-1]
+        sys.exit(
+            f"The Python of the service, {command[0]}, cannot serve: "
+            f"{error}. Install it from the environment that has what it "
+            f"needs: uv run {LOCAL_EXTRAS if local else '--extra apps'} "
+            "neurolang-repl-serve --daemon install ..."
+        )
+
+
 def install_service(args) -> None:
     """Install the service serving as *args* say, start it and enable it
     at login."""
     path, command = service_file(), service_command(args)
+    check_service_python(command, args.local)
     path.parent.mkdir(parents=True, exist_ok=True)
     if sys.platform == "darwin":
         path.write_bytes(launchd_plist(command, Path.cwd()))

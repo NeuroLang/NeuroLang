@@ -145,7 +145,7 @@ REPL that can start; to try the REPL of a branch, build it locally with
 The same page can run NeuroLang in the Python of this machine rather than
 in the browser::
 
-   uv run --extra apps neurolang-repl-serve --local --data-dir neurolang_data
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --data-dir neurolang_data
 
 builds no bundle: the page's worker (``local_worker.js``) sends what it is
 asked to the server, which builds the engine from ``--data-dir`` (by default
@@ -161,14 +161,14 @@ Python.
 To serve it over HTTPS, give a certificate and its private key, PEM files
 (the key may be in the certificate's file, and must have no passphrase)::
 
-   uv run --extra apps neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
 
 To keep it serving, as a service of your user started now and at each login,
 add ``--daemon install`` to the options it serves with; ``--daemon
 reinstall`` replaces it with the new options, and ``--daemon remove`` stops
 and removes it::
 
-   uv run --extra apps neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem
 
 On Linux it is a unit of systemd's user manager,
 :file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user
