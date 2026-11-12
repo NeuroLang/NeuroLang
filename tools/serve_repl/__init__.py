@@ -435,7 +435,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             data = b""
         if len(data) < size:
             raise ValueError("the body is shorter than its Content-Length")
-        body = json.loads(data or b"{}")  # a ValueError if not JSON
+        try:
+            body = json.loads(data or b"{}")  # a ValueError if not JSON
+        except RecursionError:
+            raise ValueError("the body nests too deep") from None
         if not isinstance(body, dict):
             raise ValueError("the body is not a JSON object")
         return body

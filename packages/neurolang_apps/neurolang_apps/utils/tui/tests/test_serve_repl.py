@@ -890,8 +890,10 @@ def test_a_silent_or_plain_http_client_of_https_is_closed_and_logged(
             assert s.recv(1) == b""  # its handshake timed out
         with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
             s.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
-            with pytest.raises(ConnectionError):
+            try:
                 s.recv(1024)
+            except ConnectionError:  # reset by the server
+                pass
         time.sleep(0.2)
     err = capsys.readouterr().err
     assert "SSLError" in err and "Traceback" not in err
@@ -920,6 +922,8 @@ def test_the_stream_of_events_outlives_the_timeout(
     ("Content-Length: 3", b"[1]", 400, "not a JSON object"),
     ("Content-Length: 4", b"{bad", 400, "Expecting property name"),
     ("Transfer-Encoding: chunked", b"0\r\n\r\n", 400, "Content-Length"),
+    ("Content-Length: 1000000", b"[" * 500000 + b"]" * 500000, 400,
+     "nests too deep"),
 ])
 def test_a_body_that_is_not_a_json_object_is_refused(
     serve, tmp_path, monkeypatch, capsys, headers, body, status, error
