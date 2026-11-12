@@ -179,6 +179,43 @@ Unreleased
   tab has a session of its own.  The feedback
   server's SQLite database is in WAL mode, for the writes of concurrent
   sessions.
+* ``neurolang-repl-serve --users``: users have ``groups``, and those of
+  ``admin`` the admin console at ``/admin`` (users, groups, the status of
+  their assistant's key, sessions, ratings); with ``--local``,
+  ``--feedback-db FILE`` stores the ratings of the page on the server with
+  the user's name and groups, the rated answers of the assistant exported
+  from the console as its examples, by engine.  A POST is taken from the
+  server's own page only.  ``--add-user NAME --groups ...``,
+  ``--set-password``, ``--set-groups``, ``--set-key NAME VARIABLE``,
+  ``--remove-user`` and ``--list-users`` manage the users from the command
+  line; the console and the command line write the users file holding a
+  lock of it, and a password has 8 characters at least.
+* With ``neurolang-repl-serve --users``, each user changes their own
+  password on their account page, ``/account``, linked from the REPL's page.
+* The users file of ``neurolang-repl-serve --users`` gives the groups their
+  keys (``groups: {lab: {env: {...}}}``, beside ``users:``), which their
+  users have unless they have their own; the console shows and sets them, as
+  does ``--set-group-key GROUP VARIABLE``.
+* A user or a group of ``neurolang-repl-serve --users`` has an assistant of
+  its own, ``llm`` (a provider of the page's form, its model and key),
+  which an admin sets in the console or with ``--set-llm`` and
+  ``--set-group-llm``, and a user saves on their account page; ``own_key``
+  (``--own-key``) lets them give their own key, or not, in the page and on
+  their account page.
+* ``neurolang-repl-serve --users`` has a login page, ``/login``, a signed
+  login cookie and ``/logout``, which ends the user's logins made before,
+  in every browser;
+  ``--secure-cookie`` sends it over HTTPS only behind a proxy.  With
+  ``--local``, the REPL shows the name of the user logged in, linked to
+  their account page, and *Log out*, which forgets the API keys the page
+  kept.  The page shows whether the server's assistant answers, and a key
+  saved on the account page or in the console answers at once in the open
+  pages of the users it changes.
+* ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
+  login page: sessions of their own, without an account, whose assistant
+  answers only with the key they give (no key of the server's, which is
+  kept out of every session's process unless its user has it), at most
+  ``--max-guest-sessions`` at once.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are

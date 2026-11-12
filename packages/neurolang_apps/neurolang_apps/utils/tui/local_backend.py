@@ -41,6 +41,34 @@ def reply_payload(reply: web.Reply) -> dict:
     }
 
 
+# The variables of a session's process (neurolang-repl-serve --users) telling
+# its user's assistant, as JSON (provider, model, base_url, key), and, "0",
+# that they may not give their own key (tools/serve_repl has them too).
+ASSISTANT_ENV = "NEUROLANG_REPL_LLM"
+OWN_KEY_ENV = "NEUROLANG_REPL_OWN_KEY"
+# "1": the user brings their own key (a guest): the server's is not theirs.
+BRING_KEY_ENV = "NEUROLANG_REPL_BRING_KEY"
+OWN_KEY_REFUSED = ("Your assistant's key is the one your admin set: you "
+                   "cannot give your own.")
+
+# What the page says of a rating stored on this server.
+RATING_NOTE = (
+    "A rating stores the query with its first rows or its error, and for an "
+    "answer of the assistant the question and its steps, on this server, "
+    "with your user name and groups."
+)
+
+
+def apply_env(env: dict) -> None:
+    """Put the variables *env* in this process's environment; one whose
+    value is None is taken out (a key of the server, from a guest's)."""
+    for name, value in env.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 class LocalBackend:
     """
     The engine and the REPL of the page, in this process.
@@ -48,8 +76,11 @@ class LocalBackend:
     The engines are built from *data_dir* at *resolution*, with all their
     analyses unless *light* (those a tab can hold, as in the browser).
     *feedback*, ``(url, doc)``, is where a rated answer goes (see
-    :meth:`~.web.WebRepl.set_feedback`). *build*, ``build(name, say)``,
-    builds an engine, telling its steps with ``say``: by default
+    :meth:`~.web.WebRepl.set_feedback`), or ``{"path": ..., "user": ...,
+    "groups": ...}`` the database of this machine where it is stored,
+    signed (see :meth:`~.web.WebRepl.set_feedback_store`). *build*,
+    ``build(name, say)``, builds an engine, telling its steps with ``say``:
+    by default
     :func:`~neurolang_apps.utils.engine_registry.build_engine`.
     """
 
@@ -63,6 +94,10 @@ class LocalBackend:
         self.feedback = feedback
         self._build = build or self._build_engine
         self.repl: Optional[web.WebRepl] = None
+        self._page_key = False  # whether the page gave the assistant's key
+        # The values the variables of the user's identity had before it
+        # (see use_identity).
+        self._before_identity = {}
         # One request at a time works on the REPL; the thread of the one
         # that does, for a stop to interrupt it.
         self._lock = threading.Lock()
@@ -154,11 +189,15 @@ class LocalBackend:
                 )
             except Exception:
                 pass
+        self._page_key = False
         repl = web.WebRepl(nl, engine, self.resolution, **options)
         repl.set_event_sink(lambda text: self.emit(json.loads(text)))
         self._use_machine_llm(repl)
         can_rate = False
-        if self.feedback:
+        if isinstance(self.feedback, dict):  # this machine's database
+            repl.set_feedback_store(**self.feedback)
+            can_rate = repl.can_rate()
+        elif self.feedback:
             repl.set_feedback(*self.feedback)
             can_rate = repl.can_rate()
         self.repl = repl
@@ -174,6 +213,11 @@ class LocalBackend:
             "predicates": repl.predicates(),
             "commands": repl.commands(),
             "canRate": can_rate,
+            # whether the page may give a key of its own
+            "ownKey": os.environ.get(OWN_KEY_ENV) != "0",
+            # where a rating goes, when it stays on this server
+            **({"ratingNote": RATING_NOTE}
+               if isinstance(self.feedback, dict) else {}),
             # whether the assistant of this machine can answer, for the
             # page to suggest a question (a version of the page that
             # predates it leaves it out)
@@ -202,12 +246,56 @@ class LocalBackend:
         baseUrl: str = "",
     ) -> None:
         """Use the AI assistant of *provider* with *key*, or that of this
-        machine without a key."""
+        machine without a key; a user who may not give their own key
+        cannot."""
         repl = self._repl()
         if not key:
+            self._page_key = False
             self._use_machine_llm(repl)
+        elif os.environ.get(OWN_KEY_ENV) == "0":
+            raise ValueError(OWN_KEY_REFUSED)
         else:
             repl.set_llm(provider, key, model, baseUrl)
+            self._page_key = True
+        self._tell_assistant()
+
+    def use_identity(self, env: dict, groups=None) -> dict:
+        """
+        Take the variables *env* of the user as they are now (their
+        assistant, whether they may give their own key, the keys of the
+        server's configuration), which an admin or the user changed while
+        the session runs, and their *groups*, which sign their ratings, if
+        given. A variable of the identity before that *env* lacks is as it
+        was before it (a key revoked is taken out). If they changed, the
+        assistant is theirs at once, unless the page gives a key that they
+        may still give. Return what the page is told.
+        """
+        before = dict(os.environ)
+        apply_env(self._before_identity)
+        self._before_identity = {name: os.environ.get(name) for name in env}
+        apply_env(env)
+        if groups is not None and isinstance(self.feedback, dict) and \
+                groups != self.feedback.get("groups"):
+            self.feedback = {**self.feedback, "groups": groups}
+            if self.repl is not None:
+                self.repl.set_feedback_store(**self.feedback)
+        if self.repl is not None and dict(os.environ) != before and (
+            not self._page_key or os.environ.get(OWN_KEY_ENV) == "0"
+        ):
+            self._page_key = False
+            self._use_machine_llm(self.repl)
+        return self._tell_assistant()
+
+    def _tell_assistant(self) -> dict:
+        """Tell the pages whether the assistant can answer and whether the
+        user may give their own key; return it."""
+        state = {
+            "type": "assistant",
+            "ready": bool(self.repl and self.repl.assistant_ready()),
+            "ownKey": os.environ.get(OWN_KEY_ENV) != "0",
+        }
+        self.emit(state)
+        return state
 
     @staticmethod
     def _use_machine_llm(repl: web.WebRepl) -> None:
@@ -217,6 +305,16 @@ class LocalBackend:
         environment), until the page gives a key; without one, the
         assistant asks the page for a key, as in the browser.
         """
+        if os.environ.get(BRING_KEY_ENV) == "1":  # theirs, from the page
+            repl.set_llm("anthropic", "")
+            return
+        assistant = os.environ.get(ASSISTANT_ENV)
+        if assistant:  # that of the user, or of their group
+            settings = json.loads(assistant)
+            repl.set_llm(settings["provider"], settings.get("key", ""),
+                         settings.get("model", ""),
+                         settings.get("base_url", ""))
+            return
         state = repl.app.assistant
         state.provider = None
         try:

@@ -20,6 +20,7 @@ async function ask(action, body = {}, { raw = false } = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (response.status === 401) postMessage({ type: "login" }); // the login expired
   if (!response.ok) {
     const { error } = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error || `the server answered ${response.status}`);
