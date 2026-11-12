@@ -122,6 +122,9 @@ Unreleased
 
 **New features:**
 
+* ``.view`` of a result with a value on the regions of an atlas (``ans(l,
+  p) :- PROB[...]``) starts at the top 5% of its values, as a result of voxels
+  does; regions alone, networks and streamlines start with all of them.
 * The examples of the parcels the uncinate connects (``uncinate_cogat.dl`` of
   the engine tracts, its README and the assistant's example of
   ``neurosynth_tracts``) count the ends of the streamlines as the pairs

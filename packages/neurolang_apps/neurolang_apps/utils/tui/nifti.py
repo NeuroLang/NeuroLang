@@ -1864,8 +1864,9 @@ def last_results_layers(app, request: ViewRequest):
     ``ans[name]`` of a program with several, gives its images, network
     or streamlines; the viewer shows them together, the layers of a
     result of several named after its block. The *request*'s threshold
-    is 0 for results that are not of voxels, unless it is given: the
-    one the viewer starts all the layers with.
+    (the top 5% by default) is 0 for results neither of voxels nor of
+    regions with a value (regions alone, networks, streamlines), unless
+    it is given: the one the viewer starts all the layers with.
     """
     if not app.results:
         app.console.print(
@@ -1883,12 +1884,17 @@ def last_results_layers(app, request: ViewRequest):
         if not _one_of_a_kind(extra, found, app.console, block.title):
             continue
         kinds.add(kind)
+        # regions with a value, not a mask: their top 5% as voxels'
+        if kind == "regions" and any(
+            name != "mask" for name, _ in block_layers
+        ):
+            kinds.add("values")
         layers += [
             (f"{block.title}: {name}" if several and block.title else name,
              path)
             for name, path in block_layers
         ]
-    if "voxels" not in kinds and not request.threshold_given:
+    if not kinds & {"voxels", "values"} and not request.threshold_given:
         request = request._replace(threshold=0.0)
     return layers, extra, request
 

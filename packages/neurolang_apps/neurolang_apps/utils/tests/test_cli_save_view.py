@@ -183,7 +183,8 @@ def test_view_the_regions_of_a_result(atlas, viewer, capsys):
     [(image, options)] = viewer
     data = np.asanyarray(image.dataobj)
     assert np.all(data[:2] == 2) and np.all(data[2:] == 1)
-    assert options["threshold"] == 0.0
+    # a value of each region: its top 5%, as for voxels
+    assert options["threshold"] == "95%"
     assert "2 regions" in capsys.readouterr().err
 
 
