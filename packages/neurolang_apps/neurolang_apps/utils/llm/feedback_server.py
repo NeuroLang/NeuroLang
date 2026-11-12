@@ -128,11 +128,20 @@ def validate(data, fields: dict, required: tuple) -> dict:
 
 
 class FeedbackStore:
-    """The answers and their ratings, in the SQLite database *path*."""
+    """
+    The answers and their ratings, in the SQLite database *path*.
+
+    Several threads or processes may write at once (the sessions of a
+    REPL's server rate answers each in its process): each write is a
+    transaction of a connection of its own, which waits up to 30 s for
+    another's to end, and the database is in WAL mode, where reading does
+    not wait for a write.
+    """
 
     def __init__(self, path):
         self.path = str(path)
         with self._connect() as db:
+            db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
 
     def _connect(self):

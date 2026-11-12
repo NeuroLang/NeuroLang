@@ -7,12 +7,15 @@
 // comes as events.
 
 const API = "/api/";
+// The session of the page's tab, on a server that keeps one per tab.
+let session = "";
+const url = (action) => API + action + (session ? `?session=${encodeURIComponent(session)}` : "");
 
 // The answer of the server to *action* with the JSON *body*: its JSON, or
 // the response itself when *raw*. An error of the server is thrown with its
 // message.
 async function ask(action, body = {}, { raw = false } = {}) {
-  const response = await fetch(API + action, {
+  const response = await fetch(url(action), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -30,7 +33,7 @@ let started = false;
 // The messages the server sends while it works go to the page as they come.
 function listen() {
   events?.close();
-  events = new EventSource(API + "events");
+  events = new EventSource(url("events"));
   events.onmessage = ({ data }) => postMessage(JSON.parse(data));
 }
 
@@ -38,7 +41,8 @@ function listen() {
 const lastLine = (error) => String(error.message ?? error).trim().split("\n").at(-1).replace(/^[\w.]+Error: /, "");
 
 const handlers = {
-  async start({ engine }) {
+  async start({ engine, session: tab }) {
+    session = tab ?? "";
     listen();
     // A query of the page this worker replaces may still run: a restart,
     // or a stop, interrupts it first.

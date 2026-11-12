@@ -372,7 +372,7 @@ function start({ restore = null } = {}) {
     $("ask-note").textContent =
       "Asking uses the AI assistant configured on this machine, as neurolang-query does, or the API key you give.";
   }
-  worker.postMessage({ type: "start", repo, ref, full, engine });
+  worker.postMessage({ type: "start", repo, ref, full, engine, session: tabSession() });
   worker.onerror = (event) => fail(event.message || "the browser ended its worker, perhaps out of memory");
   worker.onmessage = ({ data }) => {
     if (data.type === "reply" && replaying) replayStep(data);
@@ -465,6 +465,17 @@ function showTables({ tables, prompt }) {
     followUps: tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
     use: goOn,
   })));
+}
+
+// The id of this tab's session, for a server that keeps one per tab
+// (neurolang-repl-serve --local --users): a reload keeps it.
+function tabSession() {
+  let id = sessionStorage.getItem("neurolang-session");
+  if (!id) {
+    id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    sessionStorage.setItem("neurolang-session", id);
+  }
+  return id;
 }
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
