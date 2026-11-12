@@ -108,3 +108,19 @@ def test_without_a_key_the_assistant_is_that_of_the_machine(backend):
 def test_a_request_before_the_start_says_so(backend):
     with pytest.raises(RuntimeError, match="not started"):
         backend.submit("ans(x) :- person(x, a)")
+
+
+def test_an_engine_builds_in_a_data_directory_not_made_yet(
+    tmp_path, monkeypatch
+):
+    from neurolang_apps.utils.tui import local_backend
+
+    built = []
+    monkeypatch.setattr(
+        local_backend.engine_registry, "build_engine",
+        lambda name, data_dir, *args, **kwargs: built.append(data_dir),
+    )
+    monkeypatch.chdir(tmp_path)
+    data = tmp_path / "first" / "neurolang_data"
+    LocalBackend(data)._build_engine("neurosynth", lambda message: None)
+    assert built == [data] and data.is_dir()

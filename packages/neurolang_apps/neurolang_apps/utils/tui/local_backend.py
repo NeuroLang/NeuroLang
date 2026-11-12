@@ -103,7 +103,9 @@ class LocalBackend:
         if self.light:
             yaml_path = web.lightweight_engines_yaml(tempfile.mkdtemp())
         # The files an engine reads by a relative path (the atlas of
-        # tractography) are in its data directory.
+        # tractography) are in its data directory, which its downloads make
+        # on a first start.
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         os.chdir(self.data_dir)
         return engine_registry.build_engine(
             name, self.data_dir, self.resolution, yaml_path=yaml_path,
