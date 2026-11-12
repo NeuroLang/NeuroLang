@@ -108,9 +108,9 @@ may specify the following keys, all of them optional:
   ``assistant_guidance``, examples).  The coordinate meta-analysis
   engines take 6 mm, the radius of the spheres of Neurosynth's activation
   maps (its software's default, ``r=6``; see
-  :doc:`tutorial_neurosynth_tests`).  MKDA takes 10 mm spheres, and ALE
-  blurs each peak with a Gaussian whose width depends on the number of
-  subjects of the study (Eickhoff et al., 2009)
+  :doc:`tutorial_neurosynth_tests`); ALE instead blurs each peak with a
+  Gaussian whose width depends on the number of subjects of the study
+  (Eickhoff et al., 2009)
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing

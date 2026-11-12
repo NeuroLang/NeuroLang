@@ -450,10 +450,12 @@ Unreleased
   grid (``{kernel_radius_voxels}`` in ``datalog_init``), the atlases as
   their default ``radius_mm``, and the descriptions, the guidance and the
   examples of the assistant where they say ``{kernel_radius_mm}``; the
-  banner of the REPL gives it with the size of the voxels.  On the 1 mm grid
-  ``activated`` now holds about 8 times as many pairs (6 voxels instead of
-  3; :doc:`performance` measured 6.6 GB and 18 s for 6 voxels on the 2 mm
-  grid), and the atlases' activations, 6 mm instead of 3, change (#1070).
+  banner of the REPL gives it with the size of the voxels.  On the 2 mm grid
+  ``activated`` is unchanged; on the default 1 mm grid it is 6 voxels
+  instead of 3, about 455 million (voxel, study) pairs of Neurosynth's
+  peaks instead of 61 million, at least 14.6 GB instead of 2.0 GB for its
+  four 64-bit columns: use ``-r 2`` for a smaller engine.  The atlases'
+  activations, within 6 mm instead of 3, change (#1070).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
