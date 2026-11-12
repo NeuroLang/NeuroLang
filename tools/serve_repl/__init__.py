@@ -67,10 +67,11 @@ other options say::
 a unit of systemd's user manager (``~/.config/systemd/user/``; ``loginctl
 enable-linger`` keeps it running after logout), or a launchd agent on macOS
 (``~/Library/LaunchAgents/``). ``install`` builds the bundle first, here;
-the service runs the Python of this environment (``.venv/bin/python``),
-``python -m serve_repl``, with no browser and
-the paths made absolute, but not the environment of this shell. A port
-below 1024 needs a service of the system, which this does not install.
+the service runs ``python -m serve_repl`` with the Python of the environment
+installing it (``uv run``'s ``.venv/bin/python``), or ``--python PATH``,
+and its PATH, with no browser and the paths made absolute; the other
+variables of this shell (API keys...) it does not get. A port below 1024
+needs a service of the system, which this does not install.
 """
 
 import argparse
@@ -464,8 +465,9 @@ def interpreter() -> str:
 def service_command(args) -> list:
     """Return the command the service runs: this one serving as *args*
     say, with no browser, nothing to build again and absolute paths."""
+    python = str(args.python.absolute()) if args.python else interpreter()
     command = [
-        interpreter(), "-m", "serve_repl", "--no-browser",
+        python, "-m", "serve_repl", "--no-browser",
         "--host", args.host, "--port", str(args.port),
         "--site", str(args.site.resolve()),
         "--embeddings", str(args.embeddings.resolve()),
@@ -485,9 +487,24 @@ def service_command(args) -> list:
     return command
 
 
+def service_environment(python: str) -> dict:
+    """Return the variables of the service's environment: the PATH of the
+    one installing it, so that it finds the same programs (gh...), and the
+    virtual environment of *python*, if it is one's."""
+    environment = {"PATH": os.environ.get("PATH", os.defpath)}
+    venv = Path(python).parent.parent
+    if (venv / "pyvenv.cfg").is_file():
+        environment["VIRTUAL_ENV"] = str(venv)
+    return environment
+
+
 def systemd_unit(command: list, directory: Path) -> str:
     """Return the systemd unit running *command* in *directory*."""
     run = shlex.join(command).replace("%", "%%")
+    environment = "".join(
+        f"Environment={shlex.quote(f'{name}={value}')}\n".replace("%", "%%")
+        for name, value in service_environment(command[0]).items()
+    )
     return (
         "[Unit]\n"
         "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
@@ -495,6 +512,7 @@ def systemd_unit(command: list, directory: Path) -> str:
         "[Service]\n"
         f"ExecStart={run}\n"
         f"WorkingDirectory={directory}\n"
+        f"{environment}"
         "Restart=on-failure\n\n"
         "[Install]\n"
         "WantedBy=default.target\n"
@@ -507,6 +525,7 @@ def launchd_plist(command: list, directory: Path) -> bytes:
     return plistlib.dumps({
         "Label": LAUNCHD_LABEL, "ProgramArguments": command,
         "WorkingDirectory": str(directory), "RunAtLoad": True,
+        "EnvironmentVariables": service_environment(command[0]),
         "KeepAlive": {"SuccessfulExit": False},
         "StandardOutPath": log, "StandardErrorPath": log,
     })
@@ -537,8 +556,8 @@ def install_service(args) -> None:
         where = (f"journalctl --user -u {SERVICE} shows its log; it stops "
                  "at logout unless: loginctl enable-linger "
                  f"{getpass.getuser()}")
-    print(f"Installed {path}: the REPL serves at login; {where}",
-          flush=True)
+    print(f"Installed {path}, running {command[0]}: the REPL serves at "
+          f"login; {where}", flush=True)
 
 
 def remove_service() -> None:
@@ -596,6 +615,11 @@ def parse_args(argv=None):
         help="the private key of --cert, if not in its file",
     )
     parser.add_argument(
+        "--python", type=Path, metavar="PATH",
+        help="with --daemon, the Python the service runs (default: that of "
+        "the environment installing it)",
+    )
+    parser.add_argument(
         "--daemon", choices=("install", "reinstall", "remove"),
         help="install (building its bundle now), reinstall or remove a "
         "service of this user serving the REPL as the other options say, "
@@ -643,6 +667,8 @@ def parse_args(argv=None):
                      "--rebuild nor --clear")
     if args.key and not args.cert:
         parser.error("--key is that of --cert")
+    if args.python and not args.daemon:
+        parser.error("--python is that of the service: with --daemon")
     return args
 
 

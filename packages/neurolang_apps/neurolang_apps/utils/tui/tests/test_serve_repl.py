@@ -501,6 +501,37 @@ def test_the_service_runs_the_python_of_the_virtual_environment(
     assert command[0] == str(venv / "bin" / "python")
 
 
+def test_the_service_runs_the_python_asked_for(serve, tmp_path):
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--daemon", "install",
+        "--python", "/opt/py/bin/python",
+    ))
+    assert command[0] == "/opt/py/bin/python"
+    assert "--python" not in command
+
+
+def test_python_is_that_of_the_service(serve):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--python", "/opt/py/bin/python"])
+
+
+def test_the_service_has_the_path_and_the_virtual_environment(
+    serve, tmp_path, monkeypatch
+):
+    venv = tmp_path / ".venv"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "pyvenv.cfg").touch()
+    monkeypatch.setenv("PATH", "/opt/gh/bin:/usr/bin")
+    python = str(venv / "bin" / "python")
+    unit = serve.systemd_unit([python, "-m", "serve_repl"], tmp_path)
+    assert "Environment=PATH=/opt/gh/bin:/usr/bin\n" in unit
+    assert f"Environment=VIRTUAL_ENV={venv}\n" in unit
+    agent = plistlib.loads(serve.launchd_plist([python], tmp_path))
+    assert agent["EnvironmentVariables"] == {
+        "PATH": "/opt/gh/bin:/usr/bin", "VIRTUAL_ENV": str(venv),
+    }
+
+
 def test_the_service_builds_nothing_again(serve, tmp_path):
     command = serve.service_command(_daemon_args(
         serve, tmp_path, "--rebuild", "--clear", "--daemon", "install",
