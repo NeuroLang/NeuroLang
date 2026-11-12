@@ -30,6 +30,7 @@ Endpoints:
 """
 
 import argparse
+import contextlib
 import hmac
 import json
 import os
@@ -69,13 +70,13 @@ CREATE TABLE IF NOT EXISTS answers (
     provider TEXT, model TEXT, strategy TEXT, language TEXT,
     question TEXT NOT NULL, query TEXT, explanation TEXT, steps TEXT,
     rows TEXT, valid INTEGER, error TEXT, seconds REAL, calls INTEGER,
-    tokens INTEGER, user TEXT
+    tokens INTEGER, user TEXT, groups TEXT
 );
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY, answer_id TEXT NOT NULL REFERENCES answers(id),
     created TEXT, user TEXT, verdict TEXT NOT NULL, comment TEXT,
     corrected_query TEXT, corrected_query_checked INTEGER,
-    corrected_rows TEXT
+    corrected_rows TEXT, groups TEXT
 );
 CREATE INDEX IF NOT EXISTS feedback_answer ON feedback(answer_id);
 """
@@ -127,6 +128,20 @@ def validate(data, fields: dict, required: tuple) -> dict:
     return data
 
 
+def _wal(db) -> None:
+    """Put the database *db* in WAL mode, if not yet; the change waits for
+    no other connection (of a process opening it at once): tried again."""
+    for _ in range(300):
+        try:
+            if db.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+                db.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error):
+                raise
+            time.sleep(0.1)
+
+
 class FeedbackStore:
     """
     The answers and their ratings, in the SQLite database *path*.
@@ -140,21 +155,37 @@ class FeedbackStore:
 
     def __init__(self, path):
         self.path = str(path)
-        with self._connect() as db:
-            db.execute("PRAGMA journal_mode=WAL")
-            db.executescript(SCHEMA)
-            # The groups of the user (neurolang-repl-serve --users), which
-            # a database made before them lacks.
-            for table in ("answers", "feedback"):
-                columns = {row["name"] for row in db.execute(
-                    f"PRAGMA table_info({table})")}
-                if "groups" not in columns:
-                    db.execute(f"ALTER TABLE {table} ADD COLUMN groups TEXT")
+        try:
+            with self._connect() as db:
+                _wal(db)
+                db.executescript(SCHEMA)
+                # The groups of the user (neurolang-repl-serve --users),
+                # which a database made before them lacks; another process
+                # may add them meanwhile.
+                for table in ("answers", "feedback"):
+                    columns = {row["name"] for row in db.execute(
+                        f"PRAGMA table_info({table})")}
+                    if "groups" not in columns:
+                        try:
+                            db.execute(
+                                f"ALTER TABLE {table} ADD COLUMN groups TEXT")
+                        except sqlite3.OperationalError as error:
+                            if "duplicate column" not in str(error):
+                                raise
+        except sqlite3.OperationalError as error:
+            if "readonly" not in str(error):
+                raise  # a database that is only read is read as it is
 
+    @contextlib.contextmanager
     def _connect(self):
+        """A connection, a transaction committed at its end, then closed."""
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def add_answer(self, data: dict, question: bool = True) -> str:
         """Store the answer *data* and return its id; without *question*,
@@ -211,6 +242,13 @@ class FeedbackStore:
             record["feedback"] = ratings[record["id"]]
             records.append(record)
         return records
+
+    def engines(self) -> list:
+        """Return the engines of the answers, by name."""
+        with self._connect() as db:
+            return [row[0] for row in db.execute(
+                "SELECT DISTINCT engine FROM answers WHERE engine != '' "
+                "ORDER BY engine")]
 
     def count(self, engine=None, status=None) -> int:
         """Return the number of answers of *engine* with *status*."""

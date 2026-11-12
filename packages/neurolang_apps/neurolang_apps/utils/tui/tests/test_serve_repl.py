@@ -1976,3 +1976,33 @@ def test_a_change_refreshes_the_sessions_of_its_users_only(serve, tmp_path):
                  {"name": "eve", "llm": llm})
         _json_of(port, "/account/api/llm", "bob", "bob-pw", llm)
     assert refreshed == [["bob"], ["eve"], ["bob"]]
+
+
+def test_the_console_exports_the_examples_of_each_engine(serve, tmp_path):
+    from neurolang_apps.utils.llm.feedback_server import FeedbackStore
+
+    (tmp_path / "bundle.json").write_text("{}")
+    db = tmp_path / "feedback.sqlite"
+    store = FeedbackStore(db)
+    for engine, question in (("neurosynth", "Pain?"),
+                             ("neurostore", "Fear?")):
+        answer = store.add_answer({"engine": engine, "question": question,
+                                   "language": "datalog", "query": "q",
+                                   "valid": True})
+        store.add_feedback(answer, {"verdict": "correct"})
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users,
+                               feedback_db=db)
+    with _serving(server) as port:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["feedback_engines"] == ["neurostore", "neurosynth"]
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}/admin/feedback.yaml?engine=neurosynth",
+            headers=_basic("ann-pw", "ann"))
+        with urllib.request.urlopen(request, timeout=10) as response:
+            text = response.read().decode()
+            assert "neurosynth" in response.headers["Content-Disposition"]
+        assert "Pain?" in text and "Fear?" not in text
+        for query in ("", "?engine=nothing", '?engine="x'):
+            assert _status(port, f"/admin/feedback.yaml{query}",
+                           _basic("ann-pw", "ann")) == 400

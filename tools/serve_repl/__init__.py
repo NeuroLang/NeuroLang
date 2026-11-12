@@ -608,14 +608,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/feedback":
             return self._reply_json(self._admin_feedback())
         if path == "/admin/feedback.yaml" and self.feedback_db:
+            # The examples of the assistant of an engine, ?engine=NAME.
             from neurolang_apps.utils.llm.feedback_server import (
                 FeedbackStore, examples_yaml,
             )
 
-            text = examples_yaml(FeedbackStore(self.feedback_db))
+            store = FeedbackStore(self.feedback_db)
+            query = urllib.parse.urlsplit(self.path).query
+            engine = urllib.parse.parse_qs(query).get("engine", [""])[0]
+            if engine not in store.engines():
+                raise ValueError("No ratings of the engine "
+                                 f"{engine!r}: one of ?engine=NAME")
+            text = examples_yaml(store, engine)
             return self._reply(200, text.encode(), "application/yaml", [
                 ("Content-Disposition",
-                 'attachment; filename="feedback.yaml"')])
+                 f'attachment; filename="feedback-{engine}.yaml"')])
         return self._reply_json({"error": "not found"}, 404)
 
     def _admin_state(self) -> dict:
@@ -637,7 +644,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "providers": _providers(),
             "sessions": self.sessions.info() if self.sessions else None,
             "feedback": bool(self.feedback_db),
+            "feedback_engines": self._feedback_engines(),
         }
+
+    def _feedback_engines(self) -> list:
+        if not self.feedback_db:
+            return []
+        from neurolang_apps.utils.llm.feedback_server import FeedbackStore
+
+        return FeedbackStore(self.feedback_db).engines()
 
     def _admin_feedback(self) -> list:
         if not self.feedback_db:

@@ -194,8 +194,11 @@ async function show() {
     $("feedback-note").textContent = "No feedback database: start the server with --feedback-db FILE.";
     return;
   }
-  const link = Object.assign(document.createElement("a"), { href: "/admin/feedback.yaml", textContent: "Export the rated queries as YAML" });
-  $("feedback-note").replaceChildren("The latest 200 rated answers. ", link, " (the examples of the assistant, one per question).");
+  // The examples of the assistant of each engine, one per question.
+  const links = state.feedback_engines.flatMap((engine, i) => [i ? ", " : "", Object.assign(document.createElement("a"), {
+    href: `/admin/feedback.yaml?engine=${encodeURIComponent(engine)}`, textContent: engine })]);
+  $("feedback-note").replaceChildren("The latest 200 rated answers. ", ...(links.length
+    ? ["Export the rated answers of the assistant as its examples (YAML, one per question), of ", ...links, "."] : []));
   const answers = await call("/admin/api/feedback");
   $("feedback").replaceChildren(...answers.map((answer) => row([
     (answer.created ?? "").replace("T", " ").slice(0, 16), answer.user, answer.groups, answer.engine,
