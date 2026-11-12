@@ -14,7 +14,8 @@ Usage, from a checkout::
 
     uv run --extra apps neurolang-repl-serve [--port 8766] [--rebuild]
         [--engine NAME ...] [--clear]
-        [--embeddings DIR] [--site SITE] [--host 0.0.0.0] [--no-browser]
+        [--embeddings DIR] [--site SITE] [--no-browser]
+        [--host 0.0.0.0 --server-name NAME ...]
 
 the command of the workspace's root project, or ``python -m serve_repl``.
 The page offers the engines ``neurosynth_iit`` (Neurosynth with the tracts
@@ -42,6 +43,14 @@ in SITE/local, and it is as fast, and has as much memory, as this machine.
 It serves this machine only, unless ``--host``: anyone it serves can run
 queries, and save files, in its Python.
 
+Without a password, the server answers only the requests sent to
+``localhost``, ``127.0.0.1``, ``::1``, ``--host`` (unless ``0.0.0.0`` or
+``::``) and the names of ``--server-name NAME`` (repeated for several): a
+page of another site, whose name it made lead to this machine (DNS
+rebinding), is refused. Those of the network need ``--server-name`` with the
+name or the address they use (``--host 0.0.0.0 --server-name
+repl.lab.org``).
+
 The REPL of a pull request, built by its CI::
 
     uv run --extra apps neurolang-repl-serve --pr N
@@ -60,8 +69,9 @@ in the certificate's file; its passphrase, if any, on the first line of
     uv run --extra apps neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
         [--key-password-file FILE]
 
-A password, on the first line of FILE (not on the command line), that the
-browser asks every visitor for (HTTP Basic, any user name; with ``--cert``
+A password, on the first line of FILE (not on the command line; as it is,
+but for its line ending, as the passphrase of ``--key-password-file``), that
+the browser asks every visitor for (HTTP Basic, any user name; with ``--cert``
 unless on this machine only); with ``--local``, the key of the AI assistant
 that those with the password use, unless their page gives one: the
 NAME=VALUE lines of ENV (the variable that the provider's ``api_key_env``
@@ -85,10 +95,18 @@ a unit of systemd's user manager (``~/.config/systemd/user/``; ``loginctl
 enable-linger`` keeps it running after logout), or a launchd agent on macOS
 (``~/Library/LaunchAgents/``). ``install`` builds the bundle first, here;
 the service runs ``python -m serve_repl`` with the Python of the environment
-installing it (``uv run``'s ``.venv/bin/python``), or ``--python PATH``,
-and its PATH, with no browser and the paths made absolute; the other
-variables of this shell (API keys...) it does not get. A port below 1024
-needs a service of the system, which this does not install.
+installing it (``uv run``'s ``.venv/bin/python``), or ``--python PATH``
+(a name is looked for in the PATH), and its PATH, with no browser and the
+paths made absolute; the other variables of this shell (API keys...) it
+does not get. The service installed before is removed by ``reinstall``
+only once the new one's bundle is built and its Python can serve; if the
+service manager fails, the service is removed and the error told.
+``remove`` needs no other option. A port below 1024 needs a service of the
+system, which this does not install.
+
+A connection that says nothing for a minute (its TLS handshake, its request)
+is closed, and the body of a request to ``/api/`` is a JSON object of 1 MB at
+most.
 """
 
 import argparse
@@ -101,12 +119,14 @@ import json
 import os
 import plistlib
 import queue
+import re
 import shlex
 import shutil
 import socketserver
 import ssl
 import subprocess
 import sys
+import time
 import traceback
 import urllib.parse
 import webbrowser
@@ -335,6 +355,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     #: The password every request must give (HTTP Basic, any user name),
     #: as bytes; None: none.
     password = None
+    #: Without a password, the names of the host a request may be sent to
+    #: (its ``Host``): another one may be a page of another site whose name
+    #: now leads here (DNS rebinding).
+    names = frozenset()
+    #: How long a connection may say nothing (its TLS handshake, its
+    #: request, its body), in seconds.
+    timeout = 60
+    #: The longest body of a request, in bytes.
+    MAX_BODY = 1 << 20
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -344,11 +373,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass  # the downloads of the page are many and of no interest
 
     def parse_request(self):
-        """Read the request, and answer 401 to one without the password:
-        then it goes no further, whatever its method."""
+        """Read the request, and answer 401 to one without the password,
+        or, if there is none, 403 to one sent to a host not of
+        ``names``: then it goes no further, whatever its method."""
         if not super().parse_request():
             return False
-        if self.password is None or self._authorised():
+        if self.password is None:
+            try:
+                host = urllib.parse.urlsplit(
+                    "//" + (self.headers.get("Host") or "")).hostname
+            except ValueError:  # an IPv6 address without its ]
+                host = None
+            if host in self.names:
+                return True
+            self.send_error(403, "Unknown host", (
+                f"This server does not answer to {host}: if it is its name, "
+                f"serve it with --server-name {host}, or with a password"
+            ))
+            return False
+        if self._authorised():
             return True
         self.send_response(401)
         self.send_header(
@@ -370,6 +413,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return False
         given = credentials.partition(b":")[2]
         return hmac.compare_digest(given, self.password)
+
+    def _body(self) -> dict:
+        """Return the JSON object of the request's body, {} if it has none;
+        raise ValueError, telling why, if it is not one (TooLarge if over
+        MAX_BODY)."""
+        length = self.headers.get("Content-Length")
+        if length is None:
+            if self.headers.get("Transfer-Encoding"):
+                raise ValueError("a body needs a Content-Length")
+            return {}
+        size = int(length) if length.isascii() and length.isdigit() else -1
+        if size < 0:
+            raise ValueError(f"Content-Length {length!r} is not a length")
+        if size > self.MAX_BODY:
+            raise TooLarge(f"a body of {size} bytes is over "
+                           f"{self.MAX_BODY} bytes")
+        try:
+            data = self.rfile.read(size)
+        except TimeoutError:
+            data = b""
+        if len(data) < size:
+            raise ValueError("the body is shorter than its Content-Length")
+        body = json.loads(data or b"{}")  # a ValueError if not JSON
+        if not isinstance(body, dict):
+            raise ValueError("the body is not a JSON object")
+        return body
+
+
+class TooLarge(ValueError):
+    """The body of a request is over ``Handler.MAX_BODY``."""
 
 
 class LocalHandler(Handler):
@@ -412,7 +485,7 @@ class LocalHandler(Handler):
                 except queue.Empty:
                     self.wfile.write(b": alive\n\n")
                 self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
+        except OSError:  # gone, or reads nothing for Handler.timeout
             pass
         finally:
             self.backend.forget(listener)
@@ -421,9 +494,12 @@ class LocalHandler(Handler):
         if not self.path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         action = self.path[len("/api/"):]
-        length = int(self.headers.get("Content-Length") or 0)
         try:
-            body = json.loads(self.rfile.read(length) or b"{}")
+            body = self._body()
+        except ValueError as error:
+            return self._json({"error": str(error)},
+                              413 if isinstance(error, TooLarge) else 400)
+        try:
             self._answer(action, body)
         except Exception as error:  # told to the page, and in the log
             traceback.print_exc()
@@ -457,6 +533,17 @@ class Server(http.server.ThreadingHTTPServer):
     def server_bind(self):
         socketserver.TCPServer.server_bind(self)
         self.server_name, self.server_port = self.server_address[:2]
+
+    def handle_error(self, request, client_address):
+        """Log a client that fails its handshake (plain HTTP on the HTTPS
+        port), goes or says nothing in one line, others with their
+        traceback."""
+        error = sys.exc_info()[1]
+        if isinstance(error, (ssl.SSLError, ConnectionError, TimeoutError)):
+            print(f"{client_address[0]}: {type(error).__name__}: {error}",
+                  file=sys.stderr, flush=True)
+        else:
+            super().handle_error(request, client_address)
 
 
 def tls_context(cert: Path, key=None, password_file=None,
@@ -510,16 +597,23 @@ def _tls_reason(cert: Path, key, error: OSError, asked: bool) -> str:
             f"certificate and its key ({text})")
 
 
+# The names of this machine, which a server answers to without a password.
+LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
+
+
 def make_server(site: Path, host: str, port: int, backend=None,
-                tls=None, password=None):
+                tls=None, password=None, names=()):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
-    only, if given."""
+    only, if given, else to those sent to this machine's names, *host*
+    or one of *names*."""
     base = Handler if backend is None else LocalHandler
+    names = {*LOCAL_NAMES, *names, host} - {"0.0.0.0", "::", ""}
     handler = type("Handler", (base,), {
         "backend": backend,
         "password": None if password is None else password.encode(),
+        "names": frozenset(name.lower().strip("[]") for name in names),
     })
     server = Server(
         (host, port),
@@ -550,19 +644,30 @@ def write_index(site: Path, page: Path) -> None:
     )
 
 
+def read_file(path: Path) -> str:
+    """Return the text of the file *path*; stop, telling why, if it cannot
+    be read."""
+    try:
+        return path.read_text()
+    except OSError as error:
+        sys.exit(f"{path} cannot be read: {error.strerror or error}")
+
+
 def read_password(path: Path) -> str:
-    """Return the password in the first line of the file *path*."""
-    password = path.read_text().splitlines()[:1]
-    if not password or not password[0].strip():
+    """Return the password in the first line of the file *path*, as it is
+    but for its line ending."""
+    password = read_file(path).partition("\n")[0].rstrip("\r")
+    if not password:
         sys.exit(f"The password file {path} has no password on its first line")
-    return password[0].strip()
+    return password
 
 
 def read_env_file(path: Path) -> dict:
     """Return the variables of the file *path*: lines NAME=VALUE (``export``
-    before, quotes around the value and ``#`` comments may be there)."""
+    before, quotes around the value and ``#`` comments may be there, after
+    a space if on the line of a value)."""
     variables = {}
-    for number, line in enumerate(path.read_text().splitlines(), 1):
+    for number, line in enumerate(read_file(path).splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -570,8 +675,11 @@ def read_env_file(path: Path) -> dict:
         if not equals or not name.strip().isidentifier():
             sys.exit(f"{path}:{number}: not a NAME=VALUE line")
         value = value.strip()
-        if len(value) > 1 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
+        end = value.find(value[:1], 1) if value[:1] in ("'", '"') else -1
+        if end > 0:
+            value = value[1:end]
+        else:
+            value = re.split(r"\s#", value, maxsplit=1)[0].rstrip()
         variables[name.strip()] = value
     return variables
 
@@ -618,7 +726,11 @@ def interpreter() -> str:
 def service_command(args) -> list:
     """Return the command the service runs: this one serving as *args*
     say, with no browser, nothing to build again and absolute paths."""
-    python = str(args.python.absolute()) if args.python else interpreter()
+    python = args.python or interpreter()
+    if os.sep not in python:  # a name, in the PATH
+        python = shutil.which(python) or sys.exit(
+            f"--python {python}: no such program in the PATH")
+    python = str(Path(python).absolute())
     command = [
         python, "-m", "serve_repl", "--no-browser",
         "--host", args.host, "--port", str(args.port),
@@ -627,6 +739,8 @@ def service_command(args) -> list:
     ]
     for engine in args.engines or ():
         command += ["--engine", engine]
+    for name in args.server_names or ():
+        command += ["--server-name", name]
     if args.local:
         command += ["--local", "--data-dir", str(args.data_dir.resolve()),
                     "--resolution", str(args.resolution)]
@@ -655,13 +769,24 @@ def service_environment(python: str) -> dict:
     return environment
 
 
+def systemd_quote(word: str, dollar: str = "$$") -> str:
+    """Return *word* as systemd reads it back: in double quotes, its
+    backslashes and quotes escaped, its specifiers (%) and, in ExecStart,
+    variables ($, as *dollar*) not expanded."""
+    for character, escaped in (("\\", "\\\\"), ('"', '\\"'), ("%", "%%"),
+                               ("$", dollar)):
+        word = word.replace(character, escaped)
+    return f'"{word}"'
+
+
 def systemd_unit(command: list, directory: Path) -> str:
     """Return the systemd unit running *command* in *directory*."""
-    run = shlex.join(command).replace("%", "%%")
+    run = " ".join(map(systemd_quote, command))
     environment = "".join(
-        f"Environment={shlex.quote(f'{name}={value}')}\n".replace("%", "%%")
+        f"Environment={systemd_quote(f'{name}={value}', '$')}\n"
         for name, value in service_environment(command[0]).items()
     )
+    directory = str(directory).replace("%", "%%")
     return (
         "[Unit]\n"
         "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
@@ -670,7 +795,8 @@ def systemd_unit(command: list, directory: Path) -> str:
         f"ExecStart={run}\n"
         f"WorkingDirectory={directory}\n"
         f"{environment}"
-        "Restart=on-failure\n\n"
+        "Restart=on-failure\n"
+        "RestartSec=5\n\n"
         "[Install]\n"
         "WantedBy=default.target\n"
     )
@@ -688,13 +814,19 @@ def launchd_plist(command: list, directory: Path) -> bytes:
     })
 
 
-def service_manager(*args, check=True):
-    """Run systemctl --user, or launchctl on macOS, with *args*."""
-    manager = (["launchctl"] if sys.platform == "darwin"
+def manager() -> list:
+    """Return the command of the service manager, systemctl --user, or
+    launchctl on macOS; stop, telling why, if this machine lacks it."""
+    command = (["launchctl"] if sys.platform == "darwin"
                else ["systemctl", "--user"])
-    if shutil.which(manager[0]) is None:
-        sys.exit(f"--daemon needs {manager[0]}, which this machine lacks")
-    subprocess.run([*manager, *args], check=check)
+    if shutil.which(command[0]) is None:
+        sys.exit(f"--daemon needs {command[0]}, which this machine lacks")
+    return command
+
+
+def service_manager(*args, check=True):
+    """Run the service manager with *args*."""
+    subprocess.run([*manager(), *args], check=check)
 
 
 # What the service imports, by mode, and the extras of the workspace that
@@ -722,23 +854,37 @@ def check_service_python(command: list, local: bool) -> None:
         )
 
 
-def install_service(args) -> None:
-    """Install the service serving as *args* say, start it and enable it
-    at login."""
-    path, command = service_file(), service_command(args)
-    check_service_python(command, args.local)
+def install_service(command: list) -> None:
+    """Install the service running *command*, start it and enable it at
+    login; if the service manager fails, remove it and stop, telling so."""
+    path = service_file()
     path.parent.mkdir(parents=True, exist_ok=True)
-    if sys.platform == "darwin":
-        path.write_bytes(launchd_plist(command, Path.cwd()))
-        service_manager("bootstrap", f"gui/{os.getuid()}", str(path))
-        where = f"its log is {Path.home() / 'Library/Logs' / SERVICE}.log"
-    else:
-        path.write_text(systemd_unit(command, Path.cwd()))
-        service_manager("daemon-reload")
-        service_manager("enable", "--now", SERVICE)
-        where = (f"journalctl --user -u {SERVICE} shows its log; it stops "
-                 "at logout unless: loginctl enable-linger "
-                 f"{getpass.getuser()}")
+    try:
+        if sys.platform == "darwin":
+            path.write_bytes(launchd_plist(command, Path.cwd()))
+            # The bootout of a reinstall ends after it returns: until then
+            # the bootstrap fails (error 5).
+            for attempt in range(10):
+                try:
+                    service_manager("bootstrap", f"gui/{os.getuid()}",
+                                    str(path))
+                    break
+                except subprocess.CalledProcessError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.5)
+            where = f"its log is {Path.home() / 'Library/Logs' / SERVICE}.log"
+        else:
+            path.write_text(systemd_unit(command, Path.cwd()))
+            service_manager("daemon-reload")
+            service_manager("enable", "--now", SERVICE)
+            where = (f"journalctl --user -u {SERVICE} shows its log; it "
+                     "stops at logout unless: loginctl enable-linger "
+                     f"{getpass.getuser()}")
+    except subprocess.CalledProcessError as error:
+        remove_service()
+        sys.exit(f"{shlex.join(error.cmd)} failed (exit status "
+                 f"{error.returncode}): the service is not installed")
     print(f"Installed {path}, running {command[0]}: the REPL serves at "
           f"login; {where}", flush=True)
 
@@ -756,7 +902,7 @@ def remove_service() -> None:
     else:
         service_manager("disable", "--now", SERVICE, check=False)
         path.unlink()
-        service_manager("daemon-reload")
+        service_manager("daemon-reload", check=False)
     print(f"Removed {path}", flush=True)
 
 
@@ -768,7 +914,14 @@ def parse_args(argv=None):
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument(
         "--host", default="127.0.0.1",
-        help="0.0.0.0 to serve the other machines of the network too",
+        help="0.0.0.0 to serve the other machines of the network too (with "
+        "--password-file or --server-name)",
+    )
+    parser.add_argument(
+        "--server-name", action="append", dest="server_names", metavar="NAME",
+        help="without --password-file, a name of this machine that the "
+        "server answers to, besides localhost and --host (repeat for "
+        "several): those of the network need it",
     )
     parser.add_argument("--site", type=Path, default=DEFAULT_SITE)
     parser.add_argument("--rebuild", action="store_true",
@@ -800,12 +953,14 @@ def parse_args(argv=None):
     parser.add_argument(
         "--key-password-file", type=Path, metavar="FILE",
         help="the passphrase of the key of --cert, on the first line of FILE "
-        "(else asked in a terminal; a service needs the file)",
+        "as it is but for its line ending (else asked in a terminal; a "
+        "service needs the file)",
     )
     parser.add_argument(
         "--password-file", type=Path, metavar="FILE",
-        help="ask every visitor the password on the first line of FILE "
-        "(HTTP Basic, any user name); with --cert unless on this machine",
+        help="ask every visitor the password on the first line of FILE, "
+        "as it is but for its line ending (HTTP Basic, any user name); "
+        "with --cert unless on this machine",
     )
     parser.add_argument(
         "--env-file", type=Path, metavar="FILE",
@@ -815,7 +970,7 @@ def parse_args(argv=None):
         "use unless their page gives one",
     )
     parser.add_argument(
-        "--python", type=Path, metavar="PATH",
+        "--python", metavar="PATH",
         help="with --daemon, the Python the service runs (default: that of "
         "the environment installing it)",
     )
@@ -880,23 +1035,27 @@ def parse_args(argv=None):
 
 
 def daemon(args) -> None:
-    """Install, reinstall or remove the service, as *args* say; the bundle
-    of the page in the browser is built now, its errors told here."""
+    """Install or reinstall the service, as *args* say; the bundle of the
+    page in the browser is built now, its errors told here, and the
+    service installed before is removed only once all is ready."""
     if args.daemon == "install" and service_file().exists():
         sys.exit(f"A service of the REPL is installed ({service_file()}): "
                  "--daemon reinstall replaces it")
-    if args.daemon != "install":
-        remove_service()
-    if args.daemon == "remove":
-        return
+    manager()
+    command = service_command(args)
+    check_service_python(command, args.local)
     if not (args.local or args.pr is not None or args.run_id is not None):
         prepare_site(args.site, args.rebuild, args.embeddings,
                      clear=args.clear, engines=args.engines)
-    install_service(args)
+    if args.daemon == "reinstall":
+        remove_service()
+    install_service(command)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
+    if args.daemon == "remove":  # whatever the other options
+        return remove_service()
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
     tls = tls_context(args.cert, args.key, args.key_password_file,
@@ -930,7 +1089,7 @@ def main(argv=None) -> None:
         )
     write_index(args.site, page)
     server = make_server(args.site, args.host, args.port, backend, tls,
-                         password)
+                         password, args.server_names or ())
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"

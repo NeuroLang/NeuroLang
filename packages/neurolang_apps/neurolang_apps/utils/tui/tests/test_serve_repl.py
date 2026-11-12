@@ -9,10 +9,13 @@ import socket
 import ssl
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -384,6 +387,7 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
             _post(port, "submit", {"text": "boom"})
         assert error.value.code == 500
         assert json.load(error.value) == {"error": "ValueError: it broke"}
+        error.value.close()
         with _post(port, "download", {"block": 0, "kind": "csv"}) as response:
             assert response.read() == b"a,b\n"
             assert response.headers["Content-Type"] == "text/csv"
@@ -555,8 +559,8 @@ def test_the_service_has_the_path_and_the_virtual_environment(
     monkeypatch.setenv("PATH", "/opt/gh/bin:/usr/bin")
     python = str(venv / "bin" / "python")
     unit = serve.systemd_unit([python, "-m", "serve_repl"], tmp_path)
-    assert "Environment=PATH=/opt/gh/bin:/usr/bin\n" in unit
-    assert f"Environment=VIRTUAL_ENV={venv}\n" in unit
+    assert 'Environment="PATH=/opt/gh/bin:/usr/bin"\n' in unit
+    assert f'Environment="VIRTUAL_ENV={venv}"\n' in unit
     agent = plistlib.loads(serve.launchd_plist([python], tmp_path))
     assert agent["EnvironmentVariables"] == {
         "PATH": "/opt/gh/bin:/usr/bin", "VIRTUAL_ENV": str(venv),
@@ -573,9 +577,25 @@ def test_the_service_builds_nothing_again(serve, tmp_path):
 def test_the_systemd_unit_runs_the_command(serve, tmp_path):
     unit = serve.systemd_unit(["/py", "-m", "serve_repl", "--site",
                                "/a b/100%"], tmp_path)
-    assert "ExecStart=/py -m serve_repl --site '/a b/100%%'\n" in unit
+    assert 'ExecStart="/py" "-m" "serve_repl" "--site" "/a b/100%%"\n' in unit
     assert f"WorkingDirectory={tmp_path}\n" in unit
     assert "WantedBy=default.target" in unit
+    # Restarted after a failure, not as fast as systemd stops restarting.
+    assert "Restart=on-failure\nRestartSec=5\n" in unit
+
+
+def test_the_systemd_unit_runs_any_path_as_it_is(serve, tmp_path, monkeypatch):
+    """systemd expands $ and % and unescapes \\ in ExecStart, reads quotes
+    only around a whole word, and expands % in WorkingDirectory."""
+    monkeypatch.setenv("PATH", "/it's/$bin")
+    unit = serve.systemd_unit(
+        ["/it's/py", "-m", "serve_repl", "--site", 'a "$HOME" \\n %i'],
+        tmp_path / "50%",
+    )
+    assert ('ExecStart="/it\'s/py" "-m" "serve_repl" "--site" '
+            '"a \\"$$HOME\\" \\\\n %%i"\n') in unit
+    assert f"WorkingDirectory={tmp_path}/50%%\n" in unit
+    assert 'Environment="PATH=/it\'s/$bin"\n' in unit
 
 
 def test_the_launchd_agent_runs_the_command(serve, tmp_path):
@@ -585,50 +605,128 @@ def test_the_launchd_agent_runs_the_command(serve, tmp_path):
     assert agent["RunAtLoad"] and agent["WorkingDirectory"] == str(tmp_path)
 
 
-@pytest.mark.parametrize("platform", ["linux", "darwin"])
-def test_the_service_is_installed_reinstalled_and_removed(
-    serve, tmp_path, monkeypatch, platform
-):
+@pytest.fixture(params=["linux", "darwin"])
+def manager(serve, tmp_path, monkeypatch, request):
+    """The service manager of a platform, in a HOME of the test, recording
+    the verbs it runs (``managed``), the checks of the service's Python
+    (``checked``, failing if ``python``) and the builds (``built``); the
+    verbs of ``fails`` fail as many times as they say."""
+    state = SimpleNamespace(
+        platform=request.param, managed=[], checked=[], built=[], fails={},
+        python=0, slept=[],
+    )
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(serve.sys, "platform", platform)
+    monkeypatch.setattr(serve.sys, "platform", request.param)
     monkeypatch.setattr(serve.shutil, "which", lambda name: name)
-    managed, checked = [], []
+    monkeypatch.setattr(serve.time, "sleep", state.slept.append)
 
     def run(command, check=True, **kwargs):
         if command[1] == "-c":  # the check of the service's Python
-            checked.append(command[2])
-            return subprocess.CompletedProcess(command, 0, "", "")
-        managed.append(command[1:])
+            state.checked.append(command[2])
+            return subprocess.CompletedProcess(
+                command, state.python, "", "ModuleNotFoundError: no rich")
+        verb = command[2] if command[1] == "--user" else command[1]
+        state.managed.append(verb)
+        if state.fails.get(verb) and check:
+            state.fails[verb] -= 1
+            raise subprocess.CalledProcessError(5, command)
 
     monkeypatch.setattr(serve.subprocess, "run", run)
-    built = []
     monkeypatch.setattr(serve, "prepare_site",
-                        lambda *args, **kwargs: built.append(args))
+                        lambda *args, **kwargs: state.built.append(args))
     monkeypatch.setattr(serve, "tls_context", lambda *args, **kw: object())
+    return state
+
+
+def test_the_service_is_installed_reinstalled_and_removed(
+    serve, tmp_path, manager
+):
     path = serve.service_file()
     assert str(path).startswith(str(tmp_path))
 
     serve.main(["--daemon", "install", "--site", str(tmp_path / "site"),
                 "--cert", "cert.pem"])
-    assert path.is_file() and len(built) == 1
+    assert path.is_file() and len(manager.built) == 1
     assert "--cert" in path.read_bytes().decode()
     with pytest.raises(SystemExit, match="reinstall"):
         serve.main(["--daemon", "install"])
     serve.main(["--daemon", "reinstall", "--site", str(tmp_path / "site")])
-    assert path.is_file() and len(built) == 2
+    assert path.is_file() and len(manager.built) == 2
     assert "--cert" not in path.read_bytes().decode()
     serve.main(["--daemon", "remove"])
     assert not path.exists()
     serve.main(["--daemon", "remove"])  # nothing installed: nothing done
-    assert checked == ["import serve_repl"] * 2
-    verbs = [command[1] if command[0] == "--user" else command[0]
-             for command in managed]
-    if platform == "linux":
-        assert verbs == ["daemon-reload", "enable", "disable",
-                         "daemon-reload", "daemon-reload", "enable",
-                         "disable", "daemon-reload"]
+    assert manager.checked == ["import serve_repl"] * 2
+    if manager.platform == "linux":
+        assert manager.managed == [
+            "daemon-reload", "enable", "disable", "daemon-reload",
+            "daemon-reload", "enable", "disable", "daemon-reload"]
     else:
-        assert verbs == ["bootstrap", "bootout", "bootstrap", "bootout"]
+        assert manager.managed == [
+            "bootstrap", "bootout", "bootstrap", "bootout"]
+
+
+def test_a_reinstall_that_cannot_serve_keeps_the_service_installed(
+    serve, tmp_path, manager, monkeypatch
+):
+    serve.main(["--daemon", "install", "--site", str(tmp_path / "site")])
+    path, managed = serve.service_file(), list(manager.managed)
+    installed = path.read_bytes()
+    manager.python = 1  # the Python of the service cannot serve
+    with pytest.raises(SystemExit, match="cannot serve"):
+        serve.main(["--daemon", "reinstall", "--local"])
+    manager.python = 0
+
+    def fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, ["make_repl_bundle.py"])
+
+    monkeypatch.setattr(serve, "prepare_site", fail)  # the build fails
+    with pytest.raises(subprocess.CalledProcessError):
+        serve.main(["--daemon", "reinstall", "--site", str(tmp_path / "s")])
+    assert path.read_bytes() == installed
+    assert manager.managed == managed  # not stopped
+
+
+def test_a_failing_service_manager_leaves_no_service(serve, manager):
+    manager.fails = {"bootstrap": 99, "enable": 99}
+    with pytest.raises(SystemExit, match="failed .*not installed"):
+        serve.main(["--daemon", "install", "--local"])
+    assert not serve.service_file().exists()
+    if manager.platform == "linux":
+        assert manager.managed == [
+            "daemon-reload", "enable", "disable", "daemon-reload"]
+    else:  # tried for 5 seconds
+        assert manager.managed == ["bootstrap"] * 10 + ["bootout"]
+        assert sum(manager.slept) == pytest.approx(4.5)
+    manager.fails = {}
+    serve.main(["--daemon", "install", "--local"])  # it can be installed
+
+
+def test_a_bootstrap_waits_for_the_bootout_of_a_reinstall(serve, manager):
+    manager.fails = {"bootstrap": 2}
+    serve.main(["--daemon", "install", "--local"])
+    assert serve.service_file().is_file()
+    if manager.platform == "darwin":
+        assert manager.managed == ["bootstrap"] * 3
+        assert manager.slept == [0.5, 0.5]
+
+
+def test_a_machine_without_service_manager_is_told_before_anything(
+    serve, manager, monkeypatch
+):
+    monkeypatch.setattr(serve.shutil, "which", lambda name: None)
+    with pytest.raises(SystemExit, match="this machine lacks"):
+        serve.main(["--daemon", "install", "--local"])
+    assert not serve.service_file().exists()
+    assert manager.checked == manager.managed == []
+
+
+def test_remove_needs_no_other_option(serve, manager, monkeypatch, tmp_path):
+    serve.main(["--daemon", "install", "--local"])
+    monkeypatch.setattr(serve, "tls_context", pytest.fail)
+    serve.main(["--daemon", "remove", "--cert", "none.pem",
+                "--password-file", str(tmp_path / "none")])
+    assert not serve.service_file().exists()
 
 
 def test_a_service_python_lacking_the_extras_is_told(
@@ -660,6 +758,7 @@ def _status(port, path, headers=None, method="GET", body=None):
                 response.read()
             return response.status
     except urllib.error.HTTPError as error:
+        error.close()
         return error.code
 
 
@@ -749,3 +848,179 @@ def test_the_secrets_stay_in_their_files(serve, tmp_path, monkeypatch):
     assert after["--env-file"] == str(tmp_path / "env")
     unit = serve.systemd_unit(command, tmp_path)
     assert "s3cret" not in unit and "k-1" not in unit
+
+
+@contextmanager
+def _serving(server):
+    """The port of *server*, serving in a thread until the end."""
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _raw(port, request: bytes) -> tuple:
+    """Send *request* as it is; return the status and the body answered."""
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as sock:
+        sock.sendall(request)
+        answer = b""
+        while chunk := sock.recv(65536):
+            answer += chunk
+    head, _, body = answer.partition(b"\r\n\r\n")
+    return int(head.split()[1]), body
+
+
+def test_a_silent_connection_is_closed(serve, tmp_path, monkeypatch):
+    monkeypatch.setattr(serve.Handler, "timeout", 0.5)
+    with _serving(serve.make_server(tmp_path, "127.0.0.1", 0)) as port:
+        with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+            assert s.recv(1) == b""  # closed by the server
+
+
+def test_a_silent_or_plain_http_client_of_https_is_closed_and_logged(
+    serve, tmp_path, certificate, monkeypatch, capsys
+):
+    monkeypatch.setattr(serve.Handler, "timeout", 0.5)
+    tls = serve.tls_context(*certificate)
+    with _serving(serve.make_server(tmp_path, "127.0.0.1", 0, tls=tls)) \
+            as port:
+        with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+            assert s.recv(1) == b""  # its handshake timed out
+        with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+            s.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+            with pytest.raises(ConnectionError):
+                s.recv(1024)
+        time.sleep(0.2)
+    err = capsys.readouterr().err
+    assert "SSLError" in err and "Traceback" not in err
+
+
+def test_the_stream_of_events_outlives_the_timeout(
+    serve, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(serve.Handler, "timeout", 0.3)
+    monkeypatch.setattr(serve.LocalHandler, "KEEPALIVE_SECONDS", 0.1)
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, _FakeBackend())
+    with _serving(server) as port:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/events", timeout=10
+        ) as events:
+            start = time.monotonic()
+            while time.monotonic() - start < 1.0:
+                assert events.readline() in (b": alive\n", b"\n")
+
+
+@pytest.mark.parametrize("headers, body, status, error", [
+    ("Content-Length: abc", b"", 400, "is not a length"),
+    ("Content-Length: -1", b"", 400, "is not a length"),
+    ("Content-Length: 2000000", b"", 413, "over 1048576 bytes"),
+    ("Content-Length: 10", b"{}", 400, "shorter than its Content-Length"),
+    ("Content-Length: 3", b"[1]", 400, "not a JSON object"),
+    ("Content-Length: 4", b"{bad", 400, "Expecting property name"),
+    ("Transfer-Encoding: chunked", b"0\r\n\r\n", 400, "Content-Length"),
+])
+def test_a_body_that_is_not_a_json_object_is_refused(
+    serve, tmp_path, monkeypatch, capsys, headers, body, status, error
+):
+    monkeypatch.setattr(serve.Handler, "timeout", 0.5)
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, _FakeBackend())
+    with _serving(server) as port:
+        answered, text = _raw(port, (
+            "POST /api/submit HTTP/1.1\r\nHost: localhost\r\n"
+            f"Connection: close\r\n{headers}\r\n\r\n"
+        ).encode() + body)
+        assert answered == status
+        assert error in json.loads(text)["error"]
+        # A request without a body has an empty one.
+        assert _raw(port, b"POST /api/stop HTTP/1.0\r\nHost: localhost\r\n"
+                    b"\r\n") == (200, b'{"stopped": false}')
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_without_password_only_the_names_of_the_server_are_answered(
+    serve, tmp_path
+):
+    """A page of another site, whose name it made lead to 127.0.0.1 (DNS
+    rebinding), sends its own name as the host."""
+    (tmp_path / "bundle.json").write_text("{}")
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, _FakeBackend(),
+                               names=["Repl.Lab.org"])
+    with _serving(server) as port:
+        for host in ("localhost", f"localhost:{port}", f"127.0.0.1:{port}",
+                     f"[::1]:{port}", "repl.lab.org"):
+            assert _raw(port, f"GET /bundle.json HTTP/1.0\r\nHost: {host}"
+                        "\r\n\r\n".encode())[0] == 200, host
+        for host in ("evil.example", "evil.example:80", "[::1", ""):
+            status, body = _raw(port, (
+                "POST /api/submit HTTP/1.0\r\nContent-Length: 2\r\n"
+                f"Host: {host}\r\n\r\n{{}}").encode())
+            assert status == 403, host
+        assert b"--server-name evil.example" in _raw(
+            port, b"GET / HTTP/1.0\r\nHost: evil.example\r\n\r\n")[1]
+        assert _raw(port, b"GET /bundle.json HTTP/1.0\r\n\r\n")[0] == 403
+    # With a password, the host is not looked at.
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, password="pw")
+    with _serving(server) as port:
+        token = base64.b64encode(b"a:pw").decode()
+        assert _raw(port, (
+            "GET /bundle.json HTTP/1.0\r\nHost: evil.example\r\n"
+            f"Authorization: Basic {token}\r\n\r\n").encode())[0] == 200
+
+
+def test_the_service_answers_the_server_names(serve, tmp_path):
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--host", "0.0.0.0", "--server-name", "a.org",
+        "--server-name", "b.org",
+    ))
+    assert " ".join(command).count("--server-name") == 2
+    assert command[command.index("--server-name") + 1] == "a.org"
+
+
+def test_a_passphrase_with_spaces_is_kept_as_it_is(
+    serve, tmp_path, certificate
+):
+    cert, key = certificate
+    locked = _locked(key, tmp_path / "locked.pem", " sec ret ")
+    secret = tmp_path / "passphrase"
+    secret.write_text(" sec ret \r\nnext line\n")
+    assert serve.read_password(secret) == " sec ret "
+    assert serve.tls_context(cert, locked, secret)
+
+
+def test_a_missing_file_is_told(serve, tmp_path, certificate):
+    missing = tmp_path / "none"
+    with pytest.raises(SystemExit, match="none cannot be read: No such file"):
+        serve.read_password(missing)
+    with pytest.raises(SystemExit, match="none cannot be read"):
+        serve.read_env_file(missing)
+    cert, key = certificate
+    with pytest.raises(SystemExit, match="none cannot be read"):
+        serve.tls_context(cert, _locked(key, tmp_path / "locked.pem"),
+                          missing)
+
+
+def test_a_comment_after_a_value_is_left_out(serve, tmp_path):
+    env = tmp_path / "env"
+    env.write_text("A=1 # the first\nB='x # y' # z\nC=a#b\nD=\"q\"\n")
+    assert serve.read_env_file(env) == {
+        "A": "1", "B": "x # y", "C": "a#b", "D": "q",
+    }
+
+
+def test_the_python_of_the_service_may_be_a_name_in_the_path(
+    serve, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(serve.shutil, "which", lambda name: f"/opt/{name}")
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--daemon", "install", "--python", "python3"))
+    assert command[0] == "/opt/python3"
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--daemon", "install", "--python", "./bin/py"))
+    assert command[0] == str(tmp_path / "bin" / "py")
+    monkeypatch.setattr(serve.shutil, "which", lambda name: None)
+    with pytest.raises(SystemExit, match="python3: no such program"):
+        serve.service_command(_daemon_args(
+            serve, tmp_path, "--daemon", "install", "--python", "python3"))

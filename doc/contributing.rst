@@ -130,7 +130,8 @@ the ``neurosynth`` engine, a few minutes) in
 bundle built before and then builds it from nothing (the text embeddings
 below are kept).  The page opens at
 ``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
-from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
+from its CDN.  ``--host 0.0.0.0 --server-name NAME`` serves the other
+machines of the network, which reach it by NAME (see below),
 ``--port`` changes the port, ``--no-browser`` does not open the page, and
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
@@ -158,13 +159,26 @@ key is given in the page.  The server answers this machine only, unless
 ``--host``: whoever it answers runs queries, and saves files, with its
 Python.
 
+Without a password (below), the server answers only the requests sent to
+``localhost``, ``127.0.0.1``, ``::1``, the ``--host`` it is given (unless
+``0.0.0.0`` or ``::``), and the names of ``--server-name NAME`` (repeat it
+for several): a page of another site whose name it made lead to your
+machine (DNS rebinding) would otherwise run queries in its Python.  The
+other machines of the network need ``--server-name`` with the name, or the
+address, by which they reach it, e.g. ``--host 0.0.0.0 --server-name
+repl.lab.org``; the server's answer to another name says so.  With a
+password, any name is answered.  A connection that says nothing for a
+minute (its TLS handshake, its request) is closed, and the body of a
+request to ``/api/`` is a JSON object of 1 MB at most.
+
 To serve it over HTTPS, give a certificate and its private key, PEM files
 (the key may be in the certificate's file)::
 
-   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --server-name repl.lab.org --cert cert.pem --key key.pem
 
 A key with a passphrase is opened with the first line of
-``--key-password-file FILE`` (readable by you only), else the passphrase is
+``--key-password-file FILE`` (readable by you only; the line as it is, but
+for its line ending), else the passphrase is
 asked in the terminal; a service needs the file.  If they cannot serve, the
 server says why: the certificate's file has no key, the key is not that of
 the certificate, or the passphrase is not that one.  A PEM file is text,
@@ -175,7 +189,8 @@ them, and ``openssl x509 -inform DER -in cert.der -out cert.pem`` converts a
 binary (DER) one.
 
 To have it ask a password, put one on the first line of a file (readable by
-you only: ``chmod 600``) and give ``--password-file FILE``: the browser asks
+you only: ``chmod 600``; the line as it is, spaces included, but for its
+line ending) and give ``--password-file FILE``: the browser asks
 for it (any user name will do) before the site's first file, and the
 server answers no request without it.  Over the network it needs
 ``--cert``, as the password goes with each request.  With ``--local``,
@@ -190,8 +205,11 @@ REPL.
 
 To keep it serving, as a service of your user started now and at each login,
 add ``--daemon install`` to the options it serves with; ``--daemon
-reinstall`` replaces it with the new options, and ``--daemon remove`` stops
-and removes it::
+reinstall`` replaces it with the new options (once their bundle is built
+and the service's Python can serve, so that a failure leaves the service
+as it was), and ``--daemon remove``, with no other option, stops and
+removes it; if systemd or launchd fails to start it, it is removed and the
+error told::
 
    uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --password-file password --env-file llm.env
 
