@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* The documentation starts from the REPL: a page on the REPL, in the browser
+  and in a terminal (:doc:`repl`), a Quick Start and a Get Started whose
+  examples are queries of the ``neurosynth`` engine, and, under each example
+  of a page, a link that opens the REPL in the browser with it in its box
+  (``.. nl-repl::``). The examples are coloured as the REPL colours them.
+
 * ``.view`` of a result with a value on the regions of an atlas (``ans(l,
   p) :- PROB[...]``) starts at the top 5% of its values, as a result of voxels
   does; regions alone, networks and streamlines start with all of them.
