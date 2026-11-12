@@ -747,7 +747,8 @@ def _basic(password, user="anyone"):
 
 def _status(port, path, headers=None, method="GET", body=None):
     request = urllib.request.Request(
-        f"http://127.0.0.1:{port}{path}", method=method, headers=headers or {},
+        f"http://127.0.0.1:{port}{path}", method=method,
+        headers={"Content-Type": "application/json", **(headers or {})},
         data=None if body is None else json.dumps(body).encode(),
     )
     try:
@@ -933,13 +934,15 @@ def test_a_body_that_is_not_a_json_object_is_refused(
     with _serving(server) as port:
         answered, text = _raw(port, (
             "POST /api/submit HTTP/1.1\r\nHost: localhost\r\n"
+            "Content-Type: application/json\r\n"
             f"Connection: close\r\n{headers}\r\n\r\n"
         ).encode() + body)
         assert answered == status
         assert error in json.loads(text)["error"]
         # A request without a body has an empty one.
         assert _raw(port, b"POST /api/stop HTTP/1.0\r\nHost: localhost\r\n"
-                    b"\r\n") == (200, b'{"stopped": false}')
+                    b"Content-Type: application/json\r\n\r\n"
+                    ) == (200, b'{"stopped": false}')
     assert "Traceback" not in capsys.readouterr().err
 
 
@@ -1028,3 +1031,42 @@ def test_the_python_of_the_service_may_be_a_name_in_the_path(
     with pytest.raises(SystemExit, match="python3: no such program"):
         serve.service_command(_daemon_args(
             serve, tmp_path, "--daemon", "install", "--python", "python3"))
+
+
+@pytest.mark.parametrize("password", [None, "pw"])
+def test_a_post_of_another_site_is_refused(serve, tmp_path, password):
+    """A form of another site can POST text/plain whose body is JSON; a
+    script of another site sends its Origin."""
+    backend = _FakeBackend()
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, backend,
+                               password=password)
+    login = _basic(password) if password else {}
+    form = b'{"text":"evil","x":"="}'
+    with _serving(server) as port:
+        page = f"http://127.0.0.1:{port}"
+        for headers in (
+            {"Content-Type": "text/plain"},
+            {"Content-Type": "application/x-www-form-urlencoded"},
+            {"Content-Type": "multipart/form-data; boundary=x"},
+            {"Origin": "https://evil.example"},
+            {"Origin": "null"},
+        ):
+            request = urllib.request.Request(
+                f"{page}/api/submit", data=form, method="POST",
+                headers={"Content-Type": "application/json", **login,
+                         **headers},
+            )
+            with pytest.raises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(request, timeout=10)
+            error.value.close()
+            assert error.value.code == 403, headers
+        assert backend.asked == []
+        # The page's own requests: JSON, from its origin or none said.
+        for origin in ({}, {"Origin": page}):
+            request = urllib.request.Request(
+                f"{page}/api/submit", data=b'{"text":"ok"}', method="POST",
+                headers={"Content-Type": "application/json; charset=utf-8",
+                         **login, **origin},
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                assert json.load(response)["html"] == "ok"

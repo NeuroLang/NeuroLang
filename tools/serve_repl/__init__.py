@@ -106,7 +106,9 @@ system, which this does not install.
 
 A connection that says nothing for a minute (its TLS handshake, its request)
 is closed, and the body of a request to ``/api/`` is a JSON object of 1 MB at
-most.
+most. A POST is answered only if it is the page's: in JSON
+(``Content-Type: application/json``, which a form of another site cannot
+send), and from this site if the browser gives its ``Origin``.
 """
 
 import argparse
@@ -375,7 +377,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def parse_request(self):
         """Read the request, and answer 401 to one without the password,
         or, if there is none, 403 to one sent to a host not of
-        ``names``: then it goes no further, whatever its method."""
+        ``names``, and 403 to a POST not of this site's page: then it goes
+        no further, whatever its method."""
         if not super().parse_request():
             return False
         if self.password is None:
@@ -384,22 +387,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     "//" + (self.headers.get("Host") or "")).hostname
             except ValueError:  # an IPv6 address without its ]
                 host = None
-            if host in self.names:
-                return True
-            self.send_error(403, "Unknown host", (
-                f"This server does not answer to {host}: if it is its name, "
-                f"serve it with --server-name {host}, or with a password"
-            ))
+            if host not in self.names:
+                self.send_error(403, "Unknown host", (
+                    f"This server does not answer to {host}: if it is its "
+                    f"name, serve it with --server-name {host}, or with a "
+                    "password"
+                ))
+                return False
+        elif not self._authorised():
+            self.send_response(401)
+            self.send_header(
+                "WWW-Authenticate",
+                'Basic realm="NeuroLang REPL", charset="UTF-8"'
+            )
+            self.send_header("Content-Length", "0")
+            self.end_headers()
             return False
-        if self._authorised():
-            return True
-        self.send_response(401)
-        self.send_header(
-            "WWW-Authenticate", 'Basic realm="NeuroLang REPL", charset="UTF-8"'
-        )
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-        return False
+        if self.command == "POST" and not self._same_site():
+            self.send_error(403, "A request of this site's page only")
+            return False
+        return True
+
+    def _same_site(self) -> bool:
+        """Whether a POST comes from this site's page: in JSON, which
+        another site's form cannot send without asking first, and from
+        this site, if the browser says where from. The browser would
+        otherwise add the login to a form another site sends here."""
+        if self.headers.get_content_type() != "application/json":
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or \
+            urllib.parse.urlsplit(origin).netloc == self.headers.get("Host")
 
     def _authorised(self) -> bool:
         scheme, _, encoded = (

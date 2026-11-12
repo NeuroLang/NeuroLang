@@ -167,9 +167,13 @@ machine (DNS rebinding) would otherwise run queries in its Python.  The
 other machines of the network need ``--server-name`` with the name, or the
 address, by which they reach it, e.g. ``--host 0.0.0.0 --server-name
 repl.lab.org``; the server's answer to another name says so.  With a
-password, any name is answered.  A connection that says nothing for a
-minute (its TLS handshake, its request) is closed, and the body of a
-request to ``/api/`` is a JSON object of 1 MB at most.
+password, any name is answered.  With a password or without, a POST is
+answered only if it is the page's: in JSON (``Content-Type:
+application/json``, which a form of another site cannot send), and from
+this site if the browser gives its ``Origin``; otherwise any site you visit
+could run queries here.  A connection that says nothing for a minute (its
+TLS handshake, its request) is closed, and the body of a request to
+``/api/`` is a JSON object of 1 MB at most.
 
 To serve it over HTTPS, give a certificate and its private key, PEM files
 (the key may be in the certificate's file)::

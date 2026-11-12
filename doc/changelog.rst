@@ -167,9 +167,10 @@ Unreleased
   ``--local``, the server's key of the AI assistant, and the site's main
   page leads to the REPL.  Without a password, the server answers only the
   requests sent to this machine's names, ``--host`` and those of
-  ``--server-name NAME`` (against DNS rebinding); a silent connection is
-  closed after a minute, and a request's body is a JSON object of 1 MB at
-  most.
+  ``--server-name NAME`` (against DNS rebinding), and, with a password or
+  without, a POST only from the page of the site (in JSON, from its
+  ``Origin``); a silent connection is closed after a minute, and a
+  request's body is a JSON object of 1 MB at most.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are
