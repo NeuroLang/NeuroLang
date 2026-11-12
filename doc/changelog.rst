@@ -175,7 +175,8 @@ Unreleased
   (scrypt hashes, ``--hash-password``); with ``--local`` each tab of a user
   has a session in a process of its own, forked from a builder that builds
   each engine once, with the variables (the AI assistant's key) the file
-  gives the user (``--max-sessions``, ``--idle-minutes``).  The feedback
+  gives the user (``--max-sessions``, ``--idle-minutes``); a duplicated
+  tab has a session of its own.  The feedback
   server's SQLite database is in WAL mode, for the writes of concurrent
   sessions.
 * ``.graph`` draws where the answer of the last query comes from, and how:

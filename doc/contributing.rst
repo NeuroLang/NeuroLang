@@ -222,11 +222,14 @@ user has a session of its own, in a process of its own: a builder process
 builds each engine once and forks a session's process from it, so that the
 sessions share the memory of the engine's data until they write it, and
 each has its own rules, AI assistant and queries, which run at the same
-time; a stop or a restart is that of the tab's session only.  A user's
+time; a stop or a restart is that of the tab's session only (a reload
+keeps it, a duplicated tab has a new one).  A user's
 ``env`` is put in the environment of their sessions only: the key of their
 assistant, over that of ``--env-file``, and a key their page gives over
-both.  At most ``--max-sessions`` (8) run at once, and a session unused for
-``--idle-minutes`` (120) ends (its page says to restart it).  The users can
+both.  At most ``--max-sessions`` (8, at least 1) run at once: a tab
+starting one more ends the idlest session of its user, or another's unused
+for a minute.  A session unused for ``--idle-minutes`` (120, above 0) ends
+(its page says to restart it).  The users can
 read what the server's account can, and their sessions share the data
 directory, where the files they save by a relative name may collide; give
 it to people you trust.  The feedback server, where the sessions' rated
