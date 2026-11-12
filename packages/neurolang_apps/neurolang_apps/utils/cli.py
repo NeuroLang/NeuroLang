@@ -951,6 +951,31 @@ _UNDEFINED_PREDICATE = re.compile(
 )
 
 
+# The symbol a warning or an error on an undefined predicate names.
+_UNDEFINED_SYMBOL = re.compile(r"Symbol (?:not found\s+)?(\w+)")
+
+
+def left_out_symbol(nl, message: str) -> str:
+    """
+    Return the predicate that the warning or error *message* does not
+    find, if the engine *nl* leaves it out (its ``left_out_predicates``,
+    set by the REPL in the browser), or "".
+    """
+    match = _UNDEFINED_SYMBOL.search(message)
+    name = match.group(1) if match else ""
+    return name if name in getattr(nl, "left_out_predicates", ()) else ""
+
+
+def not_available(name: str, command: str = "") -> str:
+    """Return that the predicate *name* is left out of the browser's
+    engine, and that the REPL of *command* has it."""
+    return (
+        f"{name} is not available in the browser, whose engine leaves out "
+        "the analyses that need gigabytes: run the REPL on your machine "
+        "for it" + (f" ({command})." if command else ".")
+    )
+
+
 def warning_note(message: str, known_symbols) -> str:
     """
     Return a one-line note for a warning *message* raised by a query.

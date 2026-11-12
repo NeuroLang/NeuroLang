@@ -17,9 +17,7 @@ central sulcus).
 
 .. note::
 
-   If you are already familiar with logic programming, see
-   :doc:`tutorial_logic_programming` for a more technical walkthrough, in
-   Python.
+   To write the same rules in Python, see :doc:`tutorial_python`.
 
 
 The whole idea of logic programming is to be able to make assertions of the style:

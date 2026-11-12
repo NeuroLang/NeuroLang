@@ -28,6 +28,8 @@ from neurolang.frontend.error_formatting import format_error
 from neurolang_apps.utils.cli import (
     _known_symbol_names,
     _show_squall_datalog,
+    left_out_symbol,
+    not_available,
     result_to_dataframe,
     squall_column_names,
     warning_note,
@@ -140,9 +142,10 @@ def _with_timeout(function, timeout):
 _UNDEFINED = re.compile(r"Symbol (\S+) used in rule body has no entry")
 
 
-def _undefined_predicates(caught, known, text: str) -> list:
+def _undefined_predicates(caught, known, text: str, nl=None) -> list:
     """
-    Return the notes of the *caught* warnings on undefined predicates.
+    Return the notes of the *caught* warnings on undefined predicates,
+    those the engine *nl* leaves out being not available.
 
     Only the predicates written in the query *text* are reported: those
     the engine generates while rewriting it (the magic sets'
@@ -155,8 +158,11 @@ def _undefined_predicates(caught, known, text: str) -> list:
         match = _UNDEFINED.match(message)
         if match and match.group(1).lower() not in written:
             continue
-        note = warning_note(message, known)
-        if "has no facts or rules" in note:
+        left_out = left_out_symbol(nl, message)
+        note = not_available(left_out) if left_out else warning_note(
+            message, known
+        )
+        if left_out or "has no facts or rules" in note:
             notes.append(note.removeprefix("note: "))
     return list(dict.fromkeys(notes))
 
@@ -252,6 +258,9 @@ def error_message(nl, exc: BaseException, text: str, language: str) -> str:
     """Return the error *exc* of the query *text* formatted as for users."""
     if isinstance(exc, QueryCheckError):
         return str(exc)
+    missing = left_out_symbol(nl, str(exc))
+    if missing:
+        return not_available(missing)
     return format_error(
         exc, text, language=LANGUAGE_NAMES[language],
         known_symbols=_known_symbol_names(nl), color=False,
@@ -284,7 +293,9 @@ def check_query(nl, text: str, language: str) -> CheckResult:
             _execute(nl, text, language, dry_run=True)
     except Exception as exc:
         return CheckResult(False, error_message(nl, exc, text, language))
-    problems = _undefined_predicates(caught, _known_symbol_names(nl), text)
+    problems = _undefined_predicates(
+        caught, _known_symbol_names(nl), text, nl
+    )
     datalog = ""
     if language == "squall":
         try:
