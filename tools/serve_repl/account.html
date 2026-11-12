@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroLang REPL: your account</title>
+<style>
+  /* The account page of a user of neurolang-repl-serve --users. */
+  :root { color-scheme: light dark; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
+  body { margin: 0 auto; max-width: 32rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
+  .note { color: var(--dim); font-size: .85rem; }
+  form { display: grid; gap: .6rem; }
+  label { display: grid; gap: .15rem; font-size: .85rem; }
+  input, button { font: inherit; padding: .35rem .5rem; }
+  button { justify-self: start; }
+  .error { color: var(--bad); } .ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<h1>Your account</h1>
+<p>Signed in as <strong id="name"></strong><span id="groups"></span>.</p>
+<p><a href="/">Back to the REPL</a><span id="admin" hidden> · <a href="/admin">Admin console</a></span> · <a href="/logout">Log out</a></p>
+
+<h2>Your AI assistant</h2>
+<p id="assistant"></p>
+<form id="llm">
+  <label>Provider <select name="provider"></select></label>
+  <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>API key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
+  <button>Save my assistant</button>
+  <button type="button" id="llm-remove">Remove mine</button>
+</form>
+<p class="note">Your key is kept on this server, for your sessions only, and never shown again. It replaces your group's; the key a page gives replaces it for that tab.</p>
+<p id="llm-message" role="status"></p>
+
+<h2>Change your password</h2>
+<form id="password">
+  <label>Current password <input name="current" type="password" autocomplete="current-password" required></label>
+  <label>New password <input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+  <label>New password, again <input name="again" type="password" autocomplete="new-password" minlength="8" required></label>
+  <button>Change it</button>
+</form>
+<p id="message" role="status"></p>
+<p class="note">You stay logged in here; your other browsers log in again. A forgotten password is reset by an admin.</p>
+
+<script>
+const $ = (id) => document.getElementById(id);
+function say(text, ok) {
+  $("message").textContent = text;
+  $("message").className = ok ? "ok" : "error";
+}
+const WHOSE = { own: "your own key", server: "the server's key", none: "no key: give yours in the page or below", unneeded: "no key needed" };
+function showMe() {
+  return fetch("/account/api/me").then((response) => response.json()).then((me) => {
+    $("name").textContent = me.name;
+    $("groups").textContent = me.groups.length ? `, in ${me.groups.join(", ")}` : "";
+    $("admin").hidden = !me.admin;
+    const a = me.assistant;
+    const whose = a.assistant === "group" ? `the key of your group ${a.group}` : WHOSE[a.assistant] ?? a.assistant;
+    $("assistant").textContent = `Your assistant answers with ${whose}${a.provider ? `: ${a.provider}` : ""}.`
+      + (a.own_key ? "" : " Your admin set it: you cannot give your own key.");
+    const select = $("llm").provider;
+    if (!select.options.length) select.replaceChildren(...me.providers.map((p) => new Option(p.label, p.id)));
+    for (const field of $("llm").elements) field.disabled = !a.own_key;
+  });
+}
+showMe();
+async function saveLlm(body, done) {
+  const response = await fetch("/account/api/llm", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const answer = await response.json().catch(() => ({ error: response.statusText }));
+  $("llm-message").textContent = response.ok ? done : answer.error;
+  $("llm-message").className = response.ok ? "ok" : "error";
+  if (response.ok) { $("llm").key.value = ""; showMe(); }
+}
+$("llm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  saveLlm({ provider: form.get("provider"), model: form.get("model").trim(), key: form.get("key") },
+    "Your assistant is saved: it answers in your open REPL pages at once.");
+});
+$("llm-remove").addEventListener("click", () => saveLlm({ remove: true }, "Your assistant is removed."));
+$("password").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  if (form.get("new") !== form.get("again")) return say("The new passwords differ.", false);
+  const response = await fetch("/account/api/password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current: form.get("current"), new: form.get("new") }),
+  });
+  const answer = await response.json().catch(() => ({ error: response.statusText }));
+  if (!response.ok) return say(answer.error, false);
+  event.target.reset();
+  say("Your password is changed.", true);
+});
+</script>
+</body>
+</html>

@@ -57,11 +57,11 @@ ANSWER_FIELDS = {
     "strategy": str, "language": str, "question": str, "query": str,
     "explanation": str, "steps": list, "rows": str, "valid": bool,
     "error": str, "seconds": float, "calls": int, "tokens": int,
-    "user": str,
+    "user": str, "groups": str,
 }
 FEEDBACK_FIELDS = {
     "user": str, "verdict": str, "comment": str, "corrected_query": str,
-    "corrected_query_checked": bool, "corrected_rows": str,
+    "corrected_query_checked": bool, "corrected_rows": str, "groups": str,
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS answers (
@@ -143,16 +143,26 @@ class FeedbackStore:
         with self._connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            # The groups of the user (neurolang-repl-serve --users), which
+            # a database made before them lacks.
+            for table in ("answers", "feedback"):
+                columns = {row["name"] for row in db.execute(
+                    f"PRAGMA table_info({table})")}
+                if "groups" not in columns:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN groups TEXT")
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=30)
         db.row_factory = sqlite3.Row
         return db
 
-    def add_answer(self, data: dict) -> str:
-        """Store the answer *data* and return its id."""
-        data = validate(data, ANSWER_FIELDS, ("question",))
+    def add_answer(self, data: dict, question: bool = True) -> str:
+        """Store the answer *data* and return its id; without *question*,
+        a query that the REPL's page rated, which has no question."""
+        data = validate(data, ANSWER_FIELDS,
+                        ("question",) if question else ("query",))
         row = {name: data.get(name) for name in ANSWER_FIELDS}
+        row["question"] = row["question"] or ""
         row["steps"] = json.dumps(row["steps"] or [])
         row.update(id=uuid.uuid4().hex, created=_now())
         with self._connect() as db:
@@ -216,8 +226,11 @@ def training_pair(record: dict):
     Return the question of *record* with its best query, or None.
 
     The best query is the latest corrected query that was checked on
-    the engine, else the answer's query if most ratings say correct.
+    the engine, else the answer's query if most ratings say correct. A
+    query rated without a question (in the REPL's page) has none.
     """
+    if not record.get("question"):
+        return None
     for rating in reversed(record["feedback"]):
         if rating["corrected_query"] and rating["corrected_query_checked"]:
             source, query = "corrected", rating["corrected_query"]

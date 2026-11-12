@@ -337,3 +337,107 @@ def test_a_process_late_to_connect_is_killed(sessions):
     finally:
         child.kill()
         child.wait()
+
+
+def test_a_restart_has_the_user_as_they_are_now(tmp_path, monkeypatch):
+    """A key changed by the admin reaches the user's next start."""
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    env = {"NEUROLANG_LLM_CONFIG": str(config)}
+    sessions = Sessions(tmp_path, build=build,
+                        identity=lambda user: (dict(env), "lab"))
+    try:
+        ann = sessions.session("ann", "1")
+        assert not ann.start("neurostore")["assistant"]
+        env["TEST_LLM_KEY"] = "k"
+        assert ann.start("neurostore")["assistant"]
+    finally:
+        sessions.close()
+
+
+def test_the_sessions_ratings_are_signed_by_their_user(tmp_path):
+    from neurolang_apps.utils.llm.feedback_server import FeedbackStore
+
+    db = tmp_path / "feedback.sqlite"
+    groups = {"ann": "admin", "bob": "lab"}
+    sessions = Sessions(tmp_path, build=build, feedback_db=db,
+                        identity=lambda user: ({}, groups[user]))
+    try:
+        for user in ("ann", "bob"):
+            session = sessions.session(user, "1")
+            assert session.start("neurostore")["ratingNote"]
+            session.submit("ans(x) :- person(x, a)")
+            assert session.rate(verdict="good")["ok"]
+    finally:
+        sessions.close()
+    signed = {(a["user"], a["groups"]) for a in FeedbackStore(db).answers()}
+    assert signed == {("ann", "admin"), ("bob", "lab")}
+
+
+def test_a_running_session_takes_its_users_new_assistant(
+    tmp_path, monkeypatch
+):
+    """A key saved on the account page, or by an admin, answers at once in
+    the user's open pages, which are told."""
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    config = tmp_path / "llm.yaml"  # a configuration without its key
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    env = {"NEUROLANG_LLM_CONFIG": str(config)}
+    sessions = Sessions(tmp_path, build=build,
+                        identity=lambda user: (dict(env), ""))
+    try:
+        bob = sessions.session("bob", "1")
+        listener = bob.listen()
+        assert not bob.start("neurostore")["assistant"]
+        env["NEUROLANG_REPL_LLM"] = (
+            '{"provider": "anthropic", "key": "k", "model": "m"}')
+        sessions.refresh()
+        deadline = time.monotonic() + 10
+        told = []
+        while time.monotonic() < deadline and not any(
+                '"assistant"' in m and '"ready": true' in m for m in told):
+            while not listener.empty():
+                told.append(listener.get())
+            time.sleep(0.05)
+        assert any('"ready": true' in m for m in told), told
+    finally:
+        sessions.close()
+
+
+def test_a_guests_session_has_no_key_of_the_server(tmp_path, monkeypatch):
+    """With the server's key in its environment, a user's session answers
+    with it, a guest's does not (the key is not even in its process)."""
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    monkeypatch.setenv("NEUROLANG_LLM_CONFIG", str(config))
+    monkeypatch.setenv("TEST_LLM_KEY", "the-servers")
+    guest = ({"TEST_LLM_KEY": None, "NEUROLANG_REPL_BRING_KEY": "1"},
+             "guest")
+    user = ({"TEST_LLM_KEY": "the-servers"}, "")  # given, as the server does
+    sessions = Sessions(tmp_path, build=build, withhold=["TEST_LLM_KEY"],
+                        identity=lambda name: (
+                            guest if name.startswith("guest:") else user))
+    try:
+        assert sessions.session("ann", "1").start("neurostore")["assistant"]
+        visitor = sessions.session("guest:ab12", "1")
+        ready = visitor.start("neurostore")
+        assert not ready["assistant"] and ready["ownKey"]
+        environ = subprocess.run(
+            ["ps", "eww", "-o", "command=", "-p", str(visitor.pid)],
+            capture_output=True, text=True).stdout
+        assert "the-servers" not in environ
+    finally:
+        sessions.close()

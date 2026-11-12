@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroLang REPL: log in</title>
+<style>
+  /* The login page of neurolang-repl-serve --users. */
+  :root { color-scheme: light dark; --bad: #cf222e; }
+  body { margin: 0 auto; max-width: 22rem; padding: 3rem 1rem; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+  form { display: grid; gap: .7rem; }
+  label { display: grid; gap: .2rem; font-size: .9rem; }
+  input, button { font: inherit; padding: .45rem .6rem; }
+  #message { color: var(--bad); min-height: 1.2rem; }
+  #guest { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #8884; }
+  #guest[hidden] { display: none; }
+</style>
+</head>
+<body>
+<h1>NeuroLang REPL</h1>
+<form id="login">
+  <label>Name <input name="name" autocomplete="username" required autofocus></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button>Log in</button>
+</form>
+<p id="message" role="alert"></p>
+<div id="guest" hidden>
+  <p>Or try it without an account: a guest's AI assistant answers with an API key you give in the page.</p>
+  <button type="button" id="guest-in">Continue as a guest</button>
+</div>
+<script>
+// Where to go once logged in: a page of this site only.
+function next() {
+  const target = new URLSearchParams(location.search).get("next") || "/";
+  return target.startsWith("/") && !target.startsWith("//") && !target.startsWith("/\\") ? target : "/";
+}
+// Guests, if the server lets them in.
+fetch("/login/guest").then((response) => response.json()).then(({ guests }) => {
+  document.getElementById("guest").hidden = !guests;
+}).catch(() => {});
+document.getElementById("guest-in").addEventListener("click", async () => {
+  const response = await fetch("/login/guest", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  if (response.ok) return location.assign(next());
+  const answer = await response.json().catch(() => ({ error: response.statusText }));
+  document.getElementById("message").textContent = answer.error;
+});
+document.getElementById("login").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const response = await fetch("/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: form.get("name"), password: form.get("password") }),
+  });
+  if (response.ok) return location.assign(next());
+  const answer = await response.json().catch(() => ({ error: response.statusText }));
+  document.getElementById("message").textContent = answer.error;
+});
+</script>
+</body>
+</html>

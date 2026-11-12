@@ -29,7 +29,7 @@ import traceback
 from multiprocessing.connection import Client, Listener
 from typing import Callable, Optional
 
-from neurolang_apps.utils.tui.local_backend import LocalBackend
+from neurolang_apps.utils.tui.local_backend import LocalBackend, apply_env
 
 
 class SessionEnded(RuntimeError):
@@ -48,14 +48,15 @@ def _kill(pid: int) -> None:
 def _builder(conn, address, authkey, options: dict, build) -> None:
     """Build the engines asked for, once each, and fork a session's
     process from them for each ``("fork", key, start, engine, env)`` of
-    *conn* (*start* numbering each start of a session once); end when the
+    *conn* (*start* numbering each start of a session once, *env* the
+    variables of its user, *feedback* where its ratings go); end when the
     server does."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     backend = LocalBackend(build=build, **options)
     engines = {}
     while True:
         try:
-            _, key, start, engine, env = conn.recv()
+            _, key, start, engine, env, feedback = conn.recv()
         except (EOFError, OSError):
             # The server ended: so does the builder, at once, rather than
             # wait for threads that building an engine may have left.
@@ -78,8 +79,9 @@ def _builder(conn, address, authkey, options: dict, build) -> None:
             conn.close()
             code = 1
             try:
-                _session(address, authkey, key, start, env, options,
-                         engines[engine])
+                _session(address, authkey, key, start, env,
+                         {**options, "feedback": feedback or
+                          options["feedback"]}, engines[engine])
                 code = 0
             except BaseException:
                 traceback.print_exc()
@@ -109,7 +111,7 @@ def _session(address, authkey, key, start: int, env: dict, options: dict,
     """Serve the session *key* on the engine *nl*, with the variables
     *env* (the key of its user's assistant), until the server ends it."""
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
-    os.environ.update(env)
+    apply_env(env)
     backend = LocalBackend(build=lambda name, say: nl, **options)
     conn = Client(address, authkey=authkey)
     sending = threading.Lock()
@@ -153,10 +155,9 @@ class Session:
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`.
     """
 
-    def __init__(self, sessions: "Sessions", key: tuple, env: dict):
+    def __init__(self, sessions: "Sessions", key: tuple):
         self.sessions = sessions
         self.key = key
-        self.env = env
         self.used = time.monotonic()
         self.busy = 0  # the requests at work, which an idle end waits for
         # The number of the latest start, unique among the sessions: a
@@ -314,8 +315,13 @@ class Sessions:
     """
     The sessions of the users of the server, each in a process forked
     from the builder's, at most *most* running at once; one unused for *idle*
-    seconds ends. *env* gives, by user, the variables of their sessions
-    (the key of their AI assistant). The other options are those of a
+    seconds ends. *identity*, ``identity(user)``, gives the variables of
+    the sessions of *user* (the key of their AI assistant) and their groups,
+    at each start; by default those of *env*, by user, and no groups. With
+    *feedback_db*, the sessions store their ratings in that database,
+    signed by their user and groups. The variables *withhold* (the keys of
+    the server) are not in the sessions' environment unless their identity
+    gives them. The other options are those of a
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`; *build*
     must be importable by name, as the builder is started anew.
     """
@@ -325,8 +331,12 @@ class Sessions:
         feedback: Optional[tuple] = None, env: Optional[dict] = None,
         most: int = 8, idle: float = 7200.0,
         build: Optional[Callable] = None,
+        identity: Optional[Callable] = None, feedback_db=None,
+        withhold=(),
     ):
-        self.env = env or {}
+        env = env or {}
+        self.identity = identity or (lambda user: (env.get(user, {}), ""))
+        self.feedback_db = feedback_db
         self.most = most
         self.idle = idle
         self._sessions = {}
@@ -343,7 +353,15 @@ class Sessions:
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build),
         )
-        self._builder.start()
+        # The variables *withhold* (the server's keys) are not the
+        # builder's, nor so of the sessions it forks: a session has those
+        # its identity gives (a guest's none), not even in the environment
+        # its process started with.
+        withheld = {n: os.environ.pop(n) for n in withhold if n in os.environ}
+        try:
+            self._builder.start()
+        finally:
+            os.environ.update(withheld)
         theirs.close()
         self._closed = False
         for target in (self._accept, self._read_builder, self._reap):
@@ -355,9 +373,7 @@ class Sessions:
         with self._lock:
             session = self._sessions.get(key)
             if session is None:
-                session = self._sessions[key] = Session(
-                    self, key, self.env.get(user, {})
-                )
+                session = self._sessions[key] = Session(self, key)
             session.used = time.monotonic()
             return session
 
@@ -410,10 +426,17 @@ class Sessions:
             if self._sessions.get(session.key) is not session:
                 raise SessionEnded("This session ended: restart it")
             self._end_idlest(session)
+        # The user as they are now: their variables and groups may have
+        # changed since their last start.
+        env, groups = self.identity(session.key[0])
+        feedback = None
+        if self.feedback_db:
+            feedback = {"path": str(self.feedback_db),
+                        "user": session.key[0], "groups": groups}
         try:
             with self._forking:
                 self._builder_conn.send(
-                    ("fork", session.key, start, engine, session.env)
+                    ("fork", session.key, start, engine, env, feedback)
                 )
         except OSError:  # the builder is gone, its reader may not know yet
             raise RuntimeError("The builder of the engines ended: see the "
@@ -424,6 +447,43 @@ class Sessions:
         with self._lock:
             session = self._sessions.get(tuple(key))
         return session if session and session.starts == start else None
+
+    def info(self) -> list:
+        """Return the sessions: the user and the tab of each, how long it
+        has been unused, in seconds, whether it runs and is at work."""
+        now = time.monotonic()
+        with self._lock:
+            sessions = list(self._sessions.values())
+        return [{"user": s.key[0], "tab": s.key[1],
+                 "idle": round(now - s.used), "running": s.pid is not None,
+                 "busy": bool(s.busy)} for s in sessions]
+
+    def refresh(self) -> None:
+        """Give the running sessions their user as they are now (an admin
+        or the user changed their assistant): see
+        :meth:`~neurolang_apps.utils.tui.local_backend.LocalBackend.use_identity`.
+        """
+        with self._lock:
+            sessions = [s for s in self._sessions.values()
+                        if s.pid is not None]
+        for session in sessions:
+            env, _ = self.identity(session.key[0])
+            try:
+                session._call("use_identity", env=env)
+            except Exception:  # an ended session takes it at its start
+                pass
+
+    def end(self, user: str, tab: Optional[str] = None) -> int:
+        """End the sessions of *user* (that of the tab *tab* only, if
+        given); return how many."""
+        with self._lock:
+            ended = [s for key, s in self._sessions.items()
+                     if key[0] == user and tab in (None, key[1])]
+            for session in ended:
+                del self._sessions[session.key]
+        for session in ended:
+            session.end()
+        return len(ended)
 
     def _accept(self) -> None:
         while not self._closed:

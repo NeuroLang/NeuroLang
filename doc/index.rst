@@ -97,6 +97,7 @@ a guided walkthrough.
    inclusion_exclusion
    engine_configuration
    query_assistant
+   repl_server
    performance
    auto_examples/index
    api

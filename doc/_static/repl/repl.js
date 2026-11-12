@@ -293,7 +293,30 @@ function suggestQuestion() {
   if (pick) suggested = question.value = pick;
 }
 
+// Whether the page gives a key of its own, rather than the server's.
+let pageKey = false;
+
+// What the server's assistant is: *ready* to answer (the key of the user's
+// account, their group or the server), and whether the user may give their
+// own key; a key the page gives stays in use.
+function serverAssistant(ready, ownKey) {
+  $("key").hidden = !ownKey;
+  if (!ownKey) pageKey = false;
+  if (pageKey) return;
+  assistantReady = Boolean(ready);
+  Object.assign($("ask-run"), { title: ready ? "" : "Add an API key to use the assistant" }).classList.toggle("ghost", !ready);
+  $("explain").hidden = !ready;
+  $("ask-note").hidden = false;
+  if (ready) {
+    $("ask-note").textContent = `Asking uses the AI assistant ${ownKey ? "set for you on this server, unless you give your own API key" : "your admin set for you"}.`;
+    suggestQuestion();
+  } else if (bundle.users) {
+    $("ask-note").textContent = "Asking needs an API key from an AI provider: click API key, or save one on your Account page.";
+  }
+}
+
 function useKey() {
+  pageKey = true;
   assistantReady = true;
   suggestQuestion();
   $("llm-error").hidden = true;
@@ -371,6 +394,14 @@ function start({ restore = null } = {}) {
   // (neurolang-repl-serve --local) has it answer, not Pyodide: its
   // assistant is that of the machine's configuration, unless a key is given.
   const local = bundle.backend === "local";
+  // A server of users (--users): who is logged in, their account, logging out.
+  $("account").hidden = $("logout").hidden = !bundle.users;
+  if (bundle.users) {
+    fetch("/account/api/me").then((response) => response.ok && response.json()).then((me) => {
+      if (me?.name) $("account").textContent = me.name;
+      if (me?.guest) $("account").removeAttribute("href"); // a guest has no account
+    }).catch(() => {});
+  }
   worker = new Worker(local ? "local_worker.js" : "worker.js", { type: "module" });
   if (local) {
     $("ask-note").textContent =
@@ -391,6 +422,8 @@ function start({ restore = null } = {}) {
 
 // What the page does with each kind of message of the worker; *restore* is what a stop gave to give back.
 const workerMessages = {
+  // The assistant of the user changed on the server (their account page, an admin).
+  assistant: (data) => serverAssistant(data.ready, data.ownKey !== false),
   status: (data) => setStatus(data.message, "busy"),
   error: (data) => fail(data.message),
   ready: (data, restore) => {
@@ -398,9 +431,10 @@ const workerMessages = {
     $("boot").hidden = true;
     $("banner").replaceChildren(html(data.banner));
     setProviders(data.providers ?? []);
+    if ("assistant" in data) serverAssistant(data.assistant, data.ownKey !== false);
     canRate = Boolean(data.canRate);
+    if (data.ratingNote) $("rate").querySelector(".note").textContent = data.ratingNote;
     guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
-    if (data.assistant) assistantReady = true;
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
@@ -728,6 +762,7 @@ $("llm-forget").addEventListener("click", () => {
   Object.assign(llmForm.elements.key, { value: "" });
   llmForm.elements.remember.checked = false;
   worker.postMessage({ type: "llm", key: "" });
+  pageKey = false;
   assistantReady = false;
   if (suggested && question.value === suggested) question.value = "";
   suggested = "";

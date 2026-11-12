@@ -85,12 +85,21 @@ The site's main page, ``/``, leads to the REPL (unless the site has its own,
 the documentation's).
 
 Users, each with a password, rather than one password: ``--users FILE``, a
-YAML file of their password hashes (``--hash-password`` prints one) and,
-for each, the variables of their sessions (``env``: the key of their
-assistant). With ``--local``, each tab of a user has a session of its own,
-in a process forked from a builder's that builds each engine once
+YAML file of their password hashes (``--hash-password`` prints one;
+``--add-user NAME --groups admin``, ``--set-password``, ``--set-groups``,
+``--set-key NAME VARIABLE``, ``--set-group-key GROUP VARIABLE``,
+``--remove-user`` and ``--list-users`` change it from the command line)
+and, for each user or group, the variables of their sessions (``env``: the
+key of their assistant; a user's own over their group's). With
+``--local``, each tab of a user has a session of its own, in a process
+forked from a builder's that builds each engine once
 (``neurolang_apps.utils.tui.sessions``), at most ``--max-sessions`` at once,
-ended after ``--idle-minutes`` unused.
+ended after ``--idle-minutes`` unused. Each user changes their password at
+``/account``. The users of the group ``admin``
+have the admin console at ``/admin``: the users, their groups and their
+assistant's key (whose, never the key), the sessions, and the ratings of
+``--feedback-db FILE``, a SQLite database of the ratings of the page, signed
+by the user's name and groups.
 
 As a service of this user, started now and at each login, serving as the
 other options say::
@@ -124,6 +133,7 @@ import base64
 import getpass
 import hashlib
 import hmac
+import http.cookies
 import http.server
 import importlib.util
 import json
@@ -131,12 +141,14 @@ import os
 import plistlib
 import queue
 import re
+import secrets
 import shlex
 import shutil
 import socketserver
 import ssl
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.parse
@@ -148,6 +160,27 @@ BUNDLE_SCRIPT = DOC / "make_repl_bundle.py"
 PAGE = DOC / "_static" / "repl"
 LOGO = DOC / "_static" / "logo"
 DEFAULT_SITE = Path("~/.cache/neurolang/repl-site").expanduser()
+# The admin console of the users (--users), served at /admin.
+ADMIN_PAGE = Path(__file__).with_name("admin.html")
+# The page of a user's account (--users), served at /account.
+ACCOUNT_PAGE = Path(__file__).with_name("account.html")
+# The page where a user logs in (--users), served at /login, and the cookie
+# of a login, kept so many days.
+LOGIN_PAGE = Path(__file__).with_name("login.html")
+LOGIN_PATHS = ("/login", "/login/guest", "/logout")
+LOGIN_COOKIE = "neurolang_login"
+LOGIN_DAYS = 7
+# A guest (--guests): a name of its own, which no user has (theirs have no
+# ':'), in the group guest; they bring their own key.
+GUEST_PREFIX = "guest:"
+GUEST_GROUP = "guest"
+BRING_KEY_ENV = "NEUROLANG_REPL_BRING_KEY"
+# The variables of a session's process telling its user's assistant (JSON:
+# provider, model, base_url, key) and that they may not give their own key.
+ASSISTANT_ENV = "NEUROLANG_REPL_LLM"
+OWN_KEY_ENV = "NEUROLANG_REPL_OWN_KEY"
+# The shortest password a user gives themselves.
+SHORTEST_PASSWORD = 8
 # Where the text embeddings are kept between builds: making them takes
 # torch, the abstracts of the studies from PubMed and a while.
 DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
@@ -232,12 +265,12 @@ def copy_page(site: Path) -> Path:
     return repl / "index.html"
 
 
-def prepare_local_site(site: Path, engines=None) -> Path:
+def prepare_local_site(site: Path, engines=None, users=False) -> Path:
     """
     Put the page in *site* with a ``bundle.json`` telling it to have this
     machine's Python answer it (``"backend": "local"``), offering the
-    *engines* (by default all of the page's), and return the path of the
-    page.
+    *engines* (by default all of the page's), and that it has *users* (whose
+    account page it links), and return the path of the page.
     """
     script = bundle_script()
     engines = list(engines or script.ENGINES)
@@ -251,6 +284,7 @@ def prepare_local_site(site: Path, engines=None) -> Path:
             for name in engines
         },
         "default": default if default in engines else engines[0],
+        **({"users": True} if users else {}),
     }) + "\n")
     script.write_highlight_words(page.parent)
     return page
@@ -395,6 +429,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         no further, whatever its method."""
         if not super().parse_request():
             return False
+        path = urllib.parse.urlsplit(self.path).path
+        if self.users is not None and path in LOGIN_PATHS:
+            return True  # open to all; a POST is checked there
         if self.password is None and self.users is None:
             try:
                 host = urllib.parse.urlsplit(
@@ -409,6 +446,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 ))
                 return False
         elif not self._authorised():
+            if self.users is not None:
+                # The login page for a page the browser opens; for the rest
+                # a 401 without a challenge, which would have the browser
+                # ask.
+                if self.command == "GET" and \
+                        "text/html" in self.headers.get("Accept", ""):
+                    target = urllib.parse.quote(self.path, safe="/?=&")
+                    self._reply(303, b"", "text/plain", [
+                        ("Location", f"/login?next={target}")])
+                else:
+                    self._reply_json({"error": "log in first: /login"}, 401)
+                return False
             self.send_response(401)
             self.send_header(
                 "WWW-Authenticate",
@@ -433,7 +482,273 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return origin is None or \
             urllib.parse.urlsplit(origin).netloc == self.headers.get("Host")
 
+    #: The sessions of the users (--users --local), for the console.
+    sessions = None
+    #: The feedback database, for the console.
+    feedback_db = None
+
+    def do_GET(self):
+        path = urllib.parse.urlsplit(self.path).path
+        if self.users is not None and path in LOGIN_PATHS:
+            return self._login(path)
+        if path == "/admin" or path.startswith("/admin/"):
+            return self._admin(path)
+        if path == "/account" or path.startswith("/account/"):
+            return self._account(path)
+        return super().do_GET()
+
+    def do_POST(self):
+        path = urllib.parse.urlsplit(self.path).path
+        if self.users is not None and path in LOGIN_PATHS:
+            return self._login(path)
+        if path.startswith("/admin/"):
+            return self._admin(path)
+        if path.startswith("/account/"):
+            return self._account(path)
+        self.send_error(404)
+
+    def _account(self, path: str):
+        """The page of the user's account, ``/account``: who they are, and
+        a new password they give themselves (the current one first)."""
+        if self.users is None:
+            return self._reply_json({"error": "no users"}, 404)
+        if path in ("/account", "/account/"):
+            return self._reply(200, ACCOUNT_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if self.user.startswith(GUEST_PREFIX):  # no account: only who
+            if path == "/account/api/me" and self.command == "GET":
+                return self._reply_json({
+                    "name": "guest", "guest": True, "groups": [GUEST_GROUP],
+                    "admin": False, "providers": _providers(),
+                    "assistant": {"assistant": "none", "own_key": True},
+                })
+            return self._reply_json(
+                {"error": "A guest has no account: bring your key in the "
+                 "page"}, 403)
+        if path == "/account/api/me" and self.command == "GET":
+            return self._reply_json({
+                "name": self.user, "groups": self.users.groups(self.user),
+                "admin": self.users.is_admin(self.user),
+                "assistant": self.users.status(self.user),
+                "providers": _providers(),
+            })
+        if path == "/account/api/llm" and self.command == "POST":
+            if not self.users.own_key(self.user):
+                return self._reply_json({"error": "Your assistant's key is "
+                                         "the one your admin set"}, 403)
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                self.users.change(self.user, llm=False if body.get("remove")
+                                  else {k: body.get(k) for k in (
+                                      "provider", "model", "base_url", "key")})
+            except ValueError as error:
+                return self._reply_json({"error": str(error)}, 400)
+            self._refresh_sessions()
+            return self._reply_json({"ok": True})
+        if path == "/account/api/password" and self.command == "POST":
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                current = str(body.get("current", "")).encode()
+                new = str(body.get("new", ""))
+            except ValueError:
+                return self._reply_json({"error": "not JSON"}, 400)
+            if not self.users.check(self.user, current):
+                return self._reply_json(
+                    {"error": "The current password is not that one"}, 403)
+            if len(new) < SHORTEST_PASSWORD:
+                return self._reply_json({"error": "The new password has at "
+                                         f"least {SHORTEST_PASSWORD} "
+                                         "characters"}, 400)
+            self.users.change(self.user, password=new)
+            # The login made with the old password is out: a new one.
+            return self._reply_json({"ok": True}, 200, [
+                ("Set-Cookie", self._cookie(self.user, LOGIN_DAYS * 86400))])
+        return self._reply_json({"error": "not found"}, 404)
+
+    def _reply(self, status: int, body: bytes, mime: str, headers=()):
+        self.send_response(status)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(body)))
+        for name, value in headers:
+            self.send_header(name, value)
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def _reply_json(self, value, status: int = 200, headers=()):
+        self._reply(status, json.dumps(value).encode(), "application/json",
+                    headers)
+
+    def _admin(self, path: str):
+        """The admin console, ``/admin``, and what it asks, for the users
+        of the group admin only."""
+        if self.users is None or not self.users.is_admin(self.user):
+            return self._reply_json({"error": "for the admins only"}, 403)
+        try:
+            if self.command == "POST":
+                length = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(length) or b"{}")
+                return self._reply_json(self._admin_change(path, body))
+            if path in ("/admin", "/admin/"):
+                return self._reply(200, ADMIN_PAGE.read_bytes(),
+                                   "text/html; charset=utf-8")
+            if path == "/admin/api/state":
+                return self._reply_json(self._admin_state())
+            if path == "/admin/api/feedback":
+                return self._reply_json(self._admin_feedback())
+            if path == "/admin/feedback.yaml" and self.feedback_db:
+                from neurolang_apps.utils.llm.feedback_server import (
+                    FeedbackStore, examples_yaml,
+                )
+
+                text = examples_yaml(FeedbackStore(self.feedback_db))
+                return self._reply(200, text.encode(), "application/yaml", [
+                    ("Content-Disposition",
+                     'attachment; filename="feedback.yaml"')])
+            return self._reply_json({"error": "not found"}, 404)
+        except ValueError as error:  # told: the console's own messages
+            return self._reply_json({"error": str(error)}, 400)
+        except Exception as error:
+            traceback.print_exc()
+            return self._reply_json({"error": type(error).__name__}, 500)
+
+    def _admin_state(self) -> dict:
+        users = self.users.current()
+        groups = self.users.group_envs()
+        named = sorted(set(groups) | {g for e in users.values()
+                                      for g in e["groups"]})
+        return {
+            "me": self.user,
+            "users": [{"name": name, "groups": entry["groups"],
+                       "own_key_set": entry.get("own_key"),
+                       **self.users.status(name)}
+                      for name, entry in sorted(users.items())],
+            "groups": [{"name": group,
+                        "members": sorted(n for n, e in users.items()
+                                          if group in e["groups"]),
+                        **self.users.group_status(group)}
+                       for group in named],
+            "providers": _providers(),
+            "sessions": self.sessions.info() if self.sessions else None,
+            "feedback": bool(self.feedback_db),
+        }
+
+    def _admin_feedback(self) -> list:
+        if not self.feedback_db:
+            return []
+        from neurolang_apps.utils.llm.feedback_server import FeedbackStore
+
+        keep = ("created", "user", "groups", "engine", "question", "query",
+                "valid", "error", "status")
+        return [{**{key: answer.get(key) for key in keep},
+                 "ratings": [{key: rating.get(key) for key in
+                              ("created", "user", "verdict", "comment")}
+                             for rating in answer["feedback"]]}
+                for answer in FeedbackStore(self.feedback_db).answers(
+                    limit=200)]
+
+    def _refresh_sessions(self) -> None:
+        """Give the running sessions their users as they are now."""
+        if self.sessions is not None and hasattr(self.sessions, "refresh"):
+            self.sessions.refresh()
+
+    def _admin_change(self, path: str, body: dict) -> dict:
+        answer = self._admin_changed(path, body)
+        self._refresh_sessions()
+        return answer
+
+    def _admin_changed(self, path: str, body: dict) -> dict:
+        name = str(body.get("name", ""))
+        if path == "/admin/api/user":
+            self.users.change(
+                name, password=body.get("password") or None,
+                groups=body.get("groups"), env=body.get("env"),
+                create=bool(body.get("create")), llm=body.get("llm"),
+                own_key=body.get("own_key"),
+            )
+            return {"ok": True}
+        if path == "/admin/api/group":
+            self.users.change_group(name, body.get("env"), body.get("llm"),
+                                    body.get("own_key"))
+            return {"ok": True}
+        if path == "/admin/api/remove-user":
+            self.users.remove(name)
+            if self.sessions:
+                self.sessions.end(name)
+            return {"ok": True}
+        if path == "/admin/api/end-session" and self.sessions:
+            tab = body.get("tab")
+            return {"ended": self.sessions.end(name, tab and str(tab))}
+        raise ValueError("no such change")
+
+    #: The key that signs the login cookies (--users), and whether they
+    #: go over HTTPS only.
+    login_secret = None
+    secure = False
+    #: Whether a visitor may come in as a guest (--guests).
+    guests = False
+
+    def _login(self, path: str):
+        """``/login``: its page, and a user's name and password, which give
+        a login cookie; ``/logout``, which takes it back."""
+        if path == "/login/guest":
+            return self._guest()
+        if path == "/logout":
+            return self._reply(303, b"", "text/plain", [
+                ("Location", "/login"),
+                ("Set-Cookie", self._cookie("", 0))])
+        if self.command == "GET":
+            return self._reply(200, LOGIN_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if not self._same_site():
+            return self._reply_json(
+                {"error": "A request of this site's page only"}, 403)
+        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+            name = str(body.get("name", ""))
+            password = str(body.get("password", "")).encode()
+        except ValueError:
+            return self._reply_json({"error": "not JSON"}, 400)
+        if not self.users.check(name, password):
+            return self._reply_json(
+                {"error": "That name and password are not a user's"}, 403)
+        return self._reply_json({"ok": True}, 200, [
+            ("Set-Cookie", self._cookie(name, LOGIN_DAYS * 86400))])
+
+    def _guest(self):
+        """``/login/guest``: whether guests come in, and a guest's login,
+        a name of its own, which brings its own key."""
+        if self.command == "GET":
+            return self._reply_json({"guests": self.guests})
+        if not self.guests:
+            return self._reply_json({"error": "no guests here"}, 404)
+        if not self._same_site():
+            return self._reply_json(
+                {"error": "A request of this site's page only"}, 403)
+        name = GUEST_PREFIX + secrets.token_hex(6)
+        return self._reply_json({"ok": True}, 200, [
+            ("Set-Cookie", self._cookie(name, LOGIN_DAYS * 86400))])
+
+    def _cookie(self, name: str, seconds: int) -> str:
+        """The login cookie of *name* for *seconds* (0: none)."""
+        value = sign_login(self.login_secret, name, self.users, seconds) \
+            if name else ""
+        return (f"{LOGIN_COOKIE}={value}; Path=/; Max-Age={seconds}; "
+                "HttpOnly; SameSite=Lax" + ("; Secure" if self.secure else ""))
+
     def _authorised(self) -> bool:
+        if self.users is not None:
+            cookies = http.cookies.SimpleCookie(self.headers.get("Cookie"))
+            if LOGIN_COOKIE in cookies:
+                name = check_login(self.login_secret,
+                                   cookies[LOGIN_COOKIE].value, self.users,
+                                   self.guests)
+                if name is not None:
+                    self.user = name
+                    return True
         scheme, _, encoded = (
             self.headers.get("Authorization") or ""
         ).partition(" ")
@@ -450,7 +765,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.user = name.decode()
         except UnicodeDecodeError:
             return False
-        return check_password(self.users, self.user, given)
+        return self.users.check(self.user, given)
 
     def _body(self) -> dict:
         """Return the JSON object of the request's body, {} if it has none;
@@ -496,6 +811,8 @@ class LocalHandler(Handler):
     """
 
     backend = None
+    #: The sessions the guests have at most at once.
+    max_guest_sessions = 2
     # How often an idle stream of events tells it is alive, in seconds.
     KEEPALIVE_SECONDS = 15
 
@@ -517,8 +834,15 @@ class LocalHandler(Handler):
         if not hasattr(self.backend, "session"):
             return self.backend
         query = urllib.parse.urlsplit(self.path).query
-        tab = urllib.parse.parse_qs(query).get("session", ["default"])[0]
-        return self.backend.session(self.user, tab[:64])
+        tab = urllib.parse.parse_qs(query).get("session", ["default"])[0][:64]
+        if self.user.startswith(GUEST_PREFIX):
+            guests = {(i["user"], i["tab"]) for i in self.backend.info()
+                      if i["user"].startswith(GUEST_PREFIX)}
+            if (self.user, tab) not in guests and \
+                    len(guests) >= self.max_guest_sessions:
+                raise RuntimeError("The sessions of the guests are all at "
+                                   "work: come back later")
+        return self.backend.session(self.user, tab)
 
     def do_GET(self):
         if urllib.parse.urlsplit(self.path).path != "/api/events":
@@ -546,6 +870,8 @@ class LocalHandler(Handler):
 
     def do_POST(self):
         path = urllib.parse.urlsplit(self.path).path
+        if path.startswith(("/admin/", "/account/")) or path in LOGIN_PATHS:
+            return super().do_POST()
         if not path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         action = path[len("/api/"):]
@@ -657,7 +983,9 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 
 
 def make_server(site: Path, host: str, port: int, backend=None,
-                tls=None, password=None, names=(), users=None):
+                tls=None, password=None, names=(), users=None,
+                feedback_db=None, guests: bool = False,
+                max_guest_sessions: int = 2):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
@@ -670,6 +998,11 @@ def make_server(site: Path, host: str, port: int, backend=None,
         "password": None if password is None else password.encode(),
         "names": frozenset(name.lower().strip("[]") for name in names),
         "users": users,
+        "login_secret": os.urandom(32) if users is not None else None,
+        "secure": tls is not None,
+        "guests": guests, "max_guest_sessions": max_guest_sessions,
+        "sessions": backend if hasattr(backend, "info") else None,
+        "feedback_db": feedback_db,
     })
     server = Server(
         (host, port),
@@ -763,38 +1096,416 @@ def check_password(users: dict, user: str, password: bytes) -> bool:
     return True
 
 
-def read_users(path: Path) -> dict:
-    """
-    Return the users of the YAML file *path*: by name, the ``password``
-    hash of each (``neurolang-repl-serve --hash-password``) and, if they
-    have one, the variables of their sessions, ``env`` (the key of their
-    AI assistant)::
+def _env(path, owner, env) -> dict:
+    env = env or {}
+    if not isinstance(env, dict):
+        sys.exit(f"{path}: the env of {owner} is not NAME: VALUE lines")
+    return {str(k): str(v) for k, v in env.items()}
 
-        ann:
-          password: scrypt$16384$8$1$...
-          env:
-            ALBERT_API_KEY: ...
-        bob:
-          password: scrypt$16384$8$1$...
+
+def read_users_file(path: Path) -> tuple:
+    """
+    Return the users and the groups of the YAML file *path*. The users, by
+    name: the ``password`` hash of each (``neurolang-repl-serve
+    --add-user`` or ``--hash-password``), their ``groups`` and, if they have
+    some, the variables of their sessions, ``env`` (the key of their AI
+    assistant); the groups, by name: their ``env``, which their users have
+    unless theirs say otherwise::
+
+        users:
+          ann:
+            password: scrypt$16384$8$1$...
+            groups: [admin, lab]
+            env:
+              ALBERT_API_KEY: ...
+          bob:
+            password: scrypt$16384$8$1$...
+            groups: [lab]
+        groups:
+          lab:
+            env:
+              ALBERT_API_KEY: ...
+
+    A file of the users alone, without ``users:``, is read as well.
     """
     import yaml
 
     try:
-        users = yaml.safe_load(path.read_text()) or {}
+        data = yaml.safe_load(path.read_text()) or {}
     except (OSError, yaml.YAMLError) as error:
         sys.exit(f"The users file {path} cannot be read: {error}")
-    if not isinstance(users, dict) or not users:
+    if not isinstance(data, dict):
         sys.exit(f"The users file {path} has no users")
+    sections = isinstance(data.get("users"), dict) \
+        and set(data) <= {"users", "groups"} \
+        and all(isinstance(e, dict) for e in data["users"].values())
+    users = data["users"] if sections else data
+    groups = (data.get("groups") or {}) if sections else {}
+    if not users:
+        sys.exit(f"The users file {path} has no users")
+    if not isinstance(groups, dict):
+        sys.exit(f"{path}: groups is not a mapping of the groups")
     for name, entry in users.items():
         if not isinstance(entry, dict) or \
                 not str(entry.get("password", "")).startswith("scrypt$"):
             sys.exit(f"{path}: the user {name} has no password hash "
-                     "(neurolang-repl-serve --hash-password makes one)")
-        env = entry.setdefault("env", {}) or {}
-        if not isinstance(env, dict):
-            sys.exit(f"{path}: the env of {name} is not NAME: VALUE lines")
-        entry["env"] = {str(k): str(v) for k, v in env.items()}
-    return {str(name): entry for name, entry in users.items()}
+                     "(neurolang-repl-serve --add-user makes one)")
+        entry["env"] = _env(path, name, entry.get("env"))
+        _read_assistant(path, f"the user {name}", entry)
+        member = entry.get("groups") or []
+        if isinstance(member, str):
+            member = [member]
+        entry["groups"] = sorted({str(group) for group in member})
+    kept = {}
+    for name, entry in groups.items():
+        entry = dict(entry or {})
+        group = {"env": _env(path, f"the group {name}", entry.get("env"))}
+        _read_assistant(path, f"the group {name}", entry)
+        group.update({k: entry[k] for k in ("llm", "own_key") if k in entry})
+        kept[str(name)] = group
+    return {str(name): entry for name, entry in users.items()}, kept
+
+
+def _read_assistant(path, owner: str, entry: dict) -> None:
+    """Check the assistant of *entry*: ``llm``, its ``provider``, ``model``,
+    ``base_url`` and ``key``, and ``own_key``, whether its users may give
+    their own key."""
+    llm = entry.get("llm")
+    if llm is not None:
+        if not isinstance(llm, dict) or not llm.get("provider"):
+            sys.exit(f"{path}: the llm of {owner} has no provider")
+        entry["llm"] = {k: str(llm[k]) for k in
+                        ("provider", "model", "base_url", "key") if llm.get(k)}
+    if "own_key" in entry and not isinstance(entry["own_key"], bool):
+        sys.exit(f"{path}: own_key of {owner} is true or false")
+
+
+def read_users(path: Path) -> dict:
+    """Return the users of the users file *path* (see
+    :func:`read_users_file`)."""
+    return read_users_file(path)[0]
+
+
+class Users:
+    """
+    The users of the users file *path* as it is now: read again when it
+    changes (an edit by hand), and written by the admin console, at once
+    (a new file in its place), readable by its owner only. Those of the
+    group ``admin`` have the console.
+    """
+
+    ADMIN = "admin"
+
+    def __init__(self, path: Path, new: bool = False):
+        """*new*: the file may not be there yet (its first user is added
+        from the command line)."""
+        self.path = Path(path)
+        self._lock = threading.RLock()
+        self._users, self._groups = ({}, {}) \
+            if new and not self.path.exists() \
+            else read_users_file(self.path)
+        self._seen = self._mtime()
+
+    def _mtime(self):
+        try:
+            return self.path.stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def current(self) -> dict:
+        """Return the users, read again if the file changed."""
+        with self._lock:
+            mtime = self._mtime()
+            if mtime is not None and mtime != self._seen:
+                self._seen = mtime
+                try:
+                    self._users, self._groups = read_users_file(self.path)
+                except SystemExit as error:  # kept as they were
+                    print(f"The users file is not read again: {error}",
+                          file=sys.stderr, flush=True)
+            return self._users
+
+    def check(self, name: str, password: bytes) -> bool:
+        return check_password(self.current(), name, password)
+
+    def groups(self, name: str) -> list:
+        return list(self.current().get(name, {}).get("groups", []))
+
+    def is_admin(self, name: str) -> bool:
+        return self.ADMIN in self.groups(name)
+
+    def group_envs(self) -> dict:
+        """Return the variables of the groups, by group."""
+        self.current()
+        return {name: dict(g["env"]) for name, g in self._groups.items()}
+
+    def env(self, name: str) -> dict:
+        """Return the variables of the sessions of *name*: those of their
+        groups (of the first, by name, that has one), and their own over
+        them."""
+        entry = self.current().get(name, {})
+        env = {}
+        groups = self.group_envs()
+        for group in entry.get("groups", []):
+            for variable, value in groups.get(group, {}).items():
+                env.setdefault(variable, value)
+        return {**env, **entry.get("env", {})}
+
+    def assistant(self, name: str):
+        """Return the assistant *name* has (``llm``: provider, model, key),
+        with whose it is, ``source``: theirs (``own``) or that of the first
+        of their groups, by name, that has one (``group:NAME``); or None."""
+        entry = self.current().get(name, {})
+        if entry.get("llm"):
+            return {**entry["llm"], "source": "own"}
+        for group in entry.get("groups", []):
+            llm = self._groups.get(group, {}).get("llm")
+            if llm:
+                return {**llm, "source": f"group:{group}"}
+        return None
+
+    def own_key(self, name: str) -> bool:
+        """Whether *name* may give their own key: as they say, else not if
+        one of their groups says not, else they may."""
+        entry = self.current().get(name, {})
+        if "own_key" in entry:
+            return entry["own_key"]
+        return all(self._groups.get(g, {}).get("own_key", True)
+                   for g in entry.get("groups", []))
+
+    def identity(self, name: str) -> tuple:
+        """Return the variables of the sessions of *name* and their groups,
+        as :class:`~neurolang_apps.utils.tui.sessions.Sessions` asks: their
+        assistant and whether they may give their own key go there too."""
+        entry = self.current().get(name, {})
+        env = self.env(name)
+        assistant = self.assistant(name)
+        if assistant:
+            env[ASSISTANT_ENV] = json.dumps(
+                {k: v for k, v in assistant.items() if k != "source"})
+        if not self.own_key(name):
+            env[OWN_KEY_ENV] = "0"
+        return env, ",".join(entry.get("groups", []))
+
+    def status(self, name: str) -> dict:
+        """Return, for the console and the account page, whose assistant
+        *name* has (see :func:`key_status`) and whether they may give
+        their own key; never a key."""
+        entry = self.current()[name]
+        allowed = {"own_key": self.own_key(name),
+                   "variables": sorted(entry["env"])}
+        assistant = self.assistant(name)
+        if not assistant:
+            return {**key_status(entry, self.group_envs()), **allowed}
+        source = assistant["source"]
+        return {**allowed,
+                "assistant": "own" if source == "own" else "group",
+                **({} if source == "own" else {"group": source[6:]}),
+                "provider": f"{assistant['provider']} "
+                            f"({assistant.get('model') or 'its model'})",
+                "variable": ""}
+
+    def group_status(self, group: str) -> dict:
+        """Return a group's assistant and settings, for the console."""
+        entry = self._groups.get(group, {})
+        llm = entry.get("llm")
+        return {"variables": sorted(entry.get("env", {})),
+                "llm": f"{llm['provider']} ({llm.get('model') or 'its model'})"
+                       if llm else "",
+                "own_key": entry.get("own_key", True)}
+
+    def change_group(self, group: str, env=None, llm=None,
+                     own_key=None) -> None:
+        """Change the variables *env* of *group* (a None value removes
+        one), its assistant *llm* and whether its users may give their own
+        key, *own_key* (see :meth:`change`); a group left with nothing is
+        forgotten."""
+        with self._lock:
+            self.current()
+            if not group or not group.strip():
+                raise ValueError("A group's name is not empty")
+            groups = {n: {**g, "env": dict(g["env"])}
+                      for n, g in self._groups.items()}
+            entry = groups.setdefault(group, {"env": {}})
+            _change_env(entry["env"], env)
+            _change_assistant(entry, llm, own_key)
+            if not entry["env"] and set(entry) == {"env"}:
+                del groups[group]
+            self._write(self.current(), groups)
+
+    def change(self, name: str, password=None, groups=None, env=None,
+               create: bool = False, llm=None, own_key=None) -> None:
+        """Add the user *name* (*create*) or change theirs: the *password*,
+        the *groups*, the variables *env* (a None value removes one), their
+        assistant *llm* (see :func:`_change_assistant`), whether they may
+        give their own key, *own_key* (``"inherit"``: as their groups say).
+        """
+        with self._lock:
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self.current().items()}
+            if create == (name in users):
+                raise ValueError(f"The user {name} "
+                                 + ("exists" if create else "does not exist"))
+            if not name or not name.strip() or ":" in name:
+                raise ValueError("A user's name is not empty and has no ':'")
+            entry = users.setdefault(name, {"env": {}, "groups": []})
+            if create and not password:
+                raise ValueError("A new user needs a password")
+            if password:
+                entry["password"] = hash_password(password)
+            if groups is not None:
+                entry["groups"] = sorted({str(g).strip() for g in groups
+                                          if str(g).strip()})
+            _change_env(entry["env"], env)
+            _change_assistant(entry, llm, own_key)
+            self._keep_an_admin(users)
+            self._write(users)
+
+    def remove(self, name: str) -> None:
+        with self._lock:
+            users = dict(self.current())
+            if users.pop(name, None) is None:
+                raise ValueError(f"The user {name} does not exist")
+            self._keep_an_admin(users)
+            self._write(users)
+
+    def _keep_an_admin(self, users: dict) -> None:
+        if any(self.ADMIN in e["groups"] for e in self._users.values()) \
+                and not any(self.ADMIN in e["groups"] for e in users.values()):
+            raise ValueError("The users keep an admin")
+
+    def _write(self, users: dict, groups=None) -> None:
+        import tempfile
+
+        import yaml
+
+        groups = self._groups if groups is None else groups
+        kept = {"users": {name: {key: value for key, value in entry.items()
+                                 if value or key in ("password", "own_key")}
+                          for name, entry in users.items()}}
+        if groups:
+            kept["groups"] = groups
+        handle, temporary = tempfile.mkstemp(dir=self.path.parent,
+                                             prefix=".users-")
+        try:
+            with os.fdopen(handle, "w") as file:  # mkstemp's mode: 600
+                yaml.safe_dump(kept, file, sort_keys=True,
+                               allow_unicode=True)
+            os.replace(temporary, self.path)
+        except BaseException:
+            os.unlink(temporary)
+            raise
+        self._users, self._groups = read_users_file(self.path)
+        self._seen = self._mtime()
+
+
+def _change_assistant(entry: dict, llm, own_key) -> None:
+    """Change the assistant of a user's or group's *entry*: *llm*, a
+    provider of the page's form with its ``model``, ``base_url`` and
+    ``key`` (the key it had kept if none is given), or False to remove it,
+    None to leave it; *own_key* True, False, ``"inherit"`` or None."""
+    if llm is False:
+        entry.pop("llm", None)
+    elif llm:
+        provider = str(llm.get("provider", ""))
+        try:
+            from neurolang_apps.utils.llm.browser import PROVIDERS
+        except ImportError:  # without the extra llm: not checked
+            PROVIDERS = None
+        if not provider or PROVIDERS is not None and provider not in PROVIDERS:
+            raise ValueError(f"No provider {provider!r}: one of "
+                             f"{', '.join(PROVIDERS or [])}")
+        old = entry.get("llm") or {}
+        key = llm.get("key") or (old.get("key")
+                                 if old.get("provider") == provider else "")
+        if not key:
+            raise ValueError(f"The assistant of {provider} needs its key")
+        entry["llm"] = {k: str(v) for k, v in {
+            "provider": provider, "model": llm.get("model"),
+            "base_url": llm.get("base_url"), "key": key}.items() if v}
+    if own_key == "inherit":
+        entry.pop("own_key", None)
+    elif own_key is not None:
+        entry["own_key"] = bool(own_key)
+
+
+def guest_identity(strip=()) -> tuple:
+    """Return the variables and the group of a guest's sessions: no key of
+    the server (the variables *strip* taken out of their process), theirs
+    from the page."""
+    return {**{name: None for name in strip}, BRING_KEY_ENV: "1"}, \
+        GUEST_GROUP
+
+
+def server_key_names(env_file_names=()) -> list:
+    """Return the variables holding keys of the server: those of
+    ``--env-file`` and those the providers of its configuration read."""
+    names = set(env_file_names)
+    try:
+        from neurolang_apps.utils.llm.config import load_config
+
+        names |= {p.api_key_env for p in load_config().providers.values()
+                  if p.api_key_env}
+    except Exception:
+        pass
+    return sorted(names)
+
+
+def _providers() -> list:
+    """Return the providers of the page's form, or none without the extra
+    llm."""
+    try:
+        from neurolang_apps.utils.llm.browser import providers_for_form
+    except ImportError:
+        return []
+    return providers_for_form()
+
+
+def _change_env(env: dict, changes) -> None:
+    """Change the variables *env* as *changes* say (None removes one)."""
+    for variable, value in (changes or {}).items():
+        if not str(variable).isidentifier():
+            raise ValueError(f"{variable} is not a variable's name")
+        if value is None:
+            env.pop(variable, None)
+        else:
+            env[variable] = str(value)
+
+
+def key_status(entry: dict, groups=None) -> dict:
+    """Return, for the admin console, the variables a user (or a group)
+    has (their names) and whose key their assistant answers with: ``own``,
+    that of one of their *groups* (``group``, with its name in ``group``),
+    the server's (``server``), ``none`` (the user gives it in the page) or
+    ``unneeded``; never a key."""
+    from neurolang_apps.utils.llm.config import load_config
+
+    env = entry.get("env", {})
+    status = {"variables": sorted(env)}
+    from_group = {}
+    for group in entry.get("groups", []):
+        for variable, value in (groups or {}).get(group, {}).items():
+            from_group.setdefault(variable, (group, value))
+    config = env.get("NEUROLANG_LLM_CONFIG") or \
+        from_group.get("NEUROLANG_LLM_CONFIG", ("", None))[1]
+    try:
+        provider = load_config(config).provider()
+    except Exception as error:
+        return {**status, "assistant": "unknown",
+                "detail": type(error).__name__}
+    variable = provider.api_key_env
+    status.update(provider=f"{provider.name} ({provider.model})",
+                  variable=variable or "")
+    if not variable:
+        return {**status, "assistant": "unneeded"}
+    if env.get(variable):
+        return {**status, "assistant": "own"}
+    if variable in from_group:
+        return {**status, "assistant": "group",
+                "group": from_group[variable][0]}
+    if os.environ.get(variable):
+        return {**status, "assistant": "server"}
+    return {**status, "assistant": "none"}
 
 
 def users_assistants(users: dict) -> dict:
@@ -816,6 +1527,48 @@ def users_assistants(users: dict) -> dict:
             os.environ.clear()
             os.environ.update(saved)
     return assistants
+
+
+def _fingerprint(entry: dict) -> str:
+    """What changes when a user's password does: a login made before is
+    then out."""
+    return hashlib.sha256(entry["password"].encode()).hexdigest()[:16]
+
+
+def sign_login(secret: bytes, name: str, users, seconds: int) -> str:
+    """Return the value of the login cookie of *name* (a user, or a guest),
+    good for *seconds*, signed with *secret*."""
+    login = {"u": name, "e": int(time.time()) + seconds}
+    if name.startswith(GUEST_PREFIX):
+        login["g"] = 1
+    else:
+        login["p"] = _fingerprint(users.current()[name])
+    payload = base64.urlsafe_b64encode(json.dumps(login).encode()).decode()
+    signature = hmac.new(secret, payload.encode(), "sha256").hexdigest()
+    return f"{payload}.{signature}"
+
+
+def check_login(secret: bytes, value: str, users, guests: bool = False):
+    """Return the user of the login cookie *value* if it is good: signed
+    with *secret*, not expired, of a user who is still there with the same
+    password, or of a guest if *guests* are let in; else None."""
+    payload, _, signature = value.partition(".")
+    good = hmac.new(secret, payload.encode(), "sha256").hexdigest()
+    if not hmac.compare_digest(signature, good):
+        return None
+    try:
+        login = json.loads(base64.urlsafe_b64decode(payload.encode()))
+    except ValueError:
+        return None
+    if not isinstance(login, dict) or login.get("e", 0) < time.time():
+        return None
+    name = str(login.get("u", ""))
+    if login.get("g"):
+        return name if guests and name.startswith(GUEST_PREFIX) else None
+    entry = users.current().get(name)
+    if entry is None or login.get("p") != _fingerprint(entry):
+        return None
+    return name
 
 
 def read_password(path: Path) -> str:
@@ -914,6 +1667,9 @@ def service_command(args) -> list:
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes)]
+    if args.guests:
+        command += ["--guests", "--max-guest-sessions",
+                    str(args.max_guest_sessions)]
     for option, value in (("--pr", args.pr), ("--run-id", args.run_id)):
         if value is not None:
             command += [option, str(value), "--repo", args.repo]
@@ -921,7 +1677,7 @@ def service_command(args) -> list:
         ("--cert", args.cert), ("--key", args.key),
         ("--key-password-file", args.key_password_file),
         ("--password-file", args.password_file), ("--env-file", args.env_file),
-        ("--users", args.users),
+        ("--users", args.users), ("--feedback-db", args.feedback_db),
     ):
         if path is not None:
             command += [option, str(path.resolve())]
@@ -1140,6 +1896,17 @@ def parse_args(argv=None):
         "with the variables (the assistant's key) FILE gives the user",
     )
     parser.add_argument(
+        "--guests", action="store_true",
+        help="with --users and --local, let a visitor in as a guest, with "
+        "sessions of their own and no key of the server's: they bring "
+        "their own",
+    )
+    parser.add_argument(
+        "--max-guest-sessions", type=int, default=2, metavar="N",
+        help="with --guests, the sessions the guests have at most at once "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
         "--max-sessions", type=int, default=8, metavar="N",
         help="with --users and --local, the sessions at most at once "
         "(default: %(default)s)",
@@ -1150,9 +1917,57 @@ def parse_args(argv=None):
         "(default: %(default)s)",
     )
     parser.add_argument(
+        "--feedback-db", type=Path, metavar="FILE",
+        help="with --local, store the ratings of the page in the SQLite "
+        "database FILE (made if need be), with the name and the groups of "
+        "the user who rates (--users); the admin console shows them and "
+        "exports them as YAML",
+    )
+    parser.add_argument(
         "--hash-password", action="store_true",
         help="ask a password and print its hash, for a users file",
     )
+    # The users of --users FILE, changed from the command line as the
+    # admin console does; a server running reads the file again.
+    manage = parser.add_mutually_exclusive_group()
+    manage.add_argument("--list-users", action="store_true",
+                        help="list the users of --users, their groups and "
+                        "their assistant's key (whose, never the key)")
+    manage.add_argument("--add-user", metavar="NAME",
+                        help="add the user NAME to --users (made if need "
+                        "be), asking their password; with --groups")
+    manage.add_argument("--set-password", metavar="NAME",
+                        help="ask a new password of the user NAME")
+    manage.add_argument("--set-groups", metavar="NAME",
+                        help="give the user NAME the --groups")
+    manage.add_argument("--set-key", nargs=2, metavar=("NAME", "VARIABLE"),
+                        help="ask the key of the user NAME's assistant, "
+                        "in their variable VARIABLE (e.g. ALBERT_API_KEY); "
+                        "an empty one removes it")
+    manage.add_argument("--set-group-key", nargs=2,
+                        metavar=("GROUP", "VARIABLE"),
+                        help="ask the key of the assistant of the users of "
+                        "GROUP, in their variable VARIABLE, which a user's "
+                        "own replaces; an empty one removes it")
+    manage.add_argument("--set-llm", nargs="+",
+                        metavar=("NAME PROVIDER", "MODEL"),
+                        help="give the user NAME the assistant of PROVIDER "
+                        "(anthropic, openai, openrouter...), with its MODEL "
+                        "if given, asking its key; an empty key removes it")
+    manage.add_argument("--set-group-llm", nargs="+",
+                        metavar=("GROUP PROVIDER", "MODEL"),
+                        help="give the users of GROUP the assistant of "
+                        "PROVIDER, as --set-llm")
+    manage.add_argument("--own-key", nargs=2,
+                        metavar=("NAME|group:GROUP", "yes|no|inherit"),
+                        help="let a user, or the users of a group, give "
+                        "their own key in the page, or not (a user's "
+                        "inherit: as their groups say)")
+    manage.add_argument("--remove-user", metavar="NAME",
+                        help="remove the user NAME")
+    parser.add_argument("--groups", default="", metavar="G1,G2",
+                        help="the groups of --add-user or --set-groups "
+                        "(admin: the admin console)")
     parser.add_argument(
         "--env-file", type=Path, metavar="FILE",
         help="with --local and --password-file or --users, put the "
@@ -1223,6 +2038,10 @@ def parse_args(argv=None):
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
                      "certificate")
+    if args.guests and not (args.users and args.local):
+        parser.error("--guests needs --users and --local")
+    if args.feedback_db and not args.local:
+        parser.error("--feedback-db stores the ratings of --local")
     if args.env_file and not (args.local
                               and (args.password_file or args.users)):
         parser.error("--env-file is the key of those who log in: with "
@@ -1248,12 +2067,101 @@ def daemon(args) -> None:
     install_service(command)
 
 
-def ask_password_hash() -> None:
-    """Ask a password twice and print its hash, for a users file."""
-    password = getpass.getpass("Password: ")
+def ask_password(prompt: str = "Password: ") -> str:
+    """Ask a password twice; stop if it is empty or they differ."""
+    password = getpass.getpass(prompt)
     if not password or password != getpass.getpass("Again: "):
         sys.exit("The passwords are empty or differ")
-    print(hash_password(password))
+    return password
+
+
+def ask_password_hash() -> None:
+    """Ask a password twice and print its hash, for a users file."""
+    print(hash_password(ask_password()))
+
+
+def manage_users(args) -> None:
+    """Change the users of ``--users`` as the command line *args* say."""
+    if not args.users:
+        sys.exit("Give the users file: --users FILE")
+    users = Users(args.users, new=bool(args.add_user))
+    groups = [g.strip() for g in args.groups.split(",") if g.strip()]
+    try:
+        if args.list_users:
+            groups = users.group_envs()
+            for name, entry in sorted(users.current().items()):
+                status = users.status(name)
+                print(f"{name}\tgroups: {', '.join(entry['groups']) or '-'}"
+                      f"\tassistant: {status['assistant']}"
+                      + (f" of {status['group']}" if "group" in status
+                         else "")
+                      + (f" ({status['variable']})"
+                         if status.get("variable") else "")
+                      + f"\t{status.get('provider', '')}"
+                      + ("" if status["own_key"] else "\tno own key"))
+            for group in sorted(groups):
+                info = users.group_status(group)
+                print(f"group {group}\tassistant: {info['llm'] or '-'}"
+                      f"\tvariables: {', '.join(info['variables']) or '-'}"
+                      + ("" if info["own_key"] else "\tno own key"))
+            return
+        if args.add_user:
+            users.change(args.add_user, password=ask_password(
+                f"Password of {args.add_user}: "), groups=groups, create=True)
+            done = f"Added {args.add_user}"
+        elif args.set_password:
+            users.change(args.set_password, password=ask_password(
+                f"New password of {args.set_password}: "))
+            done = f"Changed the password of {args.set_password}"
+        elif args.set_groups:
+            users.change(args.set_groups, groups=groups)
+            done = f"{args.set_groups} is in: {', '.join(groups) or '-'}"
+        elif args.set_llm or args.set_group_llm:
+            words = args.set_llm or args.set_group_llm
+            if len(words) not in (2, 3):
+                sys.exit("Give the name, the provider and, if you like, "
+                         "the model")
+            target, provider, model = (words + [""])[:3]
+            key = getpass.getpass(f"The key of {provider} for {target} "
+                                  "(empty: none): ")
+            llm = {"provider": provider, "model": model, "key": key} \
+                if key else False
+            if args.set_llm:
+                users.change(target, llm=llm)
+            else:
+                users.change_group(target, llm=llm)
+            done = (f"{'Set' if key else 'Removed'} the assistant of "
+                    f"{'the group ' if args.set_group_llm else ''}{target}")
+        elif args.own_key:
+            target, choice = args.own_key
+            if choice not in ("yes", "no", "inherit"):
+                sys.exit("--own-key: yes, no or inherit")
+            own = {"yes": True, "no": False}.get(choice, "inherit")
+            if target.startswith("group:"):
+                if own == "inherit":
+                    sys.exit("A group says yes or no")
+                users.change_group(target[6:], own_key=own)
+            else:
+                users.change(target, own_key=own)
+            done = f"{target} may give their own key: {choice}"
+        elif args.set_group_key:
+            group, variable = args.set_group_key
+            key = getpass.getpass(f"{variable} of the group {group} "
+                                  "(empty: none): ")
+            users.change_group(group, {variable: key or None})
+            done = (f"{'Set' if key else 'Removed'} {variable} of the "
+                    f"group {group}")
+        elif args.set_key:
+            name, variable = args.set_key
+            key = getpass.getpass(f"{variable} of {name} (empty: none): ")
+            users.change(name, env={variable: key or None})
+            done = f"{'Set' if key else 'Removed'} {variable} of {name}"
+        else:
+            users.remove(args.remove_user)
+            done = f"Removed {args.remove_user}"
+    except ValueError as error:
+        sys.exit(str(error))
+    print(f"{done} ({users.path}; a server running reads it again)")
 
 
 def main(argv=None) -> None:
@@ -1262,19 +2170,27 @@ def main(argv=None) -> None:
         return ask_password_hash()
     if args.daemon == "remove":  # whatever the other options
         return remove_service()
+    if (args.list_users or args.add_user or args.set_password
+            or args.set_groups or args.set_key or args.set_group_key
+            or args.set_llm or args.set_group_llm or args.own_key
+            or args.remove_user):
+        return manage_users(args)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
     tls = tls_context(args.cert, args.key, args.key_password_file,
                       ask=not args.daemon) if args.cert else None
     password = read_password(args.password_file) if args.password_file \
         else None
+    env_file_names = []
     if args.env_file:
-        os.environ.update(read_env_file(args.env_file))
+        variables = read_env_file(args.env_file)
+        env_file_names = list(variables)
+        os.environ.update(variables)
         print(f"The AI assistant answers with {default_assistant()} for "
               "those who log in", flush=True)
-    users = read_users(args.users) if args.users else None
+    users = Users(args.users) if args.users else None
     if users and args.local:
-        for name, assistant in users_assistants(users).items():
+        for name, assistant in users_assistants(users.current()).items():
             print(f"{name}: the AI assistant answers with "
                   f"{assistant or 'the key their page gives'}", flush=True)
     if args.daemon:
@@ -1284,19 +2200,42 @@ def main(argv=None) -> None:
         from neurolang_apps.utils.tui.local_backend import LocalBackend
 
         args.site = args.site / "local"
-        page = prepare_local_site(args.site, args.engines)
+        page = prepare_local_site(args.site, args.engines, bool(users))
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
         if users:
             from neurolang_apps.utils.tui.sessions import Sessions
 
+            strip = server_key_names(env_file_names)
+
+            def identity(name):
+                if name.startswith(GUEST_PREFIX):
+                    return guest_identity(strip)
+                env, groups = users.identity(name)
+                # The server's keys, under the user's and their groups'.
+                return {**{n: os.environ[n] for n in strip
+                           if n in os.environ}, **env}, groups
+
             backend = Sessions(
-                args.data_dir, env={n: u["env"] for n, u in users.items()},
+                args.data_dir, identity=identity, withhold=strip,
+                feedback_db=args.feedback_db and args.feedback_db.resolve(),
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 **options,
             )
         else:
+            if args.feedback_db:
+                options["feedback"] = {
+                    "path": str(args.feedback_db.resolve()), "user": "",
+                    "groups": ""}
             backend = LocalBackend(args.data_dir, **options)
+        if args.feedback_db:
+            from neurolang_apps.utils.llm.feedback_server import (
+                FeedbackStore,
+            )
+
+            FeedbackStore(args.feedback_db)  # made now, its errors here
+            print(f"The ratings are stored in {args.feedback_db.resolve()}",
+                  flush=True)
         print(f"NeuroLang runs in {sys.executable}, on the data of "
               f"{args.data_dir.resolve()}", flush=True)
     elif args.pr is not None or args.run_id is not None:
@@ -1308,14 +2247,17 @@ def main(argv=None) -> None:
         )
     write_index(args.site, page)
     server = make_server(args.site, args.host, args.port, backend, tls,
-                         password, args.server_names or (), users)
+                         password, args.server_names or (), users,
+                         args.feedback_db, args.guests,
+                         args.max_guest_sessions)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"
            f"{page.relative_to(args.site).as_posix()}")
     print(f"The REPL is at {url} (Ctrl+C stops it)"
           + (", for those with the password" if password else "")
-          + (f", for its {len(users)} users" if users else ""),
+          + (f", for its {len(users.current())} users; the admins' "
+             "console is at /admin" if users else ""),
           flush=True)
     if not args.no_browser:
         webbrowser.open(url)

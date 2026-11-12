@@ -222,3 +222,44 @@ def test_concurrent_writers_lose_nothing(tmp_path):
     answers = FeedbackStore(path).answers()
     assert len(answers) == 100
     assert len({answer["question"] for answer in answers}) == 100
+
+
+def test_a_database_made_before_the_groups_is_kept(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.sqlite"
+    with sqlite3.connect(path) as db:  # the tables as they were
+        db.executescript(
+            "CREATE TABLE answers (id TEXT PRIMARY KEY, created TEXT,"
+            " client_version TEXT, engine TEXT, provider TEXT, model TEXT,"
+            " strategy TEXT, language TEXT, question TEXT NOT NULL,"
+            " query TEXT, explanation TEXT, steps TEXT, rows TEXT,"
+            " valid INTEGER, error TEXT, seconds REAL, calls INTEGER,"
+            " tokens INTEGER, user TEXT);"
+            "CREATE TABLE feedback (id TEXT PRIMARY KEY, answer_id TEXT NOT"
+            " NULL REFERENCES answers(id), created TEXT, user TEXT, verdict"
+            " TEXT NOT NULL, comment TEXT, corrected_query TEXT,"
+            " corrected_query_checked INTEGER, corrected_rows TEXT);"
+            "INSERT INTO answers (id, question) VALUES ('a1', 'old one');"
+        )
+    store = FeedbackStore(path)
+    store.add_answer({"question": "new one", "user": "ann", "groups": "lab"})
+    answers = {a["question"]: a for a in store.answers()}
+    assert answers["old one"]["groups"] is None
+    assert answers["new one"]["groups"] == "lab"
+
+
+def test_a_rating_of_the_page_is_stored_signed(tmp_path):
+    from ..feedback import StoreFeedbackClient, query_record
+
+    path = tmp_path / "feedback.sqlite"
+    client = StoreFeedbackClient(path, "ann", "admin,lab")
+    client.share_record(
+        query_record("ans(x) :- p(x)", "1 row", "", "neurosynth"),
+        "bad", "wrong rows",
+    )
+    [answer] = FeedbackStore(path).answers()
+    assert (answer["user"], answer["groups"], answer["status"]) == (
+        "ann", "admin,lab", "incorrect")
+    [rating] = answer["feedback"]
+    assert (rating["user"], rating["comment"]) == ("ann", "wrong rows")

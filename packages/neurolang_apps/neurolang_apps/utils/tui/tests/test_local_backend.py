@@ -124,3 +124,39 @@ def test_an_engine_builds_in_a_data_directory_not_made_yet(
     data = tmp_path / "first" / "neurolang_data"
     LocalBackend(data)._build_engine("neurosynth", lambda message: None)
     assert built == [data] and data.is_dir()
+
+
+def test_the_assistant_of_the_user_and_their_own_key(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    monkeypatch.setenv(local_backend.ASSISTANT_ENV, json.dumps(
+        {"provider": "anthropic", "model": "m", "key": "k"}))
+    ready = backend.start("neurostore")
+    assert ready["assistant"] and ready["ownKey"]
+    provider = backend.repl.app.assistant.config().provider()
+    assert (provider.name, provider.model) == ("anthropic", "m")
+    monkeypatch.setenv(local_backend.OWN_KEY_ENV, "0")
+    assert not backend.start("neurostore")["ownKey"]
+    with pytest.raises(ValueError, match="admin"):
+        backend.set_llm(provider="openai", key="mine")
+    backend.set_llm()  # back to the user's: allowed
+
+
+def test_the_users_new_assistant_keeps_the_pages_key(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    # use_identity changes this process's environment: undone after.
+    for name in (local_backend.ASSISTANT_ENV, local_backend.OWN_KEY_ENV):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    backend.start("neurostore")
+    backend.set_llm(provider="openai", key="the-pages", model="gpt")
+    user = json.dumps({"provider": "anthropic", "key": "k", "model": "m"})
+    state = backend.use_identity({local_backend.ASSISTANT_ENV: user})
+    assert state["ready"] and state["ownKey"]
+    provider = backend.repl.app.assistant.config().provider()
+    assert provider.name == "openai"  # the page's key stays
+    # Forbidden their own key, the user has their admin's at once.
+    backend.use_identity({local_backend.ASSISTANT_ENV: user,
+                          local_backend.OWN_KEY_ENV: "0"})
+    assert backend.repl.app.assistant.config().provider().name == "anthropic"
