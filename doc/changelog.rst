@@ -442,6 +442,16 @@ Unreleased
 
 **Bug fixes:**
 
+* A string constant spelled as a variable is a value, not that variable's
+  column (#1086): ``h(u) :- act(u, y) & (u == 'u')`` keeps only the rows of
+  ``act`` whose first column is ``'u'``, instead of every row, in
+  ``NeurolangDL`` and ``NeurolangPDL``, and ``h(u, z) :- act(u, y) &
+  (z == 'z')`` gives ``z`` the value ``'z'`` instead of failing. A constant
+  is equal to a column of the same value (``Constant[str]('u') ==
+  Constant[ColumnStr]('u')``): the translation to relational algebra dropped
+  such an equality as trivially true, and an extended projection
+  ``'z' → z`` was read as keeping the column ``z``, on provenance sets and
+  when moving computed columns above a join.
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
