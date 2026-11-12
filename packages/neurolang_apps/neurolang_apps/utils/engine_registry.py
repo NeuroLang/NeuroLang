@@ -1264,8 +1264,9 @@ def _load_deterministic_atlas(
 
     found = engine_cache.keep_json(
         cache_dir, "fetched", engine_cache.digest(
-            # what is kept: the place of the atlas, its labels and colours
-            atlas_name, "colours", sorted(
+            # what is kept: the place of the atlas (Destrieux's on the
+            # MNI152 template since it was registered), its labels and colours
+            atlas_name, "colours", "mni152", sorted(
                 (k, repr(v)) for k, v in fetch_kw.items() if k != "data_dir"
             ),
         ), fetch,

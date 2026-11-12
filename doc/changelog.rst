@@ -430,6 +430,15 @@ Unreleased
 
 **Bug fixes:**
 
+* The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
+  derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
+  template and off by about a millimetre, and is now moved by the scales and
+  shifts fitted to the template's grey matter (``DESTRIEUX_TO_MNI152`` of
+  ``neurolang.atlases``, ``tools/fit_destrieux_mni152.py``): the
+  grey-matter probability of its cortex goes from 0.627 to 0.649, that of
+  Schaefer's being 0.636.  Its voxels are unchanged, its affine is moved;
+  the studies activating its regions (``destrieux_activated``) are found
+  again, and change a little.
 * The streamlines of a tractogram in MNI space (``neurosynth_iit``'s IIT
   tractogram) are drawn on the MNI152 T1, not on the labels of the atlas
   they are indexed by: the engine's ``streamline_background()`` gives that

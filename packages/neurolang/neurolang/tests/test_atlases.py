@@ -4,6 +4,7 @@ regions and points of the engine, the space and the hash."""
 import subprocess
 import sys
 import warnings
+from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -349,11 +350,14 @@ def test_the_colours_of_destrieux_are_freesurfers(monkeypatch, tmp_path):
         "name": ["Background", "L G_and_S_frontomargin",
                  "R G_and_S_frontomargin", "L Medial_wall"],
     })
+    maps = tmp_path / "destrieux.nii.gz"
+    nib.save(nib.Nifti1Image(np.zeros((2, 2, 2), np.int16), np.eye(4)),
+             str(maps))
 
     class Datasets:
         @staticmethod
         def fetch_atlas_destrieux_2009(**kwargs):
-            return Fetched(maps="maps.nii.gz", labels=lut, lut=lut)
+            return Fetched(maps=str(maps), labels=lut, lut=lut)
 
     from neurolang.utils import nilearn_compat
 
@@ -367,6 +371,29 @@ def test_the_colours_of_destrieux_are_freesurfers(monkeypatch, tmp_path):
     got = atlases.fetch_destrieux(data_dir=str(tmp_path))
     assert atlases.label_colours(got.lut) == {1: "#17dc3c", 2: "#17dc3d"}
     assert atlases.label_colours(lut) == {}
+
+
+def test_destrieux_is_registered_on_the_mni152_template(tmp_path):
+    """Its voxels are those of nilearn's, on the affine moved by
+    DESTRIEUX_TO_MNI152, in a file of its own written once."""
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    affine[:3, 3] = [-76, -109, -64]
+    labels = np.arange(8, dtype=np.int16).reshape(2, 2, 2)
+    path = tmp_path / "destrieux2009_rois_lateralized.nii.gz"
+    nib.save(nib.Nifti1Image(labels, affine), str(path))
+    registered = atlases.registered_image(path, atlases.DESTRIEUX_TO_MNI152)
+    assert registered.endswith("destrieux2009_rois_lateralized_mni152.nii.gz")
+    image = nib.load(registered)
+    np.testing.assert_array_equal(np.asanyarray(image.dataobj), labels)
+    np.testing.assert_allclose(
+        image.affine, atlases.DESTRIEUX_TO_MNI152 @ affine, atol=1e-5
+    )
+    # 1.3 to 2.6% larger, about a millimetre off
+    scales = np.diag(atlases.DESTRIEUX_TO_MNI152)[:3]
+    assert np.all((scales > 1.01) & (scales < 1.03))
+    written = Path(registered).stat().st_mtime_ns
+    assert atlases.registered_image(path, np.eye(4)) == registered
+    assert Path(registered).stat().st_mtime_ns == written
 
 
 def test_the_module_needs_nothing_else_of_neurolang():
