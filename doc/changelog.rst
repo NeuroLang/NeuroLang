@@ -502,6 +502,14 @@ Unreleased
 
 **Bug fixes:**
 
+* A query of the probabilistic frontend binding a variable with a constant,
+  as ``d`` in ``cogat_definition('working memory', d)``, next to a literal
+  sharing no variable with the others, such as a second ``PROB[...] = pa``,
+  is rewritten with magic sets again: walking the adorned rules reordered
+  their bodies to avoid cross products, putting the literals bound by ``d``
+  first, and the magic sets created from the reordered bodies left those of
+  the adorned literals undefined. The query raised ``UnboundVariablesError``
+  on a similarity left unbound, or answered nothing (#1091).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
