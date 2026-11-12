@@ -147,6 +147,15 @@ Unreleased
   REPL's configuration, the REPL in the browser starts with one of the engine's
   example questions, at random, in the box of the assistant: selected, typing
   replaces it, and *Ask* asks it.  ``WebRepl.assistant_ready`` tells the page.
+
+* ``neurolang-repl-serve --local`` serves the REPL page with NeuroLang in the
+  Python of this machine rather than in the browser: the engine is built
+  from the data directory with all of its analyses (``lift('pain', i, j, k,
+  l)`` answers in 9 s, where the browser's engine leaves it out), *Stop*
+  interrupts the query on the server, files are made there, and the AI
+  assistant is the one configured on this machine unless the page gives a
+  key.  The page is the same; its worker, ``local_worker.js``, sends what it
+  is asked to the server.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are
