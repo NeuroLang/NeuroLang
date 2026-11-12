@@ -159,9 +159,20 @@ key is given in the page.  The server answers this machine only, unless
 Python.
 
 To serve it over HTTPS, give a certificate and its private key, PEM files
-(the key may be in the certificate's file, and must have no passphrase)::
+(the key may be in the certificate's file)::
 
    uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
+
+A key with a passphrase is opened with the first line of
+``--key-password-file FILE`` (readable by you only), else the passphrase is
+asked in the terminal; a service needs the file.  If they cannot serve, the
+server says why: the certificate's file has no key, the key is not that of
+the certificate, or the passphrase is not that one.  A PEM file is text,
+its first line ``-----BEGIN CERTIFICATE-----`` or ``-----BEGIN PRIVATE
+KEY-----`` (``ENCRYPTED PRIVATE KEY``: with a passphrase); ``openssl x509
+-in cert.pem -noout -subject`` and ``openssl pkey -in key.pem -noout`` read
+them, and ``openssl x509 -inform DER -in cert.der -out cert.pem`` converts a
+binary (DER) one.
 
 To have it ask a password, put one on the first line of a file (readable by
 you only: ``chmod 600``) and give ``--password-file FILE``: the browser asks

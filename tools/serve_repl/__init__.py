@@ -54,9 +54,11 @@ SITE/run-ID), unless it is there already, and serves it. It needs the
 GitHub CLI, ``gh``, logged in (``gh auth login``).
 
 HTTPS, with a certificate and its private key in PEM files (the key may be
-in the certificate's file)::
+in the certificate's file; its passphrase, if any, on the first line of
+``--key-password-file``, else asked in a terminal)::
 
     uv run --extra apps neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+        [--key-password-file FILE]
 
 A password, on the first line of FILE (not on the command line), that the
 browser asks every visitor for (HTTP Basic, any user name; with ``--cert``
@@ -457,14 +459,55 @@ class Server(http.server.ThreadingHTTPServer):
         self.server_name, self.server_port = self.server_address[:2]
 
 
-def tls_context(cert: Path, key=None) -> ssl.SSLContext:
-    """Return the TLS context of a server with the certificate *cert*, a
-    PEM file (its chain after it), and its private key, in *key* or else
-    in *cert*; a key with a passphrase cannot serve unattended."""
+def tls_context(cert: Path, key=None, password_file=None,
+                ask: bool = True) -> ssl.SSLContext:
+    """
+    Return the TLS context of a server with the certificate *cert*, a PEM
+    file (its chain after it), and its private key, in *key* or else in
+    *cert*. A key with a passphrase is opened with the first line of
+    *password_file*, else the passphrase asked in a terminal, if *ask*.
+    Stop, telling why, if they cannot serve.
+    """
+    asked = []  # whether the key asked its passphrase
+
+    def passphrase():
+        asked.append(True)
+        if password_file:
+            return read_password(Path(password_file))
+        if ask and sys.stdin.isatty():
+            return getpass.getpass(f"The passphrase of the key of {cert}: ")
+        sys.exit(f"The key of {cert} has a passphrase: give it in a file, "
+                 "--key-password-file FILE")
+
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(cert, key, password=lambda: sys.exit(
-        f"The key of {cert} has a passphrase: give it without one (--key)"))
+    try:
+        context.load_cert_chain(cert, key, password=passphrase)
+    except OSError as error:  # ssl.SSLError is one
+        sys.exit("HTTPS cannot be served: "
+                 + _tls_reason(cert, key, error, bool(asked)))
     return context
+
+
+def _tls_reason(cert: Path, key, error: OSError, asked: bool) -> str:
+    """Say why the certificate *cert* and its *key* cannot serve, the key
+    having *asked* its passphrase or not (OpenSSL says "PEM lib" of most
+    of these)."""
+    text = str(error)
+    if not isinstance(error, ssl.SSLError):
+        return f"{error.strerror or text}: {error.filename or cert}"
+    if "KEY_VALUES_MISMATCH" in text or "key values mismatch" in text:
+        return f"the key {key or cert} is not that of the certificate {cert}"
+    if asked or "BAD_DECRYPT" in text or "bad decrypt" in text:
+        return f"the passphrase of the key {key or cert} is not that one"
+    try:
+        has_key = "PRIVATE KEY" in Path(cert).read_text(errors="replace")
+    except OSError:
+        has_key = False
+    if key is None and not has_key:
+        return (f"{cert} has no private key: give the certificate's key, "
+                "--key KEY.pem")
+    return (f"{cert}" + (f" or {key}" if key else "") + " is not a PEM "
+            f"certificate and its key ({text})")
 
 
 def make_server(site: Path, host: str, port: int, backend=None,
@@ -593,6 +636,7 @@ def service_command(args) -> list:
             command += [option, str(value), "--repo", args.repo]
     for option, path in (
         ("--cert", args.cert), ("--key", args.key),
+        ("--key-password-file", args.key_password_file),
         ("--password-file", args.password_file), ("--env-file", args.env_file),
     ):
         if path is not None:
@@ -754,6 +798,11 @@ def parse_args(argv=None):
         help="the private key of --cert, if not in its file",
     )
     parser.add_argument(
+        "--key-password-file", type=Path, metavar="FILE",
+        help="the passphrase of the key of --cert, on the first line of FILE "
+        "(else asked in a terminal; a service needs the file)",
+    )
+    parser.add_argument(
         "--password-file", type=Path, metavar="FILE",
         help="ask every visitor the password on the first line of FILE "
         "(HTTP Basic, any user name); with --cert unless on this machine",
@@ -816,8 +865,8 @@ def parse_args(argv=None):
                        or args.clear):
         parser.error("--local builds no bundle: no --pr, --run-id, "
                      "--rebuild nor --clear")
-    if args.key and not args.cert:
-        parser.error("--key is that of --cert")
+    if (args.key or args.key_password_file) and not args.cert:
+        parser.error("--key and --key-password-file are those of --cert")
     if args.python and not args.daemon:
         parser.error("--python is that of the service: with --daemon")
     if (args.password_file and not args.cert
@@ -850,7 +899,8 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
-    tls = tls_context(args.cert, args.key) if args.cert else None
+    tls = tls_context(args.cert, args.key, args.key_password_file,
+                      ask=not args.daemon) if args.cert else None
     password = read_password(args.password_file) if args.password_file \
         else None
     if args.env_file:

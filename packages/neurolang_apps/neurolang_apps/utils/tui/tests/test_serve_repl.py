@@ -447,16 +447,46 @@ def test_a_key_in_the_certificate_file_serves(serve, tmp_path, certificate):
     assert serve.tls_context(both)
 
 
-def test_a_key_with_a_passphrase_is_refused(serve, tmp_path, certificate):
-    cert, key = certificate
-    locked = tmp_path / "locked.pem"
+def _locked(key, path, passphrase="secret"):
+    """The key *key* with a passphrase, in *path*."""
     subprocess.run(
-        ["openssl", "pkey", "-in", str(key), "-out", str(locked),
-         "-aes256", "-passout", "pass:secret"],
+        ["openssl", "pkey", "-in", str(key), "-out", str(path), "-aes256",
+         "-passout", f"pass:{passphrase}"],
         check=True, capture_output=True,
     )
-    with pytest.raises(SystemExit, match="passphrase"):
+    return path
+
+
+def test_a_key_with_a_passphrase_serves_with_it(
+    serve, tmp_path, certificate, monkeypatch
+):
+    cert, key = certificate
+    locked = _locked(key, tmp_path / "locked.pem")
+    secret = tmp_path / "passphrase"
+    secret.write_text("secret\n")
+    assert serve.tls_context(cert, locked, secret)
+    secret.write_text("wrong\n")
+    with pytest.raises(SystemExit, match="passphrase .* is not that one"):
+        serve.tls_context(cert, locked, secret)
+    # Without a file, a terminal is asked; a service has none.
+    monkeypatch.setattr(serve.sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit, match="key-password-file"):
         serve.tls_context(cert, locked)
+
+
+def test_a_certificate_that_cannot_serve_says_why(
+    serve, tmp_path, certificate
+):
+    cert, key = certificate
+    with pytest.raises(SystemExit, match="has no private key.*--key"):
+        serve.tls_context(cert)
+    other = tmp_path / "other.pem"
+    subprocess.run(["openssl", "genrsa", "-out", str(other), "2048"],
+                   check=True, capture_output=True)
+    with pytest.raises(SystemExit, match="is not that of the certificate"):
+        serve.tls_context(cert, other)
+    with pytest.raises(SystemExit, match="No such file"):
+        serve.tls_context(tmp_path / "none.pem", key)
 
 
 def test_key_needs_cert(serve):
@@ -574,7 +604,7 @@ def test_the_service_is_installed_reinstalled_and_removed(
     built = []
     monkeypatch.setattr(serve, "prepare_site",
                         lambda *args, **kwargs: built.append(args))
-    monkeypatch.setattr(serve, "tls_context", lambda *args: object())
+    monkeypatch.setattr(serve, "tls_context", lambda *args, **kw: object())
     path = serve.service_file()
     assert str(path).startswith(str(tmp_path))
 

@@ -156,8 +156,10 @@ Unreleased
   assistant is the one configured on this machine unless the page gives a
   key.  The page is the same; its worker, ``local_worker.js``, sends what it
   is asked to the server.
-* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]`` serves over
-  HTTPS, and ``--daemon install|reinstall|remove`` installs, replaces or
+* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+  [--key-password-file FILE]`` serves over HTTPS (a key with a passphrase
+  opened with that of the file, or asked in a terminal; a certificate that
+  cannot serve says why), and ``--daemon install|reinstall|remove`` installs, replaces or
   removes a service of the user serving the REPL with the other options, at
   login: a unit of systemd's user manager, or a launchd agent on macOS.
 * ``neurolang-repl-serve --password-file FILE`` asks every visitor for a
