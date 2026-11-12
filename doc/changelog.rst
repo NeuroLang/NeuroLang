@@ -442,6 +442,12 @@ Unreleased
 
 **Bug fixes:**
 
+* An atlas lookup with a voxel, ``ans(l) :- destrieux(l, r) &
+  contains(r, (68, 77, 37))``, gives the labels of the regions holding it
+  instead of an internal error (``TypeError: keywords must be strings``):
+  ``contains`` with a tuple of constants is a membership test, not the
+  explosion of the set into columns named by the constants, which only a
+  tuple of variables, ``contains(r, (i, j, k))``, is (#1074).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
