@@ -289,7 +289,8 @@ as YAML (its examples).  It needs ``--local``.  The sessions write it at once (W
 local disk, not a network one.
 
 With ``--users``, a page opened without a login leads to a login page,
-``/login``, which gives a login cookie, until *Log out* (``/logout``, at
+``/login``, which gives a login cookie, until *Log out* (which ends the
+user's logins in every browser; ``/logout``, at
 the top of the REPL with ``--local``, beside the user's name, linked to
 their account page); behind a proxy of HTTPS, ``--secure-cookie`` sends
 that cookie over HTTPS only.  With ``--guests`` (and ``--local``), the

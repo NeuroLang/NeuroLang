@@ -328,7 +328,8 @@ without a login leads there, and back once logged in (to a page of the
 server only).  A login is a cookie signed by the server (HttpOnly,
 SameSite=Lax, Secure over HTTPS or with ``--secure-cookie``), good for 7
 days; it ends when the user logs out (*Log out*, at the top of the REPL
-with ``--local``, ``/logout``), for every copy of the cookie made before,
+with ``--local``, ``/logout``), in every browser where they logged in
+before (every copy of the cookie),
 when their password changes (the browser that changed it stays logged in),
 when they are removed, and when the server restarts (it signs with a key
 made at its start).  Logging out, and opening the login page, forget the

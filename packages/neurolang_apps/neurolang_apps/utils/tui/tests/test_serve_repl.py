@@ -1555,6 +1555,12 @@ def test_the_command_line_sets_assistants_and_own_keys(
     monkeypatch.setattr(serve.getpass, "getpass", lambda prompt: "")
     serve.main(["--users", path, "--set-llm", "ann", "anthropic"])
     assert serve.Users(users.path).assistant("ann") is None
+    # custom asks its address.
+    monkeypatch.setattr(serve.getpass, "getpass", lambda prompt: "k-2")
+    monkeypatch.setattr("builtins.input", lambda prompt: "https://x.test/v1")
+    serve.main(["--users", path, "--set-llm", "ann", "custom", "m"])
+    assert serve.Users(users.path).assistant("ann")["base_url"] == \
+        "https://x.test/v1"
 
 
 def test_the_server_and_the_sessions_name_the_same_variables(serve):

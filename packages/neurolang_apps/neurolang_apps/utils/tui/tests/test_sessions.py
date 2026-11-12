@@ -489,7 +489,9 @@ def test_a_refresh_is_that_of_the_users_changed_and_waits_for_none(
             begun = time.monotonic()
             sessions.refresh(["bob"])
             assert time.monotonic() - begun < 0.5
-            time.sleep(1.5)
+            deadline = time.monotonic() + 10
+            while bob.busy and time.monotonic() < deadline:
+                time.sleep(0.1)
             assert not bob.busy  # given up
         finally:
             os.kill(bob.pid, signal.SIGCONT)

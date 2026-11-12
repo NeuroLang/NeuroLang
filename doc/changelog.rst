@@ -203,7 +203,8 @@ Unreleased
   (``--own-key``) lets them give their own key, or not, in the page and on
   their account page.
 * ``neurolang-repl-serve --users`` has a login page, ``/login``, a signed
-  login cookie and ``/logout``, which ends every copy of the cookie;
+  login cookie and ``/logout``, which ends the user's logins made before,
+  in every browser;
   ``--secure-cookie`` sends it over HTTPS only behind a proxy.  With
   ``--local``, the REPL shows the name of the user logged in, linked to
   their account page, and *Log out*, which forgets the API keys the page
