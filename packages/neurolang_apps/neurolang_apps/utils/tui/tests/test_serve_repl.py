@@ -1158,3 +1158,42 @@ def test_hash_password_prints_a_hash(serve, monkeypatch, capsys):
     serve.main(["--hash-password"])
     stored = capsys.readouterr().out.strip()
     assert serve._verify(stored, b"s3cret")
+
+
+def test_an_unknown_user_is_checked_as_long_as_a_user(serve, monkeypatch):
+    users = {"ann": {"password": serve.hash_password("a")}}
+    verified = []
+    verify = serve._verify
+    monkeypatch.setattr(serve, "_verify", lambda stored, password: (
+        verified.append(stored), verify(stored, password))[1])
+    assert not serve.check_password(users, "nobody", b"a")
+    assert not serve.check_password(users, "nobody", b"a")
+    assert len(verified) == 2 and verified[0].startswith("scrypt$")
+    assert verified[0] != users["ann"]["password"]
+
+
+def test_the_sessions_options_are_checked(serve):
+    for options in (["--max-sessions", "0"], ["--idle-minutes", "0"],
+                    ["--idle-minutes", "-1"]):
+        with pytest.raises(SystemExit):
+            serve.parse_args(["--local", "--users", "u", *options])
+
+
+def test_a_user_whose_variables_give_no_key_is_told(
+    serve, tmp_path, monkeypatch, capsys
+):
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    monkeypatch.setenv("NEUROLANG_LLM_CONFIG", str(config))
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    assistants = serve.users_assistants({
+        "ann": {"env": {"TEST_LLM_KEY": "k"}},
+        "bob": {"env": {"MY_VAR": "x"}},
+        "carl": {"env": {}},
+    })
+    assert assistants == {"ann": "test (m)", "bob": None, "carl": None}
+    assert "The variables of bob" in capsys.readouterr().err

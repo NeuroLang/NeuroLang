@@ -739,12 +739,18 @@ def _verify(stored: str, password: bytes) -> bool:
 # The credentials checked already, by a hash of their own: Basic sends them
 # with each request, which a hash of scrypt each would slow down.
 _checked = set()
+# A hash an unknown user's password is checked against, to take as long as
+# a known user's: the time does not tell who is a user.
+_unknown = []
 
 
 def check_password(users: dict, user: str, password: bytes) -> bool:
     """Return whether *password* is that of *user* among *users*."""
     entry = users.get(user)
     if entry is None:
+        if not _unknown:
+            _unknown.append(hash_password(os.urandom(16).hex()))
+        _verify(_unknown[0], password)
         return False
     seen = hashlib.sha256(
         b"\0".join([user.encode(), password, entry["password"].encode()])
@@ -794,7 +800,7 @@ def read_users(path: Path) -> dict:
 def users_assistants(users: dict) -> dict:
     """Return, by user, the provider and model their assistant answers
     with by default, or None if it has no key (they give theirs in the
-    page); stop if the variables of a user give no key."""
+    page); warn if the variables of a user give no key."""
     assistants = {}
     for name, entry in users.items():
         saved = dict(os.environ)
@@ -803,8 +809,8 @@ def users_assistants(users: dict) -> dict:
             assistants[name] = default_assistant(quiet=True)
         except SystemExit as error:
             if entry["env"]:
-                sys.exit(f"The variables of {name} give their assistant no "
-                         f"key: {error}")
+                print(f"The variables of {name} give their assistant no "
+                      f"key: {error}", file=sys.stderr, flush=True)
             assistants[name] = None
         finally:
             os.environ.clear()
@@ -1211,6 +1217,8 @@ def parse_args(argv=None):
         parser.error("--python is that of the service: with --daemon")
     if args.password_file and args.users:
         parser.error("--password-file or --users, not both")
+    if args.max_sessions < 1 or not args.idle_minutes > 0:
+        parser.error("--max-sessions is at least 1, --idle-minutes above 0")
     if ((args.password_file or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
