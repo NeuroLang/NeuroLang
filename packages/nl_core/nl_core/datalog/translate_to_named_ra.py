@@ -360,7 +360,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return isinstance(element, Constant[ColumnStr]) or (
             isinstance(element, Constant[Tuple])
             and all(isinstance(column, ColumnStr) for column in element.value)
-    
+        )
+
     @staticmethod
     def is_column_equal_to_itself(formula):
         """`x = x`: a constant equal to the column, as in `x = 'x'`, is
