@@ -156,6 +156,10 @@ Unreleased
   assistant is the one configured on this machine unless the page gives a
   key.  The page is the same; its worker, ``local_worker.js``, sends what it
   is asked to the server.
+* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]`` serves over
+  HTTPS, and ``--daemon install|reinstall|remove`` installs, replaces or
+  removes a service of the user serving the REPL with the other options, at
+  login: a unit of systemd's user manager, or a launchd agent on macOS.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are

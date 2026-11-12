@@ -158,6 +158,28 @@ key is given in the page.  The server answers this machine only, unless
 ``--host``: whoever it answers runs queries, and saves files, with its
 Python.
 
+To serve it over HTTPS, give a certificate and its private key, PEM files
+(the key may be in the certificate's file, and must have no passphrase)::
+
+   uv run --extra apps neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
+
+To keep it serving, as a service of your user started now and at each login,
+add ``--daemon install`` to the options it serves with; ``--daemon
+reinstall`` replaces it with the new options, and ``--daemon remove`` stops
+and removes it::
+
+   uv run --extra apps neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem
+
+On Linux it is a unit of systemd's user manager,
+:file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user
+-u neurolang-repl`` shows its log; ``loginctl enable-linger`` keeps it
+running after you log out); on macOS a launchd agent,
+:file:`~/Library/LaunchAgents/org.neurolang.repl.plist`, logging to
+:file:`~/Library/Logs/neurolang-repl.log`.  ``install`` builds the bundle
+first, where you see it; the service runs this checkout's Python with the
+paths made absolute, but without your shell's environment.  A port below
+1024 needs a service of the system, which this does not install.
+
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in
 :file:`~/.cache/neurolang/repl-embeddings` (``--embeddings``) and made

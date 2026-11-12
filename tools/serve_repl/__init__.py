@@ -51,15 +51,39 @@ the documentation's workflow uploaded for the latest run of pull request N
 (the artifact ``repl-pr-N``), or for the run ID, into SITE/pr-N (or
 SITE/run-ID), unless it is there already, and serves it. It needs the
 GitHub CLI, ``gh``, logged in (``gh auth login``).
+
+HTTPS, with a certificate and its private key in PEM files (the key may be
+in the certificate's file)::
+
+    uv run --extra apps neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+
+As a service of this user, started now and at each login, serving as the
+other options say::
+
+    uv run --extra apps neurolang-repl-serve --daemon install [OPTIONS]
+    uv run --extra apps neurolang-repl-serve --daemon reinstall [OPTIONS]
+    uv run --extra apps neurolang-repl-serve --daemon remove
+
+a unit of systemd's user manager (``~/.config/systemd/user/``; ``loginctl
+enable-linger`` keeps it running after logout), or a launchd agent on macOS
+(``~/Library/LaunchAgents/``). ``install`` builds the bundle first, here;
+the service runs this Python, ``python -m serve_repl``, with no browser and
+the paths made absolute, but not the environment of this shell. A port
+below 1024 needs a service of the system, which this does not install.
 """
 
 import argparse
+import getpass
 import http.server
 import importlib.util
 import json
+import os
+import plistlib
 import queue
+import shlex
 import shutil
 import socketserver
+import ssl
 import subprocess
 import sys
 import urllib.parse
@@ -380,16 +404,147 @@ class Server(http.server.ThreadingHTTPServer):
         self.server_name, self.server_port = self.server_address[:2]
 
 
-def make_server(site: Path, host: str, port: int, backend=None):
+def tls_context(cert: Path, key=None) -> ssl.SSLContext:
+    """Return the TLS context of a server with the certificate *cert*, a
+    PEM file (its chain after it), and its private key, in *key* or else
+    in *cert*; a key with a passphrase cannot serve unattended."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert, key, password=lambda: sys.exit(
+        f"The key of {cert} has a passphrase: give it without one (--key)"))
+    return context
+
+
+def make_server(site: Path, host: str, port: int, backend=None,
+                tls=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
-    page with the REPL of *backend* if given."""
+    page with the REPL of *backend* if given, over HTTPS with the TLS
+    context *tls* if given."""
     handler = Handler
     if backend is not None:
         handler = type("Handler", (LocalHandler,), {"backend": backend})
-    return Server(
+    server = Server(
         (host, port),
         lambda *args, **kwargs: handler(*args, directory=str(site), **kwargs),
     )
+    if tls is not None:
+        # The handshake is done by the thread of the request, not by the
+        # loop accepting them, which a client that says nothing would stop.
+        server.socket = tls.wrap_socket(
+            server.socket, server_side=True, do_handshake_on_connect=False
+        )
+    return server
+
+
+# The service running the server, of this user: a unit of systemd's user
+# manager, or a launchd agent on macOS.
+SERVICE = "neurolang-repl"
+LAUNCHD_LABEL = "org.neurolang.repl"
+
+
+def service_file() -> Path:
+    """Return the file of the service of this user."""
+    if sys.platform == "darwin":
+        return (Path.home() / "Library" / "LaunchAgents"
+                / f"{LAUNCHD_LABEL}.plist")
+    return (Path.home() / ".config" / "systemd" / "user"
+            / f"{SERVICE}.service")
+
+
+def service_command(args) -> list:
+    """Return the command the service runs: this one serving as *args*
+    say, with no browser, nothing to build again and absolute paths."""
+    command = [
+        sys.executable, "-m", "serve_repl", "--no-browser",
+        "--host", args.host, "--port", str(args.port),
+        "--site", str(args.site.resolve()),
+        "--embeddings", str(args.embeddings.resolve()),
+    ]
+    for engine in args.engines or ():
+        command += ["--engine", engine]
+    if args.local:
+        command += ["--local", "--data-dir", str(args.data_dir.resolve()),
+                    "--resolution", str(args.resolution)]
+        command += ["--light"] if args.light else []
+    for option, value in (("--pr", args.pr), ("--run-id", args.run_id)):
+        if value is not None:
+            command += [option, str(value), "--repo", args.repo]
+    for option, path in (("--cert", args.cert), ("--key", args.key)):
+        if path is not None:
+            command += [option, str(path.resolve())]
+    return command
+
+
+def systemd_unit(command: list, directory: Path) -> str:
+    """Return the systemd unit running *command* in *directory*."""
+    run = shlex.join(command).replace("%", "%%")
+    return (
+        "[Unit]\n"
+        "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
+        "After=network-online.target\n\n"
+        "[Service]\n"
+        f"ExecStart={run}\n"
+        f"WorkingDirectory={directory}\n"
+        "Restart=on-failure\n\n"
+        "[Install]\n"
+        "WantedBy=default.target\n"
+    )
+
+
+def launchd_plist(command: list, directory: Path) -> bytes:
+    """Return the launchd agent running *command* in *directory*."""
+    log = str(Path.home() / "Library" / "Logs" / f"{SERVICE}.log")
+    return plistlib.dumps({
+        "Label": LAUNCHD_LABEL, "ProgramArguments": command,
+        "WorkingDirectory": str(directory), "RunAtLoad": True,
+        "KeepAlive": {"SuccessfulExit": False},
+        "StandardOutPath": log, "StandardErrorPath": log,
+    })
+
+
+def service_manager(*args, check=True):
+    """Run systemctl --user, or launchctl on macOS, with *args*."""
+    manager = (["launchctl"] if sys.platform == "darwin"
+               else ["systemctl", "--user"])
+    if shutil.which(manager[0]) is None:
+        sys.exit(f"--daemon needs {manager[0]}, which this machine lacks")
+    subprocess.run([*manager, *args], check=check)
+
+
+def install_service(args) -> None:
+    """Install the service serving as *args* say, start it and enable it
+    at login."""
+    path, command = service_file(), service_command(args)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "darwin":
+        path.write_bytes(launchd_plist(command, Path.cwd()))
+        service_manager("bootstrap", f"gui/{os.getuid()}", str(path))
+        where = f"its log is {Path.home() / 'Library/Logs' / SERVICE}.log"
+    else:
+        path.write_text(systemd_unit(command, Path.cwd()))
+        service_manager("daemon-reload")
+        service_manager("enable", "--now", SERVICE)
+        where = (f"journalctl --user -u {SERVICE} shows its log; it stops "
+                 "at logout unless: loginctl enable-linger "
+                 f"{getpass.getuser()}")
+    print(f"Installed {path}: the REPL serves at login; {where}",
+          flush=True)
+
+
+def remove_service() -> None:
+    """Stop the service, disable it and remove its file, if installed."""
+    path = service_file()
+    if not path.exists():
+        print("No service of the REPL is installed", flush=True)
+        return
+    if sys.platform == "darwin":
+        service_manager("bootout", f"gui/{os.getuid()}/{LAUNCHD_LABEL}",
+                        check=False)
+        path.unlink()
+    else:
+        service_manager("disable", "--now", SERVICE, check=False)
+        path.unlink()
+        service_manager("daemon-reload")
+    print(f"Removed {path}", flush=True)
 
 
 def parse_args(argv=None):
@@ -421,6 +576,20 @@ def parse_args(argv=None):
         "all of them)",
     )
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument(
+        "--cert", type=Path, metavar="PEM",
+        help="serve HTTPS with this certificate (PEM, its chain after it)",
+    )
+    parser.add_argument(
+        "--key", type=Path, metavar="PEM",
+        help="the private key of --cert, if not in its file",
+    )
+    parser.add_argument(
+        "--daemon", choices=("install", "reinstall", "remove"),
+        help="install (building its bundle now), reinstall or remove a "
+        "service of this user serving the REPL as the other options say, "
+        "at login: systemd's user manager, or launchd on macOS",
+    )
     parser.add_argument(
         "--local", action="store_true",
         help="run NeuroLang in the Python of this machine rather than in "
@@ -461,11 +630,30 @@ def parse_args(argv=None):
                        or args.clear):
         parser.error("--local builds no bundle: no --pr, --run-id, "
                      "--rebuild nor --clear")
+    if args.key and not args.cert:
+        parser.error("--key is that of --cert")
     return args
+
+
+def daemon(args) -> None:
+    """Install, reinstall or remove the service, as *args* say; the bundle
+    of the page in the browser is built now, its errors told here."""
+    if args.daemon != "install":
+        remove_service()
+    if args.daemon == "remove":
+        return
+    if not (args.local or args.pr is not None or args.run_id is not None):
+        prepare_site(args.site, args.rebuild, args.embeddings,
+                     clear=args.clear, engines=args.engines)
+    install_service(args)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
+    # A certificate that cannot serve fails now, not in the service.
+    tls = tls_context(args.cert, args.key) if args.cert else None
+    if args.daemon:
+        return daemon(args)
     backend = None
     if args.local:
         from neurolang_apps.utils.tui.local_backend import LocalBackend
@@ -485,9 +673,10 @@ def main(argv=None) -> None:
             args.site, args.rebuild, args.embeddings, clear=args.clear,
             engines=args.engines,
         )
-    server = make_server(args.site, args.host, args.port, backend)
+    server = make_server(args.site, args.host, args.port, backend, tls)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
-    url = (f"http://{host}:{server.server_address[1]}/"
+    scheme = "https" if tls else "http"
+    url = (f"{scheme}://{host}:{server.server_address[1]}/"
            f"{page.relative_to(args.site).as_posix()}")
     print(f"The REPL is at {url} (Ctrl+C stops it)", flush=True)
     if not args.no_browser:

@@ -2,6 +2,10 @@
 
 import importlib.util
 import json
+import plistlib
+import shutil
+import socket
+import ssl
 import subprocess
 import threading
 import urllib.error
@@ -392,3 +396,141 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.fixture
+def certificate(tmp_path):
+    """A self-signed certificate of localhost and its key, made by openssl."""
+    if shutil.which("openssl") is None:
+        pytest.skip("needs openssl")
+    cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
+    subprocess.run(
+        ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+         "-keyout", str(key), "-out", str(cert), "-days", "1",
+         "-subj", "/CN=localhost"],
+        check=True, capture_output=True,
+    )
+    return cert, key
+
+
+def test_https_serves_with_the_certificate_even_with_a_silent_client(
+    serve, tmp_path, certificate
+):
+    cert, key = certificate
+    (tmp_path / "bundle.json").write_text(json.dumps({"wheels": []}))
+    server = serve.make_server(
+        tmp_path, "127.0.0.1", 0, tls=serve.tls_context(cert, key)
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    # A client that connects and says nothing does not stop the others.
+    silent = socket.create_connection(("127.0.0.1", port))
+    try:
+        context = ssl.create_default_context(cafile=str(cert))
+        context.check_hostname = False
+        with urllib.request.urlopen(
+            f"https://127.0.0.1:{port}/bundle.json", context=context,
+            timeout=10,
+        ) as response:
+            assert json.load(response) == {"wheels": []}
+    finally:
+        silent.close()
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_key_in_the_certificate_file_serves(serve, tmp_path, certificate):
+    cert, key = certificate
+    both = tmp_path / "both.pem"
+    both.write_text(cert.read_text() + key.read_text())
+    assert serve.tls_context(both)
+
+
+def test_key_needs_cert(serve):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--key", "key.pem"])
+
+
+def _daemon_args(serve, tmp_path, *more):
+    return serve.parse_args([
+        "--site", str(tmp_path / "site"), "--port", "8443",
+        "--cert", "cert.pem", "--engine", "neurosynth", *more,
+    ])
+
+
+def test_the_service_serves_as_asked_with_absolute_paths(
+    serve, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--local", "--data-dir", "data",
+    ))
+    assert command[1:4] == ["-m", "serve_repl", "--no-browser"]
+    assert "--daemon" not in command
+    after = dict(zip(command, command[1:]))
+    assert after["--port"] == "8443"
+    assert after["--cert"] == str(tmp_path / "cert.pem")
+    assert after["--data-dir"] == str(tmp_path / "data")
+    assert after["--engine"] == "neurosynth"
+    assert "--local" in command
+
+
+def test_the_service_builds_nothing_again(serve, tmp_path):
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--rebuild", "--clear", "--daemon", "install",
+    ))
+    assert not {"--rebuild", "--clear", "--daemon"} & set(command)
+
+
+def test_the_systemd_unit_runs_the_command(serve, tmp_path):
+    unit = serve.systemd_unit(["/py", "-m", "serve_repl", "--site",
+                               "/a b/100%"], tmp_path)
+    assert "ExecStart=/py -m serve_repl --site '/a b/100%%'\n" in unit
+    assert f"WorkingDirectory={tmp_path}\n" in unit
+    assert "WantedBy=default.target" in unit
+
+
+def test_the_launchd_agent_runs_the_command(serve, tmp_path):
+    agent = plistlib.loads(serve.launchd_plist(["/py", "-m", "x"], tmp_path))
+    assert agent["Label"] == serve.LAUNCHD_LABEL
+    assert agent["ProgramArguments"] == ["/py", "-m", "x"]
+    assert agent["RunAtLoad"] and agent["WorkingDirectory"] == str(tmp_path)
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_the_service_is_installed_reinstalled_and_removed(
+    serve, tmp_path, monkeypatch, platform
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(serve.sys, "platform", platform)
+    monkeypatch.setattr(serve.shutil, "which", lambda name: name)
+    managed = []
+    monkeypatch.setattr(
+        serve.subprocess, "run",
+        lambda command, check=True: managed.append(command[1:]),
+    )
+    built = []
+    monkeypatch.setattr(serve, "prepare_site",
+                        lambda *args, **kwargs: built.append(args))
+    monkeypatch.setattr(serve, "tls_context", lambda *args: object())
+    path = serve.service_file()
+    assert str(path).startswith(str(tmp_path))
+
+    serve.main(["--daemon", "install", "--site", str(tmp_path / "site"),
+                "--cert", "cert.pem"])
+    assert path.is_file() and len(built) == 1
+    assert "--cert" in path.read_bytes().decode()
+    serve.main(["--daemon", "reinstall", "--site", str(tmp_path / "site")])
+    assert path.is_file() and len(built) == 2
+    assert "--cert" not in path.read_bytes().decode()
+    serve.main(["--daemon", "remove"])
+    assert not path.exists()
+    serve.main(["--daemon", "remove"])  # nothing installed: nothing done
+    verbs = [command[1] if command[0] == "--user" else command[0]
+             for command in managed]
+    if platform == "linux":
+        assert verbs == ["daemon-reload", "enable", "disable",
+                         "daemon-reload", "daemon-reload", "enable",
+                         "disable", "daemon-reload"]
+    else:
+        assert verbs == ["bootstrap", "bootout", "bootstrap", "bootout"]
