@@ -156,6 +156,66 @@ Unreleased
   assistant is the one configured on this machine unless the page gives a
   key.  The page is the same; its worker, ``local_worker.js``, sends what it
   is asked to the server.
+* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+  [--key-password-file FILE]`` serves over HTTPS (a key with a passphrase
+  opened with that of the file, or asked in a terminal; a certificate that
+  cannot serve says why), and ``--daemon install|reinstall|remove`` installs, replaces or
+  removes a service of the user serving the REPL with the other options, at
+  login: a unit of systemd's user manager, or a launchd agent on macOS.
+* ``neurolang-repl-serve --password-file FILE`` asks every visitor for a
+  password (HTTP Basic), ``--env-file ENV`` gives those with it, with
+  ``--local``, the server's key of the AI assistant, and the site's main
+  page leads to the REPL.  Without a password, the server answers only the
+  requests sent to this machine's names, ``--host`` and those of
+  ``--server-name NAME`` (against DNS rebinding), and, with a password or
+  without, a POST only from the page of the site (in JSON, from its
+  ``Origin``); a silent connection is closed after a minute, and a
+  request's body is a JSON object of 1 MB at most.
+* ``neurolang-repl-serve --users FILE`` asks a user's name and password
+  (scrypt hashes, ``--hash-password``); with ``--local`` each tab of a user
+  has a session in a process of its own, forked from a builder that builds
+  each engine once, with the variables (the AI assistant's key) the file
+  gives the user (``--max-sessions``, ``--idle-minutes``); a duplicated
+  tab has a session of its own.  The feedback
+  server's SQLite database is in WAL mode, for the writes of concurrent
+  sessions.
+* ``neurolang-repl-serve --users``: users have ``groups``, and those of
+  ``admin`` the admin console at ``/admin`` (users, groups, the status of
+  their assistant's key, sessions, ratings); with ``--local``,
+  ``--feedback-db FILE`` stores the ratings of the page on the server with
+  the user's name and groups, the rated answers of the assistant exported
+  from the console as its examples, by engine.  A POST is taken from the
+  server's own page only.  ``--add-user NAME --groups ...``,
+  ``--set-password``, ``--set-groups``, ``--set-key NAME VARIABLE``,
+  ``--remove-user`` and ``--list-users`` manage the users from the command
+  line; the console and the command line write the users file holding a
+  lock of it, and a password has 8 characters at least.
+* With ``neurolang-repl-serve --users``, each user changes their own
+  password on their account page, ``/account``, linked from the REPL's page.
+* The users file of ``neurolang-repl-serve --users`` gives the groups their
+  keys (``groups: {lab: {env: {...}}}``, beside ``users:``), which their
+  users have unless they have their own; the console shows and sets them, as
+  does ``--set-group-key GROUP VARIABLE``.
+* A user or a group of ``neurolang-repl-serve --users`` has an assistant of
+  its own, ``llm`` (a provider of the page's form, its model and key),
+  which an admin sets in the console or with ``--set-llm`` and
+  ``--set-group-llm``, and a user saves on their account page; ``own_key``
+  (``--own-key``) lets them give their own key, or not, in the page and on
+  their account page.
+* ``neurolang-repl-serve --users`` has a login page, ``/login``, a signed
+  login cookie and ``/logout``, which ends the user's logins made before,
+  in every browser;
+  ``--secure-cookie`` sends it over HTTPS only behind a proxy.  With
+  ``--local``, the REPL shows the name of the user logged in, linked to
+  their account page, and *Log out*, which forgets the API keys the page
+  kept.  The page shows whether the server's assistant answers, and a key
+  saved on the account page or in the console answers at once in the open
+  pages of the users it changes.
+* ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
+  login page: sessions of their own, without an account, whose assistant
+  answers only with the key they give (no key of the server's, which is
+  kept out of every session's process unless its user has it), at most
+  ``--max-guest-sessions`` at once.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are
@@ -448,6 +508,14 @@ Unreleased
   ``contains`` with a tuple of constants is a membership test, not the
   explosion of the set into columns named by the constants, which only a
   tuple of variables, ``contains(r, (i, j, k))``, is (#1074).
+* A query of the probabilistic frontend binding a variable with a constant,
+  as ``d`` in ``cogat_definition('working memory', d)``, next to a literal
+  sharing no variable with the others, such as a second ``PROB[...] = pa``,
+  is rewritten with magic sets again: walking the adorned rules reordered
+  their bodies to avoid cross products, putting the literals bound by ``d``
+  first, and the magic sets created from the reordered bodies left those of
+  the adorned literals undefined. The query raised ``UnboundVariablesError``
+  on a similarity left unbound, or answered nothing (#1091).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and

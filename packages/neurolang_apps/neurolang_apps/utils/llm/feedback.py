@@ -269,6 +269,50 @@ class GristFeedbackClient(FeedbackClient):
         )
 
 
+class StoreFeedbackClient:
+    """
+    Rated answers written in the feedback database *path* of this machine
+    (a :class:`~neurolang_apps.utils.llm.feedback_server.FeedbackStore`,
+    which several processes may write at once), signed by the *user* and
+    their *groups*, as :class:`GristFeedbackClient` shares them.
+    """
+
+    VERDICTS = {"good": "correct", "bad": "incorrect"}
+
+    def __init__(self, path, user: str = "", groups: str = ""):
+        from .feedback_server import FeedbackStore
+
+        self.store = FeedbackStore(path)
+        self.user = user
+        self.groups = groups
+
+    def share_rated(
+        self, question, result, provider, strategy, engine, verdict,
+        comment: str = "",
+    ) -> str:
+        """Store the answer of the assistant with its *verdict*."""
+        return self.share_record(
+            answer_record(question, result, provider, strategy, engine),
+            verdict, comment,
+        )
+
+    def share_record(self, record: dict, verdict: str, comment="") -> str:
+        """Store the answer or the query *record* with its *verdict* and
+        *comment*, signed; return its id; raise :class:`FeedbackError`."""
+        signed = {"user": self.user, "groups": self.groups}
+        try:
+            answer = self.store.add_answer(
+                {**record, **signed}, question=bool(record.get("question"))
+            )
+            self.store.add_feedback(answer, {
+                "verdict": self.VERDICTS.get(verdict, verdict),
+                "comment": comment, **signed,
+            })
+        except Exception as error:
+            raise FeedbackError(f"The rating is not stored: {error}")
+        return answer
+
+
 def feedback_client(config, say: Callable = print, transport=None):
     """
     Return the client of the feedback server of *config*, an
