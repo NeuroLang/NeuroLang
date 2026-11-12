@@ -429,3 +429,18 @@ def test_previews_without_fork_run_in_a_thread(nl, monkeypatch):
         memory_mb=4096,
     )
     assert preview.ok and preview.rows == 4
+
+
+def test_a_predicate_the_engine_leaves_out_is_not_available(nl):
+    """The assistant is told that a predicate the engine leaves out (the
+    browser's, see ``WebRepl``) is not available, not that it is
+    unknown."""
+    nl.left_out_predicates = frozenset({"uniformity"})
+    result = check_query(
+        nl, "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)", "datalog"
+    )
+    assert not result.ok
+    assert "uniformity is not available in the browser" in result.message
+    assert "has no facts or rules" not in result.message
+    described = EngineContext(nl).describe("uniformity")
+    assert "uniformity is not available in the browser" in described

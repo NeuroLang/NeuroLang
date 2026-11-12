@@ -695,6 +695,14 @@ Unreleased
 * ``PROB[...]`` and ``MARG[...]`` accept their conjunctions in parentheses,
   as a rule's condition does: ``PROB[(a(x, s), (x < y)) // (b(s), c(s))] = p``
   was a syntax error.
+* The REPL in the browser, whose engine leaves out the analyses that need
+  gigabytes (``activated``, ``uniformity``, ``lift``... and the rules
+  defined from them), says so: its banner lists them, its examples and the
+  examples of its assistant leave out those using them, the assistant is
+  told never to use them, and a query using one fails with "is not
+  available in the browser" and the command of the REPL that has them,
+  rather than with an unknown predicate or an empty result, in the REPL and
+  for the assistant (#1068).
 
 **Performance:**
 
