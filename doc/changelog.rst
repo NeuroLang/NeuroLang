@@ -156,6 +156,21 @@ Unreleased
   assistant is the one configured on this machine unless the page gives a
   key.  The page is the same; its worker, ``local_worker.js``, sends what it
   is asked to the server.
+* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+  [--key-password-file FILE]`` serves over HTTPS (a key with a passphrase
+  opened with that of the file, or asked in a terminal; a certificate that
+  cannot serve says why), and ``--daemon install|reinstall|remove`` installs, replaces or
+  removes a service of the user serving the REPL with the other options, at
+  login: a unit of systemd's user manager, or a launchd agent on macOS.
+* ``neurolang-repl-serve --password-file FILE`` asks every visitor for a
+  password (HTTP Basic), ``--env-file ENV`` gives those with it, with
+  ``--local``, the server's key of the AI assistant, and the site's main
+  page leads to the REPL.  Without a password, the server answers only the
+  requests sent to this machine's names, ``--host`` and those of
+  ``--server-name NAME`` (against DNS rebinding), and, with a password or
+  without, a POST only from the page of the site (in JSON, from its
+  ``Origin``); a silent connection is closed after a minute, and a
+  request's body is a JSON object of 1 MB at most.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are

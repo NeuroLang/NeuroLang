@@ -130,7 +130,8 @@ the ``neurosynth`` engine, a few minutes) in
 bundle built before and then builds it from nothing (the text embeddings
 below are kept).  The page opens at
 ``http://localhost:8766/_static/repl/index.html``; the browser loads Pyodide
-from its CDN.  ``--host 0.0.0.0`` serves the other machines of the network,
+from its CDN.  ``--host 0.0.0.0 --server-name NAME`` serves the other
+machines of the network, which reach it by NAME (see below),
 ``--port`` changes the port, ``--no-browser`` does not open the page, and
 ``--help`` lists the options.  The command is that of the workspace's root
 project (:file:`tools/serve_repl`).
@@ -145,7 +146,7 @@ REPL that can start; to try the REPL of a branch, build it locally with
 The same page can run NeuroLang in the Python of this machine rather than
 in the browser::
 
-   uv run --extra apps neurolang-repl-serve --local --data-dir neurolang_data
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --data-dir neurolang_data
 
 builds no bundle: the page's worker (``local_worker.js``) sends what it is
 asked to the server, which builds the engine from ``--data-dir`` (by default
@@ -157,6 +158,79 @@ server, and the AI assistant is the one configured on this machine, unless a
 key is given in the page.  The server answers this machine only, unless
 ``--host``: whoever it answers runs queries, and saves files, with its
 Python.
+
+Without a password (below), the server answers only the requests sent to
+``localhost``, ``127.0.0.1``, ``::1``, the ``--host`` it is given (unless
+``0.0.0.0`` or ``::``), and the names of ``--server-name NAME`` (repeat it
+for several): a page of another site whose name it made lead to your
+machine (DNS rebinding) would otherwise run queries in its Python.  The
+other machines of the network need ``--server-name`` with the name, or the
+address, by which they reach it, e.g. ``--host 0.0.0.0 --server-name
+repl.lab.org``; the server's answer to another name says so.  With a
+password, any name is answered.  With a password or without, a POST is
+answered only if it is the page's: in JSON (``Content-Type:
+application/json``, which a form of another site cannot send), and from
+this site if the browser gives its ``Origin``; otherwise any site you visit
+could run queries here.  A connection that says nothing for a minute (its
+TLS handshake, its request) is closed, and the body of a request to
+``/api/`` is a JSON object of 1 MB at most.
+
+To serve it over HTTPS, give a certificate and its private key, PEM files
+(the key may be in the certificate's file)::
+
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --server-name repl.lab.org --cert cert.pem --key key.pem
+
+A key with a passphrase is opened with the first line of
+``--key-password-file FILE`` (readable by you only; the line as it is, but
+for its line ending), else the passphrase is
+asked in the terminal; a service needs the file.  If they cannot serve, the
+server says why: the certificate's file has no key, the key is not that of
+the certificate, or the passphrase is not that one.  A PEM file is text,
+its first line ``-----BEGIN CERTIFICATE-----`` or ``-----BEGIN PRIVATE
+KEY-----`` (``ENCRYPTED PRIVATE KEY``: with a passphrase); ``openssl x509
+-in cert.pem -noout -subject`` and ``openssl pkey -in key.pem -noout`` read
+them, and ``openssl x509 -inform DER -in cert.der -out cert.pem`` converts a
+binary (DER) one.
+
+To have it ask a password, put one on the first line of a file (readable by
+you only: ``chmod 600``; the line as it is, spaces included, but for its
+line ending) and give ``--password-file FILE``: the browser asks
+for it (any user name will do) before the site's first file, and the
+server answers no request without it.  Over the network it needs
+``--cert``, as the password goes with each request.  With ``--local``,
+``--env-file ENV`` gives those with the password the key of the AI
+assistant: ENV's ``NAME=VALUE`` lines are put in the server's environment,
+where the provider of :file:`~/.config/neurolang/llm.yaml` reads its key (the
+variable its ``api_key_env`` names, e.g. ``ALBERT_API_KEY=...``).  The key
+stays on the server; a key given in the page replaces it.  The visitors
+share one session of the REPL, its rules and a key one of them gives, and a
+restart restarts it for all.  The site's main page, ``/``, leads to the
+REPL.
+
+To keep it serving, as a service of your user started now and at each login,
+add ``--daemon install`` to the options it serves with; ``--daemon
+reinstall`` replaces it with the new options (once their bundle is built
+and the service's Python can serve, so that a failure leaves the service
+as it was), and ``--daemon remove``, with no other option, stops and
+removes it; if systemd or launchd fails to start it, it is removed and the
+error told::
+
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --password-file password --env-file llm.env
+
+On Linux it is a unit of systemd's user manager,
+:file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user
+-u neurolang-repl`` shows its log; ``loginctl enable-linger`` keeps it
+running after you log out); on macOS a launchd agent,
+:file:`~/Library/LaunchAgents/org.neurolang.repl.plist`, logging to
+:file:`~/Library/Logs/neurolang-repl.log`.  ``install`` builds the bundle
+first, where you see it; the service runs the Python of the environment
+that installs it (with ``uv run``, the checkout's :file:`.venv/bin/python`;
+``--python PATH`` chooses another), with that environment's ``PATH`` and the
+paths made absolute, but not the other variables of your shell (API keys).  It uses that environment as it is: a
+later ``uv run`` or ``uv sync`` without ``--extra apps`` (and the other
+extras it was installed with) removes their packages from it, and the
+service then fails to start until they are back.  A port below
+1024 needs a service of the system, which this does not install.
 
 ``query_similarity`` needs the text embeddings in the bundle: the SPECTER2
 query model and the embeddings of the studies.  They are kept in
