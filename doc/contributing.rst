@@ -163,12 +163,26 @@ To serve it over HTTPS, give a certificate and its private key, PEM files
 
    uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local --host 0.0.0.0 --cert cert.pem --key key.pem
 
+To have it ask a password, put one on the first line of a file (readable by
+you only: ``chmod 600``) and give ``--password-file FILE``: the browser asks
+for it (any user name will do) before the site's first file, and the
+server answers no request without it.  Over the network it needs
+``--cert``, as the password goes with each request.  With ``--local``,
+``--env-file ENV`` gives those with the password the key of the AI
+assistant: ENV's ``NAME=VALUE`` lines are put in the server's environment,
+where the provider of :file:`~/.config/neurolang/llm.yaml` reads its key (the
+variable its ``api_key_env`` names, e.g. ``ALBERT_API_KEY=...``).  The key
+stays on the server; a key given in the page replaces it.  The visitors
+share one session of the REPL, its rules and a key one of them gives, and a
+restart restarts it for all.  The site's main page, ``/``, leads to the
+REPL.
+
 To keep it serving, as a service of your user started now and at each login,
 add ``--daemon install`` to the options it serves with; ``--daemon
 reinstall`` replaces it with the new options, and ``--daemon remove`` stops
 and removes it::
 
-   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem
+   uv run --extra apps --extra tui --extra llm neurolang-repl-serve --daemon install --local --host 0.0.0.0 --cert cert.pem --key key.pem --password-file password --env-file llm.env
 
 On Linux it is a unit of systemd's user manager,
 :file:`~/.config/systemd/user/neurolang-repl.service` (``journalctl --user

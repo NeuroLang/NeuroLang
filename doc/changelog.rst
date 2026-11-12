@@ -160,6 +160,10 @@ Unreleased
   HTTPS, and ``--daemon install|reinstall|remove`` installs, replaces or
   removes a service of the user serving the REPL with the other options, at
   login: a unit of systemd's user manager, or a launchd agent on macOS.
+* ``neurolang-repl-serve --password-file FILE`` asks every visitor for a
+  password (HTTP Basic), ``--env-file ENV`` gives those with it, with
+  ``--local``, the server's key of the AI assistant, and the site's main
+  page leads to the REPL.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are

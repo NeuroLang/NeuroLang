@@ -1,5 +1,6 @@
 """Tests for the script serving the REPL in the browser on this machine."""
 
+import base64
 import importlib.util
 import json
 import plistlib
@@ -609,3 +610,112 @@ def test_a_service_python_lacking_the_extras_is_told(
     with pytest.raises(SystemExit, match="--extra tui") as stop:
         serve.check_service_python(["/venv/bin/python", "-m", "x"], True)
     assert "No module named 'rich'" in str(stop.value)
+
+
+def _basic(password, user="anyone"):
+    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
+
+def _status(port, path, headers=None, method="GET", body=None):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}", method=method, headers=headers or {},
+        data=None if body is None else json.dumps(body).encode(),
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if path == "/api/events":  # a stream: its first event will do
+                response.readline()
+            else:
+                response.read()
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+
+
+@pytest.mark.parametrize("password", ["s3cret", "mot de passe é"])
+def test_every_request_needs_the_password(serve, tmp_path, password):
+    (tmp_path / "bundle.json").write_text("{}")
+    backend = _FakeBackend()
+    backend.listener.put(json.dumps({"type": "status", "message": "hi"}))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, backend,
+                               password=password)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    requests = [
+        ("/bundle.json", "GET", None), ("/bundle.json", "HEAD", None),
+        ("/api/start", "POST", {"engine": "neurosynth"}),
+        ("/api/events", "GET", None),
+    ]
+    try:
+        for path, method, body in requests:
+            for wrong in ({}, _basic("wrong"), {"Authorization": "Basic !!"},
+                          {"Authorization": "Bearer x"}):
+                assert _status(port, path, wrong, method, body) == 401, path
+            assert _status(port, path, _basic(password), method, body) == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_main_page_leads_to_the_repl_unless_the_site_has_one(
+    serve, tmp_path
+):
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    serve.write_index(tmp_path, page)
+    assert 'url=_static/repl/index.html"' in (
+        tmp_path / "index.html").read_text()
+    (tmp_path / "index.html").write_text("the documentation")
+    serve.write_index(tmp_path, page)
+    assert (tmp_path / "index.html").read_text() == "the documentation"
+
+
+def test_a_password_in_clear_and_a_key_for_all_are_refused(serve):
+    with pytest.raises(SystemExit):  # over the network without TLS
+        serve.parse_args(["--host", "0.0.0.0", "--password-file", "p"])
+    assert serve.parse_args(["--password-file", "p"]).password_file
+    with pytest.raises(SystemExit):  # a key without a password
+        serve.parse_args(["--local", "--env-file", "e"])
+    with pytest.raises(SystemExit):  # a key in the browser's page
+        serve.parse_args(["--password-file", "p", "--env-file", "e"])
+
+
+def test_the_env_file_gives_the_assistant_its_key(
+    serve, tmp_path, monkeypatch
+):
+    config = tmp_path / "llm.yaml"
+    config.write_text(
+        "default_provider: test\nproviders:\n  test:\n    api: openai\n"
+        "    base_url: http://localhost\n    api_key_env: TEST_LLM_KEY\n"
+        "    model: m\n"
+    )
+    env = tmp_path / "env"
+    env.write_text(f"# the key\nexport TEST_LLM_KEY='k-1'\n"
+                   f"NEUROLANG_LLM_CONFIG={config}\n")
+    monkeypatch.delenv("TEST_LLM_KEY", raising=False)
+    monkeypatch.delenv("NEUROLANG_LLM_CONFIG", raising=False)
+    assert serve.read_env_file(env) == {
+        "TEST_LLM_KEY": "k-1", "NEUROLANG_LLM_CONFIG": str(config),
+    }
+    monkeypatch.setattr(serve.os, "environ", {
+        **serve.os.environ, **serve.read_env_file(env)})
+    assert serve.default_assistant() == "test (m)"
+    monkeypatch.setattr(serve.os, "environ", {
+        "NEUROLANG_LLM_CONFIG": str(config)})
+    with pytest.raises(SystemExit, match="TEST_LLM_KEY"):
+        serve.default_assistant()
+
+
+def test_the_secrets_stay_in_their_files(serve, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "password").write_text("s3cret\n")
+    (tmp_path / "env").write_text("TEST_LLM_KEY=k-1\n")
+    command = serve.service_command(serve.parse_args([
+        "--local", "--password-file", "password", "--env-file", "env",
+        "--daemon", "install",
+    ]))
+    after = dict(zip(command, command[1:]))
+    assert after["--password-file"] == str(tmp_path / "password")
+    assert after["--env-file"] == str(tmp_path / "env")
+    unit = serve.systemd_unit(command, tmp_path)
+    assert "s3cret" not in unit and "k-1" not in unit

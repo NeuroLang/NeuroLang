@@ -58,6 +58,20 @@ in the certificate's file)::
 
     uv run --extra apps neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
 
+A password, on the first line of FILE (not on the command line), that the
+browser asks every visitor for (HTTP Basic, any user name; with ``--cert``
+unless on this machine only); with ``--local``, the key of the AI assistant
+that those with the password use, unless their page gives one: the
+NAME=VALUE lines of ENV (the variable that the provider's ``api_key_env``
+names, in ``~/.config/neurolang/llm.yaml``, e.g. ``ALBERT_API_KEY=...``),
+put in the server's environment, so that the key never reaches a browser::
+
+    uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local
+        --cert CERT.pem --key KEY.pem --password-file FILE [--env-file ENV]
+
+The site's main page, ``/``, leads to the REPL (unless the site has its own,
+the documentation's).
+
 As a service of this user, started now and at each login, serving as the
 other options say::
 
@@ -76,7 +90,9 @@ needs a service of the system, which this does not install.
 """
 
 import argparse
+import base64
 import getpass
+import hmac
 import http.server
 import importlib.util
 import json
@@ -314,12 +330,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ".whl": "application/octet-stream",
     }
 
+    #: The password every request must give (HTTP Basic, any user name),
+    #: as bytes; None: none.
+    password = None
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def log_message(self, format, *args):
         pass  # the downloads of the page are many and of no interest
+
+    def parse_request(self):
+        """Read the request, and answer 401 to one without the password:
+        then it goes no further, whatever its method."""
+        if not super().parse_request():
+            return False
+        if self.password is None or self._authorised():
+            return True
+        self.send_response(401)
+        self.send_header(
+            "WWW-Authenticate", 'Basic realm="NeuroLang REPL", charset="UTF-8"'
+        )
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
+
+    def _authorised(self) -> bool:
+        scheme, _, encoded = (
+            self.headers.get("Authorization") or ""
+        ).partition(" ")
+        if scheme.lower() != "basic":
+            return False
+        try:
+            credentials = base64.b64decode(encoded.strip(), validate=True)
+        except ValueError:
+            return False
+        given = credentials.partition(b":")[2]
+        return hmac.compare_digest(given, self.password)
 
 
 class LocalHandler(Handler):
@@ -420,13 +468,16 @@ def tls_context(cert: Path, key=None) -> ssl.SSLContext:
 
 
 def make_server(site: Path, host: str, port: int, backend=None,
-                tls=None):
+                tls=None, password=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
-    context *tls* if given."""
-    handler = Handler
-    if backend is not None:
-        handler = type("Handler", (LocalHandler,), {"backend": backend})
+    context *tls* if given, to the requests giving the *password* (a str)
+    only, if given."""
+    base = Handler if backend is None else LocalHandler
+    handler = type("Handler", (base,), {
+        "backend": backend,
+        "password": None if password is None else password.encode(),
+    })
     server = Server(
         (host, port),
         lambda *args, **kwargs: handler(*args, directory=str(site), **kwargs),
@@ -438,6 +489,62 @@ def make_server(site: Path, host: str, port: int, backend=None,
             server.socket, server_side=True, do_handshake_on_connect=False
         )
     return server
+
+
+def write_index(site: Path, page: Path) -> None:
+    """Write the main page of *site*, a link to the REPL's *page* that the
+    browser follows, unless the site has one (the documentation's)."""
+    index = site / "index.html"
+    if index.exists():
+        return
+    target = page.relative_to(site).as_posix()
+    index.write_text(
+        '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">\n'
+        "<title>NeuroLang REPL</title>\n"
+        f'<meta http-equiv="refresh" content="0; url={target}">\n'
+        f'</head><body><a href="{target}">The NeuroLang REPL</a></body>'
+        "</html>\n"
+    )
+
+
+def read_password(path: Path) -> str:
+    """Return the password in the first line of the file *path*."""
+    password = path.read_text().splitlines()[:1]
+    if not password or not password[0].strip():
+        sys.exit(f"The password file {path} has no password on its first line")
+    return password[0].strip()
+
+
+def read_env_file(path: Path) -> dict:
+    """Return the variables of the file *path*: lines NAME=VALUE (``export``
+    before, quotes around the value and ``#`` comments may be there)."""
+    variables = {}
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, equals, value = line.removeprefix("export ").partition("=")
+        if not equals or not name.strip().isidentifier():
+            sys.exit(f"{path}:{number}: not a NAME=VALUE line")
+        value = value.strip()
+        if len(value) > 1 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        variables[name.strip()] = value
+    return variables
+
+
+def default_assistant() -> str:
+    """Return the provider and the model the assistant answers with by
+    default, with the keys of the environment; stop, telling why, if it
+    cannot (its key is not there)."""
+    from neurolang_apps.utils.llm.config import load_config
+
+    try:
+        provider = load_config().provider()
+        provider.api_key()
+    except Exception as error:
+        sys.exit(f"The assistant cannot answer with --env-file: {error}")
+    return f"{provider.name} ({provider.model})"
 
 
 # The service running the server, of this user: a unit of systemd's user
@@ -484,7 +591,10 @@ def service_command(args) -> list:
     for option, value in (("--pr", args.pr), ("--run-id", args.run_id)):
         if value is not None:
             command += [option, str(value), "--repo", args.repo]
-    for option, path in (("--cert", args.cert), ("--key", args.key)):
+    for option, path in (
+        ("--cert", args.cert), ("--key", args.key),
+        ("--password-file", args.password_file), ("--env-file", args.env_file),
+    ):
         if path is not None:
             command += [option, str(path.resolve())]
     return command
@@ -644,6 +754,18 @@ def parse_args(argv=None):
         help="the private key of --cert, if not in its file",
     )
     parser.add_argument(
+        "--password-file", type=Path, metavar="FILE",
+        help="ask every visitor the password on the first line of FILE "
+        "(HTTP Basic, any user name); with --cert unless on this machine",
+    )
+    parser.add_argument(
+        "--env-file", type=Path, metavar="FILE",
+        help="with --local and --password-file, put the NAME=VALUE lines of "
+        "FILE in the server's environment: the key of the AI assistant's "
+        "provider (its api_key_env), which those with the password then "
+        "use unless their page gives one",
+    )
+    parser.add_argument(
         "--python", type=Path, metavar="PATH",
         help="with --daemon, the Python the service runs (default: that of "
         "the environment installing it)",
@@ -698,6 +820,13 @@ def parse_args(argv=None):
         parser.error("--key is that of --cert")
     if args.python and not args.daemon:
         parser.error("--python is that of the service: with --daemon")
+    if (args.password_file and not args.cert
+            and args.host not in ("127.0.0.1", "localhost", "::1")):
+        parser.error("--password-file sends the password in clear without "
+                     "--cert: give a certificate")
+    if args.env_file and not (args.local and args.password_file):
+        parser.error("--env-file is the key of those with the password: "
+                     "with --local and --password-file")
     return args
 
 
@@ -719,8 +848,15 @@ def daemon(args) -> None:
 
 def main(argv=None) -> None:
     args = parse_args(argv)
-    # A certificate that cannot serve fails now, not in the service.
+    # A certificate, a password or a key that cannot serve fails now, not
+    # in the service.
     tls = tls_context(args.cert, args.key) if args.cert else None
+    password = read_password(args.password_file) if args.password_file \
+        else None
+    if args.env_file:
+        os.environ.update(read_env_file(args.env_file))
+        print(f"The AI assistant answers with {default_assistant()} for "
+              "those with the password", flush=True)
     if args.daemon:
         return daemon(args)
     backend = None
@@ -742,12 +878,16 @@ def main(argv=None) -> None:
             args.site, args.rebuild, args.embeddings, clear=args.clear,
             engines=args.engines,
         )
-    server = make_server(args.site, args.host, args.port, backend, tls)
+    write_index(args.site, page)
+    server = make_server(args.site, args.host, args.port, backend, tls,
+                         password)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"
            f"{page.relative_to(args.site).as_posix()}")
-    print(f"The REPL is at {url} (Ctrl+C stops it)", flush=True)
+    print(f"The REPL is at {url} (Ctrl+C stops it)"
+          + (", for those with the password" if password else ""),
+          flush=True)
     if not args.no_browser:
         webbrowser.open(url)
     try:
