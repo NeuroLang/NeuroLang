@@ -334,6 +334,53 @@ before its result.
 The code box colours the query as the terminal does, with the same
 tokenizer (``query_highlight``), in Datalog and in SQUALL.
 
+.. _assistant-mcp:
+
+From an MCP client
+------------------
+
+``neurolang-query --mcp`` serves a session of the interactive REPL to an
+MCP client, such as Claude Code or Claude Desktop, over its standard input
+and output: the client's model is then the assistant, with the tools of
+the ReAct agent on the engine and the REPL itself. It needs the ``mcp``
+extra (see :doc:`install`). The engine is built while the client starts,
+and the first tool call waits for it; a query given as argument or with
+``--file`` runs first, in the session, and ``--squall`` makes it a
+session of SQUALL.
+
+``repl``
+    runs what is typed at the prompt, statements and dot-commands, and
+    returns the output and the first rows of each result (50 by default),
+    tab-separated. The relations and the rules it defines alone stay in
+    the session (those given with a query are local to it, see
+    ``.scope``). ``.save`` and ``.load`` write and read files on the
+    server's machine, relative to its working directory; the pages of
+    ``.view`` and ``.graph`` are saved in files whose paths it returns.
+``guide``
+    gives the syntax of the language, the guidance of the engine and its
+    examples closest to a question, as the assistant's prompt has them.
+``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``
+    are the tools of the ReAct agent (see *Strategies*).
+
+For Claude Code, from the clone of the repository:
+
+.. code-block:: bash
+
+   claude mcp add neurolang -- \
+       uv run --directory "$PWD" --extra mcp \
+       neurolang-query --mcp --engine neurosynth
+
+or in the ``mcpServers`` of the client's configuration:
+
+.. code-block:: json
+
+   {
+     "neurolang": {
+       "command": "neurolang-query",
+       "args": ["--mcp", "--engine", "neurosynth"]
+     }
+   }
+
 .. _assistant-feedback:
 
 Rating and correcting the answers

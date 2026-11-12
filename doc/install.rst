@@ -182,6 +182,10 @@ Optional extras
    * - ``tui``
      - ``prompt-toolkit``, ``rich``
      - use the interactive mode of ``neurolang-query``
+   * - ``mcp``
+     - ``mcp``, ``httpx``, ``prompt-toolkit``, ``rich``
+     - serve the interactive mode to an MCP client, ``neurolang-query
+       --mcp`` (see :ref:`assistant-mcp`)
    * - ``ras-polars``
      - ``polars``, ``pyarrow``
      - use the Polars relational-algebra backend (see :doc:`performance`)
