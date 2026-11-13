@@ -161,11 +161,16 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
+import yaml
+
 DOC = Path(__file__).resolve().parents[2] / "doc"
 BUNDLE_SCRIPT = DOC / "make_repl_bundle.py"
 PAGE = DOC / "_static" / "repl"
 LOGO = DOC / "_static" / "logo"
-DEFAULT_SITE = Path("~/.cache/neurolang/repl-site").expanduser()
+# The defaults of the options, the one place they are written.
+DEFAULTS_FILE = Path(__file__).with_name("defaults.yaml")
+DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
+DEFAULT_SITE = Path(DEFAULTS["site"]).expanduser()
 # The admin console of the users (--users), served at /admin.
 ADMIN_PAGE = Path(__file__).with_name("admin.html")
 # The page of a user's account (--users), served at /account.
@@ -200,11 +205,11 @@ OWN_KEY_ENV = "NEUROLANG_REPL_OWN_KEY"
 SHORTEST_PASSWORD = 8
 # Where the text embeddings are kept between builds: making them takes
 # torch, the abstracts of the studies from PubMed and a while.
-DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
+DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
 # What the engines of the bundle download (atlases, templates, studies), a
 # directory each, kept for the next build: a source down (OSF, GitHub) then
 # stops no rebuild.
-DEFAULT_DOWNLOADS = Path("~/.cache/neurolang/repl-downloads").expanduser()
+DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -2622,9 +2627,9 @@ def parse_args(argv=None):
         "password (of --password-file), key_password (of "
         "--key-password-file)",
     )
-    parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument("--port", type=int, default=DEFAULTS["port"])
     parser.add_argument(
-        "--host", default="127.0.0.1",
+        "--host", default=DEFAULTS["host"],
         help="0.0.0.0 to serve the other machines of the network too (with "
         "--password-file or --server-name)",
     )
@@ -2704,17 +2709,21 @@ def parse_args(argv=None):
         "send the login cookie over HTTPS only",
     )
     parser.add_argument(
-        "--max-guest-sessions", type=int, default=2, metavar="N",
+        "--max-guest-sessions", type=int,
+        default=DEFAULTS["max_guest_sessions"], metavar="N",
         help="with --guests, the sessions the guests have at most at once "
         "(default: %(default)s)",
     )
     parser.add_argument(
-        "--max-sessions", type=int, default=8, metavar="N",
+        "--max-sessions", type=int, default=DEFAULTS["max_sessions"],
+        metavar="N",
         help="with --users and --local, the sessions at most at once "
         "(default: %(default)s)",
     )
     parser.add_argument(
-        "--idle-minutes", type=float, default=120, metavar="M",
+        "--idle-minutes", type=float,
+        default=float(DEFAULTS["idle_minutes"]),
+        metavar="M",
         help="with --users and --local, end a session unused for M minutes "
         "(default: %(default)s)",
     )
@@ -2725,7 +2734,9 @@ def parse_args(argv=None):
         "number of CPUs of this machine)",
     )
     parser.add_argument(
-        "--query-minutes", type=float, default=60.0, metavar="M",
+        "--query-minutes", type=float,
+        default=float(DEFAULTS["query_minutes"]),
+        metavar="M",
         help="with --users and --local, stop a query running for more than "
         "M minutes, ending its session's process (0: never; default: "
         "%(default)s)",
@@ -2835,12 +2846,13 @@ def parse_args(argv=None):
         "the browser: no bundle is built",
     )
     parser.add_argument(
-        "--data-dir", type=Path, default=Path("neurolang_data"),
+        "--data-dir", type=Path, default=Path(DEFAULTS["data_dir"]),
         help="with --local, the data directory of the engines (default: "
         "%(default)s)",
     )
     parser.add_argument(
-        "--resolution", type=float, default=2.0, metavar="MM",
+        "--resolution", type=float, default=float(DEFAULTS["resolution"]),
+        metavar="MM",
         help="with --local, the resolution of the engines' MNI grid "
         "(default: %(default)s)",
     )
@@ -2851,6 +2863,7 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--no-prepare", action="store_false", dest="prepare",
+        default=DEFAULTS["prepare"],
         help="with --local, do not build each engine before serving (which "
         "keeps what it downloads in --data-dir): its first session does",
     )
