@@ -17,6 +17,12 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+Nothing yet.
+
+
+v0.1a22 (2026-11-13)
+--------------------
+
 **Performance:**
 
 * A Euclidean distance bound between a set of voxels and a set of peaks
