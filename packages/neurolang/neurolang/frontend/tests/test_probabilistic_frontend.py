@@ -2942,3 +2942,33 @@ def test_the_rules_of_the_magic_sets_rewriting_are_not_warned_about():
         warnings.simplefilter("always")
         nl.program_ir.walk(Implication(Symbol("q2")(x), Symbol("p")(x)))
     assert [w for w in caught if "symbol table" in str(w.message)]
+
+
+@pytest.mark.parametrize("solver", ["default", "wmc"])
+@pytest.mark.parametrize("empty", [[], pd.DataFrame(columns=["a"])])
+def test_empty_deterministic_relation(solver, empty):
+    """An empty relation has the arity of its atoms: ~t(0) holds, and
+    t(y) does not."""
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query,
+    )
+
+    solvers = {} if solver == "default" else dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    )
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 0), (0.5, 1), (0.5, 2), (0.5, 3)], name="r"
+    )
+    nl.add_tuple_set(empty, name="t")
+    nl.execute_datalog_program(
+        "a(PROB) :- r(x), ~t(0)\n"
+        "b(PROB) :- r(x), t(y), (x < y), ~t(0)"
+    )
+    solution = nl.solve_all()
+    assert solution["a"].as_pandas_dataframe().iloc[0, 0] == pytest.approx(
+        1 - 0.5 ** 4
+    )
+    assert "b" not in solution or solution["b"].is_empty()

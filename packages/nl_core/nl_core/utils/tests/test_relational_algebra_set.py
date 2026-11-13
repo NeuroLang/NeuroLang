@@ -37,6 +37,16 @@ def test_relational_algebra_set_semantics_empty(ra_module):
     assert ras.arity == 2
 
 
+def test_projection_of_an_empty_set_keeps_the_columns_projected(ra_module):
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(("a", "b"), [])
+    unnamed = empty.to_unnamed()
+    assert unnamed.projection(1).arity == 1
+    assert unnamed.projection(1, 0, 1).arity == 3
+    assert empty.projection_to_unnamed("b").arity == 1
+    assert unnamed.projection(1).is_empty()
+    assert unnamed.projection() == ra_module.RelationalAlgebraFrozenSet.dum()
+
+
 def test_relational_algebra_set_semantics(ra_module):
     a = [5, 4, 3, 2, 3, 1]
     ras = ra_module.RelationalAlgebraSet(a)

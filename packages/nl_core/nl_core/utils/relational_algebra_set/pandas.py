@@ -269,7 +269,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         3  3
         4  4
         """
-        if self.is_empty():
+        if self.is_empty() and (self.arity == 0 or not columns):
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
         new_container.columns = pd.RangeIndex(len(columns))
