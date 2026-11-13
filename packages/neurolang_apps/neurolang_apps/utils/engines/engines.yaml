@@ -147,7 +147,8 @@ engines:
       frequencies, and a probabilistic choice over studies.  Voxels
       (i, j, k) index the 1 mm MNI152 grid (at the default resolution):
       the MNI point (x, y, z) in mm is the voxel (x + 98, y + 134,
-      z + 72), and distances between voxels are in mm.
+      z + 72), and distances between voxels are in voxels.  A study
+      activates the voxels within {kernel_radius_mm} mm of its peaks.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, lcase]
@@ -158,24 +159,31 @@ engines:
       # and NiMARE do; ``tal`` converts them as Talairach; ``drop`` leaves
       # them out. An engine extending this one can set its own value.
       unknown_space: mni
+    # The radius of the sphere a peak activates, in millimetres, at every
+    # resolution: that of ``activated`` (``{kernel_radius_voxels}``, in
+    # voxels of the grid), of the activations of the atlases and of the
+    # texts saying ``{kernel_radius_mm}``.  6 mm is the radius of
+    # Neurosynth's activation maps (doc/tutorial_neurosynth_tests.rst).
+    kernel_radius_mm: 6
     # Each atlas of mni_atlases, with ``activated``, also registers which
     # studies activate its regions: ``{atlas}_activated(label, study)`` when
     # a peak of the study (``peak_mni``, in millimetres) is within
-    # ``radius_mm`` of a voxel of the region.
+    # ``radius_mm``, by default ``kernel_radius_mm``, of a voxel of the
+    # region.
     atlases:
       schaefer:
-        activated: {predicate_name: schaefer_activated, radius_mm: 3}
+        activated: {predicate_name: schaefer_activated}
       destrieux:
-        activated: {predicate_name: destrieux_activated, radius_mm: 3}
+        activated: {predicate_name: destrieux_activated}
       tian:
-        activated: {predicate_name: tian_activated, radius_mm: 3}
+        activated: {predicate_name: tian_activated}
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
       term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
-      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= {kernel_radius_voxels})
       p_a(i, j, k, PROB) :- activated(i, j, k, s) & selected_study(s)
       p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
       p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
@@ -424,7 +432,7 @@ engines:
       activated:
         description: >-
           Studies activating a voxel of the brain mask: one of their peaks is
-          within 3 voxels (3 mm at the default 1 mm resolution)
+          within {kernel_radius_mm} mm of it
         arguments:
           - voxel
           - study
@@ -543,21 +551,21 @@ engines:
       schaefer_activated:
         description: >-
           Studies activating a Schaefer parcel (cortical networks): one of
-          their peaks is within 3 mm of a voxel of the parcel
+          their peaks is within {kernel_radius_mm} mm of a voxel of the parcel
         arguments:
           - label
           - study
       destrieux_activated:
         description: >-
           Studies activating a Destrieux region: one of their peaks is within
-          3 mm of a voxel of the region
+          {kernel_radius_mm} mm of a voxel of the region
         arguments:
           - destrieux_label
           - study
       tian_activated:
         description: >-
           Studies activating a Tian subcortical region: one of their peaks is
-          within 3 mm of a voxel of the region
+          within {kernel_radius_mm} mm of a voxel of the region
         arguments:
           - tian_label
           - study

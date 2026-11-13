@@ -525,6 +525,20 @@ Unreleased
 
 **Bug fixes:**
 
+* The radius of the activation of a study around its peaks is one
+  ``kernel_radius_mm`` of the meta-analysis engines, 6 mm, the same at every
+  resolution: ``activated`` was within 3 voxels (3 mm on the default 1 mm
+  grid, 6 mm on the 2 mm one), and the atlases (``destrieux_activated``...)
+  and the assistant within 3 mm.  ``activated`` takes it in voxels of the
+  grid (``{kernel_radius_voxels}`` in ``datalog_init``), the atlases as
+  their default ``radius_mm``, and the descriptions, the guidance and the
+  examples of the assistant where they say ``{kernel_radius_mm}``; the
+  banner of the REPL gives it with the size of the voxels.  On the 2 mm grid
+  ``activated`` is unchanged; on the default 1 mm grid it is 6 voxels
+  instead of 3, about 455 million (voxel, study) pairs of Neurosynth's
+  peaks instead of 61 million, at least 14.6 GB instead of 2.0 GB for its
+  four 64-bit columns: use ``-r 2`` for a smaller engine.  The atlases'
+  activations, within 6 mm instead of 3, change (#1070).
 * An atlas lookup with a voxel, ``ans(l) :- destrieux(l, r) &
   contains(r, (68, 77, 37))``, gives the labels of the regions holding it
   instead of an internal error (``TypeError: keywords must be strings``):

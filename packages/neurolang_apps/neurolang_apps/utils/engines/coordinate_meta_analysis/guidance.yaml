@@ -28,8 +28,8 @@ assistant_guidance: >
   of yours (the rules lift and relative_risk are those of a term at
   every voxel), the probability of each region, voxel or term when
   they are listed.  A study activates a point when one of its peaks is
-  within 3 mm of it: peak_mni(x, y, z, s), (euclidean(x, y, z, x0, y0, z0)
-  <= 3), with the coordinates of the question as MNI millimetres,
+  within {kernel_radius_mm} mm of it: peak_mni(x, y, z, s), (euclidean(x, y,
+  z, x0, y0, z0) <= {kernel_radius_mm}), with the coordinates of the question as MNI millimetres,
   written as they are.  For the classical anatomy of the cortex
   (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated,
   as for brain areas or regions when the question names no atlas;
