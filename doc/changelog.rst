@@ -593,6 +593,13 @@ v0.1a22 (2026-11-13)
   ``neurolang.confine``, set by the variable ``NEUROLANG_CONFINE``; an
   address is any ``scheme:`` (``file:/etc/passwd`` too), and building an
   engine runs ``confine.lifted()``.
+* The REPL page uploads the CSV and TSV files of its users (**Upload
+  data**), which ``.load NAME`` loads: a session keeps them in its memory
+  (at most 50 MB a file, 200 MB in all), and the page sends them again
+  before it gives the rules of a session back (``.load`` is kept in a
+  session, to save and to replay). A confined server's ``.load`` loads them only, and no
+  path. ``POST /api/upload?name=`` takes the bytes, of the type
+  ``application/x-neurolang-upload``, which no form of another site sends.
 
 **Bug fixes:**
 

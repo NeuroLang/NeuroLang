@@ -1635,18 +1635,27 @@ def relation_file_separator(path) -> str:
     return sep
 
 
-def read_relation_file(path) -> pd.DataFrame:
+def read_relation_file(path, data: bytes = None) -> pd.DataFrame:
     """
     Return the rows of the CSV or TSV file *path* as a DataFrame.
 
     The first line of the file is the header. ``~`` in *path* is
     expanded and the separator follows from the extension (see
     :func:`relation_file_separator`); gzipped files are decompressed.
+    With *data*, the rows are those bytes (an uploaded file), *path* only
+    naming them.
     """
+    import io
+
     import pandas as pd
 
     path = Path(path).expanduser()
-    return pd.read_csv(path, sep=relation_file_separator(path))
+    sep = relation_file_separator(path)
+    if data is None:
+        return pd.read_csv(path, sep=sep)
+    gzipped = path.name.lower().endswith(".gz")
+    return pd.read_csv(io.BytesIO(data), sep=sep,
+                       compression="gzip" if gzipped else None)
 
 
 def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):

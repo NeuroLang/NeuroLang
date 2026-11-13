@@ -280,6 +280,11 @@ def llm_providers():
 
 def rate(verdict, comment):
     return json.dumps(repl.rate_answer(verdict, comment))
+
+def upload(name, data):
+    if not hasattr(repl, "upload"):
+        raise ValueError("this version of NeuroLang cannot load an uploaded file")
+    return json.dumps(repl.upload(name, bytes(data.to_py())))
 `);
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
@@ -303,6 +308,7 @@ def rate(verdict, comment):
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   rateAnswer = pyodide.globals.get("rate");
+  uploadFile = pyodide.globals.get("upload");
   return pyodide.globals.get("submit");
 }
 
@@ -311,6 +317,7 @@ let submit = null;
 let repl = null;
 let makeFile = null; // the file of a result, for a download
 let rateAnswer = null; // shares the last answer of the assistant with its rating
+let uploadFile = null; // keeps a file of the visitor's for .load, in this worker's memory
 
 // The visitor's key is given to the REPL, in this worker's memory: from
 // here it goes to the provider, and to no one else.
@@ -349,6 +356,15 @@ onmessage = async ({ data }) => {
     } catch (error) {
       const message = String(error.message ?? error).trim().split("\n").at(-1);
       postMessage({ type: "rated", ok: false, message });
+    }
+    return;
+  }
+  if (data.type === "upload") {
+    try {
+      postMessage({ type: "uploaded", ...JSON.parse(uploadFile(data.name, data.bytes)) });
+    } catch (error) {
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "uploaded", error: message.replace(/^[\w.]+Error: /, "") });
     }
     return;
   }

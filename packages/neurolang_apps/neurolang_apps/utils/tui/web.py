@@ -25,6 +25,7 @@ import io
 import json
 import math
 import re
+import shlex
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -40,7 +41,7 @@ from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import _declared_columns
 from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
 
-from . import nifti, query_graph
+from . import nifti, query_graph, session
 from .app import InteractiveTuiApp, TuiSettings
 from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
@@ -711,6 +712,15 @@ class WebRepl:
         except Exception as error:  # nothing that fails here may hide a result
             reason = str(error) or "no NIfTI image can be made of this result"
             return {"block": index, "nifti": None, "nifti_reason": reason}
+
+    def upload(self, name: str, data: bytes) -> dict:
+        """
+        Keep the file *name* of the bytes *data* the page uploaded, in the
+        memory of the session, and return the statement that loads it
+        (``.load NAME``): a ValueError tells why it is refused.
+        """
+        session.store_upload(self.app, name, data)
+        return {"name": name, "statement": f".load {shlex.quote(name)}"}
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
         """

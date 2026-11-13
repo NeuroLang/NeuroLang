@@ -168,6 +168,11 @@ ACCOUNT_PAGE = Path(__file__).with_name("account.html")
 # The page where a user logs in (--users), served at /login, and the cookie
 # of a login, kept so many days.
 LOGIN_PAGE = Path(__file__).with_name("login.html")
+# The most bytes of a file a page uploads, as a session keeps one
+# (neurolang_apps.utils.tui.session.MOST_UPLOAD_BYTES).
+MOST_UPLOAD_BYTES = 50 << 20
+# Its type: not one a form of another site can send without asking first.
+UPLOAD_TYPE = "application/x-neurolang-upload"
 LOGIN_PATHS = ("/login", "/login/guest", "/login/options", "/login/orcid",
                "/login/orcid/callback", "/login/request", "/logout")
 # The cookies of a sign-in with ORCID on its way (its state and where to go
@@ -503,8 +508,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """Whether a POST comes from this site's page: in JSON, which
         another site's form cannot send without asking first, and from
         this site, if the browser says where from. The browser would
-        otherwise add the login to a form another site sends here."""
-        if self.headers.get_content_type() != "application/json":
+        otherwise add the login to a form another site sends here. A file
+        the page uploads comes as UPLOAD_TYPE, which no form sends either."""
+        if self.headers.get_content_type() not in ("application/json",
+                                                   UPLOAD_TYPE):
             return False
         origin = self.headers.get("Origin")
         return origin is None or \
@@ -1051,27 +1058,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return False
         return self.users.check(self.user, given)
 
-    def _body(self) -> dict:
-        """Return the JSON object of the request's body, {} if it has none;
-        raise ValueError, telling why, if it is not one (TooLarge if over
-        MAX_BODY)."""
+    def _bytes(self, most: int) -> bytes:
+        """Return the bytes of the request's body, b"" if it has none;
+        raise ValueError, telling why, if it has none it tells (TooLarge
+        if over *most* bytes)."""
         length = self.headers.get("Content-Length")
         if length is None:
             if self.headers.get("Transfer-Encoding"):
                 raise ValueError("a body needs a Content-Length")
-            return {}
+            return b""
         size = int(length) if length.isascii() and length.isdigit() else -1
         if size < 0:
             raise ValueError(f"Content-Length {length!r} is not a length")
-        if size > self.MAX_BODY:
-            raise TooLarge(f"a body of {size} bytes is over "
-                           f"{self.MAX_BODY} bytes")
+        if size > most:
+            raise TooLarge(f"a body of {size} bytes is over {most} bytes")
         try:
             data = self.rfile.read(size)
         except TimeoutError:
             data = b""
         if len(data) < size:
             raise ValueError("the body is shorter than its Content-Length")
+        return data
+
+    def _body(self) -> dict:
+        """Return the JSON object of the request's body, {} if it has none;
+        raise ValueError, telling why, if it is not one (TooLarge if over
+        MAX_BODY)."""
+        data = self._bytes(self.MAX_BODY)
         try:
             body = json.loads(data or b"{}")  # a ValueError if not JSON
         except RecursionError:
@@ -1160,7 +1173,12 @@ class LocalHandler(Handler):
             return self._json({"error": "not found"}, 404)
         action = path[len("/api/"):]
         try:
-            body = self._body()
+            # A file the page uploads comes as it is, named in the address
+            # (?name=), up to the size of one (session.store_upload).
+            body = {"data": self._bytes(MOST_UPLOAD_BYTES), "name":
+                    urllib.parse.parse_qs(urllib.parse.urlsplit(
+                        self.path).query).get("name", [""])[0]} \
+                if action == "upload" else self._body()
         except ValueError as error:
             return self._json({"error": str(error)},
                               413 if isinstance(error, TooLarge) else 400)
@@ -1186,6 +1204,12 @@ class LocalHandler(Handler):
             return self._json({})
         if action == "rate":
             return self._json(backend.rate(**body))
+        if action == "upload":
+            try:
+                return self._json(backend.upload(**body))
+            except (ValueError, RuntimeError) as error:  # its name, size
+                return self._json({"error": str(error).splitlines()[-1]},
+                                  400)
         if action == "download":
             file = backend.download(**body)
             return self._send(200, file.data, file.mime, [

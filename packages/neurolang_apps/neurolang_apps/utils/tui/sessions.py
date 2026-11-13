@@ -380,6 +380,9 @@ class Session:
         """Tell the pages of the session a step, as their status."""
         self.emit_text(json.dumps({"type": "status", "message": text + "…"}))
 
+    def upload(self, **options) -> dict:
+        return self._call("upload", **options)
+
     def stop(self) -> bool:
         """End the session's process, which stops what it does: the page
         starts the session again."""

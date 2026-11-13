@@ -822,10 +822,40 @@ def test_a_confined_session_writes_and_reads_no_file_of_the_server(
     for statement, says in (
         (f".save {tmp_path / 'out.csv'}", "writes no result"),
         (f".transcript {tmp_path / 'session.md'}", "writes no transcript"),
-        (f".load {tmp_path / 'secret.csv'} stolen", "reads no table"),
+        (f".load {tmp_path / 'secret.csv'} stolen", "No file"),
         (f".view {tmp_path / 'secret.nii.gz'}", "reads no image"),
     ):
         reply = repl.submit(statement)
         assert says in reply.html, statement
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "data", "secret.csv"]
+
+
+def test_the_page_uploads_a_file_that_load_loads(repl, monkeypatch, tmp_path):
+    """A file the page uploads is kept in the session's memory, and loaded
+    by its name, also on a server which reads none of its files for a
+    statement (neurolang.confine)."""
+    import gzip
+    import re
+
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils.tui import session
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path))
+    answer = repl.upload("my scores.csv", b"study,score\ns1,0.5\ns2,0.7\n")
+    assert answer["statement"] == ".load 'my scores.csv'"
+    def text(reply):
+        return re.sub(r"<[^>]+>", "", reply.html)
+
+    reply = repl.submit(answer["statement"] + " scores")
+    assert "loaded scores(study, score): 2 rows" in text(reply)
+    repl.upload("t.tsv.gz", gzip.compress(b"a\tb\n1\t2\n"))
+    assert "loaded t(a, b): 1 row" in text(repl.submit(".load t.tsv.gz"))
+    reply = repl.submit(".load other.csv")
+    assert reply.failed and "No file other.csv was uploaded" in text(reply)
+    assert list(tmp_path.iterdir()) == []  # nothing written on a disk
+    for name, data in (("../x.csv", b"a\n1\n"), ("/etc/x.csv", b"a\n"),
+                       ("notes.txt", b"a\n"), (".csv", b"a\n"),
+                       ("big.csv", b"a" * (session.MOST_UPLOAD_BYTES + 1))):
+        with pytest.raises(ValueError):
+            repl.upload(name, data)

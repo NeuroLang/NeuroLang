@@ -349,6 +349,12 @@ class _FakeBackend:
     def rate(self, verdict, comment=""):
         return {"ok": True, "message": verdict}
 
+    def upload(self, name, data):
+        if not name.endswith(".csv"):
+            raise ValueError(f"{name!r} is not a CSV")
+        self.asked.append(("upload", name, data))
+        return {"name": name, "statement": f".load {name}"}
+
     def download(self, block, kind, value=""):
         from neurolang_apps.utils.tui.web import Download
 
@@ -385,7 +391,7 @@ def test_the_local_site_has_the_page_answered_by_this_machine(
         serve.parse_args(["--local", "--rebuild"])
 
 
-def test_the_local_server_answers_the_worker(serve, tmp_path):
+def test_the_local_server_answers_the_worker(serve, tmp_path, monkeypatch):
     backend = _FakeBackend()
     server = serve.make_server(tmp_path, "127.0.0.1", 0, backend)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -422,6 +428,26 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
         with _post(port, "llm", {"provider": "anthropic", "key": "k"}):
             pass
         assert ("llm", {"provider": "anthropic", "key": "k"}) in backend.asked
+        # An uploaded file comes as it is, of a type no form sends
+        def upload(name, data, kind=serve.UPLOAD_TYPE):
+            return urllib.request.urlopen(urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/upload?name="
+                + urllib.parse.quote(name), data=data, method="POST",
+                headers={"Content-Type": kind}))
+
+        with upload("my data.csv", b"a\n1\n") as response:
+            assert json.load(response)["statement"] == ".load my data.csv"
+        assert ("upload", "my data.csv", b"a\n1\n") in backend.asked
+        for name, data, kind, code in (
+            ("x.txt", b"a", serve.UPLOAD_TYPE, 400),
+            ("y.csv", b"a", "text/plain", 403),  # another site's form
+            ("z.csv", b"a" * 5, serve.UPLOAD_TYPE, 413),
+        ):
+            monkeypatch.setattr(serve, "MOST_UPLOAD_BYTES", 4)
+            with pytest.raises(urllib.error.HTTPError) as error:
+                upload(name, data, kind)
+            with error.value:
+                assert error.value.code == code, name
         events.close()
     finally:
         server.shutdown()

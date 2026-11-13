@@ -187,6 +187,8 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
+        # The files the page uploaded, by name: their bytes (.load NAME).
+        self.uploads: dict = {}
         self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
