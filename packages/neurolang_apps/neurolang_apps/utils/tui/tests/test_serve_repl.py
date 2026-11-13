@@ -2372,3 +2372,54 @@ def test_a_server_of_its_secrets(serve, tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         serve.parse_args(["--secrets", str(path)])
     assert "with --local" in capsys.readouterr().err
+
+
+def test_the_console_shows_the_usage_and_the_log_of_each_user(
+    serve, tmp_path
+):
+    from neurolang_apps.utils.tui.activity import ActivityLog
+
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.builder_usage = {"pid": 1, "cpu": 2.0, "rss": 900.0,
+                              "pss": 450.0, "private": 10.0}
+    sessions.activity = ActivityLog(tmp_path / "activity.sqlite")
+    sessions.activity.add("bob", "submit", text="ans(x) :- p(x)",
+                          response="x\n1", failed=False, seconds=0.5,
+                          cpu=0.4, memory=30.0)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["activity"] and state["builder"]["rss"] == 900.0
+        [bob] = _json_of(port, "/admin/api/usage", "ann", "ann-pw")
+        assert (bob["user"], bob["inputs"], bob["cpu"]) == ("bob", 1, 0.4)
+        log = f"http://127.0.0.1:{port}/admin/activity.jsonl?user=bob"
+        request = urllib.request.Request(log, headers=_basic("ann-pw",
+                                                             "ann"))
+        with urllib.request.urlopen(request, timeout=10) as response:
+            [event] = [json.loads(line) for line in response]
+        assert event["text"] == "ans(x) :- p(x)"
+        assert _status(port, "/admin/activity.jsonl?user=bob",
+                       _basic("bob-pw", "bob")) == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_activity_is_logged_with_local_users(serve, tmp_path,
+                                                 monkeypatch):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--local", "--activity-db", "a.sqlite"])
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(serve.parse_args([
+        "--local", "--users", "users.yaml", "--activity-db", "a.sqlite",
+        "--daemon", "install",
+    ]))
+    after = dict(zip(command, command[1:]))
+    assert after["--activity-db"] == str(tmp_path / "a.sqlite")

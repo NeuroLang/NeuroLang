@@ -46,6 +46,7 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    key: key.pem
    users: users.yaml
    feedback_db: feedback.sqlite
+   activity_db: activity.sqlite
    data_dir: /srv/neurolang_data
    secrets: secrets.yaml
    EOF
@@ -211,6 +212,10 @@ Storing the ratings
    With ``--local``, store the ratings of the page on the server (see
    `Feedback`_).
 
+``--activity-db activity.sqlite``
+   With ``--local`` and ``--users``, log what each user runs, its result
+   and the resources it took (see `Activity and usage`_).
+
 Running as a service
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -360,8 +365,13 @@ refusal (403).  It shows:
   them (ending their sessions).  The last admin cannot be removed.
 - **Groups**: their members, assistant, variables and own key; it sets or
   removes a group's assistant and own key.
-- **Sessions**: the user and tab of each, how long it has been unused,
-  whether it works; it ends one.
+- **Sessions**: the user, tab and engine of each, how long it has been
+  unused, whether it works, the CPU seconds and the memory of its process
+  (see `Activity and usage`_); it ends one.  Above them, the memory of the
+  builder, which the sessions share.
+- **Usage by user**: with ``--activity-db``, each user's inputs run and
+  failed, their time and CPU seconds, the most memory of their sessions,
+  and a link to their log.
 - **Feedback**: the latest 200 rated answers, with the user and their
   groups, and a link for each engine exporting the rated answers of its
   assistant as its examples, in YAML.
@@ -513,6 +523,35 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   its page says to restart it.
 
 Without ``--users``, one session serves everyone, in the server's process.
+
+
+Activity and usage
+------------------
+
+The server takes, every 10 seconds, the CPU seconds and the memory of each
+session's process and of the builder, which the console shows.  A
+session's memory is its own, *private* memory: what it adds to the
+machine's beyond the engine's data, which it shares with the builder (its
+resident memory, ``rss``, counts those shared pages, and so overstates it).
+The builder's resident memory is that of the engines' data.  This is read
+from :file:`/proc` and so on Linux only; elsewhere the console shows ``-``.
+Together they tell how many sessions a machine holds: about (its memory −
+the builder's) / a session's own, at its most.
+
+With ``--activity-db activity.sqlite``, the server also logs, in that
+SQLite database (in WAL mode, as the feedback's), for each user: the start
+of each session and its engine; each input they run, with its result as
+text (its output and the first 50 rows of each table, 20,000 characters at
+most), whether it failed, how long it took, the CPU seconds and the private
+memory of its process; and the end of each session, and why (stopped,
+restarted, idle, made room for another, ended by an admin, the server
+stopped).  The page tells its users that what they run is logged.  A question to
+the assistant (``.ask``) is an input too, logged with its answer; the keys
+are never logged.  The console shows the totals
+of each user and gives their log as JSON lines (``/admin/activity.jsonl?user=NAME``);
+SQLite reads it too::
+
+   sqlite3 activity.sqlite "SELECT created, kind, text, seconds, cpu, memory FROM activity WHERE user = 'bob'"
 
 
 Feedback

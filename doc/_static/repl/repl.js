@@ -446,6 +446,9 @@ const workerMessages = {
     if ("assistant" in data) serverAssistant(data.assistant, ownKeyAllowed);
     canRate = Boolean(data.canRate);
     if (data.ratingNote) $("rate-disclosure").textContent = data.ratingNote;
+    // This server logs what the user runs (--activity-db).
+    $("log-note").textContent = data.logNote ?? "";
+    $("log-note").hidden = !data.logNote;
     guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
