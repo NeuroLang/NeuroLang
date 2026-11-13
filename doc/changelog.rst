@@ -120,6 +120,12 @@ Unreleased
 * A disjunction of functions whose variables a positive atom outside it
   binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
   startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.
+* A probabilistic rule over another whose head repeats a variable, as
+  ``b(c, s) :- a(c, s), roi(s)`` with ``a(s, s) :- term(s),
+  selected_study(s)``, keeps all its body: the rule's variables were not
+  renamed apart from the query's when its head was unified, and ``roi(s)``
+  was dropped (the probability, and the replicates of ``RESAMPLE``, were
+  those of ``term`` alone).
 
 **Bug fixes:**
 

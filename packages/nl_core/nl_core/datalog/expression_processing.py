@@ -766,18 +766,27 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
         return self.walk(Implication(new_consequent, new_antecedent))
 
 
+def _rule_variables(implication):
+    return extract_logic_free_variables(implication) | OrderedSet(
+        arg for arg in implication.consequent.args if isinstance(arg, Symbol)
+    )
+
+
 class FreshenFreeVariables(PatternWalker):
+    """
+    Rename apart the variables of a rule, those of its head included, so
+    that unifying its head with a query does not mix them with the query's.
+    """
+
     @add_match(
         Implication(FunctionApplication, ...),
         lambda implication: any(
-            not var.is_fresh
-            for var in extract_logic_free_variables(implication)
+            not var.is_fresh for var in _rule_variables(implication)
         ),
     )
     def implication_with_free_variables(self, implication):
         replacements = {
-            var: Symbol.fresh()
-            for var in extract_logic_free_variables(implication)
+            var: Symbol.fresh() for var in _rule_variables(implication)
         }
         implication = ReplaceExpressionWalker(replacements).walk(implication)
         return self.walk(implication)
