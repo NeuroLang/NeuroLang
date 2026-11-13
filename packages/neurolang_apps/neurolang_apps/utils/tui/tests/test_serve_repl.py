@@ -2594,3 +2594,107 @@ def test_a_configuration_file_has_the_activity_limits_and_dashboard(
     assert (args.activity_db, args.dashboard, args.max_running,
             args.query_minutes) == (tmp_path / "activity.sqlite", True, 4,
                                     30.0)
+
+
+# --- an ORCID user merged into a user, and separated -----------------------
+
+def test_an_orcid_user_merges_into_a_user_and_separates(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    users.change(ORCID_NEW, groups=["imaging"], create=True,
+                 orcid_name="Sofia Garcia", env={"A_KEY": "k"})
+    users.merge_orcid(ORCID_NEW, "bob")
+    entry = users.current()["bob"]
+    assert ORCID_NEW not in users.current()
+    assert entry["orcid"] == ORCID_NEW
+    assert entry["orcid_name"] == "Sofia Garcia"
+    assert entry["groups"] == ["imaging", "lab"]
+    assert entry["env"] == {"A_KEY": "k"}  # theirs where bob had none
+    assert users.check("bob", b"bob-pw")  # their password stays
+    assert users.by_orcid(ORCID_NEW) == "bob"
+    # an iD signs in one user only, and a user one iD
+    users.change(ORCID_ANN, groups=[], create=True)
+    with pytest.raises(ValueError, match="already: separate it first"):
+        users.merge_orcid(ORCID_ANN, "bob")
+    with pytest.raises(ValueError, match="signs in both"):
+        users.change(ORCID_NEW, groups=[], create=True)
+    for orcid_id, into in ((ORCID_ANN, ORCID_ANN), ("ann", "bob"),
+                           (ORCID_ANN, "nobody")):
+        with pytest.raises(ValueError):
+            users.merge_orcid(orcid_id, into)
+    # separated, the iD is a user of its own again, in bob's groups
+    assert users.separate_orcid("bob") == ORCID_NEW
+    assert "orcid" not in users.current()["bob"]
+    assert users.current()[ORCID_NEW]["groups"] == ["imaging", "lab"]
+    assert users.current()[ORCID_NEW]["orcid_name"] == "Sofia Garcia"
+    assert users.by_orcid(ORCID_NEW) == ORCID_NEW
+    with pytest.raises(ValueError, match="no ORCID iD to separate"):
+        users.separate_orcid("bob")
+
+
+def test_an_admin_separated_is_no_admin(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin", "lab"]))
+    users.change(ORCID_NEW, groups=[], create=True)
+    users.merge_orcid(ORCID_NEW, "ann")
+    users.separate_orcid("ann")
+    assert users.groups(ORCID_NEW) == ["lab"]
+    assert users.is_admin("ann")
+
+
+def test_a_users_file_of_an_id_twice_is_refused(serve, tmp_path):
+    path = tmp_path / "users.yaml"
+    hashed = serve.hash_password("pw")
+    path.write_text(f"users:\n  ann:\n    password: {hashed}\n"
+                    f"    orcid: '{ORCID_ANN}'\n"
+                    f"  '{ORCID_ANN}':\n    groups: [lab]\n")
+    with pytest.raises(SystemExit, match="signs in both"):
+        serve.read_users(path)
+    path.write_text(f"users:\n  ann:\n    password: {hashed}\n"
+                    "    orcid: not-an-id\n")
+    with pytest.raises(SystemExit, match="is not an ORCID iD"):
+        serve.read_users(path)
+
+
+def test_a_user_merged_signs_in_with_orcid(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["lab"], create=True)
+    admin = _basic("ann-pw", "ann")
+    status, _ = _json_at(port, "POST", "/admin/api/merge-orcid", admin,
+                         {"name": ORCID_ANN, "into": "bob"})
+    assert status == 200
+    state = _json_at(port, "GET", "/admin/api/state", admin)[1]
+    [bob] = [u for u in state["users"] if u["name"] == "bob"]
+    assert bob["orcid"] == ORCID_ANN
+    assert ORCID_ANN not in [u["name"] for u in state["users"]]
+    # ORCID's sign-in of the iD is bob's now
+    _, back = _sign_in(port, "c-ann", "/")
+    login = {"Cookie": _cookie_of(back, "neurolang_login")}
+    me = _json_at(port, "GET", "/account/api/me", login)[1]
+    assert (me["name"], me["orcid"], me["orcid_only"]) == (
+        "bob", ORCID_ANN, False)
+    # separated, it signs in the ORCID user again
+    status, answer = _json_at(port, "POST", "/admin/api/separate-orcid",
+                              admin, {"name": "bob"})
+    assert (status, answer["orcid"]) == (200, ORCID_ANN)
+    _, back = _sign_in(port, "c-ann", "/")
+    login = {"Cookie": _cookie_of(back, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", login)[1]["name"] \
+        == ORCID_ANN
+    status, answer = _json_at(port, "POST", "/admin/api/separate-orcid",
+                              admin, {"name": "bob"})
+    assert status == 400 and "no ORCID iD" in answer["error"]
+
+
+def test_merge_and_separate_from_the_command_line(serve, tmp_path, capsys):
+    path = tmp_path / "users.yaml"
+    serve.main(["--users", str(path), "--add-user", ORCID_NEW,
+                "--groups", "admin"])
+    users = serve.Users(path)
+    users.change("bob", password="bob-pw-long", groups=["lab"], create=True)
+    serve.main(["--users", str(path), "--merge-orcid", ORCID_NEW, "bob"])
+    assert "bob signs in with the ORCID iD" in capsys.readouterr().out
+    assert serve.read_users(path)["bob"]["orcid"] == ORCID_NEW
+    serve.main(["--users", str(path), "--separate-orcid", "bob"])
+    assert ORCID_NEW in serve.read_users(path)
+    with pytest.raises(SystemExit, match="no ORCID iD to separate"):
+        serve.main(["--users", str(path), "--separate-orcid", "bob"])

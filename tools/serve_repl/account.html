@@ -58,7 +58,8 @@ function say(text, ok) {
 const WHOSE = { own: "your own key", server: "the server's key", none: "no key: give yours in the page or below", unneeded: "no key needed" };
 function showMe() {
   return fetch("/account/api/me").then((response) => response.json()).then((me) => {
-    $("name").textContent = me.orcid_name ? `${me.orcid_name} (${me.name})` : me.name;
+    $("name").textContent = (me.orcid_name ? `${me.orcid_name} (${me.name})` : me.name)
+      + (me.orcid ? `, who signs in with ORCID ${me.orcid} too` : "");
     // one who signs in with ORCID only has no password to change
     $("password-box").hidden = Boolean(me.orcid_only);
     $("orcid-note").hidden = !me.orcid_only;

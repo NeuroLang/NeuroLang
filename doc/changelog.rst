@@ -32,6 +32,12 @@ Unreleased
   user asks for an account, with a message, which an admin approves in the
   console (*Account requests*, adding them to groups) or with
   ``--approve-request ID --groups G``, or declines.
+* The admin console of ``neurolang-repl-serve`` merges an ORCID user into a
+  user of a name of their own (*merge into…*, ``--merge-orcid ID USER``),
+  who then logs in with their password or with ORCID (their ``orcid``), in
+  the groups of both, and separates them again (*Separate ORCID*,
+  ``--separate-orcid USER``): the iD a user of its own, in the groups but
+  ``admin``.
 * ``neurolang-repl-serve --local --users`` tracks the CPU seconds and the
   memory of each session's process, its own apart from the engine's data it
   shares with the builder (on Linux), shown in the admin console; and, with

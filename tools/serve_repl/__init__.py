@@ -581,6 +581,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._reply_json({
                 "name": self.user, "groups": self.users.groups(self.user),
                 "orcid_name": entry.get("orcid_name", ""),
+                "orcid": entry.get("orcid", ""),
                 "orcid_only": "password" not in entry,
                 "admin": self.users.is_admin(self.user),
                 "assistant": self.users.status(self.user),
@@ -720,6 +721,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "users": [{"name": name, "groups": entry["groups"],
                        "own_key_set": entry.get("own_key"),
                        "orcid_name": entry.get("orcid_name", ""),
+                       "orcid": entry.get("orcid", ""),
                        "orcid_only": "password" not in entry,
                        **self.users.status(name)}
                       for name, entry in sorted(users.items())],
@@ -777,8 +779,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _admin_change(self, path: str, body: dict) -> dict:
         answer = self._admin_changed(path, body)
         name = str(body.get("name", ""))
-        if path == "/admin/api/user":
+        if path in ("/admin/api/user", "/admin/api/separate-orcid"):
             self._refresh_sessions([name])
+        elif path == "/admin/api/merge-orcid":
+            self._refresh_sessions([str(body.get("into", ""))])
         elif path == "/admin/api/group":  # its members
             self._refresh_sessions([n for n, e in self.users.current().items()
                                     if name in e["groups"]])
@@ -798,6 +802,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.users.change_group(name, body.get("env"), body.get("llm"),
                                     body.get("own_key"))
             return {"ok": True}
+        if path == "/admin/api/merge-orcid":
+            into = str(body.get("into", ""))
+            self.users.merge_orcid(name, into)
+            if self.sessions:  # the ORCID user is no more
+                self.sessions.end(name)
+            return {"ok": True}
+        if path == "/admin/api/separate-orcid":
+            return {"ok": True, "orcid": self.users.separate_orcid(name)}
         if path in ("/admin/api/approve-request",
                     "/admin/api/decline-request"):
             if self.account_requests is None:
@@ -969,11 +981,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except orcid.OrcidError:
             return self._reply(303, b"", "text/plain", [forget, (
                 "Location", "/login?orcid=failed")])
-        if orcid_id in self.users.current():
-            self.users.seen_orcid(orcid_id, name)
+        user = self.users.by_orcid(orcid_id)
+        if user is not None:
+            self.users.seen_orcid(user, name)
             return self._reply(303, b"", "text/plain", [forget, (
-                "Set-Cookie", self._cookie(orcid_id,
-                                           LOGIN_DAYS * 86400)), (
+                "Set-Cookie", self._cookie(user, LOGIN_DAYS * 86400)), (
                 "Location", started.get("n") or "/")])
         return self._reply(303, b"", "text/plain", [forget, (
             "Set-Cookie", self._signed(REQUEST_COOKIE, {
@@ -1460,6 +1472,8 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
                      "is an ORCID iD")
         if not isinstance(entry.get("orcid_name", ""), str):
             sys.exit(f"{path}: the orcid_name of {name} is a text")
+        if "orcid" in entry and not orcid.is_orcid(str(entry["orcid"])):
+            sys.exit(f"{path}: the orcid of {name} is not an ORCID iD")
         entry["env"] = _env(path, name, entry.get("env"))
         _read_assistant(path, f"the user {name}", entry)
         member = entry.get("groups") or []
@@ -1470,6 +1484,16 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
             sys.exit(f"{path}: the groups of the user {name} are a list of "
                      "names")
         entry["groups"] = sorted({str(group) for group in member})
+    # An iD signs in one user: the one it names, or the one it is merged
+    # into (orcid).
+    seen = {}
+    for name, entry in users.items():
+        for orcid_id in {str(name), str(entry.get("orcid", ""))}:
+            if orcid.is_orcid(orcid_id):
+                if orcid_id in seen:
+                    sys.exit(f"{path}: the ORCID iD {orcid_id} signs in "
+                             f"both {seen[orcid_id]} and {name}")
+                seen[orcid_id] = str(name)
     kept = {}
     for name, entry in groups.items():
         if not isinstance(entry or {}, dict):
@@ -1716,12 +1740,76 @@ class Users:
             self._keep_an_admin(users)
             self._write(users)
 
-    def seen_orcid(self, orcid_id: str, name: str) -> None:
-        """Keep the name ORCID gives the user *orcid_id*, who signed in, if
+    def by_orcid(self, orcid_id: str):
+        """Return the user who signs in with the ORCID iD *orcid_id*: the
+        one it names, or the one it was merged into (``orcid``); None."""
+        users = self.current()
+        if orcid_id in users:
+            return orcid_id
+        return next((name for name, entry in users.items()
+                     if entry.get("orcid") == orcid_id), None)
+
+    def seen_orcid(self, user: str, name: str) -> None:
+        """Keep the name ORCID gives the *user* who signed in with it, if
         it changed."""
-        entry = self.current().get(orcid_id, {})
+        entry = self.current().get(user, {})
         if name and entry.get("orcid_name") != name:
-            self.change(orcid_id, orcid_name=name)
+            self.change(user, orcid_name=name)
+
+    def merge_orcid(self, orcid_id: str, into: str) -> None:
+        """
+        Merge the user named by the ORCID iD *orcid_id* into the user
+        *into*, who then signs in with it too (their ``orcid``): their
+        groups together; *into*'s own assistant, variables and own key
+        kept, the ORCID user's taken where *into* has none. The ORCID user
+        is no more.
+        """
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            source, target = users.get(orcid_id), users.get(into)
+            if source is None or not orcid.is_orcid(orcid_id):
+                raise ValueError(f"No user named by the ORCID iD {orcid_id}")
+            if target is None or orcid.is_orcid(into):
+                raise ValueError(f"{into} is not a user with a name of their "
+                                 "own")
+            if target.get("orcid"):
+                raise ValueError(f"{into} signs in with the ORCID iD "
+                                 f"{target['orcid']} already: separate it "
+                                 "first")
+            target["orcid"] = orcid_id
+            if source.get("orcid_name"):
+                target["orcid_name"] = source["orcid_name"]
+            target["groups"] = sorted(set(target["groups"])
+                                      | set(source["groups"]))
+            for key in ("llm", "own_key"):
+                if key in source and key not in target:
+                    target[key] = source[key]
+            for variable, value in source["env"].items():
+                target["env"].setdefault(variable, value)
+            del users[orcid_id]
+            self._write(users)
+
+    def separate_orcid(self, name: str) -> str:
+        """
+        Separate the ORCID iD of the user *name* from them: a user of its
+        own again, named by it, in the groups of *name* but ``admin``
+        (which an admin gives again, if it is theirs); return the iD.
+        """
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(name)
+            if entry is None or not entry.get("orcid"):
+                raise ValueError(f"{name} has no ORCID iD to separate")
+            orcid_id = entry.pop("orcid")
+            separated = {"env": {}, "groups": [
+                g for g in entry["groups"] if g != self.ADMIN]}
+            if entry.get("orcid_name"):
+                separated["orcid_name"] = entry.pop("orcid_name")
+            users[orcid_id] = separated
+            self._write(users)
+            return orcid_id
 
     def remove(self, name: str) -> None:
         with self._changing():
@@ -1974,7 +2062,8 @@ NOT_CONFIGURED = {"help", "config", "daemon", "hash_password", "list_users",
                   "add_user", "set_password", "set_groups", "set_key",
                   "set_group_key", "set_llm", "set_group_llm", "own_key",
                   "remove_user", "list_requests", "approve_request",
-                  "decline_request", "groups"}
+                  "decline_request", "merge_orcid", "separate_orcid",
+                  "groups"}
 
 
 def read_config(parser, path: Path) -> dict:
@@ -2524,6 +2613,12 @@ def parse_args(argv=None):
                         "inherit: as their groups say)")
     manage.add_argument("--remove-user", metavar="NAME",
                         help="remove the user NAME")
+    manage.add_argument("--merge-orcid", nargs=2, metavar=("ORCID", "USER"),
+                        help="merge the user named by the ORCID iD into the "
+                        "user USER, who then signs in with it too")
+    manage.add_argument("--separate-orcid", metavar="USER",
+                        help="separate the ORCID iD of USER: a user of its "
+                        "own again, in USER's groups but admin")
     manage.add_argument("--list-requests", action="store_true",
                         help="list the requests of an account of those who "
                         "signed in with ORCID (--orcid)")
@@ -2705,7 +2800,15 @@ def manage_users(args) -> None:
                 print(f"{asked['orcid']}\t{asked['name'] or '-'}\t{when}"
                       f"\t{asked['message']}")
             return
-        if args.approve_request or args.decline_request:
+        if args.merge_orcid:
+            orcid_id, into = args.merge_orcid
+            users.merge_orcid(orcid_id, into)
+            done = f"{into} signs in with the ORCID iD {orcid_id} now"
+        elif args.separate_orcid:
+            orcid_id = users.separate_orcid(args.separate_orcid)
+            done = (f"Separated {orcid_id} from {args.separate_orcid}: a "
+                    "user of its own")
+        elif args.approve_request or args.decline_request:
             orcid_id = args.approve_request or args.decline_request
             asked = requests.current().get(orcid_id)
             if asked is None:
@@ -2794,7 +2897,8 @@ def main(argv=None) -> None:
             or args.set_groups or args.set_key or args.set_group_key
             or args.set_llm or args.set_group_llm or args.own_key
             or args.remove_user or args.list_requests
-            or args.approve_request or args.decline_request):
+            or args.approve_request or args.decline_request
+            or args.merge_orcid or args.separate_orcid):
         return manage_users(args)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
