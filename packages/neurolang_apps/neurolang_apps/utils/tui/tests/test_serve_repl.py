@@ -2581,3 +2581,16 @@ def test_a_sigterm_stops_the_server_as_a_stop(serve, tmp_path):
     finally:
         connection.close()
     assert hows == ["stopped"]
+
+
+def test_a_configuration_file_has_the_activity_limits_and_dashboard(
+    serve, tmp_path
+):
+    config = tmp_path / "server.yaml"
+    config.write_text(
+        "local: true\nusers: users.yaml\nactivity_db: activity.sqlite\n"
+        "dashboard: true\nmax_running: 4\nquery_minutes: 30\n")
+    args = serve.parse_args(["--config", str(config)])
+    assert (args.activity_db, args.dashboard, args.max_running,
+            args.query_minutes) == (tmp_path / "activity.sqlite", True, 4,
+                                    30.0)
