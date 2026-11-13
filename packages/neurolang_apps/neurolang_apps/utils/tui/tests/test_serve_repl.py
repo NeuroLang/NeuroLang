@@ -2388,6 +2388,8 @@ def test_the_console_shows_the_usage_and_the_log_of_each_user(
     sessions.activity.add("bob", "submit", text="ans(x) :- p(x)",
                           response="x\n1", failed=False, seconds=0.5,
                           cpu=0.4, memory=30.0)
+    # its process's CPU in all, and the most memory of the session
+    sessions.activity.add("bob", "end", text="idle", cpu=3.0, memory=80.0)
     users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
                    bob=("bob-pw", ["lab"]))
     server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
@@ -2398,13 +2400,14 @@ def test_the_console_shows_the_usage_and_the_log_of_each_user(
         state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
         assert state["activity"] and state["builder"]["rss"] == 900.0
         [bob] = _json_of(port, "/admin/api/usage", "ann", "ann-pw")
-        assert (bob["user"], bob["inputs"], bob["cpu"]) == ("bob", 1, 0.4)
+        assert (bob["user"], bob["inputs"], bob["cpu"], bob["seconds"],
+                bob["memory"]) == ("bob", 1, 0.4, 0.5, 80.0)
         log = f"http://127.0.0.1:{port}/admin/activity.jsonl?user=bob"
         request = urllib.request.Request(log, headers=_basic("ann-pw",
                                                              "ann"))
         with urllib.request.urlopen(request, timeout=10) as response:
-            [event] = [json.loads(line) for line in response]
-        assert event["text"] == "ans(x) :- p(x)"
+            events = [json.loads(line) for line in response]
+        assert [e["text"] for e in events] == ["ans(x) :- p(x)", "idle"]
         assert _status(port, "/admin/activity.jsonl?user=bob",
                        _basic("bob-pw", "bob")) == 403
     finally:

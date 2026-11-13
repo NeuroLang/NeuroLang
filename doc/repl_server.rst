@@ -543,9 +543,10 @@ SQLite database (in WAL mode, as the feedback's), for each user: the start
 of each session and its engine; each input they run, with its result as
 text (its output and the first 50 rows of each table, 20,000 characters at
 most), whether it failed, how long it took, the CPU seconds and the private
-memory of its process; and the end of each session, and why (stopped,
-restarted, idle, made room for another, ended by an admin, the server
-stopped).  The page tells its users that what they run is logged.  A question to
+memory of its process after it; and the end of each session, and why
+(stopped, restarted, idle, made room for another, ended by an admin, the
+server stopped), with the CPU seconds of its process in all and the most
+memory of the session, from the samples.  The page tells its users that what they run is logged.  A question to
 the assistant (``.ask``) is an input too, logged with its answer; the keys
 are never logged.  The console shows the totals
 of each user and gives their log as JSON lines (``/admin/activity.jsonl?user=NAME``);

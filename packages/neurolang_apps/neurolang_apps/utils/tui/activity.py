@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS activity (
     seconds REAL,            -- how long it took
     cpu REAL,                -- the CPU seconds of its session's process
     memory REAL              -- the private memory of the process, in MB
+                             -- (after an input; the most of the session,
+                             -- at its end)
 );
 CREATE INDEX IF NOT EXISTS activity_user ON activity (user, id);
 """
@@ -103,16 +105,19 @@ class ActivityLog:
             )
 
     def totals(self) -> list:
-        """Return, by user, their inputs run, those failed, their seconds,
-        CPU seconds, the most memory of their sessions and their last
-        event."""
+        """Return, by user, their inputs run, those failed, their seconds
+        and CPU seconds (of their inputs: an end's CPU is its process's in
+        all), the most memory of their sessions (an end's is the most of its
+        session) and their last event."""
         with self._connect() as db:
             rows = db.execute(
                 "SELECT user, "
                 "SUM(kind = 'submit') AS inputs, "
                 "SUM(kind = 'submit' AND failed) AS failed, "
-                "ROUND(SUM(seconds), 1) AS seconds, "
-                "ROUND(SUM(cpu), 1) AS cpu, "
+                "ROUND(SUM(CASE WHEN kind = 'submit' THEN seconds END), 1) "
+                "AS seconds, "
+                "ROUND(SUM(CASE WHEN kind = 'submit' THEN cpu END), 1) "
+                "AS cpu, "
                 "ROUND(MAX(memory), 1) AS memory, "
                 "MAX(created) AS last "
                 "FROM activity GROUP BY user ORDER BY last DESC"
