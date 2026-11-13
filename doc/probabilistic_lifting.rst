@@ -1088,7 +1088,7 @@ Projection on a variable
    holds for at least two values of :math:`x`, a ``HAVING COUNT(*) >= 2``
    query of Ré and Suciu [Re2009]_. It is the complement, within
    :math:`\exists x\, R(\bar u)`, of exactly one value
-   (``_at_least_two_plan``):
+   (``_at_least_plan``):
 
    .. math::
 
@@ -1099,6 +1099,47 @@ Projection on a variable
    computed with ``Subtraction``, the second query being projected
    exclusively. It is tried last, and only on this shape: other
    conjuncts, or other quantified variables in the atoms, are declined.
+
+   *At least k.* More generally, the query :math:`Q_k` with :math:`k`
+   copies :math:`R(\bar u[x_i/x])` and one strict comparison of each pair
+   :math:`x_i, x_j`, :math:`\neq`, :math:`<` or :math:`>`, satisfied by
+   some order of :math:`x_1, \dots, x_k`, holds when :math:`R(\bar u)`
+   holds for at least :math:`k` values of :math:`x`, ``HAVING COUNT(*) >=
+   k`` [Re2009]_. It is the complement, within at least :math:`k - 1`
+   values, the query :math:`Q_{k-1}` of :math:`k - 1` copies and pairwise
+   :math:`\neq`, of exactly :math:`k - 1` values (``_at_least_plan``):
+
+   .. math::
+
+      P[Q_k] = P[Q_{k-1}] - \frac{1}{(k-1)!} \sum_{a_1, \dots, a_{k-1}}
+      P[E(a_1, \dots, a_{k-1})], \quad
+      E(\bar x) = \textstyle\bigwedge_i R(\bar u[x_i/x]) \land
+      \bigwedge_{i < j} x_i \neq x_j \land
+      \lnot\exists w\, (R(\bar u[w/x]) \land \bigwedge_i w \neq x_i),
+
+   with :math:`Q_1 = \exists x\, R(\bar u)`, so that :math:`k = 2` is the
+   formula above. The sum is the projection on :math:`x_1, \dots,
+   x_{k-1}` of the plan of :math:`E`, which the comparison rule lifts once
+   they are free, summing like the disjoint projection, scaled by
+   ``WeightedNaturalJoin``; :math:`Q_{k-1}` is lifted by the same rule.
+   The plan computes, for a relation of :math:`n` tuples, a row for each
+   :math:`k - 1` values and a projection over the :math:`n` tuples, in
+   :math:`O(n^k)` time, rather than the :math:`O(nk)` of the dynamic
+   programme of the Poisson-binomial distribution; :math:`k` is thus at
+   most ``MAX_AT_LEAST``, 4 (at :math:`k = 4`, 50 tuples take about 40
+   seconds, model counting more than 300). For instance, at least three
+   studies mentioning a term,
+
+   .. math::
+
+      \exists s_1\, \exists s_2\, \exists s_3\, (\mathrm{mentions}(s_1,
+      t) \land \mathrm{mentions}(s_2, t) \land \mathrm{mentions}(s_3, t)
+      \land s_1 \neq s_2 \land s_2 \neq s_3 \land s_1 \neq s_3),
+
+   is lifted for each term :math:`t`. Without a comparison of each pair,
+   as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
+   :math:`x_1 = x_3`, or with comparisons no order satisfies, as in
+   :math:`x_1 < x_2 < x_3 < x_1`, the query is declined.
 
    For instance, the segregation of a term on the selected study,
 
@@ -1820,6 +1861,35 @@ Projection on a variable
    :math:`P[Q] = P[\exists x\, R(\bar u)] - P[\text{exactly one}]`, which
    ``Subtraction`` computes, each plan being lifted, and checked, by the
    rules of this page.
+
+   *At least k.* Take a world, the free variables being fixed. If
+   :math:`R(\bar u[a/x])` holds for :math:`k` values :math:`a_1, \dots,
+   a_k`, distinct, give the :math:`i`-th least of them to the
+   :math:`i`-th variable of an order satisfying the comparisons: each
+   :math:`<` and :math:`>` holds, the order of the values being total, as
+   for the order comparisons above, and each :math:`\neq`, the values
+   being distinct, so :math:`Q_k` holds. Conversely, the comparison of
+   each pair makes the :math:`k` values different. :math:`Q_k` thus holds
+   when :math:`R(\bar u)` holds for at least :math:`k` values, and
+   :math:`Q_{k-1}`, of pairwise :math:`\neq`, which needs no order, when
+   it holds for at least :math:`k - 1`; their difference is the worlds
+   where it holds for exactly :math:`k - 1` values, which imply
+   :math:`Q_{k-1}`, so :math:`P[Q_k] = P[Q_{k-1}] - P[\text{exactly } k -
+   1]`, which ``Subtraction`` computes. In a world where :math:`R(\bar
+   u)` holds for exactly :math:`k - 1` values, :math:`E(\bar a)` holds
+   for the :math:`(k - 1)!` orders :math:`\bar a` of these values, the
+   copies and the inequalities holding and the negated conjunct, no other
+   value holding; in any other world, it holds for none, as the
+   inequalities make :math:`k - 1` values hold and the negated conjunct no
+   other. By linearity of expectation, :math:`\sum_{\bar a}
+   P[E(\bar a)]`, the expected number of tuples :math:`\bar a` for which
+   :math:`E` holds, is :math:`(k - 1)!\, P[\text{exactly } k - 1]`; the
+   projection sums the probabilities of the plan of :math:`E`, each
+   lifted, and ``WeightedNaturalJoin`` multiplies the sum by
+   :math:`1 / (k - 1)!`. For :math:`k = 2` the events of different values
+   are exclusive (Lemma 2), and the sum is the disjoint projection. The
+   rule recurses on :math:`Q_{k-1}`, with one copy less, down to
+   :math:`Q_1`, which it does not match.
 
 Algorithms from the literature
    The rules of `Algorithms from the literature`_ are proved in the papers

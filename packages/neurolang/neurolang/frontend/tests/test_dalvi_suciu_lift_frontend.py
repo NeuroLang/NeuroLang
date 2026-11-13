@@ -726,6 +726,55 @@ def test_order_across_atoms_and_at_least_two_formulas(
         assert result == {(): pytest.approx(expected)}
 
 
+AT_LEAST_THREE = "R(x), R(y), R(z), (x != y), (y != z), (x != z)"
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2 + .5 * .4 * .3 * .8 + .5 * .4 * .7 * .2 +
+         .5 * .6 * .3 * .2 + .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(PROB) :- R(x), R(y), R(z), (x < y), (y < z), (x != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1), (.4, 2)]), {}),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1)]), {}),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}, R(u), "
+        "(u != x), (u != y), (u != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(t, PROB) :- S(t, x), S(t, y), S(t, z), "
+        "(x != y), (y != z), (x != z)",
+        dict(S=[
+            (.5, 0, 1), (.4, 0, 2), (.3, 0, 3), (.9, 1, 1), (.8, 1, 2),
+            (.7, 2, 1)
+        ]),
+        {(0,): .5 * .4 * .3}
+    ),
+])
+def test_at_least_k(query, facts, expected, solvers):
+    """
+    At least three, or four, values of R: the sum, on the worlds with
+    that many tuples or more, of their probabilities; per answer t for
+    S(t, x). Without enough tuples, there is no answer.
+    """
+    result = _solve_random(query, 0, solvers, facts)
+    assert result == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("query", [
     "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
 ])
