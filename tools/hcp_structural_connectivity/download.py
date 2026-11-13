@@ -80,11 +80,12 @@ def main() -> None:
                if "/glasser_atlas/structural_connectivity/" in o["name"]]
     print(f"{len(connectomes)} connectomes, {len(glasser)} Glasser matrices",
           flush=True)
-    with ThreadPoolExecutor(args.jobs) as pool:
-        for o in glasser:
-            path = args.staging / "glasser" / o["name"].rsplit("/", 1)[1]
-            if not path.exists():
-                pool.submit(download, o["name"], o["bytes"], path)
+    # the Glasser matrices (1 MB each) come alongside, two at a time
+    small = ThreadPoolExecutor(2)
+    for o in glasser:
+        path = args.staging / "glasser" / o["name"].rsplit("/", 1)[1]
+        if not path.exists():
+            small.submit(download, o["name"], o["bytes"], path)
     todo = [(s, o) for s, o in sorted(connectomes.items())
             if not (args.out / f"{s}.npz").exists()]
     print(f"{len(todo)} connectomes to download", flush=True)
@@ -106,6 +107,7 @@ def main() -> None:
             futures.append(pool.submit(download, o["name"], o["bytes"], path))
         for future in futures:
             future.result()
+    small.shutdown()
     (args.staging / "DONE").touch()
     print("all downloaded", flush=True)
 
