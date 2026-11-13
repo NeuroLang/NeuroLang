@@ -480,6 +480,18 @@ their sessions end.  They then log in with their password, or with ORCID::
        orcid: 0000-0002-1694-233X
        orcid_name: Sofia Garcia
 
+Users do it themselves on their account page too:
+
+- a user with a password links their iD (*Link my ORCID iD*): they sign in
+  at ORCID, which proves the iD theirs, and log in with either then; an
+  iD with an account of its own is merged into theirs, as above.  They
+  unlink it there (*Unlink it*), and log in with their password only.
+- a user who signs in with ORCID only merges their account into one of
+  theirs with a password (*Merge into it*, giving its name and password):
+  they are logged in as it then.
+
+An iD that signs in another user is not linked: an admin decides.
+
 Separating it (*Separate ORCID*, or ``--separate-orcid USER``) makes the iD a
 user of its own again, named by it, in the user's groups but ``admin``,
 which an admin gives again if it is theirs.  An iD signs in one user only:

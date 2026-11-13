@@ -38,6 +38,11 @@ Unreleased
   the groups of both, and separates them again (*Separate ORCID*,
   ``--separate-orcid USER``): the iD a user of its own, in the groups but
   ``admin``.
+* On their account page, a user of ``neurolang-repl-serve`` links their
+  ORCID iD (*Link my ORCID iD*, signing in at ORCID; the account of the iD,
+  if any, merged into theirs) and unlinks it; a user who signs in with
+  ORCID only merges their account into one of theirs with a password,
+  giving its name and password.
 * ``neurolang-repl-serve --local --users`` tracks the CPU seconds and the
   memory of each session's process, its own apart from the engine's data it
   shares with the builder (on Linux), shown in the admin console; and, with

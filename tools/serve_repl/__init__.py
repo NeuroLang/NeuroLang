@@ -583,6 +583,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "orcid_name": entry.get("orcid_name", ""),
                 "orcid": entry.get("orcid", ""),
                 "orcid_only": "password" not in entry,
+                "orcid_signs_in": self.orcid is not None,
                 "admin": self.users.is_admin(self.user),
                 "assistant": self.users.status(self.user),
                 "providers": _providers(),
@@ -597,6 +598,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                   "provider", "model", "base_url", "key")})
             self._refresh_sessions([self.user])
             return self._reply_json({"ok": True})
+        if path == "/account/api/unlink-orcid" and self.command == "POST":
+            self._body()
+            orcid_id = self.users.unlink_orcid(self.user)
+            self._refresh_sessions([self.user])
+            return self._reply_json({"ok": True, "orcid": orcid_id})
+        if path == "/account/api/merge-into" and self.command == "POST":
+            # an ORCID user into an account of theirs, proved by its
+            # password: logged in as it then
+            body = self._body()
+            into = str(body.get("name", ""))
+            password = str(body.get("password", "")).encode()
+            if not orcid.is_orcid(self.user):
+                return self._reply_json({"error": "Your account is not one "
+                                         "of ORCID"}, 403)
+            if not self.users.check(into, password):
+                return self._reply_json(
+                    {"error": "That name and password are not a user's"}, 403)
+            self.users.merge_orcid(self.user, into)
+            if self.sessions:
+                self.sessions.end(self.user)
+            self._refresh_sessions([into])
+            return self._reply_json({"ok": True, "name": into}, 200, [
+                ("Set-Cookie", self._cookie(into, LOGIN_DAYS * 86400))])
         if path == "/account/api/password" and self.command == "POST":
             body = self._body()
             current = str(body.get("current", "")).encode()
@@ -955,12 +979,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         target = query.get("next", ["/"])[0]
         if not target.startswith("/") or target.startswith("//"):
             target = "/"  # a page of this site only
-        state = secrets.token_urlsafe(24)
+        started = {"s": secrets.token_urlsafe(24), "n": target}
+        if query.get("link"):  # a user's own iD, for them to sign in with
+            if not self._authorised() or self.user.startswith(GUEST_PREFIX):
+                return self._reply_json({"error": "log in first: /login"},
+                                        401)
+            started.update(l=self.user, n="/account")
         return self._reply(303, b"", "text/plain", [
             ("Location", self.orcid.authorize_url(self._redirect_uri(),
-                                                  state)),
-            ("Set-Cookie", self._signed(ORCID_COOKIE, {
-                "s": state, "n": target}, ORCID_MINUTES * 60))])
+                                                  started["s"])),
+            ("Set-Cookie", self._signed(ORCID_COOKIE, started,
+                                        ORCID_MINUTES * 60))])
 
     def _orcid_callback(self):
         """``/login/orcid/callback?code=&state=``: ORCID tells who signed
@@ -981,6 +1010,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except orcid.OrcidError:
             return self._reply(303, b"", "text/plain", [forget, (
                 "Location", "/login?orcid=failed")])
+        if started.get("l"):
+            return self._orcid_linked(started["l"], orcid_id, name, forget)
         user = self.users.by_orcid(orcid_id)
         if user is not None:
             self.users.seen_orcid(user, name)
@@ -991,6 +1022,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "Set-Cookie", self._signed(REQUEST_COOKIE, {
                 "o": orcid_id, "m": name}, ORCID_MINUTES * 60)), (
             "Location", "/login?orcid=request")])
+
+    def _orcid_linked(self, user: str, orcid_id: str, name: str, forget):
+        """The iD *orcid_id* proved by *user*, still logged in in this
+        browser, who asked to sign in with it too: linked to them, or
+        the ORCID user of it merged into them. Back to their account,
+        ``?orcid=`` telling how it went."""
+        if not self._authorised() or self.user != user:
+            outcome = "expired"
+        else:
+            try:
+                outcome = self.users.link_orcid(user, orcid_id, name)
+                if outcome == "merged" and self.sessions:
+                    self.sessions.end(orcid_id)  # that user is no more
+                self._refresh_sessions([user])
+            except ValueError as error:
+                outcome = "taken" if "signs in" in str(error) else "refused"
+        return self._reply(303, b"", "text/plain", [forget, (
+            "Location", f"/account?orcid={outcome}")])
 
     def _account_request(self):
         """``/login/request``: who signed in with ORCID and is no user, and
@@ -1789,6 +1838,55 @@ class Users:
                 target["env"].setdefault(variable, value)
             del users[orcid_id]
             self._write(users)
+
+    def link_orcid(self, user: str, orcid_id: str, orcid_name: str = "") \
+            -> str:
+        """
+        Let *user*, of a name of their own, sign in with the ORCID iD
+        *orcid_id* too, which they proved theirs by signing in with it:
+        ``"linked"``; if the iD names an ORCID user, merge them into
+        *user* (:meth:`merge_orcid`): ``"merged"``. ValueError if the iD
+        signs in another user, or *user* has one already.
+        """
+        owner = self.by_orcid(orcid_id)
+        if owner == orcid_id:
+            self.merge_orcid(orcid_id, user)
+            return "merged"
+        if owner is not None:
+            raise ValueError(f"The ORCID iD {orcid_id} signs in "
+                             f"{'you' if owner == user else owner} already")
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(user)
+            if entry is None or orcid.is_orcid(user):
+                raise ValueError(f"{user} is not a user with a name of "
+                                 "their own")
+            if entry.get("orcid"):
+                raise ValueError(f"You sign in with the ORCID iD "
+                                 f"{entry['orcid']} already")
+            entry["orcid"] = orcid_id
+            if orcid_name:
+                entry["orcid_name"] = orcid_name
+            self._write(users)
+        return "linked"
+
+    def unlink_orcid(self, user: str) -> str:
+        """Let *user* sign in with their password only, no more with their
+        ORCID iD; return it. ValueError if they have none, or no
+        password."""
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(user) or {}
+            if not entry.get("orcid"):
+                raise ValueError("You have no ORCID iD to unlink")
+            if "password" not in entry:
+                raise ValueError("Without a password you would not log in")
+            orcid_id = entry.pop("orcid")
+            entry.pop("orcid_name", None)
+            self._write(users)
+            return orcid_id
 
     def separate_orcid(self, name: str) -> str:
         """

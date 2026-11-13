@@ -2698,3 +2698,106 @@ def test_merge_and_separate_from_the_command_line(serve, tmp_path, capsys):
     assert ORCID_NEW in serve.read_users(path)
     with pytest.raises(SystemExit, match="no ORCID iD to separate"):
         serve.main(["--users", str(path), "--separate-orcid", "bob"])
+
+
+# --- a user links their own ORCID iD, or merges into an account -------------
+
+def _link(port, cookie, code):
+    """Link the iD of *code* to the user of the login *cookie*, as their
+    account page does: the status and the headers of the way back."""
+    status, headers = _http(port, "GET", "/login/orcid?link=1",
+                            {"Cookie": cookie})
+    if status != 303:
+        return status, headers
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    started = _cookie_of(headers, "neurolang_orcid")
+    return _http(port, "GET",
+                 f"/login/orcid/callback?code={code}&state={state}",
+                 {"Cookie": f"{started}; {cookie}"})
+
+
+def test_a_user_links_their_orcid_id(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    status, back = _link(port, bob, "c-new")
+    assert (status, back["Location"]) == (303, "/account?orcid=linked")
+    assert users.current()["bob"]["orcid"] == ORCID_NEW
+    assert users.current()["bob"]["orcid_name"] == "Sofia Garcia"
+    # they sign in with it now
+    _, back = _sign_in(port, "c-new", "/")
+    me = _json_at(port, "GET", "/account/api/me",
+                  {"Cookie": _cookie_of(back, "neurolang_login")})[1]
+    assert (me["name"], me["orcid"]) == ("bob", ORCID_NEW)
+    # once only, and unlinked again
+    assert _link(port, bob, "c-new")[1]["Location"] == \
+        "/account?orcid=taken"
+    status, answer = _json_at(port, "POST", "/account/api/unlink-orcid",
+                              {"Cookie": bob}, {})
+    assert (status, answer["orcid"]) == (200, ORCID_NEW)
+    assert "orcid" not in users.current()["bob"]
+    assert _json_at(port, "POST", "/account/api/unlink-orcid",
+                    {"Cookie": bob}, {})[0] == 400
+
+
+def test_a_user_links_the_id_of_an_orcid_account(orcid_server):
+    """The account of the iD is merged into theirs."""
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    assert _link(port, bob, "c-ann")[1]["Location"] == \
+        "/account?orcid=merged"
+    assert ORCID_ANN not in users.current()
+    assert users.current()["bob"]["groups"] == ["imaging", "lab"]
+    assert users.by_orcid(ORCID_ANN) == "bob"
+
+
+def test_linking_needs_the_login_it_began_with(orcid_server):
+    port, users = orcid_server
+    assert _http(port, "GET", "/login/orcid?link=1")[0] == 401
+    users.change("bob", password="bob-pw-long", groups=[], create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    _, ann = _login(port, "ann", "ann-pw")
+    status, headers = _http(port, "GET", "/login/orcid?link=1",
+                            {"Cookie": bob})
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    started = _cookie_of(headers, "neurolang_orcid")
+    # back in a browser logged in as someone else
+    _, back = _http(port, "GET",
+                    f"/login/orcid/callback?code=c-new&state={state}",
+                    {"Cookie": f"{started}; {ann}"})
+    assert back["Location"] == "/account?orcid=expired"
+    assert "orcid" not in users.current()["ann"]
+    assert "orcid" not in users.current()["bob"]
+
+
+def test_an_orcid_user_merges_into_their_account(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, back = _sign_in(port, "c-ann", "/")
+    mine = {"Cookie": _cookie_of(back, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", mine)[1][
+        "orcid_signs_in"]
+    status, answer = _json_at(port, "POST", "/account/api/merge-into", mine,
+                              {"name": "bob", "password": "wrong"})
+    assert status == 403
+    status, headers = _http(port, "POST", "/account/api/merge-into", mine,
+                            {"name": "bob", "password": "bob-pw-long"})
+    assert status == 200
+    assert users.by_orcid(ORCID_ANN) == "bob"
+    assert users.current()["bob"]["groups"] == ["imaging", "lab"]
+    # logged in as bob now; the ORCID account is no more
+    login = {"Cookie": _cookie_of(headers, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", login)[1]["name"] \
+        == "bob"
+    assert _http(port, "GET", "/bundle.json", mine)[0] == 401
+    # a user of a password merges nothing so
+    _, bob = _login(port, "bob", "bob-pw-long")
+    assert _json_at(port, "POST", "/account/api/merge-into",
+                    {"Cookie": bob},
+                    {"name": "ann", "password": "ann-pw"})[0] == 403
