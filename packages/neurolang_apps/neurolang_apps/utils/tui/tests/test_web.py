@@ -442,6 +442,11 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
         )
         assert b"claude-test" in request.content
     assert SECRET not in reply.html
+    # The tokens of the answer: of its two requests.
+    assert {k: reply.tokens[k] for k in ("input", "output", "calls",
+                                         "model")} == {
+        "input": 2, "output": 2, "calls": 2, "model": "claude-test"}
+    assert repl.submit("ans(x) :- person(x, 5)").tokens == {}
     assert SECRET not in repl.submit(".llm").html
     assert SECRET not in repr(repl.app.assistant.config().provider())
 

@@ -661,3 +661,24 @@ def test_a_query_waiting_does_not_run_in_its_session_restarted(tmp_path):
         assert _rows(bob.submit("ans(x) :- old(x)")) == []
     finally:
         sessions.close()
+
+
+def test_the_tokens_of_an_answer_are_logged(tmp_path):
+    from neurolang_apps.utils.tui.activity import ActivityLog
+
+    sessions = Sessions(tmp_path, build=build,
+                        activity_db=tmp_path / "activity.sqlite")
+    try:
+        ann = sessions.session("ann", "1")
+        ann.start("neurostore")
+        reply = {"html": "", "failed": False, "tokens": {
+            "input": 10, "output": 3, "calls": 1, "provider": "albert",
+            "model": "m", "key": "server"}}
+        ann._log_submit(".ask who?", reply, 1.0, None)
+    finally:
+        sessions.close()
+    [answer] = [e for e in ActivityLog(tmp_path / "activity.sqlite"
+                                       ).entries("ann")
+                if e["kind"] == "submit"]
+    assert (answer["tokens_in"], answer["tokens_out"], answer["llm"],
+            answer["llm_key"]) == (10, 3, "albert/m", "server")
