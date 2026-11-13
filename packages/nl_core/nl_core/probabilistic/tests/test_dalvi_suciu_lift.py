@@ -1120,6 +1120,36 @@ def test_disjoint_separator_with_a_rest_of_different_columns(answer):
     )
 
 
+@pytest.mark.parametrize("negated", (False, True))
+def test_disjoint_separator_rest_with_another_atom_of_the_choice(negated):
+    """The rest R(s) ∨ T(t) of C(s, t) is joined with the tuples of C
+    only when it has no other atom of C, here ¬C(t, s), which depends on
+    C(s, t)."""
+    C, R, T = Symbol("C"), Symbol("R"), Symbol("T")
+    s, t = Symbol("s"), Symbol("t")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.5, "b", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(R, [(0.4, "a")])
+    cpl_program.add_probabilistic_facts_from_tuples(T, [(0.6, "a")])
+    rest = (Negation(C(t, s)), R(s)) if negated else (R(s),)
+    query = Disjunction((
+        ExistentialPredicate(s, ExistentialPredicate(t, Conjunction(
+            (C(s, t),) + rest
+        ))),
+        ExistentialPredicate(s, ExistentialPredicate(t, Conjunction(
+            (C(t, s), T(s))
+        ))),
+    ))
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, query
+    )
+    applies, plan = dalvi_suciu_lift.disjoint_separator(query, symbol_table)
+    assert applies
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan) != negated
+
+
 def test_clauses_are_range_restricted():
     """
     A clause that is a disjunction with a negated atom whose variable no

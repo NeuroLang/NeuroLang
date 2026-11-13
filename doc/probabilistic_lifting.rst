@@ -1516,8 +1516,7 @@ Disjoint separator
    choice atom, and the choices are independent of the other relations
    and of each other, so the probability of the conjunction of the
    choice atoms and the rest is the product of theirs: the join of the
-   plans of the choice atoms and of the rest, which has one
-   probabilistic atom less (*Termination*).
+   plans of the choice atoms and of the rest.
 
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
@@ -1533,7 +1532,9 @@ Disjoint separator
    deterministic rest :math:`D`, whose plan selects on it.
 
    *Termination.* The rule lifts the union with the variables of the
-   choice free, one quantifier less, or lifts nothing (deterministic rest).
+   choice free, one quantifier less, then, if needed, the rest with them
+   free, with fewer probabilistic atoms (independent rest), or lifts
+   nothing (deterministic rest).
 
    *Sign of the other literals.* Let :math:`Q = \exists \bar z\,
    \bigvee_i Q_i`, each :math:`Q_i` a conjunction of literals, positive
