@@ -538,7 +538,10 @@ Deterministic builtins
    This holds for the atoms of a conjunction: the disjuncts of a
    disjunction are rewritten apart, and the atoms of a conjunction are not
    made equal to those within its disjunctions, since :math:`C(s) \lor
-   C(f)` does not need both to be true.
+   C(f)` does not need both to be true. A variable made equal to a
+   constant is replaced by it, and two atoms that cannot be made the same
+   tuple, as :math:`C(0, 0) \land C(0, 1)` or :math:`C(x, x) \land C(0,
+   1)`, make the conjunction false.
 
    An atom :math:`C(\bar v)` within a negated existential of a
    conjunction which asserts :math:`C(\bar u)` is made :math:`C(\bar u)`,
@@ -1609,7 +1612,12 @@ Rewriting of the choices
    arguments of atoms conjoined with each other
    (``lift_optimization_for_choice_predicates``). For the same reason, the
    unification of the variables of equalities is done in each disjunct
-   apart (``UnifyVariableEqualitiesMixin``).
+   apart (``UnifyVariableEqualitiesMixin``). The equalities
+   :math:`\bar x = \bar y` relate a term to a term at the same position;
+   their classes, closed by transitivity, are unified, a variable with the
+   constant of its class. A class with two different constants has no
+   solution, so the conjunction is false, and so is a disjunction all of
+   whose disjuncts are; a false disjunct is dropped.
 
    Within a negation, in every world and for every answer where
    :math:`C(\bar u)` holds, :math:`C(\bar v)` holds exactly when
