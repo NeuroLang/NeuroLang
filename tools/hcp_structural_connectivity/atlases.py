@@ -84,9 +84,23 @@ def cortex_vertices(path: Path) -> dict:
     return vertices
 
 
+def positive_zooms(path: Path) -> None:
+    """Make the voxel sizes of the NIfTI-2 header of the CIFTI file *path*
+    1 where they are not positive (some of CBIG's are 0), which nibabel
+    refuses; they mean nothing to a CIFTI file."""
+    with open(path, "r+b") as file:
+        file.seek(104)  # pixdim, 8 doubles
+        pixdim = np.frombuffer(file.read(64), dtype="<f8").copy()
+        if (pixdim[1:] <= 0).any():
+            pixdim[1:][pixdim[1:] <= 0] = 1
+            file.seek(104)
+            file.write(pixdim.astype("<f8").tobytes())
+
+
 def dlabel(path: Path, vertices: dict):
     """The parcel of each connectome vertex in the label file *path*, and
     the names of the parcels (keys of its label table, renumbered from 1)."""
+    positive_zooms(path)
     image = nib.load(path)
     table = image.header.get_axis(0).label[0]
     data = np.asarray(image.get_fdata()[0], dtype=int)
