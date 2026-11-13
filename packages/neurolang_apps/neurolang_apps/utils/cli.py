@@ -651,7 +651,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="With --ask, the most steps the ReAct agent takes, tool "
         "calls until its final answer (default: the configuration's "
-        "max_steps, 8).",
+        "max_steps).",
     )
     parser.add_argument(
         "--llm-config",

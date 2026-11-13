@@ -79,6 +79,12 @@ class ProviderConfig:
         return key
 
 
+# The most steps of the ReAct agent, tool calls until its final answer: the
+# one value the configuration, the CLI and the docs take (the example file
+# and the docs quote it, which a test checks).
+DEFAULT_MAX_STEPS = 16
+
+
 @dataclass
 class AssistantConfig:
     """
@@ -105,7 +111,7 @@ class AssistantConfig:
 
     strategy: str = "react"
     language: str = "auto"
-    max_steps: int = 8
+    max_steps: int = DEFAULT_MAX_STEPS
     max_repairs: int = 3
     few_shot_k: int = 6
     samples: int = 1

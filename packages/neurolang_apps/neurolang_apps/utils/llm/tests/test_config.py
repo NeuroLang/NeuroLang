@@ -1,7 +1,10 @@
 import pytest
 
+from pathlib import Path
+
 from ..config import (
     CONFIG_ENV,
+    DEFAULT_MAX_STEPS,
     EXAMPLE_CONFIG,
     LLMConfigError,
     config_path,
@@ -35,6 +38,17 @@ def test_example_configuration_is_valid():
     )
     assert config.providers["claude-code"].api == "command"
     assert config.assistant.strategy == "react"
+    # The example quotes the default: they agree.
+    assert config.assistant.max_steps == DEFAULT_MAX_STEPS
+
+
+def test_the_most_steps_are_one_value():
+    assert DEFAULT_MAX_STEPS == 16
+    assert parse_config(PROVIDERS).assistant.max_steps == DEFAULT_MAX_STEPS
+    # The docs quote it too, when this is a checkout.
+    docs = Path(__file__).parents[6] / "doc" / "query_assistant.rst"
+    if docs.exists():
+        assert f"max_steps: {DEFAULT_MAX_STEPS}" in docs.read_text()
 
 
 def test_lookup_order(tmp_path, monkeypatch):

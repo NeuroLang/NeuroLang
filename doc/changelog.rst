@@ -109,6 +109,8 @@ Unreleased
   values, the range shown in the colours it is drawn with.
 * In the browser REPL, a result has a *Brain* tab beside *Table* and
   *Graph*: it shows the result in the brain viewer.
+* The assistant takes at most 16 steps by default (``max_steps``, was 8),
+  for questions that need more tool calls before a query that runs.
 * When the assistant of the browser REPL finds no query, a notice under the
   question says so, why (the steps it used up, its last query's error, or
   in its words what it found), that the query box still holds the query of

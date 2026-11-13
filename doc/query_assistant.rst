@@ -250,7 +250,7 @@ order:
     assistant:
       strategy: react        # or icl
       language: auto         # the REPL's .mode, or squall, or datalog
-      max_steps: 8
+      max_steps: 16
       max_repairs: 3
       few_shot_k: 6
       samples: 1
