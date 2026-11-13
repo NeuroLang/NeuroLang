@@ -167,7 +167,13 @@ ACCOUNT_PAGE = Path(__file__).with_name("account.html")
 # The page where a user logs in (--users), served at /login, and the cookie
 # of a login, kept so many days.
 LOGIN_PAGE = Path(__file__).with_name("login.html")
-LOGIN_PATHS = ("/login", "/login/guest", "/logout")
+LOGIN_PATHS = ("/login", "/login/guest", "/login/options", "/login/orcid",
+               "/login/orcid/callback", "/login/request", "/logout")
+# The cookies of a sign-in with ORCID on its way (its state and where to go
+# then), and of an iD of no user who may ask for an account; minutes.
+ORCID_COOKIE = "neurolang_orcid"
+REQUEST_COOKIE = "neurolang_request"
+ORCID_MINUTES = 15
 LOGIN_COOKIE = "neurolang_login"
 LOGIN_DAYS = 7
 # A guest (--guests): a name of its own, which no user has (theirs have no
@@ -190,6 +196,20 @@ REPOSITORY = "NeuroLang/NeuroLang"
 ARTIFACTS = ("repl-pr-", "documentation-html")
 # The run whose site a downloaded site is, in that site.
 RUN_FILE = ".neurolang-run"
+
+
+def _sibling(name: str):
+    """The module *name* next to this one, loaded by its path, as this one
+    may be (the tests load it so, outside of any package)."""
+    spec = importlib.util.spec_from_file_location(
+        f"serve_repl.{name}", Path(__file__).with_name(f"{name}.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: Signing in with ORCID and the requests of an account (--orcid).
+orcid = _sibling("orcid")
 
 
 def bundle_script():
@@ -490,7 +510,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urllib.parse.urlsplit(self.path).path
         if self.users is not None and path in LOGIN_PATHS:
-            return self._login(path)
+            return self._guarded(self._login, path)
         if path == "/admin" or path.startswith("/admin/"):
             return self._admin(path)
         if path == "/account" or path.startswith("/account/"):
@@ -500,7 +520,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         path = urllib.parse.urlsplit(self.path).path
         if self.users is not None and path in LOGIN_PATHS:
-            return self._login(path)
+            return self._guarded(self._login, path)
         if path.startswith("/admin/"):
             return self._admin(path)
         if path.startswith("/account/"):
@@ -543,8 +563,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 {"error": "A guest has no account: bring your key in the "
                  "page"}, 403)
         if path == "/account/api/me" and self.command == "GET":
+            entry = self.users.current().get(self.user, {})
             return self._reply_json({
                 "name": self.user, "groups": self.users.groups(self.user),
+                "orcid_name": entry.get("orcid_name", ""),
+                "orcid_only": "password" not in entry,
                 "admin": self.users.is_admin(self.user),
                 "assistant": self.users.status(self.user),
                 "providers": _providers(),
@@ -563,6 +586,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = self._body()
             current = str(body.get("current", "")).encode()
             new = str(body.get("new", ""))
+            if "password" not in self.users.current().get(self.user, {}):
+                return self._reply_json(
+                    {"error": "You sign in with ORCID: you have no "
+                     "password to change"}, 403)
             if not self.users.check(self.user, current):
                 return self._reply_json(
                     {"error": "The current password is not that one"}, 403)
@@ -634,8 +661,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "me": self.user,
             "users": [{"name": name, "groups": entry["groups"],
                        "own_key_set": entry.get("own_key"),
+                       "orcid_name": entry.get("orcid_name", ""),
+                       "orcid_only": "password" not in entry,
                        **self.users.status(name)}
                       for name, entry in sorted(users.items())],
+            "orcid": self.orcid is not None,
+            "requests": self.account_requests.list()
+            if self.account_requests else [],
             "groups": [{"name": group,
                         "members": sorted(n for n, e in users.items()
                                           if group in e["groups"]),
@@ -698,6 +730,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.users.change_group(name, body.get("env"), body.get("llm"),
                                     body.get("own_key"))
             return {"ok": True}
+        if path in ("/admin/api/approve-request",
+                    "/admin/api/decline-request"):
+            if self.account_requests is None:
+                raise ValueError("No requests: the server has no --orcid")
+            asked = self.account_requests.current().get(name)
+            if asked is None:
+                raise ValueError(f"No request of {name}")
+            if path.endswith("approve-request"):
+                self.users.change(name, groups=body.get("groups") or [],
+                                  create=True,
+                                  orcid_name=asked.get("name", ""))
+            self.account_requests.remove(name)
+            return {"ok": True}
         if path == "/admin/api/remove-user":
             self.users.remove(name)
             if self.sessions:
@@ -718,11 +763,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     #: Whether a visitor may come in as a guest (--guests).
     guests = False
 
+    #: The client of the server at ORCID (--orcid), and the requests of an
+    #: account of those who sign in with it and are no user.
+    orcid = None
+    account_requests = None
+
     def _login(self, path: str):
         """``/login``: its page, and a user's name and password, which give
-        a login cookie; ``/logout``, which takes it back."""
+        a login cookie; ``/logout``, which takes it back; signing in with
+        ORCID (``/login/orcid``) and asking for an account."""
         if path == "/login/guest":
             return self._guest()
+        if path == "/login/options" and self.command == "GET":
+            return self._reply_json({"guests": self.guests,
+                                     "orcid": self.orcid is not None})
+        if path.startswith(("/login/orcid", "/login/request")):
+            if self.orcid is None:
+                return self._reply_json({"error": "no ORCID here"}, 404)
+            if path == "/login/orcid":
+                return self._orcid_start()
+            if path == "/login/orcid/callback":
+                return self._orcid_callback()
+            return self._account_request()
         if path == "/logout":
             if self._authorised():
                 now = time.time()
@@ -765,6 +827,113 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         name = GUEST_PREFIX + secrets.token_hex(6)
         return self._reply_json({"ok": True}, 200, [
             ("Set-Cookie", self._cookie(name, LOGIN_DAYS * 86400))])
+
+    def _signed(self, cookie: str, value: dict, seconds: int) -> str:
+        """The cookie *cookie* of *value*, signed, for *seconds* (0: none)."""
+        text = ""
+        if seconds:
+            payload = base64.urlsafe_b64encode(json.dumps(
+                {**value, "e": int(time.time()) + seconds}).encode()).decode()
+            text = payload + "." + hmac.new(
+                self.login_secret, payload.encode(), "sha256").hexdigest()
+        return (f"{cookie}={text}; Path=/login; Max-Age={seconds}; "
+                "HttpOnly; SameSite=Lax" + ("; Secure" if self.secure else ""))
+
+    def _read_signed(self, cookie: str):
+        """The value of the signed cookie *cookie* if it is good and not
+        expired, else None."""
+        for header in self.headers.get_all("Cookie") or ():
+            for part in header.split(";"):
+                key, _, text = part.strip().partition("=")
+                if key != cookie:
+                    continue
+                payload, _, signature = text.partition(".")
+                good = hmac.new(self.login_secret, payload.encode(),
+                                "sha256").hexdigest()
+                if not hmac.compare_digest(signature.encode(), good.encode()):
+                    continue
+                try:
+                    value = json.loads(base64.urlsafe_b64decode(payload))
+                except ValueError:
+                    continue
+                if isinstance(value, dict) and value.get("e", 0) > time.time():
+                    return value
+        return None
+
+    def _redirect_uri(self) -> str:
+        """Where ORCID sends the visitor back: the client's, else this
+        server's ``/login/orcid/callback`` at the address of the request."""
+        if self.orcid.redirect_uri:
+            return self.orcid.redirect_uri
+        scheme = "https" if self.secure else "http"
+        return f"{scheme}://{self.headers.get('Host')}/login/orcid/callback"
+
+    def _orcid_start(self):
+        """``/login/orcid?next=PAGE``: off to ORCID's page, with a state
+        that only this browser has, to come back to PAGE."""
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        target = query.get("next", ["/"])[0]
+        if not target.startswith("/") or target.startswith("//"):
+            target = "/"  # a page of this site only
+        state = secrets.token_urlsafe(24)
+        return self._reply(303, b"", "text/plain", [
+            ("Location", self.orcid.authorize_url(self._redirect_uri(),
+                                                  state)),
+            ("Set-Cookie", self._signed(ORCID_COOKIE, {
+                "s": state, "n": target}, ORCID_MINUTES * 60))])
+
+    def _orcid_callback(self):
+        """``/login/orcid/callback?code=&state=``: ORCID tells who signed
+        in. A user logs in; an iD of no user may ask for an account."""
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        started = self._read_signed(ORCID_COOKIE)
+        forget = ("Set-Cookie", self._signed(ORCID_COOKIE, {}, 0))
+        if query.get("error"):  # the visitor said no at ORCID
+            return self._reply(303, b"", "text/plain", [forget, (
+                "Location", "/login?orcid=cancelled")])
+        if started is None or not hmac.compare_digest(
+                str(query.get("state", [""])[0]), str(started.get("s"))):
+            return self._reply(303, b"", "text/plain", [forget, (
+                "Location", "/login?orcid=expired")])
+        try:
+            orcid_id, name = self.orcid.exchange(
+                str(query.get("code", [""])[0]), self._redirect_uri())
+        except orcid.OrcidError:
+            return self._reply(303, b"", "text/plain", [forget, (
+                "Location", "/login?orcid=failed")])
+        if orcid_id in self.users.current():
+            self.users.seen_orcid(orcid_id, name)
+            return self._reply(303, b"", "text/plain", [forget, (
+                "Set-Cookie", self._cookie(orcid_id,
+                                           LOGIN_DAYS * 86400)), (
+                "Location", started.get("n") or "/")])
+        return self._reply(303, b"", "text/plain", [forget, (
+            "Set-Cookie", self._signed(REQUEST_COOKIE, {
+                "o": orcid_id, "m": name}, ORCID_MINUTES * 60)), (
+            "Location", "/login?orcid=request")])
+
+    def _account_request(self):
+        """``/login/request``: who signed in with ORCID and is no user, and
+        whether they asked for an account (GET); their request, with a
+        message for the admins (POST)."""
+        who = self._read_signed(REQUEST_COOKIE)
+        if who is None:
+            return self._reply_json({"error": "Sign in with ORCID first"},
+                                    403)
+        orcid_id = str(who.get("o"))
+        if self.command == "GET":
+            return self._reply_json({
+                "orcid": orcid_id, "name": who.get("m", ""),
+                "requested": orcid_id in self.account_requests.current()})
+        if not self._same_site():
+            return self._reply_json(
+                {"error": "A request of this site's page only"}, 403)
+        body = self._request_body()
+        if body is None:
+            return
+        self.account_requests.add(orcid_id, who.get("m", ""),
+                                  str(body.get("message", "")))
+        return self._reply_json({"ok": True})
 
     def _request_body(self):
         """Return the JSON object of the request's body, or None once told
@@ -1032,13 +1201,17 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 def make_server(site: Path, host: str, port: int, backend=None,
                 tls=None, password=None, names=(), users=None,
                 feedback_db=None, guests: bool = False,
-                max_guest_sessions: int = 2, secure_cookie: bool = False):
+                max_guest_sessions: int = 2, secure_cookie: bool = False,
+                orcid_client=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
     only, if given, else to those sent to this machine's names, *host*
     or one of *names*. The login cookie goes over HTTPS only with *tls*,
-    or *secure_cookie* (behind a proxy of HTTPS)."""
+    or *secure_cookie* (behind a proxy of HTTPS). With *orcid_client* (an
+    :class:`~serve_repl.orcid.OrcidClient`), the users sign in with ORCID
+    too, and an iD of no user may ask for an account, in a file next to the
+    users file (:func:`~serve_repl.orcid.requests_path`)."""
     base = Handler if backend is None else LocalHandler
     names = {*LOCAL_NAMES, *names, host} - {"0.0.0.0", "::", ""}
     handler = type("Handler", (base,), {
@@ -1051,6 +1224,10 @@ def make_server(site: Path, host: str, port: int, backend=None,
         "guests": guests, "max_guest_sessions": max_guest_sessions,
         "sessions": backend if hasattr(backend, "info") else None,
         "feedback_db": feedback_db,
+        "orcid": orcid_client if users is not None else None,
+        "account_requests": orcid.AccountRequests(
+            orcid.requests_path(users.path))
+        if users is not None and orcid_client is not None else None,
     })
     server = Server(
         (host, port),
@@ -1126,9 +1303,10 @@ _unknown = []
 
 
 def check_password(users: dict, user: str, password: bytes) -> bool:
-    """Return whether *password* is that of *user* among *users*."""
+    """Return whether *password* is that of *user* among *users* (a user
+    who signs in with ORCID only has none)."""
     entry = users.get(user)
-    if entry is None:
+    if entry is None or "password" not in entry:
         if not _unknown:
             _unknown.append(hash_password(os.urandom(16).hex()))
         _verify(_unknown[0], password)
@@ -1196,10 +1374,17 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
     if not isinstance(groups, dict):
         sys.exit(f"{path}: groups is not a mapping of the groups")
     for name, entry in users.items():
-        if not isinstance(entry, dict) or \
+        # A user named by an ORCID iD signs in with ORCID: a password is
+        # theirs if they like.
+        signs_in = orcid.is_orcid(str(name)) and isinstance(entry, dict) \
+            and "password" not in entry
+        if not isinstance(entry, dict) or not signs_in and \
                 not str(entry.get("password", "")).startswith("scrypt$"):
             sys.exit(f"{path}: the user {name} has no password hash "
-                     "(neurolang-repl-serve --add-user makes one)")
+                     "(neurolang-repl-serve --add-user makes one), nor "
+                     "is an ORCID iD")
+        if not isinstance(entry.get("orcid_name", ""), str):
+            sys.exit(f"{path}: the orcid_name of {name} is a text")
         entry["env"] = _env(path, name, entry.get("env"))
         _read_assistant(path, f"the user {name}", entry)
         member = entry.get("groups") or []
@@ -1418,11 +1603,14 @@ class Users:
             self._write(self._users, groups)
 
     def change(self, name: str, password=None, groups=None, env=None,
-               create: bool = False, llm=None, own_key=None) -> None:
+               create: bool = False, llm=None, own_key=None,
+               orcid_name=None) -> None:
         """Add the user *name* (*create*) or change theirs: the *password*,
         the *groups*, the variables *env* (a None value removes one), their
         assistant *llm* (see :func:`_change_assistant`), whether they may
-        give their own key, *own_key* (``"inherit"``: as their groups say).
+        give their own key, *own_key* (``"inherit"``: as their groups say),
+        and the name ORCID gives a user named by their iD, *orcid_name*.
+        A new user has a password, or an ORCID iD as their name.
         """
         if password and len(password) < SHORTEST_PASSWORD:
             raise ValueError(f"A password has at least {SHORTEST_PASSWORD} "
@@ -1437,8 +1625,12 @@ class Users:
             if not name or not name.strip() or ":" in name:
                 raise ValueError("A user's name is not empty and has no ':'")
             entry = users.setdefault(name, {"env": {}, "groups": []})
-            if create and not password:
-                raise ValueError("A new user needs a password")
+            if create and not password and not orcid.is_orcid(name):
+                raise ValueError("A new user needs a password, or an ORCID "
+                                 "iD as their name (they sign in with "
+                                 "ORCID)")
+            if orcid_name is not None:
+                entry["orcid_name"] = str(orcid_name)
             if hashed:
                 entry["password"] = hashed
             if groups is not None:
@@ -1448,6 +1640,13 @@ class Users:
             _change_assistant(entry, llm, own_key)
             self._keep_an_admin(users)
             self._write(users)
+
+    def seen_orcid(self, orcid_id: str, name: str) -> None:
+        """Keep the name ORCID gives the user *orcid_id*, who signed in, if
+        it changed."""
+        entry = self.current().get(orcid_id, {})
+        if name and entry.get("orcid_name") != name:
+            self.change(orcid_id, orcid_name=name)
 
     def remove(self, name: str) -> None:
         with self._changing():
@@ -1640,8 +1839,9 @@ def users_assistants(users: "Users") -> dict:
 
 def _fingerprint(entry: dict) -> str:
     """What changes when a user's password does: a login made before is
-    then out."""
-    return hashlib.sha256(entry["password"].encode()).hexdigest()[:16]
+    then out (that of ORCID, without a password, stays)."""
+    return hashlib.sha256(
+        entry.get("password", "orcid").encode()).hexdigest()[:16]
 
 
 def sign_login(secret: bytes, name: str, users, seconds: int) -> str:
@@ -1793,6 +1993,7 @@ def service_command(args) -> list:
         ("--key-password-file", args.key_password_file),
         ("--password-file", args.password_file), ("--env-file", args.env_file),
         ("--users", args.users), ("--feedback-db", args.feedback_db),
+        ("--orcid", args.orcid),
     ):
         if path is not None:
             command += [option, str(path.resolve())]
@@ -2017,6 +2218,13 @@ def parse_args(argv=None):
         "their own",
     )
     parser.add_argument(
+        "--orcid", type=Path, metavar="FILE",
+        help="with --users, let the users named by an ORCID iD sign in with "
+        "ORCID, the client of the YAML FILE (client_id, client_secret; "
+        "ORCID's developer tools); an iD of no user may ask for an "
+        "account, which an admin approves",
+    )
+    parser.add_argument(
         "--secure-cookie", action="store_true",
         help="with --users behind a reverse proxy of HTTPS (no --cert), "
         "send the login cookie over HTTPS only",
@@ -2085,9 +2293,17 @@ def parse_args(argv=None):
                         "inherit: as their groups say)")
     manage.add_argument("--remove-user", metavar="NAME",
                         help="remove the user NAME")
+    manage.add_argument("--list-requests", action="store_true",
+                        help="list the requests of an account of those who "
+                        "signed in with ORCID (--orcid)")
+    manage.add_argument("--approve-request", metavar="ORCID",
+                        help="add the user of the request of ORCID, with "
+                        "--groups")
+    manage.add_argument("--decline-request", metavar="ORCID",
+                        help="decline the request of ORCID")
     parser.add_argument("--groups", default="", metavar="G1,G2",
-                        help="the groups of --add-user or --set-groups "
-                        "(admin: the admin console)")
+                        help="the groups of --add-user, --set-groups or "
+                        "--approve-request (admin: the admin console)")
     parser.add_argument(
         "--env-file", type=Path, metavar="FILE",
         help="with --local and --password-file or --users, put the "
@@ -2160,6 +2376,8 @@ def parse_args(argv=None):
                      "certificate")
     if args.secure_cookie and not args.users:
         parser.error("--secure-cookie is that of the login of --users")
+    if args.orcid and not args.users:
+        parser.error("--orcid signs in the users of --users")
     if args.guests and not (args.users and args.local):
         parser.error("--guests needs --users and --local")
     if args.feedback_db and not args.local:
@@ -2227,7 +2445,31 @@ def manage_users(args) -> None:
                       f"\tvariables: {', '.join(info['variables']) or '-'}"
                       + ("" if info["own_key"] else "\tno own key"))
             return
-        if args.add_user:
+        requests = orcid.AccountRequests(orcid.requests_path(args.users))
+        if args.list_requests:
+            for asked in requests.list():
+                when = time.strftime("%Y-%m-%d %H:%M",
+                                     time.localtime(asked["when"]))
+                print(f"{asked['orcid']}\t{asked['name'] or '-'}\t{when}"
+                      f"\t{asked['message']}")
+            return
+        if args.approve_request or args.decline_request:
+            orcid_id = args.approve_request or args.decline_request
+            asked = requests.current().get(orcid_id)
+            if asked is None:
+                sys.exit(f"No request of {orcid_id}")
+            if args.approve_request:
+                users.change(orcid_id, groups=groups, create=True,
+                             orcid_name=asked.get("name", ""))
+            requests.remove(orcid_id)
+            done = (f"Added {orcid_id}, in: {', '.join(groups) or '-'}"
+                    if args.approve_request
+                    else f"Declined the request of {orcid_id}")
+        elif args.add_user and orcid.is_orcid(args.add_user):
+            # they sign in with ORCID: no password
+            users.change(args.add_user, groups=groups, create=True)
+            done = f"Added {args.add_user}, who signs in with ORCID"
+        elif args.add_user:
             users.change(args.add_user, password=ask_password(
                 f"Password of {args.add_user}: "), groups=groups, create=True)
             done = f"Added {args.add_user}"
@@ -2297,7 +2539,8 @@ def main(argv=None) -> None:
     if (args.list_users or args.add_user or args.set_password
             or args.set_groups or args.set_key or args.set_group_key
             or args.set_llm or args.set_group_llm or args.own_key
-            or args.remove_user):
+            or args.remove_user or args.list_requests
+            or args.approve_request or args.decline_request):
         return manage_users(args)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
@@ -2313,6 +2556,15 @@ def main(argv=None) -> None:
         print(f"The AI assistant answers with {default_assistant()} for "
               "those who log in", flush=True)
     users = Users(args.users) if args.users else None
+    orcid_client = None
+    if args.orcid:
+        try:
+            orcid_client = orcid.OrcidClient.from_file(args.orcid)
+        except ValueError as error:
+            sys.exit(str(error))
+        print(f"The users sign in with ORCID ({orcid_client.base}) too; "
+              "the requests of an account are in "
+              f"{orcid.requests_path(args.users)}", flush=True)
     if users and args.local:
         for name, assistant in users_assistants(users).items():
             print(f"{name}: the AI assistant answers with "
@@ -2373,7 +2625,8 @@ def main(argv=None) -> None:
     server = make_server(args.site, args.host, args.port, backend, tls,
                          password, args.server_names or (), users,
                          args.feedback_db, args.guests,
-                         args.max_guest_sessions, args.secure_cookie)
+                         args.max_guest_sessions, args.secure_cookie,
+                         orcid_client)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"

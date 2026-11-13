@@ -407,7 +407,7 @@ function start({ restore = null } = {}) {
   $("account").hidden = $("logout").hidden = !bundle.users;
   if (bundle.users) {
     fetch("/account/api/me").then((response) => response.ok && response.json()).then((me) => {
-      if (me?.name) $("account").textContent = me.name;
+      if (me?.name) $("account").textContent = me.orcid_name || me.name; // the name ORCID gives
       if (me?.guest) $("account").removeAttribute("href"); // a guest has no account
     }).catch(() => {});
   }

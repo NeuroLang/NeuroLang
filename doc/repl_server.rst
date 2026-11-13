@@ -172,6 +172,9 @@ Who may use it
 ``--secure-cookie``
    With ``--users`` behind a reverse proxy of HTTPS (no ``--cert``): the
    login cookie goes over HTTPS only, as it does with ``--cert``.
+``--orcid orcid.yaml``
+   With ``--users``: the users named by an ORCID iD sign in with ORCID, and
+   an iD of no user may ask for an account (see `Signing in with ORCID`_).
 
 Without either, anyone who reaches the server uses it.
 
@@ -338,6 +341,55 @@ the login page.  Scripts may still give a user's name
 and password with HTTP Basic (``curl -u ann:...``).  With
 ``--password-file``, the browser asks the password itself, and cannot log
 out.
+
+Signing in with ORCID
+---------------------
+
+With ``--orcid orcid.yaml``, the login page offers *Sign in with ORCID*.
+The server sends the visitor to ORCID's page, where they sign in, and ORCID
+sends them back with a code, which the server exchanges for their ORCID iD
+and their name (OAuth 2.0 with the scope ``/authenticate``: who they are,
+nothing else of their record).
+
+- A user whose name is that iD logs in, as with a password.  Such a user
+  needs no password (``password`` is left out of their entry), and their
+  name at ORCID is kept as their ``orcid_name``, which the REPL, the console
+  and their account page show::
+
+     users:
+       0000-0002-1825-0097:
+         groups: [lab]
+         orcid_name: Josiah Carberry
+
+- An iD of no user may **ask for an account**, with a message for the
+  admins.  The requests wait in :file:`users.yaml.requests.json`, next to the
+  users file; the console lists them under *Account requests*, where an
+  admin approves one, adding the user named by the iD to the groups given,
+  or declines it.  Until then, the iD has no access.
+
+The client is ORCID's: register one at `ORCID's developer tools
+<https://orcid.org/developer-tools>`_ (its *Public API* is enough), with the
+redirect URI ``https://SERVER:PORT/login/orcid/callback``, and give its id
+and secret in the YAML file (readable by you only)::
+
+   client_id: APP-XXXXXXXXXXXXXXXX
+   client_secret: ...
+   # when the server is reached at another address than its requests name
+   # (behind a proxy), the redirect URI registered:
+   redirect_uri: https://repl.example.org/login/orcid/callback
+   # a client of ORCID's sandbox, for testing:
+   sandbox: false
+
+From the command line::
+
+   neurolang-repl-serve --users users.yaml --add-user 0000-0002-1825-0097 --groups lab  # no password
+   neurolang-repl-serve --users users.yaml --list-requests
+   neurolang-repl-serve --users users.yaml --approve-request 0000-0002-1694-233X --groups lab
+   neurolang-repl-serve --users users.yaml --decline-request 0000-0002-1694-233X
+
+In the console, *Add* with an iD as the user's name and no password adds a
+user who signs in with ORCID.
+
 
 Guests
 ------

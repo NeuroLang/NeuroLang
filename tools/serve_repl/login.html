@@ -13,8 +13,12 @@
   label { display: grid; gap: .2rem; font-size: .9rem; }
   input, button { font: inherit; padding: .45rem .6rem; }
   #message { color: var(--bad); min-height: 1.2rem; }
-  #guest { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #8884; }
-  #guest[hidden] { display: none; }
+  #guest, #orcid, #request { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #8884; }
+  #guest[hidden], #orcid[hidden], #request[hidden], #login[hidden] { display: none; }
+  #orcid a { display: inline-flex; align-items: center; gap: .5rem; padding: .45rem .8rem; border: 1px solid #8888; border-radius: 4px; color: inherit; text-decoration: none; }
+  #orcid svg { width: 1.3rem; height: 1.3rem; }
+  textarea { font: inherit; padding: .45rem .6rem; min-height: 5rem; }
+  .note { font-size: .9rem; color: #888; }
 </style>
 </head>
 <body>
@@ -25,6 +29,21 @@
   <button>Log in</button>
 </form>
 <p id="message" role="alert"></p>
+<div id="orcid" hidden>
+  <!-- ORCID's iD icon, as orcid.org serves it (assets/vectors/orcid.logo.icon.svg) -->
+  <a id="orcid-in" href="/login/orcid">
+    <svg viewBox="0 0 72 72" aria-hidden="true"><path fill="#A6CE39" d="M72,36 C72,55.884375 55.884375,72 36,72 C16.115625,72 0,55.884375 0,36 C0,16.115625 16.115625,0 36,0 C55.884375,0 72,16.115625 72,36 Z"/><g transform="translate(18.868966, 12.910345)" fill="#FFF"><polygon points="5.03734929 39.1250878 0.695429861 39.1250878 0.695429861 9.14431787 5.03734929 9.14431787 5.03734929 22.6930505 5.03734929 39.1250878"/><path d="M11.409257,9.14431787 L23.1380784,9.14431787 C34.303014,9.14431787 39.2088191,17.0664074 39.2088191,24.1486995 C39.2088191,31.846843 33.1470485,39.1530811 23.1944669,39.1530811 L11.409257,39.1530811 L11.409257,9.14431787 Z M15.7511765,35.2620194 L22.6587756,35.2620194 C32.49858,35.2620194 34.7541226,27.8438084 34.7541226,24.1486995 C34.7541226,18.1301509 30.8915059,13.0353795 22.4332213,13.0353795 L15.7511765,13.0353795 L15.7511765,35.2620194 Z" id="Shape"/><path d="M5.71401206,2.90182329 C5.71401206,4.441452 4.44526937,5.72914146 2.86638958,5.72914146 C1.28750978,5.72914146 0.0187670918,4.441452 0.0187670918,2.90182329 C0.0187670918,1.33420133 1.28750978,0.0745051096 2.86638958,0.0745051096 C4.44526937,0.0745051096 5.71401206,1.36219458 5.71401206,2.90182329 Z"/></g></svg>
+    Sign in with ORCID
+  </a>
+</div>
+<div id="request" hidden>
+  <p>You signed in with ORCID as <strong id="request-name"></strong> (<a id="request-id" target="_blank" rel="noopener"></a>), who has no account here yet.</p>
+  <form id="ask">
+    <label>A message for the admins (who you are, what you would use it for) <textarea name="message" maxlength="1000"></textarea></label>
+    <button>Ask for an account</button>
+  </form>
+  <p class="note" id="request-note"></p>
+</div>
 <div id="guest" hidden>
   <p>Or try it without an account: a guest's AI assistant answers with an API key you give in the page.</p>
   <button type="button" id="guest-in">Continue as a guest</button>
@@ -43,10 +62,44 @@ try {
     for (const name of Object.keys(storage)) if (name.startsWith("neurolang-repl-llm")) storage.removeItem(name);
   }
 } catch {} // no storage here
-// Guests, if the server lets them in.
-fetch("/login/guest").then((response) => response.json()).then(({ guests }) => {
-  document.getElementById("guest").hidden = !guests;
+const $ = (id) => document.getElementById(id);
+// Back from ORCID: ?orcid= says how it went.
+const back = new URLSearchParams(location.search).get("orcid");
+// Guests and ORCID, if the server lets them in (not when asking for an account).
+fetch("/login/options").then((response) => response.json()).then(({ guests, orcid }) => {
+  $("guest").hidden = !guests || back === "request";
+  $("orcid").hidden = !orcid || back === "request";
+  $("orcid-in").href = `/login/orcid?next=${encodeURIComponent(next())}`;
 }).catch(() => {});
+// Back from ORCID: what went wrong, or an iD of no user, who may ask for an account.
+const ORCID_SAYS = {
+  cancelled: "You did not sign in at ORCID.",
+  expired: "The sign-in with ORCID took too long, or began in another browser: sign in again.",
+  failed: "ORCID did not tell who you are: sign in again.",
+};
+if (ORCID_SAYS[back]) $("message").textContent = ORCID_SAYS[back];
+if (back === "request") {
+  fetch("/login/request").then((response) => response.ok ? response.json() : Promise.reject()).then((who) => {
+    $("login").hidden = true;
+    $("request").hidden = false;
+    $("request-name").textContent = who.name || who.orcid;
+    Object.assign($("request-id"), { textContent: who.orcid, href: `https://orcid.org/${who.orcid}` });
+    if (who.requested) {
+      $("request-note").textContent = "Your request waits for an admin: you may send it again with another message.";
+    }
+  }).catch(() => { $("message").textContent = ORCID_SAYS.expired; });
+}
+$("ask").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const response = await fetch("/login/request", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: new FormData(event.target).get("message") }),
+  });
+  const answer = await response.json().catch(() => ({ error: response.statusText }));
+  $("request-note").textContent = response.ok
+    ? "Your request is sent: an admin adds you to the server, and you sign in with ORCID then."
+    : answer.error;
+});
 document.getElementById("guest-in").addEventListener("click", async () => {
   const response = await fetch("/login/guest", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   if (response.ok) return location.assign(next());
