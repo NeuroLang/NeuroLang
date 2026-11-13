@@ -1,6 +1,7 @@
 // What a plot of a result shows: bars, a histogram, points or a line, from
 // the columns of its table (table_model.js), of the rows its filter keeps,
 // in the table's order. plot_view.js draws them.
+import { SETTINGS } from "./settings.js";
 import { cellText } from "./table_model.js";
 
 const NUMERIC = new Set(["int", "float"]);
@@ -35,7 +36,7 @@ export function plotChoice(model) {
 // The bars of the column *y* labelled by the column *x*, the first *limit* in
 // the table's order, and how many *more* there are; without *y* (-1), how
 // many rows each value of *x* has, most first. The largest is *top*.
-export function barData(model, x, y, limit = 30) {
+export function barData(model, x, y, limit = SETTINGS.plot.bars) {
   let all;
   if (y >= 0) {
     all = shownRows(model).filter((row) => isNumber(row[y])).map((row) => ({ label: cellText(row[x]), value: Number(row[y]) }));
@@ -59,7 +60,7 @@ export function histogram(model, x, count = 0) {
   const values = shownRows(model).filter((row) => isNumber(row[x])).map((row) => Number(row[x]));
   if (!values.length) return { bins: [], low: 0, high: 0 };
   const low = Math.min(...values), high = Math.max(...values);
-  const number = high === low ? 1 : count || Math.min(40, Math.max(1, Math.ceil(Math.log2(values.length)) + 1));
+  const number = high === low ? 1 : count || Math.min(SETTINGS.plot.histogram_bins, Math.max(1, Math.ceil(Math.log2(values.length)) + 1));
   const width = (high - low) / number;
   const bins = Array.from({ length: number }, (_, index) => ({
     x0: low + index * width, x1: index === number - 1 ? high : low + (index + 1) * width, count: 0,

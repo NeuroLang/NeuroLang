@@ -1,6 +1,7 @@
 // The page of the in-browser REPL: a box for the AI assistant, a box for
 // the code, and the result as a table or in the brain viewer. It shows what
 // worker.js answers.
+import { SETTINGS } from "./settings.js";
 import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
@@ -197,7 +198,7 @@ function showGuide() {
     hideSummary();
     input.focus();
   }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
-  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, 200, (query) => {
+  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, SETTINGS.guide.relations_shown, (query) => {
     putQuery(query);
     hideSummary();
     input.focus();
@@ -300,14 +301,14 @@ function showAsked() {
   $("asked").hidden = !entries.length;
   $("asked-summary").textContent = `Past questions (${entries.length})`;
   const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
-  $("asked-list").replaceChildren(...entries.slice(0, 50).map((entry) => {
+  $("asked-list").replaceChildren(...entries.slice(0, SETTINGS.history.questions_shown).map((entry) => {
     const item = document.createElement("li");
     const text = Object.assign(document.createElement("p"), { className: "asked-question", textContent: entry.question });
     const shown = entry.valid && entry.query
       ? Object.assign(document.createElement("pre"), { className: "asked-query" })
       : Object.assign(document.createElement("p"), { className: "asked-none", textContent: "No valid query came of it." });
     const squall = entry.language === "squall";
-    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, 58), squall));
+    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, SETTINGS.history.question_width), squall));
     const actions = Object.assign(document.createElement("div"), { className: "asked-actions" });
     if (entry.valid && entry.query) {
       actions.append(Object.assign(document.createElement("button"), {
