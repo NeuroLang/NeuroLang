@@ -36,12 +36,23 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    # the first user, an admin (asks their password; makes users.yaml)
    uv run --extra apps neurolang-repl-serve --users users.yaml --add-user ann --groups admin
 
+   # its options in server.yaml, its secrets in secrets.yaml (chmod 600):
+   # see "Configuration files" below
+   cat > server.yaml <<EOF
+   local: true
+   host: 0.0.0.0
+   port: 8443
+   cert: cert.pem
+   key: key.pem
+   users: users.yaml
+   feedback_db: feedback.sqlite
+   data_dir: /srv/neurolang_data
+   secrets: secrets.yaml
+   EOF
+
    # serve it, as a service of this user, over HTTPS
    uv run --extra apps --extra tui --extra llm neurolang-repl-serve \
-       --daemon install --local --host 0.0.0.0 --port 8443 \
-       --cert cert.pem --key key.pem \
-       --users users.yaml --feedback-db feedback.sqlite \
-       --data-dir /srv/neurolang_data
+       --daemon install --config server.yaml
 
    loginctl enable-linger $USER   # keep it running after you log out
 
@@ -176,6 +187,12 @@ Who may use it
    With ``--users``: the users named by an ORCID iD sign in with ORCID, and
    an iD of no user may ask for an account (see `Signing in with ORCID`_).
 
+Configuration
+~~~~~~~~~~~~~
+
+``--config server.yaml``, ``--secrets secrets.yaml``
+   The options, and the secrets, in YAML files (see `Configuration files`_).
+
 Without either, anyone who reaches the server uses it.
 
 The AI assistant
@@ -207,6 +224,37 @@ Managing the users
 ``--set-llm``, ``--set-group-llm``, ``--own-key``, ``--set-key``,
 ``--set-group-key``, ``--remove-user`` and ``--hash-password`` change the
 users file from the command line (see `Managing users`_).
+
+
+Configuration files
+-------------------
+
+The server's options go in a YAML file, ``--config server.yaml``, each
+by its name (``data_dir``, or ``data-dir`` as the option is written), a list
+for an option given several times (``engines: [neurosynth, neurostore]``),
+``true`` for a flag; a relative path is relative to the file.  An option
+given on the command line replaces the file's.  The service installed with
+``--config`` runs that file as it is, so that a change of it is the
+service's at its next start (``systemctl --user restart neurolang-repl``).
+The users, their groups and their assistants stay in their own file
+(``users``), which the console writes.
+
+Its secrets go in a second YAML file, readable by you only (the server
+refuses it otherwise: ``chmod 600 secrets.yaml``), which ``server.yaml``
+names (``secrets: secrets.yaml``), or ``--secrets FILE``::
+
+   orcid:                      # the client of ORCID (see Signing in with ORCID)
+     client_id: APP-XXXXXXXXXXXXXXXX
+     client_secret: ...
+   env:                        # the server's variables (--env-file)
+     ALBERT_API_KEY: ...
+   password: ...               # the one password of all (--password-file)
+   key_password: ...           # the passphrase of the key of cert (--key-password-file)
+
+so that ``server.yaml`` holds no secret and may be shared or versioned.
+Each secret may still be given in a file of its own, as before
+(``--orcid``, ``--env-file``, ``--password-file``,
+``--key-password-file``), but not both ways at once.
 
 
 Users and groups
@@ -370,7 +418,8 @@ nothing else of their record).
 The client is ORCID's: register one at `ORCID's developer tools
 <https://orcid.org/developer-tools>`_ (its *Public API* is enough), with the
 redirect URI ``https://SERVER:PORT/login/orcid/callback``, and give its id
-and secret in the YAML file (readable by you only)::
+and secret as the ``orcid`` of the secrets (see `Configuration files`_), or
+in a YAML file of its own, ``--orcid orcid.yaml`` (readable by you only)::
 
    client_id: APP-XXXXXXXXXXXXXXXX
    client_secret: ...

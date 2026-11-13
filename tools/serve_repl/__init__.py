@@ -1144,18 +1144,21 @@ class Server(http.server.ThreadingHTTPServer):
 
 
 def tls_context(cert: Path, key=None, password_file=None,
-                ask: bool = True) -> ssl.SSLContext:
+                ask: bool = True, key_password=None) -> ssl.SSLContext:
     """
     Return the TLS context of a server with the certificate *cert*, a PEM
     file (its chain after it), and its private key, in *key* or else in
-    *cert*. A key with a passphrase is opened with the first line of
-    *password_file*, else the passphrase asked in a terminal, if *ask*.
+    *cert*. A key with a passphrase is opened with *key_password* (that
+    of the secrets), or the first line of *password_file*, else the
+    passphrase asked in a terminal, if *ask*.
     Stop, telling why, if they cannot serve.
     """
     asked = []  # whether the key asked its passphrase
 
     def passphrase():
         asked.append(True)
+        if key_password:
+            return key_password
         if password_file:
             return read_password(Path(password_file))
         if ask and sys.stdin.isatty():
@@ -1893,6 +1896,108 @@ def read_password(path: Path) -> str:
     return password
 
 
+# The options a configuration file cannot give: what to do now, not how
+# to serve.
+NOT_CONFIGURED = {"help", "config", "daemon", "hash_password", "list_users",
+                  "add_user", "set_password", "set_groups", "set_key",
+                  "set_group_key", "set_llm", "set_group_llm", "own_key",
+                  "remove_user", "list_requests", "approve_request",
+                  "decline_request", "groups"}
+
+
+def read_config(parser, path: Path) -> dict:
+    """
+    Return the options of the YAML file *path*, as the defaults of the
+    *parser*: each by its name, that of the option (``data-dir``) or of
+    its value (``data_dir``), a list for one given several times
+    (``engines: [neurosynth]``), true for a flag; a relative path is
+    relative to the file. Stop, telling why, if it is not one.
+    """
+    import yaml
+
+    try:
+        data = yaml.safe_load(Path(path).read_text()) or {}
+    except (OSError, yaml.YAMLError) as error:
+        sys.exit(f"The configuration {path} cannot be read: {error}")
+    if not isinstance(data, dict):
+        sys.exit(f"The configuration {path} is not a mapping of options")
+    actions = {}
+    for action in parser._actions:
+        if action.dest in NOT_CONFIGURED:
+            continue
+        actions[action.dest] = action
+        for option in action.option_strings:
+            actions[option.lstrip("-").replace("-", "_")] = action
+    base = Path(path).resolve().parent
+    options = {}
+    for key, value in data.items():
+        action = actions.get(str(key).replace("-", "_"))
+        if action is None:
+            sys.exit(f"{path}: no option {key!r}; the options are "
+                     f"{', '.join(sorted({a.dest for a in actions.values()}))}")
+        many = isinstance(action, argparse._AppendAction)
+        values = value if isinstance(value, list) else [value]
+        if many is not isinstance(value, list) and value is not None:
+            sys.exit(f"{path}: {key} is " + ("a list" if many else "one value"))
+        if action.nargs == 0 and not isinstance(value, bool):
+            sys.exit(f"{path}: {key} is true or false")
+        if action.type is not None and action.nargs != 0:
+            try:
+                values = [None if v is None else action.type(v)
+                          for v in values]
+            except (TypeError, ValueError):
+                sys.exit(f"{path}: {key} is not a "
+                         f"{getattr(action.type, '__name__', 'value')}")
+        if action.type is Path:
+            values = [v if v is None or v.is_absolute() else base / v
+                      for v in values]
+        if action.choices is not None:
+            bad = [v for v in values if v not in action.choices]
+            if bad:
+                sys.exit(f"{path}: {key} is one of "
+                         f"{', '.join(map(str, action.choices))}, not "
+                         f"{', '.join(map(str, bad))}")
+        options[action.dest] = values if many else values[0]
+    return options
+
+
+# What a file of secrets holds.
+SECRETS = ("orcid", "env", "password", "key_password")
+
+
+def read_secrets(path: Path) -> dict:
+    """
+    Return the secrets of the YAML file *path*, readable by its owner
+    only: ``orcid`` (``client_id``, ``client_secret``...), ``env`` (the
+    variables of the server), ``password`` and ``key_password``. Stop,
+    telling why, if it is not one, or others may read it.
+    """
+    import yaml
+
+    path = Path(path)
+    try:
+        mode = path.stat().st_mode
+        data = yaml.safe_load(path.read_text()) or {}
+    except (OSError, yaml.YAMLError) as error:
+        sys.exit(f"The secrets {path} cannot be read: {error}")
+    if mode & 0o077:
+        sys.exit(f"The secrets {path} may be read by others: chmod 600 "
+                 f"{path}")
+    if not isinstance(data, dict) or set(data) - set(SECRETS):
+        sys.exit(f"{path}: the secrets are those of {', '.join(SECRETS)}")
+    if not isinstance(data.get("env", {}), dict):
+        sys.exit(f"{path}: env is a mapping NAME: VALUE")
+    if not isinstance(data.get("orcid", {}), dict):
+        sys.exit(f"{path}: orcid is a mapping (client_id, client_secret)")
+    secrets_ = {k: v for k, v in data.items() if v is not None}
+    if "env" in secrets_:
+        secrets_["env"] = {str(k): str(v) for k, v in secrets_["env"].items()}
+    for key in ("password", "key_password"):
+        if key in secrets_:
+            secrets_[key] = str(secrets_[key])
+    return secrets_
+
+
 def read_env_file(path: Path) -> dict:
     """Return the variables of the file *path*: lines NAME=VALUE (``export``
     before, quotes around the value and ``#`` comments may be there, after
@@ -1963,6 +2068,9 @@ def service_command(args) -> list:
         python = shutil.which(python) or sys.exit(
             f"--python {python}: no such program in the PATH")
     python = str(Path(python).absolute())
+    if args.config:  # the file says it all, as it will when it changes
+        return [python, "-m", "serve_repl", "--no-browser", "--config",
+                str(args.config.resolve())]
     command = [
         python, "-m", "serve_repl", "--no-browser",
         "--host", args.host, "--port", str(args.port),
@@ -1993,7 +2101,7 @@ def service_command(args) -> list:
         ("--key-password-file", args.key_password_file),
         ("--password-file", args.password_file), ("--env-file", args.env_file),
         ("--users", args.users), ("--feedback-db", args.feedback_db),
-        ("--orcid", args.orcid),
+        ("--orcid", args.orcid), ("--secrets", args.secrets),
     ):
         if path is not None:
             command += [option, str(path.resolve())]
@@ -2152,6 +2260,19 @@ def parse_args(argv=None):
     """Return the options of the command line *argv*."""
     parser = argparse.ArgumentParser(
         prog="neurolang-repl-serve", description=__doc__.split("\n\n")[0],
+    )
+    parser.add_argument(
+        "--config", type=Path, metavar="FILE",
+        help="the YAML FILE of the options, each by its name (port, "
+        "data_dir or data-dir, engines: [...]...), its paths relative to "
+        "it; the options given here replace its own",
+    )
+    parser.add_argument(
+        "--secrets", type=Path, metavar="FILE",
+        help="the YAML FILE of the secrets, readable by its owner only: "
+        "orcid (the client of --orcid), env (the variables of --env-file), "
+        "password (of --password-file), key_password (of "
+        "--key-password-file)",
     )
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument(
@@ -2354,7 +2475,18 @@ def parse_args(argv=None):
         "--repo", default=REPOSITORY,
         help="the repository of --pr and --run-id (default: %(default)s)",
     )
+    config, _ = parser.parse_known_args(argv)
+    if config.config:
+        parser.set_defaults(**read_config(parser, config.config))
     args = parser.parse_args(argv)
+    args.secret = read_secrets(args.secrets) if args.secrets else {}
+    for option, key in (("password_file", "password"), ("env_file", "env"),
+                        ("orcid", "orcid"),
+                        ("key_password_file", "key_password")):
+        if getattr(args, option) and key in args.secret:
+            parser.error(f"--{option.replace('_', '-')} or the {key} of "
+                         f"{args.secrets}, not both")
+    password = args.password_file or "password" in args.secret
     if (args.pr or args.run_id) and (args.rebuild or args.clear):
         parser.error("--pr and --run-id build nothing: no --rebuild nor "
                      "--clear")
@@ -2362,28 +2494,29 @@ def parse_args(argv=None):
                        or args.clear):
         parser.error("--local builds no bundle: no --pr, --run-id, "
                      "--rebuild nor --clear")
-    if (args.key or args.key_password_file) and not args.cert:
+    if (args.key or args.key_password_file
+            or "key_password" in args.secret) and not args.cert:
         parser.error("--key and --key-password-file are those of --cert")
     if args.python and not args.daemon:
         parser.error("--python is that of the service: with --daemon")
-    if args.password_file and args.users:
+    if password and args.users:
         parser.error("--password-file or --users, not both")
     if args.max_sessions < 1 or not args.idle_minutes > 0:
         parser.error("--max-sessions is at least 1, --idle-minutes above 0")
-    if ((args.password_file or args.users) and not args.cert
+    if ((password or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
                      "certificate")
     if args.secure_cookie and not args.users:
         parser.error("--secure-cookie is that of the login of --users")
-    if args.orcid and not args.users:
+    if (args.orcid or "orcid" in args.secret) and not args.users:
         parser.error("--orcid signs in the users of --users")
     if args.guests and not (args.users and args.local):
         parser.error("--guests needs --users and --local")
     if args.feedback_db and not args.local:
         parser.error("--feedback-db stores the ratings of --local")
-    if args.env_file and not (args.local
-                              and (args.password_file or args.users)):
+    if (args.env_file or "env" in args.secret) and not (
+            args.local and (password or args.users)):
         parser.error("--env-file is the key of those who log in: with "
                      "--local and --password-file or --users")
     return args
@@ -2544,22 +2677,28 @@ def main(argv=None) -> None:
         return manage_users(args)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
+    secret = args.secret
     tls = tls_context(args.cert, args.key, args.key_password_file,
-                      ask=not args.daemon) if args.cert else None
+                      ask=not args.daemon,
+                      key_password=secret.get("key_password")) \
+        if args.cert else None
     password = read_password(args.password_file) if args.password_file \
-        else None
+        else secret.get("password")
     env_file_names = []
-    if args.env_file:
-        variables = read_env_file(args.env_file)
+    variables = read_env_file(args.env_file) if args.env_file \
+        else secret.get("env", {})
+    if variables:
         env_file_names = list(variables)
         os.environ.update(variables)
         print(f"The AI assistant answers with {default_assistant()} for "
               "those who log in", flush=True)
     users = Users(args.users) if args.users else None
     orcid_client = None
-    if args.orcid:
+    if args.orcid or "orcid" in secret:
         try:
-            orcid_client = orcid.OrcidClient.from_file(args.orcid)
+            orcid_client = orcid.OrcidClient.from_file(args.orcid) \
+                if args.orcid else orcid.OrcidClient.from_mapping(
+                    secret["orcid"], f"the orcid of {args.secrets}")
         except ValueError as error:
             sys.exit(str(error))
         print(f"The users sign in with ORCID ({orcid_client.base}) too; "
