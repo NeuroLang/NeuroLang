@@ -171,6 +171,15 @@ v0.1a22 (2026-11-13)
 
 **New features:**
 
+* The meta-analysis engines (``neurosynth``, ``neurostore`` and those
+  extending them) have the year, journal and abstract of each study,
+  ``study_year``, ``study_journal`` and ``study_abstract``, next to
+  ``study_title``: Neurosynth's abstracts are PubMed's, NeuroStore's years
+  those it lists for its studies, asked for at the first build and kept in
+  the data directory. A query, and the query assistant, restricts the
+  studies to years or journals. The SPECTER2 similarity of ``neurosynth``
+  embeds its ``study_abstract``, as ``neurostore`` does. See *The
+  publications of the studies* in the engine configuration documentation.
 * The rest of the documentation starts from the REPL as well: the queries of
   the Cognitive Atlas page run on the ``neurostore`` engine from their link,
   with its counts in the 2026-11 release; Concepts writes facts and rules as
