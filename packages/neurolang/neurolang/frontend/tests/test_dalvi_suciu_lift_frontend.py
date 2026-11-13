@@ -671,6 +671,9 @@ ORDER_AND_COUNT_QUERIES = [
     "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
     "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
     "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+    "q(PROB) :- R(x), T(y), (x + 1 < y)",
+    "q(PROB) :- R(x), T(y), (x < y + 1)",
+    "q(y, PROB) :- R(x), T(y), (x * 2 > y)",
 ]
 
 
@@ -708,6 +711,7 @@ def test_order_across_atoms_and_at_least_two(query, seed):
         1 - .5 * .6 * .7 - (.5 * .6 * .7 + .5 * .4 * .7 + .5 * .6 * .3)
     ),
     ("q(PROB) :- R(x), R(y), (x != y)", dict(R=[(.5, 1)]), None),
+    ("q(PROB) :- T(y), (y < y * 2)", dict(T=[(.5, -1), (.5, 2)]), .5),
 ])
 def test_order_across_atoms_and_at_least_two_formulas(
     query, facts, expected
@@ -717,7 +721,9 @@ def test_order_across_atoms_and_at_least_two_formulas(
     the sum, on the least value a of R, of p_R(a) ∏_{b<a} (1 - p_R(b))
     (1 - ∏_{c>a} (1 - p_T(c))), and for two values of R
     1 - ∏ (1 - p) - Σ_a p_a ∏_{b≠a} (1 - p_b).
-    Without the tuples needed, there is no answer.
+    Without the tuples needed, there is no answer. The least value of y,
+    -1, does not satisfy y < y * 2, which 2 does: y is not projected on
+    its least value.
     """
     result = _solve_random(query, 0, LIFTED_ONLY, facts)
     if expected is None:
