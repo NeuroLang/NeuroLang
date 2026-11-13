@@ -20,7 +20,7 @@ Unreleased
 Nothing yet.
 
 
-v0.1a22 (2026-11-12)
+v0.1a22 (2026-11-13)
 --------------------
 
 **Performance:**
