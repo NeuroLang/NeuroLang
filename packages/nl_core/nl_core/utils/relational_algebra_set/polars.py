@@ -434,7 +434,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self)()
 
     def projection(self, *columns):
-        if self.is_empty():
+        if self.is_empty() and (self.arity == 0 or not columns):
             return self._empty_set_same_structure()
         if len(columns) == 0:
             return self.dee()
