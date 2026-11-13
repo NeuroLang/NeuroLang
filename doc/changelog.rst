@@ -121,6 +121,13 @@ Unreleased
   coordinates are never the voxel indices of ``activated``, ``lift`` or
   ``brain_mask``.
 
+**Bug fixes:**
+
+* The query assistant (ReAct) stops search loops: after two
+  ``search_values`` calls finding no value it had not seen (a repeated
+  call, a variant of a pattern), the observation asks for a query with
+  the values found, run with ``run_query``.
+
 
 v0.1a22 (2026-11-13)
 --------------------
