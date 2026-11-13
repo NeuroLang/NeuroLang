@@ -376,6 +376,7 @@ let tabId = null;
 // and the engine: ?engine=NAME.
 function start({ restore = null } = {}) {
   if (!restore) session.replace([]); // a new engine has none of the rules
+  rerun = null; // a stop, a restart, end what ran again
   worker?.terminate();
   const params = new URLSearchParams(location.search);
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
@@ -485,7 +486,7 @@ const workerMessages = {
   llm: (data) => {
     if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
   },
-  // The server ended this tab's session (unused for long, room for another, the server restarted): its rules
+  // The server ended this tab's session (unused for long, room for another, a query too long): its rules
   // come back, as after a stop, then what was run runs again. Ended again while they come back, or at once
   // after, it is told, not looped.
   ended: (data) => {
