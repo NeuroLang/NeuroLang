@@ -466,6 +466,26 @@ From the command line::
 In the console, *Add* with an iD as the user's name and no password adds a
 user who signs in with ORCID.
 
+**Merging and separating.**  A user of a name of their own may sign in with
+an ORCID iD too: merging the ORCID user named by the iD into them (the
+console's *merge into…*, or ``--merge-orcid ID USER``) gives them
+``orcid: ID``, the groups of both, and the ORCID user's assistant,
+variables and own key where they have none; the ORCID user is no more, and
+their sessions end.  They then log in with their password, or with ORCID::
+
+   users:
+     bob:
+       password: scrypt$16384$8$1$...
+       groups: [imaging, lab]
+       orcid: 0000-0002-1694-233X
+       orcid_name: Sofia Garcia
+
+Separating it (*Separate ORCID*, or ``--separate-orcid USER``) makes the iD a
+user of its own again, named by it, in the user's groups but ``admin``,
+which an admin gives again if it is theirs.  An iD signs in one user only:
+the server refuses a users file where it names a user and is another's
+``orcid``.
+
 
 Guests
 ------
