@@ -238,6 +238,24 @@ def test_disjunction_in_deterministic_rule_of_probabilistic_program():
     assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
 
 
+def test_disjunction_of_functions_in_probabilistic_program():
+    """The variables of a disjunct of functions are bound outside it."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="t")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.2, 2), (0.3, 3)], name="p"
+    )
+    nl.add_symbol(lambda prefix, s: s.startswith(prefix), name="startswith")
+    res = nl.execute_datalog_program(
+        """
+        q(x) :- t(x, y), (startswith("a", y) | startswith("b", y))
+        ans(x, PROB) :- q(x), p(x)
+        """
+    )
+
+    assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
+
+
 def test_disjunction_with_a_constant_in_the_query(capsys):
     """Magic sets rewrite a disjunctive rule queried with a constant."""
     nl = NeurolangPDL()

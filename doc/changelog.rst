@@ -106,6 +106,12 @@ Unreleased
   language, with what the assistant said of it and the question it answers;
   *Ask again* puts the question back.
 
+**Bug fixes:**
+
+* A disjunction of functions whose variables a positive atom outside it
+  binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
+  startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.
+
 
 v0.1a22 (2026-11-13)
 --------------------
