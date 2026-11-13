@@ -2012,3 +2012,248 @@ def test_the_console_exports_the_examples_of_each_engine(serve, tmp_path):
         for query in ("", "?engine=nothing", '?engine="x'):
             assert _status(port, f"/admin/feedback.yaml{query}",
                            _basic("ann-pw", "ann")) == 400
+
+
+# --- signing in with ORCID -------------------------------------------------
+
+ORCID_ANN = "0000-0002-1825-0097"  # ORCID's example iD
+ORCID_NEW = "0000-0002-1694-233X"
+
+
+def test_orcid_ids_and_their_check_digit(serve):
+    assert serve.orcid.is_orcid(ORCID_ANN)
+    assert serve.orcid.is_orcid(ORCID_NEW)
+    for text in ("0000-0002-1825-0098", "0000-0002-1825-009", "ann",
+                 "0000000218250097", None):
+        assert not serve.orcid.is_orcid(text)
+
+
+def test_a_user_named_by_an_orcid_id_needs_no_password(serve, tmp_path):
+    path = tmp_path / "users.yaml"
+    path.write_text(f"users:\n  ann:\n    password: "
+                    f"{serve.hash_password('ann-pw')}\n    groups: [admin]\n"
+                    f"  '{ORCID_ANN}':\n    groups: [lab]\n"
+                    "    orcid_name: Josiah Carberry\n")
+    users = serve.Users(path)
+    assert users.groups(ORCID_ANN) == ["lab"]
+    assert not users.check(ORCID_ANN, b"")  # no password to log in with
+    path.write_text("users:\n  bob:\n    groups: [lab]\n")
+    with pytest.raises(SystemExit, match="ORCID iD"):
+        serve.read_users(path)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    users.change(ORCID_NEW, groups=["lab"], create=True)
+    with pytest.raises(ValueError, match="ORCID iD as their name"):
+        users.change("carl", groups=["lab"], create=True)
+    assert "password" not in users.current()[ORCID_NEW]
+
+
+def test_the_orcid_client_of_its_file(serve, tmp_path):
+    path = tmp_path / "orcid.yaml"
+    path.write_text("client_id: APP-1\nclient_secret: s3cret\n"
+                    "sandbox: true\n")
+    client = serve.orcid.OrcidClient.from_file(path)
+    url = client.authorize_url("https://x.org/login/orcid/callback", "st")
+    assert url.startswith("https://sandbox.orcid.org/oauth/authorize?")
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    assert query["scope"] == ["/authenticate"] and query["state"] == ["st"]
+    assert query["client_id"] == ["APP-1"]
+    path.write_text("client_id: APP-1\n")
+    with pytest.raises(ValueError, match="client_secret"):
+        serve.orcid.OrcidClient.from_file(path)
+
+
+class _FakeOrcid:
+    """ORCID, telling who signed in by the code it gave."""
+
+    base = "https://orcid.example"
+    redirect_uri = ""
+
+    def __init__(self, people):
+        self.people = people
+
+    def authorize_url(self, redirect_uri, state):
+        return f"{self.base}/authorize?" + urllib.parse.urlencode(
+            {"redirect_uri": redirect_uri, "state": state})
+
+    def exchange(self, code, redirect_uri):
+        if code not in self.people:
+            raise self.error("unknown code")
+        return self.people[code]
+
+
+@pytest.fixture
+def orcid_server(serve, tmp_path):
+    """A server of the admin ann and of the ORCID user of ORCID_ANN, whose
+    users sign in with a fake ORCID."""
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    users.change(ORCID_ANN, groups=["lab"], create=True)
+    fake = _FakeOrcid({"c-ann": (ORCID_ANN, "Josiah Carberry"),
+                       "c-new": (ORCID_NEW, "Sofia Garcia")})
+    fake.error = serve.orcid.OrcidError
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users,
+                               orcid_client=fake)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield server.server_address[1], users
+    server.shutdown()
+    server.server_close()
+
+
+def _cookie_of(headers, name):
+    for value in headers.get_all("Set-Cookie") or ():
+        if value.startswith(name + "="):
+            return value.split(";")[0]
+    return None
+
+
+def _sign_in(port, code, next_page="/admin"):
+    """Sign in with the fake ORCID, as the browser does: the status, the
+    headers of the way back, and the cookie of the start."""
+    status, headers = _http(
+        port, "GET", f"/login/orcid?next={urllib.parse.quote(next_page)}")
+    assert status == 303
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    started = _cookie_of(headers, "neurolang_orcid")
+    status, back = _http(
+        port, "GET", f"/login/orcid/callback?code={code}&state={state}",
+        {"Cookie": started})
+    return status, back
+
+
+def _json_at(port, method, path, headers=None, body=None):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}", method=method,
+        headers={"Content-Type": "application/json", **(headers or {})},
+        data=None if body is None else json.dumps(body).encode())
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        with error:
+            return error.code, json.load(error)
+
+
+def test_a_user_signs_in_with_orcid(orcid_server):
+    port, users = orcid_server
+    assert _json_at(port, "GET", "/login/options")[1] == {
+        "guests": False, "orcid": True}
+    status, headers = _http(port, "GET", "/login/orcid?next=/admin")
+    location = headers["Location"]
+    assert location.startswith("https://orcid.example/authorize?")
+    assert "redirect_uri=http%3A%2F%2F127.0.0.1" in location
+    status, back = _sign_in(port, "c-ann", "/admin?x=1")
+    assert (status, back["Location"]) == (303, "/admin?x=1")
+    login = _cookie_of(back, "neurolang_login")
+    assert _http(port, "GET", "/bundle.json", {"Cookie": login})[0] == 200
+    # the name ORCID gives is kept, and shown on their account page
+    assert users.current()[ORCID_ANN]["orcid_name"] == "Josiah Carberry"
+    status, me = _json_at(port, "GET", "/account/api/me", {"Cookie": login})
+    assert (me["name"], me["orcid_name"], me["orcid_only"]) == (
+        ORCID_ANN, "Josiah Carberry", True)
+    status, answer = _json_at(port, "POST", "/account/api/password",
+                              {"Cookie": login},
+                              {"current": "", "new": "long-enough"})
+    assert status == 403 and "ORCID" in answer["error"]
+    # a page off this site is not where they are sent
+    assert _sign_in(port, "c-ann", "//evil.example/")[1]["Location"] == "/"
+
+
+def test_a_sign_in_with_orcid_needs_its_state(orcid_server):
+    port, _ = orcid_server
+    status, headers = _http(port, "GET", "/login/orcid")
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    # without the cookie of its start (another browser), or another state
+    _, back = _http(port, "GET",
+                    f"/login/orcid/callback?code=c-ann&state={state}")
+    assert back["Location"] == "/login?orcid=expired"
+    _, back = _http(port, "GET",
+                    "/login/orcid/callback?code=c-ann&state=other",
+                    {"Cookie": _cookie_of(headers, "neurolang_orcid")})
+    assert back["Location"] == "/login?orcid=expired"
+    assert _cookie_of(back, "neurolang_login") is None
+    # a code ORCID does not know, or a sign-in cancelled at ORCID
+    assert _sign_in(port, "c-bad")[1]["Location"] == "/login?orcid=failed"
+    _, back = _http(port, "GET", "/login/orcid/callback?error=access_denied")
+    assert back["Location"] == "/login?orcid=cancelled"
+
+
+def test_an_unknown_orcid_id_asks_for_an_account(orcid_server, tmp_path):
+    port, users = orcid_server
+    status, back = _sign_in(port, "c-new")
+    assert back["Location"] == "/login?orcid=request"
+    assert _cookie_of(back, "neurolang_login") is None
+    asking = {"Cookie": _cookie_of(back, "neurolang_request")}
+    assert _json_at(port, "GET", "/login/request", asking)[1] == {
+        "orcid": ORCID_NEW, "name": "Sofia Garcia", "requested": False}
+    assert _json_at(port, "POST", "/login/request", asking,
+                    {"message": "PhD student of the lab"})[0] == 200
+    assert _json_at(port, "GET", "/login/request", asking)[1]["requested"]
+    assert _json_at(port, "GET", "/login/request")[0] == 403  # no sign-in
+    # the admins see it, and approve it in a group
+    admin = _basic("ann-pw", "ann")
+    state = _json_at(port, "GET", "/admin/api/state", admin)[1]
+    assert state["orcid"] is True
+    [asked] = state["requests"]
+    assert (asked["orcid"], asked["name"], asked["message"]) == (
+        ORCID_NEW, "Sofia Garcia", "PhD student of the lab")
+    assert _json_at(port, "POST", "/admin/api/approve-request", admin,
+                    {"name": ORCID_NEW, "groups": ["lab"]})[0] == 200
+    assert users.groups(ORCID_NEW) == ["lab"]
+    assert users.current()[ORCID_NEW]["orcid_name"] == "Sofia Garcia"
+    assert _json_at(port, "GET", "/admin/api/state", admin)[1][
+        "requests"] == []
+    # and they sign in now
+    _, back = _sign_in(port, "c-new", "/")
+    assert back["Location"] == "/"
+    assert _cookie_of(back, "neurolang_login")
+
+
+def test_an_admin_declines_a_request(orcid_server):
+    port, users = orcid_server
+    _, back = _sign_in(port, "c-new")
+    asking = {"Cookie": _cookie_of(back, "neurolang_request")}
+    _json_at(port, "POST", "/login/request", asking, {"message": "hi"})
+    admin = _basic("ann-pw", "ann")
+    assert _json_at(port, "POST", "/admin/api/decline-request", admin,
+                    {"name": ORCID_NEW})[0] == 200
+    assert ORCID_NEW not in users.current()
+    status, answer = _json_at(port, "POST", "/admin/api/approve-request",
+                              admin, {"name": ORCID_NEW, "groups": []})
+    assert status == 400 and "No request" in answer["error"]
+    # a user who is no admin approves nothing
+    _, back = _sign_in(port, "c-ann")
+    lab = {"Cookie": _cookie_of(back, "neurolang_login")}
+    assert _json_at(port, "POST", "/admin/api/approve-request", lab,
+                    {"name": ORCID_NEW, "groups": ["admin"]})[0] == 403
+
+
+def test_without_orcid_there_is_no_sign_in_with_it(console):
+    port, _ = console
+    assert _json_at(port, "GET", "/login/options")[1]["orcid"] is False
+    assert _http(port, "GET", "/login/orcid")[0] == 404
+    assert _http(port, "GET", "/login/request")[0] == 404
+
+
+def test_the_requests_from_the_command_line(serve, tmp_path, capsys):
+    path = tmp_path / "users.yaml"
+    serve.main(["--users", str(path), "--add-user", ORCID_ANN,
+                "--groups", "admin"])
+    assert "signs in with ORCID" in capsys.readouterr().out
+    assert "password" not in serve.read_users(path)[ORCID_ANN]
+    requests = serve.orcid.AccountRequests(serve.orcid.requests_path(path))
+    requests.add(ORCID_NEW, "Sofia Garcia", "hello")
+    serve.main(["--users", str(path), "--list-requests"])
+    assert f"{ORCID_NEW}\tSofia Garcia\t" in capsys.readouterr().out
+    serve.main(["--users", str(path), "--approve-request", ORCID_NEW,
+                "--groups", "lab"])
+    assert serve.read_users(path)[ORCID_NEW]["groups"] == ["lab"]
+    assert requests.list() == []
+    requests.add("0000-0001-5109-3700", "", "")
+    serve.main(["--users", str(path), "--decline-request",
+                "0000-0001-5109-3700"])
+    assert requests.list() == []
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--orcid", str(path)])
+    assert "--orcid signs in the users of --users" in capsys.readouterr().err
