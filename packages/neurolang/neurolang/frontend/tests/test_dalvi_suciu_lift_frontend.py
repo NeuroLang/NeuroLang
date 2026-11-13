@@ -597,6 +597,74 @@ def test_function_of_a_variable_separates_the_query(solvers):
 
 
 @pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("rules", [
+    "h(y) :- R(x), F(x, y), T(y)\nh(y) :- R(x), F(x, y), U(y)",
+    "h(y) :- R(x), F1(x, z), F2(z, y), T(y)\n"
+    "h(y) :- R(v), F1(v, w), F2(w, y), U(y)",
+])
+def test_function_through_the_same_path_in_several_rules(solvers, rules):
+    """
+    y is the same function of x in both rules, directly or through a
+    chain of functions: a tuple of R is in the subquery of one y only,
+    and y separates the union.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.4, 2), (0.3, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.9, "b")], name="U"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "a"), (3, "b")], name="F")
+    nl.add_tuple_set([(1, 10), (2, 10), (3, 30)], name="F1")
+    nl.add_tuple_set([(10, "a"), (30, "b")], name="F2")
+    nl.execute_datalog_program(rules + "\nq(PROB) :- h(y)")
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - (1 - 0.5 * 0.6) * (1 - 0.8 * 0.4)) *
+        (1 - 0.3 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_function_both_ways_in_several_rules(solvers):
+    """
+    G is a bijection, so that x and y determine each other: y, of every
+    probabilistic atom, separates the union first, and x then has T(y)
+    without it, which another rule lifts.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1, "a"), (0.4, 2, "b")], name="S"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, 1, "a"), (0.9, 2, "b")], name="V"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="G")
+    nl.execute_datalog_program(
+        "h(y) :- S(x, y), G(x, y), T(y)\n"
+        "h(y) :- S(x, y), G(x, y), V(x, y)\n"
+        "q(PROB) :- h(y)"
+    )
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - 0.5 * (1 - 0.4 * 0.8)) * (1 - 0.4 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
 def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
     """
     A function the engine knows by name, applied to the choice, and a
