@@ -13,12 +13,13 @@
        Probabilistic Logic Programming for Neuroimaging Analysis
      </p>
      <div class="nl-cta-group">
-       <a class="sd-sphinx-override sd-btn sd-btn-primary" href="install.html">
-         Get Started →
+       <a class="sd-sphinx-override sd-btn sd-btn-primary"
+          href="_static/repl/index.html">
+         Try it in the browser →
        </a>
        <a class="sd-sphinx-override sd-btn sd-btn-outline-secondary"
-          href="auto_examples/index.html">
-         View Examples
+          href="tutorial.html">
+         Get Started
        </a>
      </div>
    </div>
@@ -47,48 +48,52 @@ them probabilistically.
       Supports **discrete, probabilistic, and open-world** reasoning. Query
       over uncertain data with sound probabilistic semantics.
 
-   .. grid-item-card:: 🐍  Python Integration
+   .. grid-item-card:: ⌨️  Interactive
       :text-align: center
 
-      Embed logic programs directly in Python. Load images, dataframes, and
-      ontologies as relations with ``NeurolangDL``.
+      Type queries in a REPL, in the browser or in a terminal, on engines of
+      ready-made data: Neurosynth, NeuroStore, atlases, ontologies, tracts.
+      Or embed NeuroLang in Python (:doc:`tutorial_python`).
 
 ----
 
 Quick Start
 -----------
 
+Open `the REPL in the browser <_static/repl/index.html>`_, or install
+NeuroLang and start it in a terminal:
+
 .. code-block:: bash
 
-   pip install neurolang
+   pip install "neurolang[apps]"
+   neurolang-query -i --engine neurosynth
 
-.. code-block:: python
+Then ask which studies of Neurosynth mention pain:
 
-   from neurolang.frontend import NeurolangDL
+.. nl-repl::
 
-   nl = NeurolangDL()
-   nl.add_tuple_set([(0, 1), (1, 2), (2, 3)], name="connected")
+   ans(s) :- mentions(s, "pain")
 
-   with nl.environment as e:
-       e.reachable[e.x, e.y] = e.connected[e.x, e.y]
-       e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.connected[e.z, e.y]
-       result = nl.query((e.x, e.y), e.reachable(e.x, e.y))
+and which brain regions their peaks fall in most often, in the Destrieux
+atlas:
 
-   print(result)
+.. nl-repl::
 
-See :doc:`install` for full installation instructions and :doc:`tutorial` for
-a guided walkthrough.
+   pain_region(l, count(s)) :- destrieux_activated(l, s) & mentions(s, "pain")
+   ans(l, n) :- pain_region(l, n)
 
-----
+See :doc:`repl` for the REPL, :doc:`tutorial` for a first walkthrough, and
+:doc:`tutorial_datalog` for the language.
 
 .. toctree::
    :maxdepth: 1
    :hidden:
 
    install
+   repl
    tutorial
-   tutorial_squall
    tutorial_datalog
+   tutorial_squall
    tutorial_text_embeddings
    tutorial_neurosynth_tests
    tutorial_cognitive_atlas
@@ -97,10 +102,11 @@ a guided walkthrough.
    inclusion_exclusion
    engine_configuration
    query_assistant
+   repl_server
+   tutorial_python
    performance
    auto_examples/index
    api
-   tutorial_logic_programming
    changelog
    contributing
    authors

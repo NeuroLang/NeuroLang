@@ -69,6 +69,20 @@ def test_the_banner_names_the_engine_and_the_session_command_line():
     assert "neurolang-query -i --engine neurosynth --resolution 2" in banner
 
 
+def test_the_banner_gives_the_kernel_radius_and_the_voxel_size():
+    """The banner tells how far from a peak a study activates, in
+    millimetres and in voxels of the engine's grid."""
+    import nibabel as nib
+
+    nl = NeurolangPDL()
+    nl.template = nib.Nifti1Image(
+        np.ones((2, 2, 2), dtype=np.uint8), np.diag([2.0, 2.0, 2.0, 1.0])
+    )
+    banner = WebRepl(nl, engine_name="neurosynth", resolution=2).banner()
+    assert "Grid: 2 mm voxels" in banner
+    assert "within 6 mm (3 voxels) of its peaks" in banner
+
+
 def test_quit_does_not_end_the_page(repl):
     reply = repl.submit(".quit")
     assert "reload" in reply.html.lower()
@@ -473,6 +487,84 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     assert engine_registry.list_engine_names(
         path
     ) == engine_registry.list_engine_names()
+
+
+
+def _text(html):
+    """Return the text of the HTML *html*, without its tags."""
+    import re
+
+    return re.sub("<[^>]+>", "", html)
+
+
+def test_the_rules_defined_from_a_heavy_predicate_are_left_out():
+    from neurolang_apps.utils.tui.web import left_out
+
+    heavy = left_out(
+        "near(s) :- activated(i, j, k, s)\n"
+        "nearer(s) :- near(s), study(s)\n"
+        "mentioned(s) :- mentions(s, t)"
+    )
+    assert {"activated", "near", "nearer"} <= heavy
+    assert not {"mentioned", "mentions", "study"} & heavy
+
+
+def test_the_predicates_the_engine_leaves_out_are_named(repl):
+    """The browser engine (here: one defining none of them) lacks the
+    analyses that need gigabytes and what is defined from them."""
+    left_out = repl.app.left_out_predicates
+    assert repl.app._nl.left_out_predicates == left_out
+    assert {"activated", "uniformity", "uniformity_llm", "lift"} <= left_out
+    assert not {"mentions", "destrieux_activated", "person"} & left_out
+    full = NeurolangPDL()
+    for name in ("activated", "uniformity"):
+        full.add_tuple_set([(1,)], name=name)
+    defined = WebRepl(full, engine_name="neurosynth").app.left_out_predicates
+    assert not {"activated", "uniformity"} & defined
+
+
+def test_the_full_engine_leaves_out_nothing():
+    """The rules of the analyses define them in the engine of the
+    terminal, or of ``?engine=full``."""
+    from unittest.mock import patch
+
+    from neurolang_apps.utils.tests import test_engines
+
+    with patch(
+        f"{test_engines.NS_INIT}.fetch_study_metadata",
+        return_value=test_engines.FAKE_METADATA,
+    ):
+        nl = test_engines._build_small_neurosynth()
+    assert WebRepl(nl, "neurosynth").app.left_out_predicates == frozenset()
+
+
+def test_the_examples_leave_out_the_missing_predicates(repl):
+    examples = repl.examples()
+    assert examples["datalog"] and examples["squall"]
+    for query in examples["datalog"] + examples["squall"]:
+        assert "uniformity" not in query and "activated(" not in query
+    assert "ans(s) :- mentions(s, 'pain')" in examples["datalog"]
+
+
+def test_the_banner_says_what_the_engine_leaves_out(repl):
+    banner = _text(repl.banner())
+    missing = next(
+        line for line in banner.splitlines() if "not in the browser" in line
+    )
+    assert "activated" in missing and "uniformity_llm" in missing
+    assert "  uniformity(" not in banner and "  activated(" not in banner
+    assert "  mentions(" in banner
+
+
+def test_a_missing_predicate_is_not_available_rather_than_unknown(repl):
+    reply = repl.submit("ans(i, j, k, u) :- uniformity('pain', i, j, k, u)")
+    text = _text(reply.html)
+    assert reply.failed
+    assert "uniformity is not available in the browser" in text
+    assert "Undefined symbol" not in text
+    reply = repl.submit("ans(x) :- nobody(x)")
+    assert "predicate nobody has no facts or rules" in _text(reply.html)
+    assert "not available" not in _text(reply.html)
 
 
 STUDIES = [

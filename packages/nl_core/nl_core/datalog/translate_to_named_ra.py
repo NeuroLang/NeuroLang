@@ -337,19 +337,39 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         self, formula, classified_formulas
     ):
         if formula.functor == EQ:
-            if formula.args[0] == formula.args[1]:
+            if self.is_column_equal_to_itself(formula):
                 pass
             elif isinstance(formula.args[1], (Constant, Symbol)):
                 classified_formulas["eq_formulas"].append(formula)
             elif isinstance(formula.args[1], FunctionApplication):
                 classified_formulas["ext_proj_formulas"].append(formula)
-        elif formula.functor == CONTAINS and (
-            isinstance(formula.args[1], Constant[ColumnStr])
-            or isinstance(formula.args[1], Constant[Tuple])
+        elif formula.functor == CONTAINS and self.is_destroy_target(
+            formula.args[1]
         ):
             classified_formulas["destroy_formulas"].append(formula)
         else:
             classified_formulas["selection_formulas"].append(formula)
+
+    @staticmethod
+    def is_destroy_target(element):
+        """
+        Whether the *element* of a ``contains`` names the columns the set
+        is exploded into: a column, or a tuple of columns; a constant, or
+        a tuple of constants, is an element the set is filtered by.
+        """
+        return isinstance(element, Constant[ColumnStr]) or (
+            isinstance(element, Constant[Tuple])
+            and all(isinstance(column, ColumnStr) for column in element.value)
+        )
+
+    @staticmethod
+    def is_column_equal_to_itself(formula):
+        """`x = x`: a constant equal to the column, as in `x = 'x'`, is
+        not the column."""
+        return (
+            isinstance(formula.args[1], Constant[ColumnStr])
+            and formula.args[0] == formula.args[1]
+        )
 
     @staticmethod
     def process_positive_formulas(classified_formulas):

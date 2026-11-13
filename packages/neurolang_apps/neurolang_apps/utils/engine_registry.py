@@ -417,9 +417,43 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    return _merge_engine_configs(*(
+    return _with_kernel_radius(_merge_engine_configs(*(
         engines[engine] or {} for engine in _linearized(engines, name)
-    ))
+    )))
+
+
+def _with_kernel_radius(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return *config* with its ``kernel_radius_mm``, if it has one, written
+    where its texts say ``{kernel_radius_mm}`` (the descriptions, the
+    guidance and the examples of the assistant), and as the ``radius_mm``
+    of the activations of its atlases that do not set theirs.
+    """
+    radius = config.get("kernel_radius_mm")
+    if radius is None:
+        return config
+    for atlas in (config.get("atlases") or {}).values():
+        if isinstance(atlas.get("activated"), dict):
+            atlas["activated"].setdefault("radius_mm", radius)
+
+    def fill(value):
+        if isinstance(value, str):
+            return value.replace("{kernel_radius_mm}", f"{radius:g}")
+        if isinstance(value, dict):
+            return {k: fill(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [fill(v) for v in value]
+        return value
+
+    return fill(config)
+
+
+def kernel_radius_voxels(cfg: Dict[str, Any], mask) -> float:
+    """
+    Return the ``kernel_radius_mm`` of the engine configuration *cfg* in
+    voxels of the grid of *mask*, whose voxels are cubes.
+    """
+    return cfg["kernel_radius_mm"] / abs(float(mask.affine[0, 0]))
 
 
 @functools.lru_cache(maxsize=None)
@@ -1223,6 +1257,33 @@ def _register_atlas_points(nl, atlas, settings: dict) -> None:
     nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
 
 
+def _atlas_on_template(nl, atlas, cache_dir=None):
+    """
+    Return the *atlas* on the grid of the template of *nl*, resampled by
+    nearest neighbour, so that its voxels (i, j, k) are those of ``voxel``
+    and of the peaks (GH-1075); the *atlas* itself if *nl* has no template.
+    The image is kept in *cache_dir*, by the atlas's voxels and the grid.
+    """
+    from neurolang.atlases import Atlas
+
+    template = getattr(nl, "template", None)
+    if template is None:
+        return atlas
+    image = engine_cache.keep_image(
+        cache_dir, "atlas", engine_cache.digest(
+            engine_cache.image_digest(atlas.image),
+            engine_cache.grid_digest(template),
+        ),
+        lambda: _nilearn_image().resample_to_img(
+            atlas.image, template, interpolation="nearest"
+        ),
+    )
+    return Atlas(
+        atlas.name, np.asanyarray(image.dataobj), image.affine, atlas.table,
+        atlas.space, atlas.background, kind=atlas.kind, image=image,
+    )
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
@@ -1284,10 +1345,13 @@ def _load_deterministic_atlas(
             atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
             normalise=True, kind=atlas_name,
         )
-    _register_grid(nl, atlas_name, atlas.image)
+        on_template = _atlas_on_template(nl, atlas, cache_dir)
+    _register_grid(nl, atlas_name, on_template.image)
     _register_colours(nl, atlas_name, found.get("colors", ()))
     pred_name = params.get("predicate_name", atlas_name)
-    nl.add_atlas_set(pred_name, atlas)
+    nl.add_atlas_set(pred_name, on_template)
+    # The points and the activations are in millimetres: those of the
+    # atlas on its own grid, which may be finer than the template.
     if params.get("points"):
         _register_atlas_points(nl, atlas, params["points"])
     if params.get("activated"):
@@ -1525,13 +1589,19 @@ def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
         )
 
 
-def _phase_datalog_init(nl, cfg, data_dir):
+def _phase_datalog_init(nl, cfg, data_dir, mask=None):
     """
     Run the ``datalog_init`` program of the engine, from its data directory:
     the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
-    relative to it, where ``downloads`` puts the files.
+    relative to it, where ``downloads`` puts the files. Its
+    ``{kernel_radius_voxels}`` is the ``kernel_radius_mm`` of the engine in
+    voxels of the grid of *mask*, the distances between voxel indices.
     """
     datalog_init = cfg.get("datalog_init")
+    if datalog_init and "{kernel_radius_voxels}" in datalog_init:
+        datalog_init = datalog_init.replace(
+            "{kernel_radius_voxels}", f"{kernel_radius_voxels(cfg, mask):g}"
+        )
     if datalog_init:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         with contextlib.chdir(data_dir):
@@ -1852,7 +1922,7 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg, data_dir)
+    _phase_datalog_init(nl, cfg, data_dir, mask)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)

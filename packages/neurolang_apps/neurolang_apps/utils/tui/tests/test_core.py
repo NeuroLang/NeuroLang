@@ -435,6 +435,8 @@ def vocabulary_engine():
     nl.add_symbol(query_similarity, name="query_similarity")
     nl.execute_datalog_program(
         _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
+        # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
+        .replace("{kernel_radius_voxels}", "3")
     )
     return nl
 

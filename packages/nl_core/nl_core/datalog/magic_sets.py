@@ -835,13 +835,32 @@ def magic_predicate(predicate, i=None, adorned=True):
 
 
 def reachable_adorned_code(query, datalog, sips: SIPS):
+    """
+    The rules of the adorned code reachable from the adorned ``query``,
+    the query rule last, and the adorned predicates with a constant.
+
+    The rules are those of :func:`adorn_code`, with their bodies in the
+    order they were adorned in: walking them in ``datalog``'s class may
+    reorder the bodies (as the probabilistic frontend does to avoid cross
+    products), and the arcs of the SIPS, created from the bodies, would
+    not follow the adornments.
+    """
     adorned_code, constant_predicates = adorn_code(query, datalog, sips)
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
+    reachable = dict.fromkeys(
+        rule.consequent.functor
+        for rule in reachable_code(adorned_query, adorned_datalog).formulas
+    )
+    # a predicate adorned twice before its rules were has them twice
+    rules = dict.fromkeys(adorned_code.formulas)
     return (
-        reachable_code(adorned_query, adorned_datalog),
+        Union(tuple(
+            rule for functor in reachable for rule in rules
+            if rule.consequent.functor == functor
+        )),
         constant_predicates,
     )
 

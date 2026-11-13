@@ -289,6 +289,48 @@ def test_the_mask_is_kept_and_nilearn_not_asked_for_it_again(
     assert asked == [1, 1, 1, 1]
 
 
+def test_an_atlas_on_the_template_is_kept_for_the_grid_of_the_template(
+    tmp_path, monkeypatch
+):
+    """GH-1075: the atlas resampled to the template is kept, by the grid
+    of the template: another grid resamples it again."""
+    from types import SimpleNamespace
+
+    from neurolang.atlases import Atlas
+
+    data = np.zeros((3, 5, 2), dtype=np.int16)
+    data[2, 4, 1], data[0, 0, 0] = 1, 2
+    atlas = Atlas.from_labels(
+        "a", nib.Nifti1Image(data, np.diag([3.0, 3, 3, 1])),
+        ["Background", "A", "B"],
+    )
+    resampled = []
+    nilearn_image = engine_registry._nilearn_image
+
+    def counting():
+        resampled.append(1)
+        return nilearn_image()
+
+    monkeypatch.setattr(engine_registry, "_nilearn_image", counting)
+    cache = tmp_path / "cache"
+
+    def on(shape, voxel_size):
+        template = nib.Nifti1Image(
+            np.ones(shape, np.float32), np.diag([voxel_size] * 3 + [1.0])
+        )
+        return engine_registry._atlas_on_template(
+            SimpleNamespace(template=template), atlas, cache
+        )
+
+    first, again = on((9, 15, 6), 1.0), on((9, 15, 6), 1.0)
+    assert resampled == [1]
+    assert first.shape == again.shape == (9, 15, 6)
+    assert np.array_equal(first.labels, again.labels)
+    assert first.region_names() == {1: "A", 2: "B"}
+    assert on((3, 5, 2), 3.0).shape == (3, 5, 2)
+    assert resampled == [1, 1]
+
+
 def test_the_build_tells_what_it_is_about_to_load(engine):
     told = []
     engine_registry.build_engine("e", engine, progress=told.append)

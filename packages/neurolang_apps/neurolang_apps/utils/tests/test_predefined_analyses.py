@@ -50,7 +50,10 @@ def small_neurosynth():
         ].splitlines()
         if ANALYSIS_RULES.match(line)
     ]
-    nl.execute_datalog_program("\n".join(rules))
+    # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
+    nl.execute_datalog_program(
+        "\n".join(rules).replace("{kernel_radius_voxels}", "3")
+    )
     return nl
 
 
@@ -155,7 +158,10 @@ def llm_engine():
         ].splitlines()
         if LLM_RULES.match(line)
     ]
-    nl.execute_datalog_program("\n".join(rules))
+    # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
+    nl.execute_datalog_program(
+        "\n".join(rules).replace("{kernel_radius_voxels}", "3")
+    )
     return nl
 
 

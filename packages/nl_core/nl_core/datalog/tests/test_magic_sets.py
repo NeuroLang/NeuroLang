@@ -362,6 +362,28 @@ def test_edb_atom_without_constant_does_not_seed_magic_sets():
         magic_rewrite(q(y), dl)
 
 
+def test_constant_in_builtin_does_not_seed_magic_sets():
+    """
+    ``q(x) :- par(x, y), contains(y, (1, 2))``: the constant is in a
+    built-in, a filter, and binds no predicate: the query is not
+    rewritten, and is solved as it is.
+    """
+    edb = Eb_([
+        F_(par(a, C_(((1, 2), (3, 4))))), F_(par(b, C_(((3, 4),))))
+    ])
+    contains = C_(operator.contains)
+    code = Eb_([Imp_(q(x), par(x, y) & contains(y, C_((1, 2))))])
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    with raises(NoConstantPredicateFoundError):
+        magic_rewrite(q(x), dl)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[q].value == {C_((a,))}
+
+
 def test_intensional_atom_without_constant_binds_the_atoms_right_of_it():
     """
     No constant, but ``x`` of ``anc(x, y)`` is bound by ``p2(z, x)``, an

@@ -1,6 +1,7 @@
 """Tests of the REPL of the page run by this machine's Python."""
 
 import json
+import os
 import threading
 import time
 
@@ -108,3 +109,103 @@ def test_without_a_key_the_assistant_is_that_of_the_machine(backend):
 def test_a_request_before_the_start_says_so(backend):
     with pytest.raises(RuntimeError, match="not started"):
         backend.submit("ans(x) :- person(x, a)")
+
+
+def test_an_engine_builds_in_a_data_directory_not_made_yet(
+    tmp_path, monkeypatch
+):
+    from neurolang_apps.utils.tui import local_backend
+
+    built = []
+    monkeypatch.setattr(
+        local_backend.engine_registry, "build_engine",
+        lambda name, data_dir, *args, **kwargs: built.append(data_dir),
+    )
+    monkeypatch.chdir(tmp_path)
+    data = tmp_path / "first" / "neurolang_data"
+    LocalBackend(data)._build_engine("neurosynth", lambda message: None)
+    assert built == [data] and data.is_dir()
+
+
+def test_the_assistant_of_the_user_and_their_own_key(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    monkeypatch.setenv(local_backend.ASSISTANT_ENV, json.dumps(
+        {"provider": "anthropic", "model": "m", "key": "k"}))
+    ready = backend.start("neurostore")
+    assert ready["assistant"] and ready["ownKey"]
+    provider = backend.repl.app.assistant.config().provider()
+    assert (provider.name, provider.model) == ("anthropic", "m")
+    monkeypatch.setenv(local_backend.OWN_KEY_ENV, "0")
+    assert not backend.start("neurostore")["ownKey"]
+    with pytest.raises(ValueError, match="admin"):
+        backend.set_llm(provider="openai", key="mine")
+    backend.set_llm()  # back to the user's: allowed
+
+
+def test_the_users_new_assistant_keeps_the_pages_key(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    # use_identity changes this process's environment: undone after.
+    for name in (local_backend.ASSISTANT_ENV, local_backend.OWN_KEY_ENV):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    backend.start("neurostore")
+    backend.set_llm(provider="openai", key="the-pages", model="gpt")
+    user = json.dumps({"provider": "anthropic", "key": "k", "model": "m"})
+    state = backend.use_identity({local_backend.ASSISTANT_ENV: user})
+    assert state["ready"] and state["ownKey"]
+    provider = backend.repl.app.assistant.config().provider()
+    assert provider.name == "openai"  # the page's key stays
+    # Forbidden their own key, the user has their admin's at once.
+    backend.use_identity({local_backend.ASSISTANT_ENV: user,
+                          local_backend.OWN_KEY_ENV: "0"})
+    assert backend.repl.app.assistant.config().provider().name == "anthropic"
+
+
+def test_a_variable_the_users_identity_no_longer_has_is_taken_out(
+    backend, monkeypatch
+):
+    """A key an admin revoked leaves the session; a variable the builder
+    had is as it was."""
+    monkeypatch.setenv("TEST_REVOKED", "")
+    monkeypatch.delenv("TEST_REVOKED")
+    monkeypatch.setenv("TEST_BUILDERS", "the-builders")
+    backend.use_identity({"TEST_REVOKED": "k", "TEST_BUILDERS": "the-users"})
+    assert os.environ["TEST_REVOKED"] == "k"
+    backend.use_identity({"TEST_BUILDERS": "the-users-new"})
+    assert "TEST_REVOKED" not in os.environ
+    assert os.environ["TEST_BUILDERS"] == "the-users-new"
+    backend.use_identity({"TEST_BUILDERS": None})  # withheld (a guest's)
+    assert "TEST_BUILDERS" not in os.environ
+    backend.use_identity({})
+    assert os.environ["TEST_BUILDERS"] == "the-builders"
+
+
+def test_the_same_identity_keeps_the_assistant_chosen(backend, monkeypatch):
+    from neurolang_apps.utils.tui import local_backend
+
+    for name in (local_backend.ASSISTANT_ENV, local_backend.OWN_KEY_ENV):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    user = {local_backend.ASSISTANT_ENV: json.dumps(
+        {"provider": "anthropic", "key": "k", "model": "m"})}
+    backend.use_identity(user)
+    backend.start("neurostore")
+    backend.repl.app.assistant.provider = "chosen"  # .llm provider NAME
+    backend.use_identity(dict(user))
+    assert backend.repl.app.assistant.provider == "chosen"
+    user[local_backend.ASSISTANT_ENV] = json.dumps(
+        {"provider": "openai", "key": "k2"})
+    backend.use_identity(user)  # changed: the user's new one
+    assert backend.repl.app.assistant.provider == "openai"
+    backend.use_identity({})
+
+
+def test_the_ratings_are_signed_by_the_groups_of_now(backend, tmp_path):
+    backend.feedback = {"path": str(tmp_path / "f.sqlite"), "user": "ann",
+                        "groups": "lab"}
+    backend.start("neurostore")
+    backend.use_identity({}, "lab,zoo")
+    assert backend.feedback["groups"] == "lab,zoo"
+    assert backend.repl._rating.groups == "lab,zoo"

@@ -948,6 +948,104 @@ class TestEngineTemplate:
         assert np.array_equal(grid.affine, affine)
 
 
+# GH-1075: the template of the engines below, a 2 mm grid whose voxel
+# (i, j, k) is at (2 i - 6, 2 j, 2 k) mm, and two atlases of the same
+# regions, L (x < 0) and R (x >= 0), on other grids: one with its x axis
+# flipped, as FSL's, and one with another shape and origin.
+TEMPLATE_1075 = np.diag([2.0, 2.0, 2.0, 1.0])
+TEMPLATE_1075[0, 3] = -6
+FLIPPED_1075 = np.array([
+    [-1.0, 0, 0, 5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]
+])
+SHIFTED_1075 = np.array([
+    [1.0, 0, 0, -9], [0, 1, 0, -2], [0, 0, 1, -1], [0, 0, 0, 1]
+])
+
+
+def _hemisphere_atlas(affine, shape):
+    """A label image on the grid *affine*, *shape*: 1 (L) where x < 0,
+    2 (R) elsewhere, in millimetres."""
+    import nibabel as nib
+
+    ijk = np.indices(shape).reshape(3, -1).T
+    x = nib.affines.apply_affine(affine, ijk)[:, 0]
+    return nib.Nifti1Image(
+        np.where(x < 0, 1, 2).astype(np.int16).reshape(shape), affine
+    )
+
+
+@pytest.fixture
+def engine_1075(tmp_path, monkeypatch):
+    """An engine with the template above and Schaefer and Tian on their
+    own grids, with ``at_<atlas>(l, i, j, k)`` the label of each of their
+    voxels (i, j, k), as ``labels`` of the engines."""
+    import nibabel as nib
+
+    from neurolang_apps.utils import engine_registry
+
+    template = nib.Nifti1Image(np.ones((6, 4, 4), np.float32), TEMPLATE_1075)
+    monkeypatch.setattr(
+        engine_registry, "_get_mni_mask", lambda data_dir: template
+    )
+    for kind, affine, shape in (
+        ("schaefer", FLIPPED_1075, (12, 8, 8)),
+        ("tian", SHIFTED_1075, (16, 10, 9)),
+    ):
+        nib.save(_hemisphere_atlas(affine, shape), tmp_path / f"{kind}.nii")
+        monkeypatch.setitem(engine_registry._ATLAS_REGISTRY, kind, {
+            "fetch": lambda kind=kind, **kw: {
+                "maps": str(tmp_path / f"{kind}.nii"),
+                "labels": ["Background", "L", "R"],
+            },
+            "probabilistic": False,
+        })
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n  e:\n    requires_mni_mask: true\n    atlases:\n"
+        "      schaefer: {predicate_name: schaefer}\n"
+        "      tian: {predicate_name: tian}\n"
+        "    datalog_init: |\n"
+        "      at_schaefer(l, i, j, k) :- schaefer(l, r), "
+        "contains(r, (i, j, k)).\n"
+        "      at_tian(l, i, j, k) :- tian(l, r), contains(r, (i, j, k)).\n"
+    )
+    return engine_registry.build_engine(
+        "e", tmp_path / "data", yaml_path=path
+    )
+
+
+def _labelled_voxels(nl, name):
+    return {
+        (i, j, k): label for label, i, j, k
+        in nl.execute_datalog_program(f"ans(l, i, j, k) :- {name}(l, i, j, k)")
+    }
+
+
+@pytest.mark.parametrize("atlas", ["schaefer", "tian"])
+def test_an_atlas_labels_the_voxels_of_the_template(engine_1075, atlas):
+    """GH-1075: the voxel (i, j, k) of an atlas is that of the template, as
+    those of ``voxel`` and the peaks: its label is the one of the atlas at
+    the same point in millimetres."""
+    import nibabel as nib
+
+    labelled = _labelled_voxels(engine_1075, f"at_{atlas}")
+    grid = engine_1075.grids[atlas]
+    assert grid.shape == (6, 4, 4)
+    assert np.array_equal(grid.affine, TEMPLATE_1075)
+    assert set(labelled) == set(np.ndindex(6, 4, 4))
+    for ijk, label in labelled.items():
+        x = nib.affines.apply_affine(TEMPLATE_1075, ijk)[0]
+        assert label == ("L" if x < 0 else "R"), ijk
+
+
+def test_the_atlases_label_a_template_voxel_alike(engine_1075):
+    """GH-1075: the atlases of the same regions on different grids give a
+    voxel of the template the same region."""
+    assert _labelled_voxels(engine_1075, "at_schaefer") == (
+        _labelled_voxels(engine_1075, "at_tian")
+    )
+
+
 def test_resamplings_of_a_choice(tmp_path):
     """Check ``resamplings`` adds replicates of a choice, for RESAMPLE."""
     from neurolang_apps.utils import engine_registry
@@ -1109,3 +1207,82 @@ def test_datalog_init_reads_files_relative_to_the_data_directory(
     import os
 
     assert os.getcwd() == str(elsewhere)
+
+
+def _activated_mm(voxel_mm, data_dir):
+    """
+    Return the MNI points, in millimetres, of the voxels ``activated``
+    (its rule in the neurosynth engine) by a peak at the origin, on a grid
+    of *voxel_mm* millimetres spanning 12 mm around it.
+    """
+    import nibabel as nib
+
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils import engine_registry
+
+    cfg = engine_registry.get_engine_config("neurosynth")
+    rule = next(
+        line for line in cfg["datalog_init"].splitlines()
+        if line.startswith("activated(")
+    )
+    side = 24 // voxel_mm + 1
+    affine = np.diag([voxel_mm] * 3 + [1]).astype(float)
+    affine[:3, 3] = -12
+    mask = nib.Nifti1Image(np.ones((side,) * 3, dtype=np.uint8), affine)
+    nl = NeurolangPDL()
+    nl.add_tuple_set(np.argwhere(mask.get_fdata() > 0), name="brain_mask")
+    peak = 12 // voxel_mm
+    nl.add_tuple_set([(peak, peak, peak, 1)], name="peak_reported")
+    engine_registry._phase_datalog_init(
+        nl, {**cfg, "datalog_init": rule}, data_dir, mask
+    )
+    voxels = nl.solve_all()["activated"].as_pandas_dataframe()
+    return {
+        tuple(int(c) for c in nib.affines.apply_affine(affine, voxel))
+        for voxel in voxels.iloc[:, :3].to_numpy()
+    }
+
+
+def test_activated_is_within_the_kernel_radius_in_mm_at_every_resolution(
+    tmp_path,
+):
+    """
+    ``activated`` holds the voxels within ``kernel_radius_mm`` millimetres
+    of a peak whatever the size of the voxels: the same MNI neighbourhood
+    on the 1 mm and the 2 mm grids, the 2 mm voxels being the 1 mm ones
+    on its lattice (about 8 times fewer).
+    """
+    from neurolang_apps.utils import engine_registry
+
+    radius = engine_registry.get_engine_config("neurosynth")[
+        "kernel_radius_mm"
+    ]
+    one, two = (_activated_mm(size, tmp_path) for size in (1, 2))
+    offsets = np.argwhere(np.ones((25, 25, 25))) - 12
+    ball = {
+        tuple(int(c) for c in point) for point in offsets
+        if np.linalg.norm(point) <= radius
+    }
+    assert one == ball
+    assert two == {point for point in ball if not np.any(np.mod(point, 2))}
+
+
+def test_the_kernel_radius_is_written_in_the_atlases_and_the_guidance():
+    """
+    The ``kernel_radius_mm`` of an engine is the ``radius_mm`` of the
+    activations of its atlases and the radius its texts give, those of the
+    assistant, also when an engine extending it sets its own.
+    """
+    from neurolang_apps.utils import engine_registry
+
+    engines = engine_registry._load_yaml_config()["engines"]
+    engines["wide"] = {"extends": "neurosynth", "kernel_radius_mm": 10}
+    for name, radius in (("neurosynth", 6), ("wide", 10)):
+        cfg = engine_registry.resolve_engine_config(engines, name)
+        assert cfg["kernel_radius_mm"] == radius
+        assert {
+            atlas["activated"]["radius_mm"]
+            for atlas in cfg["atlases"].values() if "activated" in atlas
+        } == {radius}
+        assert f"<= {radius})" in cfg["assistant_guidance"]
+        assert "{kernel_radius_mm}" not in str(cfg)

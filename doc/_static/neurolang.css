@@ -72,3 +72,19 @@ html[data-theme="dark"] {
     margin-top: 0;
     color: var(--pst-color-primary);
 }
+
+/* A query of the REPL (.. nl-repl::): the link that runs it in the browser
+   sits right under the code, small and quiet. */
+.nl-repl div[class^="highlight"] pre {
+    margin-bottom: 0.25rem;
+}
+
+.nl-repl .nl-repl-run {
+    margin: 0 0 1rem;
+    font-size: 0.875rem;
+    text-align: right;
+}
+
+.nl-repl .nl-repl-run a::after {
+    content: " \2197";
+}

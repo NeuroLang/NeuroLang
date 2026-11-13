@@ -67,7 +67,8 @@ may specify the following keys, all of them optional:
   ``.index_tracts`` of the ``tracts`` engine finds it (the probabilistic
   DiFuMo is thresholded into regions).  A deterministic atlas with ``activated: {predicate_name, radius_mm,
   peaks}`` also registers ``predicate_name(label, study)``: the studies
-  with a peak within ``radius_mm`` (3 by default) of a voxel of the
+  with a peak within ``radius_mm`` (by default the engine's
+  ``kernel_radius_mm``, else 3) of a voxel of the
   region, the peaks being the millimetre coordinates of the relation
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
@@ -96,7 +97,20 @@ may specify the following keys, all of them optional:
 - ``datalog_init`` — inline Datalog rules that are loaded at engine startup,
   run from the engine's data directory: the paths of its commands
   (``.load_tractogram``, ``.load_atlas``...) are relative to it, where
-  ``downloads`` puts the files
+  ``downloads`` puts the files.  ``{kernel_radius_voxels}`` in them is
+  ``kernel_radius_mm`` in voxels of the engine's grid
+- ``kernel_radius_mm`` — the radius, in millimetres, of the sphere around a
+  reported peak that a study activates, the same at every resolution: the
+  bound of ``activated`` (``{kernel_radius_voxels}`` in ``datalog_init``,
+  3 voxels on the 2 mm grid, 6 on the 1 mm one), the ``radius_mm`` of the
+  ``activated`` atlases that do not set theirs, and the number written
+  for ``{kernel_radius_mm}`` in the texts of the engine (descriptions,
+  ``assistant_guidance``, examples).  The coordinate meta-analysis
+  engines take 6 mm, the radius of the spheres of Neurosynth's activation
+  maps (its software's default, ``r=6``; see
+  :doc:`tutorial_neurosynth_tests`); ALE instead blurs each peak with a
+  Gaussian whose width depends on the number of subjects of the study
+  (Eickhoff et al., 2009)
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
@@ -105,7 +119,7 @@ may specify the following keys, all of them optional:
 - ``resamplings`` — replicates of a probabilistic choice for confidence
   intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
   seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
-  tutorial :doc:`tutorial_datalog`, section 10.6)
+  tutorial :doc:`tutorial_datalog`, section 10.7)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
@@ -125,7 +139,7 @@ may specify the following keys, all of them optional:
   ``neurolang-query --ask``) is to answer questions on the engine: added
   to its system prompt.  The coordinate meta-analysis engines ask for
   probabilistic answers over ``selected_study`` (counts for "how
-  many"), activation as a peak within 3 mm of a point in MNI
+  many"), activation as a peak within ``kernel_radius_mm`` of a point in MNI
   millimetres, the Destrieux atlas for the classical anatomy of the
   cortex and the Schaefer and Tian atlases for the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
@@ -256,7 +270,10 @@ grid, with its shape and affine.  Each column of the result has the sort
 of the argument of the predicate its variable is in, in the last query:
 ``ans(x, y, z) :- voxel(x, y, z)`` holds voxel indices of the template
 grid, whatever the names of its columns, ``ans(l, i, j, k) :- labels(l,
-i, j, k)`` indices of the Schaefer atlas grid.  The sorts follow from
+i, j, k)`` indices of the Schaefer atlas grid.  With a template, each
+atlas is resampled to it (nearest neighbour) when it is loaded, so the
+voxel (i, j, k) of an atlas is that of ``voxel`` and of the peaks.  The
+sorts follow from
 the predicates declaring their ``arguments``, then from the rules defined
 from them, in Datalog as in SQUALL (``obtain every Voxel in 3D``).  The
 columns of a ``space: voxel`` sort are written as they are on its grid,
@@ -413,9 +430,10 @@ database::
         extends: mni_atlases
         atlases:      # merged into those of mni_atlases, atlas by atlas
           destrieux:
-            activated: {predicate_name: destrieux_activated, radius_mm: 3}
+            activated: {predicate_name: destrieux_activated}
           tian:
-            activated: {predicate_name: tian_activated, radius_mm: 3}
+            activated: {predicate_name: tian_activated}
+        kernel_radius_mm: 6
         requires_mni_mask: true
         use_base_symbols: true
         datalog_init: |
