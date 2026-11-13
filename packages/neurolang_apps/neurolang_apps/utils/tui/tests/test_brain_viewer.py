@@ -965,3 +965,37 @@ def test_the_edge_value_of_a_network_in_a_headless_browser(tmp_path):
     assert result["shown"] and result["options"] == ["p", "q"]
     assert "0.25" in result["before"] and "3" in result["after"]
     assert result["threshold"] == "0"
+
+
+def test_the_defaults_of_the_viewer_are_those_of_its_file():
+    """The constants are read from viewer.yaml, the page's script is
+    given its part, and the help of .view quotes the threshold."""
+    import yaml
+    from neurolang_apps.utils.tui import nifti
+
+    defaults = yaml.safe_load(brain_viewer.DEFAULTS_FILE.read_text())
+    assert brain_viewer.DEFAULT_CMAP == defaults["colormap"]
+    assert brain_viewer.OVERLAY_CMAPS == tuple(defaults["overlay_colormaps"])
+    assert brain_viewer.COLORMAPS == tuple(defaults["colormaps"])
+    assert brain_viewer.BACKGROUND_MAX_VOXELS == defaults[
+        "background_max_voxels"]
+    network = defaults["network"]
+    assert (brain_viewer.NODE_RADIUS, brain_viewer.EDGE_RADIUS) == (
+        network["node_radius"], network["edge_radius"])
+    assert brain_viewer.NETWORK_OVERLAY_OPACITY == network["overlay_opacity"]
+    assert brain_viewer.MIN_SHOWN_EDGES == network["min_shown_edges"]
+    assert brain_viewer.MAX_EDGES == network["max_edges"]
+    assert brain_viewer.MAX_STREAMLINES == defaults["streamlines"][
+        "max_shown"]
+    assert nifti.VIEW_THRESHOLD == defaults["view_threshold"]
+    help_text = " ".join(nifti.VIEW_HELP.split())
+    assert f"default: {defaults['view_threshold']}" in help_text
+    assert f"default: {defaults['colormap']}" in help_text
+    img = nib.Nifti1Image(np.ones((2, 2, 2), np.float32), np.eye(4))
+    state = _state(brain_viewer.viewer_html(
+        img, None, title="t", threshold=0, cmap=None, symmetric=False,
+    ))
+    assert state["settings"] == defaults["page"]
+    script = (brain_viewer._STATIC / "brain_viewer.js").read_text()
+    for name in defaults["page"]:
+        assert f"pageSettings.{name}" in script, name

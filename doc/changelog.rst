@@ -109,6 +109,21 @@ Unreleased
   values, the range shown in the colours it is drawn with.
 * In the browser REPL, a result has a *Brain* tab beside *Table* and
   *Graph*: it shows the result in the brain viewer.
+* The assistant takes at most 16 steps by default (``max_steps``, was 8),
+  for questions that need more tool calls before a query that runs.  The
+  defaults of the LLM configuration are in one file,
+  ``utils/llm/defaults.yaml``, which the configuration reads; the example
+  configuration and the docs quote it, and the tests check that they agree.
+  So are the other tunable defaults: those of the brain viewer and
+  ``.view`` (``utils/tui/viewer.yaml``), the options of
+  ``neurolang-repl-serve`` (``tools/serve_repl/defaults.yaml``) and the
+  limits of the browser REPL's page (``doc/_static/repl/settings.yaml``,
+  which the page reads at start).
+* When the assistant of the browser REPL finds no query, a notice under the
+  question says so, why (the steps it used up, its last query's error, or
+  in its words what it found), that the query box still holds the query of
+  before, and what to try: edit the question, edit its last query, see its
+  steps, browse the examples.
 * The browser REPL keeps the questions asked in English, each with the
   query the assistant gave, between visits (*Past questions*, under the
   box of the assistant): *Use this query* puts it back in the box, in its

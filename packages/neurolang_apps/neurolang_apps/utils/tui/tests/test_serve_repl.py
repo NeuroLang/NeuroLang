@@ -2842,3 +2842,29 @@ def test_an_orcid_user_merges_into_their_account(orcid_server):
     assert _json_at(port, "POST", "/account/api/merge-into",
                     {"Cookie": bob},
                     {"name": "ann", "password": "ann-pw"})[0] == 403
+
+
+def test_the_defaults_of_the_options_are_those_of_their_file(serve):
+    """The options take their defaults from serve_repl/defaults.yaml, and
+    the docs that quote them agree."""
+    import yaml
+
+    defaults = yaml.safe_load(serve.DEFAULTS_FILE.read_text())
+    args = serve.parse_args([])
+    for name, value in defaults.items():
+        given = getattr(args, name)
+        if isinstance(given, Path):
+            assert given == Path(value).expanduser(), name
+        else:
+            assert given == value, name
+    docs = SCRIPT.parents[2] / "doc"
+    if not docs.exists():  # not a checkout
+        return
+    server = " ".join((docs / "repl_server.rst").read_text().split())
+    assert f"({defaults['max_sessions']}, at least 1)" in server
+    assert f"({defaults['idle_minutes']}, above 0)" in server
+    assert f"({defaults['query_minutes']}; 0, never)" in server
+    assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    contributing = " ".join((docs / "contributing.rst").read_text().split())
+    assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
+    assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing
