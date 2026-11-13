@@ -91,6 +91,10 @@ Unreleased
   or Cmd and the wheel). A relation of an ontology is drawn as a node of a
   knowledge graph, linked to others; the name of a table is below the rim
   of its cylinder.
+* ``.view`` of pairs of regions or points with several value columns
+  (``ans(a, b, p, q)``) draws the network of the first, the probability
+  first, rather than every pair at 1; the viewer's *Edge value* chooses the
+  column the edges are of, its edge threshold following.
 * The brain viewer shows a range of values: a low and a high threshold
   (values or percentiles), with two sliders over a histogram of the
   values, the range shown in the colours it is drawn with.

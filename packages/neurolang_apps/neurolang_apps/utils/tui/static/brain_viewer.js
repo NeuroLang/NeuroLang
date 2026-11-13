@@ -338,17 +338,27 @@
   }
 
   // The edge threshold, a value and a slider from the smallest |value|
-  // of the edges to the largest, which draws the network again.
-  function setUpEdgeThreshold(nv, network) {
+  // of the edges to the largest, which draws the network again; and, when
+  // the result has several value columns, the one the edges are of.
+  var edgeRange = {lo: 0, hi: 0};
+  function toSlider(v) {
+    var r = edgeRange;
+    return r.hi > r.lo ? Math.round(1000 * (v - r.lo) / (r.hi - r.lo)) : 0;
+  }
+
+  // Show the network of one value column: its range, threshold and edges.
+  function showNetwork(nv, network) {
+    viewer.network = network;
     var values = network.edges.map(function (e) { return Math.abs(e.value); });
-    var lo = values.length ? Math.min.apply(null, values) : 0;
-    var hi = values.length ? Math.max.apply(null, values) : 0;
+    edgeRange.lo = values.length ? Math.min.apply(null, values) : 0;
+    edgeRange.hi = values.length ? Math.max.apply(null, values) : 0;
+    $('edge-threshold').value = format(network.threshold);
+    $('edge-slider').value = toSlider(network.threshold);
+    drawNetwork(nv, network.threshold);
+  }
+
+  function setUpEdgeThreshold(nv, network) {
     var input = $('edge-threshold'), slider = $('edge-slider');
-    var toSlider = function (v) {
-      return hi > lo ? Math.round(1000 * (v - lo) / (hi - lo)) : 0;
-    };
-    input.value = format(network.threshold);
-    slider.value = toSlider(network.threshold);
     input.addEventListener('input', function () {
       var v = parseFloat(input.value);
       if (!isFinite(v)) return;
@@ -356,11 +366,20 @@
       drawNetwork(nv, v);
     });
     slider.addEventListener('input', function () {
-      var v = lo + (hi - lo) * slider.value / 1000;
+      var v = edgeRange.lo + (edgeRange.hi - edgeRange.lo) * slider.value / 1000;
       input.value = format(v);
       drawNetwork(nv, v);
     });
-    drawNetwork(nv, network.threshold);
+    var choices = network.values || [];
+    if (choices.length > 1) {
+      var select = $('edge-value');
+      choices.forEach(function (choice, i) { select.add(new Option(choice.value, String(i))); });
+      $('edge-value-control').hidden = false;
+      select.addEventListener('change', function () {
+        showNetwork(nv, choices[parseInt(select.value, 10)]);
+      });
+    }
+    showNetwork(nv, network);
   }
 
   function listEdges(state) {

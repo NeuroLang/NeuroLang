@@ -366,6 +366,22 @@ class TestViewNetworks:
         assert [n["x"] for n in network["nodes"]] == [-2.0, 2.0]
         _remove_view_files(_output(tiny))
 
+    def test_several_value_columns_each_an_edge_value(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(a, b, p, q) :- cortex_pair(a, b, p), (q == 2 * p)"
+        )
+        tiny._handle_dot_command(".view")
+        network = view_calls[-1][1]["connectome"]
+        # The first value column, not 1 for every pair; each one offered.
+        assert [e["value"] for e in network["edges"]] == [0.75]
+        assert network["value"] == "p"
+        assert [v["value"] for v in network["values"]] == ["p", "q"]
+        assert [e["value"] for e in network["values"][1]["edges"]] == [1.5]
+        assert network["values"][1]["threshold"] <= 1.5
+        out = _output(tiny)
+        assert "value: 'p'" in out and "'q'" in out
+        _remove_view_files(out)
+
     def test_unknown_regions(self, tiny):
         tiny._nl.add_tuple_set([("X", "Y", 0.5)], name="cortex_pair")
         tiny._execute_and_display(

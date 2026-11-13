@@ -918,3 +918,50 @@ def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
     assert result["value"] == "3"
     assert result["sliderTop"] == "3"
     assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"
+
+
+_EDGE_VALUE_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var out = {};
+  out.shown = !document.getElementById('edge-value-control').hidden;
+  out.options = Array.from(document.getElementById('edge-value').options)
+    .map(function (o) { return o.textContent; });
+  out.before = document.getElementById('edges').textContent;
+  set('edge-value', '1', 'change');
+  out.after = document.getElementById('edges').textContent;
+  out.threshold = document.getElementById('edge-threshold').value;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+def _network_of_two_values():
+    """A page of a network whose edges have two value columns, p and q."""
+    names, coordinates = ["a", "b"], np.array([[0.0, 0, 0], [10, 0, 0]])
+    states = [
+        brain_viewer.connectome_state(names, coordinates, [(0, 1, w)], 0)
+        for w in (0.25, 3.0)
+    ]
+    connectome = dict(states[0], value="p", values=[
+        dict(state, value=name) for name, state in zip("pq", states)
+    ])
+    img = nib.Nifti1Image(np.ones((4, 4, 4), np.float32), np.eye(4))
+    return brain_viewer.viewer_html(
+        img, None, title="t", threshold=0, cmap=None, symmetric=False,
+        connectome=connectome,
+    )
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_edge_value_of_a_network_in_a_headless_browser(tmp_path):
+    """Check a network of several value columns offers each, and draws
+    its edges and threshold anew when another is chosen."""
+    result = _run_in_chrome(
+        tmp_path, _network_of_two_values(), _EDGE_VALUE_CHECK
+    )
+    assert result["errors"] == [] and "failed" not in result
+    assert result["shown"] and result["options"] == ["p", "q"]
+    assert "0.25" in result["before"] and "3" in result["after"]
+    assert result["threshold"] == "0"

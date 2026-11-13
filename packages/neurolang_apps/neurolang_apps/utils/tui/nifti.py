@@ -905,6 +905,27 @@ def _network_nodes(nl, df, groups: list, sorts: dict) -> tuple:
     return ends, centres
 
 
+def network_value_columns(
+    df: pd.DataFrame, groups: list, sorts: dict, request: SaveRequest,
+    provenance: Optional[tuple] = None,
+) -> list:
+    """
+    Return the value columns of the edges of a network of *df*, whose
+    nodes are the two *groups* of columns: that of the *request*'s
+    ``--value`` if given, else its numeric columns that are not of an
+    entity, the probability column first; [] for pairs of no value.
+    """
+    if request.value is not None:
+        return [_numeric_column(df, request.value)]
+    nodes = groups[0].columns + groups[1].columns
+    others = [c for c in df.columns if c not in nodes]
+    measures = _measure_columns(df, others, sorts, provenance)
+    first = value_column(
+        df, groups[0]._replace(columns=nodes), sorts, None, provenance
+    )
+    return sorted(measures, key=lambda c: c != first)
+
+
 def result_network(
     nl, df: pd.DataFrame, sorts: dict, groups: list,
     request: SaveRequest = SaveRequest(Path()),
@@ -1627,26 +1648,43 @@ def last_result_network(app, block, request: ViewRequest):
     """
     sorts = _engine_sorts(app.settings.engine_name)
     try:
-        network = result_network(
-            app._nl, block.frame, sorts,
-            network_nodes(block.frame, sorts, block.sorts), request.save,
-            block.sorts,
+        groups = network_nodes(block.frame, sorts, block.sorts)
+        choices = network_value_columns(
+            block.frame, groups, sorts, request.save, block.sorts
         )
-        if not network.edges:
-            raise SaveError(
-                "The result has no pair of two known regions or points."
-            )
         threshold = (
             request.threshold if request.threshold_given else VIEW_THRESHOLD
         )
-        connectome = brain_viewer.connectome_state(
-            network.names, network.coordinates, network.edges, threshold
-        )
+        states, networks = [], []
+        for choice in choices or [request.save.value]:
+            network = result_network(
+                app._nl, block.frame, sorts, groups,
+                request.save._replace(value=choice), block.sorts,
+            )
+            if not network.edges:
+                raise SaveError(
+                    "The result has no pair of two known regions or points."
+                )
+            networks.append(network)
+            states.append(brain_viewer.connectome_state(
+                network.names, network.coordinates, network.edges, threshold
+            ))
+        network, connectome = networks[0], states[0]
+        if len(states) > 1:  # each value column, for the page to choose
+            connectome["value"] = str(choices[0])
+            connectome["values"] = [
+                {"value": str(choice), **state}
+                for choice, state in zip(choices, states)
+            ]
     except Exception as exc:
         app.console.print(f"View failed: {exc}", style="red", markup=False)
         return None
     shown = len(brain_viewer.shown_edges(connectome))
     value = repr(str(network.value)) if network.value else "1 (pairs)"
+    if len(states) > 1:
+        value += " (also " + ", ".join(
+            repr(str(choice)) for choice in choices[1:]
+        ) + ": the edge value of the viewer)"
     message = (
         f"Network of {len(network.names)} nodes and {len(network.edges)} "
         f"edges, value: {value}; {shown} shown, those of values from "
