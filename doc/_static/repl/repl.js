@@ -376,6 +376,7 @@ let tabId = null;
 // and the engine: ?engine=NAME.
 function start({ restore = null } = {}) {
   if (!restore) session.replace([]); // a new engine has none of the rules
+  rerun = null; // a stop, a restart, end what ran again
   worker?.terminate();
   const params = new URLSearchParams(location.search);
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
@@ -485,7 +486,20 @@ const workerMessages = {
   llm: (data) => {
     if (!data.ok) Object.assign($("llm-error"), { textContent: data.message, hidden: false });
   },
+  // The server ended this tab's session (unused for long, room for another, a query too long): its rules
+  // come back, as after a stop, then what was run runs again. Ended again while they come back, or at once
+  // after, it is told, not looped.
+  ended: (data) => {
+    if (replaying || rerun !== null) {
+      replaying = rerun = null;
+      return workerMessages.reply({ failed: true, viewers: [], tables: [], html: `<pre>${data.message.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` });
+    }
+    const entries = session.entries.map((entry) => ({ ...entry }));
+    setStatus("The server had ended this session: its rules come back, then this runs again…", "busy");
+    start({ restore: { entries, box: editor.value, mode: $("mode").value, then: data.text } });
+  },
   reply: (data) => {
+    rerun = null;
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
@@ -612,6 +626,7 @@ let lastRun = ""; // what was last submitted
 let guideForStart = false;
 const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
+let rerun = null; // what runs again once the rules of a session the server ended are back
 function goOn(text) {
   editor.value = text;
   hideSummary();
@@ -620,8 +635,8 @@ function goOn(text) {
 }
 
 // Run again, one after the other, the statements that give back a session's rules.
-function replay({ entries, box, mode }, { clear = false } = {}) {
-  replaying = { queue: replayTexts(entries, mode, { clear }), total: 0, failed: 0, box, mode };
+function replay({ entries, box, mode, then }, { clear = false } = {}) {
+  replaying = { queue: replayTexts(entries, mode, { clear }), total: 0, failed: 0, box, mode, then };
   replaying.total = replaying.queue.length;
   setBusy(true);
   replayNext();
@@ -630,13 +645,14 @@ function replay({ entries, box, mode }, { clear = false } = {}) {
 function replayNext() {
   const text = replaying.queue.shift();
   if (text === undefined) {
-    const { failed, box, mode } = replaying;
+    const { failed, box, mode, then } = replaying;
     replaying = null;
     $("mode").value = mode;
     editor.refresh();
     if (box) editor.value = box;
     setStatus(failed ? `Ready. ${failed} statement${failed === 1 ? "" : "s"} of the session did not run again.` : "Ready: the rules of the session are back.");
     setBusy(false);
+    if (then) run((rerun = then)); // what the session's end interrupted
     return;
   }
   setStatus(`Restoring the rules of the session (${replaying.total - replaying.queue.length} of ${replaying.total})…`, "busy");

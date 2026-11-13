@@ -523,8 +523,16 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   reload keeps the tab's session; a duplicated tab has one of its own.
 - At most ``--max-sessions`` run at once: past them, the one unused the
   longest ends, unless it is at work or was used in the last minute (then
-  the new tab is told to wait).  One unused for ``--idle-minutes`` ends;
-  its page says to restart it.
+  the new tab is told to wait).  One unused for ``--idle-minutes`` ends.
+- A session the server ended (unused, made room for another, its query ran
+  too long) comes back at the next input of its page: the page starts it
+  again, runs again the rules the session defined (as after *Stop*, which
+  the page keeps; not its queries, nor the questions to the assistant),
+  then that input.  If it ends again while its rules come back, or at once
+  after, the page says so rather than try again.  A restart of the server
+  ends the logins too: the page opens the login page, then starts anew,
+  without the rules of the session.  With ``--activity-db``, the rules run
+  again are logged again, as inputs.
 - At most ``--max-running`` queries (and downloads of results) run at once,
   of all the sessions: one more waits its turn, its page saying so, so that
   the queries of many users share the machine's CPUs rather than slow each
@@ -532,7 +540,8 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   memory.
 - A query running longer than ``--query-minutes`` is stopped: its session's
   process ends (which frees its CPU and memory at once, as no thread of
-  Python can be stopped otherwise), and its page says to restart it.
+  Python can be stopped otherwise), and its page says so; its rules come
+  back at the next input.
 
 Without ``--users``, one session serves everyone, in the server's process.
 

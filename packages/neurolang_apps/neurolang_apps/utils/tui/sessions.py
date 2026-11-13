@@ -33,7 +33,9 @@ from neurolang_apps.utils.tui.local_backend import LocalBackend
 
 
 class SessionEnded(RuntimeError):
-    """The process of a session is gone: the page starts it again."""
+    """The process of a session is gone: the page starts it again, its
+    rules given back, and runs again what was asked (the server answers
+    409, ``{"ended": true}``)."""
 
 
 def _kill(pid: int) -> None:
@@ -359,8 +361,9 @@ class Session:
                 self.end("ran too long")
                 raise RuntimeError(
                     "The query ran longer than this server allows "
-                    f"({sessions.query_seconds / 60:g} minutes): its session "
-                    "was stopped; restart it"
+                    f"({sessions.query_seconds / 60:g} minutes): it was "
+                    "stopped, with its session, whose rules come back at the "
+                    "next input"
                 ) from None
             finally:
                 sessions._slots.release()

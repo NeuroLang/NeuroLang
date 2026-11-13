@@ -325,6 +325,10 @@ class _FakeBackend:
     def submit(self, text):
         if text == "boom":
             raise ValueError("it broke")
+        if text == "gone":
+            from neurolang_apps.utils.tui.sessions import SessionEnded
+
+            raise SessionEnded("This session ended")
         return {"html": text, "failed": False, "tables": []}
 
     def set_llm(self, **options):
@@ -391,6 +395,12 @@ def test_the_local_server_answers_the_worker(serve, tmp_path):
         with error.value:  # closed, not left to the collector to warn
             assert error.value.code == 500
             assert json.load(error.value) == {"error": "ValueError: it broke"}
+        with pytest.raises(urllib.error.HTTPError) as error:
+            _post(port, "submit", {"text": "gone"})
+        with error.value:  # the page brings its session back
+            assert error.value.code == 409
+            assert json.load(error.value) == {"error": "This session ended",
+                                              "ended": True}
         with _post(port, "download", {"block": 0, "kind": "csv"}) as response:
             assert response.read() == b"a,b\n"
             assert response.headers["Content-Type"] == "text/csv"
