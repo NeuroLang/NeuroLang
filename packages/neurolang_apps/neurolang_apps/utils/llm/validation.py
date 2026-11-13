@@ -352,7 +352,26 @@ class QueryCrashed(Exception):
 
 
 def _memory_mb(pid: int) -> float:
-    """Return the resident memory of the process *pid*, in MB."""
+    """
+    Return the memory of the process *pid*, in MB: that private to it
+    where the system tells (Linux, macOS), as a forked child shares the
+    pages of its parent it only reads, else its resident memory.
+    """
+    try:
+        if sys.platform == "darwin":
+            # proc_pid_rusage(RUSAGE_INFO_V2): ri_phys_footprint is the
+            # 10th 64-bit field, after the 16 bytes of ri_uuid.
+            info = (ctypes.c_uint64 * 64)()
+            libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+            if libproc.proc_pid_rusage(pid, 2, info) == 0:
+                return info[9] / 2 ** 20
+        with open(f"/proc/{pid}/smaps_rollup") as smaps:
+            return sum(
+                int(line.split()[1]) for line in smaps
+                if line.startswith(("Private_Clean:", "Private_Dirty:"))
+            ) / 1024
+    except (OSError, ValueError, AttributeError):
+        pass
     try:
         out = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
