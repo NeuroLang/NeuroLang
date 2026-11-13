@@ -32,6 +32,15 @@
 <p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
 <p id="message" role="status"></p>
 
+<section id="requests-box" hidden>
+<h2>Account requests</h2>
+<p class="note">Those who signed in with ORCID and are no user. Approving one adds them, named by their ORCID iD, to the groups given; they sign in with ORCID.</p>
+<div class="scroll"><table>
+  <thead><tr><th>ORCID iD</th><th>Name</th><th>Asked</th><th>Message</th><th>Groups</th><th></th></tr></thead>
+  <tbody id="requests"></tbody>
+</table></div>
+</section>
+
 <h2>Users</h2>
 <div class="scroll"><table>
   <thead><tr><th>User</th><th>Groups</th><th>AI assistant</th><th>Variables</th><th>Own key</th><th></th></tr></thead>
@@ -42,7 +51,7 @@
 <form id="change">
   <label>User <input name="name" required autocomplete="off" list="names"></label>
   <datalist id="names"></datalist>
-  <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged"></label>
+  <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged; none for an ORCID iD"></label>
   <label>Groups <input name="groups" placeholder="admin, lab"></label>
   <label>Their own key in the page <select name="own_key">
     <option value="">unchanged</option><option value="inherit">as their groups say</option>
@@ -59,6 +68,7 @@
   <label><span><input name="drop" type="checkbox"> remove</span></label>
   <button>Set their assistant</button>
 </form>
+<p class="note" id="orcid-note" hidden>A user named by an ORCID iD (0000-0002-1825-0097) signs in with ORCID, and needs no password.</p>
 <p class="note">A user's assistant: the key their page gives (if allowed), else their own (set here or on their account page), else their groups', else the server's, else none: they give theirs in the page.</p>
 
 <h2>Groups</h2>
@@ -170,11 +180,27 @@ async function show() {
   $("me").textContent = state.me;
   $("names").replaceChildren(...state.users.map((u) => Object.assign(document.createElement("option"), { value: u.name })));
   $("users").replaceChildren(...state.users.map((user) => row([
-    user.name, user.groups.join(", "), assistant(user), user.variables.join(", "),
+    user.orcid_name ? `${user.name} (${user.orcid_name})` : user.name, user.groups.join(", "), assistant(user), user.variables.join(", "),
     (user.own_key ? "allowed" : "not allowed") + (user.own_key_set === undefined || user.own_key_set === null ? "" : " (theirs)"),
     button("Remove", () => confirm(`Remove the user ${user.name} and end their sessions?`)
       && change("/admin/api/remove-user", { name: user.name }, `${user.name} is removed.`)),
   ])));
+  $("orcid-note").hidden = $("requests-box").hidden = !state.orcid;
+  $("requests").replaceChildren(...(state.requests.length ? state.requests.map((asked) => {
+    const groups = Object.assign(document.createElement("input"), { placeholder: "lab, …", size: 12 });
+    const link = Object.assign(document.createElement("a"), {
+      href: `https://orcid.org/${asked.orcid}`, target: "_blank", rel: "noopener", textContent: asked.orcid });
+    const actions = document.createElement("span");
+    actions.append(
+      button("Approve", () => change("/admin/api/approve-request", {
+        name: asked.orcid, groups: groups.value.split(",").map((g) => g.trim()).filter(Boolean),
+      }, `${asked.orcid} is added.`)),
+      " ",
+      button("Decline", () => confirm(`Decline the request of ${asked.orcid}?`)
+        && change("/admin/api/decline-request", { name: asked.orcid }, `The request of ${asked.orcid} is declined.`)),
+    );
+    return row([link, asked.name, new Date(asked.when * 1000).toISOString().replace("T", " ").slice(0, 16), asked.message, groups, actions]);
+  }) : [row(["No requests."])]));
   $("group-names").replaceChildren(...state.groups.map((g) => Object.assign(document.createElement("option"), { value: g.name })));
   $("groups").replaceChildren(...(state.groups.length ? state.groups.map((group) => row([
     group.name, group.members.join(", "), group.llm || "-", group.variables.join(", "),
