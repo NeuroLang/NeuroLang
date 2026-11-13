@@ -673,6 +673,27 @@ def test_neurolang_dl_datalog_code_disjunction_of_comparisons(body):
     assert set(res.to_unnamed()) == {(1,), (2,)}
 
 
+@pytest.mark.parametrize("program", [
+    "ans(x) :- r(x, t), (startswith('a', t) | startswith('b', t))",
+    "ans(x) :- r(x, t), (startswith('a', t) | (t == 'b'))",
+    "q(x) :- r(x, t), (startswith('a', t) | startswith('b', t))\n"
+    "ans(x) :- q(x)",
+    "q(p, x) :- (r(x, t) | s(x, t)), startswith(p, t)\n"
+    "ans(x) :- q('a', x) | q('b', x)",
+])
+def test_neurolang_dl_datalog_code_disjunction_of_functions(program):
+    """The variables of a disjunct of functions are bound outside it, or
+    by the query (magic sets)."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="r")
+    neurolang.add_tuple_set([(1, "a")], name="s")
+    neurolang.add_symbol(
+        lambda prefix, s: s.startswith(prefix), name="startswith"
+    )
+    res = neurolang.execute_datalog_program(program)
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
 def test_neurolang_dl_datalog_code_disjunction_constant_query():
     neurolang = _tracts()
     res = neurolang.execute_datalog_program(

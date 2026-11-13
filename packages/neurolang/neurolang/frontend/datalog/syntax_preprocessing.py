@@ -52,7 +52,9 @@ class ProbFol2DatalogMixin(PatternWalker):
             else:
                 fv = extract_logic_free_variables(arg)
                 fresh_head = Symbol.fresh()(*tuple(fv))
-                aux = fol_query_to_datalog_program(fresh_head, arg)
+                aux = fol_query_to_datalog_program(
+                    fresh_head, arg, self.symbol_table
+                )
                 results.append(aux)
                 new_args.append(fresh_head)
         new_condition = Condition(new_args[0], new_args[1])
@@ -69,7 +71,7 @@ class ProbFol2DatalogMixin(PatternWalker):
     def translate_implication(self, imp):
         try:
             program = fol_query_to_datalog_program(
-                imp.consequent, imp.antecedent
+                imp.consequent, imp.antecedent, self.symbol_table
             )
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException(str(e)) from e

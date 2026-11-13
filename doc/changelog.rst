@@ -73,6 +73,12 @@ Unreleased
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
 
+**Bug fixes:**
+
+* A disjunction of functions whose variables a positive atom outside it
+  binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
+  startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.
+
 
 v0.1a22 (2026-11-13)
 --------------------
