@@ -333,16 +333,24 @@ class Session:
         is told it waits); a query running longer than the server allows
         ends the session's process, which stops it."""
         sessions = self.sessions
-        start = self.starts
+        conn = self._conn
         self.busy += 1  # waiting, it is at work: no idle end
         try:
-            if not sessions._slots.acquire(blocking=False):
+            waited = not sessions._slots.acquire(blocking=False)
+            if waited:
                 self._say(f"Waiting: {sessions.running} queries run on "
                           "this server")
                 while not sessions._slots.acquire(timeout=1):
-                    if self.starts != start or self._conn is None:
+                    if self._conn is not conn:
                         raise SessionEnded("This session ended while its "
                                            "query waited: restart it")
+            # Not in the process of a restart meanwhile (a stop, then a
+            # start), which is not the one it was asked of.
+            if self._conn is not conn:
+                sessions._slots.release()
+                raise SessionEnded("This session ended while its query "
+                                   "waited: restart it")
+            if waited:
                 self._say("Running")
             try:
                 return self._call(method, timeout=sessions.query_seconds,
