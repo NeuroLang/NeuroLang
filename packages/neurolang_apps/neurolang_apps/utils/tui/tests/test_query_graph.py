@@ -319,6 +319,15 @@ def test_the_page_follows_the_theme_of_the_repl_and_says_its_height(nl):
     assert "parent.postMessage" in page
 
 
+def test_the_graph_starts_fitted_to_the_page_and_can_be_shown_at_its_size(nl):
+    page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
+    assert '<div class="graph fit">' in page
+    style = page.split("<style>")[1].split("</style>")[0]
+    # Fitted: never wider than the page, never larger than drawn.
+    assert ".graph.fit svg { max-width: 100%; height: auto; }" in style
+    assert 'id="zoom"' in page and "Actual size" in page
+
+
 def test_the_page_draws_the_distribution_of_the_probabilities(nl):
     graph = query_graph(nl, CO_ACTIVATION)
     frame = pd.DataFrame({"r1": ["A", "A"], "r2": ["B", "C"], "p": [.5, 1.]})

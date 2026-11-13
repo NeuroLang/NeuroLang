@@ -1132,6 +1132,10 @@ body { margin: 0; padding: .75rem 1rem; background: var(--bg);
 h1 { font-size: 1rem; margin: 0 0 .25rem; }
 p { margin: 0 0 .5rem; color: var(--muted); max-width: 60rem; }
 .graph { overflow: auto; }
+.graph.fit svg { max-width: 100%; height: auto; }
+.zoom { margin: 0 0 .5rem; padding: .2rem .65rem; border: 1px solid var(--edge);
+  border-radius: 6px; background: var(--bg); color: var(--text);
+  font: 12px system-ui, sans-serif; cursor: pointer; }
 svg { display: block; }
 .shape, .rim { stroke-width: 1.5; }
 .data .shape, .data .rim { fill: var(--data); stroke: var(--data-b); }
@@ -1202,6 +1206,12 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
 # Clicking a node shows its details and what it depends on, fading the
 # rest; clicking elsewhere shows everything again.
 _SCRIPT = """
+// The graph fits the page at first, its whole seen at once; or at its size.
+const zoom = document.getElementById("zoom");
+zoom.addEventListener("click", () => {
+  const fit = document.querySelector(".graph").classList.toggle("fit");
+  zoom.textContent = fit ? "Actual size" : "Fit to the page";
+});
 const nodes = JSON.parse(document.getElementById("nodes").textContent);
 const svg = document.querySelector("svg");
 const detail = document.getElementById("detail");
@@ -1291,7 +1301,8 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
         "rows that hold for sure, rows that hold for some random choices "
         "only, or probabilities. Click a node to see its rules and what "
         "it depends on.</p>"
-        f'<div class="graph"><svg xmlns="http://www.w3.org/2000/svg" '
+        '<button id="zoom" class="zoom" type="button">Actual size</button>'
+        f'<div class="graph fit"><svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width:.0f}" height="{height:.0f}" '
         f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" '
         f'aria-label="{html.escape(title)}"><defs>{markers}</defs>{body}'

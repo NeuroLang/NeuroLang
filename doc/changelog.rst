@@ -81,6 +81,13 @@ Unreleased
   session commands are in a *More* menu.
 * The tables of the browser REPL have a *Plot* button: bars, a histogram,
   points or a line of their columns, of the rows the filter keeps.
+* A long rule the browser REPL puts in its box (an example, the assistant's
+  query, a follow-up) is laid out for the box's width: its head on the left
+  and an atom of its body a line, after ``:-``; a long probability breaks
+  before its ``//``. *More* › *Format the query* (Alt+Shift+F) does it to
+  what is typed.
+* The graph of a query (``.graph``, the *Graph* tab) opens fitted to the
+  page, its whole in view; *Actual size* shows it at its size, to scroll.
 
 
 v0.1a22 (2026-11-13)

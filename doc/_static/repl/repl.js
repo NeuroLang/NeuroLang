@@ -7,6 +7,7 @@ import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
+import { layoutQuery } from "./layout.js";
 import { renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
@@ -30,6 +31,15 @@ const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+// A query the page puts in the box, laid out for its width: a long rule a line
+// per atom of its body (layout.js). What the visitor typed is kept as it is.
+const laidOut = (text) => ($("mode").value === "squall" ? text : layoutQuery(text, editor.columns()));
+const putQuery = (text) => { editor.value = laidOut(text); };
+function formatQuery() {
+  const text = laidOut(editor.value);
+  if (text !== editor.value) editor.value = text;
+  input.focus();
+}
 loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
 
 const store = (kind) => {
@@ -175,13 +185,15 @@ function showGuide() {
     question.value = text;
     question.focus();
   }, "Put this question in the box of the assistant");
-  renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
-    editor.value = query;
+  const list = $("guide-examples");
+  const width = Math.max(30, Math.floor((list.clientWidth - 24) / 7.5)); // 12.5px monospace
+  renderExamples(list, guide.examples[squall ? "squall" : "datalog"], (query) => {
+    putQuery(query);
     hideSummary();
     input.focus();
-  });
+  }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
   renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, 200, (query) => {
-    editor.value = query;
+    putQuery(query);
     hideSummary();
     input.focus();
   });
@@ -215,7 +227,7 @@ builder.addEventListener("submit", (event) => {
   const template = TEMPLATES.find((t) => t.id === $("builder-template").value);
   try {
     const query = buildQuery(template, Object.fromEntries(new FormData(builder)));
-    editor.value = query;
+    putQuery(query);
     hideSummary();
     input.focus();
     $("builder-error").textContent = "";
@@ -224,6 +236,7 @@ builder.addEventListener("submit", (event) => {
   }
 });
 $("guide").addEventListener("toggle", showGuide);
+$("guide-queries").addEventListener("toggle", showGuide); // the examples are laid out for the width of their list
 $("guide-filter").addEventListener("input", showGuide);
 
 // A query shared as a link is put in the box, not run.
@@ -460,7 +473,7 @@ const workerMessages = {
     restoreShared();
     // A first visit has a query to run in the box, not an empty one.
     const first = decodeShare(location.hash) ? "" : startingQuery(guide.examples, $("mode").value, { box: input.value, visited: history.entries.length > 0 });
-    if (first) editor.value = first;
+    if (first) putQuery(first);
   },
   file: (data) => {
     setBusy(false);
@@ -526,7 +539,7 @@ function applyReply(data) {
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
-  if (data.prompt) editor.value = data.prompt; // what the assistant wrote
+  if (data.prompt) putQuery(data.prompt); // what the assistant wrote
   else editor.refresh();
 }
 
@@ -633,10 +646,10 @@ const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
 let rerun = null; // what runs again once the rules of a session the server ended are back
 function goOn(text) {
-  editor.value = text;
+  putQuery(text);
   hideSummary();
   input.focus();
-  input.setSelectionRange(text.length, text.length);
+  input.setSelectionRange(editor.value.length, editor.value.length);
 }
 
 // Run again, one after the other, the statements that give back a session's rules.
@@ -725,6 +738,9 @@ input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     run(input.value, { remember: true });
+  } else if (event.altKey && event.shiftKey && event.code === "KeyF") {
+    event.preventDefault();
+    formatQuery();
   }
 });
 // A dot-command is a line: the lines of the question are joined.
@@ -769,6 +785,10 @@ $("mode").addEventListener("change", (event) => {
   run(`.mode ${event.target.value}`);
 });
 $("view").addEventListener("click", () => run(".view"));
+$("format").addEventListener("click", () => {
+  formatQuery();
+  $("format").closest("details").open = false;
+});
 $("explain").addEventListener("click", () => run(".explain"));
 history_.addEventListener("change", () => {
   if (history_.value) {

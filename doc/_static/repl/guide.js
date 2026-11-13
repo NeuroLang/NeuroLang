@@ -34,9 +34,10 @@ export function startingQuery(examples, mode, { box, visited }) {
   return examples[mode]?.[0] ?? "";
 }
 
-export function renderExamples(list, queries, pick, title = "Put this query in the box") {
+// *shown*(query) is the text of its button, e.g. laid out (layout.js).
+export function renderExamples(list, queries, pick, title = "Put this query in the box", shown = (query) => query) {
   list.replaceChildren(...(queries ?? []).map((query) => {
-    const button = element("button", { type: "button", className: "guide-item", textContent: query, title });
+    const button = element("button", { type: "button", className: "guide-item", textContent: shown(query), title });
     button.addEventListener("click", () => pick(query));
     return element("li", {}, button);
   }));

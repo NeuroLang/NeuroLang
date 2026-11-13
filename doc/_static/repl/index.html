@@ -254,11 +254,11 @@
 
   /* The engine and the version. */
   #engine-details > summary { font-size: .8125rem; color: var(--muted); font-weight: 500; }
-  #engine-details[open] { display: grid; gap: .6rem; }
+  #engine-details[open] { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; }
   #engine-details[open] > summary { margin-bottom: .1rem; }
   #version { font-size: .8125rem; color: var(--muted); }
-  #version input { width: 11rem; }
-  #banner { overflow-x: auto; background: var(--term); border-radius: var(--radius); color: #e8eef9; }
+  #version input { min-width: 0; flex: 1 1 9rem; }
+  #banner { overflow: auto; max-height: 22rem; background: var(--term); border-radius: var(--radius); color: #e8eef9; } /* the engine's banner: its relations scroll */
   #banner > div { padding: .6rem .8rem; }
   #banner:empty { display: none; }
 
@@ -481,6 +481,8 @@
           <button id="share" type="button" class="ghost" title="Copy a link to this query: it is in the address after the #, which the server never gets">Copy link</button>
           <details class="menu"><summary>More</summary>
             <div class="menu-items">
+              <button id="format" type="button" title="Break the long rules of the box at the commas of their bodies (Alt+Shift+F)">Format the query</button>
+              <hr>
               <button id="session-save" type="button" title="Save the statements of this session in a file">Save session</button>
               <button id="session-open" type="button" title="Open a saved session: its rules replace those of this one">Open session</button>
               <hr>
