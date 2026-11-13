@@ -83,10 +83,16 @@ class OrcidClient:
         except (OSError, yaml.YAMLError) as error:
             raise ValueError(f"The ORCID file {path} cannot be read: "
                              f"{error}") from None
+        return cls.from_mapping(data, f"The ORCID file {path}")
+
+    @classmethod
+    def from_mapping(cls, data, where: str) -> "OrcidClient":
+        """The client of the mapping *data* (a file's, or the ``orcid`` of
+        the secrets), *where* naming it; ValueError if it is not one."""
         if not isinstance(data, dict) or not data.get("client_id") \
                 or not data.get("client_secret"):
-            raise ValueError(f"The ORCID file {path} has no client_id and "
-                             "client_secret (ORCID's developer tools)")
+            raise ValueError(f"{where} has no client_id and client_secret "
+                             "(ORCID's developer tools)")
         return cls(str(data["client_id"]), str(data["client_secret"]),
                    str(data.get("redirect_uri") or ""),
                    bool(data.get("sandbox")))

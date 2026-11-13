@@ -4,6 +4,7 @@ import base64
 import importlib.util
 import json
 import os
+import re
 import plistlib
 import shutil
 import socket
@@ -471,6 +472,8 @@ def test_a_key_with_a_passphrase_serves_with_it(
     secret = tmp_path / "passphrase"
     secret.write_text("secret\n")
     assert serve.tls_context(cert, locked, secret)
+    # that of the secrets (key_password)
+    assert serve.tls_context(cert, locked, key_password="secret")
     secret.write_text("wrong\n")
     with pytest.raises(SystemExit, match="passphrase .* is not that one"):
         serve.tls_context(cert, locked, secret)
@@ -2257,3 +2260,115 @@ def test_the_requests_from_the_command_line(serve, tmp_path, capsys):
     with pytest.raises(SystemExit):
         serve.parse_args(["--orcid", str(path)])
     assert "--orcid signs in the users of --users" in capsys.readouterr().err
+
+
+# --- the configuration and the secrets in YAML files ------------------------
+
+def _secrets(tmp_path, text, mode=0o600):
+    path = tmp_path / "secrets.yaml"
+    path.write_text(text)
+    path.chmod(mode)
+    return path
+
+
+def test_the_options_of_a_configuration_file(serve, tmp_path):
+    config = tmp_path / "conf" / "server.yaml"
+    config.parent.mkdir()
+    config.write_text(
+        "port: 8443\nhost: 0.0.0.0\nlocal: true\ndata-dir: data\n"
+        "engines: [neurosynth]\nusers: users.yaml\nmax_sessions: 3\n"
+        "cert: /etc/ssl/cert.pem\nsecrets: secrets.yaml\n")
+    _secrets(config.parent, "env:\n  ALBERT_API_KEY: k\n")
+    args = serve.parse_args(["--config", str(config)])
+    assert (args.port, args.host, args.local, args.max_sessions) == (
+        8443, "0.0.0.0", True, 3)
+    # paths relative to the file, absolute ones as they are
+    assert args.data_dir == config.parent / "data"
+    assert args.users == config.parent / "users.yaml"
+    assert args.cert == Path("/etc/ssl/cert.pem")
+    assert args.engines == ["neurosynth"]
+    assert args.secret == {"env": {"ALBERT_API_KEY": "k"}}
+    # an option given replaces the file's
+    assert serve.parse_args(["--config", str(config), "--port", "9000"]
+                            ).port == 9000
+
+
+@pytest.mark.parametrize("text, says", [
+    ("prt: 1\n", "no option 'prt'"),
+    ("engines: neurosynth\n", "engines is a list"),
+    ("port: [1, 2]\n", "port is one value"),
+    ("local: yes please\n", "local is true or false"),
+    ("port: eighty\n", "port is not a int"),
+    ("engines: [nowhere]\n", "engines is one of"),
+    ("daemon: install\n", "no option 'daemon'"),
+    ("- port\n", "not a mapping"),
+])
+def test_a_configuration_file_that_is_not_one(serve, tmp_path, text, says):
+    config = tmp_path / "server.yaml"
+    config.write_text(text)
+    with pytest.raises(SystemExit, match=re.escape(says)):
+        serve.parse_args(["--config", str(config)])
+
+
+def test_the_secrets_are_their_owners(serve, tmp_path, capsys):
+    path = _secrets(tmp_path, "orcid:\n  client_id: APP-1\n"
+                    "  client_secret: s\npassword: pw\nkey_password: kp\n")
+    secret = serve.read_secrets(path)
+    assert secret["password"] == "pw" and secret["key_password"] == "kp"
+    client = serve.orcid.OrcidClient.from_mapping(secret["orcid"], "here")
+    assert client.client_id == "APP-1"
+    path.chmod(0o644)
+    with pytest.raises(SystemExit, match="chmod 600"):
+        serve.read_secrets(path)
+    with pytest.raises(SystemExit, match="the secrets are those of"):
+        serve.read_secrets(_secrets(tmp_path, "tokens: x\n"))
+    with pytest.raises(SystemExit, match="env is a mapping"):
+        serve.read_secrets(_secrets(tmp_path, "env: [a]\n"))
+    # a secret given twice, or without what it is for
+    path = _secrets(tmp_path, "password: pw\n")
+    other = tmp_path / "password.txt"
+    other.write_text("pw\n")
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--secrets", str(path), "--password-file",
+                          str(other)])
+    assert "or the password of" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--secrets", str(_secrets(
+            tmp_path, "orcid:\n  client_id: A\n  client_secret: s\n"))])
+    assert "--orcid signs in the users of --users" in capsys.readouterr().err
+
+
+def test_the_service_runs_its_configuration(serve, tmp_path, monkeypatch):
+    config = tmp_path / "server.yaml"
+    config.write_text("port: 8443\n")
+    args = serve.parse_args(["--config", str(config), "--python",
+                             sys.executable, "--daemon", "install"])
+    command = serve.service_command(args)
+    assert command[1:] == ["-m", "serve_repl", "--no-browser", "--config",
+                           str(config.resolve())]
+    # without one, its options and the file of its secrets
+    secrets_file = _secrets(tmp_path, "password: pw\n")
+    args = serve.parse_args(["--secrets", str(secrets_file), "--python",
+                             sys.executable, "--daemon", "install"])
+    command = serve.service_command(args)
+    assert command[command.index("--secrets") + 1] == str(
+        secrets_file.resolve())
+
+
+def test_a_server_of_its_secrets(serve, tmp_path, monkeypatch, capsys):
+    """The password of the secrets is that of the server; their variables
+    are those of the sessions of --local, as --env-file's."""
+    made = {}
+    monkeypatch.setattr(serve, "make_server",
+                        lambda *a, **k: made.update(args=a, kw=k)
+                        or (_ for _ in ()).throw(KeyboardInterrupt))
+    monkeypatch.setattr(serve, "write_index", lambda *a: None)
+    monkeypatch.setattr(serve, "prepare_site", lambda *a, **k: tmp_path)
+    path = _secrets(tmp_path, "password: s3cret-pw\n")
+    with pytest.raises(KeyboardInterrupt):
+        serve.main(["--secrets", str(path), "--no-browser"])
+    assert made["args"][5] == "s3cret-pw"
+    path = _secrets(tmp_path, "password: pw\nenv:\n  A_KEY: k\n")
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--secrets", str(path)])
+    assert "with --local" in capsys.readouterr().err
