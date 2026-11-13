@@ -500,7 +500,7 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
-    setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
+    setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
     if (data.ratable) showRating();
@@ -513,6 +513,8 @@ const workerMessages = {
     else if (data.tables?.length) markViewerStale();
     else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
+    // On a narrow screen the result is under the query: it is brought into view.
+    if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
   },
 };
 
@@ -705,6 +707,8 @@ applyTheme(chosen());
 // The question box is narrow on a phone: its example is left out there.
 const askPlaceholder = question.placeholder;
 const narrow = matchMedia("(max-width: 40rem)");
+// The panes of the page side by side (index.html), or one under the other.
+const stacked = matchMedia("(max-width: 71.99rem)");
 const placeAsk = () => (question.placeholder = narrow.matches ? "Ask in English…" : askPlaceholder);
 narrow.addEventListener("change", placeAsk);
 placeAsk();

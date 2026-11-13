@@ -108,13 +108,17 @@ function studyCell(value, record = {}, found = {}) {
     ...(found.pmcid ? [outside(pmcUrl(found.pmcid), "PMC", `${found.pmcid}, found with Europe PMC`, "rt-ref")] : []));
 }
 
-// The cell of a *value* of a column of the *kind*, with a bar behind it if it is a probability.
-function valueCell(value, kind, probability) {
+// The cell of a *value* of a column of the *kind*, with a track filled to it
+// if it is a probability; that of the answer, the *top* one, is drawn apart.
+function valueCell(value, kind, probability, top) {
   const text = shown(value, kind);
   const cell = element("td", { className: NUMERIC.has(kind) ? "rt-num" : "", textContent: text, title: text });
   if (probability && value !== null) {
     cell.classList.add("rt-prob");
-    cell.style.setProperty("--bar", `${(Number(value) * 100).toFixed(1)}%`);
+    cell.classList.toggle("rt-top", Number(value) === top);
+    const track = element("span", { className: "rt-track", ariaHidden: "true" });
+    track.style.setProperty("--bar", `${(Number(value) * 100).toFixed(1)}%`);
+    cell.prepend(track);
   }
   return cell;
 }
@@ -182,7 +186,7 @@ export function renderTable(payload, { download = null, followUps = null, use = 
       element("td", { className: "rt-number", textContent: number }),
       ...cells.map((value, column) => {
         if (studies.has(column) && Number.isInteger(value)) return studyCell(value, records[value], pmc?.known.get(String(value)));
-        return valueCell(value, model.kinds[column], column === model.probability);
+        return valueCell(value, model.kinds[column], column === model.probability, model.top);
       }))));
     const total = model.visibleCount;
     count.textContent = countText(model);
