@@ -220,11 +220,16 @@ Storing the ratings
    With ``--local`` and ``--users``, log what each user runs, its result
    and the resources it took (see `Activity and usage`_).
 
+``--dashboard``
+   With ``--activity-db``, a dashboard of the log, the ratings and the
+   uptime, for the admins, at ``/admin/logs/`` (see `The dashboard`_).
+
 Running as a service
 ~~~~~~~~~~~~~~~~~~~~
 
-``--daemon install|reinstall|remove``, ``--python PATH``
-   Install the server as a service of this user (see `The service`_).
+``--daemon install|reinstall|remove|status``, ``--python PATH``
+   Install the server as a service of this user, or tell how it runs (see
+   `The service`_ and `Uptime`_).
 
 Managing the users
 ~~~~~~~~~~~~~~~~~~
@@ -246,7 +251,15 @@ given on the command line replaces the file's.  The service installed with
 ``--config`` runs that file as it is, so that a change of it is the
 service's at its next start (``systemctl --user restart neurolang-repl``).
 The users, their groups and their assistants stay in their own file
-(``users``), which the console writes.
+(``users``), which the console writes.  The options of the sessions, their
+log and the dashboard go there too::
+
+   max_sessions: 8
+   idle_minutes: 120
+   max_running: 4              # queries at once (the machine's CPUs)
+   query_minutes: 60           # 0: no limit
+   activity_db: activity.sqlite
+   dashboard: true             # needs the dashboard extra
 
 Its secrets go in a second YAML file, readable by you only (the server
 refuses it otherwise: ``chmod 600 secrets.yaml``), which ``server.yaml``
@@ -576,6 +589,65 @@ SQLite reads it too::
    sqlite3 activity.sqlite "SELECT created, kind, text, seconds, cpu, memory FROM activity WHERE user = 'bob'"
 
 
+The dashboard
+-------------
+
+With ``--dashboard`` (and ``--activity-db``), the admins explore the log
+at ``/admin/logs/`` (linked from the console): `Datasette
+<https://datasette.io/>`_ on the activity log and the ratings
+(``--feedback-db``), with its charts (`datasette-vega
+<https://github.com/simonw/datasette-vega>`_).  Install them with the
+``dashboard`` extra::
+
+   uv run --extra apps --extra tui --extra llm --extra dashboard neurolang-repl-serve \
+       --daemon reinstall ... --activity-db activity.sqlite --dashboard
+
+Datasette browses, filters, sorts and searches every table (``activity``,
+``runs``, the ratings' ``answers`` and ``feedback``), exports any view as
+CSV or JSON, and runs any read-only SQL.  Its queries, on the page of the
+activity database, each over the last ``days`` (empty: all):
+
+- *What the users ran, by hour* and *by day*: the inputs, failures, users,
+  CPU seconds and the most memory;
+- *What each user ran*, *What ran on each engine*;
+- *The slowest inputs*, *The inputs that failed* (with their result);
+- *Why the sessions ended*;
+- *The uptime of the server* (in percent, over 30 days by default) and
+  *The runs of the server* (see `Uptime`_).
+
+*Show charting options*, above a result, draws it (a line of the inputs
+by hour, a bar of the CPU by user…).
+
+Datasette runs in a process of its own, started and ended with the
+server, listening on a unix socket in a directory only the server's user
+reads, not on a port; the server passes it the GET requests of the admins
+only (the dashboard is read only).
+
+
+Uptime
+------
+
+Whether the server is up, and since when:
+
+- ``GET /health``, open without a login, for a monitor: ``200 {"ok":
+  true, "uptime_seconds": N}``, or ``503`` if the sessions can no longer
+  start (their builder ended); no answer if the server is down.  Point an
+  external monitor at it (`Uptime Kuma <https://github.com/louislam/uptime-kuma>`_,
+  UptimeRobot, healthchecks.io…), or a cron job of another machine::
+
+     */5 * * * * curl -fsS --max-time 20 https://SERVER:8443/health > /dev/null || echo "the REPL is down" | mail -s REPL you@example.org
+
+- ``neurolang-repl-serve --daemon status``: what the service manager says,
+  whether it runs, since when, how many times it restarted (systemd starts
+  it again 5 seconds after it fails) and how its last run ended.
+- With ``--activity-db``, each run of the server is logged in its table
+  ``runs``: its start, the last minute it was alive and its stop.  A run
+  without a stop ended otherwise (killed, crashed, the machine stopped).
+  The dashboard's *The uptime of the server* gives the share of the last
+  days the runs cover, and *The runs of the server* lists them.  A stop by
+  the service manager (``systemctl --user stop``/``restart``) is a stop.
+
+
 Feedback
 --------
 
@@ -624,6 +696,7 @@ reach it; put it in ``--env-file`` or the users file.
                                                      # once they are checked and built
    neurolang-repl-serve --daemon remove              # stops and removes it
 
+   neurolang-repl-serve --daemon status              # runs? since when? restarts?
    systemctl --user status neurolang-repl            # Linux
    systemctl --user restart neurolang-repl
    journalctl --user -u neurolang-repl -n 80         # its log

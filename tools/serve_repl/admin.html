@@ -28,7 +28,7 @@
 </head>
 <body>
 <h1>NeuroLang REPL: admin</h1>
-<p><a href="/">The REPL</a> · <a href="/account">Your account</a> · <a href="/logout">Log out</a></p>
+<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="dashboard-link" hidden> · <a href="/admin/logs/">Dashboard of the activity</a></span> · <a href="/logout">Log out</a></p>
 <p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
 <p id="message" role="status"></p>
 
@@ -226,6 +226,7 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
   $("builder-note").textContent = [
