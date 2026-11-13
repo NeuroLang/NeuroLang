@@ -2841,7 +2841,7 @@ def main(argv=None) -> None:
     if args.daemon:
         return daemon(args)
     backend = None
-    if (users or password) and not args.unconfined:
+    if args.local and (users or password) and not args.unconfined:
         # The statements of those who log in read the engines' data only,
         # and write no file of the server: they run with its rights.
         from neurolang.confine import CONFINE_ENV

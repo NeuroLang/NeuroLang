@@ -2620,10 +2620,12 @@ def test_the_statements_of_a_server_of_users_are_confined(
     path = _secrets(tmp_path, "password: s3cret-pw\n")
     data = tmp_path / "data"
     with pytest.raises(KeyboardInterrupt):
-        serve.main(["--secrets", str(path), "--no-browser",
+        serve.main(["--secrets", str(path), "--no-browser", "--local",
                     "--data-dir", str(data)])
     assert os.environ.pop(CONFINE_ENV) == str(data.resolve())
-    with pytest.raises(KeyboardInterrupt):
-        serve.main(["--secrets", str(path), "--no-browser",
-                    "--data-dir", str(data), "--unconfined"])
-    assert CONFINE_ENV not in os.environ
+    for lifted in (["--unconfined"], []):  # in the browser, none needed
+        with pytest.raises(KeyboardInterrupt):
+            serve.main(["--secrets", str(path), "--no-browser",
+                        "--data-dir", str(data), *lifted,
+                        *(["--local"] if lifted else [])])
+        assert CONFINE_ENV not in os.environ

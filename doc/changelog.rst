@@ -583,14 +583,16 @@ v0.1a22 (2026-11-13)
 
 **Security:**
 
-* ``neurolang-repl-serve`` confines the statements of its users: with users
-  or a password, the commands that read a file (``.load_csv``,
+* ``neurolang-repl-serve --local`` confines the statements of its users:
+  with users or a password, the commands that read a file (``.load_csv``,
   ``.load_atlas``, ``.import``, ``.load_tractogram``, ``.load``, ``.view``)
   read the data directory only and fetch no address, and those that write
   one (``.save``, ``.transcript``, ``index_tracts``) refuse, so that a user
   can no longer read the server's files nor write them (``.save`` to a file
   of the account it runs as). ``--unconfined`` lifts it. The rule is
-  ``neurolang.confine``, set by the variable ``NEUROLANG_CONFINE``.
+  ``neurolang.confine``, set by the variable ``NEUROLANG_CONFINE``; an
+  address is any ``scheme:`` (``file:/etc/passwd`` too), and building an
+  engine runs ``confine.lifted()``.
 
 **Bug fixes:**
 

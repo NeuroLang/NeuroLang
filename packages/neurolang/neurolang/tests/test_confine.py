@@ -10,6 +10,7 @@ from neurolang.confine import (
     check_read,
     check_write,
     is_url,
+    lifted,
 )
 from neurolang.frontend import NeurolangDL
 
@@ -42,6 +43,9 @@ def test_confined_statements_read_their_data_only(confined, tmp_path):
     with pytest.raises(ConfinedError, match="writes no result"):
         check_write(confined / "out.csv", "result")
     assert is_url("s3://bucket/key") and not is_url("C:/data/table.csv")
+    for address in ("file:/etc/passwd", "FILE:/etc/hosts", "file:///etc"):
+        with pytest.raises(ConfinedError, match="fetches no address"):
+            check_read(address)
 
 
 def test_the_commands_of_a_confined_program(confined, tmp_path):
@@ -55,6 +59,7 @@ def test_the_commands_of_a_confined_program(confined, tmp_path):
          InvalidCommandExpression),
         ('.load_csv(s, "https://example.org/x.csv")',
          InvalidCommandExpression),
+        ('.load_csv(s, "file:/etc/passwd")', InvalidCommandExpression),
         (f'.import("{tmp_path / "secret.dl"}")', DatalogModuleError),
         (f'.load_atlas(a, "{tmp_path / "secret.nii"}", "{tmp_path / "l.csv"}")',
          InvalidCommandExpression),
@@ -71,3 +76,31 @@ def test_the_modules_an_engine_ships_are_imported(confined, tmp_path):
     nl.program_ir.module_directories = (str(shipped),)
     nl.execute_datalog_program('.import("vocabulary.dl")')
     assert nl.execute_datalog_program("ans(x) :- word(x)") is not None
+
+
+def test_the_links_of_the_data_are_the_servers(confined, tmp_path):
+    shared = tmp_path / "cache"
+    shared.mkdir()
+    (shared / "atlas.nii").write_bytes(b"")
+    (confined / "atlas").symlink_to(shared)
+    check_read(confined / "atlas" / "atlas.nii")
+    with pytest.raises(ConfinedError):
+        check_read(confined / "atlas" / ".." / ".." / "cache" / "atlas.nii")
+
+
+def test_what_the_server_runs_is_not_confined(confined, tmp_path):
+    """Building an engine (its datalog_init) runs lifted(), in its own
+    context: the statements of the other threads stay confined."""
+    import threading
+
+    seen = []
+    with lifted():
+        check_read(tmp_path / "engine.tck")
+        check_write(tmp_path / "index.cache")
+        thread = threading.Thread(target=lambda: seen.append(
+            pytest.raises(ConfinedError, check_read, tmp_path / "x")))
+        thread.start()
+        thread.join()
+    assert seen
+    with pytest.raises(ConfinedError):
+        check_read(tmp_path / "engine.tck")

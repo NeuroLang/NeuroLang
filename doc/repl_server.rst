@@ -712,13 +712,14 @@ reach it; put it in ``--env-file`` or the users file.
 Security
 --------
 
-- Anyone who logs in runs queries and commands in the server's Python.
-  With users or a password, their statements are *confined*
+- With ``--local``, anyone who logs in runs queries and commands in the
+  server's Python.  With users or a password, their statements are *confined*
   (``neurolang.confine``): ``.load_csv``, ``.load_atlas``, ``.import``,
   ``.load_tractogram``, ``.load`` and ``.view`` read the files of the data
   directory only (``--data-dir``) and fetch no address; ``.save``,
   ``.transcript`` and ``index_tracts`` write no file (the page downloads the
-  results instead).  The modules an engine ships are still imported.
+  results instead).  The engines themselves are built unconfined (their
+  ``datalog_init``), and the modules they ship are still imported.
   ``--unconfined`` lifts it, for a server of one person who trusts its
   users with its account.  Run the server as a user of its own all the
   same: the confinement guards the commands, not the Python of an engine.

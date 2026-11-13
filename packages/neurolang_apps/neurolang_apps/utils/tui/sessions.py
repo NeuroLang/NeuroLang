@@ -29,6 +29,7 @@ import traceback
 from multiprocessing.connection import Client, Listener
 from typing import Callable, Optional
 
+from neurolang.confine import lifted
 from neurolang_apps.utils.tui.local_backend import LocalBackend
 
 
@@ -100,10 +101,11 @@ def _builder(conn, address, authkey, options: dict, build) -> None:
             os._exit(0)
         try:
             if engine not in engines:
-                engines[engine] = backend._build(
-                    engine,
-                    lambda text: conn.send(("status", key, start, text)),
-                )
+                with lifted():  # the engine's commands are the server's
+                    engines[engine] = backend._build(
+                        engine,
+                        lambda text: conn.send(("status", key, start, text)),
+                    )
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
         except Exception as error:
