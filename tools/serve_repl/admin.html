@@ -227,7 +227,11 @@ async function show() {
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
   const builder = state.builder;
-  $("builder-note").textContent = builder ? `The engines' builder, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "";
+  const limits = state.limits;
+  $("builder-note").textContent = [
+    limits ? `At most ${limits.sessions} sessions, ${limits.running} queries running at once` + (limits.query_seconds ? `, each for ${minutes(limits.query_seconds)} at most.` : ".") : "",
+    builder ? `The engines' builder, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "",
+  ].join(" ");
   await showUsage(state.activity);
   if (!state.feedback) {
     $("feedback-note").textContent = "No feedback database: start the server with --feedback-db FILE.";

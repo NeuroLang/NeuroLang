@@ -254,6 +254,10 @@ Unreleased
   long it took and the resources it took, in SQLite, with the totals of each
   user and their log in the console. The page tells its users their inputs
   are logged.
+* ``neurolang-repl-serve --local --users`` runs at most ``--max-running``
+  queries at once (the machine's CPUs), of all the sessions, the others
+  waiting their turn, their page saying so; and stops a query running longer
+  than ``--query-minutes`` (60), ending its session's process.
 * ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
   login page: sessions of their own, without an account, whose assistant
   answers only with the key they give (no key of the server's, which is

@@ -278,7 +278,7 @@ class Session:
         began = time.monotonic()
         reply = {"html": "", "failed": True}
         try:
-            reply = self._call("submit", text=text)
+            reply = self._run("submit", text=text)
             return reply
         except SessionEnded:
             reply = None  # not run: the page brings the session back
@@ -325,7 +325,43 @@ class Session:
         return self._call("rate", **options)
 
     def download(self, **options):
-        return self._call("download", **options)
+        return self._run("download", **options)
+
+    def _run(self, method: str, **arguments):
+        """Return what the session's process answers to *method*, a query,
+        once fewer than the server's most queries run (meanwhile the page
+        is told it waits); a query running longer than the server allows
+        ends the session's process, which stops it."""
+        sessions = self.sessions
+        start = self.starts
+        self.busy += 1  # waiting, it is at work: no idle end
+        try:
+            if not sessions._slots.acquire(blocking=False):
+                self._say(f"Waiting: {sessions.running} queries run on "
+                          "this server")
+                while not sessions._slots.acquire(timeout=1):
+                    if self.starts != start or self._conn is None:
+                        raise SessionEnded("This session ended while its "
+                                           "query waited: restart it")
+                self._say("Running")
+            try:
+                return self._call(method, timeout=sessions.query_seconds,
+                                  **arguments)
+            except TimeoutError:
+                self.end("ran too long")
+                raise RuntimeError(
+                    "The query ran longer than this server allows "
+                    f"({sessions.query_seconds / 60:g} minutes): its session "
+                    "was stopped; restart it"
+                ) from None
+            finally:
+                sessions._slots.release()
+        finally:
+            self.busy -= 1
+
+    def _say(self, text: str) -> None:
+        """Tell the pages of the session a step, as their status."""
+        self.emit_text(json.dumps({"type": "status", "message": text + "…"}))
 
     def stop(self) -> bool:
         """End the session's process, which stops what it does: the page
@@ -433,8 +469,11 @@ class Sessions:
     variables *withhold* (the keys of
     the server) are not in the sessions' environment unless their identity
     gives them. The other options are those of a
-    :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`; *build*
-    must be importable by name, as the builder is started anew.
+    :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`. At most
+    *running* queries (and downloads) run at once (by default, as many as
+    the machine has CPUs), the others waiting; one running longer than
+    *query_seconds*, if given, ends its session's process. *build* must be
+    importable by name, as the builder is started anew.
     """
 
     def __init__(
@@ -443,7 +482,8 @@ class Sessions:
         most: int = 8, idle: float = 7200.0,
         build: Optional[Callable] = None,
         identity: Optional[Callable] = None, feedback_db=None,
-        withhold=(), activity_db=None,
+        withhold=(), activity_db=None, running: Optional[int] = None,
+        query_seconds: Optional[float] = None,
     ):
         env = env or {}
         self.identity = identity or (lambda user: (env.get(user, {}), ""))
@@ -458,6 +498,9 @@ class Sessions:
         self.builder_usage: Optional[dict] = None
         self.most = most
         self.idle = idle
+        self.running = running or os.cpu_count() or 1
+        self._slots = threading.BoundedSemaphore(self.running)
+        self.query_seconds = query_seconds or None
         self._sessions = {}
         self._lock = threading.Lock()
         self._starts = itertools.count(1)  # numbers every start once

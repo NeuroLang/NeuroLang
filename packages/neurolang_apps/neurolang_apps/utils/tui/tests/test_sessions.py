@@ -30,7 +30,16 @@ def build(name, say):
     nl = NeurolangPDL()
     nl.add_tuple_set([("alice", 3), ("bob", 5)], name="person")
     nl.add_tuple_set([(name,)], name="engine")
+    # wait(s) takes s seconds: a query of 2 (short) or 60 (long).
+    nl.add_tuple_set([(2,)], name="short")
+    nl.add_tuple_set([(60,)], name="long")
+    nl.add_symbol(wait, name="wait")
     return nl
+
+
+def wait(seconds: int) -> int:
+    time.sleep(seconds)
+    return seconds
 
 
 @pytest.fixture
@@ -578,3 +587,44 @@ def test_the_own_memory_of_a_fork_is_apart_from_the_shared():
         os.waitpid(pid, 0)
     assert 45 < usage["private"] < 80  # its 50 MB, not the parent's 100
     assert usage["rss"] > usage["private"] + 80  # the rss counts them
+
+
+def test_the_queries_running_at_once_are_at_most_so_many(tmp_path):
+    sessions = Sessions(tmp_path, build=build, running=1)
+    try:
+        ann, bob = sessions.session("ann", "1"), sessions.session("bob", "1")
+        for session in (ann, bob):
+            session.start("neurostore")
+        told = bob.listen()
+        slow = threading.Thread(target=ann.submit,
+                                args=("ans(y) :- short(s), (y == wait(s))",))
+        slow.start()
+        time.sleep(0.5)
+        began = time.monotonic()
+        assert _rows(bob.submit("ans(x) :- person(x, 5)")) == [["bob"]]
+        assert time.monotonic() - began > 1  # it waited for ann's
+        slow.join()
+        messages = []
+        while not told.empty():
+            messages.append(told.get())
+        assert any("Waiting: 1 queries run" in m for m in messages)
+    finally:
+        sessions.close()
+
+
+def test_a_query_running_too_long_ends_its_session(tmp_path):
+    sessions = Sessions(tmp_path, build=build, query_seconds=1)
+    try:
+        ann = sessions.session("ann", "1")
+        ann.start("neurostore")
+        pid = ann.pid
+        with pytest.raises(RuntimeError, match="ran longer than this "
+                           "server allows"):
+            ann.submit("ans(y) :- long(s), (y == wait(s))")
+        assert ann.pid is None and _ends(pid)
+        with pytest.raises(SessionEnded):
+            ann.submit("ans(x) :- person(x, 5)")
+        ann.start("neurostore")  # its slot is free again
+        assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
+    finally:
+        sessions.close()
