@@ -21,7 +21,18 @@ NS_INIT = "neurolang_apps.utils.engines.neurosynth.init"
 FAKE_METADATA = pd.DataFrame({
     "id": [1, 2, 3, 1001, 1002],
     "title": ["Study one", "Study two", "Study three", "Memory", "Language"],
+    "year": [2001, 2002, 2003, 2010, 2011],
+    "journal": ["Brain", "Brain", "Neuron", "NeuroImage", "Neuron"],
 })
+
+
+def _fake_abstracts(pmids, cache_path=None):
+    """PubMed's titles and abstracts of the studies 1001 and 1002."""
+    return {
+        str(p): ("", f"The abstract of {p}.") if p in (1001, 1002, "1001", "1002")
+        else ("", "")
+        for p in pmids
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -498,7 +509,8 @@ def _build_small_neurosynth(free_text=True):
                   return_value=FAKE_METADATA), \
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
-            patch.object(engine_registry, "_phase_atlases", _fake_schaefer):
+            patch.object(engine_registry, "_phase_atlases", _fake_schaefer), \
+            patch(f"{init}.fetch_pubmed_abstracts", _fake_abstracts):
         if free_text:
             return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config

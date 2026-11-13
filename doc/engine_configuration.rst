@@ -348,8 +348,9 @@ E-utilities), a table of texts, local or remote::
           text_columns: [title, abstract]   # first column is the title
 
 or texts the engine already holds as predicates ``p(id, text)``, which is
-how the ``neurostore`` engine embeds the abstracts that come with its
-database, without any download::
+how the meta-analysis engines embed the titles and abstracts of their
+studies, ``study_title`` and ``study_abstract`` (see *The publications of
+the studies*)::
 
         source:
           predicate: study_abstract
@@ -522,6 +523,36 @@ Its SPECTER2 ``query_similarity(query, study)`` embeds those titles and
 abstracts; precompute the embeddings with ``python -m
 neurolang.utils.text_embeddings --engine neurostore --data-dir
 neurolang_data``.
+
+The publications of the studies
+-------------------------------
+
+``neurosynth`` and ``neurostore``, and the engines extending them, have the
+title, abstract, year and journal of each study: ``study_title(study_id,
+title)``, ``study_abstract(study_id, abstract)``, ``study_year(study_id,
+year)`` and ``study_journal(study_id, journal)``, so that a query, and the
+query assistant, restricts the studies to years or journals and conditions
+on them as on a term::
+
+    recent(s) :- study_year(s, y), (y >= 2010), (y <= 2015)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    cond(s) :- recent(s), mentions(s, 'pain'), selected_study(s)
+    ans(l, p) :- PROB[active(l, s) // cond(s)] = p
+
+Neurosynth's metadata holds the titles, years and journals; the abstracts
+are PubMed's, asked for at the first build of the engine (about 70
+requests of two hundred studies, four to five minutes; less with an
+``NCBI_API_KEY``) and kept in
+``<data_dir>/neurosynth/pubmed_abstracts.json``. A NeuroStore release holds
+the titles, abstracts and journals but not the years: they are those
+NeuroStore lists for its studies, about twenty requests of ten thousand
+studies (700 MB, a few minutes) at the first build, kept in
+``<data_dir>/neurostore/<version>-studies.parquet``. The next builds ask for
+nothing; without the network, the studies not kept have no abstract or
+year, with a warning, until the next build. The journals are named as each
+database names them (``Neuron``, but ``The Journal of neuroscience : the
+official journal of the Society for Neuroscience`` in Neurosynth). In the
+browser the tables are those of the page's data.
 
 The Cognitive Atlas
 -------------------

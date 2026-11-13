@@ -228,15 +228,18 @@ engines:
     text_embeddings:
       study_abstracts:
         ids_from: study
-        source: pubmed
+        # The titles and abstracts of the engine (study_abstract).
+        source:
+          predicate: study_abstract
+          title_predicate: study_title
         model: allenai/specter2_base
         document_adapter: allenai/specter2
         query_adapter: allenai/specter2_adhoc_query
         function: query_similarity
         description: >-
           query_similarity(query, study) returns the cosine similarity
-          between a free-text query and the study's title and abstract
-          (PubMed), embedded with SPECTER2.
+          between a free-text query and the study's title and abstract,
+          embedded with SPECTER2.
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -333,6 +336,14 @@ engines:
         columns: [description]
         type: str
         description: "the description of a task of the Cognitive Atlas"
+      year:
+        columns: [year]
+        type: int
+        description: "a year of publication"
+      journal:
+        columns: [journal]
+        type: str
+        description: "the name of a journal"
     # Each predicate declares its arguments, in column order: the entities
     # it relates, each a sort over the columns it spans, named alone or as
     # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
@@ -350,6 +361,17 @@ engines:
       study_title:
         description: "Title of a study"
         arguments: [study, text]
+      study_abstract:
+        description: "Abstract of a study"
+        arguments: [study, text]
+      study_year:
+        description: "The year a study was published"
+        arguments: [study, year]
+      study_journal:
+        description: >-
+          The journal a study was published in, named as the engine's
+          metadata names it: find it with search_values
+        arguments: [study, journal]
       study:
         description: "All study identifiers"
         arguments:
@@ -597,16 +619,6 @@ engines:
     # within the time and memory the query assistant gives it.
     resamplings:
       boot_studies: {n: 200}
-    text_embeddings:
-      study_abstracts:
-        # The texts come with the release: no PubMed download.
-        source:
-          predicate: study_abstract
-          title_predicate: study_title
-        description: >-
-          query_similarity(query, study) returns the cosine similarity
-          between a free-text query and the study's title and abstract,
-          embedded with SPECTER2.
     sorts:
       study:
         type: str
@@ -620,9 +632,6 @@ engines:
         type: str
         description: "a cognitive domain extracted from the tasks of a study"
     predicates:
-      study_abstract:
-        description: "Abstract of a study"
-        arguments: [study, text]
       study_concept:
         description: "Cognitive concepts extracted from the tasks of a study"
         arguments: [study, concept]

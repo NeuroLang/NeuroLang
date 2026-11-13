@@ -22,6 +22,9 @@ since NeuroStore ships no term table — plus:
 * ``study_concept(study_id, concept)`` — cognitive concepts that the
   LLM-based task extraction attached to the study's analyses.
 * ``study_domain(study_id, domain)`` — likewise for cognitive domains.
+* ``study_journal(study_id, journal)``, from the release, and
+  ``study_year(study_id, year)``, which it does not hold: NeuroStore lists
+  it (:func:`study_identifiers`).
 
 The release can be chosen with the ``NEUROLANG_NEUROSTORE_RELEASE``
 environment variable (``latest``, ``nightly`` or a version such as
@@ -36,6 +39,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -47,12 +51,16 @@ from neurolang.frontend import NeurolangPDL
 from neurolang_apps.utils import engine_cache
 from neurolang_apps.utils.engines.neurosynth.init import (
     process_peaks,
+    register_publications,
     register_tables,
 )
 
 NEUROSTORE_URL = "https://neurostore.org"
 RELEASES_PATH = "/api/neurostore-studyset-releases/"
 RELEASE_ENV_VAR = "NEUROLANG_NEUROSTORE_RELEASE"
+STUDIES_PATH = "/api/studies/"
+# The studies of a page of NeuroStore's listing of its studies.
+LISTING_PAGE = 10000
 _TIMEOUT = 60
 MIN_TERM_STUDIES = 30
 NGRAM_RANGE = (1, 3)
@@ -145,6 +153,66 @@ def fetch_neurostore_dir(data_dir: Path) -> Path:
     if not (target / "coordinates.parquet").exists():
         _download_release(release, target)
     return target
+
+
+def study_identifiers(
+    data_dir: Path, release: str, study_ids, fetch=None
+) -> pd.DataFrame:
+    """
+    Return the ``study_id, pmid, doi, year`` of the *study_ids* of the
+    NeuroStore *release*, which its files do not hold.
+
+    NeuroStore lists them for all its studies, about twenty pages of ten
+    thousand (700 MB, a few minutes): the rows of the studies of the release
+    are kept in the data directory (``neurostore/RELEASE-studies.parquet``)
+    and read by the next builds. Without the network, the table is empty
+    with a warning, and asked for at the next build; in a browser, it is
+    the one that came with the page. *fetch*, which returns the JSON of a
+    URL, replaces the requests (in tests).
+    """
+    path = Path(data_dir) / "neurostore" / f"{release}-studies.parquet"
+    columns = ["study_id", "pmid", "doi", "year"]
+    if path.exists():
+        return pd.read_parquet(path)
+    if sys.platform == "emscripten":
+        return pd.DataFrame(columns=columns)
+    try:
+        listing = _study_listing(fetch or _fetch_json)
+    except (OSError, ValueError, KeyError) as error:
+        warnings.warn(
+            f"NeuroStore could not list its studies ({error}): their years "
+            "are left out, and asked for at the next build of the engine."
+        )
+        return pd.DataFrame(columns=columns)
+    listing = listing.rename(columns={"id": "study_id"})[columns]
+    table = listing[listing["study_id"].isin(set(study_ids))]
+    table = table.drop_duplicates("study_id").reset_index(drop=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_parquet(path, index=False)
+    return table
+
+
+def _study_listing(fetch) -> pd.DataFrame:
+    """Every study NeuroStore lists, with its PubMed id, DOI and year."""
+    pages, page, total = [], 1, None
+    while total is None or sum(map(len, pages)) < total:
+        reply = fetch(
+            f"{NEUROSTORE_URL}{STUDIES_PATH}?page_size={LISTING_PAGE}"
+            f"&page={page}&flat=true&nested=false"
+        )
+        total = reply["metadata"]["total_count"]
+        rows = reply["results"]
+        if not rows:
+            break
+        pages.append(pd.DataFrame(rows)[["id", "pmid", "doi", "year"]])
+        page += 1
+    return pd.concat(pages, ignore_index=True)
+
+
+def _fetch_json(url: str):
+    """The JSON at *url*."""
+    with urllib.request.urlopen(url, timeout=_TIMEOUT) as response:
+        return json.load(response)
 
 
 def _peaks_from_coordinates(coordinates: pd.DataFrame) -> pd.DataFrame:
@@ -322,6 +390,12 @@ def init_engine(
         table = values[values.str.strip() != ""].rename(column)
         table = table.rename_axis("study_id").reset_index()
         nl.add_tuple_set(table, name=name)
+
+    journals = texts.get("publication", pd.Series(None, texts.index))
+    years = study_identifiers(data_dir, release_dir.name, study_ids)
+    register_publications(nl, pd.DataFrame({
+        "study_id": study_ids.values, "journal": journals.values,
+    }).merge(years[["study_id", "year"]], on="study_id", how="left"))
 
     annotations_path = release_dir / "annotations.parquet"
     annotations = pd.read_parquet(

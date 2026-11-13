@@ -591,3 +591,22 @@ assistant_examples:
       term_association(s, t) :- mentions(s, t), selected_study(s)
       cond(s) :- seed(s), term_association(s, 'pain')
       ans(l, p) :- PROB[active(l, s) // cond(s)] = p
+
+  # The publications of the studies: years and journals.
+  - question: "Which gyri and sulci are activated by studies about pain published between 2010 and 2015?"
+    datalog: |-
+      recent(s) :- study_year(s, y), (y >= 2010), (y <= 2015)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      cond(s) :- recent(s), mentions(s, 'pain'), selected_study(s)
+      ans(l, p) :- PROB[active(l, s) // cond(s)] = p
+
+  - question: "How many studies mention working memory each year?"
+    datalog: |-
+      item(y, s) :- mentions(s, 'working memory'), study_year(s, y)
+      ans(y, n) :- AGGREGATE[y](item(y, s) @ count(s)) = n
+
+  - question: "How many studies about memory were published in Neuron each year?"
+    datalog: |-
+      item(y, s) :- study_journal(s, 'Neuron'), mentions(s, 'memory'), study_year(s, y)
+      ans(y, n) :- AGGREGATE[y](item(y, s) @ count(s)) = n
+

@@ -24,8 +24,11 @@ Registers the following predicates:
   probability, 25% threshold, 2 mm).
 * ``cognitive_task(task_id, name, description)`` — the tasks of the
   Cognitive Atlas, with their descriptions.
-* ``study_title(study_id, title)`` — the titles of the studies, from the
-  NeuroSynth metadata.
+* ``study_title(study_id, title)``, ``study_year(study_id, year)`` and
+  ``study_journal(study_id, journal)`` — the titles, years and journals of
+  the studies, from the NeuroSynth metadata.
+* ``study_abstract(study_id, abstract)`` — their abstracts, from PubMed
+  (see :func:`study_abstracts`).
 
 The ``datalog_init`` of the engine (``engines.yaml``) also derives
 ``mentions(study_id, term)`` and ``reports(study_id, i, j, k)``.
@@ -35,6 +38,8 @@ Predicate names are lowercase to match SQUALL's case-folding convention
 """
 
 import json
+import sys
+import warnings
 from pathlib import Path
 
 import nibabel as nib
@@ -54,8 +59,10 @@ from neurolang.utils.nilearn_compat import (
     nilearn_image,
 )
 from neurolang_apps.utils import engine_cache
+from neurolang_apps.utils.text_embeddings import fetch_pubmed_abstracts
 
 COGNITIVE_ATLAS_TASKS_URL = "https://www.cognitiveatlas.org/api/v-alpha/task"
+ABSTRACTS_FILE = "pubmed_abstracts.json"
 
 
 def init_engine(
@@ -86,9 +93,17 @@ def init_engine(
     term_data = term_data.rename(columns={"id": "study_id"})
     term_data["study_id"] = term_data["study_id"].astype(StudyID)
     study_ids = register_tables(nl, mask, data_dir, peak_data, term_data)
+    metadata = fetch_study_metadata(data_dir, verbose=0)
+    nl.add_tuple_set(study_titles(metadata, study_ids), name="study_title")
+    metadata = metadata.rename(columns={"id": "study_id"}).astype(
+        {"study_id": StudyID}
+    )
+    register_publications(
+        nl, metadata[metadata["study_id"].isin(study_ids["study_id"])]
+    )
     nl.add_tuple_set(
-        study_titles(fetch_study_metadata(data_dir, verbose=0), study_ids),
-        name="study_title",
+        study_abstracts(study_ids["study_id"], data_dir),
+        name="study_abstract",
     )
 
 
@@ -100,6 +115,53 @@ def study_titles(
     titles = titles.astype({"study_id": StudyID}).dropna()
     titles = titles[titles["title"].str.strip() != ""]
     return titles[titles["study_id"].isin(study_ids["study_id"])]
+
+
+def register_publications(nl: NeurolangPDL, studies: pd.DataFrame) -> None:
+    """
+    Add to *nl* ``study_year(study_id, year)`` and ``study_journal(study_id,
+    journal)``, the rows of *studies* (``study_id``, ``year``, ``journal``)
+    where they are known.
+    """
+    for column, kind in (("year", int), ("journal", str)):
+        table = studies.reindex(columns=["study_id", column]).dropna()
+        if kind is str:
+            table = table[table[column].astype(str).str.strip() != ""]
+        table = table.astype({column: kind}).drop_duplicates()
+        nl.add_tuple_set(table, name=f"study_{column}")
+
+
+def study_abstracts(study_ids: pd.Series, data_dir: Path) -> pd.DataFrame:
+    """
+    Return the ``study_id, abstract`` rows of the studies with an abstract
+    in PubMed: a study's id is its PubMed id.
+
+    The abstracts are asked for to PubMed at the first build, by batches
+    of two hundred (see
+    :func:`~neurolang_apps.utils.text_embeddings.fetch_pubmed_abstracts`),
+    and kept in ``DATA_DIR/neurosynth/pubmed_abstracts.json``: the next
+    builds ask for none. Without the network the rows are those kept, with
+    a warning; in a browser (Pyodide) those that came with the page.
+    """
+    path = Path(data_dir) / "neurosynth" / ABSTRACTS_FILE
+    ids = [str(study) for study in study_ids]
+    try:
+        if sys.platform == "emscripten":
+            raise OSError("a browser does not ask PubMed")
+        records = fetch_pubmed_abstracts(ids, cache_path=path)
+    except OSError as error:
+        if sys.platform != "emscripten":
+            warnings.warn(
+                f"PubMed could not be asked for the abstracts ({error}): "
+                "the studies without one kept have none, until the next "
+                "build of the engine."
+            )
+        records = json.loads(path.read_text()) if path.exists() else {}
+    rows = [
+        (StudyID(study), records[study][1]) for study in ids
+        if study in records and records[study][1].strip()
+    ]
+    return pd.DataFrame(rows, columns=["study_id", "abstract"])
 
 
 def register_tables(
