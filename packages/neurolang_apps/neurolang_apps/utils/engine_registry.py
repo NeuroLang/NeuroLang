@@ -1138,40 +1138,55 @@ def _peak_neighbourhoods(img, peaks_mm, studies, radius_mm, chunk):
     study of the peak and the distance to it, in millimetres through the
     affine of the image, so the atlas's grid need not be that of the peaks.
     """
-    data = np.asanyarray(img.dataobj).astype(np.int64)
-    shape = np.array(data.shape[:3])
     affine = img.affine
     inverse = np.linalg.inv(affine)
     spacing = np.linalg.norm(affine[:3, :3], axis=0)
     reach = np.ceil(radius_mm / spacing).astype(int) + 1
+    # the image padded by twice the reach: the voxels within the reach of
+    # a peak within the reach of the image are in it
+    data = np.pad(np.asanyarray(img.dataobj).astype(np.int64), [
+        (2 * r, 2 * r) for r in reach
+    ])
     offsets = np.stack(np.meshgrid(
         *(np.arange(-r, r + 1) for r in reach), indexing="ij"
     ), -1).reshape(-1, 3)
+    # those that can be within the radius of a peak, half a voxel's
+    # diagonal at most from the centre of its voxel, and their millimetres
+    steps = offsets @ affine[:3, :3].T
+    keep = np.linalg.norm(steps, axis=1) <= (
+        radius_mm + np.linalg.norm(affine[:3, :3] @ [0.5, 0.5, 0.5])
+    )
+    jumps = offsets[keep] @ [data.shape[1] * data.shape[2], data.shape[2], 1]
+    steps = steps[keep]
     order = np.argsort(studies, kind="stable")
     peaks_mm = np.asarray(peaks_mm, dtype=float)[order]
     studies = np.asarray(studies)[order]
+    centres = np.round(nib.affines.apply_affine(inverse, peaks_mm))
+    near = np.all((centres >= -reach) & (centres < data.shape - 3 * reach), 1)
+    peaks_mm, studies, centres = peaks_mm[near], studies[near], centres[near]
     firsts = np.flatnonzero(np.r_[True, studies[1:] != studies[:-1]])
     bounds = np.r_[np.unique(firsts[np.searchsorted(
         firsts, np.arange(0, len(studies), chunk), side="right"
     ) - 1]), len(studies)]
     for start, stop in zip(bounds[:-1], bounds[1:]):
-        peaks, owners = peaks_mm[start:stop], studies[start:stop]
-        centres = np.round(nib.affines.apply_affine(inverse, peaks))
-        candidates = centres.astype(int)[:, None, :] + offsets[None]
-        inside = np.all((candidates >= 0) & (candidates < shape), axis=-1)
-        distances = np.linalg.norm(
-            nib.affines.apply_affine(affine, candidates) - peaks[:, None],
-            axis=-1,
+        shift = (
+            nib.affines.apply_affine(affine, centres[start:stop])
+            - peaks_mm[start:stop]
         )
-        near = inside & (distances <= radius_mm)
-        voxels = candidates[near]
-        values = data[tuple(voxels.T)]
+        # |step + shift|², with a product of matrices
+        squared = (steps ** 2).sum(1) + (
+            (shift ** 2).sum(1)[:, None] + 2 * shift @ steps.T
+        )
+        peak, offset = np.nonzero(squared <= radius_mm ** 2)
+        flat = np.ravel_multi_index(
+            tuple((centres[start:stop] + 2 * reach).astype(int).T), data.shape
+        )[peak] + jumps[offset]
+        values = data.ravel()[flat]
         labelled = values > 0
+        peak, offset = peak[labelled], offset[labelled]
         yield (
-            values[labelled],
-            np.ravel_multi_index(tuple(voxels[labelled].T), data.shape[:3]),
-            np.broadcast_to(owners[:, None], near.shape)[near][labelled],
-            distances[near][labelled],
+            values[labelled], flat[labelled], studies[start:stop][peak],
+            np.sqrt(np.abs(squared[peak, offset])),
         )
 
 
@@ -1221,11 +1236,27 @@ def atlas_coverage(
     for values, voxels, owners, distances in _peak_neighbourhoods(
         img, peaks_mm, studies, 3 * sigma, chunk
     ):
+        if not len(values):
+            continue
+        # the max over the peaks of each study at each voxel, then the sum
+        # over the voxels of each region; the voxels come by study, by peak
+        # and in order near each peak: a stable sort merges these runs
+        change = np.r_[True, owners[1:] != owners[:-1]]
+        names, codes = owners[change], np.cumsum(change) - 1
+        key = codes * (voxels.max() + 1) + voxels
+        order = np.argsort(key, kind="stable")
+        starts = np.flatnonzero(np.diff(key[order], prepend=-1))
+        first = order[starts]
+        nearest = np.minimum.reduceat(distances[order], starts)
+        pairs, pair = np.unique(
+            codes[first] * len(sizes) + values[first], return_inverse=True
+        )
         found.append(pd.DataFrame({
-            "value": values, "voxel": voxels, "study": owners,
-            "activation": np.exp(-distances ** 2 / (2 * sigma ** 2)),
-        }).groupby(["value", "study", "voxel"]).activation.max()
-          .groupby(level=["value", "study"]).sum().reset_index())
+            "value": pairs % len(sizes), "study": names[pairs // len(sizes)],
+            "activation": np.bincount(
+                pair, np.exp(-nearest.astype(float) ** 2 / (2 * sigma ** 2))
+            ),
+        }))
     found = pd.concat(found) if found else pd.DataFrame(
         columns=["value", "study", "activation"]
     )

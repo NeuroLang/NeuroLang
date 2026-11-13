@@ -21,7 +21,7 @@ def toy(seed=0, n_peaks=40, n_studies=9):
     data[1:5, 2:6, 2:5] = 1
     data[8:13, 1:4, 5:9] = 2
     data[6, 9, 3] = 3
-    img = nib.Nifti1Image(data, AFFINE)
+    img = nib.Nifti1Image(np.asfortranarray(data), AFFINE)  # as nibabel's
     low = nib.affines.apply_affine(AFFINE, [-8, -8, -8])
     high = nib.affines.apply_affine(AFFINE, [21, 19, 17])
     peaks = rng.uniform(np.minimum(low, high), np.maximum(low, high),
