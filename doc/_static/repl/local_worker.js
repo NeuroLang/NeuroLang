@@ -23,7 +23,7 @@ async function ask(action, body = {}, { raw = false } = {}) {
   if (response.status === 401) postMessage({ type: "login" }); // the login expired
   if (!response.ok) {
     const { error, ended } = await response.json().catch(() => ({ error: response.statusText }));
-    // *ended*: the server ended this tab's session (idle, room for another, its restart).
+    // *ended*: the server ended this tab's session (idle, room for another, a query too long).
     throw Object.assign(new Error(error || `the server answered ${response.status}`), { ended: Boolean(ended) });
   }
   return raw ? response : response.json();

@@ -525,11 +525,14 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   longest ends, unless it is at work or was used in the last minute (then
   the new tab is told to wait).  One unused for ``--idle-minutes`` ends.
 - A session the server ended (unused, made room for another, its query ran
-  too long, the server restarted) comes back at the next input of its page:
-  the page starts it again, runs again the rules the session defined (as
-  after *Stop*, which the page keeps; not its queries, nor the questions to
-  the assistant), then that input.  If it ends again while its rules come
-  back, or at once after, the page says so rather than try again.
+  too long) comes back at the next input of its page: the page starts it
+  again, runs again the rules the session defined (as after *Stop*, which
+  the page keeps; not its queries, nor the questions to the assistant),
+  then that input.  If it ends again while its rules come back, or at once
+  after, the page says so rather than try again.  A restart of the server
+  ends the logins too: the page opens the login page, then starts anew,
+  without the rules of the session.  With ``--activity-db``, the rules run
+  again are logged again, as inputs.
 - At most ``--max-running`` queries (and downloads of results) run at once,
   of all the sessions: one more waits its turn, its page saying so, so that
   the queries of many users share the machine's CPUs rather than slow each
