@@ -251,7 +251,15 @@ given on the command line replaces the file's.  The service installed with
 ``--config`` runs that file as it is, so that a change of it is the
 service's at its next start (``systemctl --user restart neurolang-repl``).
 The users, their groups and their assistants stay in their own file
-(``users``), which the console writes.
+(``users``), which the console writes.  The options of the sessions, their
+log and the dashboard go there too::
+
+   max_sessions: 8
+   idle_minutes: 120
+   max_running: 4              # queries at once (the machine's CPUs)
+   query_minutes: 60           # 0: no limit
+   activity_db: activity.sqlite
+   dashboard: true             # needs the dashboard extra
 
 Its secrets go in a second YAML file, readable by you only (the server
 refuses it otherwise: ``chmod 600 secrets.yaml``), which ``server.yaml``
