@@ -96,6 +96,11 @@ Unreleased
   values, the range shown in the colours it is drawn with.
 * In the browser REPL, a result has a *Brain* tab beside *Table* and
   *Graph*: it shows the result in the brain viewer.
+* The browser REPL keeps the questions asked in English, each with the
+  query the assistant gave, between visits (*Past questions*, under the
+  box of the assistant): *Use this query* puts it back in the box, in its
+  language, with what the assistant said of it and the question it answers;
+  *Ask again* puts the question back.
 
 
 v0.1a22 (2026-11-13)

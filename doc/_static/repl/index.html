@@ -173,6 +173,19 @@
   .agent-pending .agent-obs, .agent-wait { color: var(--teal); }
   .agent-done { color: var(--ok); font-weight: 600; }
   .agent-bad { color: var(--bad); }
+  #asked > summary { font-size: .8125rem; }
+  #asked[open] > summary { margin-bottom: .5rem; }
+  .asked-list { list-style: none; margin: 0; padding: 0; display: grid; max-height: 22rem; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--sunken); }
+  .asked-list > li { display: grid; gap: .35rem; padding: .6rem .75rem; }
+  .asked-list > li + li { border-top: 1px solid var(--border); }
+  .asked-question { margin: 0; font-weight: 600; }
+  .asked-query { margin: 0; padding: .4rem .6rem; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .asked-none { margin: 0; color: var(--bad); font-size: .8125rem; }
+  .asked-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+  .asked-actions button { min-height: 1.75rem; padding: .15rem .6rem; font-size: .75rem; }
+  .asked-actions time { margin-left: auto; color: var(--faint); font-size: .75rem; }
+  body[data-busy] .asked-actions button { pointer-events: none; opacity: .4; }
+  #summary-question:empty { display: none; }
   .divider { display: flex; align-items: center; gap: .75rem; color: var(--faint); font-size: .75rem; margin: .1rem 0 -.25rem; }
   .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 
@@ -453,6 +466,10 @@
         <summary id="live-summary">Assistant steps</summary>
         <ol id="live-log" class="agent-log" aria-live="polite"></ol>
       </details>
+      <details id="asked" class="disclosure" hidden>
+        <summary id="asked-summary">Past questions</summary>
+        <ol id="asked-list" class="asked-list"></ol>
+      </details>
     </section>
 
     <section class="card" aria-labelledby="code-title">
@@ -464,6 +481,7 @@
         </div>
         <section id="summary" hidden aria-label="What the query does">
           <strong><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/></svg>Summary</strong>
+          <p id="summary-question" class="note"></p>
           <p id="summary-text"></p>
           <p id="summary-reads" class="note"></p>
           <p id="summary-warning" class="agent-bad" role="alert"></p>

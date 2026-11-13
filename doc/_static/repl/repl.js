@@ -2,6 +2,7 @@
 // the code, and the result as a table or in the brain viewer. It shows what
 // worker.js answers.
 import { History } from "./history.js";
+import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
@@ -50,6 +51,9 @@ const store = (kind) => {
   }
 };
 const history = new History(store("localStorage"));
+// The questions asked to the assistant, each with the query it gave.
+const asked = new AskedHistory(store("localStorage"));
+let asking = null; // the question being answered, and its language
 const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage"));
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
@@ -68,8 +72,9 @@ const summary = $("summary");
 function hideSummary() {
   summary.hidden = true;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }) {
-  if (!valid || !(explanation || reads)) return hideSummary();
+function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "") {
+  if (!valid || !(explanation || reads || question)) return hideSummary();
+  $("summary-question").textContent = question ? `Asked: ${question}` : "";
   $("summary-text").textContent = explanation ?? "";
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
   $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
@@ -248,6 +253,51 @@ function restoreShared() {
     run(`.mode ${shared.mode}`);
   }
   editor.value = shared.code;
+}
+
+// The past questions, the newest first, each with the query it gave: to put
+// that query back in the box, in its language, or to ask the question again.
+function showAsked() {
+  const entries = asked.newest();
+  $("asked").hidden = !entries.length;
+  $("asked-summary").textContent = `Past questions (${entries.length})`;
+  const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+  $("asked-list").replaceChildren(...entries.slice(0, 50).map((entry) => {
+    const item = document.createElement("li");
+    const text = Object.assign(document.createElement("p"), { className: "asked-question", textContent: entry.question });
+    const shown = entry.valid && entry.query
+      ? Object.assign(document.createElement("pre"), { className: "asked-query" })
+      : Object.assign(document.createElement("p"), { className: "asked-none", textContent: "No valid query came of it." });
+    const squall = entry.language === "squall";
+    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, 58), squall));
+    const actions = Object.assign(document.createElement("div"), { className: "asked-actions" });
+    if (entry.valid && entry.query) {
+      actions.append(Object.assign(document.createElement("button"), {
+        type: "button", textContent: "Use this query", title: "Put this query in the box, with what the assistant said of it",
+        onclick: () => useAsked(entry),
+      }));
+    }
+    actions.append(
+      Object.assign(document.createElement("button"), {
+        type: "button", className: "quiet", textContent: "Ask again", title: "Put this question in the box of the assistant",
+        onclick: () => { question.value = entry.question; question.focus(); },
+      }),
+      Object.assign(document.createElement("time"), { dateTime: new Date(entry.at).toISOString(), textContent: when(entry.at) }),
+    );
+    item.append(text, shown, actions);
+    return item;
+  }));
+}
+
+// The query of a past question back in the box, in its language, with its summary.
+function useAsked(entry) {
+  if ($("mode").value !== entry.language) {
+    $("mode").value = entry.language;
+    run(`.mode ${entry.language}`);
+  }
+  putQuery(entry.query);
+  showSummary({ valid: true, explanation: entry.explanation }, entry.question);
+  input.focus();
 }
 
 function showHistory() {
@@ -485,12 +535,16 @@ const workerMessages = {
     agentLog.apply(data);
     showAgent();
     if (data.event === "ask") {
+      asking = { question: data.question ?? "", language: data.language ?? $("mode").value };
       hideSummary();
       hideRating();
     }
     if (data.event === "done") {
-      showSummary(data);
+      showSummary(data, asking?.question);
       showRating();
+      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
+      asking = null;
+      showAsked();
     }
   },
   rated: (data) => {
@@ -879,4 +933,5 @@ engineSelect.addEventListener("change", () => {
   start();
 });
 showHistory();
+showAsked();
 loadEngines().then(() => start());

@@ -210,7 +210,9 @@ The query assistant
 ``.ask QUESTION`` writes a query answering a question in English with a
 large language model, and ``.explain`` reads the last query in English; see
 :doc:`query_assistant`. In the browser, the box above the code takes the
-question, with your own API key.
+question, with your own API key; *Past questions*, under it, keeps each
+question with the query it gave, to put that query back in the box or ask
+the question again.
 
 
 Scripts and transcripts
