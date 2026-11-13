@@ -144,6 +144,7 @@ import re
 import secrets
 import shlex
 import shutil
+import signal
 import socketserver
 import ssl
 import subprocess
@@ -174,6 +175,11 @@ LOGIN_PATHS = ("/login", "/login/guest", "/login/options", "/login/orcid",
 ORCID_COOKIE = "neurolang_orcid"
 REQUEST_COOKIE = "neurolang_request"
 ORCID_MINUTES = 15
+# Whether the server serves, for a monitor, without a login.
+HEALTH_PATH = "/health"
+# The dashboard (--dashboard), Datasette, for the admins:
+# neurolang_apps.utils.tui.dashboard.PREFIX.
+DASHBOARD_PREFIX = "/admin/logs/"
 LOGIN_COOKIE = "neurolang_login"
 LOGIN_DAYS = 7
 # A guest (--guests): a name of its own, which no user has (theirs have no
@@ -450,6 +456,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not super().parse_request():
             return False
         path = urllib.parse.urlsplit(self.path).path
+        if path == HEALTH_PATH:
+            return True  # open to all, monitors: it tells nothing of users
         if self.users is not None and path in LOGIN_PATHS:
             return True  # open to all; a POST is checked there
         if self.password is None and self.users is None:
@@ -506,9 +514,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     sessions = None
     #: The feedback database, for the console.
     feedback_db = None
+    #: The dashboard (--dashboard), for the console.
+    dashboard = None
+    #: When the server started (time.monotonic), for /health.
+    started = 0.0
 
     def do_GET(self):
         path = urllib.parse.urlsplit(self.path).path
+        if path == HEALTH_PATH:
+            return self._health()
         if self.users is not None and path in LOGIN_PATHS:
             return self._guarded(self._login, path)
         if path == "/admin" or path.startswith("/admin/"):
@@ -617,6 +631,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._reply(status, json.dumps(value).encode(), "application/json",
                     headers)
 
+    def _health(self):
+        """Whether the server serves, for a monitor: 200, or 503 if its
+        sessions can no longer start (their builder ended); and for how
+        long it has."""
+        dead = getattr(self.sessions, "dead", None)
+        answer = {"ok": not dead,
+                  "uptime_seconds": round(time.monotonic() - self.started)}
+        if dead:
+            answer["error"] = dead
+        self._reply_json(answer, 503 if dead else 200)
+
     def _admin(self, path: str):
         """The admin console, ``/admin``, and what it asks, for the users
         of the group admin only."""
@@ -625,6 +650,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._guarded(self._admin_answer, path)
 
     def _admin_answer(self, path: str):
+        if path == "/admin/logs" or path.startswith(DASHBOARD_PREFIX):
+            return self._dashboard(path)
         if self.command == "POST":
             return self._reply_json(self._admin_change(path, self._body()))
         if path in ("/admin", "/admin/"):
@@ -667,6 +694,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                  f'attachment; filename="feedback-{engine}.yaml"')])
         return self._reply_json({"error": "not found"}, 404)
 
+    def _dashboard(self, path: str):
+        """Pass a GET of the dashboard to Datasette (--dashboard)."""
+        if self.dashboard is None:
+            return self._reply_json({"error": "no dashboard: start the "
+                                     "server with --dashboard"}, 404)
+        if self.command != "GET":
+            return self._reply_json({"error": "the dashboard is read only"},
+                                    405)
+        if path == "/admin/logs":
+            return self._reply(301, b"", "text/plain",
+                               [("Location", DASHBOARD_PREFIX)])
+        status, headers, body = self.dashboard.get(self.path)
+        mime = dict(headers).pop("Content-Type", "text/plain")
+        self._reply(status, body, mime,
+                    [h for h in headers if h[0].title() != "Content-Type"])
+
     def _admin_state(self) -> dict:
         users = self.users.current()
         groups = self.users.group_envs()
@@ -699,6 +742,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                          None),
                 "sessions": getattr(self.sessions, "most", None)},
             "activity": getattr(self.sessions, "activity", None) is not None,
+            "dashboard": self.dashboard is not None,
             "feedback": bool(self.feedback_db),
             "feedback_engines": self._feedback_engines(),
         }
@@ -1232,7 +1276,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
                 tls=None, password=None, names=(), users=None,
                 feedback_db=None, guests: bool = False,
                 max_guest_sessions: int = 2, secure_cookie: bool = False,
-                orcid_client=None):
+                orcid_client=None, dashboard=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
@@ -1258,6 +1302,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
         "account_requests": orcid.AccountRequests(
             orcid.requests_path(users.path))
         if users is not None and orcid_client is not None else None,
+        "dashboard": dashboard, "started": time.monotonic(),
     })
     server = Server(
         (host, port),
@@ -2120,6 +2165,8 @@ def service_command(args) -> list:
             command += ["--max-running", str(args.max_running)]
     if args.secure_cookie:
         command += ["--secure-cookie"]
+    if args.dashboard:
+        command += ["--dashboard"]
     if args.guests:
         command += ["--guests", "--max-guest-sessions",
                     str(args.max_guest_sessions)]
@@ -2215,12 +2262,18 @@ def service_manager(*args, check=True):
 SERVICE_IMPORTS = "serve_repl"
 LOCAL_IMPORTS = "neurolang_apps.utils.tui.local_backend"
 LOCAL_EXTRAS = "--extra apps --extra tui --extra llm"
+DASHBOARD_IMPORTS = "datasette, datasette_vega"
 
 
-def check_service_python(command: list, local: bool) -> None:
+def check_service_python(command: list, local: bool,
+                         dashboard: bool = False) -> None:
     """Stop, telling which extras to install with, if the Python of the
-    service *command* cannot import what it serves with."""
-    modules = SERVICE_IMPORTS + (f", {LOCAL_IMPORTS}" if local else "")
+    service *command* cannot import what it serves with (its *dashboard*'s
+    too)."""
+    modules = SERVICE_IMPORTS + (f", {LOCAL_IMPORTS}" if local else "") + \
+        (f", {DASHBOARD_IMPORTS}" if dashboard else "")
+    extras = (LOCAL_EXTRAS if local else "--extra apps") + \
+        (" --extra dashboard" if dashboard else "")
     result = subprocess.run(
         [command[0], "-c", f"import {modules}"], capture_output=True,
         text=True, env=service_environment(command[0]), cwd="/",
@@ -2230,7 +2283,7 @@ def check_service_python(command: list, local: bool) -> None:
         sys.exit(
             f"The Python of the service, {command[0]}, cannot serve: "
             f"{error}. Install it from the environment that has what it "
-            f"needs: uv run {LOCAL_EXTRAS if local else '--extra apps'} "
+            f"needs: uv run {extras} "
             "neurolang-repl-serve --daemon install ..."
         )
 
@@ -2424,6 +2477,12 @@ def parse_args(argv=None):
         "the page tells the users their inputs are logged",
     )
     parser.add_argument(
+        "--dashboard", action="store_true",
+        help="with --activity-db, serve a dashboard of the activity log and "
+        "the ratings to the admins, at /admin/logs/: Datasette, with its "
+        "charts and queries of the uptime (install with --extra dashboard)",
+    )
+    parser.add_argument(
         "--hash-password", action="store_true",
         help="ask a password and print its hash, for a users file",
     )
@@ -2489,10 +2548,11 @@ def parse_args(argv=None):
         "the environment installing it)",
     )
     parser.add_argument(
-        "--daemon", choices=("install", "reinstall", "remove"),
+        "--daemon", choices=("install", "reinstall", "remove", "status"),
         help="install (building its bundle now), reinstall or remove a "
         "service of this user serving the REPL as the other options say, "
-        "at login: systemd's user manager, or launchd on macOS",
+        "at login: systemd's user manager, or launchd on macOS; or tell "
+        "whether it runs, since when and how often it restarted",
     )
     parser.add_argument(
         "--local", action="store_true",
@@ -2572,6 +2632,8 @@ def parse_args(argv=None):
         parser.error("--feedback-db stores the ratings of --local")
     if args.activity_db and not (args.local and args.users):
         parser.error("--activity-db logs the sessions of --local --users")
+    if args.dashboard and not args.activity_db:
+        parser.error("--dashboard shows the log of --activity-db")
     if (args.env_file or "env" in args.secret) and not (
             args.local and (password or args.users)):
         parser.error("--env-file is the key of those who log in: with "
@@ -2588,7 +2650,7 @@ def daemon(args) -> None:
                  "--daemon reinstall replaces it")
     manager()
     command = service_command(args)
-    check_service_python(command, args.local)
+    check_service_python(command, args.local, args.dashboard)
     if not (args.local or args.pr is not None or args.run_id is not None):
         prepare_site(args.site, args.rebuild, args.embeddings,
                      clear=args.clear, engines=args.engines)
@@ -2726,6 +2788,8 @@ def main(argv=None) -> None:
         return ask_password_hash()
     if args.daemon == "remove":  # whatever the other options
         return remove_service()
+    if args.daemon == "status":
+        return service_status()
     if (args.list_users or args.add_user or args.set_password
             or args.set_groups or args.set_key or args.set_group_key
             or args.set_llm or args.set_group_llm or args.own_key
@@ -2824,11 +2888,14 @@ def main(argv=None) -> None:
             engines=args.engines,
         )
     write_index(args.site, page)
+    board = None
+    if args.dashboard:
+        board = start_dashboard(args)
     server = make_server(args.site, args.host, args.port, backend, tls,
                          password, args.server_names or (), users,
                          args.feedback_db, args.guests,
                          args.max_guest_sessions, args.secure_cookie,
-                         orcid_client)
+                         orcid_client, board)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"
@@ -2840,6 +2907,9 @@ def main(argv=None) -> None:
           flush=True)
     if not args.no_browser:
         webbrowser.open(url)
+    # The service manager stops the server with SIGTERM: as Ctrl+C, it
+    # ends the sessions and logs its stop.
+    signal.signal(signal.SIGTERM, _interrupt)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2848,6 +2918,56 @@ def main(argv=None) -> None:
         server.server_close()
         if hasattr(backend, "close"):
             backend.close()
+        if board is not None:
+            board.close()
+
+
+def _interrupt(signum, frame):
+    raise KeyboardInterrupt
+
+
+def start_dashboard(args):
+    """Start the dashboard of the activity log of *args* (and of their
+    ratings), or stop, telling what to install."""
+    if importlib.util.find_spec("datasette") is None or \
+            importlib.util.find_spec("datasette_vega") is None:
+        sys.exit("--dashboard needs Datasette: uv run ... --extra dashboard "
+                 "neurolang-repl-serve ...")
+    from neurolang_apps.utils.tui.dashboard import Dashboard
+
+    paths = [args.activity_db] + ([args.feedback_db] if args.feedback_db
+                                  else [])
+    board = Dashboard(paths)
+    print("The dashboard of the activity is at /admin/logs/", flush=True)
+    return board
+
+
+def service_status() -> None:
+    """Tell whether the service runs, since when, how often it restarted
+    and how its last run ended, as its service manager says."""
+    if not service_file().exists():
+        print("No service of the REPL is installed", flush=True)
+        return
+    if sys.platform == "darwin":
+        result = subprocess.run(
+            [*manager(), "print", f"gui/{os.getuid()}/{LAUNCHD_LABEL}"],
+            capture_output=True, text=True)
+        lines = [line.strip() for line in result.stdout.splitlines()
+                 if line.strip().startswith(
+                     ("state =", "pid =", "runs =", "last exit code ="))]
+        log = f"~/Library/Logs/{SERVICE}.log"
+    else:
+        result = subprocess.run(
+            [*manager(), "show", SERVICE, "--property", "ActiveState,"
+             "SubState,ActiveEnterTimestamp,NRestarts,MainPID,"
+             "ExecMainStatus,Result"],
+            capture_output=True, text=True)
+        lines = result.stdout.strip().splitlines()
+        log = f"journalctl --user -u {SERVICE} -n 80"
+    for line in lines or [result.stderr.strip() or "no answer"]:
+        print(line, flush=True)
+    print(f"Its log: {log}; whether it serves: GET {HEALTH_PATH}",
+          flush=True)
 
 
 if __name__ == "__main__":
