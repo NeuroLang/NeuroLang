@@ -247,6 +247,13 @@ Unreleased
   kept.  The page shows whether the server's assistant answers, and a key
   saved on the account page or in the console answers at once in the open
   pages of the users it changes.
+* ``neurolang-repl-serve --local --users`` tracks the CPU seconds and the
+  memory of each session's process, its own apart from the engine's data it
+  shares with the builder (on Linux), shown in the admin console; and, with
+  ``--activity-db FILE``, logs what each user runs, its result as text, how
+  long it took and the resources it took, in SQLite, with the totals of each
+  user and their log in the console. The page tells its users their inputs
+  are logged.
 * ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
   login page: sessions of their own, without an account, whose assistant
   answers only with the key they give (no key of the server's, which is
