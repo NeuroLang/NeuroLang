@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+* The coordinate-based meta-analysis engines (``neurosynth``,
+  ``neurostore``) have ``schaefer_covered``, ``destrieux_covered`` and
+  ``tian_covered(label, study)``: probabilistic facts of how much a
+  study's activations cover a region, the mean over the region's voxels of
+  a Gaussian kernel of 10 mm FWHM around the study's nearest peak
+  (truncated at 3σ; facts below 0.001 left out), found once and kept in
+  the engine cache.  The assistant's guidance and examples use them for
+  graded questions (how strongly, how much of a region) in place of the
+  yes/no ``{atlas}_activated``.
+* ``add_probabilistic_facts_from_tuples`` and
+  ``add_probabilistic_choice_from_tuples`` take a ``DataFrame`` (its
+  column names were taken for its rows' type, and they failed).
+
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
   downloads and its tables kept in ``--data-dir``, so that a session starts

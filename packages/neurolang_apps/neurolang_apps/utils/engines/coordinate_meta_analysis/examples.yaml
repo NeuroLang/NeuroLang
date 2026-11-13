@@ -467,6 +467,29 @@ assistant_examples:
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
       ans(l, p) :- p_active_given_close('daydreaming during rest', l, p)
 
+  # How strongly, or how much of a region: the graded coverage of the
+  # regions by the studies' activations, <atlas>_covered, in place of the
+  # yes/no <atlas>_activated.
+  - question: "How strongly do music studies engage each Schaefer parcel?"
+    datalog: |-
+      covered(l, s) :- schaefer_covered(l, s), selected_study(s)
+      topic(s) :- mentions(s, 'music'), selected_study(s)
+      ans(l, p) :- PROB[covered(l, s) // topic(s)] = p
+
+  - question: "What share of the left opercular inferior frontal gyrus do syntax studies cover?"
+    datalog: |-
+      covered(s) :- destrieux_covered('L G front inf Opercular', s), selected_study(s)
+      topic(s) :- mentions(s, 'syntax'), selected_study(s)
+      ans(p) :- PROB[covered(s) // topic(s)] = p
+
+  - question: "Which subcortical regions do reward studies cover more than studies in general do?"
+    datalog: |-
+      covered(l, s) :- tian_covered(l, s), selected_study(s)
+      topic(s) :- mentions(s, 'reward'), selected_study(s)
+      p_topic(l, p) :- PROB[covered(l, s) // topic(s)] = p
+      p_all(l, p) :- PROB[covered(l, s)] = p
+      ans(l, ratio) :- p_topic(l, pt), p_all(l, pa), (ratio == pt / pa)
+
   - question: "What is the probability that a study activates right lateral orbital sulcus, given that it mentions linguistic?"
     datalog: |-
       active(s) :- destrieux_activated('R S orbital lateral', s), selected_study(s)
