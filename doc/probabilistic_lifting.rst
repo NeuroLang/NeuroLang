@@ -365,7 +365,9 @@ Inclusion–exclusion
    transitively. The test is sound but not complete: a negated atom
    :math:`\lnot R(\bar x)` is matched only by the same negated atom,
    through the relation :math:`\bar R` of ``NegatedSymbol``
-   (``negations_as_atoms``). The disjunctions contained in each other are
+   (``negations_as_atoms``), and a disjunct with the negation of another
+   formula, as :math:`\lnot\exists x\, R(x)`, is found contained in
+   none. The disjunctions contained in each other are
    one term, lifted once, and the weight of each term is
    :math:`\mu(S) = 1 - \sum_{T \prec S} \mu(T)`
    (``mobius_weights``, ``mobius_function``), so that a term whose weight
