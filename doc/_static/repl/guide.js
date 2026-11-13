@@ -26,6 +26,14 @@ export function suggestedQuestion(questions, current, ready, random = Math.rando
   return questions[Math.min(questions.length - 1, Math.floor(random() * questions.length))];
 }
 
+// The query a first visit starts with: the first of the *examples* of the
+// language *mode*, when the *box* is empty and the browser has no history of
+// queries run here (*visited*); "" otherwise.
+export function startingQuery(examples, mode, { box, visited }) {
+  if (box.trim() || visited) return "";
+  return examples[mode]?.[0] ?? "";
+}
+
 export function renderExamples(list, queries, pick, title = "Put this query in the box") {
   list.replaceChildren(...(queries ?? []).map((query) => {
     const button = element("button", { type: "button", className: "guide-item", textContent: query, title });

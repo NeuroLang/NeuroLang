@@ -39,6 +39,7 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --radius: 8px; --radius-lg: 12px;
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E");
+    --chart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E");
     --info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5v.5'/%3E%3C/svg%3E");
   }
   :root[data-theme=light] {
@@ -72,7 +73,7 @@
   .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 
   /* Controls: one shape for all, the blue for the action that matters. */
-  input, select, textarea { background: var(--sunken); color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: .4rem .6rem; font: 13px/1.4 var(--mono); transition: border-color .15s, box-shadow .15s; }
+  input, select, textarea { background: var(--sunken); color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: .4rem .6rem; font: 13.5px/1.4 var(--sans); transition: border-color .15s, box-shadow .15s; }
   input:hover, select:hover, textarea:hover { border-color: var(--border-strong); }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
   input::placeholder, textarea::placeholder { color: var(--faint); }
@@ -138,7 +139,7 @@
   .pane { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-content: start; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
   .card-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .card-head h2 { margin: 0 auto 0 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  .card-head h2 { margin: 0 auto 0 0; font-size: 1.1875rem; font-weight: 650; letter-spacing: -.015em; }
   #result-title { scroll-margin-top: 4.5rem; }
   .card-head h2 .note { font-weight: 400; margin-left: .35rem; }
 
@@ -150,8 +151,8 @@
   #ask-note { flex: 1 1 16rem; }
   #key { min-height: 1.75rem; padding: .15rem .6rem; font-size: .75rem; }
   #ask-help { white-space: nowrap; }
-  #llm-details > summary { font-size: .8125rem; color: var(--muted); font-weight: 500; }
-  #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .6rem; padding: .75rem; background: var(--sunken); border: 1px solid var(--border); border-radius: var(--radius); }
+  #llm-details > summary { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the API key button opens it */
+  #llm { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; padding: .75rem; background: var(--sunken); border: 1px solid var(--border); border-radius: var(--radius); }
   #llm input:not([type=checkbox]), #llm select { background-color: var(--panel); }
   #llm input[name=key] { flex: 1 1 12rem; }
   #llm label { display: flex; gap: .4rem; align-items: center; color: var(--muted); font-size: .8125rem; }
@@ -218,10 +219,10 @@
   #hint code { color: var(--text); background: var(--sunken); padding: .05rem .3rem; border-radius: 4px; }
 
   /* Examples, relations, commands: the next thing to try, the rest folded. */
-  #guide > summary { font-size: .9375rem; }
+  #guide > summary { font-size: 1.1875rem; font-weight: 650; letter-spacing: -.015em; }
   #guide[open] > summary { margin-bottom: .25rem; }
   .guide-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-  .guide-cols h3 { margin: 0 0 .4rem; font-size: .8125rem; font-weight: 600; color: var(--text); }
+  .guide-cols h3 { margin: 0 0 .4rem; font-size: .9375rem; font-weight: 600; color: var(--text); }
   .guide-cols h3 .note { font-weight: 400; margin-left: .3rem; font-size: .75rem; }
   #guide-questions .guide-item { font-family: var(--sans); font-size: 13px; }
   #guide-queries > summary h3 { display: inline; margin: 0; }
@@ -265,7 +266,7 @@
   .result-card { gap: .9rem; }
   .empty { display: grid; gap: .9rem; padding: 2.25rem 1.25rem 2.5rem; text-align: center; justify-items: center; }
   .result-card:has(#results.has, #out:not(:empty), #fatal:not([hidden])) .empty { display: none; }
-  .empty h3 { margin: 0; font-size: 1.125rem; font-weight: 650; letter-spacing: -.01em; }
+  .empty h3 { margin: 0; font-size: 1.375rem; font-weight: 650; letter-spacing: -.01em; }
   .empty p { margin: 0; max-width: 34rem; color: var(--muted); }
   #boot { display: grid; gap: .7rem; justify-items: center; color: var(--muted); }
   #boot:not([hidden]) ~ .empty-ready { display: none; }
@@ -321,7 +322,36 @@
   .rt-filter { flex: 1 1 12rem; min-width: 9rem; padding: .3rem .55rem; background-color: var(--panel); }
   .rt-bar select { padding-block: .3rem; background-color: var(--panel); }
   .rt-bar button { min-height: 1.85rem; padding: .2rem .6rem; }
-  .rt-copy { margin-left: auto; }
+  .rt-actions { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; margin-left: auto; }
+  .rt-plot-toggle::before { content: ""; width: .95rem; height: .95rem; background: currentColor; -webkit-mask: var(--chart) center / contain no-repeat; mask: var(--chart) center / contain no-repeat; }
+  .rt-bar .rt-plot-toggle[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  /* The plot of a table: one series in the blue, the largest bar in the answer's red. */
+  .rt-plot { display: grid; gap: .5rem; padding: .7rem .8rem .8rem; border-bottom: 1px solid var(--border); }
+  .plot-controls { display: flex; gap: .5rem .9rem; align-items: center; flex-wrap: wrap; font-size: .8125rem; }
+  .plot-controls label { display: flex; gap: .4rem; align-items: center; color: var(--muted); }
+  .plot-controls select { background-color: var(--panel); max-width: 14rem; }
+  .plot-figure { position: relative; min-width: 0; }
+  .plot-svg { display: block; overflow: visible; font: 12px var(--sans); }
+  .plot-axis text, .plot-label, .plot-value { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .plot-label { fill: var(--text); }
+  .plot-title { fill: var(--text); font-weight: 600; }
+  .plot-grid { stroke: var(--border); stroke-width: 1; shape-rendering: crispEdges; }
+  .plot-base { stroke: var(--border-strong); stroke-width: 1; shape-rendering: crispEdges; }
+  .plot-mark { fill: var(--accent); }
+  .plot-top .plot-mark { fill: var(--answer); }
+  .plot-top .plot-value { fill: var(--text); font-weight: 700; }
+  .plot-hit { fill: transparent; }
+  .plot-bar:hover .plot-hit { fill: var(--hover); }
+  .plot-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .plot-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+  .plot-dense { stroke: none; fill-opacity: .35; }
+  .plot-focus { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
+  .plot-tip { position: absolute; z-index: 5; pointer-events: none; display: grid; gap: .1rem; min-width: 8rem; max-width: 22rem; padding: .45rem .6rem; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); font-size: .75rem; }
+  .plot-tip div { display: flex; justify-content: space-between; gap: .9rem; }
+  .plot-tip span { color: var(--muted); }
+  .plot-tip b { font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plot-caption { font-size: .75rem; }
   .rt-menu { position: relative; }
   .rt-menu > summary { display: inline-flex; align-items: center; gap: .3rem; min-height: 1.85rem; padding: .2rem .6rem; background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius); font-weight: 500; }
   .rt-menu > summary::after { content: ""; width: .6rem; height: .6rem; background: currentColor; -webkit-mask: var(--chevron) center / contain no-repeat; mask: var(--chevron) center / contain no-repeat; transform: rotate(90deg); }
@@ -345,14 +375,19 @@
   .rt-study a { color: var(--accent); }
   .rt-study .rt-ref { margin-left: .45rem; font: 500 10.5px var(--sans); padding: 0 .3rem; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
   .rt-study .rt-ref:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
-  .rt-prob { white-space: nowrap; }
+  .rt-table td.rt-prob { white-space: nowrap; text-align: left; }
   .rt-track { position: relative; display: inline-block; vertical-align: middle; width: 4.5rem; height: .45rem; margin: -.1rem .65rem 0 0; border-radius: 999px; background: var(--track); overflow: hidden; }
   .rt-track::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--bar); border-radius: inherit; background: var(--accent); animation: fill .5s cubic-bezier(.16, 1, .3, 1) both; }
   .rt-top { font-weight: 700; }
   .rt-top .rt-track::after { background: var(--answer); }
   @keyframes fill { from { width: 0; } }
 
+  @media (max-width: 71.99rem) {
+    .workspace > .pane:first-child { display: contents; }
+    .workspace > .pane:first-child > .card:nth-child(n+3) { order: 2; }
+  }
   @media (max-width: 40rem) {
+    .rt-track { width: 2.5rem; margin-right: .45rem; }
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }
     .topbar nav { margin-left: 0; width: 100%; gap: 1rem; }

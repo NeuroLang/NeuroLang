@@ -72,6 +72,15 @@ Unreleased
   and received, its provider and model, and whose key paid (the page's, or
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
+* The REPL in the browser is redesigned: the question and the query on the
+  left, the answer on the right (one under the other on a narrow screen,
+  which scrolls to the answer), in the colours of the logo and of the
+  documentation, light and dark. A first visit finds an example in the box;
+  the result pane says what comes there until a query runs; probabilities are
+  drawn as tracks filled to their value, the most probable in red; the
+  session commands are in a *More* menu.
+* The tables of the browser REPL have a *Plot* button: bars, a histogram,
+  points or a line of their columns, of the rows the filter keeps.
 
 
 v0.1a22 (2026-11-13)

@@ -3,6 +3,7 @@
 // (table_model.js).
 import { TableModel, cellText } from "./table_model.js";
 import { citation, doiUrl, pmcUrl, pubmedUrl, studyColumns } from "./study_links.js";
+import { plotView } from "./plot_view.js";
 
 const PAGE_SIZES = [20, 50, 100, 500];
 const NUMERIC = new Set(["int", "float"]);
@@ -91,11 +92,14 @@ function controlBar(payload, { download, followUps, use }) {
   const range = element("span", { className: "rt-range" });
   const copy = element("button", { type: "button", className: "rt-copy", textContent: "Copy", title: "Copy the rows shown as tab-separated text" });
   const csv = element("button", { type: "button", textContent: "CSV", title: "Download the rows shown as CSV" });
+  const plot = element("button", { type: "button", className: "rt-plot-toggle", textContent: "Plot", title: "Plot the columns of the rows the filter keeps" });
+  plot.setAttribute("aria-pressed", "false");
   const goOn = (followUps && use ? followUps(payload) : []).map(({ label, title: hint, text }) =>
     element("button", { type: "button", textContent: label, title: hint, onclick: () => use(text) }));
   const menu = download && payload.block !== undefined ? [downloadMenu(payload, download)] : [];
-  const bar = element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, copy, csv, ...goOn, ...menu);
-  return { bar, count, filter, size, previous, range, next, copy, csv };
+  const actions = element("div", { className: "rt-actions" }, plot, copy, csv, ...goOn, ...menu);
+  const bar = element("header", { className: "rt-bar" }, title, count, filter, size, previous, range, next, actions);
+  return { bar, count, filter, size, previous, range, next, copy, csv, plot };
 }
 
 // A study: its PubMed record, and its DOI and PubMed Central record when they are known.
@@ -138,11 +142,14 @@ export function renderTable(payload, { download = null, followUps = null, use = 
   let pageIndex = 0;
   let pageSize = PAGE_SIZES[0];
 
-  const { bar, count, filter, size, previous, range, next, copy, csv } = controlBar(payload, { download, followUps, use });
+  const { bar, count, filter, size, previous, range, next, copy, csv, plot } = controlBar(payload, { download, followUps, use });
   const head = element("tr");
   const body = element("tbody");
   const table = element("table", { className: "rt-table" }, element("thead", {}, head), body);
-  const root = element("section", { className: "rt" }, bar, element("div", { className: "rt-scroll" }, table));
+  // The plot of the columns, above the rows, made when first asked for.
+  const plotBox = element("div", { className: "rt-plot", hidden: true });
+  let chart = null;
+  const root = element("section", { className: "rt" }, bar, plotBox, element("div", { className: "rt-scroll" }, table));
 
   const arrows = { asc: " ▲", desc: " ▼" };
   function renderHead() {
@@ -198,12 +205,14 @@ export function renderTable(payload, { download = null, followUps = null, use = 
   function render() {
     renderHead();
     renderBody();
+    if (!plotBox.hidden) chart.update();
   }
 
   filter.addEventListener("input", () => {
     model.setFilter(filter.value);
     pageIndex = 0;
     renderBody();
+    if (!plotBox.hidden) chart.update();
   });
   size.addEventListener("change", () => {
     pageSize = Number(size.value);
@@ -218,6 +227,13 @@ export function renderTable(payload, { download = null, followUps = null, use = 
     setTimeout(() => { copy.textContent = "Copy"; }, 1200);
   });
   csv.addEventListener("click", () => download("neurolang-result.csv", model.toCSV(), "text/csv"));
+  plot.addEventListener("click", () => {
+    plotBox.hidden = !plotBox.hidden;
+    plot.setAttribute("aria-pressed", String(!plotBox.hidden));
+    if (plotBox.hidden) return;
+    chart ??= plotView(plotBox, model);
+    chart.update();
+  });
 
   render();
   return root;

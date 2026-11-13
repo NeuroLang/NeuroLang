@@ -7,7 +7,7 @@ import { imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
-import { renderCommands, renderExamples, renderPredicates, suggestedQuestion } from "./guide.js";
+import { renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -458,6 +458,9 @@ const workerMessages = {
     if (restore) return replay(restore);
     setBusy(false);
     restoreShared();
+    // A first visit has a query to run in the box, not an empty one.
+    const first = decodeShare(location.hash) ? "" : startingQuery(guide.examples, $("mode").value, { box: input.value, visited: history.entries.length > 0 });
+    if (first) editor.value = first;
   },
   file: (data) => {
     setBusy(false);
