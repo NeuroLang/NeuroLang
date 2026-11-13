@@ -865,3 +865,56 @@ def test_the_regions_are_named_under_the_mouse(tmp_path):
     assert result["readout"] in ("left part", "right part")
     assert result["control"]
     assert (result["before"], result["after"]) == (0, 1)
+
+
+_RANGE_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var out = {};
+  var volume = brainViewer.nv.volumes[1];
+  var histogram = document.getElementById('threshold-histogram');
+  out.bins = histogram.dataset.bins;
+  out.rangeBefore = histogram.dataset.range;
+  var before = pixels();
+  set('threshold-high', '2.5', 'change');
+  out.calMax = volume.cal_max;
+  out.hidden = changed(before, pixels());
+  out.rangeAfter = histogram.dataset.range;
+  brainViewer.moveCursor([2, 2, 3]);  // 3, above the high threshold
+  out.value = document.getElementById('value').textContent;
+  set('threshold-high-slider', '1000', 'input');
+  out.sliderTop = document.getElementById('threshold-high').value;
+  set('threshold-high', '2', 'change');
+  click('reset');
+  out.resetHigh = document.getElementById('threshold-high').value;
+  out.resetRange = histogram.dataset.range;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
+    tmp_path,
+):
+    """Check the high threshold hides the voxels above it, the value
+    under the cursor staying the image's, and the histogram of the
+    values marks the range shown."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[0, 0, 3], data[1, 1, 3], data[2, 2, 3] = 1.0, 2.0, 3.0
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="range", threshold=0.5, cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _RANGE_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    bins = [int(count) for count in result["bins"].split()]
+    assert sum(bins) == 3  # the three nonzero values
+    assert result["rangeBefore"] == "0.5 3"
+    assert result["calMax"] == 2.5
+    assert result["hidden"]
+    assert result["rangeAfter"] == "0.5 2.5"
+    assert result["value"] == "3"
+    assert result["sliderTop"] == "3"
+    assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"

@@ -1,6 +1,7 @@
 """Tests for the graph of a query: its data, rules and probabilities."""
 
 import io
+import re
 
 import pandas as pd
 import pytest
@@ -16,6 +17,7 @@ from neurolang_apps.utils.tui.app import (  # noqa: E402
     InteractiveTuiApp, TuiSettings
 )
 from neurolang_apps.utils.tui.query_graph import (  # noqa: E402
+    _height, _relation_svg, _width,
     graph_page, query_graph
 )
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
@@ -319,13 +321,33 @@ def test_the_page_follows_the_theme_of_the_repl_and_says_its_height(nl):
     assert "parent.postMessage" in page
 
 
-def test_the_graph_starts_fitted_to_the_page_and_can_be_shown_at_its_size(nl):
+def test_the_graph_starts_fitted_to_the_page_and_can_be_zoomed(nl):
     page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
     assert '<div class="graph fit">' in page
     style = page.split("<style>")[1].split("</style>")[0]
     # Fitted: never wider than the page, never larger than drawn.
     assert ".graph.fit svg { max-width: 100%; height: auto; }" in style
-    assert 'id="zoom"' in page and "Actual size" in page
+    for control in ("zoom-out", "zoom-fit", "zoom-in", "zoom"):
+        assert f'id="{control}"' in page
+    assert "Actual size" in page and "ctrlKey" in page  # and Ctrl+wheel
+
+
+def test_the_name_of_a_table_is_below_the_rim_of_its_cylinder(nl):
+    graph = query_graph(nl, CO_ACTIVATION)
+    node = next(node for node in graph.nodes if node.kind == "data")
+    box = (0, 0, _width(node), _height(node, False))
+    first = float(re.search(r'y="([0-9.]+)"', _relation_svg(node, box))[1])
+    rim = 12  # the top of the cylinder: its ellipse, 2 * 6 high
+    assert first - 11 >= rim  # a label's capitals are about 11 px high
+
+
+def test_an_ontology_is_drawn_as_a_node_of_a_knowledge_graph():
+    page = graph_page(query_graph(_ontology_engine(), ONTOLOGY_QUERY), "q")
+    group = page.split('class="node ontology')[1].split("</g>")[0]
+    # A node with its links to neighbours, not a box nor a hexagon.
+    assert "<ellipse" in group and group.count('class="kg-link"') >= 3
+    assert group.count('class="kg-neighbour"') >= 3
+    assert "<polygon" not in group and "<rect" not in group
 
 
 def test_the_page_draws_the_distribution_of_the_probabilities(nl):

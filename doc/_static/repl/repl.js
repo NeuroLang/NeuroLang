@@ -564,15 +564,17 @@ function showViewer(page) {
   setViewerStale(false);
 }
 
-// The viewer shown is of an earlier result once a query gives a new one:
-// selecting its tab then views the new result (.view), rather than the old.
+// The viewer shown is of an earlier result once a query gives a new one, or
+// there is none yet: selecting its tab then views the last result (.view).
 let viewerStale = false;
 function setViewerStale(stale) {
   viewerStale = stale;
   $("tab-brain").title = stale ? "View the last result in the brain" : "";
 }
+// A result can always be tried in the brain: its tab is there, and views it.
 function markViewerStale() {
-  if (!$("tab-brain").hidden) setViewerStale(true);
+  $("tab-brain").hidden = false;
+  setViewerStale(true);
 }
 
 // No viewer: that of an earlier result is not to be taken for the last one's.

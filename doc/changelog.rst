@@ -87,7 +87,15 @@ Unreleased
   before its ``//``. *More* › *Format the query* (Alt+Shift+F) does it to
   what is typed.
 * The graph of a query (``.graph``, the *Graph* tab) opens fitted to the
-  page, its whole in view; *Actual size* shows it at its size, to scroll.
+  page, its whole in view, and zooms (−, *Fit*, +, *Actual size*, or Ctrl
+  or Cmd and the wheel). A relation of an ontology is drawn as a node of a
+  knowledge graph, linked to others; the name of a table is below the rim
+  of its cylinder.
+* The brain viewer shows a range of values: a low and a high threshold
+  (values or percentiles), with two sliders over a histogram of the
+  values, the range shown in the colours it is drawn with.
+* In the browser REPL, a result has a *Brain* tab beside *Table* and
+  *Graph*: it shows the result in the brain viewer.
 
 
 v0.1a22 (2026-11-13)
