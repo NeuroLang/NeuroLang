@@ -504,6 +504,8 @@ class Sessions:
             from neurolang_apps.utils.tui.activity import ActivityLog
 
             self.activity = ActivityLog(activity_db)
+            # This run of the server, for its uptime (see _measure).
+            self._run = self.activity.start_run()
         #: The latest usage of the builder's process (process_usage): the
         #: memory the sessions share.
         self.builder_usage: Optional[dict] = None
@@ -559,6 +561,8 @@ class Sessions:
             self._sessions.clear()
         for session in sessions:
             session.end("the server stopped")
+        if self.activity is not None:
+            self.activity.beat(self._run, stopped=True)
         self._builder_conn.close()
         self._builder.join(5)
         if self._builder.is_alive():
@@ -749,10 +753,22 @@ class Sessions:
     #: How often the usage of the processes is taken, in seconds.
     USAGE_SECONDS = 10.0
 
+    #: How often the activity log is told the server is alive, in seconds.
+    ALIVE_SECONDS = 60.0
+
     def _measure(self) -> None:
         """Take the usage of the processes of the sessions running, and of
-        the builder, every USAGE_SECONDS."""
+        the builder, every USAGE_SECONDS; tell the activity log the server
+        is alive every ALIVE_SECONDS."""
+        beaten = time.monotonic()
         while not self._closed:
+            if self.activity is not None and \
+                    time.monotonic() - beaten >= self.ALIVE_SECONDS:
+                beaten = time.monotonic()
+                try:
+                    self.activity.beat(self._run)
+                except Exception:
+                    traceback.print_exc()
             self.builder_usage = process_usage(self._builder.pid)
             with self._lock:
                 sessions = [s for s in self._sessions.values()
