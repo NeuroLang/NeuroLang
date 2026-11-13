@@ -630,6 +630,21 @@ def test_set_constant_contains():
     assert res == exp_result
 
 
+def test_set_constant_tuple_contains():
+    """A tuple of constants is an element of the set, not its columns."""
+    r1 = S_("R1")
+    x = S_("x")
+    exp = Conjunction((C_(contains)(x, C_((1, 2))), r1(x)))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    exp_result = Selection(
+        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
+        C_(contains)(C_(ColumnStr("x")), C_((1, 2))),
+    )
+    assert res == exp_result
+
+
 def test_only_equality():
     exp = Conjunction((C_(eq)(S_("x"), C_(3)),))
 

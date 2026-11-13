@@ -525,6 +525,12 @@ Unreleased
 
 **Bug fixes:**
 
+* An atlas lookup with a voxel, ``ans(l) :- destrieux(l, r) &
+  contains(r, (68, 77, 37))``, gives the labels of the regions holding it
+  instead of an internal error (``TypeError: keywords must be strings``):
+  ``contains`` with a tuple of constants is a membership test, not the
+  explosion of the set into columns named by the constants, which only a
+  tuple of variables, ``contains(r, (i, j, k))``, is (#1074).
 * The atlases of an engine with a template (Schaefer, Destrieux, Tian) are
   on its grid: their label images are resampled to the template by nearest
   neighbour when they are loaded (and kept in the engine's cache, by the

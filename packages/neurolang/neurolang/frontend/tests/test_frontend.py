@@ -1784,3 +1784,23 @@ def test_aggregate_in_ans_query(frontend_class, query, expected):
     res = nl.execute_datalog_program(query)
     assert res is not None
     assert set(map(tuple, res.as_pandas_dataframe().values)) == expected
+
+
+@pytest.mark.parametrize("frontend_class", [
+    frontend.NeurolangDL, frontend.NeurolangPDL
+])
+def test_region_contains_constant_point(frontend_class):
+    """The labels of the regions with a voxel: an atlas lookup."""
+    neurolang = frontend_class()
+    neurolang.add_symbol(contains, name="contains")
+    region1 = ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
+    region2 = ExplicitVBR(np.array([[2, 0, 0]]), np.eye(4))
+    neurolang.add_tuple_set(
+        [("A", region1), ("B", region2)], name="atlas"
+    )
+
+    res = neurolang.execute_datalog_program(
+        "ans(l) :- atlas(l, r) & contains(r, (1, 1, 0))"
+    )
+
+    assert set(res.to_unnamed()) == {("A",)}
