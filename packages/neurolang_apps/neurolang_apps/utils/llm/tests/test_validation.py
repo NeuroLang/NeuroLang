@@ -389,6 +389,31 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
     assert not preview.ok and "too much memory" in preview.text
 
 
+def test_memory_of_a_child_is_not_that_it_reads(forking):
+    """A child reading the memory of its parent, as a query reads the
+    engine's relations, shares it: only what it allocates counts."""
+    import time
+
+    import numpy as np
+
+    from ..validation import QueryTooLarge, _in_child
+
+    data = np.ones(300 * 2 ** 20 // 8)
+
+    def read():
+        time.sleep(2)  # polled while it holds the pages it read
+        return float(data.sum())
+
+    def copy():
+        hoard = data.copy()
+        time.sleep(30)
+        return float(hoard.sum())
+
+    assert _in_child(read, 20, 200) == data.size
+    with pytest.raises(QueryTooLarge):
+        _in_child(copy, 20, 200)
+
+
 def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
     """A child killed by a signal (e.g. a library that cannot run after
     fork) is reported as a crash, not as a query using too much memory.

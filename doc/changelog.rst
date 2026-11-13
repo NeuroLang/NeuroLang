@@ -62,6 +62,16 @@ Unreleased
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
 
+**Bug fixes:**
+
+* The memory limit of a query the assistant runs (``query_memory_mb``,
+  4 GB) counts the memory private to the forked process running it, not
+  the engine's relations it reads, which it shares with its parent: on
+  Linux the resident memory of the child is the parent's from the fork, so
+  every query of an engine larger than the limit was stopped as using too
+  much memory; on macOS a query reading ``activated`` (346 M rows on the
+  1 mm grid with the 6 mm kernel) was.
+
 
 v0.1a22 (2026-11-13)
 --------------------
