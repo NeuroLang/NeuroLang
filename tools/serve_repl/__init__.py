@@ -692,6 +692,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "sessions": self.sessions.info() if self.sessions else None,
             # the memory the sessions share, that of the builder's process
             "builder": getattr(self.sessions, "builder_usage", None),
+            # the most queries running at once, and their longest run
+            "limits": self.sessions and {
+                "running": getattr(self.sessions, "running", None),
+                "query_seconds": getattr(self.sessions, "query_seconds",
+                                         None),
+                "sessions": getattr(self.sessions, "most", None)},
             "activity": getattr(self.sessions, "activity", None) is not None,
             "feedback": bool(self.feedback_db),
             "feedback_engines": self._feedback_engines(),
@@ -2105,7 +2111,10 @@ def service_command(args) -> list:
         command += ["--light"] if args.light else []
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
-                    "--idle-minutes", str(args.idle_minutes)]
+                    "--idle-minutes", str(args.idle_minutes),
+                    "--query-minutes", str(args.query_minutes)]
+        if args.max_running:
+            command += ["--max-running", str(args.max_running)]
     if args.secure_cookie:
         command += ["--secure-cookie"]
     if args.guests:
@@ -2385,6 +2394,18 @@ def parse_args(argv=None):
         "(default: %(default)s)",
     )
     parser.add_argument(
+        "--max-running", type=int, metavar="N",
+        help="with --users and --local, run at most N queries at once, of "
+        "all the sessions, the others waiting their turn (default: the "
+        "number of CPUs of this machine)",
+    )
+    parser.add_argument(
+        "--query-minutes", type=float, default=60.0, metavar="M",
+        help="with --users and --local, stop a query running for more than "
+        "M minutes, ending its session's process (0: never; default: "
+        "%(default)s)",
+    )
+    parser.add_argument(
         "--feedback-db", type=Path, metavar="FILE",
         help="with --local, store the ratings of the page in the SQLite "
         "database FILE (made if need be), with the name and the groups of "
@@ -2530,6 +2551,10 @@ def parse_args(argv=None):
         parser.error("--password-file or --users, not both")
     if args.max_sessions < 1 or not args.idle_minutes > 0:
         parser.error("--max-sessions is at least 1, --idle-minutes above 0")
+    if (args.max_running is not None and args.max_running < 1) or \
+            not args.query_minutes >= 0:
+        parser.error("--max-running is at least 1, --query-minutes 0 or "
+                     "more")
     if ((password or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
@@ -2765,6 +2790,8 @@ def main(argv=None) -> None:
                 feedback_db=args.feedback_db and args.feedback_db.resolve(),
                 activity_db=args.activity_db and args.activity_db.resolve(),
                 most=args.max_sessions, idle=args.idle_minutes * 60,
+                running=args.max_running,
+                query_seconds=args.query_minutes * 60,
                 **options,
             )
             if args.activity_db:

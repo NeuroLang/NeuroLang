@@ -178,6 +178,10 @@ Who may use it
 ``--max-sessions N``, ``--idle-minutes M``
    With ``--users`` and ``--local``: the sessions at most at once (8, at
    least 1), and the minutes after which an unused one ends (120, above 0).
+``--max-running N``, ``--query-minutes M``
+   With ``--users`` and ``--local``: the queries running at once, of all
+   the sessions (the machine's CPUs, at least 1), and the minutes after
+   which a query is stopped (60; 0, never); see `Sessions`_.
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
@@ -521,6 +525,14 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   longest ends, unless it is at work or was used in the last minute (then
   the new tab is told to wait).  One unused for ``--idle-minutes`` ends;
   its page says to restart it.
+- At most ``--max-running`` queries (and downloads of results) run at once,
+  of all the sessions: one more waits its turn, its page saying so, so that
+  the queries of many users share the machine's CPUs rather than slow each
+  other down.  A session that is not running a query costs no CPU, only its
+  memory.
+- A query running longer than ``--query-minutes`` is stopped: its session's
+  process ends (which frees its CPU and memory at once, as no thread of
+  Python can be stopped otherwise), and its page says to restart it.
 
 Without ``--users``, one session serves everyone, in the server's process.
 
@@ -671,3 +683,6 @@ The assistant does not answer
    say whose assistant answers under the question's box.
 Too many sessions
    Raise ``--max-sessions``, or lower ``--idle-minutes``.
+Queries wait for long
+   The console's *Sessions* show which are at work: raise ``--max-running``
+   if the machine's CPUs are not all busy, or lower ``--query-minutes``.
