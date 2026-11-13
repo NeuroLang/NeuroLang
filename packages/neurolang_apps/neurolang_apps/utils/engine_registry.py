@@ -1130,19 +1130,13 @@ def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
     return {} if atlas is None else atlas.label_values()
 
 
-def atlas_activation(
-    img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
-    radius_mm: float = 3.0, chunk: int = 4096,
-) -> List[Tuple[str, Any]]:
+def _peak_neighbourhoods(img, peaks_mm, studies, radius_mm, chunk):
     """
-    Return the ``(label, study)`` pairs of the studies activating the
-    regions of the atlas image *img*: one of their peaks is within
-    *radius_mm* of the centre of a voxel of the region.
-
-    *peaks_mm* are the peaks' MNI coordinates in millimetres, of the
-    *studies*, and *label_names* names the values of the image. Distances
-    are measured in millimetres through the affine of the image, so the
-    atlas's grid need not be that of the peaks.
+    Yield the labelled voxels of the atlas image *img* within *radius_mm*
+    of the *peaks_mm* of the *studies*, for chunks of about *chunk* peaks
+    of whole studies: their values in the image, their flat indices, the
+    study of the peak and the distance to it, in millimetres through the
+    affine of the image, so the atlas's grid need not be that of the peaks.
     """
     data = np.asanyarray(img.dataobj).astype(np.int64)
     shape = np.array(data.shape[:3])
@@ -1153,10 +1147,15 @@ def atlas_activation(
     offsets = np.stack(np.meshgrid(
         *(np.arange(-r, r + 1) for r in reach), indexing="ij"
     ), -1).reshape(-1, 3)
-    pairs = set()
-    for start in range(0, len(peaks_mm), chunk):
-        peaks = np.asarray(peaks_mm[start:start + chunk], dtype=float)
-        owners = np.asarray(studies[start:start + chunk])
+    order = np.argsort(studies, kind="stable")
+    peaks_mm = np.asarray(peaks_mm, dtype=float)[order]
+    studies = np.asarray(studies)[order]
+    firsts = np.flatnonzero(np.r_[True, studies[1:] != studies[:-1]])
+    bounds = np.r_[np.unique(firsts[np.searchsorted(
+        firsts, np.arange(0, len(studies), chunk), side="right"
+    ) - 1]), len(studies)]
+    for start, stop in zip(bounds[:-1], bounds[1:]):
+        peaks, owners = peaks_mm[start:stop], studies[start:stop]
         centres = np.round(nib.affines.apply_affine(inverse, peaks))
         candidates = centres.astype(int)[:, None, :] + offsets[None]
         inside = np.all((candidates >= 0) & (candidates < shape), axis=-1)
@@ -1165,16 +1164,81 @@ def atlas_activation(
             axis=-1,
         )
         near = inside & (distances <= radius_mm)
-        values = data[tuple(candidates[near].T)]
-        owner = np.broadcast_to(owners[:, None], near.shape)[near]
+        voxels = candidates[near]
+        values = data[tuple(voxels.T)]
         labelled = values > 0
-        pairs.update(zip(
-            values[labelled].tolist(), owner[labelled].tolist()
-        ))
+        yield (
+            values[labelled],
+            np.ravel_multi_index(tuple(voxels[labelled].T), data.shape[:3]),
+            np.broadcast_to(owners[:, None], near.shape)[near][labelled],
+            distances[near][labelled],
+        )
+
+
+def atlas_activation(
+    img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
+    radius_mm: float = 3.0, chunk: int = 4096,
+) -> List[Tuple[str, Any]]:
+    """
+    Return the ``(label, study)`` pairs of the studies activating the
+    regions of the atlas image *img*: one of their peaks is within
+    *radius_mm* of the centre of a voxel of the region.
+
+    *peaks_mm* are the peaks' MNI coordinates in millimetres, of the
+    *studies*, and *label_names* names the values of the image (see
+    :func:`_peak_neighbourhoods`).
+    """
+    pairs = set()
+    for values, _, owners, _ in _peak_neighbourhoods(
+        img, peaks_mm, studies, radius_mm, chunk
+    ):
+        pairs.update(zip(values.tolist(), owners.tolist()))
     return sorted(
         (label_names[value], study) for value, study in pairs
         if value in label_names
     )
+
+
+def atlas_coverage(
+    img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
+    fwhm_mm: float = 10.0, threshold: float = 1e-3, chunk: int = 4096,
+) -> "pd.DataFrame":
+    """
+    Return how much the studies cover the regions of the atlas image *img*,
+    the rows ``(probability, label, study)`` of at least *threshold*.
+
+    A study activates a voxel v by max over its peaks p of
+    exp(-|v - p|² / 2σ²), a Gaussian kernel of *fwhm_mm*, σ = fwhm_mm /
+    √(8 ln 2), truncated at 3σ; it covers a region by the mean of its
+    activation over the voxels of the region. Arguments are those of
+    :func:`atlas_activation`.
+    """
+    import pandas as pd
+
+    sigma = fwhm_mm / np.sqrt(8 * np.log(2))
+    sizes = np.bincount(np.asanyarray(img.dataobj).astype(np.int64).ravel())
+    found = []
+    for values, voxels, owners, distances in _peak_neighbourhoods(
+        img, peaks_mm, studies, 3 * sigma, chunk
+    ):
+        found.append(pd.DataFrame({
+            "value": values, "voxel": voxels, "study": owners,
+            "activation": np.exp(-distances ** 2 / (2 * sigma ** 2)),
+        }).groupby(["value", "study", "voxel"]).activation.max()
+          .groupby(level=["value", "study"]).sum().reset_index())
+    found = pd.concat(found) if found else pd.DataFrame(
+        columns=["value", "study", "activation"]
+    )
+    found["activation"] /= sizes[found["value"].to_numpy(dtype=int)]
+    found = found[
+        (found["activation"] >= threshold)
+        & found["value"].isin(list(label_names))
+    ]
+    return pd.DataFrame({
+        "probability": found["activation"].to_numpy(dtype=float),
+        "label": found["value"].map(label_names).to_numpy(dtype=str),
+        "study": found["study"].to_numpy(),
+    })
 
 
 def cached_atlas_activation(
@@ -1213,6 +1277,41 @@ def cached_atlas_activation(
     return list(zip(names, arrays["studies"].tolist()))
 
 
+def cached_atlas_coverage(
+    cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
+    studies: np.ndarray, fwhm_mm: float = 10.0, threshold: float = 1e-3,
+):
+    """
+    Return the rows of :func:`atlas_coverage`, kept in *cache_dir* as the
+    pairs of :func:`cached_atlas_activation` are, by what they depend on.
+    """
+    key = engine_cache.digest(
+        float(fwhm_mm), float(threshold), engine_cache.image_digest(img),
+        sorted((int(value), str(name)) for value, name in label_names.items()),
+        np.asarray(peaks_mm, dtype=float), np.asarray(studies),
+    )
+
+    def find():
+        rows = atlas_coverage(
+            img, label_names, peaks_mm, studies, fwhm_mm, threshold
+        )
+        names, codes = np.unique(rows["label"], return_inverse=True)
+        return {
+            "names": names.astype(str), "codes": codes.astype(np.int32),
+            "studies": np.array(rows["study"].tolist()),
+            "probabilities": rows["probability"].to_numpy(np.float32),
+        }
+
+    import pandas as pd
+
+    arrays = engine_cache.keep_arrays(cache_dir, "atlas_coverage", key, find)
+    return pd.DataFrame({
+        "probability": arrays["probabilities"].astype(float),
+        "label": arrays["names"][arrays["codes"]],
+        "study": arrays["studies"],
+    })
+
+
 def _relation_frame(nl, name: str):
     """Return the rows of the stored relation *name* of *nl*, as a frame."""
     import pandas as pd
@@ -1245,6 +1344,30 @@ def _register_atlas_activation(
     name = settings.get("predicate_name", f"{pred_name}_activated")
     nl.add_tuple_set(pairs, name=name)
     nl.symbol_table[name].value.might_have_duplicates = False
+
+
+def _register_atlas_coverage(
+    nl, labels: dict, img, settings: dict, pred_name: str, cache_dir=None
+) -> None:
+    """
+    Register ``{predicate_name}(label, study)``, by default
+    ``{pred_name}_covered``, the probabilistic facts of how much each study
+    covers each region of the atlas (see :func:`atlas_coverage`), with a
+    kernel of ``fwhm_mm`` (10) and the rows of at least ``threshold``
+    (0.001), from the peaks as :func:`_register_atlas_activation`.
+    """
+    peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
+    find = atlas_coverage if cache_dir is None else functools.partial(
+        cached_atlas_coverage, cache_dir
+    )
+    rows = find(
+        img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
+        peaks.iloc[:, 3].to_numpy(), float(settings.get("fwhm_mm", 10)),
+        float(settings.get("threshold", 1e-3)),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        rows, name=settings.get("predicate_name", f"{pred_name}_covered")
+    )
 
 
 def _register_atlas_points(nl, atlas, settings: dict) -> None:
@@ -1292,8 +1415,9 @@ def _load_deterministic_atlas(
     predicates: ``{predicate_name}(label, region)``, with ``points`` its
     voxels in millimetres (see :func:`_register_atlas_points`), and with
     ``activated`` the studies activating each region (see
-    :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
-    which also remembers where the atlas is and its labels, so that nilearn
+    :func:`_register_atlas_activation`) and with ``covered`` how much they
+    cover it (see :func:`_register_atlas_coverage`), kept in *cache_dir* if
+    there is one, which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
     """
     from neurolang.atlases import Atlas, label_colours, label_table
@@ -1301,7 +1425,7 @@ def _load_deterministic_atlas(
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated", "points")
+        if k not in ("predicate_name", "activated", "covered", "points")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
@@ -1357,6 +1481,11 @@ def _load_deterministic_atlas(
     if params.get("activated"):
         _register_atlas_activation(
             nl, atlas.region_names(), atlas.image, params["activated"],
+            pred_name, cache_dir,
+        )
+    if params.get("covered"):
+        _register_atlas_coverage(
+            nl, atlas.region_names(), atlas.image, params["covered"],
             pred_name, cache_dir,
         )
 
