@@ -287,3 +287,20 @@ def test_negated_choice_atom_is_another_tuple_of_the_choice():
     assert choice == ExistentialPredicate(
         f, Conjunction((C(f), Constant(operator.ne)(f, x)))
     )
+
+
+def test_negated_choice_atom_of_several_columns_is_another_tuple():
+    """¬C(x, 1) ≡ ∃f ∃g (C(f, g) ∧ (f, g) ≠ (x, 1)), the comparison of
+    tuples being f ≠ x ∨ g ≠ 1."""
+    import operator
+    from ..expression_processing import _tuple
+    C = Symbol("C")
+    one, tuple_ = Constant(1), Constant(_tuple)
+    choice = NegatedChoicesAsOtherTuples({C}).walk(Negation(C(x, one)))
+    g = choice.head
+    f = choice.body.head
+    assert choice == ExistentialPredicate(g, ExistentialPredicate(
+        f, Conjunction((
+            C(f, g), Constant(operator.ne)(tuple_(f, g), tuple_(x, one))
+        ))
+    ))

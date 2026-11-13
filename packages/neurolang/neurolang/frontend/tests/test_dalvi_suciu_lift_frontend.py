@@ -801,3 +801,64 @@ def test_union_of_rules_joining_a_choice_and_deterministic_atoms(
     ))
     assert expected
     assert solve(LIFTED_ONLY) == pytest.approx(expected)
+
+
+# P[∃x R(x) ∧ x ≠ a] for each a, and P[∃x R(x)]; the tuple (a, b) of the
+# choice C2 is (1, 1), (1, 2) or (2, 1) with probabilities .2, .3 and .5.
+R_NOT_1, R_NOT_2, R_ANY = 1 - .3 * .6, 1 - .4 * .6, 1 - .4 * .3 * .6
+
+
+@pytest.mark.parametrize("query, expected", [
+    (
+        "q(PROB) :- R(x), ~C2(x, 1)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_NOT_2},
+    ),
+    (
+        "q(PROB) :- R(x), ~C2(x, x)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_ANY},
+    ),
+    (
+        "q(PROB) :- R(x), C2(y, z), ~C2(x, 1)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_NOT_2},
+    ),
+    (
+        "q(PROB) :- R(x), T(y), ~C2(x, 1), ~C2(y, 2)",
+        {(): (
+            .2 * R_NOT_1 * (1 - .5 * .1) + .3 * R_ANY * .9 +
+            .5 * R_NOT_2 * (1 - .5 * .1)
+        )},
+    ),
+    (
+        "q(y, PROB) :- S(x, y), ~C2(x, y)",
+        {(1,): .2 * .6 + .3 * (1 - .5 * .4) + .5 * .5, (2,): .8},
+    ),
+])
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_negated_choice_of_several_columns(solvers, query, expected):
+    """
+    ¬C2(ū) ≡ ∃f̄ (C2(f̄) ∧ f̄ ≠ ū), exactly one tuple of the choice being
+    true: the disjoint projection on f̄ of C2(f̄) ∧ ∃x (R(x) ∧ f̄ ≠ ū),
+    whose comparison of tuples selects the tuples of R, a disjunction
+    of comparisons of their columns.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_choice_from_tuples(
+        [(.2, 1, 1), (.3, 1, 2), (.5, 2, 1)], name="C2"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(.6, 1), (.7, 2), (.4, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples([(.5, 1), (.9, 2)], name="T")
+    nl.add_probabilistic_facts_from_tuples(
+        [(.5, 1, 1), (.6, 2, 1), (.8, 3, 2)], name="S"
+    )
+    nl.execute_datalog_program(query)
+    result = {
+        tuple(row[:-1]): row[-1]
+        for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
+            index=False
+        )
+    }
+    assert result == pytest.approx(expected)
