@@ -576,7 +576,11 @@ With ``--activity-db activity.sqlite``, the server also logs, in that
 SQLite database (in WAL mode, as the feedback's), for each user: the start
 of each session and its engine; each input they run, with its result as
 text (its output and the first 50 rows of each table, 20,000 characters at
-most), whether it failed, how long it took, the CPU seconds and the private
+most), whether it failed, how long it took, for a question to the assistant
+(``.ask``) the tokens it sent and received, its provider and model and
+whose key paid (``page``: the key the user gave in the page; ``server``:
+one of the server, of their group or saved in their account), the CPU
+seconds and the private
 memory of its process after it; and the end of each session, and why
 (stopped, restarted, idle, made room for another, ended by an admin, the
 server stopped), with the CPU seconds of its process in all and the most
@@ -610,6 +614,8 @@ activity database, each over the last ``days`` (empty: all):
 - *What the users ran, by hour* and *by day*: the inputs, failures, users,
   CPU seconds and the most memory;
 - *What each user ran*, *What ran on each engine*;
+- *The tokens of the assistant, by user, model and key*, to tell what the
+  keys of the server spend;
 - *The slowest inputs*, *The inputs that failed* (with their result);
 - *Why the sessions ended*;
 - *The uptime of the server* (in percent, over 30 days by default) and

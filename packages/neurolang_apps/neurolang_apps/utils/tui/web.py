@@ -172,7 +172,9 @@ class Reply:
     *ratable* whether it was a query or an answer of the assistant,
     which :meth:`WebRepl.rate_answer` can share, and *graph* the HTML page
     of the graph of the query it ran, or that ``.graph`` showed (see
-    :mod:`~neurolang_apps.utils.tui.query_graph`).
+    :mod:`~neurolang_apps.utils.tui.query_graph`). *tokens*, if the
+    assistant answered, are the tokens it sent (``input``) and received
+    (``output``), its requests (``calls``), its ``provider`` and ``model``.
     """
 
     html: str
@@ -184,6 +186,7 @@ class Reply:
     predicates: List[dict] = field(default_factory=list)
     ratable: bool = False
     graph: str = ""
+    tokens: dict = field(default_factory=dict)
 
 
 class Download(NamedTuple):
@@ -550,13 +553,21 @@ class WebRepl:
                 self._graph = query_graph.last_query_page(self.app)
             except Exception:  # a query that does not parse has no graph
                 pass
-        self._rated = self._what_is_rated(
-            text, self.app.assistant.last_run is not answered
-        )
+        run = self.app.assistant.last_run
+        self._rated = self._what_is_rated(text, run is not answered)
+        tokens = {}
+        if run is not None and run is not answered:
+            _, result, provider, _ = run
+            tokens = {
+                "input": result.usage.get("input", 0),
+                "output": result.usage.get("output", 0),
+                "calls": result.calls, "provider": provider.name,
+                "model": provider.model or provider.api,
+            }
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(), self._rated is not None, self._graph,
+            self.predicates(), self._rated is not None, self._graph, tokens,
         )
 
     def _show_graph(self, page: str) -> None:

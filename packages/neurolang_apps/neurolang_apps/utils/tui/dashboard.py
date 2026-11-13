@@ -49,7 +49,8 @@ SELECT substr(created, 1, 10) AS day,
        SUM(kind = 'submit' AND failed) AS failed,
        COUNT(DISTINCT user) AS users,
        ROUND(SUM(CASE WHEN kind = 'submit' THEN cpu END), 1) AS cpu_seconds,
-       ROUND(MAX(memory), 1) AS most_memory_mb
+       ROUND(MAX(memory), 1) AS most_memory_mb,
+       SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out
 FROM activity WHERE {_SINCE}
 GROUP BY day ORDER BY day"""),
     "by_user": ("What each user ran", f"""
@@ -59,6 +60,7 @@ SELECT user, groups,
        ROUND(SUM(CASE WHEN kind = 'submit' THEN seconds END), 1) AS seconds,
        ROUND(SUM(CASE WHEN kind = 'submit' THEN cpu END), 1) AS cpu_seconds,
        ROUND(MAX(memory), 1) AS most_memory_mb,
+       SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out,
        SUM(kind = 'start') AS starts,
        MAX(created) AS last
 FROM activity WHERE {_SINCE}
@@ -72,6 +74,13 @@ SELECT engine,
        ROUND(MAX(memory), 1) AS most_memory_mb
 FROM activity WHERE {_SINCE}
 GROUP BY engine ORDER BY inputs DESC"""),
+    "tokens": ("The tokens of the assistant, by user, model and key", f"""
+SELECT user, llm, llm_key AS whose_key,
+       COUNT(*) AS answers,
+       SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out,
+       SUM(tokens_in) + SUM(tokens_out) AS tokens
+FROM activity WHERE kind = 'submit' AND llm IS NOT NULL AND {_SINCE}
+GROUP BY user, llm, llm_key ORDER BY tokens DESC"""),
     "slowest": ("The slowest inputs", f"""
 SELECT created, user, engine, seconds, cpu, memory, failed, text, response
 FROM activity WHERE kind = 'submit' AND {_SINCE}
@@ -131,10 +140,14 @@ CHARTS = {
         ("inputs by day", "", _chart("bar", "day", "temporal", "inputs")),
         ("most memory by day", "",
          _chart("line", "day", "temporal", "most_memory_mb")),
+        ("tokens sent by day", "",
+         _chart("bar", "day", "temporal", "tokens_in")),
     ],
     "by_user": [
         ("CPU by user", "", _chart("bar", "user", "ordinal", "cpu_seconds")),
         ("inputs by user", "", _chart("bar", "user", "ordinal", "inputs")),
+        ("tokens sent by user", "",
+         _chart("bar", "user", "ordinal", "tokens_in")),
     ],
     "by_engine": [
         ("inputs by engine", "",

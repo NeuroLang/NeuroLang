@@ -209,3 +209,18 @@ def test_the_ratings_are_signed_by_the_groups_of_now(backend, tmp_path):
     backend.use_identity({}, "lab,zoo")
     assert backend.feedback["groups"] == "lab,zoo"
     assert backend.repl._rating.groups == "lab,zoo"
+
+
+def test_the_tokens_of_an_answer_say_whose_key_paid(backend, monkeypatch):
+    from neurolang_apps.utils.tui import web
+
+    backend.start("neurostore")
+    monkeypatch.setattr(backend.repl, "submit", lambda text: web.Reply(
+        html="", tokens={"input": 7, "output": 2}))
+    assert backend.submit(".ask who?")["tokens"] == {
+        "input": 7, "output": 2, "key": "server"}
+    backend.set_llm(provider="anthropic", key="mine")
+    assert backend.submit(".ask who?")["tokens"]["key"] == "page"
+    monkeypatch.setattr(backend.repl, "submit", lambda text: web.Reply(
+        html=""))
+    assert backend.submit("ans(x) :- person(x, 5)")["tokens"] == {}

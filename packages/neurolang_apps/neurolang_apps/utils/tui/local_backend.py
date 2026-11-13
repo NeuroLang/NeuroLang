@@ -38,6 +38,7 @@ def reply_payload(reply: web.Reply) -> dict:
         "predicates": reply.predicates,
         "ratable": getattr(reply, "ratable", False),
         "graph": getattr(reply, "graph", ""),
+        "tokens": getattr(reply, "tokens", {}),
     }
 
 
@@ -233,7 +234,11 @@ class LocalBackend:
         """Run *text* in the REPL and return its reply for the page."""
         def work():
             try:
-                return reply_payload(self._repl().submit(text))
+                payload = reply_payload(self._repl().submit(text))
+                if payload["tokens"]:  # whose key: the page's, or the server's
+                    payload["tokens"]["key"] = \
+                        "page" if self._page_key else "server"
+                return payload
             except KeyboardInterrupt:
                 return {
                     "html": "<pre>Stopped.</pre>", "failed": True,
