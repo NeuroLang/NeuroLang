@@ -29,7 +29,7 @@ const llmForm = $("llm");
 const results = $("results");
 const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
-const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open")];
+const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
 // A query the page puts in the box, laid out for its width: a long rule a line
@@ -376,6 +376,7 @@ function serverAssistant(ready, ownKey) {
   assistantReady = Boolean(ready);
   Object.assign($("ask-run"), { title: ready ? "" : "Add an API key to use the assistant" }).classList.toggle("ghost", !ready);
   $("explain").hidden = !ready;
+  $("refine-run").hidden = !ready;
   $("ask-note").hidden = false;
   if (ready) {
     $("ask-note").textContent = `Asking uses the AI assistant ${ownKey ? "set for you on this server, unless you give your own API key" : "your admin set for you"}.`;
@@ -399,6 +400,7 @@ function useKey() {
   $("key").textContent = "API key ✓";
   $("ask-note").hidden = true;
   $("explain").hidden = false;
+  $("refine-run").hidden = false;
 }
 
 function setProviders(list) {
@@ -800,10 +802,12 @@ input.addEventListener("keydown", (event) => {
   }
 });
 // A dot-command is a line: the lines of the question are joined.
-const ask = () => {
+const ask = (options = "") => {
   const text = question.value.trim().replace(/\s*\n\s*/g, " ");
-  if (text) run(`.ask ${text}`);
+  if (text) run(`.ask ${options}${text}`);
 };
+// Refine changes the last query, with what happened to it, for the question.
+$("refine-run").addEventListener("click", () => ask("--refine "));
 $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
   ask();
@@ -886,6 +890,7 @@ $("llm-forget").addEventListener("click", () => {
   $("key").textContent = "API key";
   $("ask-note").hidden = false;
   $("explain").hidden = true;
+  $("refine-run").hidden = true;
 });
 $("restart").addEventListener("click", () => start());
 // The next user of this browser does not have this one's key.

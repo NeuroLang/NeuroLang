@@ -129,6 +129,20 @@ class AgentResult:
     frames: Optional[list] = field(default=None, repr=False)
 
 
+@dataclass
+class Previous:
+    """
+    What an agent starts from to refine an answer: the *question* that was
+    asked ("" if not known), the *query* of that attempt, which may have
+    failed, and its *outcome* ("" if not known): the error it gave, the
+    rows it gave, or what was found against it.
+    """
+
+    question: str
+    query: str
+    outcome: str
+
+
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
     """Return *text* cut to *limit* characters, telling that it was cut."""
     if len(text) <= limit:
@@ -464,6 +478,7 @@ class Agent:
         self.examples = examples
         self.description = description
         self.guidance = guidance
+        self.previous = None
 
     def system_prompt(self, question: str, text_tools: bool = False) -> str:
         """Return the system prompt for *question*."""
@@ -530,15 +545,26 @@ class Agent:
             ),
         ).text.strip()
 
-    def run(self, question: str) -> AgentResult:
+    def _user_message(self, question: str) -> str:
+        """Return the message asking for *question*, or, if a previous
+        attempt is to be refined, for the change of its query."""
+        if self.previous is None:
+            return question
+        return prompts.refinement_request(
+            question, self.previous, self.language
+        )
+
+    def run(self, question: str, previous=None) -> AgentResult:
         """
-        Return the query answering *question*.
+        Return the query answering *question*; the one of *previous*, a
+        :class:`Previous`, is changed for it if it is given.
 
         With the setting ``comment_rules``, the accepted query is also
         written with a comment line explaining each rule, in
         ``commented`` (see :meth:`_comment`).
         """
         start = time.perf_counter()
+        self.previous = previous
         result = self._run(question)
         if result.valid and result.query and self.config.comment_rules:
             self._comment(result, question)
@@ -669,7 +695,7 @@ class IclAgent(Agent):
         result = AgentResult(language=self.language)
         messages = [
             {"role": "system", "content": self.system_prompt(question)},
-            {"role": "user", "content": question},
+            {"role": "user", "content": self._user_message(question)},
         ]
         for _ in range(self.config.max_repairs + 1):
             reply = self._complete(result, messages, temperature=temperature)
@@ -751,7 +777,7 @@ class ReactAgent(Agent):
             {"role": "system", "content": self.system_prompt(
                 question, text_tools=not self.native
             )},
-            {"role": "user", "content": question},
+            {"role": "user", "content": self._user_message(question)},
         ]
         turn = self._native_turn if self.native else self._text_turn
         rejections = 0

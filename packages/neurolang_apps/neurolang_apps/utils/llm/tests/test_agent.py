@@ -2,6 +2,7 @@ import pytest
 
 from ..agent import (
     IclAgent,
+    Previous,
     ReactAgent,
     Toolbox,
     extract_query,
@@ -667,3 +668,62 @@ def test_describe_predicate_stops_a_rule_too_slow_to_sample(nl, monkeypatch):
     toolbox = Toolbox(context, "datalog", query_timeout=0.5)
     observation, _ = toolbox.call("describe_predicate", {"name": "mentions"})
     assert observation.startswith("Computing the rows of mentions takes too")
+
+
+PREVIOUS = Previous(
+    "Which studies mention pain?", "ans(s) :- mention(s, 'pain')",
+    "Error: Undefined symbol mention",
+)
+
+
+def _user_message(agent_, index=0):
+    return agent_.client.requests[index]["messages"][1]["content"]
+
+
+def test_icl_refines_the_previous_query_for_a_new_question(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    result = icl.run("Only those with a peak?", previous=PREVIOUS)
+    assert result.valid and result.query == PAIN_DATALOG
+    message = _user_message(icl)
+    assert "# Previous question\nWhich studies mention pain?" in message
+    assert "ans(s) :- mention(s, 'pain')" in message
+    assert "Error: Undefined symbol mention" in message
+    assert message.rstrip().endswith("Only those with a peak?") or (
+        "# New question\nOnly those with a peak?" in message
+    )
+    assert "Change the previous query" in message
+
+
+def test_react_refines_the_previous_query_for_a_new_question(nl):
+    react, _ = agent(nl, ReactAgent, [answer(PAIN_DATALOG)],
+                     language="datalog")
+    result = react.run("Only those with a peak?", previous=PREVIOUS)
+    assert result.valid
+    message = _user_message(react)
+    assert "# Previous Datalog query\nans(s) :- mention(s, 'pain')" in message
+    assert "# What happened when it ran\nError: Undefined symbol" in message
+    assert "# New question\nOnly those with a peak?" in message
+
+
+def test_a_question_without_a_previous_query_is_asked_as_it_is(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    icl.run("Which studies mention pain?")
+    assert _user_message(icl) == "Which studies mention pain?"
+    # and a refinement does not stay for the next question
+    icl.client.replies.append(fenced(PAIN_DATALOG, "datalog"))
+    icl.run("Only those with a peak?", previous=PREVIOUS)
+    icl.client.replies.append(fenced(PAIN_DATALOG, "datalog"))
+    icl.run("Another question?")
+    assert _user_message(icl, 2) == "Another question?"
+
+
+def test_the_refinement_leaves_out_what_is_not_known(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    icl.run("Only those with a peak?", previous=Previous("", PAIN_DATALOG, ""))
+    message = _user_message(icl)
+    assert "# Previous question" not in message
+    assert "# What happened when it ran" not in message
+    assert f"# Previous Datalog query\n{PAIN_DATALOG}" in message

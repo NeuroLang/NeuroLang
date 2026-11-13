@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* ``.ask --refine QUESTION`` and ``.llm --refine QUESTION`` change the last
+  query for a new or extended question, instead of starting afresh: the
+  assistant is given the previous question, the previous query, even if it
+  failed, and what happened to it (the error, the first rows or that there
+  were none, the engine's notes). The browser REPL has a *Refine* button next
+  to *Ask*. The agents take ``run(question, previous=Previous(question,
+  query, outcome))``.
+
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
   downloads and its tables kept in ``--data-dir``, so that a session starts
