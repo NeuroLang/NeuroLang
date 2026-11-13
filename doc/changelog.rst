@@ -138,6 +138,12 @@ Unreleased
   much memory; on macOS a query reading ``activated`` (346 M rows on the
   1 mm grid with the 6 mm kernel) was.
 
+**Bug fixes:**
+
+* The assistant's ``search_values`` searches a predicate whose columns have
+  the same name, as ``cogat_subclass_of(iri, iri)``: it failed with
+  ``'DataFrame' object has no attribute 'str'``.
+
 
 v0.1a22 (2026-11-13)
 --------------------

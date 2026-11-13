@@ -340,7 +340,9 @@ class EngineContext:
 
     def _column(self, frame, column):
         """
-        Return the name of *column* of *frame*, given by name or number.
+        Return the position of *column* of *frame*, given by name or
+        number: the names of the columns may repeat, ``iri`` twice for a
+        relation between two classes.
 
         Raise ValueError when *frame* has no such column.
         """
@@ -348,9 +350,9 @@ class EngineContext:
         if isinstance(column, int) or str(column).isdigit():
             index = int(column)
             if 0 <= index < len(columns):
-                return frame.columns[index]
+                return index
         elif str(column) in columns:
-            return frame.columns[columns.index(str(column))]
+            return columns.index(str(column))
         raise ValueError(
             f"no column {column!r}; its columns are {', '.join(columns)}"
         )
@@ -423,7 +425,7 @@ class EngineContext:
             else:
                 columns = _string_columns(frame)
             for c in columns:
-                values = frame[c].astype(str)
+                values = frame.iloc[:, c].astype(str)
                 lowered = values.str.lower()
                 mask = lowered.str.contains(needle, regex=False)
                 mask |= lowered.str.contains(iri_needle, regex=False)
@@ -449,7 +451,8 @@ class EngineContext:
             return f"{name} has {exc}."
         strings = sorted({
             str(v) for c in columns
-            for v in frame[c].drop_duplicates().head(MAX_VALUES_SCANNED)
+            for v in frame.iloc[:, c].drop_duplicates()
+            .head(MAX_VALUES_SCANNED)
         })
         if len(strings) <= MAX_VALUES_LISTED:
             return (
@@ -484,11 +487,11 @@ def _diverse(found, limit: int, per_predicate: int = 3) -> list:
 
 
 def _string_columns(frame) -> list:
-    """Return the columns of *frame* holding strings."""
+    """Return the positions of the columns of *frame* holding strings."""
     return [
-        c for c in frame.columns
-        if (is_object_dtype(frame[c]) or is_string_dtype(frame[c]))
-        and isinstance(next(iter(frame[c].dropna()), ""), str)
+        i for i, (_, c) in enumerate(frame.items())
+        if (is_object_dtype(c) or is_string_dtype(c))
+        and isinstance(next(iter(c.dropna()), ""), str)
     ]
 
 
