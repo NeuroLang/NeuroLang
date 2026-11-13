@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
+from neurolang.confine import ConfinedError, check_read
 from rich import box
 from rich.table import Table
 
@@ -458,6 +459,11 @@ def cmd_load(app, arg: str) -> None:
         return
     path = Path(words[0]).expanduser()
     name = words[1] if len(words) == 2 else default_relation_name(path)
+    try:  # on a server, its data only (neurolang.confine)
+        check_read(path, "table")
+    except ConfinedError as exc:
+        _load_failed(app, str(exc), exc)
+        return
     try:
         df = _read_rows(path)
     except Exception as exc:

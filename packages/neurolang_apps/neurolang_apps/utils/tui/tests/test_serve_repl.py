@@ -27,6 +27,17 @@ ROOT = Path(__file__).resolve().parents[6]
 SCRIPT = ROOT / "tools" / "serve_repl" / "__init__.py"
 
 
+@pytest.fixture(autouse=True)
+def unconfined():
+    """The server confines the statements of the process it runs in
+    (NEUROLANG_CONFINE): keep that out of the tests that follow."""
+    before = os.environ.pop("NEUROLANG_CONFINE", None)
+    yield
+    os.environ.pop("NEUROLANG_CONFINE", None)
+    if before is not None:
+        os.environ["NEUROLANG_CONFINE"] = before
+
+
 @pytest.fixture
 def serve():
     spec = importlib.util.spec_from_file_location("serve_repl", SCRIPT)
@@ -2594,3 +2605,25 @@ def test_a_configuration_file_has_the_activity_limits_and_dashboard(
     assert (args.activity_db, args.dashboard, args.max_running,
             args.query_minutes) == (tmp_path / "activity.sqlite", True, 4,
                                     30.0)
+
+
+def test_the_statements_of_a_server_of_users_are_confined(
+    serve, tmp_path, monkeypatch
+):
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setattr(serve, "make_server",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            KeyboardInterrupt))
+    monkeypatch.setattr(serve, "write_index", lambda *a: None)
+    monkeypatch.setattr(serve, "prepare_site", lambda *a, **k: tmp_path)
+    path = _secrets(tmp_path, "password: s3cret-pw\n")
+    data = tmp_path / "data"
+    with pytest.raises(KeyboardInterrupt):
+        serve.main(["--secrets", str(path), "--no-browser",
+                    "--data-dir", str(data)])
+    assert os.environ.pop(CONFINE_ENV) == str(data.resolve())
+    with pytest.raises(KeyboardInterrupt):
+        serve.main(["--secrets", str(path), "--no-browser",
+                    "--data-dir", str(data), "--unconfined"])
+    assert CONFINE_ENV not in os.environ

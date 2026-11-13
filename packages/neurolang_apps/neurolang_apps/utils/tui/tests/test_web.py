@@ -805,3 +805,27 @@ def test_the_assistant_is_ready_with_a_key(repl):
     assert repl.assistant_ready()
     repl.clear_llm()
     assert not repl.assistant_ready()
+
+
+def test_a_confined_session_writes_and_reads_no_file_of_the_server(
+    repl, tmp_path, monkeypatch
+):
+    """On a server (neurolang.confine): .save, .transcript, .load and
+    .view of a path reach its data only, and write nothing."""
+    from neurolang.confine import CONFINE_ENV
+
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setenv(CONFINE_ENV, str(data))
+    (tmp_path / "secret.csv").write_text("a\n1\n")
+    repl.submit("ans(n, a) :- person(n, a)")
+    for statement, says in (
+        (f".save {tmp_path / 'out.csv'}", "writes no result"),
+        (f".transcript {tmp_path / 'session.md'}", "writes no transcript"),
+        (f".load {tmp_path / 'secret.csv'} stolen", "reads no table"),
+        (f".view {tmp_path / 'secret.nii.gz'}", "reads no image"),
+    ):
+        reply = repl.submit(statement)
+        assert says in reply.html, statement
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "data", "secret.csv"]

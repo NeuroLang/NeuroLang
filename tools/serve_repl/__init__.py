@@ -2167,6 +2167,8 @@ def service_command(args) -> list:
         command += ["--secure-cookie"]
     if args.dashboard:
         command += ["--dashboard"]
+    if args.unconfined:
+        command += ["--unconfined"]
     if args.guests:
         command += ["--guests", "--max-guest-sessions",
                     str(args.max_guest_sessions)]
@@ -2421,6 +2423,13 @@ def parse_args(argv=None):
         help="with --users and --local, let a visitor in as a guest, with "
         "sessions of their own and no key of the server's: they bring "
         "their own",
+    )
+    parser.add_argument(
+        "--unconfined", action="store_true",
+        help="with --users or a password, let the statements of the users "
+        "read and write the server's files and fetch addresses, as the "
+        "server can (by default they read its data directory only, and "
+        "write nothing: neurolang.confine)",
     )
     parser.add_argument(
         "--orcid", type=Path, metavar="FILE",
@@ -2832,6 +2841,15 @@ def main(argv=None) -> None:
     if args.daemon:
         return daemon(args)
     backend = None
+    if (users or password) and not args.unconfined:
+        # The statements of those who log in read the engines' data only,
+        # and write no file of the server: they run with its rights.
+        from neurolang.confine import CONFINE_ENV
+
+        os.environ[CONFINE_ENV] = str(args.data_dir.resolve())
+        print("The users' statements read the data of "
+              f"{args.data_dir.resolve()} only, and write no file "
+              "(--unconfined lifts it)", flush=True)
     if args.local:
         from neurolang_apps.utils.tui.local_backend import LocalBackend
 

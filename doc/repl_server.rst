@@ -712,10 +712,16 @@ reach it; put it in ``--env-file`` or the users file.
 Security
 --------
 
-- Anyone who logs in runs queries and commands with the server's account,
-  in its Python: they can read what it can read (the users file included)
-  and write files in the data directory, which the sessions share.  Give
-  the accounts to people you trust, and run the server as a user of its own.
+- Anyone who logs in runs queries and commands in the server's Python.
+  With users or a password, their statements are *confined*
+  (``neurolang.confine``): ``.load_csv``, ``.load_atlas``, ``.import``,
+  ``.load_tractogram``, ``.load`` and ``.view`` read the files of the data
+  directory only (``--data-dir``) and fetch no address; ``.save``,
+  ``.transcript`` and ``index_tracts`` write no file (the page downloads the
+  results instead).  The modules an engine ships are still imported.
+  ``--unconfined`` lifts it, for a server of one person who trusts its
+  users with its account.  Run the server as a user of its own all the
+  same: the confinement guards the commands, not the Python of an engine.
 - Use HTTPS (``--cert``) whenever the server listens on the network: the
   password and the login cookie go over it.
 - The server takes a POST only from its own page (in JSON, from its origin),

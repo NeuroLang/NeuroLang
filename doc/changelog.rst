@@ -581,6 +581,17 @@ v0.1a22 (2026-11-13)
   ``engine_bases`` is removed. The resolved configuration of every engine
   is unchanged, and read 6 times faster after the first time.
 
+**Security:**
+
+* ``neurolang-repl-serve`` confines the statements of its users: with users
+  or a password, the commands that read a file (``.load_csv``,
+  ``.load_atlas``, ``.import``, ``.load_tractogram``, ``.load``, ``.view``)
+  read the data directory only and fetch no address, and those that write
+  one (``.save``, ``.transcript``, ``index_tracts``) refuse, so that a user
+  can no longer read the server's files nor write them (``.save`` to a file
+  of the account it runs as). ``--unconfined`` lifts it. The rule is
+  ``neurolang.confine``, set by the variable ``NEUROLANG_CONFINE``.
+
 **Bug fixes:**
 
 * The radius of the activation of a study around its peaks is one
