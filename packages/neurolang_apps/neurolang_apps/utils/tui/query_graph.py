@@ -733,7 +733,9 @@ def _subtitle(node: Node) -> str:
 
 def _height(node: Node, histogram: bool) -> float:
     if not _is_card(node):
-        return _RELATION if node.columns else _RELATION - 14
+        # Room for the rim of a cylinder, around the node of an ontology.
+        extra = {"data": 8, "ontology": 12}.get(node.kind, 0)
+        return (_RELATION if node.columns else _RELATION - 14) + extra
     notes = len(_note_lines(node)) * _NOTE + (8 if node.notes else 0)
     return _TOP + len(node.rows) * _ROW + notes + 10 + (
         _HISTOGRAM if histogram else 0
@@ -747,6 +749,8 @@ def _width(node: Node) -> float:
     texts += [len(line) * _SANS for line in _note_lines(node)]
     if node.probabilities:  # room for the histogram and its caption
         texts.append(270)
+    if node.kind == "ontology":  # the text inside an ellipse
+        return max(texts) * 1.35 + 30
     return max(texts) + 28
 
 
@@ -880,13 +884,24 @@ def _shape(kind: str, box: tuple) -> str:
             f'<path class="rim" d="M{x},{y + e} a{w / 2},{e} 0 0 1 {w},0 '
             f'a{w / 2},{e} 0 0 1 {-w},0"/>'
         )
-    if kind == "ontology":  # a hexagon, as a concept map's nodes
-        s = 14
-        points = (
-            f"{x + s},{y} {x + w - s},{y} {x + w},{y + h / 2} "
-            f"{x + w - s},{y + h} {x + s},{y + h} {x},{y + h / 2}"
+    if kind == "ontology":  # a node of a knowledge graph, linked to others
+        cx, cy = x + w / 2, y + h / 2
+        neighbours = (
+            (x + 8, y + 5), (x + w - 8, y + 7), (x + w - 12, y + h - 4),
+            (x + 14, y + h - 5),
         )
-        return f'<polygon class="shape" points="{points}"/>'
+        links = "".join(
+            f'<line class="kg-link" x1="{cx}" y1="{cy}" x2="{nx}" '
+            f'y2="{ny}"/>' for nx, ny in neighbours
+        )
+        dots = "".join(
+            f'<circle class="kg-neighbour" cx="{nx}" cy="{ny}" r="4"/>'
+            for nx, ny in neighbours
+        )
+        return (
+            f'{links}<ellipse class="shape" cx="{cx}" cy="{cy}" '
+            f'rx="{w / 2 - 1}" ry="{h / 2 - 7}"/>{dots}'
+        )
     if kind == "probability":  # corners cut
         s = 10
         points = (
@@ -977,7 +992,9 @@ def _relation_svg(node: Node, box: tuple) -> str:
     if node.columns:
         lines.append(("columns", node.columns))
     lines.append(("kind", _subtitle(node)))
-    top = y + (h - 15 * len(lines)) / 2 + 13
+    # A cylinder's text is below its rim, 12 high, and above its base, 6.
+    above, below = (12, 6) if node.kind == "data" else (0, 0)
+    top = y + above + (h - above - below - 15 * len(lines)) / 2 + 13
     return "".join(
         f'<text class="{cls}" x="{x + w / 2}" y="{top + 15 * i}">'
         f"{html.escape(text)}</text>"
@@ -1132,10 +1149,18 @@ body { margin: 0; padding: .75rem 1rem; background: var(--bg);
 h1 { font-size: 1rem; margin: 0 0 .25rem; }
 p { margin: 0 0 .5rem; color: var(--muted); max-width: 60rem; }
 .graph { overflow: auto; }
+.graph.fit svg { max-width: 100%; height: auto; }
+.zoom-bar { display: flex; gap: .3rem; margin: 0 0 .5rem; }
+.zoom { padding: .2rem .65rem; min-width: 2rem;
+  border: 1px solid var(--edge); border-radius: 6px;
+  background: var(--bg); color: var(--text);
+  font: 12px system-ui, sans-serif; cursor: pointer; }
 svg { display: block; }
 .shape, .rim { stroke-width: 1.5; }
 .data .shape, .data .rim { fill: var(--data); stroke: var(--data-b); }
 .ontology .shape { fill: var(--onto); stroke: var(--onto-b); }
+.kg-link { stroke: var(--onto-b); stroke-width: 1.5; }
+.kg-neighbour { fill: var(--onto); stroke: var(--onto-b); stroke-width: 1.5; }
 .choice .shape, .facts .shape { fill: var(--rand); stroke: var(--rand-b); }
 .facts .shape { stroke-dasharray: 5 3; }
 .rule .shape { fill: var(--rule); stroke: var(--rule-b); }
@@ -1176,7 +1201,8 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
 .swatch.data { background: var(--data); border-color: var(--data-b);
   border-radius: 40%/25%; }
 .swatch.ontology { background: var(--onto); border-color: var(--onto-b);
-  clip-path: polygon(15% 0, 85% 0, 100% 50%, 85% 100%, 15% 100%, 0 50%); }
+  border-radius: 50%; margin-left: .3rem;
+  box-shadow: -7px -5px 0 -3px var(--onto-b), 8px 5px 0 -3px var(--onto-b); }
 .swatch.choice, .swatch.facts, .swatch.probabilistic {
   background: var(--rand); border-color: var(--rand-b); }
 .swatch.facts, .swatch.probabilistic { border-style: dashed; }
@@ -1202,6 +1228,35 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
 # Clicking a node shows its details and what it depends on, fading the
 # rest; clicking elsewhere shows everything again.
 _SCRIPT = """
+// The graph fits the page at first, its whole seen at once; then it zooms,
+// with the buttons or Ctrl (or Cmd) and the wheel, sized in pixels, so that
+// every browser keeps its proportions.
+const graphBox = document.querySelector(".graph");
+const drawing = graphBox.querySelector("svg");
+const [, , naturalW, naturalH] = drawing.getAttribute("viewBox")
+  .split(" ").map(Number);
+let scale = null; // null: fitted to the page
+const fitted = () => Math.min(1, graphBox.clientWidth / naturalW);
+function zoomTo(next) {
+  scale = next === null ? null : Math.min(4, Math.max(0.1, next));
+  const shown = scale ?? fitted();
+  graphBox.classList.toggle("fit", scale === null);
+  drawing.style.width = `${naturalW * shown}px`;
+  drawing.style.height = `${naturalH * shown}px`;
+}
+const by = (factor) => () => zoomTo((scale ?? fitted()) * factor);
+document.getElementById("zoom-in").addEventListener("click", by(1.25));
+document.getElementById("zoom-out").addEventListener("click", by(1 / 1.25));
+document.getElementById("zoom-fit")
+  .addEventListener("click", () => zoomTo(null));
+document.getElementById("zoom").addEventListener("click", () => zoomTo(1));
+graphBox.addEventListener("wheel", (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  zoomTo((scale ?? fitted()) * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+}, { passive: false });
+new ResizeObserver(() => { if (scale === null) zoomTo(null); })
+  .observe(graphBox);
 const nodes = JSON.parse(document.getElementById("nodes").textContent);
 const svg = document.querySelector("svg");
 const detail = document.getElementById("detail");
@@ -1291,7 +1346,15 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
         "rows that hold for sure, rows that hold for some random choices "
         "only, or probabilities. Click a node to see its rules and what "
         "it depends on.</p>"
-        f'<div class="graph"><svg xmlns="http://www.w3.org/2000/svg" '
+        '<div class="zoom-bar" role="group" aria-label="Zoom">'
+        '<button id="zoom-out" class="zoom" type="button" '
+        'aria-label="Zoom out">−</button>'
+        '<button id="zoom-fit" class="zoom" type="button">Fit</button>'
+        '<button id="zoom-in" class="zoom" type="button" '
+        'aria-label="Zoom in">+</button>'
+        '<button id="zoom" class="zoom" type="button">Actual size</button>'
+        "</div>"
+        f'<div class="graph fit"><svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width:.0f}" height="{height:.0f}" '
         f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" '
         f'aria-label="{html.escape(title)}"><defs>{markers}</defs>{body}'

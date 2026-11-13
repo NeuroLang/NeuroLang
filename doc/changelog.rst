@@ -72,6 +72,39 @@ Unreleased
   and received, its provider and model, and whose key paid (the page's, or
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
+* The REPL in the browser is redesigned: the question and the query on the
+  left, the answer on the right (one under the other on a narrow screen,
+  which scrolls to the answer), in the colours of the logo and of the
+  documentation, light and dark. A first visit finds an example in the box;
+  the result pane says what comes there until a query runs; probabilities are
+  drawn as tracks filled to their value, the most probable in red; the
+  session commands are in a *More* menu.
+* The tables of the browser REPL have a *Plot* button: bars, a histogram,
+  points or a line of their columns, of the rows the filter keeps.
+* A long rule the browser REPL puts in its box (an example, the assistant's
+  query, a follow-up) is laid out for the box's width: its head on the left
+  and an atom of its body a line, after ``:-``; a long probability breaks
+  before its ``//``. *More* › *Format the query* (Alt+Shift+F) does it to
+  what is typed.
+* The graph of a query (``.graph``, the *Graph* tab) opens fitted to the
+  page, its whole in view, and zooms (−, *Fit*, +, *Actual size*, or Ctrl
+  or Cmd and the wheel). A relation of an ontology is drawn as a node of a
+  knowledge graph, linked to others; the name of a table is below the rim
+  of its cylinder.
+* ``.view`` of pairs of regions or points with several value columns
+  (``ans(a, b, p, q)``) draws the network of the first, the probability
+  first, rather than every pair at 1; the viewer's *Edge value* chooses the
+  column the edges are of, its edge threshold following.
+* The brain viewer shows a range of values: a low and a high threshold
+  (values or percentiles), with two sliders over a histogram of the
+  values, the range shown in the colours it is drawn with.
+* In the browser REPL, a result has a *Brain* tab beside *Table* and
+  *Graph*: it shows the result in the brain viewer.
+* The browser REPL keeps the questions asked in English, each with the
+  query the assistant gave, between visits (*Past questions*, under the
+  box of the assistant): *Use this query* puts it back in the box, in its
+  language, with what the assistant said of it and the question it answers;
+  *Ask again* puts the question back.
 
 
 v0.1a22 (2026-11-13)

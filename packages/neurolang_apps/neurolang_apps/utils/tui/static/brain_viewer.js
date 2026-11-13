@@ -16,11 +16,18 @@
  * drawn in the 3D render and on the slices near them. The colormaps of the page are given to NiiVue so
  * that it colours a value as the colour bars do:
  *
- * - one-sided, the colormap spans the threshold to the maximum, and the
- *   values below the threshold are transparent;
- * - symmetric, it spans -max|v| to max|v|, its upper half for the
- *   positive values and its lower half for the negative ones, and the
- *   values of |v| below the threshold are transparent.
+ * - one-sided, the colormap spans the threshold to the high threshold
+ *   (the maximum by default), and the values out of that range are
+ *   transparent;
+ * - symmetric, it spans -h to h, h the high threshold of |v| (max|v| by
+ *   default), its upper half for the positive values and its lower half
+ *   for the negative ones, and the values of |v| out of the range are
+ *   transparent.
+ *
+ * NiiVue draws the values above its range with the colour of its top: the
+ * voxels above the high threshold are hidden by drawing a copy of the
+ * image with them set below the range (the image itself is kept, for the
+ * value under the cursor). A histogram of the values shows the range.
  */
 (function () {
   'use strict';
@@ -331,17 +338,27 @@
   }
 
   // The edge threshold, a value and a slider from the smallest |value|
-  // of the edges to the largest, which draws the network again.
-  function setUpEdgeThreshold(nv, network) {
+  // of the edges to the largest, which draws the network again; and, when
+  // the result has several value columns, the one the edges are of.
+  var edgeRange = {lo: 0, hi: 0};
+  function toSlider(v) {
+    var r = edgeRange;
+    return r.hi > r.lo ? Math.round(1000 * (v - r.lo) / (r.hi - r.lo)) : 0;
+  }
+
+  // Show the network of one value column: its range, threshold and edges.
+  function showNetwork(nv, network) {
+    viewer.network = network;
     var values = network.edges.map(function (e) { return Math.abs(e.value); });
-    var lo = values.length ? Math.min.apply(null, values) : 0;
-    var hi = values.length ? Math.max.apply(null, values) : 0;
+    edgeRange.lo = values.length ? Math.min.apply(null, values) : 0;
+    edgeRange.hi = values.length ? Math.max.apply(null, values) : 0;
+    $('edge-threshold').value = format(network.threshold);
+    $('edge-slider').value = toSlider(network.threshold);
+    drawNetwork(nv, network.threshold);
+  }
+
+  function setUpEdgeThreshold(nv, network) {
     var input = $('edge-threshold'), slider = $('edge-slider');
-    var toSlider = function (v) {
-      return hi > lo ? Math.round(1000 * (v - lo) / (hi - lo)) : 0;
-    };
-    input.value = format(network.threshold);
-    slider.value = toSlider(network.threshold);
     input.addEventListener('input', function () {
       var v = parseFloat(input.value);
       if (!isFinite(v)) return;
@@ -349,11 +366,20 @@
       drawNetwork(nv, v);
     });
     slider.addEventListener('input', function () {
-      var v = lo + (hi - lo) * slider.value / 1000;
+      var v = edgeRange.lo + (edgeRange.hi - edgeRange.lo) * slider.value / 1000;
       input.value = format(v);
       drawNetwork(nv, v);
     });
-    drawNetwork(nv, network.threshold);
+    var choices = network.values || [];
+    if (choices.length > 1) {
+      var select = $('edge-value');
+      choices.forEach(function (choice, i) { select.add(new Option(choice.value, String(i))); });
+      $('edge-value-control').hidden = false;
+      select.addEventListener('change', function () {
+        showNetwork(nv, choices[parseInt(select.value, 10)]);
+      });
+    }
+    showNetwork(nv, network);
   }
 
   function listEdges(state) {
@@ -535,17 +561,35 @@
     return s.threshold;
   }
 
+  // The largest value of the layer l the threshold applies to: of |v|
+  // when symmetric.
+  function topValue(l) {
+    var layer = viewer.layers[l];
+    return settings(l).symmetric ? layer.maxAbs : layer.max;
+  }
+
+  // The high threshold of the layer l, a value: its maximum when none is set.
+  function upperValue(l) {
+    var s = settings(l);
+    if (s.upper === null || s.upper === undefined) return topValue(l);
+    if (s.thresholdMode === 'percentile') {
+      return percentile(percentileSource(l), s.upper);
+    }
+    return s.upper;
+  }
+
   // The colour scale of the layer l: values from lo to hi span its
   // colormap, and only the voxels shown(v) are drawn.
   function scale(l) {
-    var t = thresholdValue(l), layer = viewer.layers[l];
+    var t = thresholdValue(l), u = upperValue(l), layer = viewer.layers[l];
     if (settings(l).symmetric) {
-      return {lo: -layer.maxAbs, hi: layer.maxAbs, threshold: t,
-              shown: function (v) { return Math.abs(v) >= t; }};
+      var top = Math.max(u, t);
+      return {lo: -top, hi: top, threshold: t, upper: u,
+              shown: function (v) { return Math.abs(v) >= t && Math.abs(v) <= u; }};
     }
     var lo = t > 0 ? t : Math.min(0, layer.min);
-    return {lo: lo, hi: Math.max(layer.max, lo), threshold: t,
-            shown: function (v) { return v >= t; }};
+    return {lo: lo, hi: Math.max(u, lo), threshold: t, upper: u,
+            shown: function (v) { return v >= t && v <= u; }};
   }
 
   // The index (0 to 255) of the colour of v in the scale.
@@ -575,6 +619,72 @@
     volume.cal_minNeg = NaN;
     volume.cal_maxNeg = NaN;
     volume.opacity = settingsOf.visible ? settingsOf.opacity : 0;
+    hideAbove(l, s);
+  }
+
+  // Draw the voxels of the layer l above the high threshold of its scale s
+  // out of the range, so transparent; the image is kept in layer.original.
+  function hideAbove(l, s) {
+    var layer = viewer.layers[l], symmetric = settings(l).symmetric;
+    var key = s.upper < topValue(l) ? [symmetric, s.upper, s.lo].join() : '';
+    if (key === (layer.hidden || '')) return;
+    layer.hidden = key;
+    var img = layer.volume.img;
+    if (!layer.original) layer.original = img.slice();
+    var original = layer.original, out = symmetric ? 0 : s.lo - 1;
+    for (var i = 0; i < img.length; i++) {
+      var v = original[i];
+      img[i] = key && (symmetric ? Math.abs(v) : v) > s.upper ? out : v;
+    }
+  }
+
+  // The value of the layer at the voxel vox, of its image, not of what is drawn.
+  function valueAt(layer, vox) {
+    var drawn = layer.volume.img;
+    if (layer.original) layer.volume.img = layer.original;
+    var value = layer.volume.getValue(vox[0], vox[1], vox[2]);
+    layer.volume.img = drawn;
+    return value;
+  }
+
+  // The histogram of the nonzero values of the layer l (|v| when
+  // symmetric), from 0 to the top of the sliders, log-scaled, the bins of
+  // the range shown in the colours they are drawn with.
+  var BINS = 60;
+  function drawHistogram(l, s) {
+    var canvas = $('threshold-histogram'), context = canvas.getContext('2d');
+    var layer = viewer.layers[l], symmetric = settings(l).symmetric;
+    var source = percentileSource(l), top = Math.max(layer.maxAbs, layer.max, 1e-12);
+    layer.histograms = layer.histograms || {};
+    var key = symmetric ? 'abs' : 'values', counts = layer.histograms[key];
+    if (!counts) {
+      counts = layer.histograms[key] = new Array(BINS).fill(0);
+      for (var i = 0; i < source.length; i++) {
+        if (source[i] < 0) continue;
+        counts[Math.min(BINS - 1, Math.floor(source[i] / top * BINS))] += 1;
+      }
+    }
+    var width = canvas.width, height = canvas.height, bar = width / BINS;
+    var most = Math.log1p(Math.max.apply(null, counts)) || 1;
+    var lut = viewer.luts[settings(l).cmap];
+    context.clearRect(0, 0, width, height);
+    counts.forEach(function (count, bin) {
+      if (!count) return;
+      var v = (bin + 0.5) / BINS * top, h = Math.max(1, Math.log1p(count) / most * (height - 4));
+      if (s.shown(v) || s.shown(-v)) {
+        var c = 3 * colourIndex(v, s);
+        context.fillStyle = 'rgb(' + lut[c] + ',' + lut[c + 1] + ',' + lut[c + 2] + ')';
+      } else {
+        context.fillStyle = themeColour('--line');
+      }
+      context.fillRect(bin * bar + 0.5, height - h, Math.max(1, bar - 1), h);
+    });
+    context.fillStyle = themeColour('--soft');
+    [s.threshold, s.upper].forEach(function (v) {
+      context.fillRect(Math.round(Math.min(width - 1, v / top * width)), 0, 1, height);
+    });
+    canvas.dataset.bins = counts.join(' ');
+    canvas.dataset.range = format(s.threshold) + ' ' + format(s.upper);
   }
 
   /* ---------------------------------------------------------------
@@ -673,8 +783,7 @@
     $('mm').textContent = '(' + mm.map(round).join(', ') + ')';
     $('voxel').textContent = '(' + toVoxel(mm).join(', ') + ')';
     $('value').textContent = viewer.layers.map(function (layer) {
-      var vox = layer.volume.mm2vox(mm);
-      var value = layer.volume.getValue(vox[0], vox[1], vox[2]);
+      var value = valueAt(layer, layer.volume.mm2vox(mm));
       value = String(Number(Number(value).toPrecision(6)));
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
@@ -697,10 +806,12 @@
     scales.forEach(function (s, l) { applyLayer(l, s); });
     viewer.nv.updateGLVolume();
     scales.forEach(drawColourBar);
+    drawHistogram(viewer.state.active, scales[viewer.state.active]);
     updateReadout();
     var mode = settings().thresholdMode;
     $('threshold-value').textContent =
-      mode === 'percentile' ? '= ' + format(scales[viewer.state.active].threshold) : '';
+      mode === 'percentile' ? '= ' + format(scales[viewer.state.active].threshold) +
+        ' to ' + format(scales[viewer.state.active].upper) : '';
   }
 
   // The largest threshold of the slider, in the unit of the mode.
@@ -717,6 +828,10 @@
     $('threshold').value = Number(s.threshold.toPrecision(6));
     $('threshold').max = s.thresholdMode === 'percentile' ? 100 : '';
     $('threshold-slider').value = Math.round(1000 * s.threshold / sliderTop());
+    var upper = upperInMode();
+    $('threshold-high').value = Number(upper.toPrecision(6));
+    $('threshold-high').max = s.thresholdMode === 'percentile' ? 100 : '';
+    $('threshold-high-slider').value = Math.round(1000 * upper / sliderTop());
     $('threshold-mode').value = s.thresholdMode;
     $('cmap').value = s.cmap;
     $('symmetric').checked = s.symmetric;
@@ -726,10 +841,27 @@
     $('layer-down').disabled = position === 0;
   }
 
+  // The high threshold in the unit of the mode: the top when none is set.
+  function upperInMode() {
+    var s = settings();
+    if (s.upper !== null && s.upper !== undefined) return s.upper;
+    return s.thresholdMode === 'percentile' ? 100 : topValue(viewer.state.active);
+  }
+
   function setThreshold(value) {
     if (isNaN(value)) return;
     var top = settings().thresholdMode === 'percentile' ? 100 : Infinity;
-    settings().threshold = Math.min(Math.max(value, 0), top);
+    settings().threshold = Math.min(Math.max(value, 0), top, upperInMode());
+    syncControls();
+    redraw();
+  }
+
+  // The high threshold: none (the maximum) at the top or above it.
+  function setUpper(value) {
+    if (isNaN(value)) return;
+    var s = settings(), percent = s.thresholdMode === 'percentile';
+    var top = percent ? 100 : topValue(viewer.state.active);
+    s.upper = value >= top ? null : Math.max(value, s.threshold);
     syncControls();
     redraw();
   }
@@ -738,10 +870,14 @@
   function setThresholdMode(mode) {
     var s = settings(), active = viewer.state.active;
     if (mode === s.thresholdMode) return;
-    var value = thresholdValue(active);
+    var value = thresholdValue(active), upper = upperValue(active);
+    var hasUpper = s.upper !== null && s.upper !== undefined;
     s.thresholdMode = mode;
     s.threshold = mode === 'percentile'
       ? rank(percentileSource(active), value) : Math.max(0, value);
+    if (hasUpper) {
+      s.upper = mode === 'percentile' ? rank(percentileSource(active), upper) : upper;
+    }
     syncControls();
     redraw();
   }
@@ -841,6 +977,12 @@
     $('threshold').addEventListener('input', onThreshold);
     $('threshold-slider').addEventListener('input', function (e) {
       setThreshold(sliderTop() * e.target.value / 1000);
+    });
+    var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
+    $('threshold-high').addEventListener('change', onUpper);
+    $('threshold-high').addEventListener('input', onUpper);
+    $('threshold-high-slider').addEventListener('input', function (e) {
+      setUpper(sliderTop() * e.target.value / 1000);
     });
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);

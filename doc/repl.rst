@@ -74,8 +74,8 @@ The REPL greets you with the engine's relations and an example to try:
    Query completed in 1.30 s
 
 The answer is a table: here the PubMed ids of the 516 studies of Neurosynth
-that mention pain. In the browser, the table can be sorted, filtered and
-downloaded.
+that mention pain. In the browser, the table can be sorted, filtered,
+plotted and downloaded.
 
 
 Statements
@@ -198,6 +198,10 @@ Results
 
 In the browser, the result is a table to sort, filter and download (CSV,
 TSV, or NIfTI for voxels), with tabs for the brain viewer and the graph.
+Its *Plot* button draws the rows the filter keeps: bars of a column (a
+probability by region, the most probable in red) or of how many rows each
+value has, a histogram of a numeric column, or two numeric columns as
+points or a line; the values of a mark show under the pointer.
 
 
 The query assistant
@@ -206,7 +210,9 @@ The query assistant
 ``.ask QUESTION`` writes a query answering a question in English with a
 large language model, and ``.explain`` reads the last query in English; see
 :doc:`query_assistant`. In the browser, the box above the code takes the
-question, with your own API key.
+question, with your own API key; *Past questions*, under it, keeps each
+question with the query it gave, to put that query back in the box or ask
+the question again.
 
 
 Scripts and transcripts

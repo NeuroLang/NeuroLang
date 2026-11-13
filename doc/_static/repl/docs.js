@@ -6,7 +6,7 @@ export const DOCS_URL = "https://neurolang.github.io/";
 
 export const PAGES = [
   ["Datalog tutorial", "tutorial_datalog.html"],
-  ["SQUALL tutorial", "tutorial_squall.html"],
+  ["SQUALL tutorial (deprecated)", "tutorial_squall.html"],
   ["The query assistant", "query_assistant.html"],
   ["Concepts", "concepts.html"],
   ["All the documentation", ""],
