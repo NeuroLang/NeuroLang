@@ -171,22 +171,30 @@ shown with their comments and the query is kept without them.
     active(l, s) :- schaefer_activated(l, s), selected_study(s)
     % Finds pairs of regions activated within the same study.
     co_active(l1, l2, s) :- active(l1, s), active(l2, s)
-    % Links selected studies to the term 'reading'.
-    term_association(s, t) :- mentions(s, t), selected_study(s)
-    % Calculates the probability that co-activated regions are linked to reading.
-    ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+    % Selects the studies closest to a text.
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    % The probability of co-activation given a study close to the text.
+    p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
+    % The pairs co-activated by the studies about reading, by its Cognitive Atlas definition.
+    ans(l1, l2, p) :- (l1 < l2), cogat_definition('reading', d), p_co_active_given_close(d, l1, l2, p)
 
-Questions given as a description or a Cognitive Atlas concept
--------------------------------------------------------------
+Questions given as a description or a cognitive concept
+-------------------------------------------------------
 
-On the ``neurosynth`` and ``neurostore`` engines, a topic the vocabulary
-has no term for, or a concept of the Cognitive Atlas, is matched to the
-studies by the similarity of their title and abstract to its text
+On the ``neurosynth`` and ``neurostore`` engines, a topic given as a
+description, or a cognitive process, task or concept, is matched to the
+studies by the similarity of their title and abstract to a text
 (:doc:`tutorial_text_embeddings`). ``similar_study(q, s)`` holds for the
 5% of the studies closest to the text ``q``, ``study_title(s, t)`` gives
 their titles, and ``cogat_definition(t, d)`` the definition ``d`` of a
-Cognitive Atlas concept by its lower-case label ``t``.  Both strategies
-know them from the engines' examples and guidance:
+Cognitive Atlas concept by its lower-case label ``t``.  A question naming
+a cognitive concept ("studies about working memory", "the n-back task")
+without saying mention, term or word is answered with the concept's
+Cognitive Atlas definition when ``cogat_term`` has its label, else with
+the question's own words; ``mentions(s, t)`` is kept for the questions
+about mentions, terms or words, and for the topics that are no cognitive
+concept (anatomy, disorders, populations, stimuli).  Both strategies
+know this from the engines' examples and guidance:
 
 .. code-block:: text
 
