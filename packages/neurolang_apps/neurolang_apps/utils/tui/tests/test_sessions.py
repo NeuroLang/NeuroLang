@@ -628,3 +628,36 @@ def test_a_query_running_too_long_ends_its_session(tmp_path):
         assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
     finally:
         sessions.close()
+
+
+def test_a_query_waiting_does_not_run_in_its_session_restarted(tmp_path):
+    sessions = Sessions(tmp_path, build=build, running=1)
+    try:
+        ann, bob = sessions.session("ann", "1"), sessions.session("bob", "1")
+        for session in (ann, bob):
+            session.start("neurostore")
+        slow = threading.Thread(target=ann.submit,
+                                args=("ans(y) :- short(s), (y == wait(s))",))
+        slow.start()
+        time.sleep(0.3)
+        waited = []
+
+        def asked():
+            try:
+                bob.submit("old(x) :- person(x, 5)")
+                waited.append("ran")
+            except SessionEnded:
+                waited.append("ended")
+
+        waiting = threading.Thread(target=asked)
+        waiting.start()
+        time.sleep(0.3)
+        bob.stop()
+        bob.start("neurostore")  # a start takes no slot
+        slow.join()
+        waiting.join()
+        assert waited == ["ended"]
+        # Its rule is not in the new process.
+        assert _rows(bob.submit("ans(x) :- old(x)")) == []
+    finally:
+        sessions.close()
