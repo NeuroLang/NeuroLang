@@ -279,6 +279,32 @@ def test_search_all_stored_relations(nl):
     )
 
 
+def test_search_a_rule_whose_columns_have_the_same_name(nl, monkeypatch):
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.declared_predicates",
+        lambda name: {"below": {"columns": ["iri", "iri"]}},
+    )
+    nl.add_tuple_set(
+        [("http://x.org/A", "http://x.org/B"),
+         ("http://x.org/B", "http://x.org/C")], name="sub",
+    )
+    nl.execute_datalog_program(
+        "below(x, y) :- sub(x, y)\nbelow(x, z) :- below(x, y), sub(y, z)"
+    )
+    context = EngineContext(nl, "neurosynth")
+    facts = [
+        "below(<http://x.org/A>, <http://x.org/C>)",
+        "below(<http://x.org/B>, <http://x.org/C>)",
+    ]
+    assert context.search_values("x.org/C", "below", 1).splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/C", "below").splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/A", "below", 1).endswith(
+        "its values are: 'http://x.org/B', 'http://x.org/C'"
+    )
+
+
 def test_rows_of_a_rule(nl):
     nl.execute_datalog_program("pain_study(s) :- mentions(s, 'pain')")
     context = EngineContext(nl)

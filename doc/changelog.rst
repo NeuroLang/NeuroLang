@@ -73,6 +73,12 @@ Unreleased
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
 
+**Bug fixes:**
+
+* The assistant's ``search_values`` searches a predicate whose columns have
+  the same name, as ``cogat_subclass_of(iri, iri)``: it failed with
+  ``'DataFrame' object has no attribute 'str'``.
+
 
 v0.1a22 (2026-11-13)
 --------------------
