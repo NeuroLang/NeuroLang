@@ -455,18 +455,21 @@ def test_repeated_call_is_not_run_again(nl):
 def test_searches_without_new_values_ask_for_a_query(nl):
     replies = [
         f'Action: search_values\nAction Input: {{"pattern": "{p}"}}'
-        for p in ("pain", "pai", "pain")
+        for p in ("pain", "pai", "pain", "ache")
     ] + [f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}']
-    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    react, steps = agent(
+        nl, ReactAgent, replies, language="datalog", max_steps=5
+    )
     react.context.search_values = (
         lambda pattern, *a: f"Facts with values containing {pattern!r}:\n"
-        "term('pain')"
+        f"term('{pattern.replace('pai', 'pain')[:4]}')"
     )
     assert react.run("Which studies mention pain?").valid
     notice = "Your searches find no new values: write the query"
     assert notice not in steps[1].observation
     assert notice in steps[2].observation
     assert steps[2].observation.startswith("You already called")
+    assert notice not in steps[3].observation  # 'ache' is new
 
 
 def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):

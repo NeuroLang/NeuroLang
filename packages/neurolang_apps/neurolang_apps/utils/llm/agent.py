@@ -322,10 +322,10 @@ class Toolbox:
             self.observations[key] = observation
         if name == "search_values":
             values = set(self.observations[key].splitlines()[1:])
-            if values <= self.values_found:
-                self.searches_without_new_values += 1
+            stale = values <= self.values_found
+            self.searches_without_new_values += stale
             self.values_found |= values
-            if self.searches_without_new_values >= 2:
+            if stale and self.searches_without_new_values >= 2:
                 observation += (
                     "\nYour searches find no new values: write the query "
                     "with the values found so far and run it with run_query."
