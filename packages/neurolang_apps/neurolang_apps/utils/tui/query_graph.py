@@ -1135,7 +1135,8 @@ p { margin: 0 0 .5rem; color: var(--muted); max-width: 60rem; }
 .graph.fit svg { max-width: 100%; height: auto; }
 .zoom { margin: 0 0 .5rem; padding: .2rem .65rem;
   border: 1px solid var(--edge); border-radius: 6px;
-  background: var(--bg); color: var(--text); font: 12px system-ui, sans-serif; cursor: pointer; }
+  background: var(--bg); color: var(--text);
+  font: 12px system-ui, sans-serif; cursor: pointer; }
 svg { display: block; }
 .shape, .rim { stroke-width: 1.5; }
 .data .shape, .data .rim { fill: var(--data); stroke: var(--data-b); }
