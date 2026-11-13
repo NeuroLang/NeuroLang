@@ -7,6 +7,7 @@ import os
 import re
 import plistlib
 import shutil
+import signal
 import socket
 import ssl
 import subprocess
@@ -2439,3 +2440,144 @@ def test_the_activity_is_logged_with_local_users(serve, tmp_path,
     ]))
     after = dict(zip(command, command[1:]))
     assert after["--activity-db"] == str(tmp_path / "a.sqlite")
+
+
+def test_the_health_is_open_to_monitors_and_tells_a_dead_builder(
+    serve, tmp_path
+):
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.dead = None
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    for options in ({"users": users}, {"password": "pw"}, {}):
+        server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                                   **options)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/health", timeout=10) as answer:
+                health = json.load(answer)
+            assert health["ok"] and health["uptime_seconds"] >= 0
+            assert set(health) == {"ok", "uptime_seconds"}
+            sessions.dead = "The builder of the engines ended"
+            assert _status(port, "/health") == 503
+            sessions.dead = None
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
+class _FakeDashboard:
+    def __init__(self):
+        self.asked = []
+
+    def get(self, target):
+        self.asked.append(target)
+        return 200, [("Content-Type", "text/html")], b"<h1>logs</h1>"
+
+
+def test_the_dashboard_is_the_admins_and_read_only(serve, tmp_path):
+    from neurolang_apps.utils.tui.dashboard import PREFIX
+
+    assert serve.DASHBOARD_PREFIX == PREFIX
+    (tmp_path / "bundle.json").write_text("{}")
+    board = _FakeDashboard()
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users,
+                               dashboard=board)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        target = "/admin/logs/activity/by_user?days=7"
+        assert _status(port, target, _basic("ann-pw", "ann")) == 200
+        assert board.asked == [target]
+        assert _status(port, target, _basic("bob-pw", "bob")) == 403
+        assert _status(port, "/admin/logs/", _basic("ann-pw", "ann"),
+                       "POST", {}) == 405
+        assert _http(port, "GET", "/admin/logs",
+                     _basic("ann-pw", "ann"))[0] == 301
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["dashboard"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_dashboard_options(serve, tmp_path, monkeypatch):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--local", "--users", "u", "--dashboard"])
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(serve.parse_args([
+        "--local", "--users", "u", "--activity-db", "a.sqlite",
+        "--dashboard", "--daemon", "install",
+    ]))
+    assert "--dashboard" in command
+
+
+def test_the_status_of_the_service_is_its_managers(serve, tmp_path,
+                                                   monkeypatch, capsys):
+    unit = tmp_path / "neurolang-repl.service"
+    monkeypatch.setattr(serve, "service_file", lambda: unit)
+    serve.main(["--daemon", "status"])
+    assert "No service" in capsys.readouterr().out
+    unit.write_text("")
+    asked = []
+
+    def run(command, **options):
+        asked.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, "ActiveState=active\nNRestarts=2\n", "")
+
+    monkeypatch.setattr(serve.sys, "platform", "linux")
+    monkeypatch.setattr(serve.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(serve.subprocess, "run", run)
+    serve.main(["--daemon", "status"])
+    out = capsys.readouterr().out
+    assert "NRestarts=2" in out and "/health" in out
+    assert asked[0][:4] == ["systemctl", "--user", "show", "neurolang-repl"]
+
+
+def test_a_sigterm_stops_the_server_as_a_stop(serve, tmp_path):
+    from neurolang_apps.utils.tui.dashboard import QUERIES
+
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    db = tmp_path / "activity.sqlite"
+    process = subprocess.Popen([
+        sys.executable, str(SCRIPT), "--local", "--users", str(users.path),
+        "--activity-db", str(db), "--data-dir", str(tmp_path / "data"),
+        "--site", str(tmp_path / "site"), "--port", "0", "--no-browser",
+    ])
+    try:
+        deadline = time.monotonic() + 120
+        while not db.exists() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        import sqlite3
+
+        while time.monotonic() < deadline:
+            connection = sqlite3.connect(db)
+            try:
+                runs = connection.execute("SELECT COUNT(*) FROM runs"
+                                          ).fetchone()[0]
+            except sqlite3.OperationalError:
+                runs = 0
+            finally:
+                connection.close()
+            if runs:
+                break
+            time.sleep(0.2)
+        time.sleep(1)  # into serve_forever
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(60) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+    connection = sqlite3.connect(db)
+    try:
+        hows = [row[3] for row in connection.execute(QUERIES["runs"][1])]
+    finally:
+        connection.close()
+    assert hows == ["stopped"]

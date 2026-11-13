@@ -48,6 +48,15 @@ Unreleased
   long) at its next input: it starts it again, runs
   again the rules of the session, as after *Stop*, then that input. The
   server answers an ended session with 409, ``{"ended": true}``.
+* ``neurolang-repl-serve --dashboard`` serves the admins a dashboard of
+  ``--activity-db`` and the ratings at ``/admin/logs/``: Datasette, with
+  datasette-vega's charts and queries of the activity by hour, user and
+  engine, the slowest and failed inputs, the ends of the sessions and the
+  uptime (the ``dashboard`` extra). ``GET /health`` tells a monitor whether
+  the server serves, without a login; ``--daemon status`` what the service
+  manager says of it; and the activity log has each run of the server, to
+  its stop (a SIGTERM, as from systemd, now stops the server as Ctrl+C
+  does, ending its sessions).
 
 
 v0.1a22 (2026-11-13)

@@ -11,6 +11,7 @@ logged.
 
 import contextlib
 import html
+import os
 import re
 import sqlite3
 
@@ -35,6 +36,17 @@ CREATE TABLE IF NOT EXISTS activity (
                              -- at its end)
 );
 CREATE INDEX IF NOT EXISTS activity_user ON activity (user, id);
+CREATE INDEX IF NOT EXISTS activity_created ON activity (created);
+-- Each run of the server: its start, the last time it was alive (every
+-- minute) and its end, if it stopped (a run without one ended otherwise:
+-- killed, crashed, the machine stopped).
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY,
+    started TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    stopped TEXT,
+    pid INTEGER
+);
 """
 
 #: The most characters of a result kept.
@@ -123,6 +135,26 @@ class ActivityLog:
                 "FROM activity GROUP BY user ORDER BY last DESC"
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def start_run(self) -> int:
+        """Log a start of the server, and return the number of its run."""
+        now = _now()
+        with self._connect() as db:
+            return db.execute(
+                "INSERT INTO runs (started, last_seen, pid) VALUES (?, ?, ?)",
+                (now, now, os.getpid()),
+            ).lastrowid
+
+    def beat(self, run: int, stopped: bool = False) -> None:
+        """Log that the run *run* of the server is alive now, or, if
+        *stopped*, that it stops now."""
+        now = _now()
+        with self._connect() as db:
+            db.execute(
+                "UPDATE runs SET last_seen = ?, stopped = "
+                "CASE WHEN ? THEN ? ELSE stopped END WHERE id = ?",
+                (now, stopped, now, run),
+            )
 
     def entries(self, user: str) -> list:
         """Return the events of *user*, the first first."""
