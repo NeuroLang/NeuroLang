@@ -31,9 +31,13 @@ CREATE TABLE IF NOT EXISTS activity (
     failed INTEGER,
     seconds REAL,            -- how long it took
     cpu REAL,                -- the CPU seconds of its session's process
-    memory REAL              -- the private memory of the process, in MB
+    memory REAL,             -- the private memory of the process, in MB
                              -- (after an input; the most of the session,
                              -- at its end)
+    tokens_in INTEGER,       -- the tokens the assistant sent and received
+    tokens_out INTEGER,      -- answering the input, if it did,
+    llm TEXT,                -- with the provider/model,
+    llm_key TEXT             -- and whose key: page (theirs), server
 );
 CREATE INDEX IF NOT EXISTS activity_user ON activity (user, id);
 CREATE INDEX IF NOT EXISTS activity_created ON activity (created);
@@ -88,13 +92,27 @@ class ActivityLog:
     """
 
     COLUMNS = ("created", "user", "groups", "tab", "engine", "kind", "text",
-               "response", "failed", "seconds", "cpu", "memory")
+               "response", "failed", "seconds", "cpu", "memory",
+               "tokens_in", "tokens_out", "llm", "llm_key")
+    #: The columns a log made before them lacks.
+    ADDED = {"tokens_in": "INTEGER", "tokens_out": "INTEGER", "llm": "TEXT",
+             "llm_key": "TEXT"}
 
     def __init__(self, path):
         self.path = str(path)
         with self._connect() as db:
             _wal(db)
             db.executescript(SCHEMA)
+            columns = {row["name"] for row in db.execute(
+                "PRAGMA table_info(activity)")}
+            for name, kind in self.ADDED.items():
+                if name not in columns:
+                    try:
+                        db.execute(
+                            f"ALTER TABLE activity ADD COLUMN {name} {kind}")
+                    except sqlite3.OperationalError as error:
+                        if "duplicate column" not in str(error):
+                            raise  # not another process adding it at once
 
     @contextlib.contextmanager
     def _connect(self):
@@ -131,6 +149,7 @@ class ActivityLog:
                 "ROUND(SUM(CASE WHEN kind = 'submit' THEN cpu END), 1) "
                 "AS cpu, "
                 "ROUND(MAX(memory), 1) AS memory, "
+                "SUM(tokens_in) AS tokens_in, SUM(tokens_out) AS tokens_out, "
                 "MAX(created) AS last "
                 "FROM activity GROUP BY user ORDER BY last DESC"
             ).fetchall()

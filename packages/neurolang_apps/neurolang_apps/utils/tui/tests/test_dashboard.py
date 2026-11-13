@@ -27,6 +27,12 @@ def log(tmp_path):
             memory=20.0)
     log.add("ann", "end", text="idle", engine="neurosynth", cpu=9.0,
             memory=60.0)
+    log.add("ann", "submit", text=".ask which studies?",
+            engine="neurosynth", failed=False, tokens_in=1200,
+            tokens_out=300, llm="albert/m", llm_key="server")
+    log.add("bob", "submit", text=".ask which regions?",
+            engine="neurosynth", failed=False, tokens_in=100, tokens_out=50,
+            llm="anthropic/claude", llm_key="page")
     return log
 
 
@@ -50,11 +56,16 @@ def test_each_query_runs_over_any_period(log):
     by_user = {r["user"]: r for r in _query(log, "by_user")}
     # The CPU of the inputs only; the most memory, an end's too.
     assert (by_user["ann"]["inputs"], by_user["ann"]["cpu_seconds"],
-            by_user["ann"]["most_memory_mb"]) == (1, 1.5, 60.0)
+            by_user["ann"]["most_memory_mb"]) == (2, 1.5, 60.0)
+    assert by_user["ann"]["tokens_in"] == 1200
+    tokens = [(r["user"], r["llm"], r["whose_key"], r["tokens"])
+              for r in _query(log, "tokens")]
+    assert tokens == [("ann", "albert/m", "server", 1500),
+                      ("bob", "anthropic/claude", "page", 150)]
     assert by_user["bob"]["failed"] == 1
     assert [r["reason"] for r in _query(log, "ends")] == ["idle"]
     [hour] = _query(log, "by_hour", "1")
-    assert (hour["inputs"], hour["users"]) == (2, 2)
+    assert (hour["inputs"], hour["users"]) == (4, 2)
 
 
 def test_the_uptime_is_the_share_of_the_period_the_runs_cover(log):
@@ -108,3 +119,19 @@ def test_datasette_serves_the_log_on_its_socket(log):
     finally:
         board.close()
     assert not board.directory.exists()
+
+
+def test_a_log_made_before_the_tokens_takes_them(tmp_path):
+    path = tmp_path / "old.sqlite"
+    db = sqlite3.connect(path)
+    with db:
+        db.execute("CREATE TABLE activity (id INTEGER PRIMARY KEY, "
+                   "created TEXT NOT NULL, user TEXT NOT NULL, groups TEXT, "
+                   "tab TEXT, engine TEXT, kind TEXT NOT NULL, text TEXT, "
+                   "response TEXT, failed INTEGER, seconds REAL, cpu REAL, "
+                   "memory REAL)")
+    db.close()
+    log = ActivityLog(path)
+    log.add("ann", "submit", text=".ask x", tokens_in=5, tokens_out=1)
+    [totals] = log.totals()
+    assert (totals["tokens_in"], totals["tokens_out"]) == (5, 1)

@@ -57,6 +57,10 @@ Unreleased
   manager says of it; and the activity log has each run of the server, to
   its stop (a SIGTERM, as from systemd, now stops the server as Ctrl+C
   does, ending its sessions).
+* With ``--activity-db``, an answer of the assistant logs the tokens it sent
+  and received, its provider and model, and whose key paid (the page's, or
+  the server's), shown by user in the console and by user, model and key
+  in the dashboard. The REPL's reply carries them (``tokens``).
 
 
 v0.1a22 (2026-11-13)
