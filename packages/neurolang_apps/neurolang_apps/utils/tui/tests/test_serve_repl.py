@@ -90,10 +90,44 @@ def test_the_bundle_is_built_by_the_bundle_script(
 ):
     commands = []
     monkeypatch.setattr(serve.subprocess, "check_call", commands.append)
-    serve.build_bundle(tmp_path, None)
-    serve.build_bundle(tmp_path, "emb")
+    serve.build_bundle(tmp_path, None, downloads=None)
+    serve.build_bundle(tmp_path, "emb", downloads=None)
     assert commands[0][1:] == [str(serve.BUNDLE_SCRIPT), str(tmp_path)]
     assert commands[1][-1] == "emb"
+
+
+def test_the_bundle_keeps_what_it_downloads(serve, monkeypatch, tmp_path):
+    """A source down (OSF, GitHub) does not stop a rebuild: what an engine
+    downloaded is kept, by default in DEFAULT_DOWNLOADS."""
+    commands = []
+    monkeypatch.setattr(serve.subprocess, "check_call", commands.append)
+    serve.build_bundle(tmp_path, None)
+    assert commands[0][-2:] == ["--downloads", str(serve.DEFAULT_DOWNLOADS)]
+    serve.build_bundle(tmp_path, None, downloads=tmp_path / "d")
+    assert commands[1][-2:] == ["--downloads", str(tmp_path / "d")]
+    args = serve.parse_args(["--downloads", str(tmp_path / "d")])
+    assert args.downloads == tmp_path / "d"
+
+
+def test_the_local_engines_are_prepared_before_serving(serve, capsys):
+    """Each engine is built once, its downloads and tables kept in the
+    data directory; one that fails is told, and the others are built."""
+    built = []
+
+    def run(name):
+        built.append(name)
+        return name != "neurostore"
+
+    failed = serve.prepare_engines(
+        Path("data"), ["neurosynth", "neurostore", "neurosynth_iit"], run=run,
+    )
+    assert built == ["neurosynth", "neurostore", "neurosynth_iit"]
+    assert failed == ["neurostore"]
+    out = capsys.readouterr().out
+    assert "neurosynth is ready" in out
+    assert "neurostore could not be prepared" in out
+    assert serve.parse_args(["--local"]).prepare
+    assert not serve.parse_args(["--local", "--no-prepare"]).prepare
 
 
 def test_the_bundle_is_built_with_the_engines_asked_for(
@@ -536,6 +570,12 @@ def test_the_service_serves_as_asked_with_absolute_paths(
     assert after["--data-dir"] == str(tmp_path / "data")
     assert after["--engine"] == "neurosynth"
     assert "--local" in command
+    assert after["--downloads"] == str(serve.DEFAULT_DOWNLOADS)
+    assert "--no-prepare" not in command
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--local", "--no-prepare",
+    ))
+    assert "--no-prepare" in command
 
 
 def test_the_service_runs_the_python_of_the_virtual_environment(
@@ -2549,6 +2589,7 @@ def test_a_sigterm_stops_the_server_as_a_stop(serve, tmp_path):
         sys.executable, str(SCRIPT), "--local", "--users", str(users.path),
         "--activity-db", str(db), "--data-dir", str(tmp_path / "data"),
         "--site", str(tmp_path / "site"), "--port", "0", "--no-browser",
+        "--no-prepare",  # no engine built: it stops before any is used
     ])
     try:
         deadline = time.monotonic() + 120

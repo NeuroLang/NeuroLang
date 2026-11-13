@@ -23,7 +23,9 @@ of the IIT atlas, which it starts with), ``neurosynth`` and ``neurostore`` (a
 select at its top, or ``?engine=neurostore``): the bundle has the data of
 all, unless
 ``--engine`` names the ones to build, and is built again when it lacks one that
-is asked for. It opens the page in the browser. The text embeddings of
+is asked for. What the engines download (atlases, templates, studies) is
+kept in ``--downloads`` (by default ``~/.cache/neurolang/repl-downloads``),
+for the next build. It opens the page in the browser. The text embeddings of
 ``query_similarity`` are kept in ``--embeddings`` (by default
 ``~/.cache/neurolang/repl-embeddings``): the bundle has them if they are
 there, or if torch is installed to make them (``--extra embeddings``),
@@ -33,12 +35,15 @@ The REPL with NeuroLang in the Python of this machine::
 
     uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local
         [--data-dir DIR]
-        [--resolution MM] [--light] [--engine NAME ...]
+        [--resolution MM] [--light] [--engine NAME ...] [--no-prepare]
 
 builds no bundle: the page's worker sends what it is asked to this server,
 which builds the engine from DIR (``neurolang_data`` by default, as
 ``neurolang-query``), with all of its analyses unless ``--light``, and runs
-the REPL (``neurolang_apps.utils.tui.local_backend``). The page is the same,
+the REPL (``neurolang_apps.utils.tui.local_backend``). Before serving, it
+builds each engine once, in a process of its own, unless ``--no-prepare``:
+what it downloads and the tables it finds are kept in DIR, so that a
+session starts from them, without the network. The page is the same,
 in SITE/local, and it is as fast, and has as much memory, as this machine.
 It serves this machine only, unless ``--host``: anyone it serves can run
 queries, and save files, in its Python.
@@ -196,6 +201,10 @@ SHORTEST_PASSWORD = 8
 # Where the text embeddings are kept between builds: making them takes
 # torch, the abstracts of the studies from PubMed and a while.
 DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
+# What the engines of the bundle download (atlases, templates, studies), a
+# directory each, kept for the next build: a source down (OSF, GitHub) then
+# stops no rebuild.
+DEFAULT_DOWNLOADS = Path("~/.cache/neurolang/repl-downloads").expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -242,13 +251,18 @@ def built_engines(repl: Path) -> set:
     return set(bundle.get("engines") or ["neurosynth"])
 
 
-def build_bundle(repl: Path, embeddings, engines=None) -> None:
+def build_bundle(
+    repl: Path, embeddings, engines=None, downloads=DEFAULT_DOWNLOADS,
+) -> None:
     """Build the page's bundle in *repl*, with the text embeddings of the
     data directory *embeddings* if given, and the data of the *engines*
-    (by default all those of the page)."""
+    (by default all those of the page), what they download kept in
+    *downloads* (none if None)."""
     command = [sys.executable, str(BUNDLE_SCRIPT), str(repl)]
     if embeddings:
         command.append(str(embeddings))
+    if downloads is not None:
+        command += ["--downloads", str(downloads)]
     for engine in engines or ():
         command += ["--engine", engine]
     subprocess.check_call(command)
@@ -256,7 +270,7 @@ def build_bundle(repl: Path, embeddings, engines=None) -> None:
 
 def prepare_site(
     site: Path, rebuild: bool = False, embeddings=None, clear: bool = False,
-    engines=None,
+    engines=None, downloads=DEFAULT_DOWNLOADS,
 ) -> Path:
     """
     Put the page and the logo in *site*, build the bundle if it is not
@@ -275,7 +289,10 @@ def prepare_site(
     repl.mkdir(parents=True, exist_ok=True)
     wanted = set(engines or bundle_engines())
     if rebuild or not wanted <= built_engines(repl):
-        build_bundle(repl, embeddings, engines)
+        if downloads == DEFAULT_DOWNLOADS:
+            build_bundle(repl, embeddings, engines)
+        else:
+            build_bundle(repl, embeddings, engines, downloads=downloads)
     return copy_page(site)
 
 
@@ -289,6 +306,64 @@ def copy_page(site: Path) -> Path:
         if path.is_file():
             shutil.copy(path, repl / path.name)
     return repl / "index.html"
+
+
+def _prepare_engine(data_dir, name, resolution, light) -> None:
+    """Build the engine *name* on *data_dir*, as a session does, telling its
+    steps: what it downloads, and the tables it finds, are kept there."""
+    from neurolang_apps.utils.tui.local_backend import LocalBackend
+
+    backend = LocalBackend(data_dir, resolution=resolution, light=light)
+    backend._build_engine(
+        name, lambda step: print(f"  {name}: {step}", flush=True)
+    )
+
+
+def _prepare_in_child(data_dir, resolution, light):
+    """Return the function building an engine in a process of its own,
+    which tells whether it could: the memory of the engine is not kept by
+    the server's process."""
+    import multiprocessing
+
+    context = multiprocessing.get_context("spawn")
+
+    def run(name) -> bool:
+        child = context.Process(
+            target=_prepare_engine, args=(data_dir, name, resolution, light),
+        )
+        child.start()
+        child.join()
+        return child.exitcode == 0
+    return run
+
+
+def prepare_engines(
+    data_dir: Path, engines, resolution: float = 2.0, light: bool = False,
+    run=None,
+) -> list:
+    """
+    Build each of the *engines* once on *data_dir*, before the server
+    serves: what they download (atlases, templates, studies) and the
+    tables they take long to find are kept there, so that a session starts
+    from them, without the network. Tell how each went; return the names
+    of those that could not be built, whose sessions download what they
+    lack, if they can. *run*(name) builds one and tells whether it could
+    (by default in a process of its own).
+    """
+    run = run or _prepare_in_child(data_dir, resolution, light)
+    failed = []
+    for name in engines:
+        print(f"Preparing the engine {name} in {data_dir}…", flush=True)
+        start = time.monotonic()
+        if run(name):
+            print(f"The engine {name} is ready "
+                  f"({time.monotonic() - start:.0f} s)", flush=True)
+        else:
+            failed.append(name)
+            print(f"The engine {name} could not be prepared (see above): "
+                  "its sessions download what it lacks, if they can",
+                  flush=True)
+    return failed
 
 
 def prepare_local_site(site: Path, engines=None, users=False) -> Path:
@@ -2335,6 +2410,7 @@ def service_command(args) -> list:
         "--host", args.host, "--port", str(args.port),
         "--site", str(args.site.resolve()),
         "--embeddings", str(args.embeddings.resolve()),
+        "--downloads", str(args.downloads.resolve()),
     ]
     for engine in args.engines or ():
         command += ["--engine", engine]
@@ -2344,6 +2420,7 @@ def service_command(args) -> list:
         command += ["--local", "--data-dir", str(args.data_dir.resolve()),
                     "--resolution", str(args.resolution)]
         command += ["--light"] if args.light else []
+        command += [] if args.prepare else ["--no-prepare"]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
@@ -2571,6 +2648,11 @@ def parse_args(argv=None):
         "%(default)s)",
     )
     parser.add_argument(
+        "--downloads", type=Path, default=DEFAULT_DOWNLOADS,
+        help="directory keeping what the engines of the bundle download, "
+        "for the next build (default: %(default)s)",
+    )
+    parser.add_argument(
         "--engine", action="append", choices=bundle_engines(), dest="engines",
         help="an engine to put in the bundle (repeat for several; default: "
         "all of them)",
@@ -2766,6 +2848,11 @@ def parse_args(argv=None):
         "--light", action="store_true",
         help="with --local, leave out the analyses a browser cannot hold, "
         "as the page does",
+    )
+    parser.add_argument(
+        "--no-prepare", action="store_false", dest="prepare",
+        help="with --local, do not build each engine before serving (which "
+        "keeps what it downloads in --data-dir): its first session does",
     )
     built = parser.add_mutually_exclusive_group()
     built.add_argument(
@@ -3039,6 +3126,12 @@ def main(argv=None) -> None:
 
         args.site = args.site / "local"
         page = prepare_local_site(args.site, args.engines, bool(users))
+        if args.prepare:
+            prepare_engines(
+                args.data_dir.resolve(),
+                list(args.engines or bundle_engines()),
+                args.resolution, args.light,
+            )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
         if users:
@@ -3087,7 +3180,7 @@ def main(argv=None) -> None:
     else:
         page = prepare_site(
             args.site, args.rebuild, args.embeddings, clear=args.clear,
-            engines=args.engines,
+            engines=args.engines, downloads=args.downloads,
         )
     write_index(args.site, page)
     board = None
