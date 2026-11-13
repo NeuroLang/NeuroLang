@@ -8,7 +8,12 @@ const asked = [];
 const answers = {
   stop: () => ({ stopped: false }),
   start: ({ engine }) => ({ banner: `<b>${engine}</b>`, providers: [] }),
-  submit: ({ text }) => (text === "boom" ? { status: 500, body: { error: "ValueError: it broke" } } : { html: text, failed: false }),
+  submit: ({ text }) =>
+    text === "boom"
+      ? { status: 500, body: { error: "ValueError: it broke" } }
+      : text === "gone"
+        ? { status: 409, body: { error: "This session ended: restart it", ended: true } }
+        : { html: text, failed: false },
   llm: ({ key }) => (key === "bad" ? { status: 500, body: { error: "ValueError: Unknown provider 'x'." } } : {}),
   rate: ({ verdict }) => ({ ok: true, message: verdict }),
   download: () => ({ bytes: new Uint8Array([97, 44, 98]), headers: { "X-File-Name": "r%C3%A9sultat.csv", "Content-Type": "text/csv" } }),
@@ -69,6 +74,10 @@ test("a query is answered as worker.js answers it", async () => {
   const [failed] = await send({ id: 4, text: "boom" });
   assert.equal(failed.failed, true);
   assert.match(failed.html, /ValueError: it broke/);
+});
+
+test("a session the server ended is the page's to bring back, with what was run", async () => {
+  assert.deepEqual(await send({ id: 5, text: "gone" }), [{ type: "ended", id: 5, text: "gone", message: "This session ended: restart it" }]);
 });
 
 test("the key of the assistant, and what is wrong with it", async () => {

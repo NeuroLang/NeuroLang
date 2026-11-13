@@ -258,6 +258,11 @@ Unreleased
   queries at once (the machine's CPUs), of all the sessions, the others
   waiting their turn, their page saying so; and stops a query running longer
   than ``--query-minutes`` (60), ending its session's process.
+* The REPL page of ``neurolang-repl-serve --local --users`` brings back a
+  session the server ended (unused, made room for another, its query ran too
+  long, the server restarted) at its next input: it starts it again, runs
+  again the rules of the session, as after *Stop*, then that input. The
+  server answers an ended session with 409, ``{"ended": true}``.
 * ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
   login page: sessions of their own, without an account, whose assistant
   answers only with the key they give (no key of the server's, which is

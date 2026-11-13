@@ -22,8 +22,9 @@ async function ask(action, body = {}, { raw = false } = {}) {
   });
   if (response.status === 401) postMessage({ type: "login" }); // the login expired
   if (!response.ok) {
-    const { error } = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error || `the server answered ${response.status}`);
+    const { error, ended } = await response.json().catch(() => ({ error: response.statusText }));
+    // *ended*: the server ended this tab's session (idle, room for another, its restart).
+    throw Object.assign(new Error(error || `the server answered ${response.status}`), { ended: Boolean(ended) });
   }
   return raw ? response : response.json();
 }
@@ -83,6 +84,8 @@ const handlers = {
     try {
       postMessage({ type: "reply", id, ...(await ask("submit", { text })) });
     } catch (error) {
+      // The page brings the session back, then runs *text* again.
+      if (error.ended) return postMessage({ type: "ended", id, text, message: lastLine(error) });
       const message = String(error.message ?? error).replace(/&/g, "&amp;").replace(/</g, "&lt;");
       postMessage({ type: "reply", id, failed: true, viewers: [], tables: [], html: `<pre>${message}</pre>` });
     }
