@@ -1732,6 +1732,37 @@ def test_integer_constant_equal_to_a_column_is_kept(
     assert {tuple(row) for row in result.value} == {(1, "x"), (1, "y")}
 
 
+def test_string_constant_equal_to_its_destination_column_is_computed():
+    """In π_{z + 1 → k, 'z' → z}(R(z, y)) ⋈ S(y, w), the constant 'z' is
+    equal to the column z: pushing the computed columns above the join
+    must still read z + 1 from the column z of R."""
+    class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
+        pass
+
+    y, z, k, w = (str2columnstr_constant(c) for c in "yzkw")
+    r = NameColumns(C_[AbstractSet[Tuple[int, str]]](
+        WrappedRelationalAlgebraSet([(10, "1"), (20, "2")])
+    ), (z, y))
+    s = NameColumns(C_[AbstractSet[Tuple[str, str]]](
+        WrappedRelationalAlgebraSet([("1", "a"), ("2", "b")])
+    ), (y, w))
+    expression = NaturalJoin(
+        ExtendedProjection(r, (
+            FunctionApplicationListMember(z + C_[int](1), k),
+            FunctionApplicationListMember(C_[str]("z"), z),
+            FunctionApplicationListMember(y, y),
+        )),
+        s,
+    )
+
+    result = RelationalAlgebraSolver().walk(Opt().walk(expression)).value
+    assert result.projection("k", "z", "y", "w") == (
+        NamedRelationalAlgebraFrozenSet(
+            ("k", "z", "y", "w"), [(11, "z", "1", "a"), (21, "z", "2", "b")]
+        )
+    )
+
+
 @pytest.mark.parametrize("join_op, constant_on_the_right", [
     (LeftNaturalJoin, True),
     (FullOuterNaturalJoin, True),

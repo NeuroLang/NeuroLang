@@ -2631,6 +2631,38 @@ def test_rules_with_equalities_to_constants(program, expected):
     nl.add_tuple_set([("z",)], name="bad")
     assert set(nl.execute_datalog_program(program)) == expected
 
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        ("ans(u, PROB) :- pact(u, y) & (u == 'u')", {("u", 0.5)}),
+        ("ans(y, PROB) :- pact(u, y) & ('y' == y)", {("y", 0.3)}),
+        (
+            "ans(u, PROB) :- pact(u, y) & other(u) & (u == 'u')",
+            {("u", 0.5)},
+        ),
+        (
+            "ans(u, z, PROB) :- pact(u, y) & (z == 'z')",
+            {("u", "z", 0.5), ("a", "z", 0.2), ("y", "z", 0.3)},
+        ),
+    ],
+)
+def test_probabilistic_equality_to_a_string_constant_spelled_as_a_variable(
+    program, expected
+):
+    """GH-1086: the constant 'u' is a value, not the column of `u`."""
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "u", "a"), (0.2, "a", "u"), (0.3, "y", "y")], name="pact"
+    )
+    nl.add_tuple_set([("u",), ("a",)], name="other")
+    res = nl.execute_datalog_program(program)
+    assert {
+        tuple(round(v, 6) if isinstance(v, float) else v for v in row)
+        for row in res.to_unnamed()
+    } == expected
+
+
 def test_query_the_lifted_solvers_decline_without_the_unate_check():
     """
     Without the unate check, the lifted solver raised a ValueError on a

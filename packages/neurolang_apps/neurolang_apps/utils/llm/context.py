@@ -20,7 +20,7 @@ from pandas.api.types import is_object_dtype, is_string_dtype
 from nl_expr.exceptions import UnboundVariablesError
 from nl_expr.expressions import Symbol
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.cli import result_to_dataframe
+from neurolang_apps.utils.cli import not_available, result_to_dataframe
 from neurolang_apps.utils.predicate_catalog import (
     predicate_catalog,
     program_documentation,
@@ -297,6 +297,8 @@ class EngineContext:
         """Return the description of the predicate *name* and a few rows."""
         catalog = self.catalog()
         info = catalog.get(name)
+        if name in getattr(self.nl, "left_out_predicates", ()):
+            return not_available(name)
         if info is None:
             close = difflib.get_close_matches(name, catalog, n=3)
             hint = f" Did you mean {', '.join(close)}?" if close else ""

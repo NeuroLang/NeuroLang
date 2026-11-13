@@ -23,6 +23,8 @@ from neurolang_apps.utils.cli import (
     _execute_program,
     _execute_squall_program,
     _known_symbol_names,
+    left_out_symbol,
+    not_available,
     warning_note,
     report_error,
     result_to_dataframe,
@@ -171,6 +173,9 @@ class InteractiveTuiApp:
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
+        # The predicates left out of the engine the warnings of the last
+        # query were on.
+        self._left_out_used: set = set()
         # Where the events of the assistant are sent as they happen (a
         # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
         self.agent_events = None
@@ -247,17 +252,49 @@ class InteractiveTuiApp:
         )
 
     def _print_notes(self, caught) -> None:
-        """Print one note per distinct warning in *caught*."""
+        """
+        Print one note per distinct warning in *caught*, but for those on
+        the predicates the engine leaves out, which are not available.
+        """
         known = _known_symbol_names(self._nl)
+        messages = [str(w.message) for w in caught]
+        self._left_out_used = {
+            left_out_symbol(self._nl, message) for message in messages
+        } - {""}
         notes = dict.fromkeys(
-            warning_note(str(w.message), known) for w in caught
+            warning_note(message, known) for message in messages
+            if not left_out_symbol(self._nl, message)
         )
         for note in notes:
             self.err_console.print(note, style="yellow", markup=False)
+        for name in sorted(self._left_out_used):
+            self._print_not_available(name)
+
+    @property
+    def left_out_predicates(self) -> frozenset:
+        """The predicates the engine leaves out, as the analyses that need
+        gigabytes in the browser (see web.WebRepl)."""
+        return getattr(self._nl, "left_out_predicates", frozenset())
+
+    def _print_not_available(self, name: str) -> None:
+        """Print that the predicate *name* is left out of the engine."""
+        self.failed = True
+        self.err_console.print(
+            "Error: " + not_available(name, self.settings.command_line),
+            style="red", markup=False, highlight=False,
+        )
 
     def _report_error(self, exc: Exception, program: str) -> None:
-        """Print the error *exc* of *program* as the CLI does."""
+        """
+        Print the error *exc* of *program* as the CLI does, or that the
+        predicate it does not find is one the engine leaves out.
+        """
         self.failed = True
+        missing = left_out_symbol(self._nl, str(exc))
+        if missing:
+            if missing not in self._left_out_used:
+                self._print_not_available(missing)
+            return
         report_error(
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
@@ -563,12 +600,17 @@ class InteractiveTuiApp:
             "[green]Tab[/green] completes · "
             "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
         )
-        relations = engine_relations(name)
+        relations = [
+            relation for relation in engine_relations(name)
+            if relation.split("(")[0] not in self.left_out_predicates
+        ]
         if relations:
             self.console.print("Relations:")
             for relation in relations:
                 self.console.print(f"  {relation}", markup=False)
-        examples = engine_examples(name).get(mode.lower())
+        examples = engine_examples(name, self.left_out_predicates).get(
+            mode.lower()
+        )
         if examples:
             self.console.print(f"Try: {examples[0]}", markup=False)
 

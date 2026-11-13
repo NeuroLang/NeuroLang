@@ -61,10 +61,9 @@ Similarity of every study to a query
 title and abstract of study ``s`` and the text ``query``, or ``nan`` if
 ``s`` is not a NeuroSynth study.  It is a function, so a rule gets the
 similarity with an equality and ranges over the studies with ``study``.
-Here with the ``neurolang-query`` command line
-(``python -m neurolang.utils.cli``)::
+Here with the ``neurolang-query`` command line::
 
-    python -m neurolang.utils.cli -e neurosynth --sort sim:desc \
+    neurolang-query --engine neurosynth --sort sim:desc \
         "ans(s, sim) :- study(s) & \
             (sim == query_similarity('visual word form reading', s)) \
             & (sim > 0.78)"
@@ -215,7 +214,7 @@ studies as are tagged with the term 'reading', with an aggregation
     from typing import Iterable
 
     import numpy as np
-    from neurolang.utils.engine_registry import build_engine
+    from neurolang_apps.utils.engine_registry import build_engine
 
     nl = build_engine("neurosynth", Path("neurolang_data"), resolution=4)
 

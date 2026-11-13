@@ -122,6 +122,29 @@ Unreleased
 
 **New features:**
 
+* The rest of the documentation starts from the REPL as well: the queries of
+  the Cognitive Atlas page run on the ``neurostore`` engine from their link,
+  with its counts in the 2026-11 release; Concepts writes facts and rules as
+  the REPL takes them; the pages start the REPL as ``neurolang-query -i``;
+  the README leads with the REPL in the browser.
+* The SQUALL tutorial runs in the REPL too: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the top 20 terms it
+  gives, its aggregation examples on facts typed in the session and with the
+  results they give, and its Python moves to :doc:`tutorial_python`, where
+  it is tested. SQUALL has no ``#`` comments: the examples that had them use
+  ``%`` lines.
+* The Datalog tutorial runs in the REPL: its Bayes factor program is on the
+  ``neurosynth`` engine and the Destrieux atlas, with the results and
+  confidence intervals it gives, and its Python moves to a new page,
+  *NeuroLang in Python* (:doc:`tutorial_python`), which also takes
+  *NeuroLang for Logic Programmers* (its address now leads there). The
+  page's examples are run by the tests.
+* The documentation starts from the REPL: a page on the REPL, in the browser
+  and in a terminal (:doc:`repl`), a Quick Start and a Get Started whose
+  examples are queries of the ``neurosynth`` engine, and, under each example
+  of a page, a link that opens the REPL in the browser with it in its box
+  (``.. nl-repl::``). The examples are coloured as the REPL colours them.
+
 * ``.view`` of a result with a value on the regions of an atlas (``ans(l,
   p) :- PROB[...]``) starts at the top 5% of its values, as a result of voxels
   does; regions alone, networks and streamlines start with all of them.
@@ -156,6 +179,66 @@ Unreleased
   assistant is the one configured on this machine unless the page gives a
   key.  The page is the same; its worker, ``local_worker.js``, sends what it
   is asked to the server.
+* ``neurolang-repl-serve --cert CERT.pem [--key KEY.pem]
+  [--key-password-file FILE]`` serves over HTTPS (a key with a passphrase
+  opened with that of the file, or asked in a terminal; a certificate that
+  cannot serve says why), and ``--daemon install|reinstall|remove`` installs, replaces or
+  removes a service of the user serving the REPL with the other options, at
+  login: a unit of systemd's user manager, or a launchd agent on macOS.
+* ``neurolang-repl-serve --password-file FILE`` asks every visitor for a
+  password (HTTP Basic), ``--env-file ENV`` gives those with it, with
+  ``--local``, the server's key of the AI assistant, and the site's main
+  page leads to the REPL.  Without a password, the server answers only the
+  requests sent to this machine's names, ``--host`` and those of
+  ``--server-name NAME`` (against DNS rebinding), and, with a password or
+  without, a POST only from the page of the site (in JSON, from its
+  ``Origin``); a silent connection is closed after a minute, and a
+  request's body is a JSON object of 1 MB at most.
+* ``neurolang-repl-serve --users FILE`` asks a user's name and password
+  (scrypt hashes, ``--hash-password``); with ``--local`` each tab of a user
+  has a session in a process of its own, forked from a builder that builds
+  each engine once, with the variables (the AI assistant's key) the file
+  gives the user (``--max-sessions``, ``--idle-minutes``); a duplicated
+  tab has a session of its own.  The feedback
+  server's SQLite database is in WAL mode, for the writes of concurrent
+  sessions.
+* ``neurolang-repl-serve --users``: users have ``groups``, and those of
+  ``admin`` the admin console at ``/admin`` (users, groups, the status of
+  their assistant's key, sessions, ratings); with ``--local``,
+  ``--feedback-db FILE`` stores the ratings of the page on the server with
+  the user's name and groups, the rated answers of the assistant exported
+  from the console as its examples, by engine.  A POST is taken from the
+  server's own page only.  ``--add-user NAME --groups ...``,
+  ``--set-password``, ``--set-groups``, ``--set-key NAME VARIABLE``,
+  ``--remove-user`` and ``--list-users`` manage the users from the command
+  line; the console and the command line write the users file holding a
+  lock of it, and a password has 8 characters at least.
+* With ``neurolang-repl-serve --users``, each user changes their own
+  password on their account page, ``/account``, linked from the REPL's page.
+* The users file of ``neurolang-repl-serve --users`` gives the groups their
+  keys (``groups: {lab: {env: {...}}}``, beside ``users:``), which their
+  users have unless they have their own; the console shows and sets them, as
+  does ``--set-group-key GROUP VARIABLE``.
+* A user or a group of ``neurolang-repl-serve --users`` has an assistant of
+  its own, ``llm`` (a provider of the page's form, its model and key),
+  which an admin sets in the console or with ``--set-llm`` and
+  ``--set-group-llm``, and a user saves on their account page; ``own_key``
+  (``--own-key``) lets them give their own key, or not, in the page and on
+  their account page.
+* ``neurolang-repl-serve --users`` has a login page, ``/login``, a signed
+  login cookie and ``/logout``, which ends the user's logins made before,
+  in every browser;
+  ``--secure-cookie`` sends it over HTTPS only behind a proxy.  With
+  ``--local``, the REPL shows the name of the user logged in, linked to
+  their account page, and *Log out*, which forgets the API keys the page
+  kept.  The page shows whether the server's assistant answers, and a key
+  saved on the account page or in the console answers at once in the open
+  pages of the users it changes.
+* ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
+  login page: sessions of their own, without an account, whose assistant
+  answers only with the key they give (no key of the server's, which is
+  kept out of every session's process unless its user has it), at most
+  ``--max-guest-sessions`` at once.
 * ``.graph`` draws where the answer of the last query comes from, and how:
   the data of the engine, with their columns, its random choices and
   probabilistic facts, the rules of the query and of the engine, which are
@@ -456,6 +539,42 @@ Unreleased
   peaks instead of 61 million, at least 14.6 GB instead of 2.0 GB for its
   four 64-bit columns: use ``-r 2`` for a smaller engine.  The atlases'
   activations, within 6 mm instead of 3, change (#1070).
+* An atlas lookup with a voxel, ``ans(l) :- destrieux(l, r) &
+  contains(r, (68, 77, 37))``, gives the labels of the regions holding it
+  instead of an internal error (``TypeError: keywords must be strings``):
+  ``contains`` with a tuple of constants is a membership test, not the
+  explosion of the set into columns named by the constants, which only a
+  tuple of variables, ``contains(r, (i, j, k))``, is (#1074).
+* The atlases of an engine with a template (Schaefer, Destrieux, Tian) are
+  on its grid: their label images are resampled to the template by nearest
+  neighbour when they are loaded (and kept in the engine's cache, by the
+  grid of the template), so that the voxel (i, j, k) of ``labels`` and of
+  ``contains(r, (i, j, k))`` on an atlas region is that of ``voxel`` and
+  ``reports``.  With ``-r 2``, the template voxel (68, 77, 37), MNI (38,
+  20, 2) in the right insula, was labelled by Schaefer's 2 mm FSL grid as
+  a parcel of the left hemisphere (``17Networks LH DefaultB PFCv 2``); it
+  is now ``17Networks RH SalVentAttnA Ins 1``, and ``R G insular short`` of
+  Destrieux.  The points of the atlases (``*_points``) and the studies
+  activating their regions, in millimetres, stay those of the atlases'
+  own grids (GH-1075).
+* A string constant spelled as a variable is a value, not that variable's
+  column (#1086): ``h(u) :- act(u, y) & (u == 'u')`` keeps only the rows of
+  ``act`` whose first column is ``'u'``, instead of every row, in
+  ``NeurolangDL`` and ``NeurolangPDL``, and ``h(u, z) :- act(u, y) &
+  (z == 'z')`` gives ``z`` the value ``'z'`` instead of failing. A constant
+  is equal to a column of the same value (``Constant[str]('u') ==
+  Constant[ColumnStr]('u')``): the translation to relational algebra dropped
+  such an equality as trivially true, and an extended projection
+  ``'z' → z`` was read as keeping the column ``z``, on provenance sets and
+  when moving computed columns above a join.
+* A query of the probabilistic frontend binding a variable with a constant,
+  as ``d`` in ``cogat_definition('working memory', d)``, next to a literal
+  sharing no variable with the others, such as a second ``PROB[...] = pa``,
+  is rewritten with magic sets again: walking the adorned rules reordered
+  their bodies to avoid cross products, putting the literals bound by ``d``
+  first, and the magic sets created from the reordered bodies left those of
+  the adorned literals undefined. The query raised ``UnboundVariablesError``
+  on a similarity left unbound, or answered nothing (#1091).
 * The Destrieux atlas of the engines is on the MNI152 template: nilearn's,
   derived from FreeSurfer's fsaverage, is 1.3 to 2.6% smaller than the
   template and off by about a millimetre, and is now moved by the scales and
@@ -596,6 +715,14 @@ Unreleased
 * ``PROB[...]`` and ``MARG[...]`` accept their conjunctions in parentheses,
   as a rule's condition does: ``PROB[(a(x, s), (x < y)) // (b(s), c(s))] = p``
   was a syntax error.
+* The REPL in the browser, whose engine leaves out the analyses that need
+  gigabytes (``activated``, ``uniformity``, ``lift``... and the rules
+  defined from them), says so: its banner lists them, its examples and the
+  examples of its assistant leave out those using them, the assistant is
+  told never to use them, and a query using one fails with "is not
+  available in the browser" and the command of the REPL that has them,
+  rather than with an unknown predicate or an empty result, in the REPL and
+  for the assistant (#1068).
 
 **Performance:**
 
@@ -636,7 +763,7 @@ Unreleased
   ``neurostore`` engines have ``boot_studies``, 500 and 200 replicates of
   ``selected_study``, and the query assistant has examples and guidance
   for questions on how certain an answer is. See the tutorial,
-  :doc:`tutorial_datalog`, section 10.6.
+  :doc:`tutorial_datalog`, section 10.7.
 * An engine is built from the tables it kept, instead of finding them again.
   The studies activating the regions of its atlases took 48 s of the 58 s of
   the ``neurosynth`` engine's build, and nilearn, imported to find the MNI

@@ -119,7 +119,7 @@ may specify the following keys, all of them optional:
 - ``resamplings`` — replicates of a probabilistic choice for confidence
   intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
   seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
-  tutorial :doc:`tutorial_datalog`, section 10.6)
+  tutorial :doc:`tutorial_datalog`, section 10.7)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
@@ -270,7 +270,10 @@ grid, with its shape and affine.  Each column of the result has the sort
 of the argument of the predicate its variable is in, in the last query:
 ``ans(x, y, z) :- voxel(x, y, z)`` holds voxel indices of the template
 grid, whatever the names of its columns, ``ans(l, i, j, k) :- labels(l,
-i, j, k)`` indices of the Schaefer atlas grid.  The sorts follow from
+i, j, k)`` indices of the Schaefer atlas grid.  With a template, each
+atlas is resampled to it (nearest neighbour) when it is loaded, so the
+voxel (i, j, k) of an atlas is that of ``voxel`` and of the peaks.  The
+sorts follow from
 the predicates declaring their ``arguments``, then from the rules defined
 from them, in Datalog as in SQUALL (``obtain every Voxel in 3D``).  The
 columns of a ``space: voxel`` sort are written as they are on its grid,

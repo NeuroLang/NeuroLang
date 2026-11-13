@@ -1257,6 +1257,33 @@ def _register_atlas_points(nl, atlas, settings: dict) -> None:
     nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
 
 
+def _atlas_on_template(nl, atlas, cache_dir=None):
+    """
+    Return the *atlas* on the grid of the template of *nl*, resampled by
+    nearest neighbour, so that its voxels (i, j, k) are those of ``voxel``
+    and of the peaks (GH-1075); the *atlas* itself if *nl* has no template.
+    The image is kept in *cache_dir*, by the atlas's voxels and the grid.
+    """
+    from neurolang.atlases import Atlas
+
+    template = getattr(nl, "template", None)
+    if template is None:
+        return atlas
+    image = engine_cache.keep_image(
+        cache_dir, "atlas", engine_cache.digest(
+            engine_cache.image_digest(atlas.image),
+            engine_cache.grid_digest(template),
+        ),
+        lambda: _nilearn_image().resample_to_img(
+            atlas.image, template, interpolation="nearest"
+        ),
+    )
+    return Atlas(
+        atlas.name, np.asanyarray(image.dataobj), image.affine, atlas.table,
+        atlas.space, atlas.background, kind=atlas.kind, image=image,
+    )
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
@@ -1318,10 +1345,13 @@ def _load_deterministic_atlas(
             atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
             normalise=True, kind=atlas_name,
         )
-    _register_grid(nl, atlas_name, atlas.image)
+        on_template = _atlas_on_template(nl, atlas, cache_dir)
+    _register_grid(nl, atlas_name, on_template.image)
     _register_colours(nl, atlas_name, found.get("colors", ()))
     pred_name = params.get("predicate_name", atlas_name)
-    nl.add_atlas_set(pred_name, atlas)
+    nl.add_atlas_set(pred_name, on_template)
+    # The points and the activations are in millimetres: those of the
+    # atlas on its own grid, which may be finer than the template.
     if params.get("points"):
         _register_atlas_points(nl, atlas, params["points"])
     if params.get("activated"):

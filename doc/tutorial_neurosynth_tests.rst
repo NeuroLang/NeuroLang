@@ -128,7 +128,7 @@ within 6 mm of its peaks, and a term being in the studies with a TF-IDF
 above 0.001.  Start the REPL of the ``neurosynth`` engine on the 2 mm
 grid::
 
-    python -m neurolang.utils.cli -e neurosynth -d neurolang_data -r 2 -i
+    neurolang-query -i --engine neurosynth -d neurolang_data -r 2
 
 and paste this block at the prompt.  It computes the lift and the
 uniformity ratio of the term ``vision`` over the voxels of
