@@ -345,7 +345,7 @@
   .plot-bar:hover .plot-hit { fill: var(--hover); }
   .plot-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
   .plot-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
-  .plot-dense { stroke: none; fill-opacity: .35; }
+  .plot-dense { stroke: none; fill-opacity: var(--dot-opacity, .3); }
   .plot-focus { fill: none; stroke: var(--text); stroke-width: 2; pointer-events: none; }
   .plot-tip { position: absolute; z-index: 5; pointer-events: none; display: grid; gap: .1rem; min-width: 8rem; max-width: 22rem; padding: .45rem .6rem; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); font-size: .75rem; }
   .plot-tip div { display: flex; justify-content: space-between; gap: .9rem; }
@@ -387,7 +387,7 @@
     .workspace > .pane:first-child > .card:nth-child(n+3) { order: 2; }
   }
   @media (max-width: 40rem) {
-    .rt-track { width: 2.5rem; margin-right: .45rem; }
+    .rt-track { display: none; } /* the value first; the plot draws them */
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }
     .topbar nav { margin-left: 0; width: 100%; gap: 1rem; }

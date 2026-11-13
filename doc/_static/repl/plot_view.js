@@ -192,6 +192,7 @@ export function plotView(box, model) {
     return { chart, label: `Histogram of ${model.columns[xc]}, ${total} values in ${bins.length} bins`, note: `${total} values of ${model.columns[xc]}, of the rows the filter keeps, in ${bins.length} bins.` };
   }
 
+  let chartStyle = "";
   function drawPoints(xc, yc) {
     const line = kind.value === "line";
     const points = pointData(model, xc, yc, { line });
@@ -202,14 +203,16 @@ export function plotView(box, model) {
     const xScale = linear([xs[0], xs.at(-1)], [left, right]);
     const yScale = linear([ys[0], ys.at(-1)], [bottom, top]);
     const dots = !line || points.length <= 60;
-    const chart = svg("svg", { width, height, viewBox: `0 0 ${width} ${height}`, class: "plot-svg" },
+    // Many points are small and the fainter the more there are, so that where they pile up shows.
+    const dense = points.length > 500;
+    chartStyle = dense ? `--dot-opacity: ${Math.max(0.07, Math.min(0.5, 200 / points.length)).toFixed(3)}` : "";
+    const chart = svg("svg", { width, height, viewBox: `0 0 ${width} ${height}`, class: "plot-svg", style: chartStyle },
       yGrid(ys, yScale, left, right),
       svg("g", { class: "plot-axis" }, ...xs.map((value) => text(xScale(value), bottom + 16, tickText(value), { "text-anchor": "middle" })),
         text((left + right) / 2, bottom + 34, model.columns[xc], { "text-anchor": "middle", class: "plot-title" }),
         text(left, top - 2, model.columns[yc], { class: "plot-title", dy: "-0.2em" })),
       ...(line && points.length ? [svg("path", { d: points.map((p, i) => `${i ? "L" : "M"}${xScale(p.x)},${yScale(p.y)}`).join(""), class: "plot-line" })] : []),
-      // Many points are small and see-through, so that where they pile up shows.
-      ...(dots ? points.map((p) => svg("circle", { cx: xScale(p.x), cy: yScale(p.y), r: points.length > 500 ? 2.5 : 4, class: points.length > 500 ? "plot-dot plot-dense" : "plot-dot" })) : []),
+      ...(dots ? points.map((p) => svg("circle", { cx: xScale(p.x), cy: yScale(p.y), r: dense ? 2 : 4, class: dense ? "plot-dot plot-dense" : "plot-dot" })) : []),
       svg("line", { x1: left, x2: right, y1: bottom, y2: bottom, class: "plot-base" }));
     const focus = svg("circle", { r: 6, class: "plot-focus", visibility: "hidden" });
     chart.append(focus);
