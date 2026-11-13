@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-repl-serve --local`` prepares each engine before serving
+  (``--no-prepare`` not to): it builds it once, in a process of its own, its
+  downloads and its tables kept in ``--data-dir``, so that a session starts
+  from them without the network; one it cannot prepare is told, and the
+  server serves the others.  The bundle of ``neurolang-repl-serve`` keeps what
+  its engines download in ``--downloads`` (``~/.cache/neurolang/
+  repl-downloads``), so that a rebuild does not need its sources (OSF,
+  GitHub) to be up.
+
 * ``neurolang-repl-serve --config server.yaml``: the server's options in a
   YAML file, each by its name, its paths relative to it, the command line
   replacing them; the service installed with it runs the file.  Its secrets

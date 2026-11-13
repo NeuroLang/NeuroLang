@@ -58,11 +58,14 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    loginctl enable-linger $USER   # keep it running after you log out
 
 Then open ``https://SERVER:8443/``, log in as ``ann``, and open the admin
-console at ``https://SERVER:8443/admin`` to add the other users.  The
-first start downloads the engines' data into ``--data-dir`` and builds the
-engine, which takes a few minutes; later, the first session of an engine
-takes the time of a build (about a minute for Neurosynth with ``--light``),
-and the next ones under a second.
+console at ``https://SERVER:8443/admin`` to add the other users.  Before
+serving, the server prepares each engine: it downloads its data into
+``--data-dir`` and finds the tables it takes long to find, kept there, which
+takes a few minutes the first time and is quicker after; an engine it
+cannot prepare (a source down) is told in the log, and its first session
+tries again.  A session then starts from the data kept, without the
+network: the first one of an engine takes the time of a build (about a
+minute for Neurosynth with ``--light``), the next ones under a second.
 
 
 Requirements
@@ -101,6 +104,9 @@ Serving
 ``--data-dir DIR``
    The engines' data directory (default ``neurolang_data``, relative to
    where the command runs; give an absolute path for a service).
+``--no-prepare``
+   Do not prepare the engines before serving; the first session of each
+   downloads what it lacks.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -791,8 +797,10 @@ The service does not start
    apps --extra tui --extra llm`` and ``--daemon reinstall``.
 The page says *The engine could not start*
    Open *Technical details* on the page; the full traceback is in the
-   service's log.  On a first start, the engine downloads its data into
-   ``--data-dir``: check that the server reaches the internet and has room.
+   service's log.  The log tells, before *The REPL is at*, whether each
+   engine was prepared; one that was not downloads its data into
+   ``--data-dir`` at its first session: check that the server reaches the
+   internet (and its sources, OSF and GitHub, are up) and has room.
 *The builder of the engines ended*
    The process building the engines died (out of memory, most often): see
    the log, and give the server more memory or ``--light``.
