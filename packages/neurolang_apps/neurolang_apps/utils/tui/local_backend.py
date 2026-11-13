@@ -192,6 +192,9 @@ class LocalBackend:
                 pass
         self._page_key = False
         repl = web.WebRepl(nl, engine, self.resolution, **options)
+        # The engine of this machine has the whole tractogram, and the page
+        # draws it all, as the browser's engine cannot.
+        repl.app.settings.all_streamlines = True
         repl.set_event_sink(lambda text: self.emit(json.loads(text)))
         self._use_machine_llm(repl)
         can_rate = False

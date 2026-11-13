@@ -1228,6 +1228,18 @@ class TestViewStreamlines:
         assert kwargs["streamlines"]["total"] == 3
         assert "2 of 3 shown, evenly subsampled to 2 at most" in out
 
+    def test_all_the_streamlines_with_the_setting(
+        self, tracts, view_calls, monkeypatch
+    ):
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        tracts.settings.all_streamlines = True
+        kwargs, out = self._view(
+            tracts, "ans(x) :- uncinate(x, s)", view_calls
+        )
+        assert tracts._nl.asked == [[1, 2, 3]]
+        assert kwargs["streamlines"]["shown"] == 3
+        assert "3 of 3 shown" in out and "subsampled" not in out
+
     def test_the_engine_background(self, tracts, monkeypatch):
         calls = []
         monkeypatch.setattr(

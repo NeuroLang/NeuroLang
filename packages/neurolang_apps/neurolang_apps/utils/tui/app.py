@@ -101,6 +101,10 @@ class TuiSettings:
     the settings of the Euclidean join (``euclidean_join.yaml``) the session
     uses: ``memory`` by default, as a session holds its results and, in a
     browser, has little memory.
+    With *all_streamlines*, the viewer draws every streamline of a result,
+    not :data:`~.brain_viewer.MAX_STREAMLINES` of them evenly subsampled:
+    in a REPL of this machine's Python served to a browser
+    (``neurolang-repl-serve --local``), which has the whole tractogram.
     """
 
     engine_name: str = ""
@@ -121,6 +125,7 @@ class TuiSettings:
     scope_queries: bool = True
     program_file: Optional[str] = None
     join_profile: str = "memory"
+    all_streamlines: bool = False
 
 
 class AgentRun(NamedTuple):

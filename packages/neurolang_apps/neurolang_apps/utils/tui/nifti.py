@@ -1732,7 +1732,8 @@ def last_result_streamlines(app, block):
 
     The engine's ``streamline_points`` gives the points of
     :data:`~.brain_viewer.MAX_STREAMLINES` of them at most, evenly
-    subsampled (:func:`~.brain_viewer.shown_streamlines`). Return the
+    subsampled (:func:`~.brain_viewer.shown_streamlines`), or of all of
+    them with the setting ``all_streamlines``. Return the
     layer of the number of the streamlines drawn through each voxel of
     the background, (name, path) of a temporary NIfTI file, and the
     keyword arguments of the viewer: the streamlines
@@ -1751,7 +1752,8 @@ def last_result_streamlines(app, block):
         ids = sorted(int(s) for s in pd.unique(block.frame[column]))
         if not ids:
             raise SaveError("The result has no streamlines.")
-        shown = brain_viewer.shown_streamlines(ids)
+        shown = brain_viewer.shown_streamlines(
+            ids, len(ids) if app.settings.all_streamlines else None)
         lines = [
             np.asarray(points, dtype=np.float32).reshape(-1, 3)
             for points in app._nl.streamline_points(shown)

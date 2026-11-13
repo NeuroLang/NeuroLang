@@ -104,7 +104,13 @@ Serving
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
-   Leave out the analyses a browser cannot hold, as the page does.
+   Leave out the analyses a browser cannot hold, as the page does.  With
+   or without it, the tractogram of ``neurosynth_iit`` is whole on the
+   server (37,980 streamlines, every point; the browser's has 15,000,
+   thinned), and the brain viewer draws every streamline of a result, not
+   20,000 at most: the whole tractogram is about 120 MB for the page to
+   receive, so ask for a bundle (``ans(x) :- uf(x, "left")``) on a slow
+   network.
 ``--engine NAME``
    The engines the page offers (repeat it; default: all of them).
 ``--host HOST``, ``--port PORT``

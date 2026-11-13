@@ -224,3 +224,8 @@ def test_the_tokens_of_an_answer_say_whose_key_paid(backend, monkeypatch):
     monkeypatch.setattr(backend.repl, "submit", lambda text: web.Reply(
         html=""))
     assert backend.submit("ans(x) :- person(x, 5)")["tokens"] == {}
+
+
+def test_the_viewer_draws_all_the_streamlines_of_this_machine(backend):
+    backend.start("neurostore")
+    assert backend.repl.app.settings.all_streamlines

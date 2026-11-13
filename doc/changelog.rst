@@ -61,6 +61,11 @@ Unreleased
   and received, its provider and model, and whose key paid (the page's, or
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
+* The brain viewer of ``neurolang-repl-serve --local`` draws every
+  streamline of a result, as the engine of the server has the whole
+  tractogram (the IIT one: 37,980 streamlines, every point), not 20,000
+  of them evenly subsampled, as the browser's engine does (setting
+  ``all_streamlines``).
 
 
 v0.1a22 (2026-11-13)
