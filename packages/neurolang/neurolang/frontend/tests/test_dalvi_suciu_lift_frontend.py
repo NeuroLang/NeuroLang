@@ -671,6 +671,10 @@ ORDER_AND_COUNT_QUERIES = [
     "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
     "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
     "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+    "q(w, PROB) :- R(x), S(x, y), V(w, z), (y <= z)",
+    "q(PROB) :- S(x, y), V(z, w), (y < w)",
+    "q(PROB) :- R(x), T(y), (x < y), ~U(y)",
 ]
 
 
@@ -726,14 +730,50 @@ def test_order_across_atoms_and_at_least_two_formulas(
         assert result == {(): pytest.approx(expected)}
 
 
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+        dict(R=[(.5, 1)], S=[(.6, 1, 1), (.7, 1, 3)], T=[(.8, 2), (.4, 4)]),
+        .5 * (.4 * (1 - .4 * .3) + .6 * .8 * .6)
+    ),
+    (
+        "q(PROB) :- S(x, y), V(z, w), (y < w)",
+        dict(S=[(.5, 1, 1), (.4, 2, 3)], V=[(.6, 1, 2), (.7, 2, 4)]),
+        .7 * (1 - .5 * .6) + .3 * .6 * .5
+    ),
+    (
+        "q(PROB) :- R(x), T(y), (x < y), ~U(y)",
+        dict(R=[(.5, 1)], T=[(.6, 2), (.7, 3)], U=[(.2, 3)]),
+        .5 * (1 - .4 * (1 - .7 * .8))
+    ),
+    (
+        "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+        dict(R=[(.5, 1)], S=[(.6, 1, 3)], T=[(.8, 2)]),
+        None
+    ),
+])
+def test_order_across_subqueries_formulas(query, facts, expected, solvers):
+    """
+    A side of the comparison can be a subquery independent for different
+    values of its variable: P[∃x ∃y ∃z R(x) ∧ S(x, y) ∧ T(z) ∧ y < z] is
+    the sum, on the greatest value m of T, of p_T(m) ∏_{c>m} (1 - p_T(c))
+    P[∃x R(x) ∧ ∃y (S(x, y) ∧ y < m)], ∃z V(z, w) and T(y) ∧ ¬U(y) being
+    such sides too.
+    """
+    result = _solve_random(query, 0, solvers, facts)
+    if expected is None:
+        assert result == {}
+    else:
+        assert result == {(): pytest.approx(expected)}
+
+
 @pytest.mark.parametrize("query", [
-    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+    "q(PROB) :- R(x), S(x, y), T(y), U(z), (y < z)",
 ])
 def test_order_across_atoms_declined(query):
     """
-    The comparison of a variable of a join is declined: the plan of the
-    projection of the join would select on the value of z, which it does
-    not have.
+    A comparison with a #P-hard side, R(x) ∧ S(x, y) ∧ T(y), is declined.
     """
     from nl_expr.exceptions import NonLiftableException
 
