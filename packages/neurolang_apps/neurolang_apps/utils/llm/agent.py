@@ -298,23 +298,38 @@ class Toolbox:
         self.answer_frames = None
         # The observations of the calls, by tool and arguments.
         self.observations = {}
+        # The facts search_values found, and its calls finding none new.
+        self.values_found = set()
+        self.searches_without_new_values = 0
 
     def call(self, name: str, arguments: dict):
         """
         Run the tool *name* with *arguments*: (observation, final). A call
         made already, but final_answer, is not run again: a model in a
-        loop is told so, with the result it had.
+        loop is told so, with the result it had, and after two searches
+        finding no new value, to run a query with those it found.
         """
         key = (name, json.dumps(arguments, sort_keys=True, default=str))
         if key in self.observations and name != "final_answer":
-            return (
+            observation, final = (
                 f"You already called {name} with these arguments, which "
                 f"gave:\n{truncate(self.observations[key], 500)}\n"
                 "Do not call it again: use that result and take the next "
                 "step."
             ), None
-        observation, final = self._call(name, arguments)
-        self.observations[key] = observation
+        else:
+            observation, final = self._call(name, arguments)
+            self.observations[key] = observation
+        if name == "search_values":
+            values = set(self.observations[key].splitlines()[1:])
+            if values <= self.values_found:
+                self.searches_without_new_values += 1
+            self.values_found |= values
+            if self.searches_without_new_values >= 2:
+                observation += (
+                    "\nYour searches find no new values: write the query "
+                    "with the values found so far and run it with run_query."
+                )
         return observation, final
 
     def _call(self, name: str, arguments: dict):

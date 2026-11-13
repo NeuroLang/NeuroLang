@@ -442,14 +442,31 @@ def test_repeated_call_is_not_run_again(nl):
         f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
     ]
     react, steps = agent(nl, ReactAgent, replies, language="datalog")
-    react.context.search_values = lambda *a: "mentions.c1: pain"
+    react.context.search_values = lambda *a: "Facts:\nmentions.c1: pain"
     result = react.run("Which studies mention pain?")
     assert result.valid
     assert steps[1].observation == (
         "You already called search_values with these arguments, which "
-        "gave:\nmentions.c1: pain\nDo not call it again: use that result "
-        "and take the next step."
+        "gave:\nFacts:\nmentions.c1: pain\nDo not call it again: use that "
+        "result and take the next step."
     )
+
+
+def test_searches_without_new_values_ask_for_a_query(nl):
+    replies = [
+        f'Action: search_values\nAction Input: {{"pattern": "{p}"}}'
+        for p in ("pain", "pai", "pain")
+    ] + [f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}']
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    react.context.search_values = (
+        lambda pattern, *a: f"Facts with values containing {pattern!r}:\n"
+        "term('pain')"
+    )
+    assert react.run("Which studies mention pain?").valid
+    notice = "Your searches find no new values: write the query"
+    assert notice not in steps[1].observation
+    assert notice in steps[2].observation
+    assert steps[2].observation.startswith("You already called")
 
 
 def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):
