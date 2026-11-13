@@ -311,7 +311,7 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
-    "python_init", "hidden_predicates",
+    "python_init", "hidden_predicates", "acknowledgements",
 })
 # Keys whose value is a list, or a single item standing for a list of one.
 _LIST_KEYS = frozenset({"python_init"})
@@ -879,6 +879,17 @@ def get_euclidean_join_settings(
     """
     cfg = get_engine_config(name, yaml_path)
     return dict(cfg.get("euclidean_join") or {})
+
+
+def get_acknowledgements(
+    name: str, yaml_path: Optional[Path] = None
+) -> List[str]:
+    """Return the acknowledgements of the data of an engine (its own and
+    those of the engines it extends): a text per source, with its
+    citation."""
+    cfg = get_engine_config(name, yaml_path)
+    return [" ".join(str(text).split())
+            for text in cfg.get("acknowledgements") or ()]
 
 
 def get_hidden_predicates(

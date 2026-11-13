@@ -207,6 +207,28 @@ def test_hidden_predicates_are_concatenated():
     ]
 
 
+def test_acknowledgements_are_concatenated():
+    engines = {
+        "atlas": {"acknowledgements": ["Atlas: Someone (2010)."]},
+        "data": {"extends": "atlas",
+                 "acknowledgements": ["Data: Others (2020)."]},
+    }
+    assert resolve_engine_config(engines, "data")["acknowledgements"] == [
+        "Atlas: Someone (2010).", "Data: Others (2020)."]
+
+
+def test_the_engines_acknowledge_the_hcp_and_their_atlases():
+    from neurolang_apps.utils.engine_registry import get_acknowledgements
+
+    texts = get_acknowledgements("neurosynth_iit")
+    for source in ("Schaefer", "Destrieux", "Tian", "Mansour",
+                   "Human Connectome Project", "Neurosynth", "IIT"):
+        assert any(source in text for text in texts), source
+    hcp = next(t for t in texts if "1U54MH091657" in t)
+    assert "McDonnell Center for Systems Neuroscience" in hcp
+    assert all("\n" not in text for text in texts)
+
+
 @pytest.mark.parametrize("engine", list_engine_names())
 def test_the_questions_shown_are_those_of_the_assistant(engine):
     """The questions the REPL lists first are in the assistant's bank,
@@ -214,3 +236,13 @@ def test_the_questions_shown_are_those_of_the_assistant(engine):
     cfg = get_engine_config(engine)
     bank = {e["question"] for e in cfg.get("assistant_examples", [])}
     assert set(cfg.get("questions") or []) <= bank
+
+
+def test_the_assistant_is_told_the_connectivity_has_no_subcortex():
+    from neurolang_apps.utils.engine_registry import get_predicates
+
+    predicates = get_predicates("neurosynth")
+    for name in ("schaefer_structural_connectivity",
+                 "destrieux_structural_connectivity"):
+        text = " ".join(predicates[name]["description"].split())
+        assert "Cortex only" in text and "thalamus" in text, name

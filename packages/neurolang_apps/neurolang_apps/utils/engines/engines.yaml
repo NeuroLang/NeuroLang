@@ -41,6 +41,50 @@ engines:
         predicate_name: tian
         scale: 2
         points: {predicate_name: tian_points}
+    # The structural connectivity of the cortex between the parcels of
+    # Schaefer and of Destrieux: the mean number of streamlines between two
+    # parcels over the HCP subjects of Mansour et al. (2021), whose
+    # high-resolution connectomes tools/hcp_structural_connectivity
+    # parcellates (connectomes/README.md).
+    relations:
+      schaefer_structural_connectivity:
+        file: connectomes/hcp_schaefer100_17.tsv.gz
+      destrieux_structural_connectivity:
+        file: connectomes/hcp_destrieux.tsv.gz
+    acknowledgements:
+      - >-
+        Schaefer 2018 parcellation, 100 parcels, 17 networks (nilearn's):
+        Schaefer A, Kong R, Gordon EM, Laumann TO, Zuo XN, Holmes AJ,
+        Eickhoff SB, Yeo BTT. Local-global parcellation of the human
+        cerebral cortex from intrinsic functional connectivity MRI.
+        Cerebral Cortex 28:3095-3114 (2018). doi:10.1093/cercor/bhx179
+      - >-
+        Destrieux 2009 atlas (nilearn's): Destrieux C, Fischl B, Dale A,
+        Halgren E. Automatic parcellation of human cortical gyri and sulci
+        using standard anatomical nomenclature. NeuroImage 53:1-15 (2010).
+        doi:10.1016/j.neuroimage.2010.06.010
+      - >-
+        Tian 2020 subcortical atlas (Melbourne Subcortex Atlas): Tian Y,
+        Margulies DS, Breakspear M, Zalesky A. Topographic organization of
+        the human subcortex unveiled with functional connectivity
+        gradients. Nature Neuroscience 23:1421-1432 (2020).
+        doi:10.1038/s41593-020-00711-6
+      - >-
+        Structural connectivity (schaefer_structural_connectivity,
+        destrieux_structural_connectivity): the mean over 1,064 subjects of
+        the HCP Young Adult study of their high-resolution structural
+        connectomes, by Mansour L S, Tian Y, Yeo BTT, Cropley V, Zalesky A.
+        High-resolution connectomic fingerprints: mapping neural identity
+        and behavior. NeuroImage 229:117695 (2021).
+        doi:10.1016/j.neuroimage.2020.117695, parcellated by NeuroLang
+        (tools/hcp_structural_connectivity), Destrieux's labels brought to
+        the HCP's fs_LR surface by its registration to fsaverage (Van Essen
+        DC, Glasser MF, Dierker DL, Harwell J, Coalson T. Cerebral Cortex
+        22:2241-2262 (2012). doi:10.1093/cercor/bhr291). The Human
+        Connectome Project: Van Essen DC, Smith SM, Barch DM, Behrens TEJ,
+        Yacoub E, Ugurbil K. The WU-Minn Human Connectome Project: an
+        overview. NeuroImage 80:62-79 (2013).
+        doi:10.1016/j.neuroimage.2013.05.041. Data were provided [in part] by the Human Connectome Project, WU-Minn Consortium (Principal Investigators: David Van Essen and Kamil Ugurbil; 1U54MH091657) funded by the 16 NIH Institutes and Centers that support the NIH Blueprint for Neuroscience Research; and by the McDonnell Center for Systems Neuroscience at Washington University.
     datalog_init: |
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
       schaefer_label(l) :- schaefer(l, r)
@@ -77,7 +121,37 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      streamlines:
+        columns: [streamlines]
+        type: float
+        description: >-
+          a mean number of streamlines of tractography, over the subjects
     predicates:
+      schaefer_structural_connectivity:
+        description: >-
+          Structural connectivity between two Schaefer parcels: the mean
+          number of streamlines joining them over 1,064 HCP subjects (of
+          about 3.4 million each), from diffusion MRI tractography
+          (Mansour et al. 2021; .credits); both ways round, the pairs no
+          streamline joins left out. Cortex only: the subcortical
+          structures (thalamus, basal ganglia, hippocampus, amygdala, the
+          tian regions) and the cerebellum are not in it, so there is no
+          structural connectivity of theirs in this engine
+        arguments:
+          - label
+          - label
+          - streamlines
+      destrieux_structural_connectivity:
+        description: >-
+          Structural connectivity between two Destrieux regions: the mean
+          number of streamlines joining them over 1,064 HCP subjects, as
+          schaefer_structural_connectivity. Cortex only: no subcortical
+          structure (thalamus, basal ganglia, hippocampus, amygdala, the
+          tian regions) nor the cerebellum
+        arguments:
+          - destrieux_label
+          - destrieux_label
+          - streamlines
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
         arguments:
@@ -605,6 +679,12 @@ engines:
       reported activation peaks, TF-IDF term frequencies, and a
       probabilistic choice over studies.
     python_init: "neurolang_apps.utils.engines.neurosynth.init"
+    acknowledgements:
+      - >-
+        Neurosynth: Yarkoni T, Poldrack RA, Nichols TE, Van Essen DC,
+        Wager TD. Large-scale automated synthesis of human functional
+        neuroimaging data. Nature Methods 8:665-670 (2011).
+        doi:10.1038/nmeth.1635
 
   neurostore:
     extends: coordinate_meta_analysis
@@ -824,6 +904,18 @@ engines:
   iit_tractogram:
     abstract: true
     extends: tracts
+    acknowledgements:
+      - >-
+        IIT Human Brain Atlas v3 (Illinois Institute of Technology; Qi X,
+        Arfanakis K et al.): its whole-brain tractogram (IIT3mean.tck) and
+        its Desikan-Killiany wmparc, under the IIT Human Brain Template
+        License (non-commercial educational and research use, with
+        attribution; https://www.nitrc.org/projects/iit/); FreeSurfer's
+        colour LUT; the bundles of tract_querier (Wassermann D, Makris N,
+        Rathi Y, Shenton M, Kikinis R, Kubicki M, Westin CF. The white
+        matter query language: a novel approach for describing human white
+        matter anatomy. Brain Structure and Function 221:4705-4721 (2016).
+        doi:10.1007/s00429-015-1179-4)
     # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain
     # Template License: non-commercial research, attribution): its
     # whole-brain tractogram and its Desikan-Killiany wmparc, from the OSF

@@ -113,6 +113,9 @@ may specify the following keys, all of them optional:
   (Eickhoff et al., 2009)
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
   predicates
+- ``acknowledgements`` — the sources of the engine's data, a text each
+  with its citation and the acknowledgement its terms ask for; the REPL's
+  ``.credits`` prints those of the engine and of the engines it extends
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
@@ -456,8 +459,9 @@ and the engine's own entries override all of them.  Merging works per key:
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
   ``dimension_type_predicates``, ``assistant_examples``,
-  ``hidden_predicates``, ``solver_mixins`` and ``python_init`` (a single
-  module is a list of one) are concatenated without duplicates;
+  ``hidden_predicates``, ``solver_mixins``, ``acknowledgements`` and
+  ``python_init`` (a single module is a list of one) are concatenated
+  without duplicates;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;

@@ -102,6 +102,13 @@ def test_engines(app, capsys):
     assert "Destrieux 2009 cortical atlas" in out
 
 
+def test_credits_tell_the_sources_of_the_data(app):
+    out = " ".join(_command(app, ".credits").split())
+    assert "The data of neurosynth, and how to acknowledge them:" in out
+    assert "doi:10.1038/nmeth.1635" in out  # Neurosynth
+    assert "1U54MH091657" in out  # the HCP's acknowledgement
+
+
 def test_rewritten_shows_last_query(app, capsys):
     app._execute_and_display("ans(x) :- active(x)")
     capsys.readouterr()

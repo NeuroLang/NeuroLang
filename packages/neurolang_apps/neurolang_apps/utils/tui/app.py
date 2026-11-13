@@ -595,6 +595,10 @@ class InteractiveTuiApp:
             description = " ".join(config.get("description", "").split())
             self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
             self._print_kernel(config)
+            if config.get("acknowledgements"):
+                self.console.print(
+                    "Its data, and how to acknowledge them: "
+                    "[green].credits[/green]")
         self.console.print(
             f"Mode: {mode} · [green].help[/green] for help · "
             "[green]Tab[/green] completes · "

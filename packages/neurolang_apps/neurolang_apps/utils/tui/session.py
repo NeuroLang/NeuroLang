@@ -550,6 +550,22 @@ def cmd_engines(app, arg: str) -> None:
     engine_registry.show_engines()
 
 
+@command(".credits", "Show the sources of the engine's data, and how to "
+         "acknowledge them")
+def cmd_credits(app, arg: str) -> None:
+    """Print the acknowledgements of the data of the session's engine."""
+    name = app.settings.engine_name
+    texts = engine_registry.get_acknowledgements(name) if name else []
+    if not texts:
+        app.console.print("This engine names no source of its data.",
+                          markup=False)
+        return
+    app.console.print(f"The data of {name}, and how to acknowledge them:",
+                      markup=False)
+    for text in texts:
+        app.console.print(f"- {text}", markup=False, soft_wrap=True)
+
+
 def _no_last_query(app) -> bool:
     """Print a message and return True if no query has been run yet."""
     if app.last_query is None:

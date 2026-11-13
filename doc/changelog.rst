@@ -44,6 +44,19 @@ Unreleased
   repl-downloads``), so that a rebuild does not need its sources (OSF,
   GitHub) to be up.
 
+* The engines with the MNI atlases have the structural connectivity of the
+  cortex: ``schaefer_structural_connectivity(l1, l2, n)`` and
+  ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
+  streamlines joining two parcels over 1,064 subjects of the Human
+  Connectome Project, from the high-resolution connectomes of Mansour et
+  al. (2021), parcellated by ``tools/hcp_structural_connectivity``
+  (``connectomes/README.md`` of the engines); ``.view`` draws a result of
+  them as a network. There is no subcortex in them, so no Tian.
+* An engine names the sources of its data, with their citations and the
+  acknowledgements their terms ask for (``acknowledgements``, inherited
+  from the engines it extends), and the REPL's ``.credits`` prints them:
+  the atlases, Neurosynth, the IIT Human Brain Atlas and the HCP.
+
 * ``neurolang-repl-serve --config server.yaml``: the server's options in a
   YAML file, each by its name, its paths relative to it, the command line
   replacing them; the service installed with it runs the file.  Its secrets

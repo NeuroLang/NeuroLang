@@ -268,6 +268,9 @@ Every command
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines
      - both
+   * - ``.credits``
+     - the sources of the engine's data, and how to acknowledge them
+     - both
    * - ``.datalog [PREDICATE]``
      - the Datalog of the last SQUALL query, or the rules of a relation
      - both
