@@ -272,6 +272,10 @@ Unreleased
   manager says of it; and the activity log has each run of the server, to
   its stop (a SIGTERM, as from systemd, now stops the server as Ctrl+C
   does, ending its sessions).
+* With ``--activity-db``, an answer of the assistant logs the tokens it sent
+  and received, its provider and model, and whose key paid (the page's, or
+  the server's), shown by user in the console and by user, model and key
+  in the dashboard. The REPL's reply carries them (``tokens``).
 * ``neurolang-repl-serve --guests`` lets visitors in as guests, from the
   login page: sessions of their own, without an account, whose assistant
   answers only with the key they give (no key of the server's, which is

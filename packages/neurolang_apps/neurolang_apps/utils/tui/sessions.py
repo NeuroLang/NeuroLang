@@ -313,11 +313,15 @@ class Session:
         if before and after and before["pid"] == after["pid"]:
             cpu = round(after["cpu"] - before["cpu"], 2)
             memory = after["private"]
+        tokens = reply.get("tokens") or {}
         self.sessions._log(
             self, "submit", text=text,
             response=response_text(reply),
             failed=bool(reply.get("failed")), seconds=round(seconds, 3),
-            cpu=cpu, memory=memory,
+            cpu=cpu, memory=memory, tokens_in=tokens.get("input"),
+            tokens_out=tokens.get("output"),
+            llm=tokens and f"{tokens.get('provider')}/{tokens.get('model')}"
+            or None, llm_key=tokens.get("key"),
         )
 
     def set_llm(self, **options) -> None:

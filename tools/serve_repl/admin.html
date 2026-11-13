@@ -101,7 +101,7 @@
 <h2>Usage by user</h2>
 <p class="note" id="usage-note"></p>
 <div class="scroll"><table>
-  <thead><tr><th>User</th><th>Inputs</th><th>Failed</th><th>Time</th><th>CPU</th><th>Most memory</th><th>Last</th><th></th></tr></thead>
+  <thead><tr><th>User</th><th>Inputs</th><th>Failed</th><th>Time</th><th>CPU</th><th>Most memory</th><th>Tokens (in / out)</th><th>Last</th><th></th></tr></thead>
   <tbody id="usage"></tbody>
 </table></div>
 
@@ -257,10 +257,11 @@ async function showUsage(logged) {
     $("usage-note").textContent = "No log of the activity: start the server with --activity-db FILE.";
     return $("usage").replaceChildren();
   }
-  $("usage-note").textContent = "Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), from the log.";
+  $("usage-note").textContent = "Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log.";
   const users = await call("/admin/api/usage");
   $("usage").replaceChildren(...(users.length ? users.map((u) => row([
     u.user, u.inputs, u.failed, `${u.seconds ?? 0} s`, `${u.cpu ?? 0} s`, u.memory == null ? "-" : `${u.memory} MB`,
+    u.tokens_in == null ? "-" : `${u.tokens_in} / ${u.tokens_out}`,
     (u.last ?? "").replace("T", " ").slice(0, 16),
     Object.assign(document.createElement("a"), { href: `/admin/activity.jsonl?user=${encodeURIComponent(u.user)}`, textContent: "Log" }),
   ])) : [row(["Nothing run yet."])]));
