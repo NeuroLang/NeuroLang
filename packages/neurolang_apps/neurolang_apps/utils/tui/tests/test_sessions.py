@@ -533,6 +533,8 @@ def test_the_activity_of_the_users_is_logged(tmp_path):
         ann.submit("ans(x) :- person(x, 5)")
         ann.submit("ans(x :- (")
         ann.stop()
+        with pytest.raises(SessionEnded):  # not run: not logged
+            ann.submit("ans(x) :- person(x, 5)")
     finally:
         sessions.close()
     log = ActivityLog(tmp_path / "activity.sqlite")
@@ -551,6 +553,8 @@ def test_the_activity_of_the_users_is_logged(tmp_path):
     [totals] = log.totals()
     assert (totals["user"], totals["inputs"], totals["failed"]) == \
         ("ann", 2, 1)
+    if os.path.exists("/proc/self/smaps_rollup"):  # the inputs' CPU only
+        assert totals["cpu"] == round(good["cpu"] + bad["cpu"], 1)
 
 
 def test_the_own_memory_of_a_fork_is_apart_from_the_shared():

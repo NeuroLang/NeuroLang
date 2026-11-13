@@ -43,18 +43,23 @@ def _kill(pid: int) -> None:
         pass
 
 
-def process_usage(pid: int) -> Optional[dict]:
+def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
     """
-    Return the CPU seconds of the process *pid* and its memory in MB, on
-    Linux (None elsewhere, or if it is gone): its resident memory (``rss``),
-    which counts the pages a session shares with the builder, its
-    proportional share of them (``pss``) and the memory of its own
-    (``private``), which a session adds to the machine's.
+    Return the CPU seconds of the process *pid* and, if *memory*, its
+    memory in MB, on Linux (None elsewhere, or if it is gone): its resident
+    memory (``rss``), which counts the pages a session shares with the
+    builder, its proportional share of them (``pss``) and the memory of its
+    own (``private``), which a session adds to the machine's. The memory
+    takes longer to read, the larger the process.
     """
     try:
         with open(f"/proc/{pid}/stat") as file:
             # Its name, in parentheses, may hold spaces: the fields follow.
             fields = file.read().rsplit(")", 1)[1].split()
+        ticks = int(fields[11]) + int(fields[12])  # utime, stime
+        cpu = {"pid": pid, "cpu": round(ticks / os.sysconf("SC_CLK_TCK"), 2)}
+        if not memory:
+            return cpu
         kb = {}
         with open(f"/proc/{pid}/smaps_rollup") as file:
             for line in file:
@@ -62,12 +67,10 @@ def process_usage(pid: int) -> Optional[dict]:
                 value = value.split()
                 if len(value) == 2 and value[1] == "kB":
                     kb[name] = int(value[0])
-        ticks = int(fields[11]) + int(fields[12])  # utime, stime
     except (OSError, IndexError, ValueError):
         return None
     return {
-        "pid": pid,
-        "cpu": round(ticks / os.sysconf("SC_CLK_TCK"), 2),
+        **cpu,
         "rss": round(kb.get("Rss", 0) / 1024, 1),
         "pss": round(kb.get("Pss", 0) / 1024, 1),
         "private": round((kb.get("Private_Clean", 0)
@@ -270,12 +273,16 @@ class Session:
                 self.used = time.monotonic()
 
     def submit(self, text: str) -> dict:
-        before = self._sample()
+        pid = self.pid
+        before = process_usage(pid, memory=False) if pid else None
         began = time.monotonic()
         reply = {"html": "", "failed": True}
         try:
             reply = self._call("submit", text=text)
             return reply
+        except SessionEnded:
+            reply = None  # not run: the page brings the session back
+            raise
         except Exception as error:
             reply = {"html": f"{type(error).__name__}: {error}",
                      "failed": True}
@@ -292,9 +299,9 @@ class Session:
             self.peak = max(self.peak, usage["private"])
         return usage
 
-    def _log_submit(self, text: str, reply: dict, seconds: float,
+    def _log_submit(self, text: str, reply: Optional[dict], seconds: float,
                     before: Optional[dict]) -> None:
-        if self.sessions.activity is None:
+        if self.sessions.activity is None or reply is None:
             return
         from neurolang_apps.utils.tui.activity import response_text
 
@@ -344,8 +351,7 @@ class Session:
             usage = self.usage if self.usage and self.usage["pid"] == pid \
                 else {}
             self.sessions._log(self, "end", text=reason,
-                               cpu=usage.get("cpu"),
-                               memory=usage.get("private"))
+                               cpu=usage.get("cpu"), memory=self.peak or None)
 
     # Its process.
 
