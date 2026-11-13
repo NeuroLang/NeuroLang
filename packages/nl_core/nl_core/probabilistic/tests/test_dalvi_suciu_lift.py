@@ -1299,7 +1299,7 @@ def test_extremum_conjunct_of_a_subquery():
     events for different values of w have different tuples, implies the
     query; y is no candidate in R(x) ∧ S(x, y) ∧ y < w, ∃x R(x) ∧ S(x, y)
     sharing R(x) across the values of y, nor w with a comparison x < z of
-    a variable of its subquery."""
+    a variable of its subquery, or within a term."""
     R, S, V = (Symbol(n) for n in ("R", "S", "V"))
     x, y, z, w = (Symbol(n) for n in ("x", "y", "z", "w"))
     symbol_table = {
@@ -1320,6 +1320,10 @@ def test_extremum_conjunct_of_a_subquery():
     ) is None
     assert dalvi_suciu_lift._extremum_conjunct(
         w, variables, (S(x, y), V(z, w), LT(y, w), LT(x, z)), symbol_table
+    ) is None
+    assert dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, Constant(abs)(w))),
+        symbol_table
     ) is None
 
 
