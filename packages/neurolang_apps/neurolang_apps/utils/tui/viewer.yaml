@@ -1,0 +1,35 @@
+# The defaults of the brain viewer: .view (nifti.py), the page of
+# brain_viewer.py and its script, static/brain_viewer.js. They are read
+# there, the one place they are written; the tests check the help quotes them.
+
+# The threshold .view starts with: a value, or a percentile of the nonzero
+# values ("95%": the top 5% of the voxels shown).
+view_threshold: "95%"
+
+# The colormap used when none is asked for; those of the overlays after the
+# first, in turn; and those the page offers (matplotlib's and nilearn's).
+colormap: plasma
+overlay_colormaps: [viridis, cool, hot, cividis, magma]
+colormaps: [hot, inferno, viridis, plasma, magma, cividis, cold_hot, RdBu_r,
+            bwr, coolwarm, gray]
+
+# The largest background embedded, in voxels: the 1 mm MNI grid fits.
+background_max_voxels: 16777216
+
+network:
+  node_radius: 4.0        # mm: the largest node
+  edge_radius: 1.5        # mm: the thickest edge
+  overlay_opacity: 0.5    # the overlays of a network or streamlines start so
+  min_shown_edges: 20     # a percentile threshold shows at least these
+  max_edges: 20000        # the largest edges given to the page
+
+streamlines:
+  max_shown: 20000        # drawn at most, evenly subsampled
+
+# What the script of the page takes (the data of the page carries it).
+page:
+  listed_edges: 20        # the strongest edges listed under the views
+  network_xray: 0.6       # how much a network shows through the 3D render
+  network_slab_mm: 6      # the slab of a slice a network is drawn in
+  thinnest_edge: 0.2      # the edge at the threshold, a share of the largest
+  histogram_bins: 60      # the bins of the histogram of the values

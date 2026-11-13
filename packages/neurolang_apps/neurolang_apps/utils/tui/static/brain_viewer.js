@@ -270,8 +270,11 @@
   // much the network shows through the 3D render, the thickness of the
   // slab of a slice it is drawn in, in millimetres, and the thickness of
   // the edge at the threshold, a share of that of the largest edge.
-  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6,
-    THINNEST_EDGE = 0.2;
+  var pageSettings = data.settings;  // of viewer.yaml
+  var LISTED_EDGES = pageSettings.listed_edges,
+    NETWORK_XRAY = pageSettings.network_xray,
+    NETWORK_SLAB_MM = pageSettings.network_slab_mm,
+    THINNEST_EDGE = pageSettings.thinnest_edge;
 
   // The network as NiiVue draws it, of the edges of |value| at least
   // *threshold* and the nodes they join. The colour and the size of a
@@ -650,7 +653,7 @@
   // The histogram of the nonzero values of the layer l (|v| when
   // symmetric), from 0 to the top of the sliders, log-scaled, the bins of
   // the range shown in the colours they are drawn with.
-  var BINS = 60;
+  var BINS = pageSettings.histogram_bins;
   function drawHistogram(l, s) {
     var canvas = $('threshold-histogram'), context = canvas.getContext('2d');
     var layer = viewer.layers[l], symmetric = settings(l).symmetric;
