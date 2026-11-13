@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-repl-serve --config server.yaml``: the server's options in a
+  YAML file, each by its name, its paths relative to it, the command line
+  replacing them; the service installed with it runs the file.  Its secrets
+  (the ORCID client, the server's ``env``, the ``password``, the
+  ``key_password`` of the certificate's key) in a second YAML file,
+  ``secrets: secrets.yaml`` or ``--secrets``, which the server refuses if
+  others may read it.
 * ``neurolang-repl-serve --users users.yaml --orcid orcid.yaml``: the users
   named by an ORCID iD sign in with ORCID (OAuth 2.0, scope
   ``/authenticate``), with no password, their ORCID name shown; an iD of no
