@@ -74,6 +74,24 @@ def test_add_uniform_probabilistic_choice_set():
     assert res_d2.type is AbstractSet[Tuple[float, str]]
 
 
+def test_probabilistic_tuples_from_a_dataframe():
+    nl = NeurolangPDL()
+    facts = nl.add_probabilistic_facts_from_tuples(
+        pd.DataFrame({"p": [0.5, 0.2], "x": ["a", "b"]}), name="facts"
+    )
+    choice = nl.add_probabilistic_choice_from_tuples(
+        pd.DataFrame({"p": [0.4, 0.6], "x": ["a", "b"]}), name="choice"
+    )
+    assert facts.type is AbstractSet[Tuple[float, str]]
+    assert choice.type is AbstractSet[Tuple[float, str]]
+    with nl.scope:
+        nl.execute_datalog_program("q(x, p) :- PROB[facts(x) & choice(x)] = p")
+        result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert dict(result.itertuples(index=False)) == pytest.approx(
+        {"a": 0.2, "b": 0.12}
+    )
+
+
 def build_neurosynth_like_engine():
     """
     Build a small engine with the EDB of the neurosynth engine.
