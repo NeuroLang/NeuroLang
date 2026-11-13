@@ -1083,6 +1083,43 @@ def test_disjoint_separator_lifts_queries_with_a_negation():
         assert isinstance(plan, DisjointProjection)
 
 
+@pytest.mark.parametrize("answer", (False, True))
+def test_disjoint_separator_with_a_rest_of_different_columns(answer):
+    """∃x, y C(x, y) ∧ (R(x) ∨ T(y)), the second rule having C(y, x):
+    the rest R(a) ∨ T(b) of the tuple (a, b) of C has disjuncts with
+    different columns, and is lifted joined with the tuples of C:
+    Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b)]."""
+    C, R, T, Z, ans = (Symbol(n) for n in ("C", "R", "T", "Z", "ans"))
+    x, y, z = (Symbol(n) for n in ("x", "y", "z"))
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.4, "a", 1), (0.7, "b", 1)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a", 1), (0.5, "b", 2)]
+    )
+    head = Z(z) if answer else Z()
+    cpl_program.walk(Union((
+        Implication(head, Conjunction((C(x, y), R(x, z)))),
+        Implication(head, Conjunction((C(y, x), T(x, z)))),
+    )))
+    if answer:
+        query = Implication(ans(z), Z(z))
+        expected = [(0.5 * 0.4 + 0.3 * 0.88 + 0.2 * 0.76, 1), (0.25, 2)]
+        columns = ("_p_", "z")
+    else:
+        query = Implication(ans(), Z())
+        expected = [(0.5 * 0.7 + 0.3 * 0.88 + 0.2 * 0.76,)]
+        columns = ("_p_",)
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set(expected, columns)
+    )
+
+
 def test_clauses_are_range_restricted():
     """
     A clause that is a disjunction with a negated atom whose variable no

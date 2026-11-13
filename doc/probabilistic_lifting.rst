@@ -745,7 +745,18 @@ Disjoint separator
    computed as a set (marked with ``Materialise``, as the deterministic
    subqueries above) when the tuples of its relations are known as sets,
    and otherwise as the support of its plan. Otherwise the union is
-   lifted for every :math:`\bar a` by the other rules. The rule applies
+   lifted for every :math:`\bar a` by the other rules. When they decline
+   it and no other atom has the relation of a choice atom, the rest is
+   independent of the choices:
+   :math:`P[\bigvee_i (C(\bar a) \land R_i(\bar a))] = P[C(\bar a)]\,
+   P[\bigvee_i (D_C(\bar a) \land R_i(\bar a))]`, :math:`D_C` the
+   deterministic relation of the tuples of :math:`C`. This gives every
+   disjunct of the rest the variables of :math:`C`, as a union needs:
+   :math:`\exists x, y\, (C(x, y) \land R(x)) \lor \exists x, y\,
+   (C(y, x) \land T(x))`, renamed into :math:`\exists x, y\, C(x, y)
+   \land (R(x) \lor T(y))`, has the rest :math:`R(a) \lor T(b)`, whose
+   disjuncts have different columns, lifted as :math:`(D_C(a, b) \land
+   R(a)) \lor (D_C(a, b) \land T(b))`. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
    them, and every free variable of the query. A free variable or a
@@ -1494,6 +1505,19 @@ Disjoint separator
    choice; with the support, :math:`1 \cdot (1 - 1) = 0`. A tuple of null
    label is not in the support of a provenance set, which the plan of
    :math:`D` ends with.
+
+   *Independent rest.* In every world, :math:`C(\bar a)` implies
+   :math:`D_C(\bar a)`, a true tuple of :math:`C` being one of its
+   tuples, so :math:`C(\bar a) \land R_i \equiv C(\bar a) \land
+   D_C(\bar a) \land R_i`, and the conjunct :math:`C(\bar a)` of every
+   disjunct factors out of the union. An atom of the rest equal to
+   :math:`C(\bar a)` is true under it, as :math:`D_C(\bar a)` is, and is
+   replaced by it too. No other atom of the rest has the relation of a
+   choice atom, and the choices are independent of the other relations
+   and of each other, so the probability of the conjunction of the
+   choice atoms and the rest is the product of theirs: the join of the
+   plans of the choice atoms and of the rest, which has one
+   probabilistic atom less (*Termination*).
 
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
