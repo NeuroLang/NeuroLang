@@ -62,6 +62,15 @@ Unreleased
   the server's), shown by user in the console and by user, model and key
   in the dashboard. The REPL's reply carries them (``tokens``).
 
+**Bug fixes:**
+
+* The query assistant's guidance on the meta-analysis engines: the regions
+  not activated by the studies about a topic get their probability of not
+  being activated given the topic (``~destrieux_activated`` over
+  ``selected_study``), not the regions no such study activates; and MNI
+  coordinates are never the voxel indices of ``activated``, ``lift`` or
+  ``brain_mask``.
+
 
 v0.1a22 (2026-11-13)
 --------------------

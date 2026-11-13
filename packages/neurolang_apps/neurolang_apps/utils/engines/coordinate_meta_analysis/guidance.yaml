@@ -11,7 +11,10 @@ assistant_guidance: >
   question asking for a list (which studies, list the parcels of a
   network, which terms a study mentions) gets the entities themselves,
   without PROB: ans(s) :- mentions(s, 'pain'), or ans(s) :- study(s),
-  ~mentions(s, 'pain').
+  ~mentions(s, 'pain').  The regions not activated by the studies
+  about a topic get their probability of not being activated, given
+  the topic: not_active(l, s) :- destrieux(l, r), selected_study(s),
+  ~destrieux_activated(l, s), then PROB[not_active(l, s) // topic(s)].
   Answer the questions asking how likely, how often, what fraction or
   probability, and those on the activations, co-activations or
   co-occurring terms of a term, a topic or a region (which regions,
@@ -30,7 +33,8 @@ assistant_guidance: >
   they are listed.  A study activates a point when one of its peaks is
   within {kernel_radius_mm} mm of it: peak_mni(x, y, z, s), (euclidean(x, y,
   z, x0, y0, z0) <= {kernel_radius_mm}), with the coordinates of the question as MNI millimetres,
-  written as they are.  For the classical anatomy of the cortex
+  written as they are, never as the voxel indices (i, j, k) of
+  activated, lift or brain_mask.  For the classical anatomy of the cortex
   (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated,
   as for brain areas or regions when the question names no atlas;
   for the functional anatomy, the Schaefer networks of the cortex,
