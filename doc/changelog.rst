@@ -122,6 +122,12 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-repl-serve --users users.yaml --orcid orcid.yaml``: the users
+  named by an ORCID iD sign in with ORCID (OAuth 2.0, scope
+  ``/authenticate``), with no password, their ORCID name shown; an iD of no
+  user asks for an account, with a message, which an admin approves in the
+  console (*Account requests*, adding them to groups) or with
+  ``--approve-request ID --groups G``, or declines.
 * The rest of the documentation starts from the REPL as well: the queries of
   the Cognitive Atlas page run on the ``neurostore`` engine from their link,
   with its counts in the 2026-11 release; Concepts writes facts and rules as
