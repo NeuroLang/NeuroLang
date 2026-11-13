@@ -1123,6 +1123,9 @@ class LocalHandler(Handler):
         try:
             self._answer(action, body)
         except Exception as error:  # told to the page, and in the log
+            if type(error).__name__ == "SessionEnded":
+                # The page brings the session back (sessions.py).
+                return self._json({"error": str(error), "ended": True}, 409)
             traceback.print_exc()
             self._json({"error": f"{type(error).__name__}: {error}"}, 500)
 
