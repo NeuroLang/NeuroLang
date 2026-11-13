@@ -110,7 +110,10 @@ Unreleased
 * In the browser REPL, a result has a *Brain* tab beside *Table* and
   *Graph*: it shows the result in the brain viewer.
 * The assistant takes at most 16 steps by default (``max_steps``, was 8),
-  for questions that need more tool calls before a query that runs.
+  for questions that need more tool calls before a query that runs.  The
+  defaults of the LLM configuration are in one file,
+  ``utils/llm/defaults.yaml``, which the configuration reads; the example
+  configuration and the docs quote it, and the tests check that they agree.
 * When the assistant of the browser REPL finds no query, a notice under the
   question says so, why (the steps it used up, its last query's error, or
   in its words what it found), that the query box still holds the query of
