@@ -1166,9 +1166,11 @@ def test_users_options(serve, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     command = serve.service_command(serve.parse_args([
         "--local", "--users", "users.yaml", "--max-sessions", "3",
-        "--idle-minutes", "30", "--daemon", "install",
+        "--idle-minutes", "30", "--max-running", "2", "--daemon", "install",
     ]))
     after = dict(zip(command, command[1:]))
+    assert (after["--max-running"], after["--query-minutes"]) == ("2",
+                                                                  "60.0")
     assert after["--users"] == str(tmp_path / "users.yaml")
     assert (after["--max-sessions"], after["--idle-minutes"]) == ("3", "30.0")
 
@@ -1194,7 +1196,8 @@ def test_an_unknown_user_is_checked_as_long_as_a_user(serve, monkeypatch):
 
 def test_the_sessions_options_are_checked(serve):
     for options in (["--max-sessions", "0"], ["--idle-minutes", "0"],
-                    ["--idle-minutes", "-1"]):
+                    ["--idle-minutes", "-1"], ["--max-running", "0"],
+                    ["--query-minutes", "-1"]):
         with pytest.raises(SystemExit):
             serve.parse_args(["--local", "--users", "u", *options])
 

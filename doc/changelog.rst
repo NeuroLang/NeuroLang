@@ -32,9 +32,6 @@ Unreleased
   user asks for an account, with a message, which an admin approves in the
   console (*Account requests*, adding them to groups) or with
   ``--approve-request ID --groups G``, or declines.
-
-**New features:**
-
 * ``neurolang-repl-serve --local --users`` tracks the CPU seconds and the
   memory of each session's process, its own apart from the engine's data it
   shares with the builder (on Linux), shown in the admin console; and, with
@@ -42,7 +39,10 @@ Unreleased
   long it took and the resources it took, in SQLite, with the totals of each
   user and their log in the console. The page tells its users their inputs
   are logged.
-
+* ``neurolang-repl-serve --local --users`` runs at most ``--max-running``
+  queries at once (the machine's CPUs), of all the sessions, the others
+  waiting their turn, their page saying so; and stops a query running longer
+  than ``--query-minutes`` (60), ending its session's process.
 
 
 v0.1a22 (2026-11-13)
