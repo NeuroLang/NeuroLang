@@ -43,6 +43,41 @@ def _kill(pid: int) -> None:
         pass
 
 
+def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
+    """
+    Return the CPU seconds of the process *pid* and, if *memory*, its
+    memory in MB, on Linux (None elsewhere, or if it is gone): its resident
+    memory (``rss``), which counts the pages a session shares with the
+    builder, its proportional share of them (``pss``) and the memory of its
+    own (``private``), which a session adds to the machine's. The memory
+    takes longer to read, the larger the process.
+    """
+    try:
+        with open(f"/proc/{pid}/stat") as file:
+            # Its name, in parentheses, may hold spaces: the fields follow.
+            fields = file.read().rsplit(")", 1)[1].split()
+        ticks = int(fields[11]) + int(fields[12])  # utime, stime
+        cpu = {"pid": pid, "cpu": round(ticks / os.sysconf("SC_CLK_TCK"), 2)}
+        if not memory:
+            return cpu
+        kb = {}
+        with open(f"/proc/{pid}/smaps_rollup") as file:
+            for line in file:
+                name, _, value = line.partition(":")
+                value = value.split()
+                if len(value) == 2 and value[1] == "kB":
+                    kb[name] = int(value[0])
+    except (OSError, IndexError, ValueError):
+        return None
+    return {
+        **cpu,
+        "rss": round(kb.get("Rss", 0) / 1024, 1),
+        "pss": round(kb.get("Pss", 0) / 1024, 1),
+        "private": round((kb.get("Private_Clean", 0)
+                          + kb.get("Private_Dirty", 0)) / 1024, 1),
+    }
+
+
 # -- In the builder's process ---------------------------------------------
 
 def _builder(conn, address, authkey, options: dict, build) -> None:
@@ -164,6 +199,11 @@ class Session:
         # process, or a message of the builder, of another is not this one's.
         self.starts = 0
         self.pid: Optional[int] = None
+        self.engine = ""
+        # The latest usage of its process (process_usage), and the most
+        # private memory of its processes, in MB.
+        self.usage: Optional[dict] = None
+        self.peak = 0.0
         # The identity of its user its process has: (variables, groups).
         self.identity = None
         self._conn = None
@@ -203,7 +243,8 @@ class Session:
     def start(self, engine: str) -> dict:
         """Start the session anew, in a new process, on *engine*."""
         with self._starting:
-            self.end()
+            self.end("restarted")
+            self.engine = engine
             self._forked.clear()
             self._failure = None
             self.busy += 1
@@ -212,7 +253,7 @@ class Session:
                 # The build may take minutes; the session may end meanwhile.
                 while not self._forked.wait(5):
                     if self.sessions.dead or not self.sessions._owns(self):
-                        self.end()
+                        self.end("ended while it started")
                 if self._failure:
                     raise RuntimeError(self._failure)
                 identity = self.sessions.identity(self.key[0])
@@ -220,13 +261,62 @@ class Session:
                     self._call("use_identity", env=identity[0],
                                groups=identity[1])
                     self.identity = identity
-                return self._call("start", engine=engine)
+                ready = self._call("start", engine=engine)
+                self.sessions._log(self, "start", text=engine)
+                if self.sessions.activity is not None:
+                    from neurolang_apps.utils.tui.activity import LOG_NOTE
+
+                    ready["logNote"] = LOG_NOTE
+                return ready
             finally:
                 self.busy -= 1
                 self.used = time.monotonic()
 
     def submit(self, text: str) -> dict:
-        return self._call("submit", text=text)
+        pid = self.pid
+        before = process_usage(pid, memory=False) if pid else None
+        began = time.monotonic()
+        reply = {"html": "", "failed": True}
+        try:
+            reply = self._call("submit", text=text)
+            return reply
+        except SessionEnded:
+            reply = None  # not run: the page brings the session back
+            raise
+        except Exception as error:
+            reply = {"html": f"{type(error).__name__}: {error}",
+                     "failed": True}
+            raise
+        finally:
+            self._log_submit(text, reply, time.monotonic() - began, before)
+
+    def _sample(self) -> Optional[dict]:
+        """Take the usage of the session's process now, if it runs."""
+        pid = self.pid
+        usage = process_usage(pid) if pid is not None else None
+        if usage is not None:
+            self.usage = usage
+            self.peak = max(self.peak, usage["private"])
+        return usage
+
+    def _log_submit(self, text: str, reply: Optional[dict], seconds: float,
+                    before: Optional[dict]) -> None:
+        if self.sessions.activity is None or reply is None:
+            return
+        from neurolang_apps.utils.tui.activity import response_text
+
+        # Its process's, after: as it ended (end), if it did.
+        after = self._sample() or self.usage
+        cpu = memory = None
+        if before and after and before["pid"] == after["pid"]:
+            cpu = round(after["cpu"] - before["cpu"], 2)
+            memory = after["private"]
+        self.sessions._log(
+            self, "submit", text=text,
+            response=response_text(reply),
+            failed=bool(reply.get("failed")), seconds=round(seconds, 3),
+            cpu=cpu, memory=memory,
+        )
 
     def set_llm(self, **options) -> None:
         return self._call("set_llm", **options)
@@ -241,12 +331,14 @@ class Session:
         """End the session's process, which stops what it does: the page
         starts the session again."""
         running = self.pid is not None
-        self.end()
+        self.end("stopped")
         return running
 
-    def end(self) -> None:
-        """Kill the session's process, if any; what waits on it fails."""
+    def end(self, reason: str = "ended") -> None:
+        """Kill the session's process, if any, logging why, *reason*; what
+        waits on it fails."""
         with self._lock:
+            self._sample()  # its last usage, which the log of a query takes
             pid, conn, self.pid, self._conn = self.pid, self._conn, None, None
             if pid is not None:
                 _kill(pid)
@@ -255,6 +347,11 @@ class Session:
                 self._fail_replies(conn)
             if not self._forked.is_set():  # a start waiting for its process
                 self._failed("The session ended")
+        if pid is not None:
+            usage = self.usage if self.usage and self.usage["pid"] == pid \
+                else {}
+            self.sessions._log(self, "end", text=reason,
+                               cpu=usage.get("cpu"), memory=self.peak or None)
 
     # Its process.
 
@@ -330,7 +427,10 @@ class Sessions:
     the sessions of *user* (the key of their AI assistant) and their groups,
     at each start; by default those of *env*, by user, and no groups. With
     *feedback_db*, the sessions store their ratings in that database,
-    signed by their user and groups. The variables *withhold* (the keys of
+    signed by their user and groups. With *activity_db*, the inputs of the
+    sessions, their results and the resources they took are logged there
+    (:class:`~neurolang_apps.utils.tui.activity.ActivityLog`). The
+    variables *withhold* (the keys of
     the server) are not in the sessions' environment unless their identity
     gives them. The other options are those of a
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`; *build*
@@ -343,11 +443,19 @@ class Sessions:
         most: int = 8, idle: float = 7200.0,
         build: Optional[Callable] = None,
         identity: Optional[Callable] = None, feedback_db=None,
-        withhold=(),
+        withhold=(), activity_db=None,
     ):
         env = env or {}
         self.identity = identity or (lambda user: (env.get(user, {}), ""))
         self.feedback_db = feedback_db
+        self.activity = None
+        if activity_db:
+            from neurolang_apps.utils.tui.activity import ActivityLog
+
+            self.activity = ActivityLog(activity_db)
+        #: The latest usage of the builder's process (process_usage): the
+        #: memory the sessions share.
+        self.builder_usage: Optional[dict] = None
         self.most = most
         self.idle = idle
         self._sessions = {}
@@ -375,7 +483,8 @@ class Sessions:
             os.environ.update(withheld)
         theirs.close()
         self._closed = False
-        for target in (self._accept, self._read_builder, self._reap):
+        for target in (self._accept, self._read_builder, self._reap,
+                       self._measure):
             threading.Thread(target=target, daemon=True).start()
 
     def session(self, user: str, tab: str) -> Session:
@@ -395,7 +504,7 @@ class Sessions:
             sessions = list(self._sessions.values())
             self._sessions.clear()
         for session in sessions:
-            session.end()
+            session.end("the server stopped")
         self._builder_conn.close()
         self._builder.join(5)
         if self._builder.is_alive():
@@ -424,7 +533,8 @@ class Sessions:
                 f"The server has {self.most} sessions at work: close a tab "
                 "or wait"
             )
-        min(idle, key=lambda s: s.used).end()
+        min(idle, key=lambda s: s.used).end(
+            f"made room for a session of {starting.key[0]}")
 
     def _fork(self, session: Session, engine: str) -> None:
         """Number a start of *session* and ask the builder for its
@@ -465,9 +575,14 @@ class Sessions:
         now = time.monotonic()
         with self._lock:
             sessions = list(self._sessions.values())
-        return [{"user": s.key[0], "tab": s.key[1],
+        return [{"user": s.key[0], "tab": s.key[1], "engine": s.engine,
                  "idle": round(now - s.used), "running": s.pid is not None,
-                 "busy": bool(s.busy)} for s in sessions]
+                 "busy": bool(s.busy),
+                 # the latest sample of its process, and the most memory
+                 "cpu": s.usage and s.usage["cpu"],
+                 "memory": s.usage and s.usage["private"],
+                 "pss": s.usage and s.usage["pss"],
+                 "peak": s.peak or None} for s in sessions]
 
     #: How long a refresh waits for a session's process, in seconds.
     REFRESH_SECONDS = 10.0
@@ -499,16 +614,17 @@ class Sessions:
         except Exception:  # an ended session takes it at its start
             pass
 
-    def end(self, user: str, tab: Optional[str] = None) -> int:
+    def end(self, user: str, tab: Optional[str] = None,
+            reason: str = "ended by an admin") -> int:
         """End the sessions of *user* (that of the tab *tab* only, if
-        given); return how many."""
+        given), for *reason*; return how many."""
         with self._lock:
             ended = [s for key, s in self._sessions.items()
                      if key[0] == user and tab in (None, key[1])]
             for session in ended:
                 del self._sessions[session.key]
         for session in ended:
-            session.end()
+            session.end(reason)
         return len(ended)
 
     def _accept(self) -> None:
@@ -576,6 +692,34 @@ class Sessions:
                 session._failed(f"The process of the session ({pid}) did "
                                 "not start: see the server's log")
 
+    #: How often the usage of the processes is taken, in seconds.
+    USAGE_SECONDS = 10.0
+
+    def _measure(self) -> None:
+        """Take the usage of the processes of the sessions running, and of
+        the builder, every USAGE_SECONDS."""
+        while not self._closed:
+            self.builder_usage = process_usage(self._builder.pid)
+            with self._lock:
+                sessions = [s for s in self._sessions.values()
+                            if s.pid is not None]
+            for session in sessions:
+                session._sample()
+            time.sleep(self.USAGE_SECONDS)
+
+    def _log(self, session: Session, kind: str, **fields) -> None:
+        """Log the event *kind* of *session*, if the activity is logged;
+        a failure to is told in the server's log only."""
+        if self.activity is None:
+            return
+        groups = session.identity[1] if session.identity else ""
+        try:
+            self.activity.add(session.key[0], kind, tab=session.key[1],
+                              groups=groups, engine=session.engine,
+                              **fields)
+        except Exception:
+            traceback.print_exc()
+
     def _reap(self) -> None:
         while not self._closed:
             time.sleep(min(60.0, self.idle / 2))
@@ -586,4 +730,4 @@ class Sessions:
                 for session in idle:
                     del self._sessions[session.key]
             for session in idle:
-                session.end()
+                session.end("idle")

@@ -634,6 +634,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._reply_json(self._admin_state())
         if path == "/admin/api/feedback":
             return self._reply_json(self._admin_feedback())
+        activity = getattr(self.sessions, "activity", None)
+        if path == "/admin/api/usage":
+            return self._reply_json(activity.totals() if activity else [])
+        if path == "/admin/activity.jsonl" and activity:
+            # The log of a user, ?user=NAME, an event a line.
+            query = urllib.parse.urlsplit(self.path).query
+            user = urllib.parse.parse_qs(query).get("user", [""])[0]
+            entries = activity.entries(user)
+            if not entries:
+                raise ValueError(f"No activity of {user!r}: ?user=NAME")
+            text = "".join(json.dumps(e) + "\n" for e in entries)
+            name = urllib.parse.quote(user, safe="")
+            return self._reply(200, text.encode(), "application/x-ndjson", [
+                ("Content-Disposition",
+                 f'attachment; filename="activity-{name}.jsonl"')])
         if path == "/admin/feedback.yaml" and self.feedback_db:
             # The examples of the assistant of an engine, ?engine=NAME.
             from neurolang_apps.utils.llm.feedback_server import (
@@ -675,6 +690,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                        for group in named],
             "providers": _providers(),
             "sessions": self.sessions.info() if self.sessions else None,
+            # the memory the sessions share, that of the builder's process
+            "builder": getattr(self.sessions, "builder_usage", None),
+            "activity": getattr(self.sessions, "activity", None) is not None,
             "feedback": bool(self.feedback_db),
             "feedback_engines": self._feedback_engines(),
         }
@@ -746,7 +764,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/remove-user":
             self.users.remove(name)
             if self.sessions:
-                self.sessions.end(name)
+                self.sessions.end(name, reason="the user was removed")
             return {"ok": True}
         if path == "/admin/api/end-session" and self.sessions:
             tab = body.get("tab")
@@ -2102,6 +2120,7 @@ def service_command(args) -> list:
         ("--password-file", args.password_file), ("--env-file", args.env_file),
         ("--users", args.users), ("--feedback-db", args.feedback_db),
         ("--orcid", args.orcid), ("--secrets", args.secrets),
+        ("--activity-db", args.activity_db),
     ):
         if path is not None:
             command += [option, str(path.resolve())]
@@ -2373,6 +2392,14 @@ def parse_args(argv=None):
         "exports them as YAML",
     )
     parser.add_argument(
+        "--activity-db", type=Path, metavar="FILE",
+        help="with --local and --users, log what each user runs, its "
+        "result as text, how long it took, the CPU time and the memory of "
+        "their session, in the SQLite database FILE (made if need be); the "
+        "admin console shows the totals of each user and gives their log; "
+        "the page tells the users their inputs are logged",
+    )
+    parser.add_argument(
         "--hash-password", action="store_true",
         help="ask a password and print its hash, for a users file",
     )
@@ -2515,6 +2542,8 @@ def parse_args(argv=None):
         parser.error("--guests needs --users and --local")
     if args.feedback_db and not args.local:
         parser.error("--feedback-db stores the ratings of --local")
+    if args.activity_db and not (args.local and args.users):
+        parser.error("--activity-db logs the sessions of --local --users")
     if (args.env_file or "env" in args.secret) and not (
             args.local and (password or args.users)):
         parser.error("--env-file is the key of those who log in: with "
@@ -2734,9 +2763,13 @@ def main(argv=None) -> None:
             backend = Sessions(
                 args.data_dir, identity=identity, withhold=strip,
                 feedback_db=args.feedback_db and args.feedback_db.resolve(),
+                activity_db=args.activity_db and args.activity_db.resolve(),
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 **options,
             )
+            if args.activity_db:
+                print("What the users run is logged in "
+                      f"{args.activity_db.resolve()}", flush=True)
         else:
             if args.feedback_db:
                 options["feedback"] = {

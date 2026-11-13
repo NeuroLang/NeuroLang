@@ -91,9 +91,18 @@
 <p class="note">The users of a group have its assistant unless they have their own; of several groups, the first by name gives it. A group may forbid its users their own key (a user's own setting wins).</p>
 
 <h2>Sessions</h2>
+<p class="note" id="builder-note"></p>
 <div class="scroll"><table>
-  <thead><tr><th>User</th><th>Tab</th><th>Unused for</th><th>State</th><th></th></tr></thead>
+  <thead><tr><th>User</th><th>Tab</th><th>Engine</th><th>Unused for</th><th>State</th><th>CPU</th><th>Memory</th><th></th></tr></thead>
   <tbody id="sessions"></tbody>
+</table></div>
+<p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
+
+<h2>Usage by user</h2>
+<p class="note" id="usage-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th>User</th><th>Inputs</th><th>Failed</th><th>Time</th><th>CPU</th><th>Most memory</th><th>Last</th><th></th></tr></thead>
+  <tbody id="usage"></tbody>
 </table></div>
 
 <h2>Feedback</h2>
@@ -213,9 +222,13 @@ async function show() {
   $("sessions").replaceChildren(...(sessions === null
     ? [row(["The server runs no sessions of its own (without --local)."])]
     : sessions.length ? sessions.map((s) => row([
-      s.user, s.tab.slice(0, 8), minutes(s.idle), s.busy ? "at work" : s.running ? "running" : "ended",
+      s.user, s.tab.slice(0, 8), s.engine, minutes(s.idle), s.busy ? "at work" : s.running ? "running" : "ended",
+      s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  const builder = state.builder;
+  $("builder-note").textContent = builder ? `The engines' builder, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "";
+  await showUsage(state.activity);
   if (!state.feedback) {
     $("feedback-note").textContent = "No feedback database: start the server with --feedback-db FILE.";
     return;
@@ -231,6 +244,21 @@ async function show() {
     answer.question, answer.query,
     answer.ratings.map((r) => r.verdict + (r.comment ? `: ${r.comment}` : "")).join("\n"),
   ])));
+}
+
+// What each user ran (--activity-db), and their log.
+async function showUsage(logged) {
+  if (!logged) {
+    $("usage-note").textContent = "No log of the activity: start the server with --activity-db FILE.";
+    return $("usage").replaceChildren();
+  }
+  $("usage-note").textContent = "Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), from the log.";
+  const users = await call("/admin/api/usage");
+  $("usage").replaceChildren(...(users.length ? users.map((u) => row([
+    u.user, u.inputs, u.failed, `${u.seconds ?? 0} s`, `${u.cpu ?? 0} s`, u.memory == null ? "-" : `${u.memory} MB`,
+    (u.last ?? "").replace("T", " ").slice(0, 16),
+    Object.assign(document.createElement("a"), { href: `/admin/activity.jsonl?user=${encodeURIComponent(u.user)}`, textContent: "Log" }),
+  ])) : [row(["Nothing run yet."])]));
 }
 
 $("change").addEventListener("submit", (event) => {

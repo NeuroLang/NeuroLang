@@ -519,3 +519,62 @@ def test_a_change_during_a_start_reaches_the_session(tmp_path, monkeypatch):
         assert ready and ready[0]["assistant"]
     finally:
         sessions.close()
+
+
+def test_the_activity_of_the_users_is_logged(tmp_path):
+    from neurolang_apps.utils.tui.activity import ActivityLog
+
+    sessions = Sessions(tmp_path, build=build,
+                        activity_db=tmp_path / "activity.sqlite",
+                        identity=lambda user: ({}, "lab"))
+    try:
+        ann = sessions.session("ann", "1")
+        assert "logs what you run" in ann.start("neurostore")["logNote"]
+        ann.submit("ans(x) :- person(x, 5)")
+        ann.submit("ans(x :- (")
+        ann.stop()
+        with pytest.raises(SessionEnded):  # not run: not logged
+            ann.submit("ans(x) :- person(x, 5)")
+    finally:
+        sessions.close()
+    log = ActivityLog(tmp_path / "activity.sqlite")
+    events = log.entries("ann")
+    kinds = [e["kind"] for e in events]
+    assert kinds == ["start", "submit", "submit", "end"]
+    start, good, bad, end = events
+    assert (start["text"], start["engine"], start["groups"]) == \
+        ("neurostore", "neurostore", "lab")
+    assert good["text"] == "ans(x) :- person(x, 5)"
+    assert "bob" in good["response"] and not good["failed"]
+    assert bad["failed"] and good["seconds"] >= 0
+    assert end["text"] == "stopped"
+    if os.path.exists("/proc/self/smaps_rollup"):  # Linux
+        assert good["cpu"] is not None and good["memory"] > 0
+    [totals] = log.totals()
+    assert (totals["user"], totals["inputs"], totals["failed"]) == \
+        ("ann", 2, 1)
+    if os.path.exists("/proc/self/smaps_rollup"):  # the inputs' CPU only
+        assert totals["cpu"] == round(good["cpu"] + bad["cpu"], 1)
+
+
+def test_the_own_memory_of_a_fork_is_apart_from_the_shared():
+    from neurolang_apps.utils.tui.sessions import process_usage
+
+    if process_usage(os.getpid()) is None:
+        pytest.skip("the usage of a process is read on Linux")
+    shared = bytearray(os.urandom(1 << 20)) * 100  # 100 MB, of the parent
+    ready, done = os.pipe(), os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        own = bytearray(os.urandom(1 << 20)) * 50  # 50 MB of its own
+        os.write(ready[1], b"x")
+        os.read(done[0], 1)
+        os._exit(len(own) and len(shared) and 0)
+    try:
+        os.read(ready[0], 1)
+        usage = process_usage(pid)
+    finally:
+        os.write(done[1], b"x")
+        os.waitpid(pid, 0)
+    assert 45 < usage["private"] < 80  # its 50 MB, not the parent's 100
+    assert usage["rss"] > usage["private"] + 80  # the rss counts them
