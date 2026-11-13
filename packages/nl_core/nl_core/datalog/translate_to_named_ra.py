@@ -521,6 +521,13 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         # the previous difference, that match it: the result is the same,
         # and the expression grows linearly with the negations instead of
         # doubling with each (the previous difference was in both operands)
+        if classified_formulas["neg_formulas"] and not (
+            classified_formulas["pos_formulas"]
+        ):
+            # Without positive formulas, the negations restrict TRUE
+            output = Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet.dee()
+            )
         positive = output
         named_columns = classified_formulas["named_columns"]
         for neg_formula in classified_formulas["neg_formulas"]:
