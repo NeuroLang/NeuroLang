@@ -238,6 +238,17 @@ def test_a_session_downloads_and_rates(sessions):
     assert "ok" in ann.rate(verdict="good")
 
 
+def test_a_session_loads_what_its_page_uploads(sessions):
+    ann = sessions.session("ann", "t1")
+    ann.start("neurosynth")
+    assert ann.upload(name="pets.csv", data=b"pet\ncat\n") == {
+        "name": "pets.csv", "statement": ".load pets.csv"}
+    ann.submit(".load pets.csv")
+    assert _rows(ann.submit("ans(x) :- pets(x)")) == [["cat"]]
+    with pytest.raises(RuntimeError, match="not the name of a file"):
+        ann.upload(name="../pets.csv", data=b"pet\n")
+
+
 def test_a_busy_session_is_not_ended_for_another(tmp_path):
     sessions = Sessions(tmp_path, build=build, most=1)
     try:

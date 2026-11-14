@@ -30,7 +30,7 @@ const llmForm = $("llm");
 const results = $("results");
 const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
-const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open")];
+const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
 // A query the page puts in the box, laid out for its width: a long rule a line
@@ -566,6 +566,7 @@ const workerMessages = {
     const first = decodeShare(location.hash) ? "" : startingQuery(guide.examples, $("mode").value, { box: input.value, visited: history.entries.length > 0 });
     if (first) putQuery(first);
   },
+  uploaded: (data) => uploaded?.(data),
   file: (data) => {
     setBusy(false);
     if (data.error) return setStatus(`The file could not be made: ${data.error}`, "error");
@@ -753,10 +754,26 @@ function goOn(text) {
 }
 
 // Run again, one after the other, the statements that give back a session's rules.
-function replay({ entries, box, mode, then }, { clear = false } = {}) {
+// The files uploaded in this tab (.load NAME), by name: a session started
+// anew has none, so they are sent again before its statements are restored.
+const uploads = new Map();
+let uploaded = null; // resolves on the worker's answer to an upload
+
+function sendUpload(name, bytes) {
+  return new Promise((resolve) => {
+    uploaded = resolve;
+    worker.postMessage({ type: "upload", name, bytes: bytes.slice() });
+  });
+}
+
+async function replay({ entries, box, mode, then }, { clear = false } = {}) {
   replaying = { queue: replayTexts(entries, mode, { clear }), total: 0, failed: 0, box, mode, then };
   replaying.total = replaying.queue.length;
   setBusy(true);
+  for (const [name, bytes] of uploads) {
+    setStatus(`Uploading ${name} again…`, "busy");
+    await sendUpload(name, bytes);
+  }
   replayNext();
 }
 
@@ -937,7 +954,10 @@ $("llm-forget").addEventListener("click", () => {
   $("explain").hidden = true;
   $("refine-run").hidden = true;
 });
-$("restart").addEventListener("click", () => start());
+$("restart").addEventListener("click", () => {
+  uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  start();
+});
 // The next user of this browser does not have this one's key.
 $("logout").addEventListener("click", () => llmSettings.forget());
 $("stop").addEventListener("click", () => {
@@ -948,6 +968,22 @@ $("stop").addEventListener("click", () => {
 });
 $("session-save").addEventListener("click", () => {
   saveFile({ name: "neurolang-session.json", mime: "application/json", bytes: session.serialise(editor.value, $("mode").value) });
+});
+$("upload").addEventListener("click", () => $("upload-file").click());
+$("upload-file").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  event.target.value = "";
+  if (!file) return;
+  setBusy(true);
+  setStatus(`Uploading ${file.name}…`, "busy");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const answer = await sendUpload(file.name, bytes);
+  if (answer.error) {
+    setBusy(false);
+    return setStatus(`${file.name} was not uploaded: ${answer.error}`, "error");
+  }
+  uploads.set(answer.name, bytes);
+  run(answer.statement, { remember: true });
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {

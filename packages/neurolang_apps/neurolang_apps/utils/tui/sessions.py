@@ -29,6 +29,7 @@ import traceback
 from multiprocessing.connection import Client, Listener
 from typing import Callable, Optional
 
+from neurolang.confine import lifted
 from neurolang_apps.utils.tui.local_backend import LocalBackend
 
 
@@ -103,10 +104,11 @@ def _builder(conn, address, authkey, options: dict, build,
             os._exit(0)
         try:
             if engine not in engines:
-                engines[engine] = backend.build(
-                    engine,
-                    lambda text: conn.send(("status", key, start, text)),
-                )
+                with lifted():  # the engine's commands are the server's
+                    engines[engine] = backend.build(
+                        engine,
+                        lambda text: conn.send(("status", key, start, text)),
+                    )
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
         except Exception as error:
@@ -380,6 +382,9 @@ class Session:
     def _say(self, text: str) -> None:
         """Tell the pages of the session a step, as their status."""
         self.emit_text(json.dumps({"type": "status", "message": text + "…"}))
+
+    def upload(self, **options) -> dict:
+        return self._call("upload", **options)
 
     def stop(self) -> bool:
         """End the session's process, which stops what it does: the page

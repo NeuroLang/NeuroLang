@@ -27,6 +27,7 @@ from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Symbol
 from neurolang.atlases import Atlas, SpaceMismatchError
+from neurolang.confine import ConfinedError, check_read, check_write
 
 from . import vocabulary_predicates
 from .atlas import atlas_term_mapping
@@ -178,6 +179,17 @@ class TractsCommandsMixin(PatternWalker):
         if ident in self._tracts.tractograms:
             raise InvalidCommandExpression(
                 f"tractogram {ident!r} was already loaded")
+        # the file, the address and the directory a statement gives (see
+        # neurolang.confine)
+        for given in (names.get("path"), options.get("url"),
+                      options.get("data_dir")
+                      if options.get("data_dir") != self._tracts.data_dir
+                      else None):
+            if given:
+                try:
+                    check_read(given, "tractogram")
+                except ConfinedError as e:
+                    raise InvalidCommandExpression(str(e)) from e
         try:
             path = names.get("path") or fetch_tractogram(
                 kind, options["bundle"], options["data_dir"],
@@ -201,6 +213,14 @@ class TractsCommandsMixin(PatternWalker):
              "allow_space_mismatch": 0, "term_mapping": None,
              "extent": None},
         )
+        try:  # the files a statement gives (see neurolang.confine)
+            if options["cache"]:
+                check_write(options["cache"], "index cache")
+            if isinstance(options["term_mapping"], str) \
+                    and Path(options["term_mapping"]).suffix:
+                check_read(options["term_mapping"], "term mapping")
+        except ConfinedError as e:
+            raise InvalidCommandExpression(str(e)) from e
         state = self._tracts
         ident, atlas_name = names["tractogram"], names["atlas"]
         if ident not in state.tractograms:

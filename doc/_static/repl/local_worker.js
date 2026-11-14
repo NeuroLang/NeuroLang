@@ -9,16 +9,20 @@
 const API = "/api/";
 // The session of the page's tab, on a server that keeps one per tab.
 let session = "";
-const url = (action) => API + action + (session ? `?session=${encodeURIComponent(session)}` : "");
+const url = (action, params = {}) => {
+  const query = Object.entries({ ...(session ? { session } : {}), ...params })
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&");
+  return API + action + (query ? `?${query}` : "");
+};
 
 // The answer of the server to *action* with the JSON *body*: its JSON, or
 // the response itself when *raw*. An error of the server is thrown with its
-// message.
-async function ask(action, body = {}, { raw = false } = {}) {
-  const response = await fetch(url(action), {
+// message. A file is sent as it is, of its own type, named by *params*.
+async function ask(action, body = {}, { raw = false, file = null, params = {} } = {}) {
+  const response = await fetch(url(action, params), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": file ? "application/x-neurolang-upload" : "application/json" },
+    body: file ?? JSON.stringify(body),
   });
   if (response.status === 401) postMessage({ type: "login" }); // the login expired
   if (!response.ok) {
@@ -67,6 +71,13 @@ const handlers = {
       postMessage({ type: "rated", ...(await ask("rate", { verdict, comment: comment ?? "" })) });
     } catch (error) {
       postMessage({ type: "rated", ok: false, message: lastLine(error) });
+    }
+  },
+  async upload({ name, bytes }) {
+    try {
+      postMessage({ type: "uploaded", ...(await ask("upload", {}, { file: bytes, params: { name } })) });
+    } catch (error) {
+      postMessage({ type: "uploaded", error: lastLine(error) });
     }
   },
   async download({ block, kind, value }) {
