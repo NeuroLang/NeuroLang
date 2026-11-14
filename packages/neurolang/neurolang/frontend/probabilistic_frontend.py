@@ -33,6 +33,8 @@ from nl_core.datalog.aggregation import (
 from nl_core.datalog.chase import Chase
 from nl_core.datalog.constraints_representation import (
     DatalogConstraintsProgram,
+    RightImplication,
+    iter_implications,
 )
 from nl_core.datalog.exceptions import InvalidMagicSetError
 from nl_expr.exceptions import SymbolNotFoundError
@@ -493,7 +495,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         # them, which takes the probabilistic path. The other cases fall
         # through to the base QueryBuilderDatalog implementation, which
         # creates a fresh query rule and only runs the deterministic chase.
+        # A predicate the ontology constrains, as ``headOf`` by
+        # ``Dean(x) -> exists y. headOf(x, y)``, is queried as an EDB one:
+        # its constraints are not rules to solve, they rewrite the rule.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
+        if any(
+            isinstance(rule, RightImplication)
+            for rule in iter_implications(symbol_entry)
+        ):
+            symbol_entry = None
         if _solved_as_query_rule(head, symbol_entry):
             is_edb = symbol_entry is None or isinstance(
                 symbol_entry, ir.Constant
