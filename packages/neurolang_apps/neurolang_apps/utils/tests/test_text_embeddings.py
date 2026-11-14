@@ -801,3 +801,18 @@ def test_in_a_browser_a_missing_model_says_the_page_was_built_without(
     with pytest.raises(ImportError, match="built without") as error:
         te.Specter2Encoder(model_dir=tmp_path).encode_query("reading")
     assert "pip install" not in str(error.value)
+
+
+@pytest.mark.parametrize("engine, owner", [
+    ("neurosynth", "neurosynth"),
+    ("neurosynth_tracts", "neurosynth"),
+    ("neurosynth_iit", "neurosynth"),
+    ("neurostore", "neurostore"),
+    ("neurostore_tracts", "neurostore"),
+    ("neurostore_iit", "neurostore"),
+])
+def test_engine_variants_use_their_parents_embeddings(engine, owner):
+    """The variants of the shipped engines read their parent's caches."""
+    assert engine_registry.embeddings_owner(
+        engine, "study_abstracts"
+    ) == owner
