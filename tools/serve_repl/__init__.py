@@ -19,8 +19,9 @@ Usage, from a checkout::
 
 the command of the workspace's root project, or ``python -m serve_repl``.
 The page offers the engines ``neurosynth_iit`` (Neurosynth with the tracts
-of the IIT atlas, which it starts with), ``neurosynth`` and ``neurostore`` (a
-select at its top, or ``?engine=neurostore``): the bundle has the data of
+of the IIT atlas, which it starts with), ``neurosynth``, ``neurostore`` and
+``neurostore_iit`` (NeuroStore with the same tracts; a select at its top, or
+``?engine=neurostore``): the bundle has the data of
 all, unless
 ``--engine`` names the ones to build, and is built again when it lacks one that
 is asked for. What the engines download (atlases, templates, studies) is

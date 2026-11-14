@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
+  tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
+  Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
+  tractogram and tract_querier's bundles). The page of the REPL offers
+  ``neurostore_iit`` as *NeuroStore + tracts*, with the text embeddings of
+  ``neurostore``. What they share is two abstract engines,
+  ``meta_analysis_tracts`` and ``iit_tractogram``.
+  
 * The login page of ``neurolang-repl-serve --users`` is the REPL's: its logo
   and colours, in the theme the visitor chose in the REPL (or the system's), a
   card with the name and the password, which can be shown, a button that waits
