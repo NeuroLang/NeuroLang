@@ -23,8 +23,10 @@ since NeuroStore ships no term table — plus:
   LLM-based task extraction attached to the study's analyses.
 * ``study_domain(study_id, domain)`` — likewise for cognitive domains.
 * ``study_journal(study_id, journal)``, from the release, and
-  ``study_year(study_id, year)``, which it does not hold: NeuroStore lists
-  it (:func:`study_identifiers`).
+  ``study_year(study_id, year)``, ``study_pmid(study_id, pmid)`` and
+  ``study_doi(study_id, doi)``, which it does not hold: NeuroStore lists
+  them (:func:`study_identifiers`). The PubMed ids are those of Neurosynth,
+  whose ids they are: they match the studies of the two databases.
 
 The release can be chosen with the ``NEUROLANG_NEUROSTORE_RELEASE``
 environment variable (``latest``, ``nightly`` or a version such as
@@ -180,8 +182,9 @@ def study_identifiers(
         listing = _study_listing(fetch or _fetch_json)
     except (OSError, ValueError, KeyError) as error:
         warnings.warn(
-            f"NeuroStore could not list its studies ({error}): their years "
-            "are left out, and asked for at the next build of the engine."
+            f"NeuroStore could not list its studies ({error}): their years, "
+            "PubMed ids and DOIs are left out, and asked for at the next "
+            "build of the engine."
         )
         return pd.DataFrame(columns=columns)
     listing = listing.rename(columns={"id": "study_id"})[columns]
@@ -392,10 +395,10 @@ def init_engine(
         nl.add_tuple_set(table, name=name)
 
     journals = texts.get("publication", pd.Series(None, texts.index))
-    years = study_identifiers(data_dir, release_dir.name, study_ids)
+    identifiers = study_identifiers(data_dir, release_dir.name, study_ids)
     register_publications(nl, pd.DataFrame({
         "study_id": study_ids.values, "journal": journals.values,
-    }).merge(years[["study_id", "year"]], on="study_id", how="left"))
+    }).merge(identifiers, on="study_id", how="left"))
 
     annotations_path = release_dir / "annotations.parquet"
     annotations = pd.read_parquet(

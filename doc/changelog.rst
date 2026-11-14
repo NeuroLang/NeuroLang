@@ -341,9 +341,11 @@ v0.1a22 (2026-11-13)
 * The meta-analysis engines (``neurosynth``, ``neurostore`` and those
   extending them) have the year, journal and abstract of each study,
   ``study_year``, ``study_journal`` and ``study_abstract``, next to
-  ``study_title``: Neurosynth's abstracts are PubMed's, NeuroStore's years
-  those it lists for its studies, asked for at the first build and kept in
-  the data directory. A query, and the query assistant, restricts the
+  ``study_title``, and its identifiers, ``study_pmid`` and ``study_doi``,
+  the same in both engines, so that their studies are matched:
+  Neurosynth's abstracts are PubMed's, NeuroStore's years, PubMed ids and
+  DOIs those it lists for its studies, asked for at the first build and
+  kept in the data directory. A query, and the query assistant, restricts the
   studies to years or journals. The SPECTER2 similarity of ``neurosynth``
   embeds its ``study_abstract``, as ``neurostore`` does. See *The
   publications of the studies* in the engine configuration documentation.
