@@ -59,7 +59,9 @@ define:
   adding Datalog commands ``.name(...)``; inherited parent first;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
-  ``f(query, doc) -> similarity``; see
+  ``f(query, doc) -> similarity``, with ``f_cutoff(query)`` the 95th
+  percentile of the similarities to the query, or ``inf`` if the mean of
+  its 20 largest is below ``similarity_gate`` (0.75 by default); see
   :mod:`neurolang_apps.utils.text_embeddings`::
 
       text_embeddings:
@@ -67,6 +69,7 @@ define:
           ids_from: study
           source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
+          similarity_gate: 0.75
 
 Usage
 -----
@@ -1759,6 +1762,12 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         nl.add_symbol(
             text_embeddings.make_similarity_function(index),
             name=emb_cfg["function"],
+        )
+        nl.add_symbol(
+            text_embeddings.make_cutoff_function(
+                index, emb_cfg.get("similarity_gate", 0.75)
+            ),
+            name=emb_cfg["function"] + "_cutoff",
         )
 
 

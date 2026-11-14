@@ -779,6 +779,29 @@ def make_similarity_function(index, id_type=None):
     return query_similarity
 
 
+def make_cutoff_function(index, gate=0.75, percentile=95, top=20):
+    """
+    Build a NeuroLang function ``f(query) -> cutoff``: the *percentile* of
+    the positive similarities of the documents to the query text, or
+    ``inf`` if the mean of the *top* largest is below *gate*: a text no
+    document is about.  Cached per text, so that ``similar_study`` needs
+    no aggregation.
+    """
+    @lru_cache(maxsize=4096)
+    def cutoff(query):
+        scores = np.asarray(index.scores(query), dtype=float)
+        scores = scores[scores > 0]
+        if np.sort(scores)[-top:].mean() < gate:
+            return float("inf")
+        return float(np.percentile(scores, percentile))
+
+    # A plain function, as NeuroLang types it from its annotations.
+    def query_similarity_cutoff(query: str) -> float:
+        return cutoff(query)
+
+    return query_similarity_cutoff
+
+
 def main(argv=None):
     """
     Download the models and compute the text embeddings of an engine.

@@ -462,7 +462,7 @@ FREE_TEXT_PREDICATES = frozenset({
 def _without_free_text_rules(config):
     """Return the engine *config* without the rules of a free-text query."""
     names = FREE_TEXT_PREDICATES | {
-        "cutoff_similarity", "p_similar", "p_a_given_similar",
+        "p_similar", "p_a_given_similar",
         "p_any_voxel_given_similar",
     }
     rules = [
