@@ -81,7 +81,11 @@ may specify the following keys, all of them optional:
   ``EUCLIDEAN(x, y, z, x2, y2, z2) <= r``, finds the pairs with a k-d
   tree instead of comparing every pair; the engines extending
   ``mni_atlases`` have ``schaefer_points``, ``destrieux_points`` and
-  ``tian_points`` (236,000 rows, 13 MB).
+  ``tian_points`` (236,000 rows, 13 MB).  The key of an atlas is its
+  kind unless it has ``kind``: ``structural_connectivity`` has
+  ``schaefer400: {kind: schaefer, predicate_name: schaefer400, n_rois:
+  400, ...}`` beside the ``schaefer`` of 100 parcels it inherits, each
+  with its own grid and sort of labels.
   ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),
@@ -112,7 +116,11 @@ may specify the following keys, all of them optional:
   Gaussian whose width depends on the number of subjects of the study
   (Eickhoff et al., 2009)
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
-  predicates
+  predicates; a URL is downloaded once into the data directory, checked
+  against the entry's ``md5`` if it has one
+- ``acknowledgements`` — the sources of the engine's data, a text each
+  with its citation and the acknowledgement its terms ask for; the REPL's
+  ``.credits`` prints those of the engine and of the engines it extends
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
@@ -463,8 +471,10 @@ and the engine's own entries override all of them.  Merging works per key:
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
   ``dimension_type_predicates``, ``assistant_examples``,
-  ``hidden_predicates``, ``solver_mixins`` and ``python_init`` (a single
-  module is a list of one) are concatenated without duplicates;
+  ``hidden_predicates``, ``solver_mixins``, ``acknowledgements`` and
+  ``python_init`` (a single module is a list of one) are concatenated
+  without duplicates, and ``assistant_guidance`` texts as
+  ``datalog_init``;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
@@ -491,6 +501,11 @@ built-in engines keep there
   and the questions of the query assistant (``assistant_examples``);
 - ``<engine>/guidance.yaml``: the ``assistant_guidance``.
 
+``structural_connectivity/`` and ``functional_connectivity/`` hold those
+of the structural and of the resting-state functional connectivity, which
+``coordinate_meta_analysis`` extends (both, after the abstract
+``connectivity_atlases``, the atlas of 400 Schaefer parcels and the sorts
+of the gradients they share);
 ``coordinate_meta_analysis/`` holds the examples and the guidance shared by
 ``neurosynth`` and ``neurostore``, and ``neurostore/examples.yaml`` adds the
 questions on NeuroStore's own predicates: an engine inherits

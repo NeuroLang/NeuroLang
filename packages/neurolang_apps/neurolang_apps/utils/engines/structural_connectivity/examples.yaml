@@ -1,0 +1,185 @@
+# The example queries of structural_connectivity, merged into its entry of
+# ../engines.yaml (see doc/engine_configuration.rst): the questions the
+# REPL shows first (questions), the queries it shows (examples) and the
+# few-shot examples of the query assistant (assistant_examples), which
+# the engines extending it (neurosynth, neurostore) inherit before their
+# own. Every query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+questions:
+  - Which cortical regions is the left superior frontal gyrus structurally connected to?
+  - What is the structural network of the left default mode network?
+  - What is the probability that a white-matter streamline leaving the left angular gyrus ends in each region?
+  - What is the first gradient of the structural connectivity of the cortex?
+examples:
+  datalog:
+    - "ans(l, n) :- destrieux_structural_connectivity('L G front sup', l, n)"
+    - "ans(l1, l2, n) :- schaefer_structural_connectivity(l1, l2, n), (l1 < l2), (n > 5000)"
+    - "ans(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)"
+    - "ans(l, v) :- schaefer_structural_gradient(l, 1, v)"
+
+# Questions on the structural connectivity: the anatomical wiring of the
+# cortex, white-matter streamlines of diffusion MRI tractography, never
+# the resting-state functional connectivity (functional_connectivity) nor
+# the co-activation of regions by studies (the meta-analysis engines). Its values are mean streamline counts,
+# stored: they are answered without PROB, as counts, sums, thresholds;
+# or turned into probabilities, either computed (a fraction of the
+# streamlines) or as the probabilities of probabilistic facts or choices,
+# which PROB then queries. A network gives each pair once (l1 < l2), as
+# .view draws it; a seed region fixes the first argument.
+assistant_examples:
+  # Counts: the wiring itself.
+  - question: Which cortical regions is the left superior frontal gyrus structurally connected to?
+    datalog: |-
+      ans(l, n) :- destrieux_structural_connectivity('L G front sup', l, n)
+
+  - question: What is the structural connectivity of the left angular gyrus, its connections of more than 1000 white-matter streamlines?
+    datalog: |-
+      ans(l, n) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n), (n > 1000)
+
+  - question: Which pairs of gyri and sulci are structurally connected by more than 10000 white-matter streamlines?
+    datalog: |-
+      ans(l1, l2, n) :- destrieux_structural_connectivity(l1, l2, n), (l1 < l2), (n > 10000)
+
+  - question: What is the structural network of the left default mode network?
+    datalog: |-
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      ans(l1, l2, n) :- schaefer_structural_connectivity(l1, l2, n), default_left(l1), default_left(l2), (l1 < l2)
+
+  - question: Which Schaefer parcels have the strongest structural connectivity?
+    datalog: |-
+      ans(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)
+
+  - question: How many cortical regions is the left precentral gyrus structurally connected to by more than 100 streamlines?
+    datalog: |-
+      ans(count(l)) :- destrieux_structural_connectivity('L G precentral', l, n), (n > 100)
+
+  - question: How many white-matter streamlines structurally connect the left and the right hemispheres?
+    datalog: |-
+      between(l1, l2, n) :- destrieux_structural_connectivity(l1, l2, n), startswith('L ', l1), startswith('R ', l2)
+      ans(sum(n)) :- between(l1, l2, n)
+
+  - question: Which regions are two strong structural connections away from the left superior frontal gyrus (more than 5000 streamlines each)?
+    datalog: |-
+      strong(l1, l2) :- destrieux_structural_connectivity(l1, l2, n), (n > 5000)
+      ans(l) :- strong('L G front sup', m), strong(m, l), (l != 'L G front sup')
+
+  # From counts to probabilities, computed: a fraction of the
+  # streamlines, in the body (f == n / t), never in the head.
+  - question: What is the probability that a white-matter streamline leaving the left angular gyrus ends in each region?
+    datalog: |-
+      strength(l, sum(n)) :- destrieux_structural_connectivity(l, l2, n)
+      ans(l2, p) :- destrieux_structural_connectivity('L G pariet inf Angular', l2, n), strength('L G pariet inf Angular', t), (p == n / t)
+
+  - question: What fraction of the white-matter streamlines of the left posterior cingulate (precuneus) parcel go to each other parcel?
+    datalog: |-
+      strength(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)
+      ans(l2, f) :- schaefer_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l2, n), strength('17Networks LH DefaultA pCunPCC 1', t), (f == n / t)
+
+  - question: What is the probability that a white-matter streamline of the cortex, drawn at random, structurally connects each pair of Schaefer parcels?
+    datalog: |-
+      total(sum(n)) :- schaefer_structural_connectivity(l1, l2, n), (l1 < l2)
+      ans(l1, l2, p) :- schaefer_structural_connectivity(l1, l2, n), (l1 < l2), total(t), (p == n / t)
+
+  # The structural connectivity as a probabilistic program. A choice (^):
+  # a streamline drawn at random from a region ends in exactly one region,
+  # with the probability of its fraction. Probabilistic facts (::): each
+  # connection is there or not, independently, with a probability growing
+  # with its streamlines, 1 - exp(-n / 5000) (1000 streamlines: 0.18,
+  # 10000: 0.86; a choice of the model, to tell), the weakest (100
+  # streamlines or fewer) left out; PROB gives the probability of a
+  # path, of reaching a network.
+  - question: If a white-matter streamline is drawn at random from the left posterior cingulate (precuneus) parcel, what is the probability that it ends in the default mode network?
+    datalog: |-
+      strength(sum(n)) :- schaefer_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n)
+      ends_in(l) ^ (n / t) :- schaefer_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n), strength(t)
+      default(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      default(l) :- schaefer_label(l), startswith('17Networks RH Default', l)
+      in_default(x) :- ends_in(l), default(l), (x == 'default')
+      ans(p) :- PROB[in_default(x)] = p
+
+  - question: Taking each structural connection as present with probability 1 - exp(-n / 5000), what is the probability that each Schaefer parcel is structurally connected to the left default mode network?
+    datalog: |-
+      wired(l1, l2) :: 1 - exp(-n / 5000.0) :- schaefer_structural_connectivity(l1, l2, n), (n > 100)
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      to_default(x) :- wired(x, l), default_left(l)
+      ans(x, p) :- PROB[to_default(x)] = p
+
+  - question: Taking each structural connection as present with probability 1 - exp(-n / 5000), what is the probability that the left superior frontal gyrus reaches the left angular gyrus in at most two structural steps?
+    datalog: |-
+      wired(l1, l2) :: 1 - exp(-n / 5000.0) :- destrieux_structural_connectivity(l1, l2, n), (n > 100)
+      reach(l) :- wired('L G front sup', l)
+      reach(l) :- wired('L G front sup', m), wired(m, l)
+      target(l) :- reach(l), (l == 'L G pariet inf Angular')
+      ans(p) :- PROB[target(l)] = p
+
+  # The linear gradients of the structural connectivity: the principal
+  # components of the regions' connectivity profiles, within each
+  # hemisphere (dimension 1 to 10), a value per region that .view paints on
+  # the cortex, several dimensions in several columns. Structural, from
+  # tractography: not the functional gradients of resting-state fMRI.
+  - question: What is the first gradient of the structural connectivity of the cortex?
+    datalog: |-
+      ans(l, v) :- schaefer_structural_gradient(l, 1, v)
+
+  - question: Show the first three structural connectivity gradients of the gyri and sulci on the cortex.
+    datalog: |-
+      ans(l, g1, g2, g3) :- destrieux_structural_gradient(l, 1, g1), destrieux_structural_gradient(l, 2, g2), destrieux_structural_gradient(l, 3, g3)
+
+  - question: How much of the variance of the structural connectivity does each gradient explain?
+    datalog: |-
+      ans(d, h, e) :- schaefer_structural_gradient_variance(d, h, e)
+
+  - question: Which Schaefer parcels are at the two ends of the first structural connectivity gradient, its top and bottom 10%?
+    datalog: |-
+      high(percentile(v, 90)) :- schaefer_structural_gradient(l, 1, v)
+      low(percentile(v, 10)) :- schaefer_structural_gradient(l, 1, v)
+      end(l, v) :- schaefer_structural_gradient(l, 1, v), high(t), (v >= t)
+      end(l, v) :- schaefer_structural_gradient(l, 1, v), low(t), (v <= t)
+      ans(l, v) :- end(l, v)
+
+  - question: Where is the default mode network along the first three structural connectivity gradients, on average?
+    datalog: |-
+      default(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      default(l) :- schaefer_label(l), startswith('17Networks RH Default', l)
+      ans(d, mean(v)) :- schaefer_structural_gradient(l, d, v), default(l), (d <= 3)
+
+  - question: Which regions are near the left superior frontal gyrus in the space of the first two structural connectivity gradients?
+    datalog: |-
+      position(l, a, b) :- destrieux_structural_gradient(l, 1, a), destrieux_structural_gradient(l, 2, b)
+      ans(l, d) :- position(l, a, b), position('L G front sup', a0, b0), (d == ((a - a0) ** 2 + (b - b0) ** 2) ** 0.5), (d < 2), (l != 'L G front sup')
+
+  # The finer Schaefer atlas, 400 parcels (schaefer400), of the same 17
+  # networks: its own relations and labels.
+  - question: Which parcels of the Schaefer atlas of 400 are the most strongly structurally connected to the left prefrontal parcel '17Networks LH DefaultA PFCd 1'?
+    datalog: |-
+      ans(l, n) :- schaefer400_structural_connectivity('17Networks LH DefaultA PFCd 1', l, n), (n > 1000)
+
+  - question: What is the structural network of the left default mode network at 400 parcels?
+    datalog: |-
+      default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
+      ans(l1, l2, n) :- schaefer400_structural_connectivity(l1, l2, n), default_left(l1), default_left(l2), (l1 < l2), (n > 500)
+
+  - question: What is the first gradient of the structural connectivity of the cortex at 400 parcels?
+    datalog: |-
+      ans(l, v) :- schaefer400_structural_gradient(l, 1, v)
+
+  - question: How much of the variance of the structural connectivity does each gradient explain at 400 parcels?
+    datalog: |-
+      ans(d, h, e) :- schaefer400_structural_gradient_variance(d, h, e)
+
+  # The subcortex (Tian's regions, scale 2), a stop-gap: the streamlines
+  # of ONE population-average tractogram (the HCP1065 atlas of Yeh 2022),
+  # not means over subjects, nor of the scale of the cortical counts.
+  - question: Which parcels of the Schaefer atlas of 400 are structurally connected to the thalamus, and by how many streamlines of the population tractogram?
+    datalog: |-
+      thalamus(t) :- tian(t, r), startswith('THA', t)
+      ans(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, t, n), thalamus(t)
+
+  - question: What is the structural network among the subcortical regions, its pairs of more than 10 streamlines?
+    datalog: |-
+      ans(t1, t2, n) :- tian_structural_connectivity(t1, t2, n), (t1 < t2), (n > 10)
+
+  - question: Which subcortical regions are the parcels of the left default mode network structurally connected to, and by how many streamlines of the population tractogram?
+    datalog: |-
+      default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
+      ans(t, sum(n)) :- schaefer400_tian_structural_connectivity(l, t, n), default_left(l)

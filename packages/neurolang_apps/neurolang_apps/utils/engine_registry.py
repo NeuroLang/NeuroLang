@@ -274,7 +274,8 @@ def _resolve_relation_file(
 
     If the ``file`` value is a URL it is downloaded via nilearn's
     ``_fetch_files`` (with caching and optional archive extraction)
-    to ``{data_dir}/{engine_name}/``.
+    to ``{data_dir}/{engine_name}/``, checked against its ``md5`` if the
+    entry gives one.
 
     Local paths are resolved relative to *base_dir* (defaults to the
     built-in ``engines/`` directory).
@@ -285,7 +286,7 @@ def _resolve_relation_file(
     if raw.startswith(("http://", "https://")):
         dl_dir = str(data_dir / engine_name)
         name = Path(raw).name
-        opts = {}
+        opts = {"md5sum": rel_cfg["md5"]} if rel_cfg.get("md5") else {}
         if extract_member:
             opts["uncompress"] = True
             # If extract specifies a member name, use that as the target file
@@ -311,7 +312,8 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
-    "python_init", "hidden_predicates",
+    "python_init", "hidden_predicates", "acknowledgements",
+    "assistant_guidance",
 })
 # Keys whose value is a list, or a single item standing for a list of one.
 _LIST_KEYS = frozenset({"python_init"})
@@ -613,7 +615,8 @@ def get_predicates(
             default_desc=f"{atl_name} atlas regions",
         )
         # Probabilistic atlases also register a probability predicate
-        if _ATLAS_REGISTRY.get(atl_name, {}).get("probabilistic"):
+        kind = atl_params.get("kind", atl_name)
+        if _ATLAS_REGISTRY.get(kind, {}).get("probabilistic"):
             prob_name = atl_params.get(
                 "prob_predicate_name", f"{pred_name}_prob"
             )
@@ -901,6 +904,17 @@ def get_euclidean_join_settings(
     """
     cfg = get_engine_config(name, yaml_path)
     return dict(cfg.get("euclidean_join") or {})
+
+
+def get_acknowledgements(
+    name: str, yaml_path: Optional[Path] = None
+) -> List[str]:
+    """Return the acknowledgements of the data of an engine (its own and
+    those of the engines it extends): a text per source, with its
+    citation."""
+    cfg = get_engine_config(name, yaml_path)
+    return [" ".join(str(text).split())
+            for text in cfg.get("acknowledgements") or ()]
 
 
 def get_hidden_predicates(
@@ -1320,10 +1334,11 @@ def _load_deterministic_atlas(
     """
     from neurolang.atlases import Atlas, label_colours, label_table
 
-    info = _ATLAS_REGISTRY[atlas_name]
+    kind = params.get("kind", atlas_name)
+    info = _ATLAS_REGISTRY[kind]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated", "points")
+        if k not in ("predicate_name", "activated", "points", "kind")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
@@ -1365,7 +1380,7 @@ def _load_deterministic_atlas(
         warnings.simplefilter("ignore")
         atlas = Atlas.from_labels(
             atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
-            normalise=True, kind=atlas_name,
+            normalise=True, kind=kind,
         )
         on_template = _atlas_on_template(nl, atlas, cache_dir)
     _register_grid(nl, atlas_name, on_template.image)
@@ -1400,8 +1415,10 @@ def _load_probabilistic_atlas(
     """
     from neurolang.atlases import label_name
 
-    info = _ATLAS_REGISTRY[atlas_name]
-    fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
+    info = _ATLAS_REGISTRY[params.get("kind", atlas_name)]
+    fetch_kw = {
+        k: v for k, v in params.items() if k not in ("predicate_name", "kind")
+    }
     fetch_kw["data_dir"] = str(data_dir)
     atl_data = info["fetch"](**fetch_kw)
 
@@ -1464,10 +1481,11 @@ def _load_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """Download a brain atlas via nilearn and register it as a predicate."""
-    info = _ATLAS_REGISTRY.get(atlas_name)
+    kind = params.get("kind", atlas_name)
+    info = _ATLAS_REGISTRY.get(kind)
     if info is None:
         raise ValueError(
-            f"Unknown atlas {atlas_name!r}. "
+            f"Unknown atlas {kind!r}. "
             f"Available: {', '.join(sorted(_ATLAS_REGISTRY))}"
         )
     if info["probabilistic"]:

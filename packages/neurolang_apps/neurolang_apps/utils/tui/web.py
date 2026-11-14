@@ -90,6 +90,13 @@ def lightweight_engines_yaml(directory) -> Path:
             )
         for name in heavy & set(engine.get("predicates") or {}):
             del engine["predicates"][name]
+        # the files of the relations are the package's, not *directory*'s
+        for relation in (engine.get("relations") or {}).values():
+            if isinstance(relation, dict) and not str(
+                    relation.get("file", "")).startswith(("http://",
+                                                         "https://")):
+                relation["file"] = str(
+                    engine_registry._ENGINES_DIR / relation["file"])
     path = Path(directory) / "engines.yaml"
     path.write_text(yaml.safe_dump(config))
     return path
