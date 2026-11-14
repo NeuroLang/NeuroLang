@@ -762,6 +762,54 @@ engines:
         columns: [v]
         type: float
         description: "a coordinate in millimetres, RAS+, on an axis"
+    # The relations .load_tractogram and .index_tracts store (vocabulary.dl):
+    # their streamline x is of the sort streamline, so that .view draws a
+    # result of their streamlines as streamlines, even beside the regions
+    # they join, ans(s, l1, l2).
+    predicates:
+      streamline:
+        description: >-
+          Each streamline x, the tractogram t it is of and its position s in
+          the file
+        arguments:
+          - streamline
+          - {sort: tractogram, columns: [t], type: str}
+          - {sort: position, columns: [s], type: int}
+      streamline_label:
+        description: >-
+          The labels l of atlas a that streamline x goes through
+        arguments: [atlas, streamline, label_id]
+      endpoint_label:
+        description: "The label l of atlas a of the end e of streamline x"
+        arguments: [atlas, streamline, end, label_id]
+      streamline_extent:
+        description: >-
+          The bounds lo and hi of the points of streamline x on an axis, in
+          millimetres
+        arguments:
+          - streamline
+          - axis
+          - {sort: coordinate, columns: [lo]}
+          - {sort: coordinate, columns: [hi]}
+      endpoint_coord:
+        description: >-
+          The coordinate v, on an axis, of the end e of streamline x
+        arguments: [streamline, end, axis, coordinate]
+      endpoint_point:
+        description: >-
+          The point (px, py, pz), in MNI millimetres, of the end e of
+          streamline x; EUCLIDEAN(px, py, pz, x, y, z) <= r with the points
+          of another stored relation (schaefer_points) finds the ends near
+          them
+        arguments:
+          - streamline
+          - end
+          - {sort: mni, columns: [px, py, pz]}
+      streamline_length:
+        description: "The length mm of streamline x, in millimetres"
+        arguments:
+          - streamline
+          - {sort: length, columns: [mm], type: float}
 
   neurosynth_tracts:
     extends: [neurosynth, tracts]
