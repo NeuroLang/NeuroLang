@@ -15,10 +15,10 @@ Nothing in this module is specific to a dataset.  Texts come from PubMed
 (:func:`fetch_pubmed_abstracts`) or from a CSV/TSV table
 (:func:`load_text_table`).  ``torch``, ``transformers`` and ``adapters``
 are only imported when the first document or query is embedded; install
-them with ``pip install "neurolang[embeddings]"``. Without them, as in a
-browser, queries are embedded by the numpy encoder of
-:mod:`.specter2_numpy` from the weights exported next to the model
-(:attr:`Specter2Encoder.numpy_path`), the documents having been embedded
+them with ``pip install "neurolang[embeddings]"``. Queries are embedded
+by the numpy encoder of :mod:`.specter2_numpy` when its weights are
+exported next to the model (:attr:`Specter2Encoder.numpy_path`), or
+without torch, as in a browser, the documents having been embedded
 beforehand; :data:`fetch_missing` can fetch both when first needed.
 
 Engines declared in ``engines.yaml`` can opt in through a
@@ -275,7 +275,8 @@ class Specter2Encoder:
     Embed documents and queries with SPECTER2.
 
     The base model and both adapters are loaded on the first call to
-    :meth:`encode_documents` or :meth:`encode_query`.  With a *model_dir*
+    :meth:`encode_documents` or :meth:`encode_query` (which embeds with
+    numpy instead when its weights are there, see :meth:`_uses_numpy`).  With a *model_dir*
     they are downloaded once into it (see :meth:`download`) and then
     loaded from there without network; otherwise they come from the
     Hugging Face hub and its cache.  A document is encoded as
@@ -407,7 +408,8 @@ class Specter2Encoder:
         loaded on the CPU.
         """
         if self._uses_numpy():
-            self._numpy_query("brain")  # loads its weights
+            if self._numpy is None:
+                self._numpy_query("brain")  # loads its weights
             return
         if self._model is None and not self._has_local_copies():
             return      # loading would download: leave it to the child

@@ -107,6 +107,10 @@ Serving
 ``--no-prepare``
    Do not prepare the engines before serving; the first session of each
    downloads what it lacks.
+``--no-preload-embeddings``
+   Do not load an engine's text embeddings when it is built (with
+   ``--users``, before forking its sessions): its first query of them
+   does; see `Sessions`_.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -188,9 +192,6 @@ Who may use it
    With ``--users`` and ``--local``: the queries running at once, of all
    the sessions (the machine's CPUs, at least 1), and the minutes after
    which a query is stopped (60; 0, never); see `Sessions`_.
-``--no-preload-embeddings``
-   With ``--users`` and ``--local``: do not load an engine's text
-   embeddings before forking its sessions; see `Sessions`_.
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
