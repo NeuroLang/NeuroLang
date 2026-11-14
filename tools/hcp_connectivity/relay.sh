@@ -1,19 +1,23 @@
 #!/bin/bash
 # Relay the HCP connectomes through this machine when the cluster's own
-# downloads are slow (download.py): each file is downloaded here, copied to
+# downloads are slow (python -m hcp_connectivity download): each file is
+# downloaded here, copied to
 # the staging directory of the cluster (as .part, renamed when whole), and
-# deleted here; parcellate.py takes it from there. Subjects already
-# parcellated (OUT/<subject>.npz) or staged are skipped, so the relay
-# resumes. The Glasser matrices go to STAGING/glasser.
+# deleted here; the structural worker takes it from there. Subjects already
+# parcellated (in a part of OUT, OUT/part-*.subjects) or staged are skipped,
+# so the relay resumes. The Glasser matrices go to STAGING/glasser.
 #
 #   relay.sh HOST STAGING OUT LOCAL_DIR [JOBS]
-#   relay.sh margaret /scratch/dwasserm/hcp_sc/staging \
-#       /data/parietal/store3/work/dwasserm/hcp_sc/out /tmp/hcp_relay 4
+#
+# HOST is reached with ssh and scp, with the options of SSH_OPTIONS (as
+# SSH_OPTIONS="-F ~/.ssh/cluster_config"); CACERT is the certificates of
+# curl (default /etc/ssl/cert.pem).
 set -uo pipefail
 HOST=$1 STAGING=$2 OUT=$3 LOCAL=$4 JOBS=${5:-4}
 BUCKET="https://swift.rc.nectar.org.au/v1/AUTH_ee5989f4c9184ea29012bb124cd3dff0/connectome_storage"
-SSH=(ssh -F "$HOME/ssh_config_dw" -o ServerAliveInterval=30)
-SCP=(scp -q -F "$HOME/ssh_config_dw" -o ServerAliveInterval=30)
+read -r -a OPTIONS <<<"${SSH_OPTIONS:-}"
+SSH=(ssh ${OPTIONS[@]+"${OPTIONS[@]}"} -o ServerAliveInterval=30)
+SCP=(scp -q ${OPTIONS[@]+"${OPTIONS[@]}"} -o ServerAliveInterval=30)
 CACERT=${CACERT:-/etc/ssl/cert.pem}
 mkdir -p "$LOCAL"
 export HOST STAGING LOCAL BUCKET CACERT
@@ -30,7 +34,7 @@ listing() {
     marker=$(printf '%s\n' "$page" | tail -1)
   done
 }
-done_here=$("${SSH[@]}" "$HOST" "ls $OUT $STAGING $STAGING/glasser 2>/dev/null")
+done_here=$("${SSH[@]}" "$HOST" "cat $OUT/part-*.subjects 2>/dev/null | sed 's/\$/.npz/'; ls $STAGING $STAGING/glasser 2>/dev/null")
 listing | grep -E '/(high_resolution|glasser_atlas)/structural_connectivity/' \
   | while read -r name; do
       file=${name##*/}

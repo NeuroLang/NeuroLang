@@ -51,7 +51,7 @@ Unreleased
   ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
   streamlines joining two parcels over 1,064 subjects of the Human
   Connectome Project, from the high-resolution connectomes of Mansour et
-  al. (2021), parcellated by ``tools/hcp_structural_connectivity``. The
+  al. (2021), parcellated by ``tools/hcp_connectivity``. The
   engines download them, at a tag, checked by their md5 (a relation's
   ``md5``), from the public dataset
   https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
@@ -82,7 +82,7 @@ Unreleased
   the hemispheres (|r| = 0.92). On Schaefer's parcels the first runs from
   somatomotor to visual cortex, the second from lateral to medial cortex;
   ``.view --threshold 0`` paints them on the cortex, one overlay per
-  gradient. ``tools/hcp_structural_connectivity/gradients.py`` makes them,
+  gradient. ``tools/hcp_connectivity/gradients.py`` makes them,
   for the 22 atlases of the dataset (its ``v1.1``), with examples for the
   query assistant (the ends of a gradient, a network's position, the
   regions near a region, a term's activations along a gradient). The help

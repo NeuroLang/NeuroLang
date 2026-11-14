@@ -180,13 +180,13 @@ engines:
     # The structural connectivity of the cortex between the parcels of
     # Schaefer and of Destrieux: the mean number of streamlines between two
     # parcels over the HCP subjects of Mansour et al. (2021), whose
-    # high-resolution connectomes tools/hcp_structural_connectivity
+    # high-resolution connectomes tools/hcp_connectivity
     # parcellates; published, with those of other atlases and their
     # standard deviations, in https://gitlab.inria.fr/dwasserm/
     # neurolang-hcp-connectivity (its README: how they were made, and how
     # to acknowledge them), at a tag.
     # The linear gradients of the connectivity, its principal components
-    # within each hemisphere (tools/hcp_structural_connectivity/
+    # within each hemisphere (tools/hcp_connectivity/
     # gradients.py), are of the same dataset.
     relations:
       schaefer_structural_connectivity:
@@ -216,7 +216,7 @@ engines:
         High-resolution connectomic fingerprints: mapping neural identity
         and behavior. NeuroImage 229:117695 (2021).
         doi:10.1016/j.neuroimage.2020.117695, parcellated by NeuroLang
-        (tools/hcp_structural_connectivity; the dataset:
+        (tools/hcp_connectivity; the dataset:
         https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity),
         Destrieux's labels brought to the HCP's fs_LR surface by its
         registration to fsaverage (Van Essen
