@@ -581,7 +581,8 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   single-user ``--local`` server loads them when it builds an engine, and
   preparing the engines writes their cache).  The query model is the numpy one
   (``specter2_numpy``) when its weights are next to the model's copies,
-  ``{data_dir}/{engine}/embeddings/models/*.npz``: it loads in half a
+  ``{data_dir}/{engine}/embeddings/models/*.npz`` (for an engine extending
+``neurosynth`` or ``neurostore``, those of the engine it extends): it loads in half a
   second, without torch.  Otherwise it is torch's, on the CPU, which needs
   the ``embeddings`` extra, as computing the documents' embeddings does
   when their cache is missing (hours on a CPU: ``python -m

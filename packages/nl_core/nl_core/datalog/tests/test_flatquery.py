@@ -243,3 +243,20 @@ def test_flatten_query_double_vareq():
     flat = flatten_query(query, program)
     assert isinstance(flat, Conjunction)
     assert set(flat.formulas) == {R(a), R(b)}
+
+
+def test_flatten_renames_apart_a_repeated_head_variable():
+    # Q(y, y) :- P(y) queried as Q(x, y): the rule's y is not the query's.
+    code = Union((Implication(Q(y, y), P(y)),))
+    program = TestDatalogProgram()
+    program.walk(code)
+    result = flatten_query(Conjunction((Q(x, y), R(y))), program)
+    assert R(y) in result.formulas
+    assert P(x) in result.formulas or any(
+        formula.functor == EQ and set(formula.args) == {x, y}
+        for formula in result.formulas
+    )
+    assert not any(
+        formula.functor == EQ and formula.args[0] == formula.args[1]
+        for formula in result.formulas
+    )

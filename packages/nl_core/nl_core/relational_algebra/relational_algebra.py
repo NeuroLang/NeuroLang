@@ -989,9 +989,7 @@ class RelationalAlgebraSolver(
                 column_type = left_type_args[left.columns.index(column)]
             if column in right.columns and len(right_type_args) > 0:
                 right_type = right_type_args[right.columns.index(column)]
-                column_type = type_system.unify_types(
-                    column_type, right_type
-                )
+                column_type = _unify_inferred_types(column_type, right_type)
             row_type += (column_type,)
         return Tuple[row_type]
 
@@ -1242,7 +1240,7 @@ class RelationalAlgebraSolver(
         right = self.walk(ra_op.relation_right)
         left_type = _get_const_relation_type(left)
         right_type = _get_const_relation_type(right)
-        type_ = type_system.unify_types(left_type, right_type)
+        type_ = _unify_inferred_types(left_type, right_type)
         binary_op_fun_name = {
             Union: "__or__",
             Intersection: "__and__",
@@ -1345,6 +1343,31 @@ def _infer_relation_type(relation):
         for arg in relation.fetch_one()
     )]
     return AbstractSet[tuple_type]
+
+
+def _unify_inferred_types(left, right):
+    """
+    Unify the types `left` and `right` of relations, or of their columns,
+    inferred from a tuple of each (see `_infer_relation_type`): a column
+    with values of types that do not unify, as `int` and `str`, is of
+    type `Unknown`.
+    """
+    if (
+        type_system.is_leq_informative(left, right)
+        or type_system.is_leq_informative(right, left)
+    ):
+        return type_system.unify_types(left, right)
+    if type_system.is_parameterized(left) and type_system.is_parameterized(
+        right
+    ):
+        left_args = type_system.get_args(left)
+        right_args = type_system.get_args(right)
+        if len(left_args) > 0 and len(left_args) == len(right_args):
+            args = tuple(map(_unify_inferred_types, left_args, right_args))
+            if type_system.is_leq_informative(left, AbstractSet):
+                return AbstractSet[args]
+            return Tuple[args]
+    return Unknown
 
 
 def _get_const_relation_type(const_relation):
