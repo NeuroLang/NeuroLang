@@ -46,3 +46,14 @@ assistant_guidance: >
   The connectivity is of the cortex only: the subcortex (thalamus, basal
   ganglia, hippocampus, amygdala, the tian regions) and the cerebellum
   have none; say so rather than query it.
+  The gradients of the structural connectivity,
+  schaefer_structural_gradient(l, d, v) and
+  destrieux_structural_gradient(l, d, v), are its principal components
+  within each hemisphere: v is the position of region l along gradient d
+  (1 the axis that varies most, to 10; their variance in
+  *_structural_gradient_variance); a question on gradients, an
+  embedding or axes of the connectivity fixes d, and a result of a
+  region and values is painted on the cortex by .view --threshold 0
+  (every region; the default shows the highest values only), one column
+  per gradient shown. They are structural (tractography), not the functional
+  gradients of resting-state fMRI, which no engine has.

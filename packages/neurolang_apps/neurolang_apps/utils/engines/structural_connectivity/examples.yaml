@@ -9,11 +9,13 @@ questions:
   - Which cortical regions is the left superior frontal gyrus structurally connected to?
   - What is the structural network of the left default mode network?
   - What is the probability that a white-matter streamline leaving the left angular gyrus ends in each region?
+  - What is the first gradient of the structural connectivity of the cortex?
 examples:
   datalog:
     - "ans(l, n) :- destrieux_structural_connectivity('L G front sup', l, n)"
     - "ans(l1, l2, n) :- schaefer_structural_connectivity(l1, l2, n), (l1 < l2), (n > 5000)"
     - "ans(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)"
+    - "ans(l, v) :- schaefer_structural_gradient(l, 1, v)"
 
 # Questions on the structural connectivity: the anatomical wiring of the
 # cortex, white-matter streamlines of diffusion MRI tractography, never
@@ -109,3 +111,39 @@ assistant_examples:
       reach(l) :- wired('L G front sup', m), wired(m, l)
       target(l) :- reach(l), (l == 'L G pariet inf Angular')
       ans(p) :- PROB[target(l)] = p
+
+  # The linear gradients of the structural connectivity: the principal
+  # components of the regions' connectivity profiles, within each
+  # hemisphere (dimension 1 to 10), a value per region that .view paints on
+  # the cortex, several dimensions in several columns. Structural, from
+  # tractography: not the functional gradients of resting-state fMRI.
+  - question: What is the first gradient of the structural connectivity of the cortex?
+    datalog: |-
+      ans(l, v) :- schaefer_structural_gradient(l, 1, v)
+
+  - question: Show the first three structural connectivity gradients of the gyri and sulci on the cortex.
+    datalog: |-
+      ans(l, g1, g2, g3) :- destrieux_structural_gradient(l, 1, g1), destrieux_structural_gradient(l, 2, g2), destrieux_structural_gradient(l, 3, g3)
+
+  - question: How much of the variance of the structural connectivity does each gradient explain?
+    datalog: |-
+      ans(d, h, e) :- schaefer_structural_gradient_variance(d, h, e)
+
+  - question: Which Schaefer parcels are at the two ends of the first structural connectivity gradient, its top and bottom 10%?
+    datalog: |-
+      high(percentile(v, 90)) :- schaefer_structural_gradient(l, 1, v)
+      low(percentile(v, 10)) :- schaefer_structural_gradient(l, 1, v)
+      end(l, v) :- schaefer_structural_gradient(l, 1, v), high(t), (v >= t)
+      end(l, v) :- schaefer_structural_gradient(l, 1, v), low(t), (v <= t)
+      ans(l, v) :- end(l, v)
+
+  - question: Where is the default mode network along the first three structural connectivity gradients, on average?
+    datalog: |-
+      default(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      default(l) :- schaefer_label(l), startswith('17Networks RH Default', l)
+      ans(d, mean(v)) :- schaefer_structural_gradient(l, d, v), default(l), (d <= 3)
+
+  - question: Which regions are near the left superior frontal gyrus in the space of the first two structural connectivity gradients?
+    datalog: |-
+      position(l, a, b) :- destrieux_structural_gradient(l, 1, a), destrieux_structural_gradient(l, 2, b)
+      ans(l, d) :- position(l, a, b), position('L G front sup', a0, b0), (d == ((a - a0) ** 2 + (b - b0) ** 2) ** 0.5), (d < 2), (l != 'L G front sup')

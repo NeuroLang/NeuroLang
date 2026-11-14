@@ -71,6 +71,23 @@ Unreleased
   connectivity of the regions a term activates or co-activates, and the
   probability that a random streamline of a region ends in one a term
   activates. ``assistant_guidance`` is inherited, the base's first.
+* The linear gradients of the structural connectivity,
+  ``schaefer_structural_gradient(l, d, v)`` and
+  ``destrieux_structural_gradient(l, d, v)``, with the variance each
+  explains (``*_structural_gradient_variance``): a principal component
+  analysis of the regions' connectivity profiles (log streamlines) within
+  each hemisphere, the right hemisphere's rotated onto the left's
+  (orthogonal Procrustes over the regions of the same name), 10
+  dimensions; over the whole brain the first component would only split
+  the hemispheres (|r| = 0.92). On Schaefer's parcels the first runs from
+  somatomotor to visual cortex, the second from lateral to medial cortex;
+  ``.view --threshold 0`` paints them on the cortex, one overlay per
+  gradient. ``tools/hcp_structural_connectivity/gradients.py`` makes them,
+  for the 22 atlases of the dataset (its ``v1.1``), with examples for the
+  query assistant (the ends of a gradient, a network's position, the
+  regions near a region, a term's activations along a gradient). The help
+  of ``.view`` tells the default threshold of a result of regions with
+  values, the highest values only.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:

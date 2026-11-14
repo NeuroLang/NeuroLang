@@ -1224,8 +1224,10 @@ Without either, the colormap of an overlay is symmetric when it has
 negative values. The page also sets the opacity of each overlay; an
 infinite value is drawn as the largest finite one.
 
-A result on the regions of an atlas shows every region of the result,
-painted with its value, unless --threshold is given. A result of pairs,
+A result on the regions of an atlas paints each region with its value:
+with the default threshold, those of the highest values (a result of
+regions only, every one); --threshold 0 paints every region, as a map
+of all their values (a gradient) asks. A result of pairs,
 two columns of region labels, or two points (x1, y1, z1, x2, y2, z2),
 and a value, such as the co-activation of two regions,
   ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // ...] = p

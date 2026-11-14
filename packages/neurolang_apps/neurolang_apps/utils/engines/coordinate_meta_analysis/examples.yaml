@@ -695,3 +695,12 @@ assistant_examples:
       term_association(s, t) :- mentions(s, t), selected_study(s)
       reached(s) :- ends_in(l), active(l, s)
       ans(p) :- PROB[reached(s) // term_association(s, 'memory')] = p
+
+  # The structural connectivity gradients against the activations of a
+  # term: where, along an anatomical axis of the cortex, a function lies.
+  - question: Where along the second structural connectivity gradient, from sensorimotor to occipital cortex, are the regions activated by studies about pain?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
+      ans(l, v, p) :- pain(l, p), (p > 0.3), destrieux_structural_gradient(l, 2, v)

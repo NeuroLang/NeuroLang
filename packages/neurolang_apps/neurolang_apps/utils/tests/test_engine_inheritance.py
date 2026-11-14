@@ -265,14 +265,9 @@ def test_a_relation_file_downloaded_is_checked_by_its_md5(
                        {"md5sum": "abc"})]]
 
 
-@pytest.mark.network
-@pytest.mark.parametrize("relation", ["schaefer_structural_connectivity",
-                                      "destrieux_structural_connectivity"])
-def test_the_connectivity_files_are_pairs_of_engine_regions(
-    relation, tmp_path
-):
-    """The tables of the HCP connectivity, at their tag on GitLab, checked
-    by their md5, as the engines download them."""
+def _fetched(relation, tmp_path):
+    """The table of *relation* of the engines, at its tag on GitLab,
+    checked by its md5, as the engines download it (skip if offline)."""
     import pandas as pd
 
     from neurolang_apps.utils import engine_registry
@@ -283,7 +278,16 @@ def test_the_connectivity_files_are_pairs_of_engine_regions(
         path = engine_registry._resolve_relation_file(entry, "e", tmp_path)
     except Exception as error:  # offline, GitLab down
         pytest.skip(f"cannot fetch {entry['file']}: {error!r}")
-    table = pd.read_csv(path, sep="\t")
+    return pd.read_csv(path, sep="\t")
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("relation", ["schaefer_structural_connectivity",
+                                      "destrieux_structural_connectivity"])
+def test_the_connectivity_files_are_pairs_of_engine_regions(
+    relation, tmp_path
+):
+    table = _fetched(relation, tmp_path)
     assert list(table.columns) == ["region1", "region2", "streamlines"]
     regions = set(table.region1)
     assert len(regions) == (100 if "schaefer" in relation else 148)
@@ -295,6 +299,22 @@ def test_the_connectivity_files_are_pairs_of_engine_regions(
     swapped = table.set_index(["region2", "region1"]).streamlines
     swapped.index.names = both.index.names
     assert both.sort_index().equals(swapped.sort_index())  # both ways round
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("atlas,regions", [("schaefer", 100),
+                                           ("destrieux", 148)])
+def test_the_gradients_are_ten_per_region(atlas, regions, tmp_path):
+    gradients = _fetched(f"{atlas}_structural_gradient", tmp_path)
+    assert list(gradients.columns) == ["region", "dimension", "value"]
+    assert gradients.groupby("region").dimension.apply(sorted).map(
+        lambda d: d == list(range(1, 11))).all()
+    assert gradients.region.nunique() == regions
+    variance = _fetched(f"{atlas}_structural_gradient_variance", tmp_path)
+    assert list(variance.columns) == ["dimension", "hemisphere",
+                                      "explained"]
+    assert set(variance.hemisphere) == {"L", "R"}
+    assert (variance.groupby("hemisphere").explained.sum() <= 1).all()
 
 
 def test_the_guidance_of_the_assistant_is_inherited():
