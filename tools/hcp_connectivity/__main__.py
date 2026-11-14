@@ -46,6 +46,11 @@ def main(argv=None) -> None:
     sub.add_argument("kind", choices=["structural", "functional"])
     for path in ("work", "parts", "dataset"):
         sub.add_argument(path, type=Path)
+    sub = command("population", "the connectivity of the cortex and the "
+                  "subcortex from a population tractogram, into OUT "
+                  "(WORK: its atlases; needs the internet)", "work", "out")
+    sub.add_argument("tractograms", nargs="+", type=Path)
+    sub.add_argument("--radius", type=float, default=3.0)
     command("gradients", "the gradients again, of the matrices of DATASET",
             "work", "dataset")
     args = parser.parse_args(argv)
@@ -70,6 +75,9 @@ def main(argv=None) -> None:
             from .atlases import tian_names
             combine.functional(args.work, tian_names(args.work / "atlases"),
                                args.parts, args.dataset)
+    elif args.command == "population":
+        from .population import run
+        run(args.work, args.out, args.tractograms, args.radius)
     elif args.command == "gradients":
         from .combine import regradient
         regradient(args.work, args.dataset)

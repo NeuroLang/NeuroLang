@@ -166,3 +166,20 @@ assistant_examples:
   - question: How much of the variance of the structural connectivity does each gradient explain at 400 parcels?
     datalog: |-
       ans(d, h, e) :- schaefer400_structural_gradient_variance(d, h, e)
+
+  # The subcortex (Tian's regions, scale 2), a stop-gap: the streamlines
+  # of ONE population-average tractogram (the HCP1065 atlas of Yeh 2022),
+  # not means over subjects, nor of the scale of the cortical counts.
+  - question: Which parcels of the Schaefer atlas of 400 are structurally connected to the thalamus, and by how many streamlines of the population tractogram?
+    datalog: |-
+      thalamus(t) :- tian(t, r), startswith('THA', t)
+      ans(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, t, n), thalamus(t)
+
+  - question: What is the structural network among the subcortical regions, its pairs of more than 10 streamlines?
+    datalog: |-
+      ans(t1, t2, n) :- tian_structural_connectivity(t1, t2, n), (t1 < t2), (n > 10)
+
+  - question: Which subcortical regions are the parcels of the left default mode network structurally connected to, and by how many streamlines of the population tractogram?
+    datalog: |-
+      default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
+      ans(t, sum(n)) :- schaefer400_tian_structural_connectivity(l, t, n), default_left(l)

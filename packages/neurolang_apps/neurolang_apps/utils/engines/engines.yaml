@@ -175,8 +175,12 @@ engines:
       (schaefer_structural_gradient, schaefer400_structural_gradient,
       destrieux_structural_gradient), with the atlases of the MNI brain
       and the Schaefer atlas of 400 parcels (schaefer400), of 17 networks
-      as the 100 parcels. Cortex only: there is no structural
-      connectivity of the subcortex (Tian) nor of the cerebellum.
+      as the 100 parcels. Those connectivities are of the cortex only; a
+      stop-gap with the subcortex (Tian's regions, scale 2) is the
+      streamline counts of one population-average tractogram, the HCP1065
+      atlas of Yeh (2022) (tian_structural_connectivity,
+      schaefer400_tian_structural_connectivity). No structural
+      connectivity of the cerebellum.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith]
@@ -210,6 +214,14 @@ engines:
       destrieux_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/destrieux.tsv.gz
         md5: 2c68298ab7444215e0b0816d5400dde6
+      # The subcortex: streamline counts of one population-average
+      # tractogram (tools/hcp_connectivity/population.py), at the tag v2.0.
+      tian_structural_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.0/tsv/tian_population.tsv.gz
+        md5: fba57922fd288ff4f00a70526e7ccd64
+      schaefer400_tian_structural_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.0/tsv/schaefer400_17_tian_population.tsv.gz
+        md5: 25c16f9673f233c89354e48772cb3b9d
       schaefer_structural_gradient:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer100_17_gradients.tsv.gz
         md5: 9e84ae695f907ea2622893e483de2609
@@ -254,7 +266,34 @@ engines:
         support the NIH Blueprint for Neuroscience Research; and by the
         McDonnell Center for Systems Neuroscience at Washington
         University.
+      - >-
+        Structural connectivity of the subcortex
+        (tian_structural_connectivity,
+        schaefer400_tian_structural_connectivity): the streamlines of the
+        HCP1065 population-averaged tractography atlas (1,065 HCP Young
+        Adult subjects, ICBM 2009a nonlinear asymmetric space, licence CC
+        BY-SA 4.0, https://brain.labsolver.org/hcp_trk_atlas.html), Yeh
+        F-C. Population-based tract-to-region connectome of the human brain
+        and its hierarchical topology. Nature Communications 13:4933
+        (2022). doi:10.1038/s41467-022-32595-4; DSI Studio: Yeh F-C. Nature
+        Methods (2025). doi:10.1038/s41592-025-02762-8; counted between the
+        regions of the Schaefer 400 and Tian S2 atlases by NeuroLang
+        (tools/hcp_connectivity/population.py). Data were provided [in
+        part] by the Human Connectome Project, WU-Minn Consortium
+        (Principal Investigators: David Van Essen and Kamil Ugurbil;
+        1U54MH091657) funded by the 16 NIH Institutes and Centers that
+        support the NIH Blueprint for Neuroscience Research; and by the
+        McDonnell Center for Systems Neuroscience at Washington
+        University.
     sorts:
+      population_streamlines:
+        columns: [streamlines]
+        type: float
+        description: >-
+          a number of streamlines of one population-average tractogram
+          (the HCP1065 atlas of Yeh 2022), not a mean over subjects, nor
+          of the scale of the streamlines of the structural connectivity of
+          the cortex
       streamlines:
         columns: [streamlines]
         type: float
@@ -310,11 +349,47 @@ engines:
           joining them over 1,064 HCP subjects, both ways round. Cortex
           only: the subcortical structures (thalamus, basal ganglia,
           hippocampus, amygdala, the tian regions) and the cerebellum are
-          not in it. Structural (tractography), not functional
+          not in it (schaefer400_tian_structural_connectivity is a
+          stop-gap with the subcortex). Structural (tractography), not
+          functional
         arguments:
           - schaefer400_label
           - schaefer400_label
           - streamlines
+      tian_structural_connectivity:
+        description: >-
+          Structural connectivity between two regions of Tian's subcortex
+          atlas (scale 2: thalamus, caudate, putamen, pallidum, nucleus
+          accumbens, hippocampus, amygdala; both hemispheres): the number
+          of streamlines joining them in ONE population-average
+          tractogram, the HCP1065 atlas of Yeh (2022, 1,065 HCP subjects;
+          .credits), both ways round, no pair of a region with itself.
+          Streamline counts of that tractogram (the bundles of the atlas),
+          not means over subjects, and not comparable in scale to
+          schaefer400_structural_connectivity. Structural (tractography),
+          not functional. A stop-gap, to be replaced by subject-level
+          tractography
+        arguments:
+          - tian_label
+          - tian_label
+          - population_streamlines
+      schaefer400_tian_structural_connectivity:
+        description: >-
+          Structural connectivity between a Schaefer parcel (400 parcels,
+          17 networks) and a region of Tian's subcortex atlas (scale 2),
+          the subcortex of the structural connectivity: the number of
+          streamlines joining them in ONE population-average tractogram,
+          the HCP1065 atlas of Yeh (2022, 1,065 HCP subjects; .credits),
+          the pairs no streamline joins left out. Streamline counts of that
+          tractogram (the bundles of the atlas), not means over subjects,
+          and not comparable in scale to
+          schaefer400_structural_connectivity. Structural (tractography),
+          not functional. A stop-gap, to be replaced by subject-level
+          tractography
+        arguments:
+          - schaefer400_label
+          - tian_label
+          - population_streamlines
       schaefer400:
         description: >-
           Schaefer 2018 parcel label and its region, of the atlas of 400

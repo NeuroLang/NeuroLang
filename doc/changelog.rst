@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+* Structural connectivity of the subcortex, a stop-gap, in
+  ``structural_connectivity``: ``schaefer400_tian_structural_connectivity(l,
+  t, n)`` (a Schaefer 400 parcel and a Tian region) and
+  ``tian_structural_connectivity(t1, t2, n)`` (two Tian regions), the
+  streamlines of ONE population-average tractogram, Yeh's HCP1065 atlas
+  (1,065 HCP subjects; CC BY-SA 4.0), counted between the regions by
+  ``python -m hcp_connectivity population`` (``tools/hcp_connectivity``).
+  They are counts of that tractogram, not means over subjects, and not of
+  the scale of ``schaefer400_structural_connectivity``; structural, not
+  functional; to be replaced by subject-level tractography. With examples
+  and a guidance line for the query assistant.
+
 * The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
   tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
   Neurosynth with it (the vocabulary of tracts; the IIT whole-brain

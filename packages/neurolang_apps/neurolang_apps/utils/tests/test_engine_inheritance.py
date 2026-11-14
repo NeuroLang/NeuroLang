@@ -344,3 +344,57 @@ def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
         "resolution_mm": 2, "yeo_networks": 17}
     assert cfg["sorts"]["schaefer400_label"]["atlas"] == "schaefer400"
     assert "schaefer400" not in get_engine_config("destrieux")["atlases"]
+
+
+def test_the_subcortical_connectivity_is_a_stop_gap_of_one_tractogram():
+    from neurolang_apps.utils.engine_registry import (
+        get_acknowledgements, get_predicates)
+
+    cfg = get_engine_config("neurosynth")
+    predicates = get_predicates("neurosynth")
+    sorts = {
+        "tian_structural_connectivity":
+            ["tian_label", "tian_label", "population_streamlines"],
+        "schaefer400_tian_structural_connectivity":
+            ["schaefer400_label", "tian_label", "population_streamlines"]}
+    for name, arguments in sorts.items():
+        assert [a["sort"] for a in predicates[name]["arguments"]] == \
+            arguments
+        entry = cfg["relations"][name]
+        assert "/-/raw/v2.0/tsv/" in entry["file"] and entry["md5"]
+        text = " ".join(predicates[name]["description"].split())
+        for words in ("ONE population-average tractogram", "1,065",
+                      "not means over subjects",
+                      "not comparable in scale", "not functional",
+                      "stop-gap", "subject-level tractography"):
+            assert words in text, (name, words)
+    assert "population_streamlines" in cfg["sorts"]
+    guidance = " ".join(cfg["assistant_guidance"].split())
+    assert "schaefer400_tian_structural_connectivity" in guidance
+    assert "ONE population-average tractogram" in guidance
+    texts = get_acknowledgements("neurosynth")
+    assert any("Yeh" in t and "10.1038/s41467-022-32595-4" in t
+               and "CC BY-SA 4.0" in t for t in texts)
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("relation,columns", [
+    ("tian_structural_connectivity", ["region1", "region2", "streamlines"]),
+    ("schaefer400_tian_structural_connectivity",
+     ["region", "tian_region", "streamlines"])])
+def test_the_subcortical_connectivity_files_are_pairs_of_engine_regions(
+    relation, columns, tmp_path
+):
+    table = _fetched(relation, tmp_path)
+    assert list(table.columns) == columns
+    first, second = columns[:2]
+    assert table[second].nunique() == 32
+    assert table[first].nunique() == (32 if first == "region1" else 400)
+    assert not any("-" in r or "_" in r for r in set(table[first]))
+    assert (table.streamlines > 0).all()
+    if first == "region1":
+        assert (table.region1 != table.region2).all()
+        both = table.set_index(["region1", "region2"]).streamlines
+        swapped = table.set_index(["region2", "region1"]).streamlines
+        swapped.index.names = both.index.names
+        assert both.sort_index().equals(swapped.sort_index())

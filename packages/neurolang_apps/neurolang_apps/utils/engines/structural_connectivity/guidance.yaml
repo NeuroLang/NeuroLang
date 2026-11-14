@@ -52,9 +52,17 @@ assistant_guidance: >
   finer parcellation; the labels of the two are different (as
   '17Networks LH DefaultA PFCd 1' of 400), so a query uses the atlas of
   its relation: schaefer400(l, r) lists the 400, schaefer_label(l) the 100.
-  The connectivity is of the cortex only: the subcortex (thalamus, basal
-  ganglia, hippocampus, amygdala, the tian regions) and the cerebellum
-  have none; say so rather than query it.
+  The connectivity above is of the cortex only. The subcortex (thalamus,
+  basal ganglia, nucleus accumbens, hippocampus, amygdala: the regions of
+  tian, 'THA DA lh', 'aHIP rh') has a stop-gap structural connectivity,
+  schaefer400_tian_structural_connectivity(l, t, n) between a parcel of
+  schaefer400 and a Tian region and tian_structural_connectivity(t1, t2,
+  n) between two Tian regions: n is a number of streamlines of ONE
+  population-average tractogram (the HCP1065 atlas of 1,065 subjects),
+  not a mean over subjects and not of the scale of the cortical counts, so
+  never compare or add them with schaefer_structural_connectivity; say that
+  caveat in the answer. The cerebellum has none; say so rather than query
+  it.
   The gradients of the structural connectivity,
   schaefer_structural_gradient(l, d, v) and
   destrieux_structural_gradient(l, d, v), are its principal components
