@@ -248,17 +248,44 @@ def test_the_assistant_is_told_the_connectivity_has_no_subcortex():
         assert "Cortex only" in text and "thalamus" in text, name
 
 
-@pytest.mark.parametrize("name", ["hcp_schaefer100_17", "hcp_destrieux"])
-def test_the_connectivity_files_are_pairs_of_engine_regions(name):
+def test_a_relation_file_downloaded_is_checked_by_its_md5(
+    tmp_path, monkeypatch
+):
+    from neurolang_apps.utils import engine_registry
+
+    asked = []
+    monkeypatch.setattr(
+        engine_registry, "_fetch_files",
+        lambda folder, files, verbose: asked.append(files) or ["x.tsv"])
+    engine_registry._resolve_relation_file(
+        {"file": "https://example.org/v1/x.tsv", "md5": "abc"}, "e",
+        tmp_path)
+    assert asked == [[("x.tsv", "https://example.org/v1/x.tsv",
+                       {"md5sum": "abc"})]]
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("relation", ["schaefer_structural_connectivity",
+                                      "destrieux_structural_connectivity"])
+def test_the_connectivity_files_are_pairs_of_engine_regions(
+    relation, tmp_path
+):
+    """The tables of the HCP connectivity, at their tag on GitLab, checked
+    by their md5, as the engines download them."""
     import pandas as pd
 
-    from neurolang_apps.utils.engine_registry import _ENGINES_DIR
+    from neurolang_apps.utils import engine_registry
 
-    table = pd.read_csv(_ENGINES_DIR / "connectomes" / f"{name}.tsv.gz",
-                        sep="\t")
+    entry = get_engine_config("neurosynth")["relations"][relation]
+    assert "/-/raw/v" in entry["file"] and entry["md5"]  # pinned
+    try:
+        path = engine_registry._resolve_relation_file(entry, "e", tmp_path)
+    except Exception as error:  # offline, GitLab down
+        pytest.skip(f"cannot fetch {entry['file']}: {error!r}")
+    table = pd.read_csv(path, sep="\t")
     assert list(table.columns) == ["region1", "region2", "streamlines"]
     regions = set(table.region1)
-    assert len(regions) == (100 if "schaefer" in name else 148)
+    assert len(regions) == (100 if "schaefer" in relation else 148)
     # named as the engines name the parcels (neurolang.atlases.label_name)
     assert not any("-" in r or "_" in r for r in regions)
     assert (table.region1 != table.region2).all()

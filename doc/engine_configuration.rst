@@ -112,7 +112,8 @@ may specify the following keys, all of them optional:
   Gaussian whose width depends on the number of subjects of the study
   (Eickhoff et al., 2009)
 - ``relations`` — CSV/TSV files (local paths or URLs) loaded as extensional
-  predicates
+  predicates; a URL is downloaded once into the data directory, checked
+  against the entry's ``md5`` if it has one
 - ``acknowledgements`` — the sources of the engine's data, a text each
   with its citation and the acknowledgement its terms ask for; the REPL's
   ``.credits`` prints those of the engine and of the engines it extends

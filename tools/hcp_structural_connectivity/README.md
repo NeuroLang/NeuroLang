@@ -1,7 +1,10 @@
 # The structural connectivity of the engines, from the HCP
 
-These scripts make `engines/connectomes/*.tsv.gz` of `neurolang_apps` (see
-its README for what they hold and how to acknowledge them) from the public
+These scripts make the dataset
+https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity (see its
+README for what it holds and how to acknowledge it), whose
+`tsv/schaefer100_17.tsv.gz` and `tsv/destrieux.tsv.gz` the engines
+download (`relations` of `mni_atlases`, at a tag, with their md5), from the public
 high-resolution structural connectomes of Mansour et al. (2021): one
 59,412 × 59,412 sparse matrix per subject of the HCP Young Adult study
 (1,064 of them, 557 GB), in the authors' bucket
@@ -30,8 +33,8 @@ pandas in `WORK/.venv`, and this repository in `WORK/NeuroLang`:
    `validation.tsv`, our Glasser matrices against the authors', subject by
    subject.
 
-The engines take `schaefer100_17.tsv.gz` as `hcp_schaefer100_17.tsv.gz`
-and `destrieux.tsv.gz` as `hcp_destrieux.tsv.gz`.
+A new version of the dataset is a new tag there: the engines' URLs and
+md5s name it.
 
 On Margaret (2026-11): `WORK=/data/parietal/store3/work/dwasserm/hcp_sc`,
 `STAGING=/scratch/dwasserm/hcp_sc/staging`; the login node downloaded at

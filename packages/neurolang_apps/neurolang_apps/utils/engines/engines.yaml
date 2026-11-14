@@ -45,12 +45,17 @@ engines:
     # Schaefer and of Destrieux: the mean number of streamlines between two
     # parcels over the HCP subjects of Mansour et al. (2021), whose
     # high-resolution connectomes tools/hcp_structural_connectivity
-    # parcellates (connectomes/README.md).
+    # parcellates; published, with those of other atlases and their
+    # standard deviations, in https://gitlab.inria.fr/dwasserm/
+    # neurolang-hcp-connectivity (its README: how they were made, and how
+    # to acknowledge them), at a tag.
     relations:
       schaefer_structural_connectivity:
-        file: connectomes/hcp_schaefer100_17.tsv.gz
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/schaefer100_17.tsv.gz
+        md5: 88b8e2c1a5efced165391959e2d91b80
       destrieux_structural_connectivity:
-        file: connectomes/hcp_destrieux.tsv.gz
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/destrieux.tsv.gz
+        md5: 2c68298ab7444215e0b0816d5400dde6
     acknowledgements:
       - >-
         Schaefer 2018 parcellation, 100 parcels, 17 networks (nilearn's):
@@ -77,7 +82,9 @@ engines:
         High-resolution connectomic fingerprints: mapping neural identity
         and behavior. NeuroImage 229:117695 (2021).
         doi:10.1016/j.neuroimage.2020.117695, parcellated by NeuroLang
-        (tools/hcp_structural_connectivity), Destrieux's labels brought to
+        (tools/hcp_structural_connectivity; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity),
+        Destrieux's labels brought to
         the HCP's fs_LR surface by its registration to fsaverage (Van Essen
         DC, Glasser MF, Dierker DL, Harwell J, Coalson T. Cerebral Cortex
         22:2241-2262 (2012). doi:10.1093/cercor/bhr291). The Human

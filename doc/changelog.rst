@@ -49,9 +49,13 @@ Unreleased
   ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
   streamlines joining two parcels over 1,064 subjects of the Human
   Connectome Project, from the high-resolution connectomes of Mansour et
-  al. (2021), parcellated by ``tools/hcp_structural_connectivity``
-  (``connectomes/README.md`` of the engines); ``.view`` draws a result of
-  them as a network. There is no subcortex in them, so no Tian.
+  al. (2021), parcellated by ``tools/hcp_structural_connectivity``. The
+  engines download them, at a tag, checked by their md5 (a relation's
+  ``md5``), from the public dataset
+  https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
+  those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
+  standard deviations, in parquet; ``.view`` draws a result of them as a
+  network. There is no subcortex in them, so no Tian.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:

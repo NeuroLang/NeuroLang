@@ -274,7 +274,8 @@ def _resolve_relation_file(
 
     If the ``file`` value is a URL it is downloaded via nilearn's
     ``_fetch_files`` (with caching and optional archive extraction)
-    to ``{data_dir}/{engine_name}/``.
+    to ``{data_dir}/{engine_name}/``, checked against its ``md5`` if the
+    entry gives one.
 
     Local paths are resolved relative to *base_dir* (defaults to the
     built-in ``engines/`` directory).
@@ -285,7 +286,7 @@ def _resolve_relation_file(
     if raw.startswith(("http://", "https://")):
         dl_dir = str(data_dir / engine_name)
         name = Path(raw).name
-        opts = {}
+        opts = {"md5sum": rel_cfg["md5"]} if rel_cfg.get("md5") else {}
         if extract_member:
             opts["uncompress"] = True
             # If extract specifies a member name, use that as the target file
