@@ -53,13 +53,21 @@ starting with `obtain`. Rules start with `define as Name`.
 
 DATALOG_REFERENCE = """\
 NeuroLang Datalog: a program is a sequence of rules `head :- body`, one
-per line; the query is the rule whose head is `ans(...)`, and there is
-only one.
+per line; the query is the rule whose head is `ans(...)`.
+- The variables of `ans` name the columns of the answer: name them after
+  what they hold, `ans(region, probability)`, not `ans(l, p)`. A
+  column computed in a head (an aggregation, a percentile) has no name:
+  compute it in a rule of its own, which `ans` reads with named
+  variables.
+- Several answers are named queries, `ans[name](...)`, one per kind of
+  rows: `ans[parcels](parcel) :- ...` and
+  `ans[concepts](concept, probability) :- ...`.
 - Variables are lower-case identifiers; numbers are written as is.
 - {strings}.
-- The body is a conjunction separated by `,`: `ans(s) :- study(s),
-  mentions(s, 'pain')`. Disjunction with `|`, looser than `,`:
-  `ans(s) :- (mentions(s, 'pain') | mentions(s, 'ache')), study(s)`.
+- The body is a conjunction separated by `,`: `ans(study) :-
+  study(study), mentions(study, 'pain')`. Disjunction with `|`, looser
+  than `,`: `ans(study) :- (mentions(study, 'pain') |
+  mentions(study, 'ache')), study(study)`.
 - Negation: `~mentions(s, 'pain')`; its variables must be bound by a
   positive atom of the body.
 - Comparisons and arithmetic in parentheses: `(w > 0.1)`, `(c != 0)`,
@@ -69,10 +77,11 @@ only one.
   Datalog module; `'package:module.dl'` is one of a Python package.
 - A yes/no question is a query without variables: `ans() :- body`.
 - When the question names the kind of its answers (a country, a book),
-  restrict them with their class: `ans(c) :- located(x, c), Country(c)`.
+  restrict them with their class:
+  `ans(country) :- located(x, country), Country(country)`.
 - The largest (or smallest) by a value: compare with the max (min),
   `top(m) :- AGGREGATE[](value(x, v) @ max(v)) = m` and
-  `ans(x) :- value(x, m), top(m)`.
+  `ans(item) :- value(item, m), top(m)`.
 - Only for the k largest with k > 1, rank by counting the larger values
   among the candidates of the question (never a whole large relation):
   `larger(x, y) :- value(x, v), value(y, w), (w > v)`,
@@ -82,12 +91,14 @@ only one.
   single atom (define a conjunction in a rule first), grouped by the
   variables other than the aggregated one:
   `term_count(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n` and
-  `ans(t, n) :- term_count(t, n)`; without group
+  `ans(term, studies) :- term_count(term, studies)`; without group
   `AGGREGATE[](study(s) @ count(s)) = n` (count, sum, max, min, mean).
 - Probabilities over probabilistic relations (e.g. a probabilistic
-  choice): `ans(t, p) :- PROB[mentioned_term(t)] = p`, conditional
+  choice): `ans(term, probability) :-
+  PROB[mentioned_term(term)] = probability`, conditional
   `PROB[a(x) // b(x)] = p`; a probability can be compared like any value:
-  `ans(t, bf) :- bayes_factor(t, bf), (bf > 3.16)`.
+  `ans(term, bayes_factor) :- bayes_factor(term, bayes_factor),
+  (bayes_factor > 3.16)`.
 - Distances: `(euclidean(i, j, k, 74, 130, 52) < 6)` keeps the points
   within 6 of a point; between the points of two relations it is fast
   only when both are stored relations, not rules.
@@ -150,7 +161,11 @@ Work in steps:
    the question names, and run it with run_query: check that it gives
    the kind of rows the question asks for, and correct it otherwise.
 3. As soon as run_query shows the right rows, give the query with
-   final_answer. Return only what the question asks for."""
+   final_answer. Return what the question asks for and, as answers of
+   their own, the entities it names that the answer is computed over
+   (the regions at the ends of a tract, the parcels of a network): one
+   named answer per kind of rows (`ans[name](...)` in Datalog,
+   `obtain ... as Name.` in SQUALL)."""
 
 TEXT_PROTOCOL = """\
 You can call these tools:
