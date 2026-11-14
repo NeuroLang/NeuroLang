@@ -218,11 +218,9 @@ def test_encoder_import_error_says_the_cause(monkeypatch):
         te.Specter2Encoder().encode_query("reading")
 
 
-def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
-    """On macOS a forked child, as the assistant checks queries in, cannot
-    load a model nor use MPS: before the assistant forks, the encoders with
-    local copies are loaded and moved to the CPU; the others are left
-    alone, and nothing is done on other systems."""
+def _fake_loads(monkeypatch):
+    """Make Specter2Encoder load a fake model; return the list of its
+    loads and moves."""
     loads = []
 
     class Model:
@@ -236,21 +234,76 @@ def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
             loads.append(("load", self.device))
 
     monkeypatch.setattr(te.Specter2Encoder, "_load", fake_load)
-    local = te.Specter2Encoder(model_dir=tmp_path, device="mps")
-    for repo in (local.model_name, local.document_adapter, local.query_adapter):
-        copy = tmp_path / repo.replace("/", "--")
+    return loads
+
+
+def _local_copies(encoder, model_dir):
+    for repo in (encoder.model_name, encoder.document_adapter,
+                 encoder.query_adapter):
+        copy = model_dir / repo.replace("/", "--")
         copy.mkdir()
         (copy / te.COMPLETE_MARKER).touch()
+
+
+def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
+    """On macOS a forked child, as the assistant checks queries in, cannot
+    load a model nor use MPS: before the assistant forks, the encoders with
+    local copies are loaded and moved to the CPU; the others are left
+    alone, and nothing is done on other systems."""
+    loads = _fake_loads(monkeypatch)
+    local = te.Specter2Encoder(model_dir=tmp_path, device="mps")
+    _local_copies(local, tmp_path)
     remote = te.Specter2Encoder(device="mps")       # would download
     monkeypatch.setattr(te.sys, "platform", "darwin")
     te.prepare_for_fork()
     assert loads == [("load", "mps"), "cpu"]
-    assert local.device == "cpu" and isinstance(local._model, Model)
+    assert local.device == "cpu" and local._model is not None
     assert remote._model is None and remote.device == "mps"
     monkeypatch.setattr(te.sys, "platform", "linux")
     other = te.Specter2Encoder(model_dir=tmp_path, device="mps")
     te.prepare_for_fork()
     assert other._model is None
+
+
+def test_preload_loads_the_documents_and_the_model_on_the_cpu(
+    monkeypatch, tmp_path, caplog
+):
+    """The REPL server's builder preloads an engine's text embeddings
+    before forking its sessions: the documents' and the query model, on the
+    CPU; what cannot be loaded is logged, and left to the first query."""
+    loads = _fake_loads(monkeypatch)
+    encoder = te.Specter2Encoder(model_dir=tmp_path, device="cuda")
+    _local_copies(encoder, tmp_path)
+    encoder.encode_documents = FakeEncoder().encode_documents
+    index = te.EmbeddingIndex([1, 2, 3, 4], load_documents, encoder)
+    textless = te.EmbeddingIndex([5], load_documents, FakeEncoder())
+    nl = type("Engine", (), {"text_embedding_indexes": {
+        "textless": textless, "studies": index}})
+    te.preload(nl)
+    assert index._matrix is not None and textless._matrix is None
+    assert loads == [("load", "cuda"), "cpu"] and encoder.device == "cpu"
+    assert "text embeddings textless are not preloaded" in caplog.text
+
+
+def test_queries_are_embedded_with_numpy_when_its_weights_are_there(
+    monkeypatch, tmp_path
+):
+    """With the numpy query encoder's weights, a query, and the preload
+    of a server, take them rather than torch's model."""
+    loads = _fake_loads(monkeypatch)
+    queries = []
+    monkeypatch.setattr(te.Specter2Encoder, "_numpy_query",
+                        lambda self, text: queries.append(text))
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    _local_copies(encoder, tmp_path)
+    encoder._fork_safe()
+    assert loads and not queries
+    loads.clear()
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    encoder.numpy_path.touch()
+    encoder._fork_safe()
+    encoder.encode_query("reading")
+    assert not loads and len(queries) == 2
 
 
 # ---------------------------------------------------------------------------
