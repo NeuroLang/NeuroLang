@@ -920,6 +920,51 @@ def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
     assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"
 
 
+_SLIDER_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  // The x of a thumb, its centre running from 7px to 7px short of the
+  // end of its 14px-thumbed range, against the x of the threshold drawn
+  // on the histogram.
+  var histogram = document.getElementById('threshold-histogram');
+  function offsets() {
+    var box = histogram.getBoundingClientRect();
+    var range = histogram.dataset.range.split(' ').map(Number);
+    return ['threshold-slider', 'threshold-high-slider'].map(function (id, i) {
+      var input = document.getElementById(id), r = input.getBoundingClientRect();
+      var thumb = r.left + 7 + input.value / 1000 * (r.width - 14);
+      return Math.abs(thumb - (box.left + range[i] / 3 * box.width));
+    });
+  }
+  var out = {percentile: offsets()};
+  set('threshold-slider', '500', 'input');
+  out.dragged = Number(histogram.dataset.range.split(' ')[0]);
+  out.draggedOffsets = offsets();
+  set('threshold-mode', 'value', 'change');
+  set('threshold', '0.75', 'change');
+  out.value = offsets();
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_threshold_sliders_follow_the_histogram(tmp_path):
+    """Check a thumb of the threshold sliders sits over the value it
+    sets on the histogram, also in percentiles of skewed values."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data.flat[:20] = 3 * (np.arange(1, 21) / 20) ** 3  # most values small
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="sliders", threshold="50%", cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _SLIDER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    for offsets in ("percentile", "draggedOffsets", "value"):
+        assert max(result[offsets]) < 2, (offsets, result[offsets])
+    assert result["dragged"] >= 1.5  # half way along the values, not percentiles
+
 _EDGE_VALUE_CHECK = _CHECK_HELPERS + """
 <script>
 brainViewer.ready.then(function () {

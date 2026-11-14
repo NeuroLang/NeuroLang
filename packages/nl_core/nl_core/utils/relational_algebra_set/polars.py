@@ -1532,6 +1532,9 @@ class NamedRelationalAlgebraFrozenSet(
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
         if self._container is None:
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
+        if any(callable(op) for op in eval_expressions.values()):
+            # Python callables run once per row: don't run them on duplicates
+            self._drop_duplicates_if_needed()
 
         # Keep the dee sentinel column while computing the new columns:
         # a frame with no columns has no rows in polars >= 2, so stripping
@@ -1584,13 +1587,14 @@ class NamedRelationalAlgebraFrozenSet(
             elif callable(operation):
                 # Need eager for callable
                 eager = new_container.collect()
-                col_names = data_names
-                Row = self._make_named_row_class(col_names)
+                # Read by label, as the pandas rows: a namedtuple renames
+                # the columns starting with an underscore.
+                row_of = abc.row_type(data_names)
                 values = [
-                    operation(Row(*(
+                    operation(row_of(
                         _DictWrapper(v) if isinstance(v, dict) else v
                         for v in row
-                    ))) for row in data_rows(eager)
+                    )) for row in data_rows(eager)
                 ]
                 eager = eager.with_columns(
                     pl.Series(name=dst_column, values=values)

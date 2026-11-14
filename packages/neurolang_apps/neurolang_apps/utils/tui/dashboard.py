@@ -29,8 +29,8 @@ IMPORTS = "datasette, datasette_vega"
 EXTRA = "--extra dashboard"
 
 # The period of a query, :days (empty: all), as the start of its window.
-_SINCE = ("created >= COALESCE(datetime('now', '-' || NULLIF(:days, '') || "
-          "' days'), '')")
+_SINCE = ("created >= COALESCE(strftime('%Y-%m-%dT%H:%M:%f', 'now', "
+          "'-' || NULLIF(:days, '') || ' days'), '')")
 
 #: The queries of the activity log, by name: their title and SQL.
 QUERIES = {
@@ -97,7 +97,9 @@ FROM activity WHERE kind = 'end' AND {_SINCE}
 GROUP BY reason ORDER BY sessions DESC"""),
     "uptime": ("The uptime of the server", """
 WITH span AS (
-    SELECT julianday('now') - COALESCE(NULLIF(:days, ''), 30) AS lo,
+    -- from the first run, if later: the log knows nothing before it
+    SELECT MAX(julianday('now') - COALESCE(NULLIF(:days, ''), 30),
+               (SELECT julianday(MIN(started)) FROM runs)) AS lo,
            julianday('now') AS hi),
 runs_in AS (
     SELECT MAX(julianday(started), lo) AS a,

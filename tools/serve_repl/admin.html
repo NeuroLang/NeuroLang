@@ -28,7 +28,7 @@
 </head>
 <body>
 <h1>NeuroLang REPL: admin</h1>
-<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="dashboard-link" hidden> · <a href="/admin/logs/">Dashboard of the activity</a></span> · <a href="/logout">Log out</a></p>
+<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="activity-link" hidden> · <a href="/admin/activity">Activity</a></span><span id="dashboard-link" hidden> · <a href="/admin/logs/">Raw data and SQL</a></span> · <a href="/logout">Log out</a></p>
 <p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
 <p id="message" role="status"></p>
 
@@ -266,6 +266,7 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  $("activity-link").hidden = !state.activity;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
@@ -297,7 +298,8 @@ async function showUsage(logged) {
     $("usage-note").textContent = "No log of the activity: start the server with --activity-db FILE.";
     return $("usage").replaceChildren();
   }
-  $("usage-note").textContent = "Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log.";
+  $("usage-note").replaceChildren("Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log. By period, over time, and each input with its result: ",
+    Object.assign(document.createElement("a"), { href: "/admin/activity", textContent: "Activity" }), ".");
   const users = await call("/admin/api/usage");
   $("usage").replaceChildren(...(users.length ? users.map((u) => row([
     u.user, u.inputs, u.failed, `${u.seconds ?? 0} s`, `${u.cpu ?? 0} s`, u.memory == null ? "-" : `${u.memory} MB`,

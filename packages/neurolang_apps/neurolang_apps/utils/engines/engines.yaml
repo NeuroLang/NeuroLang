@@ -816,36 +816,19 @@ engines:
           - streamline
           - {sort: length, columns: [mm], type: float}
 
-  neurosynth_tracts:
-    extends: [neurosynth, tracts]
-    description: >
-      Neurosynth with tractography: the studies, terms, peaks and Cognitive
-      Atlas of neurosynth, the studies that activate each parcel of its
-      atlases (schaefer_activated(label, study)...), and the commands and
-      vocabulary of tractography of tracts (extra tracts of
-      neurolang-apps), whose streamlines end near the points of a parcel
-      (endpoint_point, schaefer_points). similar_study, the studies about
-      a text, needs the extra embeddings (SPECTER2). The uncinate
-      fasciculus and the concepts of the studies that activate its parcels
-      are examples/uncinate_cogat.dl of the engine tracts.
+  # The engines of a meta-analysis with tractography: the vocabulary of
+  # tracts over the parcels whose studies a meta-analysis engine has
+  # (schaefer_activated...), and the questions on both.
+  meta_analysis_tracts:
+    abstract: true
+    extends: [coordinate_meta_analysis, tracts]
 
-  neurosynth_iit:
-    extends: neurosynth_tracts
-    description: >
-      Neurosynth with a whole-brain tractogram and tract_querier's bundles:
-      neurosynth_tracts after the commands that load the whole-brain
-      tractogram of the IIT Human Brain Atlas v3 (IIT3mean.tck, 38,000
-      streamlines, RAS+ mm, 88 MB, downloaded into the data directory's
-      tracts/iit), load the atlas's Desikan-Killiany wmparc (downloaded, with
-      FreeSurfer's colour LUT, into tracts/fs; its labels are the codes of
-      FreeSurfer's, so the term mapping freesurfer_aseg_aparc applies; the
-      tractogram and the atlas are of the same atlas, so in the same space),
-      index the tractogram by it and import the bundles of tract_querier's
-      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view work
-      at the prompt. The files are read relative to the data directory,
-      from which datalog_init runs. The entry tractogram tells the bundle of
-      the REPL in the browser how to subsample the file it ships in its
-      place, so that this program is the same there.
+  # The whole-brain tractogram of the IIT Human Brain Atlas v3, indexed by
+  # its wmparc, and tract_querier's bundles, at the prompt (see
+  # neurosynth_iit).
+  iit_tractogram:
+    abstract: true
+    extends: tracts
     # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain
     # Template License: non-commercial research, attribution): its
     # whole-brain tractogram and its Desikan-Killiany wmparc, from the OSF
@@ -873,6 +856,55 @@ engines:
       .load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", "tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
       .index_tracts("iit", "fs")
       .import("bundles/freesurfer_queries.dl")
+
+  neurosynth_tracts:
+    extends: [neurosynth, meta_analysis_tracts]
+    description: >
+      Neurosynth with tractography: the studies, terms, peaks and Cognitive
+      Atlas of neurosynth, the studies that activate each parcel of its
+      atlases (schaefer_activated(label, study)...), and the commands and
+      vocabulary of tractography of tracts (extra tracts of
+      neurolang-apps), whose streamlines end near the points of a parcel
+      (endpoint_point, schaefer_points). similar_study, the studies about
+      a text, needs the extra embeddings (SPECTER2). The uncinate
+      fasciculus and the concepts of the studies that activate its parcels
+      are examples/uncinate_cogat.dl of the engine tracts.
+
+  neurosynth_iit:
+    extends: [neurosynth_tracts, iit_tractogram]
+    description: >
+      Neurosynth with a whole-brain tractogram and tract_querier's bundles:
+      neurosynth_tracts after the commands that load the whole-brain
+      tractogram of the IIT Human Brain Atlas v3 (IIT3mean.tck, 38,000
+      streamlines, RAS+ mm, 88 MB, downloaded into the data directory's
+      tracts/iit), load the atlas's Desikan-Killiany wmparc (downloaded, with
+      FreeSurfer's colour LUT, into tracts/fs; its labels are the codes of
+      FreeSurfer's, so the term mapping freesurfer_aseg_aparc applies; the
+      tractogram and the atlas are of the same atlas, so in the same space),
+      index the tractogram by it and import the bundles of tract_querier's
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view work
+      at the prompt. The files are read relative to the data directory,
+      from which datalog_init runs. The entry tractogram tells the bundle of
+      the REPL in the browser how to subsample the file it ships in its
+      place, so that this program is the same there.
+
+  neurostore_tracts:
+    extends: [neurostore, meta_analysis_tracts]
+    description: >
+      NeuroStore with tractography: neurostore (its studies, terms, peaks,
+      abstracts, concepts and domains) and the commands and vocabulary of
+      tractography of tracts, as neurosynth_tracts is for neurosynth.
+
+  neurostore_iit:
+    extends: [neurostore_tracts, iit_tractogram]
+    description: >
+      NeuroStore with a whole-brain tractogram and tract_querier's bundles:
+      neurostore_tracts after the commands of neurosynth_iit, which load the
+      whole-brain tractogram and the Desikan-Killiany wmparc of the IIT
+      Human Brain Atlas v3 (downloaded into the data directory's tracts),
+      index the one by the other and import the bundles of
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view
+      work at the prompt.
 
   # Example template usage (commented out — uncomment to enable):
   #
