@@ -51,6 +51,7 @@ from nl_core.datalog.ontologies_rewriter import (
     OntologyRewriter,
     chase_rules,
     constraints_that_can_hold,
+    projecting_rules,
 )
 
 from nl_expr.exceptions import (
@@ -1167,13 +1168,14 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _rewrite_program_with_ontology(self, deterministic_program, holds):
         """Xrewrite with the constraints that can hold, those without
         existential variables only on values they introduce; the chase
-        applies the latter, as rules, to the named values."""
+        applies the latter, as rules, to the named values, with the
+        rewritings of those that project a variable out."""
         constraints = self._constraints_that_can_hold(holds)
         rewrite = OntologyRewriter(
             Union(sum((
                 _split_aggregation(rule, constraints)
                 for rule in deterministic_program.formulas
-            ), ())),
+            ), ()) + projecting_rules(constraints)),
             constraints, chased=True,
         ).Xrewrite()
         return Union(chase_rules(

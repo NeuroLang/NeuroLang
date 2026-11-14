@@ -651,6 +651,17 @@ def _random_property_axioms(rng, classes, props=("p", "r"), kinds=None):
     return axioms
 
 
+def _derived_predicates(axioms):
+    """The predicates the ``axioms`` derive."""
+    return {
+        q for k, _, p, d in axioms for q in (
+            (d,) if k in ("sub", "all", "subp", "dom", "rng") else
+            (p,) if k in ("sym", "trans") else
+            (p, "r", d) if k == "and" else (p, d)
+        )
+    }
+
+
 def _property_consequences(kind, p, d, facts):
     """The facts a property axiom derives from the binary ``facts``."""
     pairs = {f[1:] for f in facts if f[0] == p and len(f) == 3}
@@ -790,6 +801,48 @@ def test_certain_answers_on_random_horn_ontologies():
             assert res == expected, (axioms, facts, program)
 
 
+def test_certain_answers_with_property_axioms():
+    """As above, with 1 to 3 property axioms: the answers are the certain
+    ones, and only sound with a transitive property."""
+    import random
+
+    rng = random.Random(1)
+    constants = ("a", "b", "c")
+    for case in range(24):
+        classes, axioms = _random_horn_ontology(rng)
+        axioms = sorted(
+            set(axioms) | _random_property_axioms(rng, classes), key=str
+        )
+        facts = {(rng.choice(classes), rng.choice(constants))
+                 for _ in range(rng.randint(1, 3))}
+        facts |= {(rng.choice(("p", "r")),) + tuple(rng.sample(constants, 2))
+                  for _ in range(rng.randint(0, 3))}
+        predicates = {f[0] for f in facts} | _derived_predicates(axioms)
+        nl = NeurolangPDL()
+        nl.load_ontology(io.StringIO(_turtle(axioms)), format="turtle")
+        for name in {f[0] for f in facts}:
+            nl.add_tuple_set(
+                [f[1:] for f in facts if f[0] == name], name=name
+            )
+        for _ in range(2):
+            body = []
+            for _ in range(rng.randint(1, 2)):
+                name = rng.choice(sorted(predicates))
+                arity = 2 if name in ("p", "r") else 1
+                body.append((name,) + tuple(rng.choices("xyz", k=arity)))
+            variables = sorted({v for atom in body for v in atom[1:]})
+            head = rng.sample(variables, rng.randint(1, len(variables)))
+            program = "ans({}) :- {}".format(", ".join(head), ", ".join(
+                f"{a[0]}({', '.join(a[1:])})" for a in body
+            ))
+            expected = _certain_answers(axioms, facts, head, body, depth=4)
+            res = {tuple(r) for r in nl.execute_datalog_program(program)}
+            if any(a[0] == "trans" for a in axioms):
+                assert res <= expected, (axioms, facts, program)
+            else:
+                assert res == expected, (axioms, facts, program)
+
+
 def test_has_value_binds_the_variable_in_all_the_query():
     """Rewriting ``p(x, w)`` with ``C0(x) → p(x, 'v')`` binds ``w`` to
     ``'v'`` in all of the query, so ``C0(w)`` is ``C0('v')``, false."""
@@ -841,12 +894,42 @@ def test_sub_property_and_range_on_the_value_an_existential_introduces():
 
 def test_domain_holds_of_a_named_value_through_an_unnamed_one():
     """``headOf(x, y) → Manager(x)`` derives ``Manager('Juan')`` from the
-    unnamed department Juan heads: it rewrites ``Manager(x)`` although
-    ``x`` is in the head."""
+    unnamed department Juan heads."""
     nl = _deans(":headOf rdfs:domain :Manager .")
     assert _answers(nl, "ans(x) :- Manager(x)") == {
         ('Ana',), ('Juan',), ('Physics',)
     }
+
+
+def test_domain_fact_through_an_unnamed_value_is_chased():
+    """The rewritings of ``headOf(x, y) → Manager(x)`` are chased, so the
+    full constraints apply to ``Manager('Juan')``: ``Manager ⊑ Person``,
+    and ``Manager ⊑ ∃runs.Team`` with ``runs``'s domain ``Lead``. Eva, a
+    Manager by a fact, keeps it."""
+    nl = _deans(
+        ":headOf rdfs:domain :Manager .\n"
+        ":Manager a owl:Class ; rdfs:subClassOf :Person , [ a "
+        "owl:Restriction ; owl:onProperty :runs ; owl:someValuesFrom :Team"
+        " ] .\n:runs rdfs:domain :Lead ."
+    )
+    nl.add_tuple_set([('Eva',)], name='Manager')
+    named = {('Ana',), ('Juan',), ('Physics',), ('Eva',)}
+    assert _answers(nl, "ans(x) :- Manager(x)") == named
+    assert _answers(nl, "ans(x) :- Person(x)") == named
+    assert _answers(nl, "ans(x) :- Lead(x)") == named
+
+
+def test_all_values_through_an_inverse_is_not_found():
+    """``Dept ⊑ ∀headedBy.Boss`` with ``headedBy`` the inverse of
+    ``headOf`` makes Juan a Boss through his unnamed department: a rule of
+    two atoms from an unnamed value to a named one, outside the
+    completeness fragment of doc/ontologies.rst."""
+    nl = _deans(
+        ":headedBy owl:inverseOf :headOf .\n:Dept rdfs:subClassOf [ a "
+        "owl:Restriction ; owl:onProperty :headedBy ; owl:allValuesFrom "
+        ":Boss ] ."
+    )
+    assert _answers(nl, "ans(x) :- Boss(x)") == set()
 
 
 def test_inverse_and_symmetric_properties_on_an_unnamed_value():
