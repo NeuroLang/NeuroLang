@@ -361,6 +361,11 @@ class Specter2Encoder:
     def _load(self):
         if self._model is not None:
             return
+        if self.cache_key in _MODELS:  # an engine built again
+            loaded = _MODELS[self.cache_key]
+            self._torch, self._tokenizer, self._model = loaded
+            self.device = self._model.device.type
+            return
         try:
             import torch
             from adapters import AutoAdapterModel
@@ -380,6 +385,7 @@ class Specter2Encoder:
         model.load_adapter(str(document), source=source, load_as="document")
         model.load_adapter(str(query), source=source, load_as="query")
         self._model = model.to(self.device).eval()
+        _MODELS[self.cache_key] = (torch, self._tokenizer, self._model)
         LOG.info("Loaded %s on %s", self.model_name, self.device)
 
     def _has_local_copies(self):
@@ -392,16 +398,21 @@ class Specter2Encoder:
 
     def _fork_safe(self):
         """
-        Load the model, on the CPU, ahead of a fork.
+        Load the model, on the CPU, ahead of a fork: the numpy query
+        encoder if it embeds the queries (see :meth:`_uses_numpy`).
 
         On macOS a forked child, as the query assistant checks queries in,
-        is aborted when it loads a model with transformers or uses MPS;
-        it can run a model its parent loaded on the CPU.
+        is aborted when it loads a model with transformers or uses MPS
+        (nor can one use CUDA anywhere); it can run a model its parent
+        loaded on the CPU.
         """
+        if self._uses_numpy():
+            self._numpy_query("brain")  # loads its weights
+            return
         if self._model is None and not self._has_local_copies():
             return      # loading would download: leave it to the child
         self._load()
-        if self.device == "mps":
+        if self.device != "cpu":
             self._model = self._model.to("cpu")
             self.device = "cpu"
 
@@ -420,12 +431,20 @@ class Specter2Encoder:
         docs = [t + sep + (a or "") for t, a in zip(titles, texts)]
         return self._encode(docs, "document")
 
+    def _uses_numpy(self):
+        """Whether queries are embedded with numpy: when its weights are
+        at :attr:`numpy_path` (it loads faster and takes less memory than
+        torch, and starts no thread), or torch is not installed."""
+        path = self.numpy_path
+        return self._numpy is not None or not _torch_available() or (
+            path is not None and path.exists())
+
     def encode_query(self, text):
         """
-        Embed a free-text query as a vector, with numpy when torch is not
-        installed (see :attr:`numpy_path`).
+        Embed a free-text query as a vector, with numpy if
+        :meth:`_uses_numpy`, otherwise with torch.
         """
-        if self._model is None and not _torch_available():
+        if self._uses_numpy():
             return self._numpy_query(text)
         self._load()
         return self._encode([text], "query")[0]
@@ -472,13 +491,17 @@ class Specter2Encoder:
             max_length=512,
             return_tensors="pt",
             return_token_type_ids=False,
-        ).to(self.device)
+        ).to(self._model.device)  # moved by another encoder sharing it
         hidden = self._model(**inputs).last_hidden_state
         return hidden[:, 0, :].float().cpu().numpy()
 
 
 # The SPECTER2 encoders of the process (see prepare_for_fork).
 _ENCODERS = weakref.WeakSet()
+
+# The models loaded, by cache_key: the encoders of an engine built again
+# share them.
+_MODELS = {}
 
 
 def prepare_for_fork():
@@ -497,6 +520,25 @@ def prepare_for_fork():
             encoder._fork_safe()
         except Exception:  # noqa: BLE001 -- a fork must not fail for it
             LOG.debug("Encoder not prepared for fork", exc_info=True)
+
+
+def preload(nl):
+    """
+    Load the document embeddings and the query model of the engine *nl*
+    (the numpy one if there, else torch's on the CPU), for the processes forked from this one to share them,
+    rather than each load them on its first query (the REPL server's
+    sessions). What cannot be loaded (torch is missing, the model is not
+    in ``model_dir``) is left to the first query, and logged.
+    """
+    for name, index in getattr(nl, "text_embedding_indexes", {}).items():
+        try:
+            index.build()
+            if not index.encoder._uses_numpy():
+                index.encoder.download()  # the copies _fork_safe loads
+            index.encoder._fork_safe()
+        except Exception as error:  # noqa: BLE001 -- loaded on first use
+            LOG.warning("The text embeddings %s are not preloaded: %s: %s",
+                        name, type(error).__name__, error)
 
 
 def _after_fork_in_child():

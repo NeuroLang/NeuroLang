@@ -571,10 +571,11 @@ def test_the_service_serves_as_asked_with_absolute_paths(
     assert "--local" in command
     assert after["--downloads"] == str(serve.DEFAULT_DOWNLOADS)
     assert "--no-prepare" not in command
+    assert "--no-preload-embeddings" not in command
     command = serve.service_command(_daemon_args(
-        serve, tmp_path, "--local", "--no-prepare",
+        serve, tmp_path, "--local", "--no-prepare", "--no-preload-embeddings",
     ))
-    assert "--no-prepare" in command
+    assert "--no-prepare" in command and "--no-preload-embeddings" in command
 
 
 def test_the_service_runs_the_python_of_the_virtual_environment(

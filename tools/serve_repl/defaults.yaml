@@ -11,6 +11,7 @@ downloads: ~/.cache/neurolang/repl-downloads    # what the bundle's engines down
 data_dir: neurolang_data      # --local: the engines' data
 resolution: 2.0               # --local: mm, the engines' MNI grid
 prepare: true                 # --local: build each engine before serving
+preload_embeddings: true      # --local: load the engines' text embeddings when built
 max_sessions: 8               # --users --local: sessions at once
 idle_minutes: 120             # --users --local: an unused session ends
 query_minutes: 60             # --users --local: a query is stopped (0: never)

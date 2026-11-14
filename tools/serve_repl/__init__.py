@@ -322,18 +322,20 @@ def copy_page(site: Path) -> Path:
     return repl / "index.html"
 
 
-def _prepare_engine(data_dir, name, resolution, light) -> None:
+def _prepare_engine(data_dir, name, resolution, light, embeddings) -> None:
     """Build the engine *name* on *data_dir*, as a session does, telling its
-    steps: what it downloads, and the tables it finds, are kept there."""
+    steps: what it downloads, and the tables it finds, are kept there (and,
+    with *embeddings*, its text embeddings and their model)."""
     from neurolang_apps.utils.tui.local_backend import LocalBackend
 
-    backend = LocalBackend(data_dir, resolution=resolution, light=light)
-    backend._build_engine(
+    backend = LocalBackend(data_dir, resolution=resolution, light=light,
+                           preload_embeddings=embeddings)
+    backend.build(
         name, lambda step: print(f"  {name}: {step}", flush=True)
     )
 
 
-def _prepare_in_child(data_dir, resolution, light):
+def _prepare_in_child(data_dir, resolution, light, embeddings):
     """Return the function building an engine in a process of its own,
     which tells whether it could: the memory of the engine is not kept by
     the server's process."""
@@ -343,7 +345,8 @@ def _prepare_in_child(data_dir, resolution, light):
 
     def run(name) -> bool:
         child = context.Process(
-            target=_prepare_engine, args=(data_dir, name, resolution, light),
+            target=_prepare_engine,
+            args=(data_dir, name, resolution, light, embeddings),
         )
         child.start()
         child.join()
@@ -353,18 +356,20 @@ def _prepare_in_child(data_dir, resolution, light):
 
 def prepare_engines(
     data_dir: Path, engines, resolution: float = 2.0, light: bool = False,
-    run=None,
+    run=None, embeddings: bool = False,
 ) -> list:
     """
     Build each of the *engines* once on *data_dir*, before the server
     serves: what they download (atlases, templates, studies) and the
     tables they take long to find are kept there, so that a session starts
-    from them, without the network. Tell how each went; return the names
+    from them, without the network (with *embeddings*, their text
+    embeddings and the model of these too). Tell how each went; return the
+    names
     of those that could not be built, whose sessions download what they
     lack, if they can. *run*(name) builds one and tells whether it could
     (by default in a process of its own).
     """
-    run = run or _prepare_in_child(data_dir, resolution, light)
+    run = run or _prepare_in_child(data_dir, resolution, light, embeddings)
     failed = []
     for name in engines:
         print(f"Preparing the engine {name} in {data_dir}…", flush=True)
@@ -2505,6 +2510,8 @@ def service_command(args) -> list:
                     "--resolution", str(args.resolution)]
         command += ["--light"] if args.light else []
         command += [] if args.prepare else ["--no-prepare"]
+        command += [] if args.preload_embeddings else [
+            "--no-preload-embeddings"]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
@@ -2946,6 +2953,14 @@ def parse_args(argv=None):
         help="with --local, do not build each engine before serving (which "
         "keeps what it downloads in --data-dir): its first session does",
     )
+    parser.add_argument(
+        "--no-preload-embeddings", action="store_false",
+        dest="preload_embeddings", default=DEFAULTS["preload_embeddings"],
+        help="with --local, do not load the text embeddings of an engine "
+        "(its documents', from their cache or computed into it, and the "
+        "query model) when it is built: its first query of them does, in "
+        "each session (in memory of its own, with --users)",
+    )
     built = parser.add_mutually_exclusive_group()
     built.add_argument(
         "--pr", type=int,
@@ -3223,6 +3238,7 @@ def main(argv=None) -> None:
                 args.data_dir.resolve(),
                 list(args.engines or bundle_engines()),
                 args.resolution, args.light,
+                embeddings=args.preload_embeddings,
             )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
@@ -3246,6 +3262,7 @@ def main(argv=None) -> None:
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 running=args.max_running,
                 query_seconds=args.query_minutes * 60,
+                preload_embeddings=args.preload_embeddings,
                 **options,
             )
             if args.activity_db:
@@ -3256,7 +3273,9 @@ def main(argv=None) -> None:
                 options["feedback"] = {
                     "path": str(args.feedback_db.resolve()), "user": "",
                     "groups": ""}
-            backend = LocalBackend(args.data_dir, **options)
+            backend = LocalBackend(
+                args.data_dir, preload_embeddings=args.preload_embeddings,
+                **options)
         if args.feedback_db:
             from neurolang_apps.utils.llm.feedback_server import (
                 FeedbackStore,
