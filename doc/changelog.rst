@@ -24,7 +24,11 @@ Unreleased
   rows.  ``.view`` (and the brain tab) draws all those it can and leaves
   out, telling why, those with nothing to draw, such as a table of terms
   and Bayes factors beside the regions of the same program: it failed as a
-  whole.
+  whole.  Each answer is an overlay of the viewer, which a box by its
+  colour bar shows or hides; the masks of several answers have each a
+  colour of their own (``mask_colormaps`` in ``viewer.yaml``: Blues,
+  Oranges, Greens...), and the colours of the atlas start off, which would
+  hide them.
 * Ontologies: the constraints without existential variables (subclass,
   ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
   Datalog rules; XRewrite rewrites the query with the existential ones, the

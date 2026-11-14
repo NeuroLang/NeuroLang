@@ -291,6 +291,23 @@ class TestViewRegionNames:
         assert regions.colours == list(nifti.REGION_PALETTE[:2])
         _remove_view_files(_output(tiny))
 
+    def test_the_regions_of_several_answers_in_the_colours_of_each(
+        self, tiny, view_calls
+    ):
+        """The answers of a program with several, regions each, are told
+        apart by the colour of their overlay: the colours of the atlas
+        start hidden, the names of the regions are kept."""
+        tiny._execute_and_display(
+            "ans[a](l) :- cortex_activated(l, s), (l == 'A')\n"
+            "ans[b](l) :- cortex_activated(l, s), (l == 'B')\n"
+        )
+        tiny._handle_dot_command(".view")
+        img, kwargs = view_calls[-1]
+        assert [name for name, _ in img] == ["a: mask", "b: mask"]
+        assert not kwargs["regions"].coloured
+        assert kwargs["regions"].names
+        _remove_view_files(_output(tiny))
+
     def test_regions_of_two_atlases(self, tiny, view_calls):
         tiny._execute_and_display(
             "ans(l) :- cortex_activated(l, s) | deep_activated(l, s)"

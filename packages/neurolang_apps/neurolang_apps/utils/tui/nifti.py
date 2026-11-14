@@ -1945,6 +1945,9 @@ def last_results_layers(app, request: ViewRequest):
         return None
     if not kinds & {"voxels", "values"} and not request.threshold_given:
         request = request._replace(threshold=0.0)
+    if len(titles) > 1 and "regions" in extra:
+        # the answers are told apart by the colours of their overlays
+        extra["regions"] = extra["regions"]._replace(coloured=False)
     return layers, extra, request, titles
 
 

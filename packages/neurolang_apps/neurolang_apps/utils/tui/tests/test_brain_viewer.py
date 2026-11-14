@@ -471,6 +471,34 @@ class TestLayers:
         assert {layer["cmap"] for layer in layers} <= set(state["colormaps"])
         assert state["initial"]["active"] == 0
 
+    def test_masks_of_several_answers_have_distinct_colours(self):
+        """The masks of the answers of a program with several, value 1
+        each, are drawn in the top colours of their colormaps: those of
+        the masks, single hues in turn, not those whose top is alike
+        (plasma and viridis both end in yellow)."""
+        mask = np.zeros((4, 4, 4), dtype=np.float32)
+        mask[1, 1, 1] = 1.0
+        state = _state(brain_viewer.viewer_html(
+            [("front: mask", _image(mask)), ("temp: mask", _image(mask)),
+             ("weighted: w", _image(mask))],
+            None, title="t", threshold="0", cmap=None, symmetric=False,
+        ))
+        cmaps = [layer["cmap"] for layer in state["initial"]["layers"]]
+        assert cmaps[:2] == list(brain_viewer.MASK_CMAPS[:2])
+        assert cmaps[2] not in brain_viewer.MASK_CMAPS
+        assert set(cmaps) <= set(state["colormaps"])
+
+    def test_a_mask_alone_keeps_the_colormap(self):
+        mask = np.zeros((4, 4, 4), dtype=np.float32)
+        mask[1, 1, 1] = 1.0
+        state = _state(brain_viewer.viewer_html(
+            _image(mask), None, title="t", threshold="0", cmap=None,
+            symmetric=False,
+        ))
+        assert state["initial"]["layers"][0]["cmap"] == (
+            brain_viewer.DEFAULT_CMAP
+        )
+
     def test_the_cursor_starts_on_the_peak_of_the_first(self, state):
         assert state["initial"]["cursor"] == [1, 2, 3]
 
@@ -1061,6 +1089,7 @@ def test_the_defaults_of_the_viewer_are_those_of_its_file():
     defaults = yaml.safe_load(brain_viewer.DEFAULTS_FILE.read_text())
     assert brain_viewer.DEFAULT_CMAP == defaults["colormap"]
     assert brain_viewer.OVERLAY_CMAPS == tuple(defaults["overlay_colormaps"])
+    assert brain_viewer.MASK_CMAPS == tuple(defaults["mask_colormaps"])
     assert brain_viewer.COLORMAPS == tuple(defaults["colormaps"])
     assert brain_viewer.BACKGROUND_MAX_VOXELS == defaults[
         "background_max_voxels"]
