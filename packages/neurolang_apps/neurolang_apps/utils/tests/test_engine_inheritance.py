@@ -388,8 +388,12 @@ def test_the_subcortical_connectivity_files_are_pairs_of_engine_regions(
     table = _fetched(relation, tmp_path)
     assert list(table.columns) == columns
     first, second = columns[:2]
-    assert table[second].nunique() == 32
-    assert table[first].nunique() == (32 if first == "region1" else 400)
+    # a population tractogram's bundles reach some of the subcortex only:
+    # 18 of Tian's 32 regions have a Tian partner, 31 a Schaefer 400
+    # parcel, and 306 of the 400 parcels a Tian region
+    assert all(r.endswith((" lh", " rh")) for r in set(table[second]))
+    assert table[second].nunique() == (18 if first == "region1" else 31)
+    assert table[first].nunique() == (18 if first == "region1" else 306)
     assert not any("-" in r or "_" in r for r in set(table[first]))
     assert (table.streamlines > 0).all()
     if first == "region1":
