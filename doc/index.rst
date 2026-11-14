@@ -98,6 +98,7 @@ See :doc:`repl` for the REPL, :doc:`tutorial` for a first walkthrough, and
    tutorial_neurosynth_tests
    tutorial_cognitive_atlas
    concepts
+   ontologies
    probabilistic_lifting
    inclusion_exclusion
    engine_configuration

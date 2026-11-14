@@ -14,7 +14,12 @@ from nl_expr.logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import OntologyParser, RightImplication
-from ..ontologies_rewriter import OntologyRewriter, constraints_that_can_hold
+from ..expression_processing import extract_logic_atoms
+from ..ontologies_rewriter import (
+    OntologyRewriter,
+    chase_rules,
+    constraints_that_can_hold,
+)
 
 S_ = Symbol
 C_ = Constant
@@ -447,3 +452,93 @@ def test_variable_in_a_head_term_is_distinguished():
     assert len(OntologyRewriter(Union((rule,)), constraints).Xrewrite()) == 2
     rule = I_(q(count(b)), headOf(a, b))
     assert OntologyRewriter(Union((rule,)), constraints).Xrewrite() == {rule}
+
+
+def _bodies(rewriting):
+    """The rewritings as (head, body) of functor names and arguments."""
+    return {
+        (q.consequent.args, frozenset(
+            (a.functor.name, a.args) for a in extract_logic_atoms(q.antecedent)
+        )) for q in rewriting
+    }
+
+
+def test_factorisation_keeps_the_rest_of_the_body():
+    """Factorising the ``aux`` atoms of ``q(v) :- aux(u, x), aux(v, x),
+    E(v)`` keeps ``E(v)``, so the existential gives ``C(v) ∧ E(v)``."""
+    C, E, aux, q = S_("C"), S_("E"), S_("aux"), S_("q")
+    u, v, x, y = S_("u"), S_("v"), S_("x"), S_("y")
+    constraints = _categorize_constraints([RI_(C(x), aux(x, y))])
+    rule = I_(q(v), Conjunction((aux(u, x), aux(v, x), E(v))))
+
+    rewriting = OntologyRewriter(Union((rule,)), constraints).Xrewrite()
+    heads_bodies = {
+        (head, frozenset(name for name, _ in body))
+        for head, body in _bodies(rewriting)
+    }
+    assert all(
+        set(head) <= {
+            arg for q in rewriting for a in extract_logic_atoms(q.antecedent)
+            for arg in a.args
+        } for head, _ in heads_bodies
+    )
+    assert any(names == {"C", "E"} for _, names in heads_bodies)
+
+
+def test_renamed_constraint_variables_are_new():
+    """Applying ``aux(x, y) → C(y)`` twice must not reuse a query variable:
+    ``q(z) :- C(x), r(y, x), r(z, y)`` rewrites to ``q(z) :- C(z)``."""
+    C, aux, r, q = S_("C"), S_("aux"), S_("r"), S_("q")
+    x, y, z = S_("x"), S_("y"), S_("z")
+    constraints = _categorize_constraints([
+        RI_(C(x), aux(x, y)), RI_(aux(x, y), r(x, y)),
+        RI_(aux(x, y), C(y)),
+    ])
+    rule = I_(q(z), Conjunction((C(x), r(y, x), r(z, y))))
+
+    rewriting = OntologyRewriter(Union((rule,)), constraints).Xrewrite()
+    assert any(
+        body == frozenset({("C", head)}) for head, body in _bodies(rewriting)
+    )
+
+
+def test_chased_full_constraints_rewrite_atoms_out_of_the_head():
+    """With ``chased``, ``Dept(x) → Unit(x)`` rewrites ``Unit(y)``, which
+    may stand for an unnamed value, and not ``Unit(x)`` in the head."""
+    Dept, Unit, headOf, q = S_("Dept"), S_("Unit"), S_("headOf"), S_("q")
+    x, y = S_("x"), S_("y")
+    constraints = _categorize_constraints([RI_(Dept(x), Unit(x))])
+
+    rule = I_(q(x), Unit(x))
+    assert OntologyRewriter(
+        Union((rule,)), constraints, chased=True
+    ).Xrewrite() == {rule}
+    rule = I_(q(x), Conjunction((headOf(x, y), Unit(y))))
+    assert len(OntologyRewriter(
+        Union((rule,)), constraints, chased=True
+    ).Xrewrite()) == 2
+
+
+def test_chase_rules():
+    """The full constraints the rule depends on become rules; ``Unit``,
+    with facts, is derived into a copy; rules over ``aux``, which has no
+    values, are left out."""
+    Dean, Dept, Unit, aux, q = (
+        S_("Dean"), S_("Dept"), S_("Unit"), S_("aux"), S_("q")
+    )
+    x, y = S_("x"), S_("y")
+    constraints = _categorize_constraints([
+        RI_(Dean(x), aux(x, y)), RI_(aux(x, y), Dept(y)),
+        RI_(Dept(x), Unit(x)),
+    ])
+    rules = chase_rules(
+        constraints, {Dept, Unit}, [I_(q(x), Unit(x)), I_(q(x), aux(x, y))],
+        {Unit, Dept},
+    )
+    assert len(rules) == 3
+    query, chased, copy = rules
+    unit = query.antecedent.functor
+    assert unit != Unit and chased.consequent.functor == unit
+    assert chased.antecedent.functor == Dept
+    assert copy.consequent.functor == unit
+    assert copy.antecedent.functor == Unit

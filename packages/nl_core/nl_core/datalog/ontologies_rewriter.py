@@ -4,7 +4,9 @@ from nl_expr.expression_walker import (
     add_match,
 )
 from nl_expr.expressions import Symbol
-from nl_expr.logic import Constant, Implication, NaryLogicOperator, Negation
+from nl_expr.logic import (
+    Constant, Implication, NaryLogicOperator, Negation, Union
+)
 from nl_expr.logic.expression_processing import ExtractFreeVariablesWalker
 from nl_expr.logic.transformations import CollapseConjunctions
 from nl_expr.logic.unification import apply_substitution, most_general_unifier
@@ -41,16 +43,79 @@ def constraints_that_can_hold(constraints, holds):
         holding |= heads
 
 
+def chase_rules(constraints, holds, rules, edb):
+    """
+    Return ``rules`` with, as Datalog rules, the ``constraints`` without
+    existential variables that can hold from ``holds`` and that ``rules``
+    depend on. Rules over a consequent of the constraints that has no
+    values are left out. A predicate of ``edb`` these derive is replaced
+    by a copy of its facts, as a rule cannot derive into it.
+    """
+    full = constraints_that_can_hold({
+        name: {s for s in sigmas if not _existential_variables(s)}
+        for name, sigmas in constraints.items()
+    }, holds)
+    unvalued = {
+        sigma.consequent.functor for sigmas in constraints.values()
+        for sigma in sigmas if sigma.consequent.functor.name not in full
+    } - set(holds)
+    rules = [
+        rule for rule in rules if not unvalued & {
+            atom.functor for atom in extract_logic_atoms(rule.antecedent)
+        }
+    ]
+    chase, seen, todo = [], set(), list(rules)
+    while todo:
+        for atom in extract_logic_atoms(todo.pop().antecedent):
+            name = getattr(atom.functor, "name", None)
+            if name not in seen:
+                seen.add(name)
+                for sigma in full.get(name, ()):
+                    chase.append(
+                        Implication(sigma.consequent, sigma.antecedent)
+                    )
+                    todo.append(sigma)
+    heads = {rule.consequent.functor: rule.consequent for rule in chase}
+    copies = {p.name: Symbol.fresh() for p in heads if p in edb}
+    copy_rules = []
+    for name, copy in copies.items():
+        args = tuple(Symbol.fresh() for _ in heads[Symbol(name)].args)
+        copy_rules.append(Implication(copy(*args), Symbol(name)(*args)))
+    return tuple(
+        ReplaceSymbolWalker(copies).walk(Union(tuple(rules) + tuple(chase)))
+        .formulas
+    ) + tuple(copy_rules)
+
+
 class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
     @add_match(RightImplication)
     def extract_variables_s(self, expression):
         return self.walk(expression.consequent) - self.walk(expression.antecedent)
 
 
+def _arguments(formula):
+    """The arguments of an atom, the symbols of a negated one."""
+    return getattr(formula, "args", formula._symbols)
+
+
+def _existential_variables(sigma):
+    return ExtractFreeVariablesRightImplicationWalker().walk(sigma)
+
+
 class OntologyRewriter:
-    def __init__(self, query, union_of_constraints):
+    """
+    Rewrite ``query`` with ``union_of_constraints`` (Xrewrite).
+
+    With ``chased``, the constraints without existential variables hold
+    on the named values, as the chase applied them as rules. They then
+    rewrite only atoms with a variable not in the rule's head, the only
+    ones that can stand for a value an existential introduces.
+    """
+
+    def __init__(self, query, union_of_constraints, chased=False):
         self.query = query
         self.union_of_constraints = union_of_constraints
+        self.chased = chased
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -106,6 +171,13 @@ class OntologyRewriter:
     def rewriting_step(self, q0, sigma, rename_count):
         S_applicable = self._get_applicable(sigma, q0)
         list_q0 = []
+        # The renamed variables of sigma must not be those of q0.
+        names = {symbol.name for symbol in q0._symbols}
+        while any(
+            f"{symbol.name}{rename_count + 1}" in names
+            for symbol in sigma._symbols
+        ):
+            rename_count += 1
         for S in S_applicable:
             rename_count += 1
             sigma_i = self._rename(sigma, rename_count)
@@ -120,16 +192,19 @@ class OntologyRewriter:
         return (new_q0, "r", "u") not in Q_rew and (new_q0, "r", "e",) not in Q_explored
 
     def factorization_step(self, q0, sigma):
-        body_q = q0.antecedent
-        S_factorizable = self._get_factorizable(sigma, body_q)
-        list_q0 = []
-        if len(S_factorizable) > 1:
-            qS = self._full_unification(S_factorizable)
-            if qS:
-                new_q0 = Implication(q0.consequent, qS)
-                list_q0.append(new_q0)
-
-        return list_q0
+        """Unify the atoms of ``q0`` that ``sigma`` factorizes, in all of
+        ``q0``, and keep one copy of each atom."""
+        S = self._get_factorizable(sigma, q0.antecedent)
+        unified = self._full_unification(S) if len(S) > 1 else None
+        if unified is None:
+            return []
+        q = ReplaceSymbolWalker({
+            arg.name: u
+            for atom in S for arg, u in zip(atom.args, unified.args)
+            if isinstance(arg, Symbol) and arg != u
+        }).walk(q0)
+        body = q.antecedent.apply(tuple(dict.fromkeys(q.antecedent.formulas)))
+        return [Implication(q.consequent, CollapseConjunctions().walk(body))]
 
     def _is_new_factorization(self, new_q0, Q_rew, Q_explored):
         return (
@@ -143,8 +218,9 @@ class OntologyRewriter:
         acum = S[0]
         for term in S:
             temp = most_general_unifier(term, acum)
-            new_term = apply_substitution(temp[1], temp[0])
-            acum = new_term
+            if temp is None:
+                return None
+            acum = apply_substitution(temp[1], temp[0])
 
         return acum
 
@@ -185,7 +261,8 @@ class OntologyRewriter:
     def _free_var_other_term(self, free_var, q, S):
         if isinstance(q, NaryLogicOperator):
             return any(
-                formula not in S and free_var in formula.args for formula in q.formulas
+                formula not in S and free_var in _arguments(formula)
+                for formula in q.formulas
             )
         else:
             if q != S and free_var in q.args:
@@ -198,13 +275,21 @@ class OntologyRewriter:
             return any(
                 sub_arg == free_var and index not in pos
                 for formula in q.formulas
-                for index, sub_arg in enumerate(formula.args)
+                for index, sub_arg in enumerate(_arguments(formula))
             )
         else:
             return any(arg == free_var and i != pos for i, arg in enumerate(q.args))
 
     def _get_applicable(self, sigma, q):
         S = self._get_term(q.antecedent, sigma.consequent)
+        if self.chased and not _existential_variables(sigma):
+            S = [
+                s for s in S if any(
+                    isinstance(arg, Symbol)
+                    and not self._is_distinguished(arg, q)
+                    for arg in s.args
+                )
+            ]
         if self._is_applicable(sigma, q, S):
             return S
 
@@ -260,7 +345,9 @@ class OntologyRewriter:
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):
-            count = sum(a == var for term in q.formulas for var in term.args)
+            count = sum(
+                a == var for term in q.formulas for var in _arguments(term)
+            )
         else:
             count = sum(a == term for term in q.args)
         return count > 1
@@ -283,19 +370,29 @@ class OntologyRewriter:
         else:
             for arg in sigma.args:
                 if arg not in renamed and isinstance(arg, Symbol):
-                    temp = arg.fresh()
-                    temp.name = arg.name + str(index)
+                    # A new symbol: renaming one would leave stale hashes.
+                    temp = type(arg)(arg.name + str(index))
+                    temp.is_fresh = arg.is_fresh
                     new_args[arg] = temp
                 renamed.add(arg)
         return new_args, renamed
 
     def _combine_rewriting(self, q, qS, S, sigma):
-        sigma_ant = apply_substitution(sigma.antecedent, qS[0])
-        q_con = apply_substitution(q.consequent, qS[0])
-        replace = dict({S: sigma_ant})
-        rsw = ReplaceExpressionWalker(replace)
-        sigma_ant = rsw.walk(q.antecedent)
-        sigma_ant = CollapseConjunctions().walk(sigma_ant)
-
-        return Implication(q_con, sigma_ant)
+        """Replace ``S`` in ``q`` by the body of ``sigma`` and apply their
+        unifier ``qS`` to all of ``q``: a query variable it binds, as to
+        the constant of ``C(x) → p(x, v)``, is bound everywhere."""
+        substitution = {}
+        for symbol, value in qS[0].items():
+            for _ in qS[0]:
+                if value not in qS[0]:
+                    break
+                value = qS[0][value]
+            substitution[symbol.name] = value
+        q = ReplaceSymbolWalker(substitution).walk(Implication(
+            q.consequent,
+            ReplaceExpressionWalker({S: sigma.antecedent}).walk(q.antecedent),
+        ))
+        return Implication(
+            q.consequent, CollapseConjunctions().walk(q.antecedent)
+        )
 

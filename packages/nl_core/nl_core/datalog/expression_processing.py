@@ -521,7 +521,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
-            if rule not in idb[functor].formulas:
+            if rule not in getattr(idb.get(functor), "formulas", ()):
                 raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog " "instance."
                 )

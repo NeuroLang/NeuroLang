@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+* Ontologies: the constraints without existential variables (subclass,
+  ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
+  Datalog rules; XRewrite rewrites the query with the existential ones, the
+  others only on atoms that can stand for a value they introduce.  A query
+  on the Cognitive Atlas with an instance of a class high in its hierarchy
+  now ends (``ans(x) :- ro:has_part(x, y)``: 1.7 s, was > 120 s).  New page
+  :doc:`ontologies`.  Fixes on the way: XRewrite's factorisation dropped the
+  rest of the body, a rewriting step bound a query variable only in the
+  rewritten atom (wrong answers with ``hasValue``), a renamed constraint
+  variable could take a query variable's name, a negated atom made XRewrite
+  fail, the chased predicates broke ``solve_all``, an aggregate over a
+  rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
+  ``C(x) → B(x)``.
 * ``neurolang-repl-serve --local`` loads the text embeddings of an engine
   when it builds it (its documents', from their cache or computed into it,
   and the SPECTER2 query model): with ``--users`` in the builder, before
@@ -181,6 +194,14 @@ Unreleased
 
 **Performance:**
 
+* The query assistant caches its prompts on the Anthropic API, and on
+  OpenRouter for Claude: the steps of
+  an answer repeat the system prompt and the conversation so far, which are
+  then read from the cache at a tenth of the price of input tokens or less,
+  making an answer about three times cheaper.  The line after the query
+  counts the tokens read from the cache, also for the providers that cache
+  by themselves, such as DeepSeek on OpenRouter.
+
 * A natural join on a unique key of strings, such as the NeuroStore study
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
@@ -200,6 +221,12 @@ Unreleased
   abstracts again under its own name, which took hours on NeuroStore.  An
   engine whose documents differ from the shared embeddings, or whose own
   directory alone has them, keeps its own.
+* Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
+  taken for an aggregation, the operator applied to each group's values,
+  and gave rows of missing values or failed in pandas; it is now refused
+  with a ``ForbiddenExpressionError`` that tells how to compute the value
+  in the body, ``(v == n / 2)``.
+
 * The threshold sliders of the brain viewer sit over the values they set
   on the histogram. In percentile mode a thumb was placed at its percentile
   along the slider while the histogram's axis is the value, so for skewed

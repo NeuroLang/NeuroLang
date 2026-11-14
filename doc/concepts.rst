@@ -122,7 +122,8 @@ RDF Data and Ontologies
 (RDF/XML, Turtle, N-Triples…, guessed from the file extension or given
 with ``format``). The axioms of the ontology become constraints:
 ``Manager rdfs:subClassOf Employee`` makes ``Employee(x)`` hold for every
-``Manager``, by rewriting the queries.
+``Manager``. :doc:`ontologies` describes how, and which answers a query
+then gets.
 
 With ``individuals=True`` every triple is also a fact, so that a knowledge
 graph is queried as a SPARQL endpoint would be::
