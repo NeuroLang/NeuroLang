@@ -60,19 +60,25 @@ def test_the_engine_is_declared():
     frontend = "neurolang_apps.utils.engines.tracts.frontend"
     assert cfg["solver_mixins"] == [f"{frontend}:TractsCommandsMixin"]
     assert cfg["python_init"] == [frontend]
-    # the atlases of neurosynth, without the studies that activate them
-    # (which need its peaks), and no MNI template
+    # the atlases of neurosynth, without the studies that activate or
+    # cover them (which need its peaks), and no MNI template
     assert not cfg.get("requires_mni_mask")
     assert set(cfg["atlases"]) == {"destrieux", "schaefer", "tian"}
-    assert not any("activated" in a for a in cfg["atlases"].values())
+    assert not any(
+        {"activated", "covered"} & set(a) for a in cfg["atlases"].values()
+    )
     neurosynth = engine_registry.get_engine_config("neurosynth")
     for name, atlas in cfg["atlases"].items():
-        assert {**atlas, "activated": neurosynth["atlases"][name][
-            "activated"]} == neurosynth["atlases"][name]
+        assert {**atlas, **{
+            key: neurosynth["atlases"][name][key]
+            for key in ("activated", "covered")
+        }} == neurosynth["atlases"][name]
     predicates = engine_registry.get_predicates("tracts")
     assert {"destrieux", "tian", "schaefer", "labels"} <= set(predicates)
-    assert not {"destrieux_activated", "tian_activated",
-                "schaefer_activated", "peak_reported"} & set(predicates)
+    assert not {
+        "destrieux_activated", "tian_activated", "schaefer_activated",
+        "schaefer_covered", "peak_reported",
+    } & set(predicates)
     assert predicates["destrieux"] == engine_registry.get_predicates(
         "neurosynth")["destrieux"]
 

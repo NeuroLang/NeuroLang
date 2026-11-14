@@ -1309,9 +1309,10 @@ class NeurolangPDL(QueryBuilderDatalog):
         self, iterable, type_, name, solver_add_method
     ):
         if isinstance(iterable, pd.DataFrame):
-            iterable = iterable.rename(
+            # a set, whose rows (not column names) give the type
+            iterable = self.program_ir.new_set(iterable.rename(
                 columns={n: i for i, n in enumerate(iterable.columns)}
-            )
+            ))
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):

@@ -169,14 +169,21 @@ engines:
     # studies activate its regions: ``{atlas}_activated(label, study)`` when
     # a peak of the study (``peak_mni``, in millimetres) is within
     # ``radius_mm``, by default ``kernel_radius_mm``, of a voxel of the
-    # region.
+    # region.  ``covered`` registers how much the studies cover its regions,
+    # probabilistic facts ``{atlas}_covered(label, study)``: the mean over
+    # the voxels of the region of the study's activation, the max over its
+    # peaks of a Gaussian kernel of ``fwhm_mm`` (10) truncated at 3 sigma;
+    # those below ``threshold`` (0.001) are left out.
     atlases:
       schaefer:
         activated: {predicate_name: schaefer_activated}
+        covered: {predicate_name: schaefer_covered}
       destrieux:
         activated: {predicate_name: destrieux_activated}
+        covered: {predicate_name: destrieux_covered}
       tian:
         activated: {predicate_name: tian_activated}
+        covered: {predicate_name: tian_covered}
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
@@ -612,6 +619,31 @@ engines:
         description: >-
           Studies activating a Tian subcortical region: one of their peaks is
           within {kernel_radius_mm} mm of a voxel of the region
+        arguments:
+          - tian_label
+          - study
+      schaefer_covered:
+        description: >-
+          How much a study covers a Schaefer parcel, as a probability: the
+          mean over the parcel's voxels of the study's activation, a
+          Gaussian kernel of 10 mm FWHM around its nearest peak
+        probability: true
+        arguments:
+          - label
+          - study
+      destrieux_covered:
+        description: >-
+          How much a study covers a Destrieux region, as a probability (see
+          schaefer_covered)
+        probability: true
+        arguments:
+          - destrieux_label
+          - study
+      tian_covered:
+        description: >-
+          How much a study covers a Tian subcortical region, as a probability
+          (see schaefer_covered)
+        probability: true
         arguments:
           - tian_label
           - study

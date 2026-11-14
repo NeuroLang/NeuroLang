@@ -14,6 +14,7 @@ there: with them, nilearn is not imported at all, the build takes 6 s
 natively and 8 s in a browser, and the page starts in 23 s instead of 127 s.
 
 The kinds are ``atlas_activation`` (the pairs of studies and regions),
+``atlas_coverage`` (how much the studies cover the regions),
 ``mask`` (the MNI mask), ``voxels`` (the brain and cortex voxels) and
 ``fetched`` (where nilearn put an atlas, and its labels). The files hold
 arrays, an image and text only (``.npz``, ``.nii.gz``, ``.json``), so the
