@@ -10,7 +10,7 @@ of the engines with the MNI atlases (`mni_atlases` in `../engines.yaml`):
 | `streamlines` | the mean, over the subjects, of the number of streamlines of tractography joining them |
 
 Each pair is there both ways round; the pairs no streamline joins are left
-out. Each subject has about 3.4 million streamlines.
+out. Each subject has 2.8 to 3.6 million streamlines.
 
 ## How they were made
 

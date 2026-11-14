@@ -246,3 +246,24 @@ def test_the_assistant_is_told_the_connectivity_has_no_subcortex():
                  "destrieux_structural_connectivity"):
         text = " ".join(predicates[name]["description"].split())
         assert "Cortex only" in text and "thalamus" in text, name
+
+
+@pytest.mark.parametrize("name", ["hcp_schaefer100_17", "hcp_destrieux"])
+def test_the_connectivity_files_are_pairs_of_engine_regions(name):
+    import pandas as pd
+
+    from neurolang_apps.utils.engine_registry import _ENGINES_DIR
+
+    table = pd.read_csv(_ENGINES_DIR / "connectomes" / f"{name}.tsv.gz",
+                        sep="\t")
+    assert list(table.columns) == ["region1", "region2", "streamlines"]
+    regions = set(table.region1)
+    assert len(regions) == (100 if "schaefer" in name else 148)
+    # named as the engines name the parcels (neurolang.atlases.label_name)
+    assert not any("-" in r or "_" in r for r in regions)
+    assert (table.region1 != table.region2).all()
+    assert (table.streamlines > 0).all()
+    both = table.set_index(["region1", "region2"]).streamlines
+    swapped = table.set_index(["region2", "region1"]).streamlines
+    swapped.index.names = both.index.names
+    assert both.sort_index().equals(swapped.sort_index())  # both ways round

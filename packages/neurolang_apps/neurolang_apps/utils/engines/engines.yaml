@@ -131,7 +131,7 @@ engines:
         description: >-
           Structural connectivity between two Schaefer parcels: the mean
           number of streamlines joining them over 1,064 HCP subjects (of
-          about 3.4 million each), from diffusion MRI tractography
+          2.8 to 3.6 million each), from diffusion MRI tractography
           (Mansour et al. 2021; .credits); both ways round, the pairs no
           streamline joins left out. Cortex only: the subcortical
           structures (thalamus, basal ganglia, hippocampus, amygdala, the
