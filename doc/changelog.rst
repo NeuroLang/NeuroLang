@@ -19,12 +19,16 @@ Unreleased
 
 **New features:**
 
-* ``neurolang-repl-serve --local --users`` loads the text embeddings of an
-  engine (its documents' and the SPECTER2 query model, on the CPU) in the
-  builder, before forking its sessions: they share them, and their first
-  ``query_similarity`` (``similar_study``, ``lift_llm``) no longer loads the
-  model. ``--no-preload-embeddings`` (``preload_embeddings: false``) leaves
-  them to each session, as before.
+* ``neurolang-repl-serve --local`` loads the text embeddings of an engine
+  when it builds it (its documents', from their cache or computed into it,
+  and the SPECTER2 query model): with ``--users`` in the builder, before
+  forking the sessions, which share them; their first ``query_similarity``
+  (``similar_study``, ``lift_llm``) no longer loads the model, and no
+  longer crashes a session on macOS. ``--no-preload-embeddings``
+  (``preload_embeddings: false``) leaves them to the first query, as
+  before. Queries are embedded with the numpy SPECTER2 encoder whenever its
+  weights are next to the model, not only without torch; encoders of an
+  engine built again share torch's model.
 * ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
   ``/admin/activity``: filters of the period, user and engine above
   figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most

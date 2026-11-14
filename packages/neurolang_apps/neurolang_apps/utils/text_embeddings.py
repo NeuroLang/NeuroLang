@@ -436,8 +436,8 @@ class Specter2Encoder:
         at :attr:`numpy_path` (it loads faster and takes less memory than
         torch, and starts no thread), or torch is not installed."""
         path = self.numpy_path
-        return self._numpy is not None or not _torch_available() or (
-            path is not None and path.exists())
+        return self._numpy is not None or (
+            path is not None and path.exists()) or not _torch_available()
 
     def encode_query(self, text):
         """

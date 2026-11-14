@@ -573,14 +573,20 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   session from it.  The sessions share the memory of the engine's data, as
   forked processes do until they write it.
 - Before its first fork, the builder loads the engine's text embeddings
-  (those of its documents, and the query model, on the CPU), which its
-  sessions then share, rather than each load them, in memory of its own, at
-  its first ``query_similarity`` (unless ``--no-preload-embeddings``, or
-  ``preload_embeddings: false``).  This needs the ``embeddings`` extra; the
-  model is downloaded into the data directory if it is not there (``python
-  -m neurolang.utils.text_embeddings --engine NAME`` does it ahead of
-  time).  What cannot be loaded is logged, and loaded by each session at
-  its first query, as before.
+  (those of its documents, from their cache, and the query model), which
+  its sessions then share, rather than each load them, in memory of its
+  own, at its first ``query_similarity`` (unless
+  ``--no-preload-embeddings``, or ``preload_embeddings: false``; the
+  single-user ``--local`` server loads them when it builds an engine, and
+  preparing the engines writes their cache).  The query model is the numpy one
+  (``specter2_numpy``) when its weights are next to the model's copies,
+  ``{data_dir}/{engine}/embeddings/models/*.npz``: it loads in half a
+  second, without torch.  Otherwise it is torch's, on the CPU, which needs
+  the ``embeddings`` extra, as computing the documents' embeddings does
+  when their cache is missing (hours on a CPU: ``python -m
+  neurolang.utils.text_embeddings --engine NAME`` does it ahead of time,
+  best on a GPU).  What cannot be loaded is logged, and loaded by each
+  session at its first query, as before.
 - Each session has its own rules, assistant, queries (which run at the same
   time as those of the others) and files; *Stop* and *Restart* end that
   session's process only, and the page starts it again.
