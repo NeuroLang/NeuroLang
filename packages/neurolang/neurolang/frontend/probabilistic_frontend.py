@@ -41,6 +41,7 @@ from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
     InlineEqualityConstantsMixin,
+    extract_logic_atoms,
     is_aggregation_rule,
 )
 from nl_core.datalog.magic_sets import magic_rewrite
@@ -1161,8 +1162,10 @@ class NeurolangPDL(QueryBuilderDatalog):
         applies the latter, as rules, to the named values."""
         constraints = self._constraints_that_can_hold(holds)
         rewrite = OntologyRewriter(
-            Union(sum(map(_split_aggregation, deterministic_program.formulas),
-                      ())),
+            Union(sum((
+                _split_aggregation(rule, constraints)
+                for rule in deterministic_program.formulas
+            ), ())),
             constraints, chased=True,
         ).Xrewrite()
         return Union(chase_rules(
@@ -1480,10 +1483,14 @@ def _has_probability(head) -> bool:
     )
 
 
-def _split_aggregation(rule):
-    """``H(count(x)) :- B`` as ``H(count(x)) :- b(x)`` and ``b(x) :- B``:
-    the aggregate is then over the union of the rewritings of ``B``."""
-    if not is_aggregation_rule(rule):
+def _split_aggregation(rule, constraints):
+    """``H(count(x)) :- B`` as ``H(count(x)) :- b(x)`` and ``b(x) :- B``
+    when ``B`` has a predicate the ``constraints`` derive: the aggregate is
+    then over the union of the rewritings of ``B``."""
+    if not is_aggregation_rule(rule) or not any(
+        getattr(atom.functor, "name", None) in constraints
+        for atom in extract_logic_atoms(rule.antecedent)
+    ):
         return (rule,)
     body = ir.Symbol.fresh()(*sorted(
         extract_logic_free_variables(rule.antecedent)
