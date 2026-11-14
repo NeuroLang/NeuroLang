@@ -1651,6 +1651,18 @@ def _login(port, name, password):
     return status, cookie.split(";")[0]
 
 
+def test_the_login_page_needs_no_other_file(serve):
+    """Before a login every file but the login's is refused: the page has
+    its logo, its style and its script in it, and the ids its script reads."""
+    page = serve.LOGIN_PAGE.read_text()
+    assert not re.search(r"<link\b|<script[^>]*\bsrc=|@import|url\((?!data:)", page)
+    assert not re.search(r'<img[^>]*\bsrc="(?!data:)', page)
+    ids = re.findall(r'\$\("([\w-]+)"\)', page.split("<script>\n// Where")[1])
+    assert {"login", "message", "password", "reveal", "orcid-in", "guest-in",
+            "ask", "request"} <= set(ids)
+    assert all(f'id="{name}"' in page for name in set(ids))
+
+
 def test_users_log_in_on_a_page_and_out(console):
     port, users = console
     # A page the browser opens leads to the login page; the rest is

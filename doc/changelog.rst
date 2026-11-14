@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* The login page of ``neurolang-repl-serve --users`` is the REPL's: its logo
+  and colours, in the theme the visitor chose in the REPL (or the system's), a
+  card with the name and the password, which can be shown, a button that waits
+  while the server answers, the error above the form, *Sign in with ORCID* and
+  *Continue as a guest* under *or*, and the request for an account as a card of
+  its own. It is still one file, with the logo in it: the server refuses every
+  other file before a login.
+
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
   downloads and its tables kept in ``--data-dir``, so that a session starts
