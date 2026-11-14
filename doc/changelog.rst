@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* Query assistant: the neurosynth engine has 631 examples of its own after
+  the 91 shared with neurostore (``engines/neurosynth/examples.yaml``):
+  Sonnet 5.5's queries for 800 generated questions, kept when DeepSeek
+  returned the same rows or a Sonnet judge accepted them, deduplicated,
+  checked on the engine and far from the questions of the evaluation sets
+  (bge-m3 cosine at most 0.85).  On the v3 test set, DeepSeek V4 Flash on
+  Albert answers 27 and 26 of 32 exactly, against 21 and 22.
 * Ontologies: the constraints without existential variables (subclass,
   ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
   Datalog rules; XRewrite rewrites the query with the existential ones, the
