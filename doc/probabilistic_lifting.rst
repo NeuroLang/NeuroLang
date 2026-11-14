@@ -331,7 +331,8 @@ Separator variable
 
       P[\exists z\, Q(z)] = 1 - \prod_a (1 - P[Q(a)]).
 
-   The plan algebra also has ``IndependentProjectionUniversal``, the dual
+   When the plan of the subqueries is not pure, the rules that follow are
+   tried on the query as it is. The plan algebra also has ``IndependentProjectionUniversal``, the dual
    projection for a universally quantified separator variable
    [Suciu2020]_, but it is not one of the implemented rules: the
    algorithm's conversions to normal forms
@@ -876,9 +877,21 @@ Separator determined by a functional dependency
    subquery being computed for it; it is followed
    through several deterministic atoms, and from several columns. An atom
    of a choice keeps its variables, its tuples being exclusive for all the
-   values of :math:`y`, as does an atom of a relation in several disjuncts
-   of a union, and the variables are determined in conjunctions only, by
-   atoms which are not negated.
+   values of :math:`y`. The variables are determined by the atoms which
+   are not negated and are conjuncts of every clause, of the disjunctive
+   normal form of the union, with the relation of the atom; in
+
+   .. math::
+
+      \exists y\, \exists x\, (R(x) \land G(x, y) \land T(y)) \lor
+      (R(x) \land G(x, y) \land U(y)),
+
+   :math:`G` determines :math:`y` from :math:`x` in both clauses with
+   :math:`R`, and :math:`y` separates the query, whereas an :math:`H(x, y)`
+   instead of :math:`G(x, y)` in the second clause leaves :math:`R(x)`
+   without :math:`y`. The separator variables of every probabilistic atom,
+   if any, are separated before the others, which they determine in the
+   subqueries.
 
 Unions of plans with the same columns
    A union of plans, of the disjuncts of a deterministic formula or of the
@@ -1726,23 +1739,39 @@ Comparisons with a constant
    :math:`x` not free in :math:`C`.
 
 Separator determined by a functional dependency
-   Let :math:`Q = \exists y\, \varphi(y)` be a conjunctive query in which
-   every atom of a tuple-independent relation has :math:`y`, or variables
-   :math:`\bar x` from which positive deterministic atoms of
-   :math:`\varphi` determine :math:`y`: :math:`y = f(\bar x)` in every
-   world satisfying them, :math:`f` being the same in every world. A tuple
-   :math:`R(\bar a)` of such an atom is then a tuple of
-   :math:`\varphi(b)` only for :math:`b = f(\bar a)`, the relation of
-   :math:`R` being in no other atom (the separator variable rule declines
-   a relation in two atoms without :math:`y` at the same position, and a
-   relation in two disjuncts keeps its variables). The events
-   :math:`\varphi(b)` for different :math:`b` thus have no tuple in common
-   and are independent, which is what the separator variable rule needs:
-   :math:`P[Q] = 1 - \prod_b (1 - P[\varphi(b)])`. The tuples of a choice
-   are not independent of each other, so its atoms are not extended. The
-   dependency is checked on the relation, by comparing the numbers of
-   distinct values of :math:`\bar x` and of :math:`(\bar x, y)`, in
-   polynomial time.
+   Let :math:`Q = \exists y\, \varphi(y)`, :math:`\varphi` a union of
+   conjunctions, its clauses :math:`\varphi_1, \dots, \varphi_n` in
+   disjunctive normal form, in which every atom of a tuple-independent
+   relation has :math:`y`, or variables :math:`\bar x` from which a set
+   :math:`D` of deterministic atoms determines :math:`y`: :math:`y =
+   f(\bar x)` in every world satisfying them, :math:`f` being the same in
+   every world. The atoms of :math:`D` are positive conjuncts of every
+   clause with the relation of the atom (``_determined_variables``). Let
+   :math:`R(\bar u)` be such an atom without :math:`y`; it is the only
+   atom of :math:`R` in :math:`Q`, the separator variable rule declining
+   a relation in two different atoms without :math:`y` at the same
+   position. A tuple :math:`R(\bar a)` is in the lineage of
+   :math:`\varphi(b)` through a clause :math:`\varphi_i` with
+   :math:`R(\bar u)`, that is through a valuation :math:`\theta` of
+   :math:`\varphi_i` with :math:`\theta(\bar u) = \bar a` and
+   :math:`\theta(y) = b` which satisfies its deterministic atoms, among
+   them those of :math:`D`: hence :math:`b = f(\bar a)`, the same
+   function for every clause, as :math:`D` and :math:`R(\bar u)` are the
+   same atoms in all of them. The events :math:`\varphi(b)` for different
+   :math:`b` thus have no tuple in common and are independent, which is
+   what the separator variable rule needs:
+   :math:`P[Q] = 1 - \prod_b (1 - P[\varphi(b)])`. Different deterministic
+   atoms in two clauses, as :math:`G(x, y)` and :math:`H(x, y)`, would give
+   :math:`R(\bar a)` to the subqueries of two values,
+   :math:`g(\bar a)` and :math:`h(\bar a)`; neither is then a conjunct of
+   every clause with :math:`R`. The tuples of a choice are not independent
+   of each other, so its atoms are not extended. The dependency is checked
+   on the relation, by comparing the numbers of distinct values of
+   :math:`\bar x` and of :math:`(\bar x, y)`, in polynomial time.
+   Separating only the variables of every probabilistic atom, a subset of
+   the separator variables, is sound by the same argument for each of
+   them; trying the next rules when the plan is not pure is sound as each
+   rule is.
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model
