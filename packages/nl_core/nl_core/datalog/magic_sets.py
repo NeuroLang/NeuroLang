@@ -39,6 +39,7 @@ from .constraints_representation import (
     reachable_code,
 )
 from .expression_processing import (
+    _strongly_connected_components,
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
@@ -491,50 +492,6 @@ def check_stratified(rules, origins=None) -> None:
             )
             error.predicate = (origins or {}).get(head)
             raise error
-
-
-def _strongly_connected_components(edges):
-    """``{node: index of its component}``, Tarjan's algorithm without
-    recursion; the nodes with no rule of their own are in no cycle."""
-    index, low, on_stack, stack = {}, {}, set(), []
-    component, count = {}, 0
-    for root in list(edges):
-        if root in index:
-            continue
-        work = [(root, iter(edges.get(root, ())))]
-        index[root] = low[root] = len(index)
-        stack.append(root)
-        on_stack.add(root)
-        while work:
-            node, successors = work[-1]
-            advanced = False
-            for succ in successors:
-                if succ not in edges:
-                    continue
-                if succ not in index:
-                    index[succ] = low[succ] = len(index)
-                    stack.append(succ)
-                    on_stack.add(succ)
-                    work.append((succ, iter(edges.get(succ, ()))))
-                    advanced = True
-                    break
-                if succ in on_stack:
-                    low[node] = min(low[node], index[succ])
-            if advanced:
-                continue
-            work.pop()
-            if work:
-                parent = work[-1][0]
-                low[parent] = min(low[parent], low[node])
-            if low[node] == index[node]:
-                while True:
-                    member = stack.pop()
-                    on_stack.discard(member)
-                    component[member] = count
-                    if member == node:
-                        break
-                count += 1
-    return component
 
 
 def magic_rewrite(

@@ -1,7 +1,16 @@
 import pytest
 
+import re
+from pathlib import Path
+
+import yaml
+
 from ..config import (
     CONFIG_ENV,
+    DEFAULTS,
+    DEFAULTS_FILE,
+    AssistantConfig,
+    ProviderConfig,
     EXAMPLE_CONFIG,
     LLMConfigError,
     config_path,
@@ -35,6 +44,34 @@ def test_example_configuration_is_valid():
     )
     assert config.providers["claude-code"].api == "command"
     assert config.assistant.strategy == "react"
+    # The example quotes the defaults: they agree.
+    for name, value in yaml.safe_load(EXAMPLE_CONFIG.read_text())[
+            "assistant"].items():
+        assert DEFAULTS["assistant"][name] == value, name
+
+
+def test_the_defaults_are_those_of_the_defaults_file():
+    defaults = yaml.safe_load(DEFAULTS_FILE.read_text())
+    assert defaults["assistant"]["max_steps"] == 16
+    assistant = AssistantConfig()
+    for name, value in defaults["assistant"].items():
+        assert getattr(assistant, name) == value, name
+    provider = ProviderConfig("p", "openai", "m")
+    for name, value in defaults["provider"].items():
+        assert getattr(provider, name) == value, name
+    assert parse_config(PROVIDERS).assistant == assistant
+
+
+def test_the_docs_quote_the_defaults():
+    docs = Path(__file__).parents[6] / "doc" / "query_assistant.rst"
+    if not docs.exists():  # not a checkout
+        return
+    block = docs.read_text().split("    assistant:\n", 1)[1]
+    quoted = dict(re.findall(r"^      (\w+): ([^#\n]+?)\s*(?:#.*)?$",
+                             block.split("\n\n", 1)[0], re.M))
+    assert quoted
+    for name, text in quoted.items():
+        assert DEFAULTS["assistant"][name] == yaml.safe_load(text), name
 
 
 def test_lookup_order(tmp_path, monkeypatch):

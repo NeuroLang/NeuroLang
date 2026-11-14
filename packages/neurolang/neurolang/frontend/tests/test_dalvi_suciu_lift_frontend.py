@@ -597,6 +597,74 @@ def test_function_of_a_variable_separates_the_query(solvers):
 
 
 @pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("rules", [
+    "h(y) :- R(x), F(x, y), T(y)\nh(y) :- R(x), F(x, y), U(y)",
+    "h(y) :- R(x), F1(x, z), F2(z, y), T(y)\n"
+    "h(y) :- R(v), F1(v, w), F2(w, y), U(y)",
+])
+def test_function_through_the_same_path_in_several_rules(solvers, rules):
+    """
+    y is the same function of x in both rules, directly or through a
+    chain of functions: a tuple of R is in the subquery of one y only,
+    and y separates the union.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.4, 2), (0.3, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.9, "b")], name="U"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "a"), (3, "b")], name="F")
+    nl.add_tuple_set([(1, 10), (2, 10), (3, 30)], name="F1")
+    nl.add_tuple_set([(10, "a"), (30, "b")], name="F2")
+    nl.execute_datalog_program(rules + "\nq(PROB) :- h(y)")
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - (1 - 0.5 * 0.6) * (1 - 0.8 * 0.4)) *
+        (1 - 0.3 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_function_both_ways_in_several_rules(solvers):
+    """
+    G is a bijection, so that x and y determine each other: y, of every
+    probabilistic atom, separates the union first, and x then has T(y)
+    without it, which another rule lifts.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1, "a"), (0.4, 2, "b")], name="S"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, 1, "a"), (0.9, 2, "b")], name="V"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="G")
+    nl.execute_datalog_program(
+        "h(y) :- S(x, y), G(x, y), T(y)\n"
+        "h(y) :- S(x, y), G(x, y), V(x, y)\n"
+        "q(PROB) :- h(y)"
+    )
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - 0.5 * (1 - 0.4 * 0.8)) * (1 - 0.4 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
 def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
     """
     A function the engine knows by name, applied to the choice, and a
@@ -671,6 +739,9 @@ ORDER_AND_COUNT_QUERIES = [
     "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
     "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
     "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+    "q(PROB) :- R(x), T(y), (x + 1 < y)",
+    "q(PROB) :- R(x), T(y), (x < y + 1)",
+    "q(y, PROB) :- R(x), T(y), (x * 2 > y)",
     "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
     "q(w, PROB) :- R(x), S(x, y), V(w, z), (y <= z)",
     "q(PROB) :- S(x, y), V(z, w), (y < w)",
@@ -712,6 +783,7 @@ def test_order_across_atoms_and_at_least_two(query, seed):
         1 - .5 * .6 * .7 - (.5 * .6 * .7 + .5 * .4 * .7 + .5 * .6 * .3)
     ),
     ("q(PROB) :- R(x), R(y), (x != y)", dict(R=[(.5, 1)]), None),
+    ("q(PROB) :- T(y), (y < y * 2)", dict(T=[(.5, -1), (.5, 2)]), .5),
 ])
 def test_order_across_atoms_and_at_least_two_formulas(
     query, facts, expected
@@ -721,7 +793,9 @@ def test_order_across_atoms_and_at_least_two_formulas(
     the sum, on the least value a of R, of p_R(a) ∏_{b<a} (1 - p_R(b))
     (1 - ∏_{c>a} (1 - p_T(c))), and for two values of R
     1 - ∏ (1 - p) - Σ_a p_a ∏_{b≠a} (1 - p_b).
-    Without the tuples needed, there is no answer.
+    Without the tuples needed, there is no answer. The least value of y,
+    -1, does not satisfy y < y * 2, which 2 does: y is not projected on
+    its least value.
     """
     result = _solve_random(query, 0, LIFTED_ONLY, facts)
     if expected is None:

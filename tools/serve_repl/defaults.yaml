@@ -1,0 +1,17 @@
+# The defaults of the options of neurolang-repl-serve, named as in a
+# configuration file (--config server.yaml): read by serve_repl, the one place
+# they are written; doc/repl_server.rst and doc/contributing.rst quote them,
+# which the tests check. A path starting with ~ is in the home directory; a
+# relative one is relative to where the command runs.
+port: 8766
+host: 127.0.0.1
+site: ~/.cache/neurolang/repl-site              # the page and its bundle
+embeddings: ~/.cache/neurolang/repl-embeddings  # the text embeddings kept
+downloads: ~/.cache/neurolang/repl-downloads    # what the bundle's engines download
+data_dir: neurolang_data      # --local: the engines' data
+resolution: 2.0               # --local: mm, the engines' MNI grid
+prepare: true                 # --local: build each engine before serving
+max_sessions: 8               # --users --local: sessions at once
+idle_minutes: 120             # --users --local: an unused session ends
+query_minutes: 60             # --users --local: a query is stopped (0: never)
+max_guest_sessions: 2         # --guests: sessions of the guests at once

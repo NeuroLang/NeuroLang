@@ -1,11 +1,12 @@
 // The table viewer of a REPL result: a table to sort by clicking a column,
 // filter, page through, copy and download. The rows are the model's
 // (table_model.js).
+import { SETTINGS } from "./settings.js";
 import { TableModel, cellText } from "./table_model.js";
 import { citation, doiUrl, pmcUrl, pubmedUrl, studyColumns } from "./study_links.js";
 import { plotView } from "./plot_view.js";
 
-const PAGE_SIZES = [20, 50, 100, 500];
+const PAGE_SIZES = SETTINGS.table.page_sizes;
 const NUMERIC = new Set(["int", "float"]);
 
 function element(tag, properties = {}, ...children) {

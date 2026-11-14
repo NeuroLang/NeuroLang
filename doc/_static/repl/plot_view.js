@@ -1,6 +1,7 @@
 // The plot of a result's table: bars, a histogram, points or a line of its
 // columns (plot_model.js), drawn in SVG with the page's colours, with the
 // values of a mark under the pointer. The table stays the view of every value.
+import { SETTINGS } from "./settings.js";
 import { barData, histogram, kindsOf, niceTicks, plotChoice, pointData } from "./plot_model.js";
 import { cellText } from "./table_model.js";
 
@@ -202,9 +203,9 @@ export function plotView(box, model) {
     const xs = niceTicks(...(points.length ? extent(points.map((p) => p.x)) : [0, 1]), Math.max(2, Math.round((right - left) / 90)));
     const xScale = linear([xs[0], xs.at(-1)], [left, right]);
     const yScale = linear([ys[0], ys.at(-1)], [bottom, top]);
-    const dots = !line || points.length <= 60;
+    const dots = !line || points.length <= SETTINGS.plot.line_dots;
     // Many points are small and the fainter the more there are, so that where they pile up shows.
-    const dense = points.length > 500;
+    const dense = points.length > SETTINGS.plot.dense_points;
     chartStyle = dense ? `--dot-opacity: ${Math.max(0.07, Math.min(0.5, 200 / points.length)).toFixed(3)}` : "";
     const chart = svg("svg", { width, height, viewBox: `0 0 ${width} ${height}`, class: "plot-svg", style: chartStyle },
       yGrid(ys, yScale, left, right),

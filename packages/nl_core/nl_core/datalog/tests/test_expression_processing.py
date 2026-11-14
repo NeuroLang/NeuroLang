@@ -278,6 +278,42 @@ def test_stratification_after_mutual_recursion():
     ]
 
 
+def test_stratification_of_many_components_after_a_large_one():
+    """
+    Recursive components are taken one per stratum while a large one,
+    reading an undefined predicate U, waits: the components are computed
+    in linear time, where reaching them from every predicate was cubic
+    (minutes for an ontology's thousands of rules).
+    """
+    E = S_('E')  # noqa: N806
+    U = S_('U')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+    q = [S_(f'q{j}') for j in range(100)]
+    p = [S_(f'p{i}') for i in range(1000)]
+
+    chain = [Imp_(q[0](x), E(x, x)), Imp_(q[0](x), E(x, y) & q[0](y))]
+    for previous, current in zip(q, q[1:]):
+        chain += [
+            Imp_(current(x), E(x, y) & current(y)),
+            Imp_(current(x), previous(x)),
+        ]
+    ring = [Imp_(p[0](x), q[-1](x) & U(x))] + [
+        Imp_(p[i](x), p[i - 1](x)) for i in range(1, len(p))
+    ] + [Imp_(p[0](x), p[-1](x))]
+    code = DT.walk(B_(chain + ring))
+
+    datalog = Datalog()
+    datalog.walk(code)
+    datalog.add_extensional_predicate_from_tuples(E, {(1, 1)})
+
+    strata, _ = stratify(code, datalog)
+
+    assert strata == [
+        list(code.formulas[j:j + 2]) for j in range(0, len(chain), 2)
+    ] + [list(code.formulas[len(chain):])]
+
+
 def test_stratification_defers_rules_on_deferred_heads():
     """
     A rule whose body predicate has a rule left for a later stratum is

@@ -1182,7 +1182,7 @@ def _save_nifti(app, block, request: SaveRequest) -> None:
 
 # The default threshold of the viewer: the 95th percentile of the nonzero
 # values, so the top 5% of the voxels are shown.
-VIEW_THRESHOLD = "95%"
+VIEW_THRESHOLD = brain_viewer.DEFAULTS["view_threshold"]
 
 VIEW_USAGE = (
     ".view [PATH.nii[.gz]] [--threshold T|P%] [--cmap NAME] "
@@ -1213,11 +1213,11 @@ live, for the overlay chosen in their list (shown, or hidden; ▲ and ▼
 draw it over the next one or under the previous one), what these options
 start each overlay with:
   --threshold T|P%      hide the voxels below T, or below the P-th
-                        percentile of the nonzero values (default: 95%,
-                        the top 5% of the voxels)
+                        percentile of the nonzero values (default:
+                        VIEW_THRESHOLD)
   --cmap NAME           the colormap, of matplotlib or nilearn (default:
-                        plasma), of the first overlay; the others take
-                        viridis, cool, hot... in turn
+                        DEFAULT_CMAP), of the first overlay; the others
+                        take OVERLAY_CMAPS... in turn
   --symmetric           a colormap symmetric around 0, hiding |v| < T
   --one-sided           a colormap from the threshold to the maximum
 Without either, the colormap of an overlay is symmetric when it has
@@ -1244,11 +1244,16 @@ evenly subsampled. A column holds streamline ids when, without voxel
 columns, it is of the sort streamline (engines.yaml), or, the engine
 having streamlines, it is the one column of integers of unknown sort:
   ans(x) :- uncinate(x, "left")
-ans(x, y, z) stays millimetres. An engine has streamlines when it has
-the method streamline_points(ids), giving the points of each id, an
-(n, 3) array in millimetres (RAS+); its streamline_background(), if
-any, gives the image they are drawn on, in their space, else the MNI152
-T1 is."""
+ans(x, y, z) stays millimetres. A column of the sort streamline is
+drawn as streamlines even beside the regions they join, not as their
+network: ans(s, l1, l2) :- connects(s, l1, l2). An engine has
+streamlines when it has the method streamline_points(ids), giving the
+points of each id, an (n, 3) array in millimetres (RAS+); its
+streamline_background(), if any, gives the image they are drawn on,
+in their space, else the MNI152
+T1 is.""".replace("VIEW_THRESHOLD", str(VIEW_THRESHOLD)).replace(
+    "DEFAULT_CMAP", brain_viewer.DEFAULT_CMAP).replace(
+    "OVERLAY_CMAPS", ", ".join(brain_viewer.OVERLAY_CMAPS[:3]))
 
 
 HELP_TOPICS["view"] = VIEW_HELP
@@ -1616,15 +1621,19 @@ def _view_image_file(app, image: SavedImage) -> Path:
 
 def _result_kind(app, block, request: SaveRequest) -> str:
     """
-    Return what the result *block* of *app* holds: ``network`` for pairs
-    of regions or points, ``regions`` for regions of an atlas, else
-    ``voxels``; without voxel columns, ``streamlines`` for streamline ids
-    (:func:`streamline_column`), of the sort :data:`STREAMLINE_SORT` or,
-    the engine having streamlines (:func:`has_streamlines`), integers.
+    Return what the result *block* of *app* holds: ``streamlines`` for a
+    column of the sort :data:`STREAMLINE_SORT`, even beside the pairs of
+    regions they join; ``network`` for pairs of regions or points,
+    ``regions`` for regions of an atlas, else ``voxels``; without voxel
+    columns, ``streamlines`` for streamline ids
+    (:func:`streamline_column`), the engine having streamlines
+    (:func:`has_streamlines`), integers.
     """
     sorts = _engine_sorts(app.settings.engine_name)
     if request.points is not None:
         return "voxels"
+    if streamline_column(block.frame, block.sorts, integers=False):
+        return "streamlines"
     if network_nodes(block.frame, sorts, block.sorts):
         return "network"
     try:

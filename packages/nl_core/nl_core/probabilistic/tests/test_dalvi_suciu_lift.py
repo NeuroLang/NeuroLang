@@ -1183,13 +1183,54 @@ def test_functional_dependency_in_one_disjunct_only():
     query = ExistentialPredicate(y, ExistentialPredicate(x, Disjunction((
         conjunction, Conjunction((R(x), G(x, y)))
     ))))
-    assert dalvi_suciu_lift.find_separator_variables(
+    assert y not in dalvi_suciu_lift.find_separator_variables(
         query, symbol_table
-    )[0] == set()
+    )[0]
     assert y in dalvi_suciu_lift.find_separator_variables(
         ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
         symbol_table
     )[0]
+
+
+@pytest.mark.parametrize("function", (True, False))
+def test_functional_dependency_through_the_same_path_in_disjuncts(function):
+    """∃y (∃x R(x) ∧ F(x, y) ∧ T(y)) ∨ (∃x R(x) ∧ F(x, y) ∧ U(y)): a tuple
+    of R is in the subqueries of f(x) only, through F in both disjuncts,
+    when F is a function of x, and y then separates the query."""
+    R, F, T, U, Z, ans = (
+        Symbol(n) for n in ("R", "F", "T", "U", "Z", "ans")
+    )
+    x, y = Symbol("x"), Symbol("y")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, 1), (0.4, 2), (0.3, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a"), (0.7, "b")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        U, [(0.2, "a"), (0.9, "b")]
+    )
+    cpl_program.add_extensional_predicate_from_tuples(
+        F, [(1, "a"), (2, "a"), (3, "b")] + ([] if function else [(3, "a")])
+    )
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), F(x, y), T(y)))),
+        Implication(Z(), Conjunction((R(x), F(x, y), U(y)))),
+    )))
+    query = Implication(ans(), Z())
+    if not function:
+        with pytest.raises(NonLiftableException):
+            dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+        return
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = 1 - (
+        (1 - (1 - 0.5 * 0.6) * (1 - 0.8 * 0.4)) *
+        (1 - 0.3 * (1 - 0.3 * 0.1))
+    )
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
 
 
 def test_set_partitions():

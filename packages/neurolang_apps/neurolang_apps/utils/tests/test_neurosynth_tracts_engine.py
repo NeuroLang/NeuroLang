@@ -47,6 +47,30 @@ def test_the_engine_is_neurosynth_and_tracts():
             "schaefer_points"} <= set(predicates)
 
 
+def test_the_streamlines_joining_regions_are_streamlines():
+    """The streamlines between two parcels, ans(s, l1, l2), are of the sort
+    streamline, which .view draws as streamlines, not as a network."""
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils.tui import nifti
+    from neurolang_apps.utils.tui.provenance import column_sorts
+
+    program = (
+        "end_near(s, e, l) :- endpoint_point(s, e, x, y, z), "
+        "schaefer_points(a, b, c, l), (euclidean(x, y, z, a, b, c) <= 2)\n"
+        "connects(s, l1, l2) :- end_near(s, 0, l1), end_near(s, 1, l2), "
+        "(l1 != l2)\n"
+        "ans(s, l1, l2) :- connects(s, l1, l2)"
+    )
+    (sorts,) = column_sorts(
+        NeurolangPDL(), "neurosynth_tracts", program, squall=False
+    ).values()
+    assert [sort.sort for sort in sorts] == [
+        nifti.STREAMLINE_SORT, "label", "label"
+    ]
+    frame = pd.DataFrame({"s": [1], "l1": ["a"], "l2": ["b"]})
+    assert nifti.streamline_column(frame, sorts, integers=False) == "s"
+
+
 # The frontal end of one more left uncinate, the only one near a parcel
 # of its own (3 of FAKE_LABELS), and the voxel of that parcel.
 LONE_END = (-20.0, 48.0, -4.0)

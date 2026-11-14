@@ -1,6 +1,5 @@
 import logging
 import operator
-from collections import Counter
 from functools import reduce
 from itertools import chain, combinations, product
 from typing import AbstractSet
@@ -940,7 +939,8 @@ def _split_exclusive_projection(antecedent, symbol_table):
 
 def _extremum_conjunct(variable, variables, conjuncts, symbol_table):
     """`¬∃w ∃Y' (K[w/v, Y'/Y] ∧ w < v)`, `v` being *variable*, if `v` is
-    the lesser side of every comparison with it, `K` being the conjuncts
+    the lesser side of every comparison with it, whose other side is a
+    term without `v`, `K` being the conjuncts
     with `v` but these comparisons and those connected to them by the
     other variables `Y` of `variables`, which the comparisons do not have,
     and `K` an atom whose only variable of `variables` is `v` or `∃Y K`
@@ -957,7 +957,10 @@ def _extremum_conjunct(variable, variables, conjuncts, symbol_table):
     for comparison in comparisons:
         if comparison.functor.value not in ORDER_SIDES or variable not in (
             comparison.args
-        ) or len(set(comparison.args)) != 2:
+        ) or [
+            variable in extract_logic_free_variables(arg)
+            for arg in comparison.args
+        ].count(True) != 1:
             return None
         sides.add(ORDER_SIDES[comparison.functor.value][
             comparison.args.index(variable)
@@ -1510,7 +1513,8 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     rule_pdnf = convert_to_pnf_with_dnf_matrix(rule_dnf)
     has_svs, plan = has_separator_variables(rule_pdnf, symbol_table)
-    if has_svs:
+    # Otherwise the rules below are tried on the query as it is.
+    if has_svs and is_pure_lifted_plan(plan):
         return plan
 
     has_safe_plan, plan = disjoint_separator(rule_dnf, symbol_table)
@@ -2450,6 +2454,15 @@ def has_separator_variables(query, symbol_table):
         if not, False and None.
     """
     svs, expression = find_separator_variables(query, symbol_table)
+    # Those of every probabilistic atom are separated first, the others
+    # being determined by them in the subqueries.
+    svs = {
+        var for var in svs
+        if all(
+            var in atom.args for atom in extract_logic_atoms(expression)
+            if not is_atom_a_deterministic_relation(atom, symbol_table)
+        )
+    } or svs
     if len(svs) > 0:
         return True, separator_variable_plan(
             expression, svs, symbol_table
@@ -2510,11 +2523,16 @@ def find_separator_variables(query, symbol_table):
 
 def extract_probabilistic_root_variables(formulas, symbol_table):
     candidates = None
-    # Variables are determined for a fact's atom only when its relation
-    # is in one formula: a tuple then belongs to the subquery of one value.
-    formulas_of = Counter(chain.from_iterable(
-        _functors(formula) for formula in formulas
-    ))
+    # A fact's atom has the variables that the atoms of every clause with
+    # its relation determine: a tuple belongs to the subquery of one value.
+    clauses = []
+    for formula in formulas:
+        matrix = ExtractExistentialPrefix().walk(
+            convert_to_pnf_with_dnf_matrix(formula)
+        )[1]
+        clauses += (
+            matrix.formulas if isinstance(matrix, Disjunction) else (matrix,)
+        )
     for formula in formulas:
         probabilistic_atoms = OrderedSet(
             atom
@@ -2526,9 +2544,11 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
         root_variables = reduce(
             lambda y, x: x & y,
             (
-                _determined_variables(atom.args, formula, symbol_table)
-                if formulas_of[atom.functor] == 1 and
-                is_atom_a_probabilistic_fact_relation(atom, symbol_table)
+                _determined_variables(atom.args, [
+                    clause for clause in clauses
+                    if atom.functor in _functors(clause)
+                ], symbol_table)
+                if is_atom_a_probabilistic_fact_relation(atom, symbol_table)
                 else set(atom.args)
                 for atom in probabilistic_atoms
             )
@@ -2554,19 +2574,17 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
     return candidates
 
 
-def _determined_variables(variables, formula, symbol_table):
-    """`variables` and the variables that the deterministic atoms of the
-    conjunction `formula` determine from them: those of a column on
-    which the columns of the variables already determined are a key."""
+def _determined_variables(variables, clauses, symbol_table):
+    """`variables` and the variables that the deterministic atoms which
+    are conjuncts of every one of the `clauses` determine from them: those
+    of a column on which the columns of the variables already determined
+    are a key."""
     variables = set(variables)
-    if any(
-        isinstance(e, Disjunction) for _, e in expression_iterator(formula)
-    ):
-        return variables
     atoms = [
-        atom for atom in extract_logic_predicates(formula)
-        if not isinstance(atom, Negation) and
-        is_atom_a_deterministic_relation(atom, symbol_table)
+        atom for atom in reduce(
+            operator.and_, map(ExtractConjunctAtoms().walk, clauses)
+        )
+        if is_atom_a_deterministic_relation(atom, symbol_table)
     ]
     determined = None
     while determined != variables:
