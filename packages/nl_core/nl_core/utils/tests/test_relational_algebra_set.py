@@ -1117,6 +1117,26 @@ def test_extended_projection_on_python_sets(ra_module):
     assert expected_len == new_set
 
 
+def test_extended_projection_callable_runs_once_per_distinct_row(ra_module):
+    calls = []
+
+    def f(r):
+        calls.append(r.x)
+        return r.x * 10
+
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(1, 2), (1, 3), (1, 4), (2, 5)]
+    ).projection("x")
+    new_set = ras.extended_projection(
+        {"x": RelationalAlgebraColumnStr("x"), "z": f}
+    )
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "z"), [(1, 10), (2, 20)]
+    )
+    assert new_set == expected
+    assert sorted(calls) == [1, 2]
+
+
 def test_rename_columns(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"),

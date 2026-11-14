@@ -183,6 +183,14 @@ Unreleased
   the same name, as ``cogat_subclass_of(iri, iri)``: it failed with
   ``'DataFrame' object has no attribute 'str'``.
 
+**Performance:**
+
+* A Python function computing a column of a rule, as ``query_similarity``,
+  runs once per distinct row (pandas and polars backends): it ran on the
+  duplicates of its input, 2 M rows instead of 14 k in
+  ``cogat_definition('memory', d), similar_study(d, s),
+  study_journal(s, 'Neuron')``, which took 70 s instead of 3 s.
+
 
 v0.1a22 (2026-11-13)
 --------------------

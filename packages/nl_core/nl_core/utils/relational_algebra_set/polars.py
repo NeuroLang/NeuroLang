@@ -1532,6 +1532,9 @@ class NamedRelationalAlgebraFrozenSet(
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
         if self._container is None:
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
+        if any(callable(op) for op in eval_expressions.values()):
+            # Python callables run once per row: don't run them on duplicates
+            self._drop_duplicates_if_needed()
 
         # Keep the dee sentinel column while computing the new columns:
         # a frame with no columns has no rows in polars >= 2, so stripping
