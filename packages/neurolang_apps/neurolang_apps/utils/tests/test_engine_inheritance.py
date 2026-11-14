@@ -92,7 +92,8 @@ def test_unknown_base_and_cycle():
 def test_builtin_engines():
     assert list_engine_names() == [
         "destrieux", "neurostore", "neurostore_iit", "neurostore_tracts",
-        "neurosynth", "neurosynth_iit", "neurosynth_tracts", "tracts",
+        "neurosynth", "neurosynth_iit", "neurosynth_tracts",
+        "structural_connectivity", "tracts",
     ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
@@ -294,3 +295,16 @@ def test_the_connectivity_files_are_pairs_of_engine_regions(
     swapped = table.set_index(["region2", "region1"]).streamlines
     swapped.index.names = both.index.names
     assert both.sort_index().equals(swapped.sort_index())  # both ways round
+
+
+def test_the_guidance_of_the_assistant_is_inherited():
+    engines = {
+        "connectivity": {"assistant_guidance": "Connectivity is stored."},
+        "meta": {"extends": "connectivity",
+                 "assistant_guidance": "Use PROB over studies."},
+    }
+    assert resolve_engine_config(engines, "meta")["assistant_guidance"] == (
+        "Connectivity is stored.\nUse PROB over studies.")
+    guidance = get_engine_config("neurosynth")["assistant_guidance"]
+    assert guidance.index("schaefer_structural_connectivity") < \
+        guidance.index("selected_study")

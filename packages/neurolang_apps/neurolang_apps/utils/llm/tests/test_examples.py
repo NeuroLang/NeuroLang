@@ -12,7 +12,7 @@ from ..examples import (
 )
 from ..validation import check_query
 
-BANK_ENGINES = ("neurosynth", "neurostore")
+BANK_ENGINES = ("structural_connectivity", "neurosynth", "neurostore")
 
 
 def test_words_drop_stop_words():
@@ -61,6 +61,10 @@ def test_banks_are_inherited():
     # neurostore adds examples of its own after it.
     shared = load_examples("coordinate_meta_analysis")
     assert load_examples("neurosynth") == shared
+    # ...which begins with that of the structural connectivity it extends
+    connectivity = load_examples("structural_connectivity")
+    assert shared[:len(connectivity)] == connectivity
+    assert len(shared) > len(connectivity)
     neurostore = load_examples("neurostore")
     assert neurostore[:len(shared)] == shared
     assert len(neurostore) > len(shared)

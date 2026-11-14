@@ -313,6 +313,7 @@ _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
     "python_init", "hidden_predicates", "acknowledgements",
+    "assistant_guidance",
 })
 # Keys whose value is a list, or a single item standing for a list of one.
 _LIST_KEYS = frozenset({"python_init"})

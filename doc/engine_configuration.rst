@@ -462,7 +462,8 @@ and the engine's own entries override all of them.  Merging works per key:
   ``dimension_type_predicates``, ``assistant_examples``,
   ``hidden_predicates``, ``solver_mixins``, ``acknowledgements`` and
   ``python_init`` (a single module is a list of one) are concatenated
-  without duplicates;
+  without duplicates, and ``assistant_guidance`` texts as
+  ``datalog_init``;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
   ``predicates``, ``text_embeddings``, ...) are merged recursively by
   OmegaConf, so an engine can change one parameter of an inherited entry;
@@ -489,6 +490,8 @@ built-in engines keep there
   and the questions of the query assistant (``assistant_examples``);
 - ``<engine>/guidance.yaml``: the ``assistant_guidance``.
 
+``structural_connectivity/`` holds those of the structural connectivity
+of the cortex, which ``coordinate_meta_analysis`` extends;
 ``coordinate_meta_analysis/`` holds the examples and the guidance shared by
 ``neurosynth`` and ``neurostore``, and ``neurostore/examples.yaml`` adds the
 questions on NeuroStore's own predicates: an engine inherits

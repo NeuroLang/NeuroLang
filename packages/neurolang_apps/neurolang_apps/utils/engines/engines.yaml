@@ -41,21 +41,6 @@ engines:
         predicate_name: tian
         scale: 2
         points: {predicate_name: tian_points}
-    # The structural connectivity of the cortex between the parcels of
-    # Schaefer and of Destrieux: the mean number of streamlines between two
-    # parcels over the HCP subjects of Mansour et al. (2021), whose
-    # high-resolution connectomes tools/hcp_structural_connectivity
-    # parcellates; published, with those of other atlases and their
-    # standard deviations, in https://gitlab.inria.fr/dwasserm/
-    # neurolang-hcp-connectivity (its README: how they were made, and how
-    # to acknowledge them), at a tag.
-    relations:
-      schaefer_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/schaefer100_17.tsv.gz
-        md5: 88b8e2c1a5efced165391959e2d91b80
-      destrieux_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/destrieux.tsv.gz
-        md5: 2c68298ab7444215e0b0816d5400dde6
     acknowledgements:
       - >-
         Schaefer 2018 parcellation, 100 parcels, 17 networks (nilearn's):
@@ -74,24 +59,6 @@ engines:
         the human subcortex unveiled with functional connectivity
         gradients. Nature Neuroscience 23:1421-1432 (2020).
         doi:10.1038/s41593-020-00711-6
-      - >-
-        Structural connectivity (schaefer_structural_connectivity,
-        destrieux_structural_connectivity): the mean over 1,064 subjects of
-        the HCP Young Adult study of their high-resolution structural
-        connectomes, by Mansour L S, Tian Y, Yeo BTT, Cropley V, Zalesky A.
-        High-resolution connectomic fingerprints: mapping neural identity
-        and behavior. NeuroImage 229:117695 (2021).
-        doi:10.1016/j.neuroimage.2020.117695, parcellated by NeuroLang
-        (tools/hcp_structural_connectivity; the dataset:
-        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity),
-        Destrieux's labels brought to
-        the HCP's fs_LR surface by its registration to fsaverage (Van Essen
-        DC, Glasser MF, Dierker DL, Harwell J, Coalson T. Cerebral Cortex
-        22:2241-2262 (2012). doi:10.1093/cercor/bhr291). The Human
-        Connectome Project: Van Essen DC, Smith SM, Barch DM, Behrens TEJ,
-        Yacoub E, Ugurbil K. The WU-Minn Human Connectome Project: an
-        overview. NeuroImage 80:62-79 (2013).
-        doi:10.1016/j.neuroimage.2013.05.041. Data were provided [in part] by the Human Connectome Project, WU-Minn Consortium (Principal Investigators: David Van Essen and Kamil Ugurbil; 1U54MH091657) funded by the 16 NIH Institutes and Centers that support the NIH Blueprint for Neuroscience Research; and by the McDonnell Center for Systems Neuroscience at Washington University.
     datalog_init: |
       schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
       schaefer_label(l) :- schaefer(l, r)
@@ -128,37 +95,7 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
-      streamlines:
-        columns: [streamlines]
-        type: float
-        description: >-
-          a mean number of streamlines of tractography, over the subjects
     predicates:
-      schaefer_structural_connectivity:
-        description: >-
-          Structural connectivity between two Schaefer parcels: the mean
-          number of streamlines joining them over 1,064 HCP subjects (of
-          2.8 to 3.6 million each), from diffusion MRI tractography
-          (Mansour et al. 2021; .credits); both ways round, the pairs no
-          streamline joins left out. Cortex only: the subcortical
-          structures (thalamus, basal ganglia, hippocampus, amygdala, the
-          tian regions) and the cerebellum are not in it, so there is no
-          structural connectivity of theirs in this engine
-        arguments:
-          - label
-          - label
-          - streamlines
-      destrieux_structural_connectivity:
-        description: >-
-          Structural connectivity between two Destrieux regions: the mean
-          number of streamlines joining them over 1,064 HCP subjects, as
-          schaefer_structural_connectivity. Cortex only: no subcortical
-          structure (thalamus, basal ganglia, hippocampus, amygdala, the
-          tian regions) nor the cerebellum
-        arguments:
-          - destrieux_label
-          - destrieux_label
-          - streamlines
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
         arguments:
@@ -219,9 +156,101 @@ engines:
           - mni
           - tian_label
 
+  # The structural connectivity of the cortex between the parcels of the
+  # MNI atlases: a small engine of its own, which the meta-analysis engines
+  # (coordinate_meta_analysis: neurosynth, neurostore) extend; its
+  # examples and guidance for the query assistant are in
+  # structural_connectivity/.
+  structural_connectivity:
+    extends: mni_atlases
+    description: >
+      Structural connectivity of the cortex from diffusion MRI
+      tractography: the mean number of streamlines joining two parcels of
+      the Schaefer atlas (schaefer_structural_connectivity) or two regions
+      of the Destrieux atlas (destrieux_structural_connectivity) over
+      1,064 subjects of the Human Connectome Project (Mansour et al.
+      2021), with the atlases of the MNI brain. Cortex only: there is no
+      structural connectivity of the subcortex (Tian) nor of the
+      cerebellum.
+    requires_mni_mask: true
+    use_base_symbols: true
+    builtins: [exp, log, startswith]
+    # The structural connectivity of the cortex between the parcels of
+    # Schaefer and of Destrieux: the mean number of streamlines between two
+    # parcels over the HCP subjects of Mansour et al. (2021), whose
+    # high-resolution connectomes tools/hcp_structural_connectivity
+    # parcellates; published, with those of other atlases and their
+    # standard deviations, in https://gitlab.inria.fr/dwasserm/
+    # neurolang-hcp-connectivity (its README: how they were made, and how
+    # to acknowledge them), at a tag.
+    relations:
+      schaefer_structural_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/schaefer100_17.tsv.gz
+        md5: 88b8e2c1a5efced165391959e2d91b80
+      destrieux_structural_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.0/tsv/destrieux.tsv.gz
+        md5: 2c68298ab7444215e0b0816d5400dde6
+    acknowledgements:
+      - >-
+        Structural connectivity (schaefer_structural_connectivity,
+        destrieux_structural_connectivity): the mean over 1,064 subjects of
+        the HCP Young Adult study of their high-resolution structural
+        connectomes, by Mansour L S, Tian Y, Yeo BTT, Cropley V, Zalesky A.
+        High-resolution connectomic fingerprints: mapping neural identity
+        and behavior. NeuroImage 229:117695 (2021).
+        doi:10.1016/j.neuroimage.2020.117695, parcellated by NeuroLang
+        (tools/hcp_structural_connectivity; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity),
+        Destrieux's labels brought to the HCP's fs_LR surface by its
+        registration to fsaverage (Van Essen
+        DC, Glasser MF, Dierker DL, Harwell J, Coalson T. Cerebral Cortex
+        22:2241-2262 (2012). doi:10.1093/cercor/bhr291). The Human
+        Connectome Project: Van Essen DC, Smith SM, Barch DM, Behrens TEJ,
+        Yacoub E, Ugurbil K. The WU-Minn Human Connectome Project: an
+        overview. NeuroImage 80:62-79 (2013).
+        doi:10.1016/j.neuroimage.2013.05.041. Data were provided [in
+        part] by the Human Connectome Project, WU-Minn Consortium
+        (Principal Investigators: David Van Essen and Kamil Ugurbil;
+        1U54MH091657) funded by the 16 NIH Institutes and Centers that
+        support the NIH Blueprint for Neuroscience Research; and by the
+        McDonnell Center for Systems Neuroscience at Washington
+        University.
+    sorts:
+      streamlines:
+        columns: [streamlines]
+        type: float
+        description: >-
+          a mean number of streamlines of tractography, over the subjects
+    predicates:
+      schaefer_structural_connectivity:
+        description: >-
+          Structural connectivity between two Schaefer parcels: the mean
+          number of streamlines joining them over 1,064 HCP subjects (of
+          2.8 to 3.6 million each), from diffusion MRI tractography
+          (Mansour et al. 2021; .credits); both ways round, the pairs no
+          streamline joins left out. Cortex only: the subcortical
+          structures (thalamus, basal ganglia, hippocampus, amygdala, the
+          tian regions) and the cerebellum are not in it, so there is no
+          structural connectivity of theirs in this engine
+        arguments:
+          - label
+          - label
+          - streamlines
+      destrieux_structural_connectivity:
+        description: >-
+          Structural connectivity between two Destrieux regions: the mean
+          number of streamlines joining them over 1,064 HCP subjects, as
+          schaefer_structural_connectivity. Cortex only: no subcortical
+          structure (thalamus, basal ganglia, hippocampus, amygdala, the
+          tian regions) nor the cerebellum
+        arguments:
+          - destrieux_label
+          - destrieux_label
+          - streamlines
+
   coordinate_meta_analysis:
     abstract: true
-    extends: mni_atlases
+    extends: structural_connectivity
     description: >
       Shared setup of the coordinate-based meta-analysis engines
       (neurosynth, neurostore): reported activation peaks, TF-IDF term

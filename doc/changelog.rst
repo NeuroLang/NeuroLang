@@ -44,8 +44,10 @@ Unreleased
   repl-downloads``), so that a rebuild does not need its sources (OSF,
   GitHub) to be up.
 
-* The engines with the MNI atlases have the structural connectivity of the
-  cortex: ``schaefer_structural_connectivity(l1, l2, n)`` and
+* The structural connectivity of the cortex, a small engine of its own,
+  ``structural_connectivity`` (the MNI atlases and their connectivity),
+  which ``coordinate_meta_analysis`` extends, so ``neurosynth`` and
+  ``neurostore`` have it: ``schaefer_structural_connectivity(l1, l2, n)`` and
   ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
   streamlines joining two parcels over 1,064 subjects of the Human
   Connectome Project, from the high-resolution connectomes of Mansour et
@@ -55,7 +57,11 @@ Unreleased
   https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
   those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
   standard deviations, in parquet; ``.view`` draws a result of them as a
-  network. There is no subcortex in them, so no Tian.
+  network. There is no subcortex in them, so no Tian. Its questions and
+  their queries teach the query assistant the connectivity of a region,
+  a network, the strength of a parcel, and, on the meta-analysis
+  engines, the connectivity of the regions a term activates or
+  co-activates; ``assistant_guidance`` is inherited, the base's first.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:

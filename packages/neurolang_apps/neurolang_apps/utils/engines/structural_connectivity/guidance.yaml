@@ -1,0 +1,28 @@
+# Merged into the entry of structural_connectivity in ../engines.yaml
+# (see doc/engine_configuration.rst); the engines extending it
+# (coordinate_meta_analysis: neurosynth, neurostore) add their guidance
+# after it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to answer the
+# questions on the structural connectivity: added to its system prompt.
+assistant_guidance: >
+  Structural connectivity (how strongly two cortical regions are wired,
+  which regions a region connects to, white-matter or anatomical
+  connectivity, a structural network or connectome) is
+  schaefer_structural_connectivity(l1, l2, n) for the parcels of the
+  Schaefer networks and destrieux_structural_connectivity(l1, l2, n) for
+  the gyri and sulci of Destrieux: n is the mean number of streamlines
+  of tractography joining the two regions over 1,064 HCP subjects, a
+  stored value, not a probability, so the answers over it use no PROB.
+  Each pair is stored both ways round: a network gives each pair once
+  with (l1 < l2); the regions a seed connects to fix the seed in the
+  first argument. A strong connection is a large n: compare with a
+  threshold, (n > 1000), or sum n over a region's pairs for its
+  strength, sum(n); a value computed from n is computed in the body,
+  (f == n / t), never in the head. The labels are those of schaefer and destrieux
+  (Schaefer's name the network, as '17Networks LH DefaultA pCunPCC 1',
+  so startswith('17Networks LH Default', l) selects the left default
+  network; Destrieux's start with the hemisphere, as 'L G front sup').
+  The connectivity is of the cortex only: the subcortex (thalamus, basal
+  ganglia, hippocampus, amygdala, the tian regions) and the cerebellum
+  have none; say so rather than query it.

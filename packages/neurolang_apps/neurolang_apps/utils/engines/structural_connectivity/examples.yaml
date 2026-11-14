@@ -1,0 +1,61 @@
+# The example queries of structural_connectivity, merged into its entry of
+# ../engines.yaml (see doc/engine_configuration.rst): the questions the
+# REPL shows first (questions), the queries it shows (examples) and the
+# few-shot examples of the query assistant (assistant_examples), which
+# the engines extending it (neurosynth, neurostore) inherit before their
+# own. Every query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+questions:
+  - Which cortical regions is the left superior frontal gyrus structurally connected to?
+  - What is the structural network of the left default mode network?
+  - Which Schaefer parcels have the strongest structural connectivity?
+examples:
+  datalog:
+    - "ans(l, n) :- destrieux_structural_connectivity('L G front sup', l, n)"
+    - "ans(l1, l2, n) :- schaefer_structural_connectivity(l1, l2, n), (l1 < l2), (n > 5000)"
+    - "ans(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)"
+
+# Questions on the structural connectivity, with their Datalog queries.
+# The values are mean streamline counts, stored: no PROB. A network gives
+# each pair once (l1 < l2), as .view draws it; a seed region fixes the
+# first argument.
+assistant_examples:
+  - question: Which cortical regions is the left superior frontal gyrus structurally connected to?
+    datalog: |-
+      ans(l, n) :- destrieux_structural_connectivity('L G front sup', l, n)
+
+  - question: Which regions are strongly structurally connected to the left angular gyrus, with more than 1000 streamlines?
+    datalog: |-
+      ans(l, n) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n), (n > 1000)
+
+  - question: Which pairs of gyri and sulci are joined by more than 10000 streamlines?
+    datalog: |-
+      ans(l1, l2, n) :- destrieux_structural_connectivity(l1, l2, n), (l1 < l2), (n > 10000)
+
+  - question: What is the structural network of the left default mode network?
+    datalog: |-
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      ans(l1, l2, n) :- schaefer_structural_connectivity(l1, l2, n), default_left(l1), default_left(l2), (l1 < l2)
+
+  - question: Which Schaefer parcels have the strongest structural connectivity?
+    datalog: |-
+      ans(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)
+
+  - question: How many cortical regions is the left precentral gyrus connected to by more than 100 streamlines?
+    datalog: |-
+      ans(count(l)) :- destrieux_structural_connectivity('L G precentral', l, n), (n > 100)
+
+  - question: What fraction of the streamlines of the left posterior cingulate (precuneus) parcel go to each other parcel?
+    datalog: |-
+      strength(l, sum(n)) :- schaefer_structural_connectivity(l, l2, n)
+      ans(l2, f) :- schaefer_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l2, n), strength('17Networks LH DefaultA pCunPCC 1', t), (f == n / t)
+
+  - question: How many streamlines join the left and the right hemispheres?
+    datalog: |-
+      between(l1, l2, n) :- destrieux_structural_connectivity(l1, l2, n), startswith('L ', l1), startswith('R ', l2)
+      ans(sum(n)) :- between(l1, l2, n)
+
+  - question: Which regions are two connections away from the left superior frontal gyrus, through strong connections (more than 5000 streamlines each)?
+    datalog: |-
+      strong(l1, l2) :- destrieux_structural_connectivity(l1, l2, n), (n > 5000)
+      ans(l) :- strong('L G front sup', m), strong(m, l), (l != 'L G front sup')

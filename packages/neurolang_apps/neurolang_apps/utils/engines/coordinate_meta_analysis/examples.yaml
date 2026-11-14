@@ -635,3 +635,30 @@ assistant_examples:
       item(y, s) :- cogat_definition('memory', d), similar_study(d, s), neuron(s), study_year(s, y)
       ans(y, n) :- AGGREGATE[y](item(y, s) @ count(s)) = n
 
+
+  # Structural and functional connectivity together: the structural
+  # connectivity (structural_connectivity) is a stored mean of streamlines,
+  # joined, by the labels of the regions, with the probabilities of
+  # activation of the meta-analysis, which PROB rules of their own give.
+  - question: Which cortical regions activated by studies about pain are strongly structurally connected to each other?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
+      ans(l1, l2, n) :- pain(l1, p1), pain(l2, p2), (p1 > 0.4), (p2 > 0.4), destrieux_structural_connectivity(l1, l2, n), (l1 < l2), (n > 1000)
+
+  - question: Are the Schaefer parcels co-activated by studies about reading also structurally connected?
+    datalog: |-
+      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      co_activation(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+      ans(l1, l2, p, n) :- co_activation(l1, l2, p), schaefer_structural_connectivity(l1, l2, n)
+
+  - question: Which regions structurally connected to the left angular gyrus are activated by studies about memory?
+    datalog: |-
+      connected(l, n) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n), (n > 1000)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      memory(l, p) :- PROB[active(l, s) // term_association(s, 'memory')] = p
+      ans(l, n, p) :- connected(l, n), memory(l, p)
