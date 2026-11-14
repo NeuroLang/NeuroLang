@@ -1,0 +1,27 @@
+# Merged into the entry of disconnectome7t_tractogram in ../engines.yaml (see
+# doc/engine_configuration.rst).
+#
+# Questions on neurosynth_disconnectome7t and neurostore_disconnectome7t,
+# added after those of neurosynth_tracts and neurostore_tracts.
+# The engine has loaded a tractogram and imported the bundles of
+# tract_querier's freesurfer_queries.dl (uf, af, cst, ilf, ifof...): a
+# bundle is a predicate of a streamline x and a hemisphere h, "left" or
+# "right". The tractogram is Disconnectome7T (20 HCP subjects at 7 T), the
+# atlas the FreeSurfer segmentation of those subjects, with the terms of
+# freesurfer_aseg_aparc.
+# The questions the REPL shows first: those on the tracts, then some of
+# coordinate_meta_analysis (a list of an engine replaces that of its bases).
+questions:
+  - Which streamlines form the left uncinate fasciculus?
+  - Which streamlines form the right inferior longitudinal fasciculus?
+  - Which studies mention pain?
+  - Which gyri and sulci are activated by studies about language?
+  - What is the Bayes factor of fear for the activation of the left amygdala?
+assistant_examples:
+  - question: Which streamlines form the left uncinate fasciculus?
+    datalog: |-
+      ans(x) :- uf(x, "left")
+
+  - question: Which streamlines form the right inferior longitudinal fasciculus?
+    datalog: |-
+      ans(x) :- ilf(x, "right")
