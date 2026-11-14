@@ -127,6 +127,41 @@ def functional(work: Path, tian_names: list, parts: Path,
     print(f"{len(subjects)} subjects")
 
 
+def tractography(work: Path, parts: Path, dataset: Path) -> None:
+    """The group tractography connectivity (tractography.py): the
+    SIFT2-weighted streamlines (times mu) between the 400 Schaefer parcels
+    and Tian's 32 regions, and their number."""
+    from .atlases import tian_names
+    from .tractography import ATLAS, NAME
+
+    mean, sd, subjects, extra = group(parts)
+    for folder in ("parquet", "tsv"):
+        (dataset / folder).mkdir(parents=True, exist_ok=True)
+    regions = cortical(work)[ATLAS][1]
+    tian = tian_names(work / "atlases")
+    names = regions + tian
+    pd.DataFrame({"subject": subjects, "streamlines": extra["total"],
+                  "assigned": extra["assigned"], "mu": extra["mu"]}
+                 ).to_parquet(dataset / "parquet" /
+                              "tractography_subjects.parquet", index=False)
+    for key in (NAME, f"{NAME}_count"):
+        write_matrix(matrix(mean[key], names),
+                     dataset / "parquet" / f"{key}_mean.parquet")
+        write_matrix(matrix(sd[key], names),
+                     dataset / "parquet" / f"{key}_sd.parquet")
+        r = matrix(mean[key], names)
+        write_tsv(pairs(r, regions, regions, ["region1", "region2"],
+                        "streamlines", 6),
+                  dataset / "tsv" / f"{key}.tsv.gz")
+        write_tsv(pairs(r, regions, tian, ["region", "tian_region"],
+                        "streamlines", 6),
+                  dataset / "tsv" / f"{key}_tian.tsv.gz")
+        write_tsv(pairs(r, tian, tian, ["region1", "region2"],
+                        "streamlines", 6),
+                  dataset / "tsv" / f"{key}_tian_tian.tsv.gz")
+    print(f"{len(subjects)} subjects")
+
+
 def regradient(work: Path, dataset: Path) -> None:
     """The gradients again, of the matrices of DATASET."""
     for a in cortical(work):
