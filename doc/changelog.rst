@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
+  ``/admin/activity``: filters of the period, user and engine above
+  figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
+  memory of a session), a strip of the runs of the server, charts of the
+  inputs, CPU, tokens and active users over time (Chart.js, served by the
+  server), the users, and the inputs, sortable, searchable and each opening
+  on its result. Datasette (``--dashboard``) stays, as *Raw data and SQL*.
+  Its queries of the last days no longer take the whole first day (they
+  compared ISO times with SQLite's), and its uptime counts from the first
+  run logged.
 * The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
   tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
   Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
@@ -161,6 +171,10 @@ Unreleased
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
   takes 23 s instead of 81 s (2 mm grid).
+* A function of a rule's variables, such as ``query_similarity(q, s)``
+  over the 65,000 studies of NeuroStore, is given each row as a tuple read
+  by column, not as a pandas row: ``uniformity_llm('auditory stimuli', i,
+  j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
 
@@ -170,6 +184,12 @@ Unreleased
   with a ``ForbiddenExpressionError`` that tells how to compute the value
   in the body, ``(v == n / 2)``.
 
+* The threshold sliders of the brain viewer sit over the values they set
+  on the histogram. In percentile mode a thumb was placed at its percentile
+  along the slider while the histogram's axis is the value, so for skewed
+  maps the low thumb could be far from its line (128 px of 360 at the 50th
+  percentile of cubed values); the thumbs are now placed by value, and the
+  histogram is inset by half a thumb so its ends meet the thumbs' travel.
 * Checking or running a query on an ontology's predicates, as
   ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
   cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying

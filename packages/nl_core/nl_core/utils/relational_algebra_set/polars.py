@@ -1587,13 +1587,14 @@ class NamedRelationalAlgebraFrozenSet(
             elif callable(operation):
                 # Need eager for callable
                 eager = new_container.collect()
-                col_names = data_names
-                Row = self._make_named_row_class(col_names)
+                # Read by label, as the pandas rows: a namedtuple renames
+                # the columns starting with an underscore.
+                row_of = abc.row_type(data_names)
                 values = [
-                    operation(Row(*(
+                    operation(row_of(
                         _DictWrapper(v) if isinstance(v, dict) else v
                         for v in row
-                    ))) for row in data_rows(eager)
+                    )) for row in data_rows(eager)
                 ]
                 eager = eager.with_columns(
                     pl.Series(name=dst_column, values=values)

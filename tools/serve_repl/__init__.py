@@ -174,6 +174,14 @@ DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
 DEFAULT_SITE = Path(DEFAULTS["site"]).expanduser()
 # The admin console of the users (--users), served at /admin.
 ADMIN_PAGE = Path(__file__).with_name("admin.html")
+# The page of the activity of the users (--activity-db), and the chart
+# library it draws with (Chart.js, MIT, in vendor/ as NiiVue is in the
+# REPL's).
+ACTIVITY_PAGE = Path(__file__).with_name("activity.html")
+CHART_JS = Path(__file__).parent / "vendor" / "chartjs" / "chart.umd.min.js"
+ACTIVITY_PATHS = ("/admin/activity", "/admin/vendor/chart.umd.min.js",
+                  "/admin/api/activity/report", "/admin/api/activity/inputs",
+                  "/admin/api/activity/entry")
 # The page of a user's account (--users), served at /account.
 ACCOUNT_PAGE = Path(__file__).with_name("account.html")
 # The page where a user logs in (--users), served at /login, and the cookie
@@ -770,6 +778,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         activity = getattr(self.sessions, "activity", None)
         if path == "/admin/api/usage":
             return self._reply_json(activity.totals() if activity else [])
+        if path in ACTIVITY_PATHS:
+            return self._activity(path, activity)
         if path == "/admin/activity.jsonl" and activity:
             # The log of a user, ?user=NAME, an event a line.
             query = urllib.parse.urlsplit(self.path).query
@@ -815,6 +825,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         mime = dict(headers).pop("Content-Type", "text/plain")
         self._reply(status, body, mime,
                     [h for h in headers if h[0].title() != "Content-Type"])
+
+    def _activity(self, path: str, activity):
+        """The page of the activity of the users (--activity-db), its data
+        and the chart library it draws with."""
+        if path == "/admin/activity":
+            return self._reply(200, ACTIVITY_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if path == "/admin/vendor/chart.umd.min.js":
+            return self._reply(200, CHART_JS.read_bytes(),
+                               "text/javascript; charset=utf-8",
+                               [("Cache-Control", "max-age=86400")])
+        if activity is None:
+            return self._reply_json({"error": "no activity log: start the "
+                                     "server with --activity-db FILE"}, 404)
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+
+        def get(name, default=""):
+            return query.get(name, [default])[0]
+
+        since, user, engine = _since(get("days")), get("user"), get("engine")
+        if path == "/admin/api/activity/report":
+            return self._reply_json(activity.report(
+                since, user or None, engine or None, _zone(get("tz"))))
+        if path == "/admin/api/activity/inputs":
+            try:
+                offset = max(0, int(get("offset", "0")))
+                limit = min(100, max(1, int(get("limit", "50"))))
+            except ValueError:
+                raise ValueError("offset and limit are numbers")
+            return self._reply_json(activity.inputs(
+                since, user or None, engine or None,
+                failed=get("failed") == "1", search=get("q")[:200],
+                sort=get("sort", "latest"), limit=limit, offset=offset))
+        try:
+            entry = activity.entry(int(get("id", "0")))
+        except ValueError:
+            raise ValueError("id is a number")
+        if not entry:
+            return self._reply_json({"error": "no such input"}, 404)
+        return self._reply_json(entry)
 
     def _admin_state(self) -> dict:
         users = self.users.current()
@@ -2224,6 +2274,34 @@ def check_login(secret: bytes, value: str, users, guests: bool = False,
     if entry is None or login.get("p") != _fingerprint(entry):
         return None
     return name
+
+
+def _since(days: str):
+    """The start of the last *days* days (a number, of the page), as an
+    aware datetime; None for all (empty)."""
+    from datetime import datetime, timedelta, timezone
+
+    if not days:
+        return None
+    try:
+        days = float(days)
+    except ValueError:
+        raise ValueError("days is a number of days, or empty for all")
+    if not 0 < days <= 3660:
+        raise ValueError("days is between 0 and 3660")
+    return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _zone(name: str):
+    """The time zone *name* (IANA, the page's), UTC if none or unknown."""
+    from datetime import timezone
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(name) if name else timezone.utc
+    except (ValueError, KeyError, OSError, ImportError):
+        return timezone.utc
 
 
 def read_password(path: Path) -> str:

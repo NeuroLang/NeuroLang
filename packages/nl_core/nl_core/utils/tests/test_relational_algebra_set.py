@@ -1091,6 +1091,30 @@ def test_extended_projection(ra_module):
     assert initial_set == new_set
 
 
+def test_extended_projection_of_a_function_reads_a_row_as_its_callers_do(
+    ra_module
+):
+    """A function of the row reads a column as an attribute, by its label or
+    among the row's values, as the solvers' functions do, whatever its name
+    (``_n``, which a namedtuple renames); with pandas, the labels may be
+    integers (polars makes them strings)."""
+    rows = [("a1", 7, 0.5), ("b2", 9, 0.25)]
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("s", "_n", "p"), rows
+    )
+    new_set = initial_set.extended_projection({
+        "s": RelationalAlgebraColumnStr("s"),
+        "a": lambda r: f"{r.s}:{r['_n']}",
+        "b": lambda r: list(r)[2] * r._n,
+    })
+    assert set(new_set) == {("a1", "a1:7", 3.5), ("b2", "b2:9", 2.25)}
+    if ra_module is not pandas:
+        return
+    unnamed = ra_module.NamedRelationalAlgebraFrozenSet((1, 2), [(7, 8)])
+    assert set(unnamed.extended_projection({"z": lambda r: r[1] - r[2]})) \
+        == {(-1,)}
+
+
 def test_extended_projection_on_dee(ra_module):
     ras_a = (
         ra_module.NamedRelationalAlgebraFrozenSet.dee().extended_projection(

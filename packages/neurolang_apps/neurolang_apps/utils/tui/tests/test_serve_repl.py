@@ -2879,3 +2879,66 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     contributing = " ".join((docs / "contributing.rst").read_text().split())
     assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
     assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing
+
+
+def test_the_activity_page_is_the_admins(serve, tmp_path):
+    from neurolang_apps.utils.tui.activity import ActivityLog
+
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.activity = ActivityLog(tmp_path / "activity.sqlite")
+    sessions.activity.add("bob", "submit", text="ans(x) :- p(x)",
+                          engine="neurosynth", response="x\n1",
+                          failed=False, seconds=0.5, cpu=0.4)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        for path in ("/admin/activity", "/admin/vendor/chart.umd.min.js",
+                     "/admin/api/activity/report?days=7"):
+            assert _status(port, path, _basic("bob-pw", "bob")) == 403
+            assert _status(port, path, _basic("ann-pw", "ann")) == 200
+        report = _json_of(port, "/admin/api/activity/report?days=7&"
+                          "tz=Europe/Paris", "ann", "ann-pw")
+        assert report["figures"]["inputs"] == 1
+        assert report["names"] == ["bob"] and report["engines"] == [
+            "neurosynth"]
+        [row] = _json_of(port, "/admin/api/activity/inputs?user=bob&q=p(x",
+                         "ann", "ann-pw")
+        entry = _json_of(port, f"/admin/api/activity/entry?id={row['id']}",
+                         "ann", "ann-pw")
+        assert entry["response"] == "x\n1"
+        for bad in ("inputs?sort=id", "report?days=-1", "inputs?offset=x",
+                    "entry?id=x"):
+            assert _status(port, f"/admin/api/activity/{bad}",
+                           _basic("ann-pw", "ann")) == 400
+        assert _status(port, "/admin/api/activity/entry?id=99",
+                       _basic("ann-pw", "ann")) == 404
+        assert _json_of(port, "/admin/api/state", "ann", "ann-pw")[
+            "activity"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_without_an_activity_log_the_page_says_how(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        assert _status(port, "/admin/activity", _basic("ann-pw", "ann")) \
+            == 200
+        with pytest.raises(urllib.error.HTTPError) as error:
+            _json_of(port, "/admin/api/activity/report", "ann", "ann-pw")
+        with error.value:
+            assert error.value.code == 404
+            assert "--activity-db" in json.load(error.value)["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
