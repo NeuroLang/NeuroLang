@@ -1405,6 +1405,36 @@ def test_naturaljoin_on_a_unique_key_takes_little_memory():
     assert peak < 1.5 * frame.memory_usage(index=False).sum()
 
 
+@pytest.mark.parametrize("small_first", [True, False])
+def test_naturaljoin_on_a_unique_string_key(small_first):
+    """
+    The look-up join on a unique key of pandas' strings, held by Arrow as
+    the study ids of NeuroStore are, matches the rows a merge matches, the
+    keys of the larger relation missing from the smaller one left out.
+    """
+    import numpy as np
+    import pandas as pd
+
+    small_rows = [("a1", 0.5), ("b2", 0.25), ("c3", 0.125)]
+    keys = ["b2", "a1", "zz", "b2", "c3"]
+    large_rows = [(k, n) for n, k in enumerate(keys)]
+    small = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "p"), pd.DataFrame(small_rows, columns=["s", "p"])
+    )
+    large = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "n"), pd.DataFrame(large_rows, columns=["s", "n"])
+    )
+    assert not isinstance(large._container["s"].dtype, np.dtype)
+    p = dict(small_rows)
+    if small_first:
+        joined = small.naturaljoin(large)
+        expected = {(k, p[k], n) for k, n in large_rows if k in p}
+    else:
+        joined = large.naturaljoin(small)
+        expected = {(k, n, p[k]) for k, n in large_rows if k in p}
+    assert set(joined.to_unnamed()) == expected
+
+
 def test_aggregate_sum_of_floats_is_python_sum(ra_module):
     import math
 
