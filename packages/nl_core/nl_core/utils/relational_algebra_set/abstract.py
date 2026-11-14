@@ -16,6 +16,28 @@ def count_distinct(*columns: Iterable) -> int:
     return len(set(zip(*columns)))
 
 
+def row_type(columns):
+    """
+    The type of the rows of *columns* given to a function of a row by
+    ``extended_projection``: tuples of their values whose column is read
+    as an attribute or by its label, whatever the label (``_x`` as well).
+    """
+    positions = {column: i for i, column in enumerate(columns)}
+
+    class Row(tuple):
+        __slots__ = ()
+
+        def __getattr__(self, name):
+            if name not in positions:
+                raise AttributeError(name)
+            return tuple.__getitem__(self, positions[name])
+
+        def __getitem__(self, label):
+            return tuple.__getitem__(self, positions[label])
+
+    return Row
+
+
 class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
     pass
 

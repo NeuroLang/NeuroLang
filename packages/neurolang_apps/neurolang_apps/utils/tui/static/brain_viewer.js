@@ -270,8 +270,11 @@
   // much the network shows through the 3D render, the thickness of the
   // slab of a slice it is drawn in, in millimetres, and the thickness of
   // the edge at the threshold, a share of that of the largest edge.
-  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6,
-    THINNEST_EDGE = 0.2;
+  var pageSettings = data.settings;  // of viewer.yaml
+  var LISTED_EDGES = pageSettings.listed_edges,
+    NETWORK_XRAY = pageSettings.network_xray,
+    NETWORK_SLAB_MM = pageSettings.network_slab_mm,
+    THINNEST_EDGE = pageSettings.thinnest_edge;
 
   // The network as NiiVue draws it, of the edges of |value| at least
   // *threshold* and the nodes they join. The colour and the size of a
@@ -650,7 +653,7 @@
   // The histogram of the nonzero values of the layer l (|v| when
   // symmetric), from 0 to the top of the sliders, log-scaled, the bins of
   // the range shown in the colours they are drawn with.
-  var BINS = 60;
+  var BINS = pageSettings.histogram_bins;
   function drawHistogram(l, s) {
     var canvas = $('threshold-histogram'), context = canvas.getContext('2d');
     var layer = viewer.layers[l], symmetric = settings(l).symmetric;
@@ -814,11 +817,20 @@
         ' to ' + format(scales[viewer.state.active].upper) : '';
   }
 
-  // The largest threshold of the slider, in the unit of the mode.
+  // The sliders lie over the histogram, so a position (0 to 1000) is a
+  // value on its axis, from 0 to its top, in either mode.
   function sliderTop() {
     var layer = viewer.layers[viewer.state.active];
+    return Math.max(layer.maxAbs, layer.max, 1e-12);
+  }
+
+  function positionOf(v) { return Math.round(1000 * v / sliderTop()); }
+
+  // The threshold, in the unit of the mode, at the slider position p.
+  function thresholdAt(p) {
+    var v = sliderTop() * p / 1000;
     return settings().thresholdMode === 'percentile'
-      ? 100 : Math.max(layer.maxAbs, layer.max, 1e-12);
+      ? rank(percentileSource(viewer.state.active), v) : v;
   }
 
   function syncControls() {
@@ -827,11 +839,11 @@
     $('visible').checked = s.visible;
     $('threshold').value = Number(s.threshold.toPrecision(6));
     $('threshold').max = s.thresholdMode === 'percentile' ? 100 : '';
-    $('threshold-slider').value = Math.round(1000 * s.threshold / sliderTop());
+    $('threshold-slider').value = positionOf(thresholdValue(viewer.state.active));
     var upper = upperInMode();
     $('threshold-high').value = Number(upper.toPrecision(6));
     $('threshold-high').max = s.thresholdMode === 'percentile' ? 100 : '';
-    $('threshold-high-slider').value = Math.round(1000 * upper / sliderTop());
+    $('threshold-high-slider').value = positionOf(upperValue(viewer.state.active));
     $('threshold-mode').value = s.thresholdMode;
     $('cmap').value = s.cmap;
     $('symmetric').checked = s.symmetric;
@@ -976,13 +988,13 @@
     $('threshold').addEventListener('change', onThreshold);
     $('threshold').addEventListener('input', onThreshold);
     $('threshold-slider').addEventListener('input', function (e) {
-      setThreshold(sliderTop() * e.target.value / 1000);
+      setThreshold(thresholdAt(e.target.value));
     });
     var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
     $('threshold-high').addEventListener('change', onUpper);
     $('threshold-high').addEventListener('input', onUpper);
     $('threshold-high-slider').addEventListener('input', function (e) {
-      setUpper(sliderTop() * e.target.value / 1000);
+      setUpper(thresholdAt(e.target.value));
     });
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);

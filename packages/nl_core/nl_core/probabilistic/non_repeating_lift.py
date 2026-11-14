@@ -106,10 +106,10 @@ def non_repeating_plan(formula, symbol_table):
 
 def columns_comparison(comparison):
     """The comparison of the columns named after the variables of
-    `comparison`."""
+    `comparison`, within its terms too, as `x + 1 < y`."""
     return ReplaceExpressionWalker({
-        v: str2columnstr_constant(v.name)
-        for v in extract_logic_free_variables(comparison)
+        variable: str2columnstr_constant(variable.name)
+        for variable in extract_logic_free_variables(comparison)
     }).walk(comparison)
 
 

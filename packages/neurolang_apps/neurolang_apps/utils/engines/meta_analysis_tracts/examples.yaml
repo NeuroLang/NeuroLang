@@ -1,8 +1,8 @@
-# Merged into the entry of neurosynth_tracts in ../engines.yaml (see
+# Merged into the entry of meta_analysis_tracts in ../engines.yaml (see
 # doc/engine_configuration.rst).
 #
-# Questions on neurosynth_tracts, added after the bank of
-# coordinate_meta_analysis. They are about a tractogram the program has
+# Questions on neurosynth_tracts and neurostore_tracts, added after the bank
+# of coordinate_meta_analysis (and that of neurostore). They are about a tractogram the program has
 # loaded and indexed, as the commands of
 # examples/uncinate_cogat.dl of the engine tracts do: an atlas "fs" with the
 # terms of the vocabulary of tractography (a wmparc of FreeSurfer) and the

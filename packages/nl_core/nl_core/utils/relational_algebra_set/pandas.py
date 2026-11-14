@@ -6,7 +6,7 @@ from uuid import uuid1
 import numpy as np
 import pandas as pd
 from . import abstract as abc
-from .abstract import count_distinct
+from .abstract import count_distinct, row_type
 
 
 NA = pd.NA
@@ -46,6 +46,7 @@ _COPY_ON_WRITE = _copy_on_write()
 # arrays as long as the relation: the activations of the voxels by the
 # studies are tens of millions of rows.
 _CHUNK_ROWS = 1 << 22
+
 
 # The reductions computed a chunk at a time, and the reduction of their
 # partial results giving that of the whole.
@@ -269,7 +270,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         3  3
         4  4
         """
-        if self.is_empty():
+        if self.is_empty() and (self.arity == 0 or not columns):
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
         new_container.columns = pd.RangeIndex(len(columns))
@@ -799,8 +800,19 @@ class NamedRelationalAlgebraFrozenSet(
             for name in taken
         ):
             return None
-        index = pd.Index(small_key)
-        keys = large_key.to_numpy()
+        if isinstance(large_key.dtype, np.dtype):
+            index = pd.Index(small_key)
+            keys = large_key.to_numpy()
+        else:
+            # Keys such as pandas' strings, held by Arrow, are looked up as
+            # their codes: those of the small relation's keys, unique and
+            # first, are their positions.
+            codes, _ = pd.factorize(
+                pd.concat([small_key, large_key], ignore_index=True),
+                use_na_sentinel=False,
+            )
+            index = pd.RangeIndex(len(small_key))
+            keys = codes[len(small_key):]
         chunks = range(0, len(keys), _CHUNK_ROWS)
         # The rows matched, then the columns taken, a chunk at a time: the
         # positions of the rows matched are never whole.
@@ -1251,6 +1263,9 @@ class NamedRelationalAlgebraFrozenSet(
                 columns=proj_columns,
                 iterable=[],
             )
+        if any(callable(op) for op in eval_expressions.values()):
+            # Python callables run once per row: don't run them on duplicates
+            self._drop_duplicates_if_needed()
         new_container = self._container.copy()
         new_container = new_container.infer_objects()
         seen_pure_columns = set()
@@ -1266,9 +1281,14 @@ class NamedRelationalAlgebraFrozenSet(
                 seen_pure_columns.add(operation)
                 new_container[dst_column] = new_container.loc[:, operation]
             elif callable(operation):
-                new_container[dst_column] = new_container.apply(
-                    operation, axis=1
-                )
+                # A row as a tuple read by label: a pandas row of
+                # DataFrame.apply costs ten times the function, e.g.
+                # query_similarity over the 65,000 studies of NeuroStore.
+                row = row_type(new_container.columns)
+                new_container[dst_column] = [
+                    operation(row(values)) for values in
+                    new_container.itertuples(index=False, name=None)
+                ]
             else:
                 new_container[dst_column] = operation
         new_container = new_container.loc[:, proj_columns]

@@ -920,6 +920,51 @@ def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
     assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"
 
 
+_SLIDER_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  // The x of a thumb, its centre running from 7px to 7px short of the
+  // end of its 14px-thumbed range, against the x of the threshold drawn
+  // on the histogram.
+  var histogram = document.getElementById('threshold-histogram');
+  function offsets() {
+    var box = histogram.getBoundingClientRect();
+    var range = histogram.dataset.range.split(' ').map(Number);
+    return ['threshold-slider', 'threshold-high-slider'].map(function (id, i) {
+      var input = document.getElementById(id), r = input.getBoundingClientRect();
+      var thumb = r.left + 7 + input.value / 1000 * (r.width - 14);
+      return Math.abs(thumb - (box.left + range[i] / 3 * box.width));
+    });
+  }
+  var out = {percentile: offsets()};
+  set('threshold-slider', '500', 'input');
+  out.dragged = Number(histogram.dataset.range.split(' ')[0]);
+  out.draggedOffsets = offsets();
+  set('threshold-mode', 'value', 'change');
+  set('threshold', '0.75', 'change');
+  out.value = offsets();
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_threshold_sliders_follow_the_histogram(tmp_path):
+    """Check a thumb of the threshold sliders sits over the value it
+    sets on the histogram, also in percentiles of skewed values."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data.flat[:20] = 3 * (np.arange(1, 21) / 20) ** 3  # most values small
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="sliders", threshold="50%", cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _SLIDER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    for offsets in ("percentile", "draggedOffsets", "value"):
+        assert max(result[offsets]) < 2, (offsets, result[offsets])
+    assert result["dragged"] >= 1.5  # half way along the values, not percentiles
+
 _EDGE_VALUE_CHECK = _CHECK_HELPERS + """
 <script>
 brainViewer.ready.then(function () {
@@ -965,3 +1010,37 @@ def test_the_edge_value_of_a_network_in_a_headless_browser(tmp_path):
     assert result["shown"] and result["options"] == ["p", "q"]
     assert "0.25" in result["before"] and "3" in result["after"]
     assert result["threshold"] == "0"
+
+
+def test_the_defaults_of_the_viewer_are_those_of_its_file():
+    """The constants are read from viewer.yaml, the page's script is
+    given its part, and the help of .view quotes the threshold."""
+    import yaml
+    from neurolang_apps.utils.tui import nifti
+
+    defaults = yaml.safe_load(brain_viewer.DEFAULTS_FILE.read_text())
+    assert brain_viewer.DEFAULT_CMAP == defaults["colormap"]
+    assert brain_viewer.OVERLAY_CMAPS == tuple(defaults["overlay_colormaps"])
+    assert brain_viewer.COLORMAPS == tuple(defaults["colormaps"])
+    assert brain_viewer.BACKGROUND_MAX_VOXELS == defaults[
+        "background_max_voxels"]
+    network = defaults["network"]
+    assert (brain_viewer.NODE_RADIUS, brain_viewer.EDGE_RADIUS) == (
+        network["node_radius"], network["edge_radius"])
+    assert brain_viewer.NETWORK_OVERLAY_OPACITY == network["overlay_opacity"]
+    assert brain_viewer.MIN_SHOWN_EDGES == network["min_shown_edges"]
+    assert brain_viewer.MAX_EDGES == network["max_edges"]
+    assert brain_viewer.MAX_STREAMLINES == defaults["streamlines"][
+        "max_shown"]
+    assert nifti.VIEW_THRESHOLD == defaults["view_threshold"]
+    help_text = " ".join(nifti.VIEW_HELP.split())
+    assert f"default: {defaults['view_threshold']}" in help_text
+    assert f"default: {defaults['colormap']}" in help_text
+    img = nib.Nifti1Image(np.ones((2, 2, 2), np.float32), np.eye(4))
+    state = _state(brain_viewer.viewer_html(
+        img, None, title="t", threshold=0, cmap=None, symmetric=False,
+    ))
+    assert state["settings"] == defaults["page"]
+    script = (brain_viewer._STATIC / "brain_viewer.js").read_text()
+    for name in defaults["page"]:
+        assert f"pageSettings.{name}" in script, name

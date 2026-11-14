@@ -4,6 +4,7 @@
 // ending with "," or inside brackets continues the rule, for the parser and
 // for the REPL's statements (statements.py), so the layout changes nothing
 // of what runs.
+import { SETTINGS } from "./settings.js";
 
 const OPENING = "([{", CLOSING = ")]}";
 
@@ -61,7 +62,7 @@ function layoutLine(line, width) {
   const head = `${line.slice(0, neck).trimEnd()} :- `;
   const body = line.slice(neck + 2).trim();
   // Under the body, unless the head takes much of the line.
-  const indent = head.length <= width * 0.45 ? head.length : 4;
+  const indent = head.length <= width * SETTINGS.layout.head_share ? head.length : SETTINGS.layout.short_indent;
   const commas = scan(body, (index, depth) => depth === 0 && body[index] === ",");
   if (!commas.length) return layoutProbability(head, body, indent, width) ?? line;
   const atoms = [0, ...commas.map((comma) => comma + 1)].map((from, index) => body.slice(from, commas[index]).trim());
