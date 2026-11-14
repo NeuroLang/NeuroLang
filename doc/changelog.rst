@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
+  ``/admin/activity``: filters of the period, user and engine above
+  figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
+  memory of a session), a strip of the runs of the server, charts of the
+  inputs, CPU, tokens and active users over time (Chart.js, served by the
+  server), the users, and the inputs, sortable, searchable and each opening
+  on its result. Datasette (``--dashboard``) stays, as *Raw data and SQL*.
+  Its queries of the last days no longer take the whole first day (they
+  compared ISO times with SQLite's), and its uptime counts from the first
+  run logged.
 * The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
   tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
   Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
