@@ -658,3 +658,37 @@ assistant_examples:
       item(y, s) :- cogat_definition('memory', d), similar_study(d, s), neuron(s), study_year(s, y)
       ans(y, n) :- AGGREGATE[y](item(y, s) @ count(s)) = n
 
+  # The titles, abstracts and identifiers of the studies: a PubMed id is an
+  # integer, a DOI is in lower case without https://doi.org/.
+  - question: "List the titles of the studies about fear published in Neuron, with their years."
+    datalog: |-
+      neuron(s) :- study_journal(s, 'Neuron')
+      ans(s, t, y) :- cogat_definition('fear', d), similar_study(d, s), neuron(s), study_title(s, t), study_year(s, y)
+
+  - question: "What is the title of the study with PubMed id 9620698?"
+    datalog: |-
+      ans(t) :- study_pmid(s, 9620698), study_title(s, t)
+
+  - question: "What is the abstract of the paper with PMID 9620698?"
+    datalog: |-
+      ans(a) :- study_pmid(s, 9620698), study_abstract(s, a)
+
+  - question: "Which study has the DOI https://doi.org/10.1016/S0896-6273(00)80475-4, and when was it published?"
+    datalog: |-
+      ans(s, t, y) :- study_doi(s, '10.1016/s0896-6273(00)80475-4'), study_title(s, t), study_year(s, y)
+
+  - question: "Which subcortical regions does the study with PubMed id 9620698 activate?"
+    datalog: |-
+      ans(l) :- study_pmid(s, 9620698), tian_activated(l, s)
+
+  - question: "What are the PubMed ids and DOIs of the studies about fear published in Neuron?"
+    datalog: |-
+      neuron(s) :- study_journal(s, 'Neuron')
+      ans(s, p, d) :- cogat_definition('fear', d0), similar_study(d0, s), neuron(s), study_pmid(s, p), study_doi(s, d)
+
+  - question: "How many studies have a PubMed id but no DOI?"
+    datalog: |-
+      with_doi(s) :- study_doi(s, d)
+      item(s) :- study_pmid(s, p), ~with_doi(s)
+      ans(n) :- AGGREGATE[](item(s) @ count(s)) = n
+
