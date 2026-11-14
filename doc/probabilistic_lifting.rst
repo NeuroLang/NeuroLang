@@ -1077,20 +1077,35 @@ Projection on a variable
    An order comparison between atoms, as in
    :math:`\exists x\, \exists y\, (R(x) \land T(y) \land x < y)`, is
    projected exclusively on the least value of :math:`x` for which
-   :math:`R(x)` holds (``_extremum_conjunct``): when :math:`R(\bar u)` is
-   the only conjunct of :math:`\varphi` with :math:`v` but comparisons,
-   :math:`v` is its only variable of :math:`X`, and :math:`v` is the
-   lesser side of every comparison with it, :math:`v < t` or
-   :math:`v \leq t`, :math:`t` being a term without :math:`v`, as
-   :math:`x + 1`,
+   :math:`R(x)` holds (``_extremum_conjunct``). In general, a side of the
+   comparisons can be a subquery: let :math:`K` be the conjuncts of
+   :math:`\varphi` with :math:`v` but its comparisons, and those connected
+   to them by the other variables :math:`Y` of :math:`X` in :math:`K`.
+   When no comparison with :math:`v` has a variable of :math:`Y`, and
+   :math:`v` is the lesser side of every comparison with it,
+   :math:`v < t` or :math:`v \leq t`, :math:`t` being a term without
+   :math:`v`, as :math:`x + 1`,
 
    .. math::
 
       \exists X\, \varphi \equiv \exists X\, \big(\varphi \land
-      \lnot\exists w\, (R(\bar u[w/v]) \land w < v)\big),
+      \lnot\exists w\, \exists Y'\, (K[w/v, Y'/Y] \land w < v)\big),
 
    and the same with :math:`w > v`, the greatest value, when it is the
-   greater side of every comparison. The comparison rule then lifts the
+   greater side of every comparison. This holds for any :math:`K`; to
+   choose a variable whose rewritten query lifts, :math:`v` is only taken
+   when :math:`K` is an atom :math:`R(\bar u)` whose only variable of
+   :math:`X` is :math:`v`, or when :math:`v` separates :math:`\exists Y\,
+   K`, its events for different values of :math:`v` having different
+   tuples (``_separates``): in
+   :math:`R(x) \land S(x, y) \land T(z) \land y < z`, :math:`y` is not
+   taken, :math:`R(x)` being in :math:`K` for every value of :math:`y`,
+   and the projection is on the greatest :math:`z` of :math:`T(z)`; in
+   :math:`S(x, y) \land V(z, w) \land y < w` it is on the greatest
+   :math:`w` of :math:`\exists z\, V(z, w)`; in
+   :math:`R(x) \land T(y) \land \lnot U(y) \land x < y` on the least
+   :math:`x`, or on the greatest :math:`y` of
+   :math:`T(y) \land \lnot U(y)`. The comparison rule then lifts the
    query with :math:`v` free, and, for tuple-independent :math:`R` and
    :math:`T`,
 
@@ -1108,16 +1123,60 @@ Projection on a variable
    :math:`b < a` instead, in quadratic time, with the existing operators.
    The answer variables can be in :math:`R(\bar u)`, e.g.
    :math:`\exists x\, \exists y\, (V(s, x) \land T(y) \land x < y)`.
-   In :math:`R(x) \land S(x, y) \land T(z) \land y < z`, :math:`y` is in an
-   atom with another quantified variable, so the projection is on the
-   greatest :math:`z`; the comparison :math:`y < z` is then nested within
-   the projection on :math:`x`, whose plan does not have the values of
-   :math:`z`, and the query is declined. A chain such as
+   A chain such as
    :math:`R(x) \land T(y) \land U(z) \land x < y \land y < z` is lifted
    by applying the rule twice: the projection on the least :math:`x`
    leaves :math:`\exists y\, \exists z\, (T(y) \land U(z) \land y < z)`
    in its body, a query of the same form, whose quantifiers the
-   projection plan pushes back down (``PQD``).
+   projection plan pushes back down (``PQD``). Pushing an existential
+   :math:`\exists y` down keeps with a negation of :math:`y` the conjuncts
+   sharing a variable with it, so that the negation stays range
+   restricted, but not those sharing a variable with another negation
+   only, such as the conjunct added for the least :math:`x` in
+   :math:`R(x) \land T(y) \land \lnot U(y) \land x < y`
+   (``PushExistentialsDownConjunctionsMixin``):
+   :math:`\exists y\, (A \land B) \equiv A \land \exists y\, B` when
+   :math:`y` is not free in :math:`A`.
+
+   *Comparisons as relations.* The comparison of :math:`v` projected with
+   a quantified variable :math:`t` may be the only conjunct binding
+   :math:`v` in a subquery: in
+   :math:`T(z) \land \exists x\, (R(x) \land \exists y\, (S(x, y) \land y
+   < z))`, :math:`y` is no separator, and the plan of the subquery would
+   select on a column :math:`z` it does not have. When the projected
+   query does not lift, each such comparison :math:`t \lhd v` is replaced
+   by a deterministic atom :math:`L(t, v)`, of the values of :math:`t` and
+   :math:`v` in the tuples of conjunct atoms :math:`A(t)` and
+   :math:`B(v)` which satisfy it (``_comparisons_as_relations``, the
+   relations of the atoms replaced by their tuples, as for the disjoint
+   separator):
+
+   .. math::
+
+      A(t) \land B(v) \land t \lhd v \equiv
+      A(t) \land B(v) \land L(t, v).
+
+   The subquery is then lifted with :math:`v` free, here
+   :math:`\exists x\, R(x) \land \exists y\, (S(x, y) \land L(y, z))`
+   with the separators :math:`x` then :math:`y`, deterministic atoms not
+   counting, so that
+
+   .. math::
+
+      P[\exists x\, \exists y\, \exists z\, (R(x) \land S(x, y) \land T(z)
+      \land y < z)] = \sum_m p_T(m) \prod_{c > m} \big(1 - p_T(c)\big)\,
+      P[\exists x\, R(x) \land \exists y\, (S(x, y) \land y < m)].
+
+   Like the projection on the least value, :math:`L` has the pairs of the
+   relations in order, in quadratic time. Declined remain, for instance,
+   two comparisons between the variables of two subqueries,
+   :math:`S(x, y) \land V(z, w) \land y < w \land x < z`, subqueries
+   independent for no value of the variable compared on either side,
+   :math:`R(x) \land S(x, y) \land V(z, w) \land U(z) \land y < w`, and a
+   comparison with a constant shattered into the relation of the atom
+   binding :math:`t`, whose tuples are not known as a set, and a
+   comparison kept within an existential with a negation sharing its
+   variable, :math:`S(x, y) \land \lnot W(x, y) \land T(z) \land y < z`.
 
    *At least two.* The query
    :math:`\exists x\, \exists y\, (R(\bar u) \land R(\bar u[y/x]) \land
@@ -1860,24 +1919,52 @@ Projection on a variable
    :math:`\exists X\, \varphi`, and its probability is the sum of theirs,
    which ``DisjointProjection`` computes. The proof does not depend on the
    relation of :math:`R`, which can be tuple-independent, a choice or
-   deterministic, nor on the other conjuncts of :math:`\varphi`.
+   deterministic, nor on the other conjuncts of :math:`\varphi`. With the
+   conjunct :math:`\lnot\exists w\, \exists Y'\, (K[w/v, Y'/Y] \land w <
+   v)` of ``_extremum_conjunct``, the same holds with
+   :math:`\exists Y\, K` for :math:`R(\bar u)`: :math:`E_a` implies
+   :math:`\exists Y\, K[a/v]`, :math:`K` being conjuncts of
+   :math:`\varphi`, and, for :math:`a < b`, :math:`E_b` implies its
+   negation.
 
    *Least value.* The conjunct added by ``_extremum_conjunct`` makes the
    query no stronger. Take a world and values of the variables, :math:`v
-   = a` among them, satisfying :math:`\varphi`. The values :math:`c` for
-   which :math:`R(\bar u[c/v])` holds, the other variables of
-   :math:`R(\bar u)` being free ones, fixed, include :math:`a`, and are
-   finite: let :math:`m \leq a` be the least, the order compared being
-   total. With :math:`v = m`, :math:`R(\bar u[m/v])` holds and no
-   :math:`R(\bar u[w/v])` with :math:`w < m`, so the added conjunct holds;
-   the conjuncts without :math:`v` are unchanged; each comparison
-   :math:`v < t` or :math:`v \leq t` holds, as :math:`m \leq a` and
-   :math:`t` is a term without :math:`v` (with :math:`v < 2v`, the least
-   value :math:`-1` fails where :math:`2` holds). These are
-   all the conjuncts of :math:`\varphi`, which then holds with the added
-   conjunct. The converse is immediate, so both queries have the same
-   worlds; the greatest value is symmetric. The query rewritten is then
-   projected exclusively, proved above.
+   = a` and :math:`Y = \bar b` among them, satisfying :math:`\varphi`. The
+   values :math:`c` for which :math:`\exists Y\, K[c/v]` holds, the free
+   variables being fixed, include :math:`a`, and are finite, :math:`v`
+   being in a positive atom of :math:`K`, the query being range
+   restricted: let :math:`m \leq a` be the least, the order compared being
+   total, and :math:`\bar b'` values of :math:`Y` for which
+   :math:`K[m/v, \bar b'/Y]` holds. With :math:`v = m` and
+   :math:`Y = \bar b'`, :math:`K` holds and no :math:`\exists Y\, K[w/v]`
+   with :math:`w < m`, so the added conjunct holds; the other conjuncts
+   have neither :math:`v` nor a variable of :math:`Y`, :math:`K` being
+   closed under the variables of :math:`Y`, but the comparisons with
+   :math:`v`, which have no variable of :math:`Y` (both checked), and are
+   unchanged; each comparison :math:`v < t` or :math:`v \leq t` holds, as
+   :math:`m \leq a` and :math:`t` is a term without :math:`v` (with
+   :math:`v < 2v`, the least value :math:`-1` fails where :math:`2`
+   holds). These are all the conjuncts of :math:`\varphi`, which then
+   holds with the added conjunct. The converse is immediate, so both
+   queries have the same worlds; the greatest value is symmetric. The
+   choice of :math:`v` by ``_separates`` only selects a query that the
+   rules lift, and plays no part in this proof. The query rewritten is
+   then projected exclusively, proved above.
+
+   *Comparisons as relations.* In a world satisfying the conjuncts
+   :math:`A(t)` and :math:`B(v)` for values :math:`a` of :math:`t` and
+   :math:`c` of :math:`v`, the tuples of :math:`A` and :math:`B` with
+   these values are in their relations, so :math:`(a, c) \in L` exactly
+   when :math:`a \lhd c`: :math:`t \lhd v` and :math:`L(t, v)` agree in
+   every world and for all values satisfying the other conjuncts, and
+   the rewritten query, its conjuncts being the same otherwise, has the
+   same worlds. :math:`L` being deterministic, its atom has probability 1
+   for its tuples and adds no dependence between atoms (Lemma 1); the
+   rewritten query is lifted and checked by the rules of this page. The
+   existentials pushed down by ``PushExistentialsDownConjunctionsMixin``
+   are equivalences, :math:`\exists y\, (A \land B) \equiv A \land
+   \exists y\, B` for :math:`y` not free in :math:`A`, whichever
+   conjuncts it keeps.
 
    *At least two.* :math:`Q` holds in a world exactly when
    :math:`R(\bar u[a/x])` holds for at least two values :math:`a`: given

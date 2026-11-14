@@ -107,6 +107,19 @@ def test_push_existentials_down():
     assert PED.walk(exp) == exp
 
 
+def test_push_existentials_down_keeps_only_the_negations_of_its_variable():
+    """The conjuncts without X, a negation among them, are not kept with a
+    negation of X when they share no variable with it."""
+    exp = ExistentialPredicate(X, Conjunction((
+        P(X), Negation(Q(X)), R(Y), Negation(Q(Y))
+    )))
+
+    assert PED.walk(exp) == Conjunction((
+        ExistentialPredicate(X, Conjunction((P(X), Negation(Q(X))))),
+        R(Y), Negation(Q(Y))
+    ))
+
+
 def test_push_universals_down():
     exp = UniversalPredicate(
         X,
