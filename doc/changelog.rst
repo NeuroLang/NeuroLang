@@ -351,6 +351,12 @@ Unreleased
 
 **Performance:**
 
+* The chase reads the bodies of the constraints of an ontology (the 10,399
+  axioms of the Cognitive Atlas) only for a predicate found nowhere else,
+  not at every stratum of every query: about 1 s less per query on the
+  engines with the Cognitive Atlas (decoding an image on neurosynth at 2 mm:
+  7.1 s to 6.0 s).
+
 * The query assistant caches its prompts on the Anthropic API, and on
   OpenRouter for Claude: the steps of
   an answer repeat the system prompt and the conversation so far, which are

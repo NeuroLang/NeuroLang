@@ -540,16 +540,9 @@ def dependency_matrix(datalog, rules=None, instance=None):
         existential_symbols = set(
             rule.functor for rule in datalog.existential_rules.keys()
         )
-        # A predicate only in constraint bodies is an empty relation.
-        signature = set(
-            atom.functor
-            for formula in datalog.constraints().formulas
-            for atom in extract_logic_atoms(formula.antecedent)
-        )
     else:
         constraint_symbols = set()
         existential_symbols = set()
-        signature = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -572,15 +565,32 @@ def dependency_matrix(datalog, rules=None, instance=None):
             elif (
                 isinstance(functor, Symbol)
                 and functor not in previous_symbols
-                and functor not in signature
                 and (
                     functor not in datalog.symbol_table
                     or functor in datalog.intensional_database()
                 )
+                and functor not in _constraint_signature(datalog)
             ):
                 raise SymbolNotFoundError(f"Symbol not found {functor.name}")
 
     return idb_symbols, dependency_matrix
+
+
+def _constraint_signature(datalog):
+    """
+    Return the predicates of the bodies of the constraints of *datalog*:
+    one only there is an empty relation, not a symbol not found. It is
+    asked only of a predicate found nowhere else, as reading every
+    constraint (the 10,399 axioms of the Cognitive Atlas) takes ~0.5 s,
+    and the chase asks for a dependency matrix at each stratum.
+    """
+    if not hasattr(datalog, "constraints"):
+        return set()
+    return set(
+        atom.functor
+        for formula in datalog.constraints().formulas
+        for atom in extract_logic_atoms(formula.antecedent)
+    )
 
 
 def program_has_loops(program_representation):
