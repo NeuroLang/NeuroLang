@@ -428,8 +428,8 @@ _FAKE_ATLASES = {
 def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
     """
     Register one-region ``schaefer``, ``destrieux`` and ``tian`` atlases
-    with the studies activating them and the points *cfg* asks for, as
-    ``_phase_atlases``.
+    with the studies activating and covering them and the points *cfg*
+    asks for, as ``_phase_atlases``.
     """
     import nibabel as nib
 
@@ -445,6 +445,9 @@ def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
         nl.add_atlas_set(name, atlas)
         engine_registry._register_atlas_activation(
             nl, {1: label}, image, {"radius_mm": 3}, name
+        )
+        engine_registry._register_atlas_coverage(
+            nl, {1: label}, image, {}, name
         )
         points = cfg["atlases"][name].get("points")
         if points:
@@ -624,13 +627,16 @@ class TestNeurosynthDeclarations:
         assert hidden <= set(engine_registry.get_predicates("neurosynth"))
 
     def test_probability_declared_for_the_choice(self):
-        """Check the choices over the studies and the voxels are the
-        probabilistic predicates."""
+        """Check the choices over the studies and the voxels, and the
+        coverage of the atlases' regions, are the probabilistic predicates."""
         from neurolang_apps.utils import engine_registry
 
         assert engine_registry.get_probabilistic_predicates(
             "neurosynth"
-        ) == {"selected_study", "selected_voxel"}
+        ) == {
+            "selected_study", "selected_voxel", "schaefer_covered",
+            "destrieux_covered", "tian_covered",
+        }
 
 
 class TestPredicateArguments:

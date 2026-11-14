@@ -73,7 +73,27 @@ may specify the following keys, all of them optional:
   ``peaks`` (``x, y, z, study``, ``peak_mni`` by default).  The distances
   are measured in millimetres through the atlas's affine, so its grid need
   not be the template's, and the pairs are kept in the data directory once
-  found (see :ref:`engine-cache`).  With ``points: {predicate_name}`` a
+  found (see :ref:`engine-cache`).  With ``covered: {predicate_name,
+  fwhm_mm, threshold, peaks}`` it registers ``predicate_name(label,
+  study)`` (``{atlas}_covered`` by default) as probabilistic facts: how
+  much the study covers the region,
+
+  .. math::
+
+     P(\text{covered}(l, s)) = \frac{1}{|l|} \sum_{v \in l}
+     \max_{p \in s} \exp\left(-\frac{\lVert v - p \rVert^2}
+     {2\sigma^2}\right),
+     \qquad \sigma = \frac{\text{fwhm\_mm}}{\sqrt{8 \ln 2}},
+
+  the mean over the voxels ``v`` of the region of the study's activation,
+  a Gaussian kernel of ``fwhm_mm`` (10) around its nearest peak ``p``,
+  truncated at :math:`3\sigma` (beyond, it counts 0); the facts below
+  ``threshold`` (0.001) are left out, and those kept are cached as the
+  pairs of ``activated`` are.  The facts of two regions are independent
+  given the study, so ``PROB[covered(l, s) // topic(s)]``, with
+  ``covered(l, s) :- destrieux_covered(l, s), selected_study(s)``, is the
+  mean share of each region the studies of the topic cover.  With
+  ``points: {predicate_name}`` a
   deterministic atlas also registers ``predicate_name(x, y, z, label)``:
   the centre of each voxel of each region, in millimetres through the
   atlas's affine, a stored relation, so that a rule bounding the distance
@@ -445,8 +465,10 @@ database::
         atlases:      # merged into those of mni_atlases, atlas by atlas
           destrieux:
             activated: {predicate_name: destrieux_activated}
+            covered: {predicate_name: destrieux_covered}
           tian:
             activated: {predicate_name: tian_activated}
+            covered: {predicate_name: tian_covered}
         kernel_radius_mm: 6
         requires_mni_mask: true
         use_base_symbols: true

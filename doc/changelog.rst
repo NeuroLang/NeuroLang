@@ -32,6 +32,18 @@ Unreleased
   fail, the chased predicates broke ``solve_all``, an aggregate over a
   rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
   ``C(x) → B(x)``.
+* The coordinate-based meta-analysis engines (``neurosynth``,
+  ``neurostore``) have ``schaefer_covered``, ``destrieux_covered`` and
+  ``tian_covered(label, study)``: probabilistic facts of how much a
+  study's activations cover a region, the mean over the region's voxels of
+  a Gaussian kernel of 10 mm FWHM around the study's nearest peak
+  (truncated at 3σ; facts below 0.001 left out), found once and kept in
+  the engine cache.  The assistant's guidance and examples use them for
+  graded questions (how strongly, how much of a region) in place of the
+  yes/no ``{atlas}_activated``.
+* ``add_probabilistic_facts_from_tuples`` and
+  ``add_probabilistic_choice_from_tuples`` take a ``DataFrame`` (its
+  column names were taken for its rows' type, and they failed).
 * ``neurolang-repl-serve --local`` loads the text embeddings of an engine
   when it builds it (its documents', from their cache or computed into it,
   and the SPECTER2 query model): with ``--users`` in the builder, before

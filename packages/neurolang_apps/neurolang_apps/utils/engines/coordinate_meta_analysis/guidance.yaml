@@ -61,6 +61,18 @@ assistant_guidance: >
   CAU caudate; a structure is all its parts (aPUT and pPUT, aHIP and
   pHIP, lAMY and mAMY, NAc core and shell, THA DA, DP, VA and VP), in
   both hemispheres unless the question names one.
+  For how strongly or how much of a region a term or topic engages
+  (a graded map over the regions rather than which ones are
+  activated), use schaefer_covered(l, s), destrieux_covered(l, s) or
+  tian_covered(l, s) in place of the yes/no _activated: probabilistic
+  facts of how much of the region a study's activations cover (a
+  Gaussian kernel of 10 mm FWHM around its peaks, averaged over the
+  region's voxels), joined with selected_study as _activated is:
+  covered(l, s) :- destrieux_covered(l, s), selected_study(s), then
+  PROB[covered(l, s) // topic(s)] = p, the mean share of the region
+  the studies of the topic cover.  The facts of two regions are
+  independent given the study: the coverage of a structure of several
+  parts is not a rule over its parts; keep _activated for it.
   Co-activation is the activation of regions or points by the same
   study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
   s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
