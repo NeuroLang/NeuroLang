@@ -394,13 +394,81 @@ memory and the restrictions to them as many atoms for the second, and
 XRewrite explores their 26,600 pairs.  Dropping the dead ones leaves 224 to
 explore, and the query takes 24 s, most of it in building the rewritings
 that are then dropped.  A query of three such atoms, ``ans(s) :-
-cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)``
-(the tasks with a contrast that measures some response inhibition), did
-not end within 16 minutes.  In its first 210 s the rewritings kept no more
-than three atoms and grew to 2,826, while 146,000 more were built and
-dropped as dead: the time goes into building rewritings that are then
-dropped.  Testing a rewriting step for this before building its result is
-the next step.
+cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)`` (the
+tasks with a contrast that measures some response inhibition), with the instances of the Stroop task
+given by ``cogat:CAO_00872(s) :- mentions(s, 'stroop task')``, did not end
+within 40 minutes.  Its prefix ``has_contrast(s, x), measures(x, c)`` built
+258,746 rewritings in 300 s, 99.3 % of them dead: each of the 425
+restrictions on ``has_contrast`` gives an ``aux_i(s, x)``, built before the
+test drops it.
+
+A rewriting step is therefore tested before it is built.  A position ``i``
+of a predicate ``B`` is *null* when ``B`` has no facts or rules and every
+constraint deriving ``B`` has its existential in position ``i``: an atom
+``B(…, t, …)`` with ``t`` in position ``i`` leaves a rewriting only by an
+existential step, which needs ``t`` to be a variable out of the head
+occurring nowhere else.  When a step moves the term ``t`` of an atom into a
+null position ``(B, i)`` of the constraint's body, ``t`` must not be a
+constant or a variable of the head, and every other occurrence of ``t``
+must then reach ``(B, i)`` and be factorised with it.  Steps on distinct
+atoms commute: a step depends on the rest of the query only through the
+variables it shares and those of the head, and a full constraint keeps
+every variable of its head in its body, so a step left for later changes
+neither for the others.  The step into ``(B, i)`` is thus taken only once
+each other occurrence of ``t`` is one step from ``(B, i)``: it is the last
+step in some order of every rewriting it leads to, and the rewritings with
+answers are the same.  On the prefix, the occurrence of ``x`` in
+``aux_j(x, c)``, from ``measures``, is not one step from the unnamed
+position of any ``aux_i`` on ``has_contrast``, and the 425 steps are not
+built.  On a toy chain of eight tasks, ``T_i ⊑ ∃h.K_i``, ``K_i ⊑
+∃m.W_i`` and ``W_i ⊑ R``, the query ``h(s, x), m(x, c), R(c)`` builds 88
+rewritings instead of 2,072.
+
+The constraints used are those whose body can hold, a forward fixpoint from
+the predicates with facts or rules through all the constraints, existential
+ones included: ``C(x) → ∃y aux(x, y)`` makes ``aux`` hold once ``C`` does,
+and ``p`` and ``D`` through the full ``aux`` constraints.  A constraint
+whose body holds in no model of the facts and rules never fires in the
+chase, so the universal model, and the certain answers it gives, are the
+same without it.  On the Atlas this restriction does not prune the chain:
+the one Stroop instance makes 8,566 of the 10,405 constraints hold, as for
+``CAO_01600`` above.
+
+.. list-table:: Time of the open-world queries, with the instances of the
+   Stroop task given by a rule (139 studies)
+   :header-rows: 1
+   :widths: 64 18 18
+
+   * - query
+     - before
+     - after
+   * - ``ans(s) :- cogpo:has_contrast(s, x)``, first query
+     - 13.5 s
+     - 7.3 s
+   * - ``ans(s) :- cogpo:has_contrast(s, x), cogat:CAO_01515(x)``
+     - 15.1 s
+     - 2.0 s
+   * - ``ans(s) :- inhibition_study(s)``
+     - > 40 min
+     - 3.8 s
+   * - ``ans(s, c) :-`` the three atoms of ``inhibition_study``
+     - > 60 s
+     - 2.1 s
+   * - ``inhibition_study`` with the stop-signal task instead
+     - 2.6 s
+     - 2.0 s
+   * - ``ans(s) :- cogpo:has_contrast(s, x), cogat:measures(x, c)``
+     - > 300 s
+     - 30.4 s
+   * - ``p_active_given_inhibition``, the conditional probability map
+     - > 60 s
+     - 20.6 s
+
+The queries ran in this order in one process.  The first pays, once, for
+the constraints that can hold and the rewritings of the projecting
+constraints; the study answers are the 139 of ``mentions(s, 'stroop
+task')``, and the map has 1,296,985 voxels, with a highest probability of
+0.180.
 
 Outside these assumptions the answers stay sound.  On 480 more random
 queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half
