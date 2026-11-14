@@ -26,7 +26,10 @@ What is in the ontology
 
 The ontology is loaded with ``individuals: true`` and ``names: prefixed``,
 so that a triple ``s p o`` is the fact ``p(s, o)``, with classes and
-properties named after their prefix, and the IRIs of the classes
+properties named after their prefix (the file declares none for its own
+namespace: the engine gives it ``cogat``, so that the class of working
+memory is ``cogat:CAO_00587`` and the property ``cogat:measures``), and the
+IRIs of the classes
 (``http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00587``) are their
 values.  The ones to know:
 
@@ -174,3 +177,5 @@ of its entry in ``engines.yaml``, or extend ``coordinate_meta_analysis``
       - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
         individuals: true
         names: prefixed
+        prefixes:
+          cogat: http://www.cognitiveatlas.org/ontology/cogat.owl#

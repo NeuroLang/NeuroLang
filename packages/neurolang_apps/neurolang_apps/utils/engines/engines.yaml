@@ -225,6 +225,10 @@ engines:
       - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
         individuals: true
         names: prefixed
+        # The file declares no prefix for its own namespace: its classes and
+        # properties are cogat:CAO_00587, cogat:measures.
+        prefixes:
+          cogat: http://www.cognitiveatlas.org/ontology/cogat.owl#
     text_embeddings:
       study_abstracts:
         ids_from: study
