@@ -19,6 +19,10 @@ Unreleased
 
 **New features:**
 
+* The network of the brain viewer names what is under the mouse on a
+  slice: a node, the name of its region; an edge, the names of the two
+  regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,
+  2 mm, of the sphere or tube drawn).
 * ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
   ``/admin/activity``: filters of the period, user and engine above
   figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
