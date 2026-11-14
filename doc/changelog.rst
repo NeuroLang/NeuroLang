@@ -167,6 +167,12 @@ Unreleased
 
 **Performance:**
 
+* The query assistant caches its prompts on the Anthropic API: the steps of
+  an answer repeat the system prompt and the conversation so far, which are
+  then read from the cache at a tenth of the price of input tokens or less,
+  making an answer about three times cheaper.  The line after the query
+  counts the tokens read from the cache.
+
 * A natural join on a unique key of strings, such as the NeuroStore study
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``

@@ -111,20 +111,28 @@ def test_anthropic_request_and_tool_calls(monkeypatch):
     assert seen["headers"]["x-api-key"] == "secret"
     assert seen["headers"]["anthropic-version"]
     body = seen["body"]
-    assert body["system"] == "You write queries."
+    cached = {"type": "ephemeral"}
+    assert body["system"] == [
+        {"type": "text", "text": "You write queries.", "cache_control": cached}
+    ]
     assert [m["role"] for m in body["messages"]] == [
         "user", "assistant", "user"
     ]
+    assert body["messages"][0]["content"] == "Which studies mention pain?"
     assistant = body["messages"][1]["content"]
     assert assistant[0] == {"type": "text", "text": "Let me check."}
     assert assistant[1]["type"] == "tool_use"
     results = body["messages"][2]["content"]
     assert [r["tool_use_id"] for r in results] == ["c1", "c2"]
+    # The conversation so far is cached at its last block, for the next
+    # request of the assistant to read it from the cache.
+    assert "cache_control" not in results[0]
+    assert results[1]["cache_control"] == cached
     assert body["tools"][0]["input_schema"]["type"] == "object"
     assert "temperature" not in body
     assert reply.text == "Running it."
     assert reply.tool_calls[0].arguments == {"query": "obtain every Study."}
-    assert reply.usage == {"input": 20, "output": 4}
+    assert reply.usage == {"input": 20, "output": 4, "cached": 0}
 
 
 def test_anthropic_reply_blocks_are_sent_back_unchanged(monkeypatch):
@@ -152,6 +160,28 @@ def test_anthropic_reply_blocks_are_sent_back_unchanged(monkeypatch):
          "content": "valid"},
     ], TOOLS)
     assert bodies[1]["messages"][1] == {"role": "assistant", "content": blocks}
+
+
+def test_anthropic_cached_tokens_are_counted(monkeypatch):
+    """The tokens read from or written to the cache count as input."""
+    def handler(request):
+        body = json.loads(request.content)
+        # A question alone is a string, sent as a block to be marked.
+        assert body["messages"] == [{"role": "user", "content": [{
+            "type": "text", "text": "Which studies mention pain?",
+            "cache_control": {"type": "ephemeral"},
+        }]}]
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": "ans(s)"}],
+            "usage": {"input_tokens": 5, "output_tokens": 2,
+                      "cache_read_input_tokens": 1000,
+                      "cache_creation_input_tokens": 200},
+        })
+
+    reply = client("anthropic", handler, monkeypatch).complete(
+        CONVERSATION[:2]
+    )
+    assert reply.usage == {"input": 1205, "output": 2, "cached": 1000}
 
 
 def test_invalid_tool_arguments_are_kept(monkeypatch):

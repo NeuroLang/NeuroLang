@@ -234,6 +234,32 @@ class OpenAIChatClient(ChatClient):
         )
 
 
+# Prompt caching of the Anthropic API: each request marks the end of
+# the system prompt and of the conversation, so that the next request
+# of the assistant, which repeats them, reads them from the cache (at a
+# tenth of the price of input tokens, or less) instead of sending them
+# again. The cache lasts five minutes from its last use.
+CACHED = {"type": "ephemeral"}
+
+
+def _cached(messages: list) -> list:
+    """
+    Return *messages* with a cache mark on the last block of the last,
+    a user message (the blocks of a reply, thinking blocks among them,
+    go back unchanged).
+    """
+    if not messages or messages[-1]["role"] != "user":
+        return messages
+    last = messages[-1]
+    content = last["content"]
+    if isinstance(content, str):
+        content = [{"type": "text", "text": content}]
+    if not content:
+        return messages
+    content = [*content[:-1], {**content[-1], "cache_control": CACHED}]
+    return [*messages[:-1], {**last, "content": content}]
+
+
 class AnthropicChatClient(ChatClient):
     """Client of the Anthropic messages API."""
 
@@ -306,11 +332,13 @@ class AnthropicChatClient(ChatClient):
         # No temperature: current Claude models reject sampling parameters.
         payload = {
             "model": self.provider.model,
-            "messages": self._messages(messages),
+            "messages": _cached(self._messages(messages)),
             "max_tokens": self.provider.max_tokens,
         }
         if system:
-            payload["system"] = system
+            payload["system"] = [
+                {"type": "text", "text": system, "cache_control": CACHED}
+            ]
         if tools:
             payload["tools"] = [
                 {
@@ -338,8 +366,13 @@ class AnthropicChatClient(ChatClient):
         return Reply(
             "".join(text), calls,
             {
-                "input": usage.get("input_tokens", 0),
+                # Tokens read from or written to the cache are sent too.
+                "input": usage.get("input_tokens", 0)
+                + (usage.get("cache_read_input_tokens") or 0)
+                + (usage.get("cache_creation_input_tokens") or 0),
                 "output": usage.get("output_tokens", 0),
+                # Of the input, the tokens read from the cache.
+                "cached": usage.get("cache_read_input_tokens") or 0,
             },
             data["content"],
         )

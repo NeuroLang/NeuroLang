@@ -275,7 +275,12 @@ The ``api`` of a provider is one of:
     The OpenAI chat completions API, spoken by OpenRouter, Albert, vLLM,
     Ollama and most open services.
 ``anthropic``
-    The Anthropic messages API.
+    The Anthropic messages API, with prompt caching: each request of the
+    assistant repeats the system prompt and the conversation so far, which
+    the API then reads from its cache, for five minutes, at a tenth of the
+    price of input tokens or less. The line after the query counts the
+    tokens read from the cache (``5 LLM calls, 40213 tokens, 31876 read
+    from the cache``).
 ``command``
     A local command that reads the conversation on its standard input
     and writes the reply on its standard output. ``{system}`` in its
