@@ -2018,8 +2018,10 @@ def disjoint_separator(query, symbol_table):
     P[C(\\bar a)]\\,[D(\\bar a)]`, planned as the choice joined with the
     support of the deterministic union, whatever the number of
     disjuncts; otherwise the union is lifted for every :math:`\\bar a` by
-    the other rules. A conjunctive query is the union of a single
-    disjunct.
+    the other rules, or, if they decline it and the rest has no other
+    atom of the choices, as the choice atoms joined with the rest, in
+    which they are replaced by the deterministic relations of their
+    tuples. A conjunctive query is the union of a single disjunct.
 
     The rule declines a union with a disjunct without a free variable of
     the query, true for every value of it, which a plan cannot give. Its
@@ -2140,6 +2142,31 @@ def disjoint_separator(query, symbol_table):
         RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
     plan = dalvi_suciu_lift(body, symbol_table)
+    tuples = {atom.functor: _tuples_of(atom, symbol_table)
+              for atom in choice_atoms}
+    if not is_pure_lifted_plan(plan) and not any(
+        atom.functor in tuples for atom in remainder_atoms
+    ) and None not in tuples.values():
+        # The rest is independent of the choices: P[C(a) and R(a)] =
+        # P[C(a)] P[D_C(a) and R(a)], D_C the tuples of C, which give the
+        # rest of every disjunct the variables of C.
+        padding = {}
+        for atom in choice_atoms:
+            columns = [Symbol.fresh() for _ in atom.args]
+            relation, padding[atom.functor] = Symbol.fresh(), Symbol.fresh()
+            symbol_table[relation] = materialised_relation(
+                atom.functor(*columns), columns, tuples
+            )
+            symbol_table[padding[atom.functor]] = DeterministicFactSet(
+                relation
+            )
+        plan = reduce(
+            rap.NaturalJoin,
+            (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            dalvi_suciu_lift(
+                ReplaceExpressionWalker(padding).walk(body), symbol_table
+            ),
+        )
     return True, rap.DisjointProjection(plan, attributes)
 
 
