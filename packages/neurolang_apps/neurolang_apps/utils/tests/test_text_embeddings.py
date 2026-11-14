@@ -219,8 +219,8 @@ def test_encoder_import_error_says_the_cause(monkeypatch):
 
 
 def _fake_loads(monkeypatch):
-    """Make Specter2Encoder load a fake model; return the list of its
-    loads and moves."""
+    """Make Specter2Encoder load a fake model, as if torch were installed;
+    return the list of its loads and moves."""
     loads = []
 
     class Model:
@@ -234,6 +234,7 @@ def _fake_loads(monkeypatch):
             loads.append(("load", self.device))
 
     monkeypatch.setattr(te.Specter2Encoder, "_load", fake_load)
+    monkeypatch.setattr(te, "_torch_available", lambda: True)
     return loads
 
 
@@ -548,6 +549,92 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
     assert "query_similarity" not in preds
 
 
+@pytest.fixture
+def extending_yaml(engine_yaml, tmp_path):
+    """An abstract base with the entry ``docs``, ``b`` inheriting it, and
+    engines extending ``b``: ``c`` as it is, ``d`` with fewer studies,
+    ``e`` with ``docs`` of another predicate."""
+    (tmp_path / "three.tsv").write_text("study_id\n1\n2\n3\n")
+    engine_yaml.write_text(
+        engine_yaml.read_text().replace(
+            "  mini:\n", "  base:\n    abstract: true\n"
+        ) + """
+  b: {extends: base}
+  c: {extends: b}
+  d: {extends: b, relations: {study: three.tsv}}
+  e:
+    extends: b
+    relations: {paper: study.tsv}
+    text_embeddings: {docs: {ids_from: paper}}
+"""
+    )
+    return engine_yaml
+
+
+def _similar(name, data_dir, yaml_path):
+    """Build *name*, run a query of ``docs``; return its index."""
+    nl = engine_registry.build_engine(name, data_dir, yaml_path=yaml_path)
+    nl.execute_datalog_program(
+        "ans(s) :- study(s) & (x == query_similarity('motor hand', s)) "
+        "& (x > 0.5)"
+    )
+    return nl.text_embedding_indexes["docs"]
+
+
+def test_extending_engines_share_the_embeddings(extending_yaml, tmp_path):
+    owners = {
+        name: engine_registry.embeddings_owner(name, "docs", extending_yaml)
+        for name in "bcde"
+    }
+    assert owners == {"b": "b", "c": "b", "d": "b", "e": "e"}
+    shared = tmp_path / "data/b/embeddings"
+    for name, calls in (("c", 1), ("b", 0)):
+        index = _similar(name, tmp_path / "data", extending_yaml)
+        assert index.cache_path == shared / "docs.npz"
+        assert index.encoder.model_dir == shared / "models"
+        assert index.encoder.document_calls == calls
+    assert not (tmp_path / "data/c").exists()
+
+
+def test_other_documents_keep_their_own_embeddings(extending_yaml, tmp_path):
+    shared = tmp_path / "data/b/embeddings/docs.npz"
+    _similar("b", tmp_path / "data", extending_yaml)
+    key = te.cached_key(shared)
+    for name in "de":
+        index = _similar(name, tmp_path / "data", extending_yaml)
+        assert index.cache_path == tmp_path / f"data/{name}/embeddings/docs.npz"
+        assert index.encoder.document_calls == 1
+        assert te.cached_key(shared) == key
+    again = _similar("d", tmp_path / "data", extending_yaml)
+    assert again.encoder.document_calls == 0
+
+
+def test_an_engine_keeps_the_embeddings_in_its_directory(
+    extending_yaml, tmp_path
+):
+    """Embeddings made before they were shared are still read."""
+    own = tmp_path / "data/c/embeddings"
+    _similar("b", tmp_path / "data", extending_yaml)
+    (own / "models").mkdir(parents=True)
+    (tmp_path / "data/b/embeddings/docs.npz").rename(own / "docs.npz")
+    index = _similar("c", tmp_path / "data", extending_yaml)
+    assert index.cache_path == own / "docs.npz"
+    assert index.encoder.model_dir == own / "models"
+    assert index.encoder.document_calls == 0
+
+
+def test_preload_reads_the_owners_embeddings(extending_yaml, tmp_path):
+    """The REPL server's preload of an engine reads its owner's caches."""
+    _similar("b", tmp_path / "data", extending_yaml)
+    nl = engine_registry.build_engine(
+        "c", tmp_path / "data", yaml_path=extending_yaml
+    )
+    te.preload(nl)
+    index = nl.text_embedding_indexes["docs"]
+    assert index._matrix is not None and index.encoder.document_calls == 0
+    assert not (tmp_path / "data/c").exists()
+
+
 def test_engine_yaml_unknown_source(engine_yaml, tmp_path):
     engine_yaml.write_text(
         engine_yaml.read_text().replace(
@@ -727,3 +814,18 @@ def test_in_a_browser_a_missing_model_says_the_page_was_built_without(
     with pytest.raises(ImportError, match="built without") as error:
         te.Specter2Encoder(model_dir=tmp_path).encode_query("reading")
     assert "pip install" not in str(error.value)
+
+
+@pytest.mark.parametrize("engine, owner", [
+    ("neurosynth", "neurosynth"),
+    ("neurosynth_tracts", "neurosynth"),
+    ("neurosynth_iit", "neurosynth"),
+    ("neurostore", "neurostore"),
+    ("neurostore_tracts", "neurostore"),
+    ("neurostore_iit", "neurostore"),
+])
+def test_engine_variants_use_their_parents_embeddings(engine, owner):
+    """The variants of the shipped engines read their parent's caches."""
+    assert engine_registry.embeddings_owner(
+        engine, "study_abstracts"
+    ) == owner
