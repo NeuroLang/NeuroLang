@@ -750,6 +750,12 @@ the scores of each query:
 Percentiles are linearly interpolated and ties are kept, so the top 10%
 can hold slightly more than 10% of the rows.
 
+Arithmetic in the head of a rule, ``ans(x, n / 2) :- r(x, n)``, is not an
+aggregation, and is refused: a value computed from each row is computed in
+the body, and named in the head,
+``ans(x, v) :- r(x, n), (v == n / 2)``; a value computed from an
+aggregation, by a rule of its own over the aggregation's rule.
+
 10.2 Existential Predicates
 ----------------------------
 

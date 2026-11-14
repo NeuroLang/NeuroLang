@@ -164,6 +164,12 @@ Unreleased
 
 **Bug fixes:**
 
+* Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
+  taken for an aggregation, the operator applied to each group's values,
+  and gave rows of missing values or failed in pandas; it is now refused
+  with a ``ForbiddenExpressionError`` that tells how to compute the value
+  in the body, ``(v == n / 2)``.
+
 * Checking or running a query on an ontology's predicates, as
   ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
   cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying
