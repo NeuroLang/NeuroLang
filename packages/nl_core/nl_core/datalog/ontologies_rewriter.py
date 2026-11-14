@@ -93,6 +93,11 @@ class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
         return self.walk(expression.consequent) - self.walk(expression.antecedent)
 
 
+def _arguments(formula):
+    """The arguments of an atom, the symbols of a negated one."""
+    return getattr(formula, "args", formula._symbols)
+
+
 def _existential_variables(sigma):
     return ExtractFreeVariablesRightImplicationWalker().walk(sigma)
 
@@ -256,7 +261,8 @@ class OntologyRewriter:
     def _free_var_other_term(self, free_var, q, S):
         if isinstance(q, NaryLogicOperator):
             return any(
-                formula not in S and free_var in formula.args for formula in q.formulas
+                formula not in S and free_var in _arguments(formula)
+                for formula in q.formulas
             )
         else:
             if q != S and free_var in q.args:
@@ -269,7 +275,7 @@ class OntologyRewriter:
             return any(
                 sub_arg == free_var and index not in pos
                 for formula in q.formulas
-                for index, sub_arg in enumerate(formula.args)
+                for index, sub_arg in enumerate(_arguments(formula))
             )
         else:
             return any(arg == free_var and i != pos for i, arg in enumerate(q.args))
@@ -339,7 +345,9 @@ class OntologyRewriter:
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):
-            count = sum(a == var for term in q.formulas for var in term.args)
+            count = sum(
+                a == var for term in q.formulas for var in _arguments(term)
+            )
         else:
             count = sum(a == term for term in q.args)
         return count > 1

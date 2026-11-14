@@ -984,13 +984,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         -------
         Result obtained after resolution of the deterministic stratum
         '''
+        added = set()
         if "__constraints__" in self.symbol_table:
             symbol_table = self.program_ir.symbol_table
             holds = frozenset(
                 symbol for symbol in self.program_ir.constraints()._symbols
                 if not _only_constraints(symbol_table.get(symbol, Union(())))
             )
+            heads = {rule.consequent.functor for rule in det_idb.formulas}
             det_idb = self._rewrite_det_idb(det_idb, holds)
+            # The predicates of the chased constraints and their copies.
+            added = {
+                rule.consequent.functor for rule in det_idb.formulas
+            } - heads
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
@@ -1001,6 +1007,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
+        for symbol in added & solution.keys():
+            del solution[symbol]
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):

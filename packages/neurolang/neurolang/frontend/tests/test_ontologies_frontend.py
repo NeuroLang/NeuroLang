@@ -532,6 +532,34 @@ def test_full_rule_on_the_value_an_existential_introduces():
     # The count is over the union of the rewritings of its body.
     res = nl.execute_datalog_program("ans(count(x)) :- headOf(x, y)")
     assert set(res) == {(2,)}
+    res = nl.execute_datalog_program(
+        "ans(x, w) :- headOf(x, y), Unit(y), headOf(w, z), Unit(z)"
+    )
+    assert set(res) == {(a, b) for a in ('Ana', 'Juan') for b in ('Ana', 'Juan')}
+
+
+def test_negation_and_solve_all_over_chased_constraints():
+    """Negation is closed world over the derived facts, a negated atom
+    does not stop the rewriting, and the predicates the chase adds stay
+    out of the solution."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(DEAN_DEPT_UNIT), format="turtle")
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    nl.add_tuple_set([('Ana', 'Physics')], name='headOf')
+    nl.add_tuple_set([('Physics',)], name='Dept')
+    nl.add_tuple_set([('Physics',), ('Bio',), ('Juan',)], name='thing')
+    res = nl.execute_datalog_program("ans(y) :- thing(y), ~Unit(y)")
+    assert set(res) == {('Bio',), ('Juan',)}
+    res = nl.execute_datalog_program("ans(x) :- headOf(x, y), ~thing(x)")
+    assert set(res) == {('Ana',)}
+    nl.execute_datalog_program(
+        "leads(x) :- headOf(x, y), Unit(y)\n"
+        "c(count(x)) :- headOf(x, y)"
+    )
+    solution = nl.solve_all()
+    assert not any(name.startswith('fresh') for name in solution)
+    assert set(solution['leads']) == {('Ana',), ('Juan',)}
+    assert set(solution['c']) == {(2,)}
 
 
 def test_intersection_class_holds_on_named_values():
@@ -625,7 +653,7 @@ def _turtle(axioms):
 
 
 def _certain_answers(axioms, facts, head, body, depth=6):
-    """Chase ``facts`` with labelled nulls ``(n, k)`` up to ``depth``
+    """Chase ``facts`` with labelled nulls up to ``depth``
     nulls deep, match ``body`` and keep the answers without nulls."""
     facts = set(facts)
     depths = {}
@@ -640,6 +668,8 @@ def _certain_answers(axioms, facts, head, body, depth=6):
                     new.add((d, t))
                 elif kind == "all":
                     new |= {(d, g[2]) for g in facts if g[:2] == (p, t)}
+                elif kind == "has":
+                    new.add((p, t, d))
                 elif depths.get(t, 0) < depth:
                     if kind == "and":
                         new.add((p, t))
