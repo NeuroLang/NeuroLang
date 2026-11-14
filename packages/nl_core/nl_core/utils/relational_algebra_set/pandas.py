@@ -6,7 +6,7 @@ from uuid import uuid1
 import numpy as np
 import pandas as pd
 from . import abstract as abc
-from .abstract import count_distinct
+from .abstract import count_distinct, row_type
 
 
 NA = pd.NA
@@ -46,6 +46,7 @@ _COPY_ON_WRITE = _copy_on_write()
 # arrays as long as the relation: the activations of the voxels by the
 # studies are tens of millions of rows.
 _CHUNK_ROWS = 1 << 22
+
 
 # The reductions computed a chunk at a time, and the reduction of their
 # partial results giving that of the whole.
@@ -1280,9 +1281,14 @@ class NamedRelationalAlgebraFrozenSet(
                 seen_pure_columns.add(operation)
                 new_container[dst_column] = new_container.loc[:, operation]
             elif callable(operation):
-                new_container[dst_column] = new_container.apply(
-                    operation, axis=1
-                )
+                # A row as a tuple read by label: a pandas row of
+                # DataFrame.apply costs ten times the function, e.g.
+                # query_similarity over the 65,000 studies of NeuroStore.
+                row = row_type(new_container.columns)
+                new_container[dst_column] = [
+                    operation(row(values)) for values in
+                    new_container.itertuples(index=False, name=None)
+                ]
             else:
                 new_container[dst_column] = operation
         new_container = new_container.loc[:, proj_columns]
