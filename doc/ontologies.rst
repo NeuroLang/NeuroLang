@@ -64,7 +64,9 @@ The restrictions themselves are facts on class names; the 323
        owl:someValuesFrom(r, d)
 
 These instances cover what the procedure must handle: a value no fact names
-in (I), a recursion in (II), and the size of a real ontology in (III).
+in (I), a recursion in (II), and the size of a real ontology in (III).  A
+fourth, (IV), puts (III) to work on the studies of Neurosynth, in
+:ref:`ontologies-open-closed`.
 
 Loading an ontology
 -------------------
@@ -475,6 +477,366 @@ funded(x), headOf(x, y)`` gives only Ana, because the body of a
 probabilistic rule is not rewritten.  The ontology thus acts as certain
 knowledge: it defines deterministic relations, and the probabilistic layer
 of [Zanitti2023]_ reasons on top of them.
+
+.. _ontologies-open-closed:
+
+Open and closed worlds on the Cognitive Atlas
+---------------------------------------------
+
+Which studies used a task that, according to the Cognitive Atlas, measures
+response inhibition?  And which form of response inhibition did each one
+measure?
+
+The data record particular facts, while an ontology records general ones.
+The curators of the Cognitive Atlas state each general fact once and leave
+the particulars out.  Read in an open world, these general facts answer
+questions about particular studies; read in a closed world, they answer
+none.
+
+**Two readings.**  In the *closed world*, what is not recorded is false.  In
+the *open world*, what is not recorded is unknown, and the ontology can
+imply it.  The Atlas says that every Stroop task has an incongruent −
+congruent contrast, that this contrast measures some response inhibition,
+and that motor inhibition is a kind of response inhibition.  It names no
+study, no contrast of a particular study and no particular instance of a
+concept; nor does it decide which form of response inhibition the contrast
+measures.  Under the closed world, the curators would have to enter every
+study, its contrasts and what each measures before a query found anything.
+Under the open world, what they left out stays unknown, and the general
+facts still yield answers.
+
+NeuroLang reads the predicates an ontology constrains in the open world.
+It returns their *certain answers*, those true in every completion of the
+data that agrees with the ontology (section *Open world and certain
+answers*).  Each axiom is a *constraint*, an implication ``body → head``
+kept apart from the rules of the program (section *Loading an ontology*).
+A constraint is *existential* when its head states that some value exists
+without naming it; such a value is an *unnamed value*.  The constraints
+are applied in two ways (section *Two mechanisms*): the *chase* adds, as
+rules would, the facts that the constraints without existentials imply, and
+the *rewriting* turns the query into a union of queries over the data that
+also finds the answers holding through unnamed values.
+
+(IV) *Stroop studies in the Cognitive Atlas*.  The ``neurosynth`` engine
+holds 14,371 studies and loads the Atlas, ``cogat.v2.owl``, as in (III).
+The Atlas has no instance of any task.  One rule gives it some: a study
+that mentions the Stroop task is an instance of the Atlas class of that
+name, ``cogat:CAO_00872`` (Stroop task).
+
+.. code-block:: neurolang
+
+   % cogat:CAO_00872 (Stroop task), cogat:CAO_00487 (response inhibition)
+   cogat:CAO_00872(s) :- mentions(s, 'stroop task')
+
+The questions rest on three axioms of the Atlas.  Below, ``A ⊑ B`` reads
+"every ``A`` is a ``B``", and ``∃p.D`` reads "related by the property
+``p`` to some ``D``":
+
+.. list-table:: The axioms of (IV)
+   :header-rows: 1
+   :widths: 50 50
+
+   * - In plain English
+     - Formally
+   * - Every Stroop task has an incongruent − congruent contrast.
+     - ``cogat:CAO_00872 ⊑ ∃cogpo:has_contrast.cogat:CAO_01515``
+   * - Every incongruent − congruent contrast of the Stroop task measures
+       some response inhibition.
+     - ``cogat:CAO_01515 ⊑ ∃cogat:measures.cogat:CAO_00487``
+   * - Motor inhibition is a kind of response inhibition.
+     - ``cogat:CAO_00407 ⊑ cogat:CAO_00487``
+
+In these axioms ``cogat:`` is the namespace
+``http://www.cognitiveatlas.org/ontology/cogat.owl#``, and ``cogpo:`` that
+of the Cognitive Paradigm Ontology, from which the Atlas takes
+``has_contrast``; ``cogat:CAO_00872`` is the Stroop task;
+``cogat:CAO_01515`` is its contrast
+``Stroop_task-incongruent_minus_congruent``; ``cogat:CAO_00487`` is
+response inhibition; finally, ``cogat:CAO_00407`` is motor inhibition.
+Every identifier, axiom and count on the Atlas in this section was checked
+with rdflib on the engine's copy of the file.  The Stroop task has three
+more contrasts, none of which measures anything.  Response inhibition has
+one more named subclass, emotional suppression (``cogat:CAO_00283``).  No
+contrast of the Atlas measures motor inhibition or emotional suppression,
+so the third axiom does not change the answers below.  The file holds no
+fact of ``cogpo:has_contrast`` or ``cogat:measures`` between individuals,
+and no individual of ``cogat:CAO_00487`` or ``cogat:CAO_00872``.
+
+The closed world is computed on the same engine with the constraints
+removed and ``cogpo:has_contrast``, ``cogat:measures`` and
+``cogat:CAO_00487`` as empty relations: the plain Datalog reading of the
+same rules.  The results were computed on 14 November 2026 with NeuroLang
+master ``37acbf99`` merged with #1250 (``1d49ac93``), one query at a time;
+each time includes the compilation of the query.
+
+**Which studies measure response inhibition?**  The question, as a query:
+
+.. code-block:: neurolang
+
+   % cogat:CAO_00872 (Stroop task), cogat:CAO_00487 (response inhibition)
+   cogat:CAO_00872(s) :- mentions(s, 'stroop task')
+   inhibition_study(s) :- cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)
+   ans(s) :- inhibition_study(s)
+
+and its first two steps, ``ans(s) :- cogpo:has_contrast(s, x)`` and
+``ans(s) :- cogpo:has_contrast(s, x), cogat:CAO_01515(x)``, each after the
+same rule for ``cogat:CAO_00872``:
+
+.. list-table:: Studies with a contrast that measures response inhibition
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - Query
+     - Closed world
+     - Open world
+     - Why
+   * - ``has_contrast(s, x)``
+     - 0 (no rows), 0.3 s
+     - 139 rows, 3.4 s
+     - every Stroop task has some contrast
+   * - ``has_contrast(s, x), CAO_01515(x)``
+     - not run
+     - 139 rows, 15.1 s
+     - that contrast is an incongruent − congruent one
+   * - ``inhibition_study(s)``
+     - 0 (no rows), 0.5 s
+     - did not end within 2,400 s
+     - the rewriting of three atoms does not end in time
+
+.. list-table:: Open world, ``has_contrast(s, x)``: first rows (139 rows)
+   :header-rows: 1
+   :widths: 15 85
+
+   * - ``s``
+     - title (``study_title``)
+   * - 11532889
+     - Anterior cingulate cortex and response conflict: effects of response
+       modality and processing domain.
+   * - 11844731
+     - Imaging how attention modulates pain in humans using functional MRI.
+   * - 11919006
+     - An event-related functional MRI study comparing interference effects
+       in the Simon and Stroop tasks.
+   * - 12595201
+     - Practice-related effects demonstrate complementary roles of anterior
+       cingulate and prefrontal cortices in attentional control.
+   * - 12738340
+     - Brain activation patterns during a selective attention test-a
+       functional MRI study in healthy volunteers and patients with
+       schizophrenia.
+   * - …
+     - 139 rows
+
+The first two steps find, through an unnamed contrast, the 139 studies the
+closed world cannot.  The curators stated one axiom; they did not enter 139
+contrasts.  By the two axioms, the same 139 studies are the certain answers
+of ``inhibition_study(s)``: the contrast of each measures some response
+inhibition.  This follows from the axioms, checked with rdflib; the engine
+did not compute it.  The rewriting of the three-atom query explores more
+rewritings than it can within the time, as the section *When the answers
+are complete* describes for the same query with one instance of a
+contrast.
+
+**Which form of response inhibition did each one measure?**  In the open
+world:
+
+.. code-block:: neurolang
+
+   % cogat:CAO_00872 (Stroop task), cogat:CAO_00487 (response inhibition)
+   cogat:CAO_00872(s) :- mentions(s, 'stroop task')
+   ans(s, c) :- cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)
+
+In the closed world, at the level of classes: the restrictions of the
+Atlas are facts on class names (``rdfs:subClassOf``, ``owl:onProperty``,
+``owl:someValuesFrom``), which the engine's ``cogat_measures``,
+``cogat_subclass_of`` and ``cogat_term`` already walk:
+
+.. code-block:: neurolang
+
+   has_contrast_class(t, k) :- rdfs:subClassOf(t, r), owl:onProperty(r, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#has_contrast>), owl:someValuesFrom(r, k)
+   inhibition(c) :- cogat_term(c, 'response inhibition')
+   inhibition(c) :- cogat_subclass_of(c, d), cogat_term(d, 'response inhibition')
+   inhibition_task(t, c) :- has_contrast_class(t, k), cogat_measures(k, c), inhibition(c)
+   ans(t, n, m) :- inhibition_task(t, c), cogat_term(t, n), cogat_term(c, m)
+
+and, with the same first four rules, the studies that mention such a task,
+``ans(s, n) :- inhibition_task(t, c), cogat_term(t, n), mentions(s, n)``.
+
+.. list-table:: The form of response inhibition each study measured
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Query
+     - Rows, time
+     - Why
+   * - open world, ``ans(s, c)``
+     - 0 (no rows), 181.7 s
+     - each study's response inhibition is an unnamed value
+   * - closed world, tasks ``ans(t, n, m)``
+     - 7 rows, 5.8 s
+     - the class axioms, read as facts, name the concept
+   * - closed world, studies ``ans(s, n)``
+     - 139 rows, 6.4 s
+     - of the 7 task names, only ``'stroop task'`` is a Neurosynth term
+
+.. list-table:: Closed world, ``ans(t, n, m)`` (7 rows)
+   :header-rows: 1
+
+   * - ``t``
+     - ``n``
+     - ``m``
+   * - ``cogat:CAO_00707``
+     - color-word stroop task
+     - response inhibition
+   * - ``cogat:CAO_00794``
+     - conditional stop signal task
+     - response inhibition
+   * - ``cogat:CAO_00810``
+     - choice reaction time task
+     - response inhibition
+   * - ``cogat:CAO_00827``
+     - go-no-go task
+     - response inhibition
+   * - ``cogat:CAO_00864``
+     - simon task
+     - response inhibition
+   * - ``cogat:CAO_00872``
+     - stroop task
+     - response inhibition
+   * - ``cogat:CAO_00950``
+     - hayling sentence completion test
+     - response inhibition
+
+The open world adds answers, never values.  It can say that a study
+measures some response inhibition, but it never invents which one: the
+Atlas names none for any study.  The closed world names the concept because
+the class axioms, read as facts, name it, and it reaches studies only
+through a second, textual step, the term of the task's name.
+
+**Why not** ``mentions(s, 'stroop task')``?  On Neurosynth it returns the
+same 139 studies in 2.2 s.  The question, however, is about a concept, and
+the ontology decides which tasks count: a curator who gives another task a
+contrast that measures response inhibition changes the answer without
+changing the query.  Of the 7 task names above, only ``'stroop task'`` is
+in the Neurosynth vocabulary; hence on Neurosynth the example shows the
+mechanism, not a gain in recall.  The vocabulary of the ``neurostore``
+engine has five of them: its TF-IDF table puts ``'stroop task'`` above the
+threshold of ``mentions`` in 444 studies, and the five names in 742.  The
+open-world query was not run there, as it does not end on Neurosynth with
+one task.
+
+**Where in the brain?**  The open-world predicate as the condition of a
+probabilistic query:
+
+.. code-block:: neurolang
+
+   % cogat:CAO_00872 (Stroop task), cogat:CAO_00487 (response inhibition)
+   cogat:CAO_00872(s) :- mentions(s, 'stroop task')
+   inhibition_study(s) :- cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)
+   p_active_given_inhibition(i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (inhibition_study(s) & selected_study(s))
+   ans(i, j, k, p) :- p_active_given_inhibition(i, j, k, p)
+
+Here ``p`` is the probability that a study, among those that measure
+response inhibition, reports a peak within 6 mm of the voxel
+``(i, j, k)``.
+
+.. list-table:: Activation given response inhibition
+   :header-rows: 1
+   :widths: 30 25 45
+
+   * - Reading
+     - Rows, time
+     - Why
+   * - closed world
+     - 0 (no rows), 5.1 s
+     - the condition holds of no study
+   * - open world
+     - did not end within 2,400 s
+     - its condition is the three-atom query above
+
+The certain answers of the condition are the 139 Stroop studies.  Hence
+the same conditional over ``mentions(s, 'stroop task')``,
+``p_active_given_stroop(i, j, k, PROB) :- (activated(i, j, k, s) &
+selected_study(s)) // (mentions(s, 'stroop task') & selected_study(s))``,
+gives what the open-world query owes: 1,296,985 voxels with ``p > 0``, in
+14.2 s.  Its highest ``p`` in each region of the Destrieux atlas, with the
+MNI coordinates of the voxel that reaches it, are:
+
+.. list-table:: ``p_active_given_stroop``, the six Destrieux regions with the highest ``p``
+   :header-rows: 1
+
+   * - Destrieux region
+     - MNI (mm)
+     - ``p``
+   * - L S precentral inf part
+     - (−43, 5, 31)
+     - 0.180
+   * - L G front sup
+     - (−4, 11, 49)
+     - 0.173
+   * - L S front inf
+     - (−42, 20, 28)
+     - 0.151
+   * - R G front sup
+     - (3, 19, 43)
+     - 0.151
+   * - R G and S cingul Mid Ant
+     - (5, 22, 37)
+     - 0.151
+   * - L G and S cingul Mid Ant
+     - (−6, 12, 48)
+     - 0.137
+
+The highest, 0.180, is 25 of the 139 studies.
+
+**What the curators did not state.**  The stop signal task,
+``cogat:CAO_00871``, has six contrasts in the Atlas, and none has a
+``measures`` axiom.  ``'stop signal'`` is a Neurosynth term:
+
+.. code-block:: neurolang
+
+   % cogat:CAO_00871 (stop signal task), cogat:CAO_00487 (response inhibition)
+   cogat:CAO_00871(s) :- mentions(s, 'stop signal')
+   inhibition_study(s) :- cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)
+   ans(s) :- inhibition_study(s)
+
+.. list-table:: Stop signal studies
+   :header-rows: 1
+   :widths: 34 22 44
+
+   * - Query
+     - Rows, time
+     - Why
+   * - closed world, ``mentions(s, 'stop signal')``
+     - 99 rows, 2.3 s
+     - the term is in their abstracts
+   * - open world, ``inhibition_study(s)``
+     - 0 (no rows), 1.8 s
+     - no stop signal contrast measures anything in the Atlas
+
+Non-exhaustiveness is allowed; missing knowledge is not filled in.  The
+open world completes the instances of what the curators stated, and it
+cannot infer what they never stated, that a stop signal contrast measures
+response inhibition.  The answers are as complete as the ontology.
+
+Writing such queries
+~~~~~~~~~~~~~~~~~~~~
+
+Keep a chain through unnamed values inside one rule.  The rewriting treats
+each rule on its own (section *When the answers are complete*), so
+``inhibition_study(s)`` holds the whole chain and projects it onto ``s``; a
+rule with ``x`` or ``c`` in its head loses the answers reached through the
+unnamed contrast.  Define the instances of a class with a deterministic
+rule, as with ``mentions`` above, and bring ``PROB`` in afterwards: a class
+defined by a rule over a probabilistic predicate gives no instance to the
+constraints of a deterministic query (same section).
+
+In short, the open world lets the curators of an ontology be
+non-exhaustive.  On (IV), one axiom stated once gave 139 studies a contrast
+that no one entered, and only what was never stated stayed out of reach.
+The three-atom chain is entailed but not yet computed: a rewriting that
+ends on it, as the section *When the answers are complete* calls for, would
+confirm it.
 
 What would confirm and what limits this
 ---------------------------------------
