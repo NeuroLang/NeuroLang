@@ -1683,7 +1683,7 @@ def _phase_resamplings(nl, cfg):
         })
 
 
-_ONTOLOGY_OPTIONS = ("format", "individuals", "names")
+_ONTOLOGY_OPTIONS = ("format", "individuals", "names", "prefixes")
 
 
 def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
@@ -1708,8 +1708,8 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
     Load the engine's ``ontologies``.
 
     Each entry gives a file with ``url`` (a URL or a local path), or
-    several, loaded together, with ``urls``. ``format``, ``individuals``
-    and ``names`` are passed to
+    several, loaded together, with ``urls``. ``format``, ``individuals``,
+    ``names`` and ``prefixes`` are passed to
     :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
     """
     for onto_cfg in cfg.get("ontologies", []):

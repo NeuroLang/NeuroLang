@@ -37,7 +37,8 @@ class OntologyParser:
     file extensions when None (RDF/XML by default). *names* is how
     classes and properties are named: ``local`` (``Dean``,
     ``rdf-schema:label``) or ``prefixed`` (``pv:Employee``, from the
-    prefixes the files declare, else the full IRI).
+    prefixes the files declare and the *prefixes*, a dictionary from
+    prefix to namespace, else the full IRI).
 
     With *individuals*, every triple is also a fact (see
     :meth:`parse_individuals`) and the annotations of classes are facts
@@ -46,7 +47,7 @@ class OntologyParser:
 
     def __init__(
         self, paths, connector_symbol=None, load_format=None,
-        individuals=False, names="local",
+        individuals=False, names="local", prefixes=None,
     ):
         if names not in NAMING_STYLES:
             raise ValueError(
@@ -64,6 +65,8 @@ class OntologyParser:
                 load_format or _guess_format(path) for path in paths
             ]
         self._load_ontology(paths, load_format)
+        for prefix, namespace in (prefixes or {}).items():
+            self.rdfGraph.bind(prefix, namespace, override=True)
 
         if connector_symbol is None:
             self.connector_symbol = Symbol.fresh()

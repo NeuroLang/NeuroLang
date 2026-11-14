@@ -136,8 +136,10 @@ graph is queried as a SPARQL endpoint would be::
 * a triple ``s p o`` is the fact ``p(s, o)`` and ``s rdf:type C`` is also
   ``C(s)``;
 * with ``names="prefixed"``, classes and properties are named after the
-  prefixes the files declare (``pv:name``, ``rdfs:label``), or their full
-  IRI when no prefix is declared;
+  prefixes the files declare (``pv:name``, ``rdfs:label``) and those of
+  ``prefixes``, a dictionary from prefix to namespace, or their full IRI
+  when no prefix is declared, written ``<http://...>`` as the predicate of
+  an atom: ``<http://ex.org/c#K>(s) :- d(s)``;
 * IRIs are the strings of their full IRI, written ``<http://...>`` in
   Datalog; literals are their value (numbers, strings without their
   language tag, dates as ISO strings).
@@ -323,7 +325,8 @@ builds an engine, it runs up to ten phases, in this order:
    ``urls``.  ``format`` is the rdflib format (guessed from the file
    extension by default); with ``individuals: true`` every triple is also
    loaded as a fact, and ``names: prefixed`` names classes and properties
-   ``prefix:local`` (see :ref:`neurolang-rdf-data`)::
+   ``prefix:local`` (see :ref:`neurolang-rdf-data`), with the prefixes the
+   files declare and those of ``prefixes``::
 
        ontologies:
          - url: "https://example.com/ontology.owl"
@@ -332,6 +335,8 @@ builds an engine, it runs up to ten phases, in this order:
              - "data/instances.ttl"
            individuals: true
            names: prefixed
+           prefixes:
+             ex: "https://example.com/vocab#"
 
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
    of Datalog rules.  These are evaluated after templates and atlases

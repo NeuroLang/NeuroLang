@@ -213,6 +213,21 @@ Unreleased
 
 **Bug fixes:**
 
+* The constraints of an ontology ignored the instances a rule derives:
+  with ``c:K(s) :- two_back(s)`` and ``c:K ⊑ ∃c:measures.c:WM``,
+  ``ans(s) :- c:measures(s, c)`` returned nothing, while a fact of ``c:K``
+  gave its answer.  The code a query needs is now followed through the
+  constraints, so the rules defining the predicates of their bodies are
+  solved with the query (:doc:`ontologies`).
+
+* The classes and properties of an ontology named by their IRI, those of a
+  namespace the file declares no prefix for, as the Cognitive Atlas's,
+  could not be written in Datalog: ``<iri>(x)`` is now an atom of the
+  predicate the IRI names, in heads and bodies.  ``load_ontology`` and the
+  ``ontologies`` of ``engines.yaml`` take ``prefixes``, from prefix to
+  namespace, and the ``neurosynth`` and ``neurostore`` engines name the
+  Cognitive Atlas's ``cogat:CAO_00587``, ``cogat:measures``.
+
 * Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
   taken for an aggregation, the operator applied to each group's values,
   and gave rows of missing values or failed in pandas; it is now refused
