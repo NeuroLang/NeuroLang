@@ -145,6 +145,10 @@ Unreleased
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
   takes 23 s instead of 81 s (2 mm grid).
+* A function of a rule's variables, such as ``query_similarity(q, s)``
+  over the 65,000 studies of NeuroStore, is given each row as a tuple read
+  by column, not as a pandas row: ``uniformity_llm('auditory stimuli', i,
+  j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
 

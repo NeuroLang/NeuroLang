@@ -47,6 +47,28 @@ _COPY_ON_WRITE = _copy_on_write()
 # studies are tens of millions of rows.
 _CHUNK_ROWS = 1 << 22
 
+
+def _row_type(columns):
+    """
+    The type of the rows of *columns* given to a function of a row: tuples
+    of their values whose column is read as an attribute or by its label,
+    as of a row of pandas.
+    """
+    positions = {column: i for i, column in enumerate(columns)}
+
+    class Row(tuple):
+        __slots__ = ()
+
+        def __getattr__(self, name):
+            if name not in positions:
+                raise AttributeError(name)
+            return tuple.__getitem__(self, positions[name])
+
+        def __getitem__(self, label):
+            return tuple.__getitem__(self, positions[label])
+
+    return Row
+
 # The reductions computed a chunk at a time, and the reduction of their
 # partial results giving that of the whole.
 _COMBINED_REDUCTIONS = {
@@ -1280,9 +1302,14 @@ class NamedRelationalAlgebraFrozenSet(
                 seen_pure_columns.add(operation)
                 new_container[dst_column] = new_container.loc[:, operation]
             elif callable(operation):
-                new_container[dst_column] = new_container.apply(
-                    operation, axis=1
-                )
+                # A row as a tuple read by label: a pandas row of
+                # DataFrame.apply costs ten times the function, e.g.
+                # query_similarity over the 65,000 studies of NeuroStore.
+                row = _row_type(new_container.columns)
+                new_container[dst_column] = [
+                    operation(row(values)) for values in
+                    new_container.itertuples(index=False, name=None)
+                ]
             else:
                 new_container[dst_column] = operation
         new_container = new_container.loc[:, proj_columns]
