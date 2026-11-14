@@ -494,3 +494,9 @@ def test_query_a_property_the_ontology_only_constrains():
     assert set(res) == expected
     res = nl.execute_datalog_program("ans(a) :- headOf(a, b)")
     assert set(res) == {('Juan',)}
+    assert nl.execute_datalog_program("ans() :- headOf(a, b)")
+    res = nl.execute_datalog_program("ans(count(a)) :- headOf(a, b)")
+    assert set(res) == {(1,)}
+    # b is distinguished by the head's term: the constraint does not apply.
+    res = nl.execute_datalog_program("ans(count(b)) :- headOf(a, b)")
+    assert set(res) == set()

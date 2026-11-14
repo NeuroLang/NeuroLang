@@ -256,10 +256,7 @@ class OntologyRewriter:
         )
 
     def _is_distinguished(self, var, q):
-        if var in q.consequent.args:
-            return True
-
-        return False
+        return var in q.consequent._symbols
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):

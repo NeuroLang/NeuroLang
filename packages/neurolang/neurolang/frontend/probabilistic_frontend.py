@@ -521,6 +521,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 # The deterministic chase of the base implementation
                 # neither solves the probabilistic queries a conjunction
                 # may depend on nor applies the ontology's constraints.
+                if _computes_terms(head):
+                    return self._execute_query_computing_terms(
+                        head, predicate, show_rewritten, dry_run, show_ra
+                    )
                 return self._execute_query_through_rule(
                     head, predicate, show_rewritten, dry_run, show_ra
                 )
@@ -1484,6 +1488,12 @@ def _solved_as_query_rule(head, symbol_entry) -> bool:
     """
     if not hasattr(symbol_entry, "formulas"):
         return True
+    return _computes_terms(head)
+
+
+def _computes_terms(head) -> bool:
+    """Whether the query's *head* computes a term other than a probability,
+    such as the aggregate ``count(s)``."""
     return isinstance(head, tuple) and any(
         isinstance(h.expression, ir.FunctionApplication)
         and h.expression.functor != PROB

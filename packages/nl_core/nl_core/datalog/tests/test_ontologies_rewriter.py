@@ -8,6 +8,7 @@ from nl_expr.logic import (
     ExistentialPredicate,
     FunctionApplication,
     Implication,
+    Union,
 )
 from nl_expr.logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
@@ -433,3 +434,16 @@ def test_constraints_that_can_hold():
         "headOf": {dean}, "Person": {person}
     }
     assert constraints_that_can_hold(constraints, set()) == {}
+
+
+def test_variable_in_a_head_term_is_distinguished():
+    """``b`` in ``count(b)`` is distinguished: the existential of
+    ``Dean(x) -> headOf(x, y)`` does not rewrite ``headOf(a, b)``."""
+    Dean, headOf, q, count = S_("Dean"), S_("headOf"), S_("q"), S_("count")
+    x, y, a, b = S_("x"), S_("y"), S_("a"), S_("b")
+    constraints = _categorize_constraints([RI_(Dean(x), headOf(x, y))])
+
+    rule = I_(q(count(a)), headOf(a, b))
+    assert len(OntologyRewriter(Union((rule,)), constraints).Xrewrite()) == 2
+    rule = I_(q(count(b)), headOf(a, b))
+    assert OntologyRewriter(Union((rule,)), constraints).Xrewrite() == {rule}
