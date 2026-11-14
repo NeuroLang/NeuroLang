@@ -529,7 +529,10 @@ class ChaseSemiNaive:
         has it bound to the tuples new since the previous iteration, its
         delta, or found earlier in this one: its other results are already
         in ``instance``. From the second iteration, it is not evaluated if
-        they are none. Other rules see the whole instance.
+        they are none. Other rules, and all of them in the first iteration,
+        have these atoms bound to their whole relation, as one from an
+        earlier stratum has no delta; all see the tuples found earlier in
+        the iteration.
         """
         continue_chase = not instance_update.is_empty()
         functors = {rule.consequent.functor for rule in rules}
@@ -557,9 +560,12 @@ class ChaseSemiNaive:
             continue_chase = False
             for rule in rules:
                 atoms = recursive_atoms[rule]
-                restriction_instance = instance_update
-                if len(atoms) < 2:
-                    if iteration > 1 and not any(
+                restriction_instance = MapInstance({
+                    a: instance.elements[a] for a in atoms
+                    if a in instance.elements
+                }) | instance_update
+                if len(atoms) < 2 and iteration > 1:
+                    if not any(
                         a in delta or a in instance_update for a in atoms
                     ):
                         continue
