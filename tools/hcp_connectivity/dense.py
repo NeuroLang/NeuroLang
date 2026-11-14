@@ -11,7 +11,9 @@ least ``--minimum-length`` mm are kept, compressed (dipy's
 ``compress_streamlines``: the fewest points within ``--tolerance`` mm of
 the streamline), pooled, shuffled, and as many as fit in the size are
 written in ``OUT/<name>.tck`` (TCK: 12 bytes a point and one more a
-streamline). The segmentation, ``OUT/<name>_wmparc.nii.gz``, is the label
+streamline), at most ``--count`` of them; with ``--brain``, only those
+whose points are all within the MNI152 brain mask of the viewer
+(nilearn's). The segmentation, ``OUT/<name>_wmparc.nii.gz``, is the label
 of each voxel the most of the subjects' ``MNINonLinear/wmparc.nii.gz``
 give it (their grid, 0.7 mm; FreeSurfer's labels, so FreeSurfer's colour
 LUT and the term mapping freesurfer_aseg_aparc apply).
@@ -55,10 +57,27 @@ def segmentation(wmparcs: list) -> nib.Nifti1Image:
     return image
 
 
+def within_brain(lines: list) -> np.ndarray:
+    """Whether each streamline of *lines* has all its points within the
+    MNI152 brain mask of the engines' viewer (nilearn's, 1 mm): the 7 T
+    data are distorted over the orbits and under the cerebellum, where
+    some streamlines leave their own subject's brain."""
+    from nilearn.datasets import load_mni152_brain_mask
+
+    mask = load_mni152_brain_mask(resolution=1)
+    inside = np.asarray(mask.dataobj) > 0
+    data = nib.streamlines.ArraySequence(lines)
+    ijk = np.round(nib.affines.apply_affine(np.linalg.inv(mask.affine),
+                                            data._data)).astype(int)
+    within = np.all((ijk >= 0) & (ijk < inside.shape), axis=1)
+    within[within] = inside[tuple(ijk[within].T)]
+    return np.logical_and.reduceat(within, data._offsets)
+
+
 def run(trk_dir: Path, hcp: Path, out: Path, name: str = "disconnectome7t",
         subjects: int = 20, affine: Path = None, minimum_length: float = 30,
         tolerance: float = 0.5, megabytes: float = 480,
-        seed: int = 0) -> None:
+        seed: int = 0, count: int = None, brain: bool = False) -> None:
     out.mkdir(parents=True, exist_ok=True)
     matrix = np.loadtxt(affine) if affine else np.eye(4)
     paths = sorted(p for p in trk_dir.glob("*.trk")
@@ -71,6 +90,12 @@ def run(trk_dir: Path, hcp: Path, out: Path, name: str = "disconnectome7t",
         print(f"{path.stem}: {len(lines)} streamlines, "
               f"{sum(map(len, lines))} points", flush=True)
     order = np.random.default_rng(seed).permutation(len(pool))
+    if brain:
+        inside = within_brain(pool)
+        print(f"{inside.sum()} of {len(pool)} streamlines within the brain",
+              flush=True)
+        order = order[inside[order]]
+    order = order[:count]
     size = 12 * (1 + np.cumsum([len(pool[i]) + 1 for i in order]))
     chosen = [pool[i] for i in order[:np.searchsorted(size, megabytes * 1e6)]]
     tractogram = nib.streamlines.Tractogram(chosen,

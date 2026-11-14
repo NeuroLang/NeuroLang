@@ -58,6 +58,8 @@ def main(argv=None) -> None:
     sub.add_argument("--minimum-length", type=float, default=30)
     sub.add_argument("--tolerance", type=float, default=0.5)
     sub.add_argument("--megabytes", type=float, default=480)
+    sub.add_argument("--count", type=int)
+    sub.add_argument("--brain", action="store_true")
     tasks(command("structural", "a worker parcellating the connectomes of "
                   "STAGING into OUT", "work", "staging", "out"), False)
     tasks(command("functional", "a task of the functional connectivity of "
@@ -88,7 +90,8 @@ def main(argv=None) -> None:
     elif args.command == "dense":
         from .dense import run
         run(args.trk_dir, args.hcp, args.out, args.name, args.subjects,
-            args.affine, args.minimum_length, args.tolerance, args.megabytes)
+            args.affine, args.minimum_length, args.tolerance, args.megabytes,
+            count=args.count, brain=args.brain)
     elif args.command == "fit-space":
         import numpy as np
 
