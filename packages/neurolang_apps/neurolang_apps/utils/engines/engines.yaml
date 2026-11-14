@@ -348,6 +348,14 @@ engines:
         columns: [journal]
         type: str
         description: "the name of a journal"
+      pmid:
+        columns: [pmid]
+        type: int
+        description: "a PubMed id"
+      doi:
+        columns: [doi]
+        type: str
+        description: "a DOI, in lower case, without https://doi.org/"
     # Each predicate declares its arguments, in column order: the entities
     # it relates, each a sort over the columns it spans, named alone or as
     # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
@@ -376,6 +384,17 @@ engines:
           The journal a study was published in, named as the engine's
           metadata names it: find it with search_values
         arguments: [study, journal]
+      study_pmid:
+        description: >-
+          The PubMed id of a study, the same in every engine (a Neurosynth
+          study's id is its PubMed id): it matches the studies of two
+          engines
+        arguments: [study, pmid]
+      study_doi:
+        description: >-
+          The DOI of a study, as its database gives it: match the studies
+          of two engines on study_pmid
+        arguments: [study, doi]
       study:
         description: "All study identifiers"
         arguments:

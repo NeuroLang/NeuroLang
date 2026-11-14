@@ -23,6 +23,7 @@ FAKE_METADATA = pd.DataFrame({
     "title": ["Study one", "Study two", "Study three", "Memory", "Language"],
     "year": [2001, 2002, 2003, 2010, 2011],
     "journal": ["Brain", "Brain", "Neuron", "NeuroImage", "Neuron"],
+    "doi": ["10.1/1", "10.1/2", "10.1/3", "10.1/1001", "10.1/1002"],
 })
 
 
