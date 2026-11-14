@@ -318,6 +318,24 @@ change the settings:
 
     nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
 
+**Refining a query.** ``.ask --refine QUESTION`` (also ``.llm --refine
+QUESTION``) changes the last query for a new or extended question instead of
+starting afresh. The model is given the previous question, if the assistant
+was asked one, the previous query, and what happened to it: the error it
+failed with, the first rows it gave, or that it gave none, and the notes of the
+engine (such as a predicate with no facts or rules). It is asked to keep what is
+right, correct what the outcome shows is wrong, and start again only if the new
+question has nothing to do with the query. The query is the last that ran, if
+one ran after the assistant's last answer (the answer, or the visitor's
+correction of it); otherwise it is the assistant's last attempt, even one that
+failed. Without either, the command says that there is nothing to refine. In
+the browser, the *Refine* button next to *Ask* does the same. The technique is
+that of the multi-turn text-to-SQL and the execution-feedback literature: an
+edit of the previous query (Chain-of-Editions, CoE-SQL, arXiv 2405.02712) with
+the feedback of its execution (as the refiner of MAC-SQL), which are
+more reliable than a model re-reading its own answer without running it
+(Huang et al., arXiv 2310.01798).
+
 ``.explain`` reads the last query that ran, whoever wrote it, in English: the
 model is given the query, in its language, with the engine's predicates,
 and answers with a sentence or two, printed after ``Reads as:``. It takes

@@ -10,7 +10,9 @@ validation and repair, and a ReAct agent exploring the engine with
 tools. It needs the ``llm`` extra (``pip install "neurolang[llm]"``).
 """
 
-from .agent import AgentResult, AgentStep, IclAgent, ReactAgent, make_agent
+from .agent import (
+    AgentResult, AgentStep, IclAgent, Previous, ReactAgent, make_agent
+)
 from .config import (
     AssistantConfig,
     LLMConfig,
@@ -22,6 +24,7 @@ from .providers import LLMError, make_client
 
 __all__ = [
     "AgentResult", "AgentStep", "AssistantConfig", "IclAgent", "LLMConfig",
+    "Previous",
     "LLMConfigError", "LLMError", "ProviderConfig", "ReactAgent",
     "load_config", "make_agent", "make_client",
 ]
