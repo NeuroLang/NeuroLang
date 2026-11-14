@@ -37,6 +37,7 @@ v = Symbol("v")
 x = Symbol("x")
 w = Symbol("w")
 y = Symbol("y")
+z = Symbol("z")
 
 NE = Constant(operator.ne)
 LT = Constant(operator.lt)
@@ -469,6 +470,75 @@ def test_non_strict_comparison_sharing_a_symbol_not_liftable():
     cpl.walk(Implication(A(x, y), Conjunction((R(w, y), LE(w, x)))))
     query = Implication(
         ans(x, y), Conjunction((R(x, y), Negation(A(x, y))))
+    )
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+R4 = R1 | {(0.5, "d")}
+S3 = {
+    (0.5, "a", "b"), (0.4, "a", "c"), (0.3, "a", "d"), (0.7, "b", "a"),
+    (0.6, "b", "b"), (0.2, "b", "c"), (0.9, "c", "a"),
+}
+
+
+def test_at_least_three():
+    """∃x, y, z (R(x) ∧ R(y) ∧ R(z) ∧ x ≠ y ∧ y ≠ z ∧ x ≠ z), also with
+    comparisons x < y < z, x ≠ z: R has at least three tuples."""
+    for comparisons in (
+        (NE(x, y), NE(y, z), NE(x, z)), (LT(x, y), LT(y, z), NE(x, z))
+    ):
+        check(
+            {R: R4}, {}, [],
+            Implication(ans(), Conjunction((R(x), R(y), R(z)) + comparisons)),
+            lambda db: {()} if len(db[R]) >= 3 else set(),
+        )
+
+
+def test_at_least_three_per_answer():
+    """∃x, y, z (S(t, x) ∧ S(t, y) ∧ S(t, z) ∧ x ≠ y ∧ y ≠ z ∧ x ≠ z)."""
+    check(
+        {S: S3}, {}, [],
+        Implication(ans(t), Conjunction((
+            S(t, x), S(t, y), S(t, z), NE(x, y), NE(y, z), NE(x, z)
+        ))),
+        lambda db: {
+            (a,) for a, _ in db[S]
+            if sum(1 for c, _ in db[S] if c == a) >= 3
+        },
+    )
+
+
+def test_at_least_four():
+    """Four values of R, with pairwise ≠."""
+    variables = (x, y, z, u)
+    check(
+        {R: R4}, {}, [],
+        Implication(ans(), Conjunction(
+            tuple(R(v) for v in variables) +
+            tuple(NE(*p) for p in itertools.combinations(variables, 2))
+        )),
+        lambda db: {()} if len(db[R]) >= 4 else set(),
+    )
+
+
+@pytest.mark.parametrize("variables, comparisons", [
+    ((x, y, z), (NE(x, y), NE(y, z))),
+    ((x, y, z), (LT(x, y), LT(y, z))),
+    ((x, y, z), (LT(x, y), LT(y, z), LT(z, x))),
+    (
+        (x, y, z, u, v),
+        tuple(NE(*p) for p in itertools.combinations((x, y, z, u, v), 2))
+    ),
+])
+def test_at_least_k_not_lifted(variables, comparisons):
+    """Without a strict comparison of each pair, satisfied by an order
+    of the variables, the query is not at least k values of R; beyond
+    MAX_AT_LEAST values, it is not lifted either."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(R, R4)
+    query = Implication(
+        ans(), Conjunction(tuple(R(v) for v in variables) + comparisons)
     )
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
