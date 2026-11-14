@@ -714,6 +714,46 @@ def test_the_network_in_a_headless_browser(tmp_path):
     }
 
 
+_NETWORK_HOVER_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  // the mouse over every point of the views, the names shown beside it
+  var canvas = document.getElementById('gl');
+  var tip = document.getElementById('region-tip');
+  var rect = canvas.getBoundingClientRect(), named = {};
+  for (var x = 0; x < rect.width; x += 3) {
+    for (var y = 0; y < rect.height; y += 3) {
+      canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: rect.left + x, clientY: rect.top + y, bubbles: true}));
+      if (!tip.hidden) named[tip.textContent] = true;
+    }
+  }
+  canvas.dispatchEvent(new MouseEvent('mouseleave'));
+  report({named: Object.keys(named).sort(), hidden: tip.hidden});
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_network_is_named_under_the_mouse(tmp_path):
+    """Check the mouse over a node of the network shows its name, and
+    over an edge the names of the nodes it joins and its value."""
+    network = brain_viewer.connectome_state(
+        ["a", "b", "c"],
+        np.array([[5.0, 15, 13], [29, 15, 13], [17, 27, 13]]),
+        [(0, 1, 0.4), (1, 2, 0.2)], 0,
+    )
+    html = brain_viewer.viewer_html(
+        _image(np.ones((20, 20, 20), dtype=np.float32)), None,
+        title="network", threshold=0, cmap=None, symmetric=False,
+        connectome=network,
+    )
+    result = _run_in_chrome(tmp_path, html, _NETWORK_HOVER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert set(result["named"]) == {"a", "b", "c", "a — b: 0.4", "b — c: 0.2"}
+    assert result["hidden"]
+
 # Three streamlines in the millimetres of the 4×4×4 grid of AFFINE.
 _LINES = [
     np.array([[-3.0, -5.0, -7.0], [-1.0, -3.0, -5.0], [1.0, -1.0, -3.0]]),
@@ -919,6 +959,51 @@ def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
     assert result["sliderTop"] == "3"
     assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"
 
+
+_SLIDER_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  // The x of a thumb, its centre running from 7px to 7px short of the
+  // end of its 14px-thumbed range, against the x of the threshold drawn
+  // on the histogram.
+  var histogram = document.getElementById('threshold-histogram');
+  function offsets() {
+    var box = histogram.getBoundingClientRect();
+    var range = histogram.dataset.range.split(' ').map(Number);
+    return ['threshold-slider', 'threshold-high-slider'].map(function (id, i) {
+      var input = document.getElementById(id), r = input.getBoundingClientRect();
+      var thumb = r.left + 7 + input.value / 1000 * (r.width - 14);
+      return Math.abs(thumb - (box.left + range[i] / 3 * box.width));
+    });
+  }
+  var out = {percentile: offsets()};
+  set('threshold-slider', '500', 'input');
+  out.dragged = Number(histogram.dataset.range.split(' ')[0]);
+  out.draggedOffsets = offsets();
+  set('threshold-mode', 'value', 'change');
+  set('threshold', '0.75', 'change');
+  out.value = offsets();
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_threshold_sliders_follow_the_histogram(tmp_path):
+    """Check a thumb of the threshold sliders sits over the value it
+    sets on the histogram, also in percentiles of skewed values."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data.flat[:20] = 3 * (np.arange(1, 21) / 20) ** 3  # most values small
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="sliders", threshold="50%", cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _SLIDER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    for offsets in ("percentile", "draggedOffsets", "value"):
+        assert max(result[offsets]) < 2, (offsets, result[offsets])
+    assert result["dragged"] >= 1.5  # half way along the values, not percentiles
 
 _EDGE_VALUE_CHECK = _CHECK_HELPERS + """
 <script>

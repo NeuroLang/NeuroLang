@@ -750,6 +750,12 @@ the scores of each query:
 Percentiles are linearly interpolated and ties are kept, so the top 10%
 can hold slightly more than 10% of the rows.
 
+Arithmetic in the head of a rule, ``ans(x, n / 2) :- r(x, n)``, is not an
+aggregation, and is refused: a value computed from each row is computed in
+the body, and named in the head,
+``ans(x, v) :- r(x, n), (v == n / 2)``; a value computed from an
+aggregation, by a rule of its own over the aggregation's rule.
+
 10.2 Existential Predicates
 ----------------------------
 
@@ -1090,7 +1096,9 @@ the thinnest at the edge threshold to the thickest at the largest value,
 in the 3D render of the brain and on the slices, and lists the strongest
 edges.  The edge threshold, the strongest 5% by default (``--threshold``),
 is changed in the viewer, under the views: "Edges from" and its slider
-draw the network again with the edges above it.  The co-activation of the
+draw the network again with the edges above it.  On a slice, the mouse
+over a node shows the name of its region, and over an edge the names of
+the two regions it joins and its value.  The co-activation of the
 Schaefer regions by studies about reading, the probability that a study
 mentioning reading activates both regions of a pair::
 

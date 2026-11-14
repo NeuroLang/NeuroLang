@@ -462,3 +462,300 @@ def test_negation_beside_a_class_with_subclasses():
         "ans(e) :- pv:Employee(e), ~managed(e)"
     )
     assert set(unmanaged) == {("http://example.org/m1",)}
+
+
+def test_query_a_property_the_ontology_only_constrains():
+    """``headOf`` has a constraint, no rule and no fact: it is queried as
+    an EDB predicate, not by magic sets, which found no rule to adorn. A
+    Dean heads something, so is an answer when ``b`` is projected out,
+    once there are Deans."""
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <owl:Class rdf:ID="Dean">
+            <rdfs:subClassOf>
+                <owl:Restriction>
+                    <owl:onProperty rdf:resource="#headOf" />
+                    <owl:someValuesFrom rdf:resource="#College" />
+                </owl:Restriction>
+            </rdfs:subClassOf>
+        </owl:Class>
+    </rdf:RDF>'''
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+    assert not set(nl.execute_datalog_program("ans(a) :- headOf(a, b)"))
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    with nl.scope as e:
+        e.answer[e.a, e.b] = e.headOf[e.a, e.b]
+        expected = set(nl.solve_all().get('answer', ()))
+
+    res = nl.execute_datalog_program("ans(a, b) :- headOf(a, b)")
+    assert set(res) == expected
+    res = nl.execute_datalog_program("ans(a) :- headOf(a, b)")
+    assert set(res) == {('Juan',)}
+    assert nl.execute_datalog_program("ans() :- headOf(a, b)")
+    res = nl.execute_datalog_program("ans(count(a)) :- headOf(a, b)")
+    assert set(res) == {(1,)}
+    # b is distinguished by the head's term: the constraint does not apply.
+    res = nl.execute_datalog_program("ans(count(b)) :- headOf(a, b)")
+    assert set(res) == set()
+
+
+DEAN_DEPT_UNIT = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix : <http://ex.org/> .
+:Dean a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty :headOf ; owl:someValuesFrom :Dept
+] .
+:Dept a owl:Class ; rdfs:subClassOf :Unit .
+:Unit a owl:Class .
+"""
+
+
+def test_full_rule_on_the_value_an_existential_introduces():
+    """``Dept ⊑ Unit`` is applied by the chase to named departments and by
+    the rewriting to the unnamed one each Dean heads."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(DEAN_DEPT_UNIT), format="turtle")
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    nl.add_tuple_set([('Ana', 'Physics')], name='headOf')
+    nl.add_tuple_set([('Physics',)], name='Dept')
+    res = nl.execute_datalog_program("ans(x) :- headOf(x, y), Unit(y)")
+    assert set(res) == {('Juan',), ('Ana',)}
+    res = nl.execute_datalog_program("ans(x, y) :- headOf(x, y), Unit(y)")
+    assert set(res) == {('Ana', 'Physics')}
+    assert set(nl.execute_datalog_program("ans(y) :- Unit(y)")) == {
+        ('Physics',)
+    }
+    # The count is over the union of the rewritings of its body.
+    res = nl.execute_datalog_program("ans(count(x)) :- headOf(x, y)")
+    assert set(res) == {(2,)}
+    res = nl.execute_datalog_program(
+        "ans(x, w) :- headOf(x, y), Unit(y), headOf(w, z), Unit(z)"
+    )
+    names = ('Ana', 'Juan')
+    assert set(res) == {(a, b) for a in names for b in names}
+
+
+def test_negation_and_solve_all_over_chased_constraints():
+    """Negation is closed world over the derived facts, a negated atom
+    does not stop the rewriting, and the predicates the chase adds stay
+    out of the solution."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(DEAN_DEPT_UNIT), format="turtle")
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    nl.add_tuple_set([('Ana', 'Physics')], name='headOf')
+    nl.add_tuple_set([('Physics',)], name='Dept')
+    nl.add_tuple_set([('Physics',), ('Bio',), ('Juan',)], name='thing')
+    res = nl.execute_datalog_program("ans(y) :- thing(y), ~Unit(y)")
+    assert set(res) == {('Bio',), ('Juan',)}
+    res = nl.execute_datalog_program("ans(x) :- headOf(x, y), ~thing(x)")
+    assert set(res) == {('Ana',)}
+    nl.execute_datalog_program(
+        "leads(x) :- headOf(x, y), Unit(y)\n"
+        "c(count(x)) :- headOf(x, y)"
+    )
+    solution = nl.solve_all()
+    assert not any(name.startswith('fresh') for name in solution)
+    assert set(solution['leads']) == {('Ana',), ('Juan',)}
+    assert set(solution['c']) == {(2,)}
+
+
+def test_intersection_class_holds_on_named_values():
+    """``Chair ⊑ Person ⊓ ∃headOf.Department`` gives ``Chair ⊑ Person``,
+    which the chase applies before ``Person ⊑ Agent``."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO("""
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :Chair a owl:Class ; rdfs:subClassOf [ a owl:Class ; owl:intersectionOf (
+        :Person
+        [ a owl:Restriction ; owl:onProperty :headOf ;
+          owl:someValuesFrom :Department ]
+    ) ] .
+    :Person a owl:Class ; rdfs:subClassOf :Agent .
+    """), format="turtle")
+    nl.add_tuple_set([('Miguel',)], name='Chair')
+    assert set(nl.execute_datalog_program("ans(x) :- Agent(x)")) == {
+        ('Miguel',)
+    }
+    assert set(nl.execute_datalog_program(
+        "ans(x) :- headOf(x, y), Department(y)"
+    )) == {('Miguel',)}
+
+
+def test_query_over_a_high_class_instance_ends():
+    """A chain of 60 classes, each ``Ci ⊑ ∀p.Ci+1``, with an instance of
+    the top: the full rules go to the chase, so the rewriting of ``p(x, y)``
+    does not descend the hierarchy."""
+    n = 60
+    ttl = "".join(
+        f":C{i} a owl:Class ; rdfs:subClassOf :C{i + 1} , [ a owl:Restriction"
+        f" ; owl:onProperty :p ; owl:allValuesFrom :C{i + 1} ] , [ a "
+        f"owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :C{i} ] .\n"
+        for i in range(n)
+    )
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(
+        "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+        "@prefix : <http://ex.org/> .\n" + ttl
+    ), format="turtle")
+    nl.add_tuple_set([('a',)], name='C0')
+    assert set(nl.execute_datalog_program("ans(x) :- p(x, y)")) == {('a',)}
+    assert set(nl.execute_datalog_program(f"ans(x) :- C{n}(x)")) == {('a',)}
+
+
+def _random_horn_ontology(rng, n_classes=4, props=("p", "r")):
+    """Axioms ``(kind, C, p, D)``: ``sub`` C ⊑ D, ``some`` C ⊑ ∃p.D,
+    ``all`` C ⊑ ∀p.D, ``and`` C ⊑ B ⊓ ∃r.D with B as ``p``. The rules
+    without existentials go from a class to one of higher index, so are
+    not recursive: with recursive ones, Xrewrite need not end."""
+    classes = [f"C{i}" for i in range(n_classes)]
+    axioms = set()
+    for _ in range(rng.randint(2, 6)):
+        kind = rng.choice(("sub", "some", "all", "and"))
+        c, d = sorted(rng.sample(classes, 2))
+        if kind == "some":
+            c, d = rng.choice(classes), rng.choice(classes)
+        p = rng.choice(props)
+        if kind == "and":
+            c, p = sorted(rng.sample(classes, 2))
+        axioms.add((kind, c, None if kind == "sub" else p, d))
+    return classes, sorted(axioms, key=str)
+
+
+def _turtle(axioms):
+    lines = [
+        "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .",
+        "@prefix : <http://ex.org/> .",
+    ]
+    for kind, c, p, d in axioms:
+        if kind == "sub":
+            sup = f":{d}"
+        elif kind == "and":
+            sup = (
+                f"[ a owl:Class ; owl:intersectionOf ( :{p} [ a "
+                f"owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom "
+                f":{d} ] ) ]"
+            )
+        else:
+            values = "someValuesFrom" if kind == "some" else "allValuesFrom"
+            sup = (
+                f"[ a owl:Restriction ; owl:onProperty :{p} ; "
+                f"owl:{values} :{d} ]"
+            )
+        lines.append(f":{c} a owl:Class ; rdfs:subClassOf {sup} .")
+    return "\n".join(lines)
+
+
+def _certain_answers(axioms, facts, head, body, depth=6):
+    """Chase ``facts`` with labelled nulls up to ``depth``
+    nulls deep, match ``body`` and keep the answers without nulls."""
+    facts = set(facts)
+    depths = {}
+    while True:
+        new = set()
+        for kind, c, p, d in axioms:
+            for f in facts:
+                if f[0] != c:
+                    continue
+                t = f[1]
+                if kind == "sub":
+                    new.add((d, t))
+                elif kind == "all":
+                    new |= {(d, g[2]) for g in facts if g[:2] == (p, t)}
+                elif kind == "has":
+                    new.add((p, t, d))
+                elif depths.get(t, 0) < depth:
+                    if kind == "and":
+                        new.add((p, t))
+                    null = ("null", kind, c, p, d, t)
+                    depths[null] = depths.get(t, 0) + 1
+                    prop = "r" if kind == "and" else p
+                    new |= {(prop, t, null), (d, null)}
+        if new <= facts:
+            break
+        facts |= new
+
+    def match(atoms, sub):
+        if not atoms:
+            yield sub
+            return
+        functor, *args = atoms[0]
+        for f in facts:
+            if f[0] != functor or len(f) != len(atoms[0]):
+                continue
+            s = dict(sub)
+            if all(s.setdefault(a, v) == v for a, v in zip(args, f[1:])):
+                yield from match(atoms[1:], s)
+
+    return {
+        tuple(s[v] for v in head) for s in match(body, {})
+        if not any(isinstance(s[v], tuple) for v in head)
+    }
+
+
+def test_certain_answers_on_random_horn_ontologies():
+    """NeuroLang's answers are the certain answers, computed by a chase
+    with labelled nulls, on random ontologies, data and queries."""
+    import random
+
+    rng = random.Random(0)
+    constants = ("a", "b", "c")
+    for _ in range(40):
+        classes, axioms = _random_horn_ontology(rng)
+        facts = {(rng.choice(classes), rng.choice(constants))
+                 for _ in range(rng.randint(1, 3))}
+        facts |= {(rng.choice(("p", "r")),) + tuple(rng.sample(constants, 2))
+                  for _ in range(rng.randint(0, 3))}
+        # The predicates with facts or derived by a constraint.
+        predicates = {f[0] for f in facts} | {
+            q for k, _, p, d in axioms
+            for q in ((d,) if k in ("sub", "all") else (p, d))
+        } | {"r" for k, *_ in axioms if k == "and"}
+        nl = NeurolangPDL()
+        nl.load_ontology(io.StringIO(_turtle(axioms)), format="turtle")
+        for name in {f[0] for f in facts}:
+            nl.add_tuple_set(
+                [f[1:] for f in facts if f[0] == name], name=name
+            )
+        for _ in range(3):
+            body = []
+            for _ in range(rng.randint(1, 3)):
+                name = rng.choice(sorted(predicates))
+                arity = 2 if name in ("p", "r") else 1
+                body.append((name,) + tuple(rng.choices("xyz", k=arity)))
+            variables = sorted({v for atom in body for v in atom[1:]})
+            head = rng.sample(variables, rng.randint(1, len(variables)))
+            program = "ans({}) :- {}".format(", ".join(head), ", ".join(
+                f"{a[0]}({', '.join(a[1:])})" for a in body
+            ))
+            expected = _certain_answers(axioms, facts, head, body)
+            res = set(nl.execute_datalog_program(program))
+            assert res == expected, (axioms, facts, program)
+
+
+def test_has_value_binds_the_variable_in_all_the_query():
+    """Rewriting ``p(x, w)`` with ``C0(x) → p(x, 'v')`` binds ``w`` to
+    ``'v'`` in all of the query, so ``C0(w)`` is ``C0('v')``, false."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO("""
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :C0 a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :p ; owl:hasValue :v
+    ] .
+    """), format="turtle")
+    nl.add_tuple_set([('a',)], name='C0')
+    assert set(nl.execute_datalog_program("ans(x, w) :- p(x, w)")) == {
+        ('a', 'v')
+    }
+    assert not set(nl.execute_datalog_program(
+        "ans(x) :- p(x, w), C0(w)"
+    ))

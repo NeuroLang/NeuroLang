@@ -174,6 +174,14 @@ DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
 DEFAULT_SITE = Path(DEFAULTS["site"]).expanduser()
 # The admin console of the users (--users), served at /admin.
 ADMIN_PAGE = Path(__file__).with_name("admin.html")
+# The page of the activity of the users (--activity-db), and the chart
+# library it draws with (Chart.js, MIT, in vendor/ as NiiVue is in the
+# REPL's).
+ACTIVITY_PAGE = Path(__file__).with_name("activity.html")
+CHART_JS = Path(__file__).parent / "vendor" / "chartjs" / "chart.umd.min.js"
+ACTIVITY_PATHS = ("/admin/activity", "/admin/vendor/chart.umd.min.js",
+                  "/admin/api/activity/report", "/admin/api/activity/inputs",
+                  "/admin/api/activity/entry")
 # The page of a user's account (--users), served at /account.
 ACCOUNT_PAGE = Path(__file__).with_name("account.html")
 # The page where a user logs in (--users), served at /login, and the cookie
@@ -314,18 +322,20 @@ def copy_page(site: Path) -> Path:
     return repl / "index.html"
 
 
-def _prepare_engine(data_dir, name, resolution, light) -> None:
+def _prepare_engine(data_dir, name, resolution, light, embeddings) -> None:
     """Build the engine *name* on *data_dir*, as a session does, telling its
-    steps: what it downloads, and the tables it finds, are kept there."""
+    steps: what it downloads, and the tables it finds, are kept there (and,
+    with *embeddings*, its text embeddings and their model)."""
     from neurolang_apps.utils.tui.local_backend import LocalBackend
 
-    backend = LocalBackend(data_dir, resolution=resolution, light=light)
-    backend._build_engine(
+    backend = LocalBackend(data_dir, resolution=resolution, light=light,
+                           preload_embeddings=embeddings)
+    backend.build(
         name, lambda step: print(f"  {name}: {step}", flush=True)
     )
 
 
-def _prepare_in_child(data_dir, resolution, light):
+def _prepare_in_child(data_dir, resolution, light, embeddings):
     """Return the function building an engine in a process of its own,
     which tells whether it could: the memory of the engine is not kept by
     the server's process."""
@@ -335,7 +345,8 @@ def _prepare_in_child(data_dir, resolution, light):
 
     def run(name) -> bool:
         child = context.Process(
-            target=_prepare_engine, args=(data_dir, name, resolution, light),
+            target=_prepare_engine,
+            args=(data_dir, name, resolution, light, embeddings),
         )
         child.start()
         child.join()
@@ -345,18 +356,20 @@ def _prepare_in_child(data_dir, resolution, light):
 
 def prepare_engines(
     data_dir: Path, engines, resolution: float = 2.0, light: bool = False,
-    run=None,
+    run=None, embeddings: bool = False,
 ) -> list:
     """
     Build each of the *engines* once on *data_dir*, before the server
     serves: what they download (atlases, templates, studies) and the
     tables they take long to find are kept there, so that a session starts
-    from them, without the network. Tell how each went; return the names
+    from them, without the network (with *embeddings*, their text
+    embeddings and the model of these too). Tell how each went; return the
+    names
     of those that could not be built, whose sessions download what they
     lack, if they can. *run*(name) builds one and tells whether it could
     (by default in a process of its own).
     """
-    run = run or _prepare_in_child(data_dir, resolution, light)
+    run = run or _prepare_in_child(data_dir, resolution, light, embeddings)
     failed = []
     for name in engines:
         print(f"Preparing the engine {name} in {data_dir}…", flush=True)
@@ -770,6 +783,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         activity = getattr(self.sessions, "activity", None)
         if path == "/admin/api/usage":
             return self._reply_json(activity.totals() if activity else [])
+        if path in ACTIVITY_PATHS:
+            return self._activity(path, activity)
         if path == "/admin/activity.jsonl" and activity:
             # The log of a user, ?user=NAME, an event a line.
             query = urllib.parse.urlsplit(self.path).query
@@ -815,6 +830,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         mime = dict(headers).pop("Content-Type", "text/plain")
         self._reply(status, body, mime,
                     [h for h in headers if h[0].title() != "Content-Type"])
+
+    def _activity(self, path: str, activity):
+        """The page of the activity of the users (--activity-db), its data
+        and the chart library it draws with."""
+        if path == "/admin/activity":
+            return self._reply(200, ACTIVITY_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if path == "/admin/vendor/chart.umd.min.js":
+            return self._reply(200, CHART_JS.read_bytes(),
+                               "text/javascript; charset=utf-8",
+                               [("Cache-Control", "max-age=86400")])
+        if activity is None:
+            return self._reply_json({"error": "no activity log: start the "
+                                     "server with --activity-db FILE"}, 404)
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+
+        def get(name, default=""):
+            return query.get(name, [default])[0]
+
+        since, user, engine = _since(get("days")), get("user"), get("engine")
+        if path == "/admin/api/activity/report":
+            return self._reply_json(activity.report(
+                since, user or None, engine or None, _zone(get("tz"))))
+        if path == "/admin/api/activity/inputs":
+            try:
+                offset = max(0, int(get("offset", "0")))
+                limit = min(100, max(1, int(get("limit", "50"))))
+            except ValueError:
+                raise ValueError("offset and limit are numbers")
+            return self._reply_json(activity.inputs(
+                since, user or None, engine or None,
+                failed=get("failed") == "1", search=get("q")[:200],
+                sort=get("sort", "latest"), limit=limit, offset=offset))
+        try:
+            entry = activity.entry(int(get("id", "0")))
+        except ValueError:
+            raise ValueError("id is a number")
+        if not entry:
+            return self._reply_json({"error": "no such input"}, 404)
+        return self._reply_json(entry)
 
     def _admin_state(self) -> dict:
         users = self.users.current()
@@ -2226,6 +2281,34 @@ def check_login(secret: bytes, value: str, users, guests: bool = False,
     return name
 
 
+def _since(days: str):
+    """The start of the last *days* days (a number, of the page), as an
+    aware datetime; None for all (empty)."""
+    from datetime import datetime, timedelta, timezone
+
+    if not days:
+        return None
+    try:
+        days = float(days)
+    except ValueError:
+        raise ValueError("days is a number of days, or empty for all")
+    if not 0 < days <= 3660:
+        raise ValueError("days is between 0 and 3660")
+    return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _zone(name: str):
+    """The time zone *name* (IANA, the page's), UTC if none or unknown."""
+    from datetime import timezone
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(name) if name else timezone.utc
+    except (ValueError, KeyError, OSError, ImportError):
+        return timezone.utc
+
+
 def read_password(path: Path) -> str:
     """Return the password in the first line of the file *path*, as it is
     but for its line ending."""
@@ -2427,6 +2510,8 @@ def service_command(args) -> list:
                     "--resolution", str(args.resolution)]
         command += ["--light"] if args.light else []
         command += [] if args.prepare else ["--no-prepare"]
+        command += [] if args.preload_embeddings else [
+            "--no-preload-embeddings"]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
@@ -2868,6 +2953,14 @@ def parse_args(argv=None):
         help="with --local, do not build each engine before serving (which "
         "keeps what it downloads in --data-dir): its first session does",
     )
+    parser.add_argument(
+        "--no-preload-embeddings", action="store_false",
+        dest="preload_embeddings", default=DEFAULTS["preload_embeddings"],
+        help="with --local, do not load the text embeddings of an engine "
+        "(its documents', from their cache or computed into it, and the "
+        "query model) when it is built: its first query of them does, in "
+        "each session (in memory of its own, with --users)",
+    )
     built = parser.add_mutually_exclusive_group()
     built.add_argument(
         "--pr", type=int,
@@ -3145,6 +3238,7 @@ def main(argv=None) -> None:
                 args.data_dir.resolve(),
                 list(args.engines or bundle_engines()),
                 args.resolution, args.light,
+                embeddings=args.preload_embeddings,
             )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
@@ -3168,6 +3262,7 @@ def main(argv=None) -> None:
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 running=args.max_running,
                 query_seconds=args.query_minutes * 60,
+                preload_embeddings=args.preload_embeddings,
                 **options,
             )
             if args.activity_db:
@@ -3178,7 +3273,9 @@ def main(argv=None) -> None:
                 options["feedback"] = {
                     "path": str(args.feedback_db.resolve()), "user": "",
                     "groups": ""}
-            backend = LocalBackend(args.data_dir, **options)
+            backend = LocalBackend(
+                args.data_dir, preload_embeddings=args.preload_embeddings,
+                **options)
         if args.feedback_db:
             from neurolang_apps.utils.llm.feedback_server import (
                 FeedbackStore,

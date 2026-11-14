@@ -224,3 +224,21 @@ def test_the_tokens_of_an_answer_say_whose_key_paid(backend, monkeypatch):
     monkeypatch.setattr(backend.repl, "submit", lambda text: web.Reply(
         html=""))
     assert backend.submit("ans(x) :- person(x, 5)")["tokens"] == {}
+
+
+def test_a_build_preloads_the_text_embeddings_if_asked(tmp_path, monkeypatch):
+    from neurolang_apps.utils import text_embeddings
+
+    preloaded = []
+    monkeypatch.setattr(text_embeddings, "preload", preloaded.append)
+
+    def build(name, say):
+        nl = _engine(name, say)
+        nl.text_embedding_indexes = {"studies": object()}
+        return nl
+
+    nl = LocalBackend(tmp_path, build=build).build("destrieux", print)
+    assert preloaded == []
+    backend = LocalBackend(tmp_path, build=build, preload_embeddings=True)
+    backend.start("destrieux")
+    assert len(preloaded) == 1 and preloaded[0] is not nl

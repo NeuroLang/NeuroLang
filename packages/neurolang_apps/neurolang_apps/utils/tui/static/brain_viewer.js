@@ -214,6 +214,7 @@
       nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
       await loadStreamlines(nv, data.streamlines);
     }
+    if (data.regions || data.connectome) followMouse(nv);
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
@@ -239,18 +240,19 @@
       colours.opacity = box.checked ? 1 : 0;
       nv.updateGLVolume();
     });
-    followRegions(nv);
   }
 
-  // The region of the result under the mouse, on a slice, named beside it.
-  function followRegions(nv) {
+  // The node or the edge of the network, else the region of the result,
+  // under the mouse on a slice, named beside it.
+  function followMouse(nv) {
     var canvas = $('gl'), tip = $('region-tip');
     canvas.addEventListener('mousemove', function (event) {
       var rect = canvas.getBoundingClientRect();
       var ratio = canvas.width / rect.width;
       var frac = nv.canvasPos2frac([
         (event.clientX - rect.left) * ratio, (event.clientY - rect.top) * ratio]);
-      var name = frac[0] < 0 ? '–' : regionAt(Array.from(nv.frac2mm(frac)).slice(0, 3));
+      var mm = Array.from(nv.frac2mm(frac)).slice(0, 3);
+      var name = frac[0] < 0 ? '–' : networkAt(mm) || (viewer.regions ? regionAt(mm) : '–');
       tip.hidden = name === '–';
       tip.textContent = name;
       tip.style.left = event.clientX + 14 + 'px';
@@ -266,6 +268,44 @@
     return n > 0 ? regions.names[n - 1] : '–';
   }
 
+  // The name of the node of the network drawn at *mm*, else 'first —
+  // second: value' of its edge there, the nearest within HOVER_MM of its
+  // surface; '' when none is.
+  function networkAt(mm) {
+    var state = viewer.networkState, network = viewer.network;
+    if (!state) return '';
+    var best = '', nearest = Infinity;
+    var near = function (distance, radius, name) {
+      if (distance - radius <= HOVER_MM && distance - radius < nearest) {
+        nearest = distance - radius;
+        best = name;
+      }
+    };
+    state.nodes.forEach(function (n) {
+      near(Math.hypot(n.x - mm[0], n.y - mm[1], n.z - mm[2]),
+           n.sizeValue * network.nodeRadius, n.name);
+    });
+    if (best) return best;
+    state.edges.forEach(function (e) {
+      var a = state.nodes[e.first], b = state.nodes[e.second];
+      near(segmentDistance(mm, [a.x, a.y, a.z], [b.x, b.y, b.z]),
+           Math.abs(e.colorValue) * state.edgeScale,
+           a.name + ' — ' + b.name + ': ' + format(e.value));
+    });
+    return best;
+  }
+
+  // The distance from the point p to the segment from a to b.
+  function segmentDistance(p, a, b) {
+    var ab = [0, 1, 2].map(function (i) { return b[i] - a[i]; });
+    var length2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    var t = length2 > 0 ? ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] +
+      (p[2] - a[2]) * ab[2]) / length2 : 0;
+    t = Math.min(1, Math.max(0, t));
+    return Math.hypot(a[0] + t * ab[0] - p[0], a[1] + t * ab[1] - p[1],
+                      a[2] + t * ab[2] - p[2]);
+  }
+
   // The strongest edges of the network, listed under the views, how
   // much the network shows through the 3D render, the thickness of the
   // slab of a slice it is drawn in, in millimetres, and the thickness of
@@ -274,7 +314,8 @@
   var LISTED_EDGES = pageSettings.listed_edges,
     NETWORK_XRAY = pageSettings.network_xray,
     NETWORK_SLAB_MM = pageSettings.network_slab_mm,
-    THINNEST_EDGE = pageSettings.thinnest_edge;
+    THINNEST_EDGE = pageSettings.thinnest_edge,
+    HOVER_MM = pageSettings.hover_mm;
 
   // The network as NiiVue draws it, of the edges of |value| at least
   // *threshold* and the nodes they join. The colour and the size of a
@@ -333,7 +374,7 @@
   // Draw the edges of the network of |value| at least *threshold*, and
   // list the strongest.
   function drawNetwork(nv, threshold) {
-    var state = networkState(viewer.network, threshold);
+    var state = viewer.networkState = networkState(viewer.network, threshold);
     nv.meshes.slice().forEach(function (mesh) { nv.removeMesh(mesh); });
     if (state.edges.length) nv.addMesh(nv.loadConnectomeAsMesh(state));
     nv.drawScene();
@@ -817,11 +858,20 @@
         ' to ' + format(scales[viewer.state.active].upper) : '';
   }
 
-  // The largest threshold of the slider, in the unit of the mode.
+  // The sliders lie over the histogram, so a position (0 to 1000) is a
+  // value on its axis, from 0 to its top, in either mode.
   function sliderTop() {
     var layer = viewer.layers[viewer.state.active];
+    return Math.max(layer.maxAbs, layer.max, 1e-12);
+  }
+
+  function positionOf(v) { return Math.round(1000 * v / sliderTop()); }
+
+  // The threshold, in the unit of the mode, at the slider position p.
+  function thresholdAt(p) {
+    var v = sliderTop() * p / 1000;
     return settings().thresholdMode === 'percentile'
-      ? 100 : Math.max(layer.maxAbs, layer.max, 1e-12);
+      ? rank(percentileSource(viewer.state.active), v) : v;
   }
 
   function syncControls() {
@@ -830,11 +880,11 @@
     $('visible').checked = s.visible;
     $('threshold').value = Number(s.threshold.toPrecision(6));
     $('threshold').max = s.thresholdMode === 'percentile' ? 100 : '';
-    $('threshold-slider').value = Math.round(1000 * s.threshold / sliderTop());
+    $('threshold-slider').value = positionOf(thresholdValue(viewer.state.active));
     var upper = upperInMode();
     $('threshold-high').value = Number(upper.toPrecision(6));
     $('threshold-high').max = s.thresholdMode === 'percentile' ? 100 : '';
-    $('threshold-high-slider').value = Math.round(1000 * upper / sliderTop());
+    $('threshold-high-slider').value = positionOf(upperValue(viewer.state.active));
     $('threshold-mode').value = s.thresholdMode;
     $('cmap').value = s.cmap;
     $('symmetric').checked = s.symmetric;
@@ -979,13 +1029,13 @@
     $('threshold').addEventListener('change', onThreshold);
     $('threshold').addEventListener('input', onThreshold);
     $('threshold-slider').addEventListener('input', function (e) {
-      setThreshold(sliderTop() * e.target.value / 1000);
+      setThreshold(thresholdAt(e.target.value));
     });
     var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
     $('threshold-high').addEventListener('change', onUpper);
     $('threshold-high').addEventListener('input', onUpper);
     $('threshold-high-slider').addEventListener('input', function (e) {
-      setUpper(sliderTop() * e.target.value / 1000);
+      setUpper(thresholdAt(e.target.value));
     });
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);

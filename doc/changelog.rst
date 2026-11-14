@@ -54,6 +54,43 @@ Unreleased
   functional; to be replaced by subject-level tractography. With examples
   and a guidance line for the query assistant.
 
+* Ontologies: the constraints without existential variables (subclass,
+  ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
+  Datalog rules; XRewrite rewrites the query with the existential ones, the
+  others only on atoms that can stand for a value they introduce.  A query
+  on the Cognitive Atlas with an instance of a class high in its hierarchy
+  now ends (``ans(x) :- ro:has_part(x, y)``: 1.7 s, was > 120 s).  New page
+  :doc:`ontologies`.  Fixes on the way: XRewrite's factorisation dropped the
+  rest of the body, a rewriting step bound a query variable only in the
+  rewritten atom (wrong answers with ``hasValue``), a renamed constraint
+  variable could take a query variable's name, a negated atom made XRewrite
+  fail, the chased predicates broke ``solve_all``, an aggregate over a
+  rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
+  ``C(x) → B(x)``.
+* ``neurolang-repl-serve --local`` loads the text embeddings of an engine
+  when it builds it (its documents', from their cache or computed into it,
+  and the SPECTER2 query model): with ``--users`` in the builder, before
+  forking the sessions, which share them; their first ``query_similarity``
+  (``similar_study``, ``lift_llm``) no longer loads the model, and no
+  longer crashes a session on macOS. ``--no-preload-embeddings``
+  (``preload_embeddings: false``) leaves them to the first query, as
+  before. Queries are embedded with the numpy SPECTER2 encoder whenever its
+  weights are next to the model, not only without torch; encoders of an
+  engine built again share torch's model.
+* The network of the brain viewer names what is under the mouse on a
+  slice: a node, the name of its region; an edge, the names of the two
+  regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,
+  2 mm, of the sphere or tube drawn).
+* ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
+  ``/admin/activity``: filters of the period, user and engine above
+  figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
+  memory of a session), a strip of the runs of the server, charts of the
+  inputs, CPU, tokens and active users over time (Chart.js, served by the
+  server), the users, and the inputs, sortable, searchable and each opening
+  on its result. Datasette (``--dashboard``) stays, as *Raw data and SQL*.
+  Its queries of the last days no longer take the whole first day (they
+  compared ISO times with SQLite's), and its uptime counts from the first
+  run logged.
 * The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
   tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
   Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
@@ -246,13 +283,37 @@ Unreleased
 
 **Performance:**
 
+* The query assistant caches its prompts on the Anthropic API, and on
+  OpenRouter for Claude: the steps of
+  an answer repeat the system prompt and the conversation so far, which are
+  then read from the cache at a tenth of the price of input tokens or less,
+  making an answer about three times cheaper.  The line after the query
+  counts the tokens read from the cache, also for the providers that cache
+  by themselves, such as DeepSeek on OpenRouter.
+
 * A natural join on a unique key of strings, such as the NeuroStore study
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
   takes 23 s instead of 81 s (2 mm grid).
+* A function of a rule's variables, such as ``query_similarity(q, s)``
+  over the 65,000 studies of NeuroStore, is given each row as a tuple read
+  by column, not as a pandas row: ``uniformity_llm('auditory stimuli', i,
+  j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
 
+* Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
+  taken for an aggregation, the operator applied to each group's values,
+  and gave rows of missing values or failed in pandas; it is now refused
+  with a ``ForbiddenExpressionError`` that tells how to compute the value
+  in the body, ``(v == n / 2)``.
+
+* The threshold sliders of the brain viewer sit over the values they set
+  on the histogram. In percentile mode a thumb was placed at its percentile
+  along the slider while the histogram's axis is the value, so for skewed
+  maps the low thumb could be far from its line (128 px of 360 at the 50th
+  percentile of cubed values); the thumbs are now placed by value, and the
+  histogram is inset by half a thumb so its ends meet the thumbs' travel.
 * Checking or running a query on an ontology's predicates, as
   ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
   cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying
@@ -420,9 +481,11 @@ v0.1a22 (2026-11-13)
 * The meta-analysis engines (``neurosynth``, ``neurostore`` and those
   extending them) have the year, journal and abstract of each study,
   ``study_year``, ``study_journal`` and ``study_abstract``, next to
-  ``study_title``: Neurosynth's abstracts are PubMed's, NeuroStore's years
-  those it lists for its studies, asked for at the first build and kept in
-  the data directory. A query, and the query assistant, restricts the
+  ``study_title``, and its identifiers, ``study_pmid`` and ``study_doi``,
+  the same in both engines, so that their studies are matched:
+  Neurosynth's abstracts are PubMed's, NeuroStore's years, PubMed ids and
+  DOIs those it lists for its studies, asked for at the first build and
+  kept in the data directory. A query, and the query assistant, restricts the
   studies to years or journals. The SPECTER2 similarity of ``neurosynth``
   embeds its ``study_abstract``, as ``neurostore`` does. See *The
   publications of the studies* in the engine configuration documentation.

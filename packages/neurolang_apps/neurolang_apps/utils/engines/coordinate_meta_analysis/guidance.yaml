@@ -113,7 +113,9 @@ assistant_guidance: >
   The publications of the studies restrict them to a time or a
   journal: study_year(s, y), study_journal(s, j), with the journal
   named as the engine names it (find it with search_values), and
-  study_title(s, t), study_abstract(s, a) for their texts.  Restrict
+  study_title(s, t), study_abstract(s, a) for their texts;
+  study_pmid(s, p) and study_doi(s, d) identify a paper, as PubMed
+  and the DOI do (an integer, and the DOI in lower case).  Restrict
   the studies in a rule of their own, recent(s) :- study_year(s, y),
   (y >= 2010), (y <= 2015), then condition on it as on a term:
   PROB[active(l, s) // cond(s)] = p with cond(s) :- recent(s),

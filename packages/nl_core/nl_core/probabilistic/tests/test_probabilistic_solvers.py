@@ -1902,3 +1902,22 @@ def test_choice_with_closed_negated_deterministic_query(r_facts, expected):
     assert testing.eq_prov_relations(
         result, testing.make_prov_set(expected, ("_p_", "x"))
     )
+
+
+@pytest.mark.parametrize("solver", [weighted_model_counting, dalvi_suciu_lift])
+def test_choice_atoms_with_constants(solver):
+    """Two atoms of a choice are the same tuple: C(x, y), C(a, a) is
+    C(a, a), and C(x, x), C(a, b) is false."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        C, [(0.25, i, j) for i in ("a", "b") for j in ("a", "b")]
+    )
+    cpl.add_probabilistic_facts_from_tuples(Q, [(0.2, "a"), (0.6, "b")])
+    for body, probabilities in (
+        (Conjunction((C(x, y), C(a, a), Q(x))), [(0.25 * 0.2,)]),
+        (Conjunction((C(x, a), C(b, y), Q(x))), [(0.25 * 0.6,)]),
+        (Conjunction((C(x, x), C(a, b), Q(x))), []),
+    ):
+        result = solver.solve_succ_query(Implication(ans(), body), cpl)
+        expected = testing.make_prov_set(probabilities, ("_p_",))
+        assert testing.eq_prov_relations(result, expected)
