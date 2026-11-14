@@ -378,12 +378,21 @@ class OntologyRewriter:
         return new_args, renamed
 
     def _combine_rewriting(self, q, qS, S, sigma):
-        sigma_ant = apply_substitution(sigma.antecedent, qS[0])
-        q_con = apply_substitution(q.consequent, qS[0])
-        replace = dict({S: sigma_ant})
-        rsw = ReplaceExpressionWalker(replace)
-        sigma_ant = rsw.walk(q.antecedent)
-        sigma_ant = CollapseConjunctions().walk(sigma_ant)
-
-        return Implication(q_con, sigma_ant)
+        """Replace ``S`` in ``q`` by the body of ``sigma`` and apply their
+        unifier ``qS`` to all of ``q``: a query variable it binds, as to
+        the constant of ``C(x) → p(x, v)``, is bound everywhere."""
+        substitution = {}
+        for symbol, value in qS[0].items():
+            for _ in qS[0]:
+                if value not in qS[0]:
+                    break
+                value = qS[0][value]
+            substitution[symbol.name] = value
+        q = ReplaceSymbolWalker(substitution).walk(Implication(
+            q.consequent,
+            ReplaceExpressionWalker({S: sigma.antecedent}).walk(q.antecedent),
+        ))
+        return Implication(
+            q.consequent, CollapseConjunctions().walk(q.antecedent)
+        )
 

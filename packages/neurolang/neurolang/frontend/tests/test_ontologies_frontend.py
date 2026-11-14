@@ -535,7 +535,8 @@ def test_full_rule_on_the_value_an_existential_introduces():
     res = nl.execute_datalog_program(
         "ans(x, w) :- headOf(x, y), Unit(y), headOf(w, z), Unit(z)"
     )
-    assert set(res) == {(a, b) for a in ('Ana', 'Juan') for b in ('Ana', 'Juan')}
+    names = ('Ana', 'Juan')
+    assert set(res) == {(a, b) for a in names for b in names}
 
 
 def test_negation_and_solve_all_over_chased_constraints():
@@ -737,3 +738,24 @@ def test_certain_answers_on_random_horn_ontologies():
             expected = _certain_answers(axioms, facts, head, body)
             res = set(nl.execute_datalog_program(program))
             assert res == expected, (axioms, facts, program)
+
+
+def test_has_value_binds_the_variable_in_all_the_query():
+    """Rewriting ``p(x, w)`` with ``C0(x) → p(x, 'v')`` binds ``w`` to
+    ``'v'`` in all of the query, so ``C0(w)`` is ``C0('v')``, false."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO("""
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :C0 a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :p ; owl:hasValue :v
+    ] .
+    """), format="turtle")
+    nl.add_tuple_set([('a',)], name='C0')
+    assert set(nl.execute_datalog_program("ans(x, w) :- p(x, w)")) == {
+        ('a', 'v')
+    }
+    assert not set(nl.execute_datalog_program(
+        "ans(x) :- p(x, w), C0(w)"
+    ))
