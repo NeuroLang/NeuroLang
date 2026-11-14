@@ -92,9 +92,9 @@ def test_unknown_base_and_cycle():
 def test_builtin_engines():
     assert list_engine_names() == [
         "destrieux", "functional_connectivity", "neurostore",
-        "neurostore_iit", "neurostore_tracts", "neurosynth",
-        "neurosynth_iit", "neurosynth_tracts", "structural_connectivity",
-        "tracts",
+        "neurostore_disconnectome7t", "neurostore_iit", "neurostore_tracts",
+        "neurosynth", "neurosynth_disconnectome7t", "neurosynth_iit",
+        "neurosynth_tracts", "structural_connectivity", "tracts",
     ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
@@ -478,3 +478,25 @@ def test_the_functional_gradients_are_ten_per_region(atlas, regions,
     assert (gradients.groupby("region").dimension.nunique() == 10).all()
     variance = _fetched(f"{atlas}_functional_gradient_variance", tmp_path)
     assert (variance.groupby("hemisphere").explained.sum() <= 1).all()
+
+
+def test_disconnectome7t_engines_load_the_files_they_download():
+    """Both engines of Disconnectome7T load the tractogram and the
+    segmentation they download, and acknowledge it and the HCP."""
+    from neurolang_apps.utils.engine_registry import get_acknowledgements
+
+    ns = get_engine_config("neurosynth_disconnectome7t")
+    store = get_engine_config("neurostore_disconnectome7t")
+    for key in ("downloads", "tractogram", "questions"):
+        assert ns[key] == store[key]
+    files = {f"{d['dest']}/{d.get('name', d['url'].rsplit('/', 1)[-1])}"
+             for d in ns["downloads"]}
+    tail = ns["datalog_init"].rstrip().splitlines()[-4:]
+    assert store["datalog_init"].rstrip().splitlines()[-4:] == tail
+    for path in ("tracts/disconnectome7t/disconnectome7t.tck",
+                 "tracts/disconnectome7t/disconnectome7t_wmparc.nii.gz",
+                 "tracts/fs/FreeSurferColorLUT.txt"):
+        assert path in files and f'"{path}"' in "\n".join(tail)
+    assert ns["tractogram"]["path"] in files
+    texts = " ".join(get_acknowledgements("neurosynth_disconnectome7t"))
+    assert "Disconnectome7T" in texts and "Human Connectome" in texts

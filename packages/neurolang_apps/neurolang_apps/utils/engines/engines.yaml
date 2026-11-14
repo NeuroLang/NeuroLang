@@ -1607,6 +1607,80 @@ engines:
       freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view
       work at the prompt.
 
+  disconnectome7t_tractogram:
+    abstract: true
+    extends: tracts
+    acknowledgements:
+      - >-
+        Disconnectome7T (Thiebaut de Schotten M, Foulon C, Nachev P. Brain
+        disconnections link structural connectivity with function and
+        behaviour. Nature Communications 11:5094 (2020).
+        doi:10.1038/s41467-020-18920-9; https://osf.io/5zqwg/): the
+        tractography of the 7 T diffusion MRI of the Human Connectome
+        Project; data provided by the Human Connectome Project, WU-Minn
+        Consortium (Principal Investigators: David Van Essen and Kamil
+        Ugurbil; 1U54MH091657) funded by the 16 NIH Institutes and Centers
+        that support the NIH Blueprint for Neuroscience Research, and by the
+        McDonnell Center for Systems Neuroscience at Washington University;
+        FreeSurfer's colour LUT; the bundles of tract_querier (Wassermann D,
+        Makris N, Rathi Y, Shenton M, Kikinis R, Kubicki M, Westin CF. The
+        white matter query language: a novel approach for describing human
+        white matter anatomy. Brain Structure and Function 221:4705-4721
+        (2016). doi:10.1007/s00429-015-1179-4)
+    # 300,000 streamlines of 20 HCP subjects of Disconnectome7T, all
+    # within the MNI152 brain, and their group FreeSurfer segmentation,
+    # both in the HCP's MNI152 space (tools/hcp_connectivity, dense.py and
+    # space.py), in the dataset
+    # https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity at a tag.
+    downloads:
+      - url: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.1/tractography/disconnectome7t.tck
+        name: disconnectome7t.tck
+        md5: 340d63f180395d40ca7f39ee80eae7b5
+        dest: tracts/disconnectome7t
+      - url: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.1/tractography/disconnectome7t_wmparc.nii.gz
+        name: disconnectome7t_wmparc.nii.gz
+        md5: 0e3774fcd9cee7f4934f9733f9944ede
+        dest: tracts/disconnectome7t
+      - url: https://raw.githubusercontent.com/freesurfer/freesurfer/18761d34d14d62216ec1ca3b0056fb9b04ea2f59/distribution/FreeSurferColorLUT.txt
+        md5: ce7f38b53a507ac1990e0795353417d7
+        dest: tracts/fs
+    # The bundle of the REPL ships a subsample (the points are already
+    # compressed: every point kept)
+    tractogram: {path: tracts/disconnectome7t/disconnectome7t.tck, subsample: 15000, step: 1, seed: 0}
+    datalog_init: |
+      .load_tractogram("d7t", "tracts/disconnectome7t/disconnectome7t.tck", space="MNI152")
+      .load_atlas("fs", "tracts/disconnectome7t/disconnectome7t_wmparc.nii.gz", "tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+      .index_tracts("d7t", "fs")
+      .import("bundles/freesurfer_queries.dl")
+
+  neurosynth_disconnectome7t:
+    extends: [neurosynth_tracts, disconnectome7t_tractogram]
+    description: >
+      Neurosynth with a dense whole-brain tractogram and tract_querier's
+      bundles: neurosynth_tracts after the commands that load a dense
+      tractogram of the Human Connectome Project's 7 T diffusion MRI
+      (Disconnectome7T: 300,000 streamlines of at least 30 mm of 20
+      subjects, all within the brain, 44 MB, downloaded into the data
+      directory's tracts/disconnectome7t), load the FreeSurfer segmentation of those
+      subjects (the label most of them give each voxel; FreeSurfer's codes,
+      so the term mapping freesurfer_aseg_aparc applies), both in the
+      HCP's MNI152 space, the space of the atlases, index the one by the
+      other and import the bundles of tract_querier's
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view
+      work at the prompt. Denser than neurosynth_iit (38,000 streamlines of
+      one template), and of real subjects: the bundles have more
+      streamlines, and some IIT does not find (af, slf_i, ec) are found.
+
+  neurostore_disconnectome7t:
+    extends: [neurostore_tracts, disconnectome7t_tractogram]
+    description: >
+      NeuroStore with a dense whole-brain tractogram and tract_querier's
+      bundles: neurostore_tracts after the commands of
+      neurosynth_disconnectome7t (Disconnectome7T, 300,000 streamlines of
+      20 HCP subjects at 7 T, and their FreeSurfer segmentation, in the
+      HCP's MNI152 space), so that ans(x) :- uf(x, "left") and .view work
+      at the prompt.
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:
