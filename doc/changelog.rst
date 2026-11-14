@@ -54,6 +54,13 @@ Unreleased
   before. Queries are embedded with the numpy SPECTER2 encoder whenever its
   weights are next to the model, not only without torch; encoders of an
   engine built again share torch's model.
+* ``.ask --refine QUESTION`` and ``.llm --refine QUESTION`` change the last
+  query for a new or extended question, instead of starting afresh: the
+  assistant is given the previous question, the previous query, even if it
+  failed, and what happened to it (the error, the first rows or that there
+  were none, the engine's notes). The browser REPL has a *Refine* button next
+  to *Ask*. The agents take ``run(question, previous=Previous(question,
+  query, outcome))``.
 * The network of the brain viewer names what is under the mouse on a
   slice: a node, the name of its region; an edge, the names of the two
   regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,

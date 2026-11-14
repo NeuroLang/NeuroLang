@@ -61,13 +61,14 @@ def script(app, *replies):
 
 
 @pytest.mark.parametrize("arg, expected", [
-    ("Which studies?", (None, None, "Which studies?", None)),
+    ("Which studies?", (None, None, "Which studies?", None, False)),
     (
         "--squall --react what's there",
-        ("squall", "react", "what's there", None),
+        ("squall", "react", "what's there", None, False),
     ),
-    ("--datalog   --icl  q", ("datalog", "icl", "q", None)),
-    ("--steps 12 --react q", (None, "react", "q", 12)),
+    ("--datalog   --icl  q", ("datalog", "icl", "q", None, False)),
+    ("--steps 12 --react q", (None, "react", "q", 12, False)),
+    ("--refine --steps 3 only pain", (None, None, "only pain", 3, True)),
 ])
 def test_parse_ask(arg, expected):
     assert parse_ask(arg) == expected
@@ -647,3 +648,85 @@ def test_explain_reports_provider_errors(app):
     app.assistant.client = Failing()
     app._run_line(".explain")
     assert app.failed and "HTTP 401: bad key" in output(app)
+
+
+def _first_user_message(client, index=0):
+    return client.requests[index]["messages"][1]["content"]
+
+
+def test_refine_starts_from_the_last_attempt_even_if_it_failed(app):
+    wrong = "```datalog\nans(s) :- mention(s, 'pain')\n```"
+    script(app, wrong, wrong)
+    app._run_line(".ask Which studies mention pain?")
+    assert app.failed
+    client = script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
+    app._run_line(".ask --refine Only the first one")
+    assert app.pending_input == "ans(s) :- mentions(s, 'pain')"
+    message = _first_user_message(client)
+    assert "# Previous question\nWhich studies mention pain?" in message
+    assert "ans(s) :- mention(s, 'pain')" in message
+    assert "# What happened when it ran\n" in message
+    assert "mention" in message.split("# What happened when it ran\n")[1]
+    assert "# New question\nOnly the first one" in message
+
+
+def test_refine_starts_from_the_query_run_since_with_its_error(app):
+    script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
+    app._run_line(".ask Which studies mention pain?")
+    app._run_line("ans(s) :- nothing(s)")  # the visitor changed it
+    client = script(app, "```datalog\nans(s) :- study(s)\n```")
+    app._run_line(".ask --refine All of them")
+    message = _first_user_message(client)
+    assert "# Previous question\nWhich studies mention pain?" in message
+    assert "ans(s) :- nothing(s)" in message
+    assert "# What happened when it ran\n" in message
+    assert "The query ran and gave no rows." in message
+    assert "note: predicate nothing has no facts or rules" in message
+
+
+def test_refine_tells_the_error_of_a_query_that_failed(app):
+    app._run_line("ans(s) :- study(s")
+    client = script(app, "```datalog\nans(s) :- study(s)\n```")
+    app._run_line(".ask --refine Close the bracket")
+    message = _first_user_message(client)
+    assert "ans(s) :- study(s" in message
+    assert "# What happened when it ran\nError:" in message
+
+
+def test_refine_tells_the_rows_of_the_query_that_ran(app):
+    app._run_line("ans(s, t) :- mentions(s, t)")
+    client = script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
+    app._run_line(".ask --refine Only the studies of pain")
+    message = _first_user_message(client)
+    assert "# Previous question" not in message  # it was typed, not asked
+    assert "ans(s, t) :- mentions(s, t)" in message
+    assert "2 rows" in message and "pain" in message and "fear" in message
+
+
+def test_refine_tells_that_the_query_gave_no_rows(app):
+    app._run_line("ans(s) :- mentions(s, 'joy')")
+    client = script(app, "```datalog\nans(s) :- mentions(s, 'pain')\n```")
+    app._run_line(".ask --refine Rather pain")
+    assert "gave no rows" in _first_user_message(client)
+
+
+def test_refine_with_nothing_to_start_from_says_so(app):
+    app._run_line(".ask --refine Only the first one")
+    assert app.failed and "Nothing to refine" in output(app)
+
+
+def test_llm_refines_too_and_the_next_question_starts_afresh(app):
+    app._run_line("ans(s, t) :- mentions(s, t)")
+    client = script(app, *REACT_PAIN)
+    app._run_line(".llm --refine Only the studies of pain")
+    assert "# Previous Datalog query\nans(s, t) :- mentions(s, t)" in (
+        _first_user_message(client)
+    )
+    client = script(app, *REACT_PAIN)
+    app._run_line(".llm Which studies mention pain?")
+    assert _first_user_message(client) == "Which studies mention pain?"
+
+
+def test_refine_needs_a_question(app):
+    app._run_line(".ask --refine")
+    assert app.failed and "Usage: .ask" in output(app)

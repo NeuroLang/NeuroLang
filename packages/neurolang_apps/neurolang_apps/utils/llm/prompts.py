@@ -391,6 +391,30 @@ def repair_prompt(query: str, error: str, language: str) -> str:
     )
 
 
+def refinement_request(question: str, previous, language: str) -> str:
+    """
+    Return the message asking to change the query of a *previous* attempt
+    (its question, query and outcome, see :class:`~.agent.Previous`) so
+    that it answers the new *question*, rather than to start over.
+    """
+    parts = []
+    if previous.question:
+        parts.append(f"# Previous question\n{previous.question}")
+    parts.append(
+        f"# Previous {LANGUAGE_NAMES[language]} query\n{previous.query}"
+    )
+    if previous.outcome:
+        parts.append(f"# What happened when it ran\n{previous.outcome}")
+    parts.append(f"# New question\n{question}")
+    parts.append(
+        "Change the previous query so that it answers the new question: "
+        "keep what is right, correct what the outcome shows is wrong, and "
+        "start again only if the new question has nothing to do with it. "
+        "Answer as before."
+    )
+    return "\n\n".join(parts)
+
+
 def observation(result: str) -> str:
     """Return the *result* of a tool as a text protocol observation."""
     return f"Observation: {result}"

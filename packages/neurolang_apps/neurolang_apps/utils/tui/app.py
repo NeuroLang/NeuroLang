@@ -166,6 +166,10 @@ class InteractiveTuiApp:
         self.session = None
         self.completer = None
         self.last_query = None
+        # What the last query that ran failed with, None if it did not,
+        # and the notes the last submission gave.
+        self.last_error = None
+        self.last_notes = []
         # The query whose result is in results, for the graph of its rows.
         self.results_query = None
         # The rules added by the submission of the last query, by symbol.
@@ -265,6 +269,7 @@ class InteractiveTuiApp:
             warning_note(message, known) for message in messages
             if not left_out_symbol(self._nl, message)
         )
+        self.last_notes = list(notes)
         for note in notes:
             self.err_console.print(note, style="yellow", markup=False)
         for name in sorted(self._left_out_used):
@@ -290,6 +295,7 @@ class InteractiveTuiApp:
         predicate it does not find is one the engine leaves out.
         """
         self.failed = True
+        self.last_error = str(exc)
         missing = left_out_symbol(self._nl, str(exc))
         if missing:
             if missing not in self._left_out_used:
@@ -361,6 +367,7 @@ class InteractiveTuiApp:
             return
         self.agent_run = AgentRun(program, self.settings.squall, frames)
         self.last_query = (program, self.settings.squall)
+        self.last_error = None
         self.last_added_rules = {}
         self.results_query = self.last_query
 
@@ -564,6 +571,7 @@ class InteractiveTuiApp:
             return
         if query:
             self.last_query = (program, self.settings.squall)
+            self.last_error = None
             self.last_added_rules = {}
             self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
