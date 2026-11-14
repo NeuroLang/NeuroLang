@@ -47,6 +47,7 @@ def test_neurostore_iit_loads_the_tractogram_of_neurosynth_iit():
 
 def test_neurostore_iit_has_the_questions_of_the_bundles():
     bank = load_examples("neurostore_iit")
-    assert bank[:-2] == load_examples("neurostore_tracts")
-    assert bank[-2:] == load_examples("neurosynth_iit")[-2:]
-    assert bank[-2].queries["datalog"] == 'ans(x) :- uf(x, "left")'
+    assert bank[:-3] == load_examples("neurostore_tracts")
+    assert bank[-3:] == load_examples("neurosynth_iit")[-3:]
+    assert bank[-3].queries["datalog"] == \
+        'ans(streamline) :- uf(streamline, "left")'

@@ -19,8 +19,32 @@ questions:
 assistant_examples:
   - question: Which streamlines form the left uncinate fasciculus?
     datalog: |-
-      ans(x) :- uf(x, "left")
+      ans(streamline) :- uf(streamline, "left")
 
   - question: Which streamlines form the right inferior longitudinal fasciculus?
     datalog: |-
-      ans(x) :- ilf(x, "right")
+      ans(streamline) :- ilf(streamline, "right")
+
+  # The regions at the two ends of a bundle: those near the end points of
+  # its streamlines, end 0 at one end and end 1 at the other, keeping the
+  # pairs of regions joined by at least 5% of its streamlines. The answer
+  # also gives these regions, as an answer of its own. The Cognitive Atlas
+  # tasks are the classes below COGPO_00049 (behavioural experimental
+  # paradigm); few of their labels are terms of the vocabulary.
+  - question: What is the specificity, by its Bayes factor, of each cognitive task mentioned in the studies activating the regions at both ends of the left uncinate fasciculus?
+    datalog: |-
+      end_region(x, e, region) :- uf(x, "left"), endpoint_point(x, e, ex, ey, ez), destrieux_points(px, py, pz, region), (EUCLIDEAN(ex, ey, ez, px, py, pz) <= 3)
+      pair(x, region_1, region_2) :- end_region(x, 0, region_1), end_region(x, 1, region_2), (region_1 != region_2)
+      pair_count(region_1, region_2, count(x)) :- pair(x, region_1, region_2)
+      uf_count(count(x)) :- uf(x, "left")
+      connected(region_1, region_2, n) :- pair_count(region_1, region_2, n), uf_count(t), (n >= 0.05 * t)
+      connecting(s) :- connected(region_1, region_2, n), destrieux_activated(region_1, s), destrieux_activated(region_2, s), selected_study(s)
+      task_label(label) :- rdfs:subClassOf(c, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#COGPO_00049>), cogat_term(c, label)
+      mentioned_task(t, s) :- task_label(t), mentions(s, t), selected_study(s)
+      both(t, s) :- task_label(t), mentions(s, t), connecting(s)
+      connecting_probability(p_r) :- PROB[connecting(s)] = p_r
+      task_probability(t, PROB) :- mentioned_task(t, s)
+      joint_probability(t, PROB) :- both(t, s)
+      bayes_factor(t, bf) :- joint_probability(t, p_rt), connecting_probability(p_r), task_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans[uf_end_regions](region_1, region_2, streamlines) :- connected(region_1, region_2, streamlines)
+      ans[task_specificity](task, bayes_factor) :- bayes_factor(task, bayes_factor)

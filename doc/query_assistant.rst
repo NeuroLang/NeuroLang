@@ -103,6 +103,18 @@ and text-to-SPARQL systems.
     questions on its concepts, domains and abstracts. The guidance of the
     prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
 
+    The columns of an answer are named by the variables of its ``ans``:
+    the prompt asks for names that say what they hold,
+    ``ans(region, probability)`` rather than ``ans(l, p)``, and the
+    examples are written so (a test checks it). When the answer is
+    computed over entities the question names, such as the regions at the
+    ends of a tract, these are given too, as an answer of their own: one
+    named query ``ans[name](...)`` per kind of rows, as in the example of
+    the ``neurosynth_iit`` bank on the cognitive tasks of the studies
+    activating the regions at both ends of the left uncinate fasciculus,
+    which answers ``ans[uf_end_regions](region_1, region_2, streamlines)``
+    and ``ans[task_specificity](task, bayes_factor)``.
+
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
     arguments are reported. When it fails, the formatted error is sent
