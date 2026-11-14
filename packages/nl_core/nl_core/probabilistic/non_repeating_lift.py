@@ -41,6 +41,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from nl_expr.expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from nl_expr.expression_walker import (
     PatternWalker,
+    ReplaceExpressionWalker,
     add_match,
     expression_iterator,
 )
@@ -105,11 +106,11 @@ def non_repeating_plan(formula, symbol_table):
 
 def columns_comparison(comparison):
     """The comparison of the columns named after the variables of
-    `comparison`."""
-    return comparison.functor(*(
-        str2columnstr_constant(arg.name) if isinstance(arg, Symbol) else arg
-        for arg in comparison.args
-    ))
+    `comparison`, within its terms too, as `x + 1 < y`."""
+    return ReplaceExpressionWalker({
+        variable: str2columnstr_constant(variable.name)
+        for variable in extract_logic_free_variables(comparison)
+    }).walk(comparison)
 
 
 def select_comparisons(plan, comparisons):

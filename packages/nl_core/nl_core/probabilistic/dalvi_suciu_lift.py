@@ -891,7 +891,8 @@ def _extremum_conjunct(variable, variables, conjuncts):
     """`¬∃w (R(ū[w/v]) ∧ w < v)`, `v` being *variable*, if `R(ū)` is the
     only conjunct with `v` but comparisons, `v` is its only variable of
     `variables`, and `v` is the lesser side of every comparison with it,
-    or the same with `w > v` if it is the greater side, or None. The
+    whose other side is a term without `v`, or the same with `w > v` if
+    it is the greater side, or None. The
     least (greatest) value of `v` for which `R(ū)` holds satisfies
     the comparisons of any other value, so the conjunct is implied.
     """
@@ -904,7 +905,10 @@ def _extremum_conjunct(variable, variables, conjuncts):
             others.append(conjunct)
         elif conjunct.functor.value in ORDER_SIDES and variable in (
             conjunct.args
-        ) and len(set(conjunct.args)) == 2:
+        ) and [
+            variable in extract_logic_free_variables(arg)
+            for arg in conjunct.args
+        ].count(True) == 1:
             sides.add(ORDER_SIDES[conjunct.functor.value][
                 conjunct.args.index(variable)
             ])

@@ -1043,7 +1043,8 @@ Projection on a variable
    the only conjunct of :math:`\varphi` with :math:`v` but comparisons,
    :math:`v` is its only variable of :math:`X`, and :math:`v` is the
    lesser side of every comparison with it, :math:`v < t` or
-   :math:`v \leq t`,
+   :math:`v \leq t`, :math:`t` being a term without :math:`v`, as
+   :math:`x + 1`,
 
    .. math::
 
@@ -1801,7 +1802,9 @@ Projection on a variable
    total. With :math:`v = m`, :math:`R(\bar u[m/v])` holds and no
    :math:`R(\bar u[w/v])` with :math:`w < m`, so the added conjunct holds;
    the conjuncts without :math:`v` are unchanged; each comparison
-   :math:`v < t` or :math:`v \leq t` holds, as :math:`m \leq a`. These are
+   :math:`v < t` or :math:`v \leq t` holds, as :math:`m \leq a` and
+   :math:`t` is a term without :math:`v` (with :math:`v < 2v`, the least
+   value :math:`-1` fails where :math:`2` holds). These are
    all the conjuncts of :math:`\varphi`, which then holds with the added
    conjunct. The converse is immediate, so both queries have the same
    worlds; the greatest value is symmetric. The query rewritten is then
