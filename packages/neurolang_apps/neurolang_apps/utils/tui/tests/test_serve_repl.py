@@ -403,6 +403,23 @@ def _post(port, action, body):
     return urllib.request.urlopen(request)
 
 
+def test_a_local_server_offers_the_engines_of_7t_tracts(serve, tmp_path):
+    """With --local the page offers, and the server prepares, the engines
+    too large for a browser tab, besides the bundle's; the bundle has
+    none of them."""
+    page = serve.prepare_local_site(tmp_path)
+    offered = json.loads((page.parent / "bundle.json").read_text())["engines"]
+    assert set(serve.bundle_engines()) < set(offered)
+    assert offered["neurosynth_disconnectome7t"] == {
+        "label": "Neurosynth + 7 T tracts"}
+    assert "neurostore_disconnectome7t" in offered
+    assert serve.parse_args(
+        ["--local", "--engine", "neurosynth_disconnectome7t"]
+    ).engines == ["neurosynth_disconnectome7t"]
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--engine", "neurosynth_disconnectome7t"])
+
+
 def test_the_local_site_has_the_page_answered_by_this_machine(
     serve, tmp_path
 ):
