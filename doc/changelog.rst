@@ -132,6 +132,12 @@ Unreleased
 
 **Bug fixes:**
 
+* ``.view`` of streamlines with the regions they join, as
+  ``ans(s, l1, l2) :- connects(s, l1, l2)``, draws the streamlines, their
+  column of the sort ``streamline``: it drew the network of the regions.
+  The engine ``tracts`` declares the relations of a tractogram
+  (``endpoint_point``, ``streamline_label``...), so that their streamline
+  is of that sort.
 * A disjunction of functions whose variables a positive atom outside it
   binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
   startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.

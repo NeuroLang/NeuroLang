@@ -1193,6 +1193,22 @@ class TestViewStreamlines:
             tracts, tracts.results[-1], nifti.SaveRequest(Path("x.nii"))
         ) == "network"
 
+    def test_streamlines_between_pairs_stay_streamlines(
+        self, tracts, view_calls
+    ):
+        """The streamlines joining two regions, ans(s, l1, l2), are drawn,
+        not the network of their ends."""
+        kwargs, out = self._view(
+            tracts,
+            "ans(s, x, y, z, x2, y2, z2) :- tract(s), mni(x, y, z), "
+            "mni(x2, y2, z2)",
+            view_calls,
+        )
+        assert tracts.results[-1].sorts[0].sort == nifti.STREAMLINE_SORT
+        assert "connectome" not in kwargs
+        assert kwargs["streamlines"]["total"] == 2
+        assert "Streamlines of the column 's': 2 of 2 shown" in out
+
     def test_several_integer_columns_are_not_streamlines(self, tracts):
         tracts._nl.add_tuple_set([(1, 7), (2, 8)], name="pairs")
         tracts._execute_and_display("ans(a, b) :- pairs(a, b)")
