@@ -717,10 +717,20 @@ class WebRepl:
         """
         Keep the file *name* of the bytes *data* the page uploaded, in the
         memory of the session, and return the statement that loads it
-        (``.load NAME``): a ValueError tells why it is refused.
+        (``.load NAME``, or ``.image NAME`` replacing the image of the
+        session) and for an image the ``query`` decoding it, if the engine
+        can: a ValueError tells why it is refused.
         """
         session.store_upload(self.app, name, data)
-        return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        if not session.is_image(name):
+            return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        decoding = nifti.image_decoding(self.app, "image")
+        return {
+            "name": name,
+            "statement": f".image {shlex.quote(name)} --name image",
+            "query": "" if decoding.get("missing", True)
+            else decoding["query"],
+        }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
         """

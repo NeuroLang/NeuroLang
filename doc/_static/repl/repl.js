@@ -987,6 +987,8 @@ $("upload-file").addEventListener("change", async (event) => {
   }
   uploads.set(answer.name, bytes);
   run(answer.statement, { remember: true });
+  // An image comes with the query decoding it, for the visitor to run.
+  if (answer.query) putQuery(answer.query);
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {

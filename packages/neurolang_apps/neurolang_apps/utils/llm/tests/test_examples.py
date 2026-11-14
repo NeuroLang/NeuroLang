@@ -114,7 +114,12 @@ def test_bank_queries_are_valid_on_the_engine(engine):
     voxels = pd.DataFrame(list(nl.symbols["brain_mask"].value)[:10],
                           columns=["i", "j", "k"])
     nl.add_tuple_set(voxels.assign(value=1.0), name="image")
-    nl.add_uniform_probabilistic_choice_over_set(voxels, name="image_voxel")
+    nl.add_tuple_set(voxels.assign(weight=0.1), name="image_voxel")
+    decoding = engine_registry.get_engine_config(engine).get("image_decoding")
+    if decoding:
+        nl.execute_datalog_program(
+            decoding["rules"].replace("{name}", "image")
+        )
     failures = []
     for example in load_examples(engine):
         for language, query in example.queries.items():

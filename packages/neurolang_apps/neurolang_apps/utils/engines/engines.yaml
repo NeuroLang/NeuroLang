@@ -223,6 +223,25 @@ engines:
         n: 500
         scheme: bayesian
         seed: 0
+    # The decoding of an image loaded with .image (tui/nifti.py), {name}
+    # its relation: {name}_voxel(i, j, k, w) are its activated voxels, and
+    # w the probability that a voxel chosen in the image is (i, j, k).
+    # {name}_hit(s) is that study s activates the chosen voxel, of
+    # probability the weight of the voxels of the image it activates (the
+    # voxel is chosen independently of the study); {name}_decoding(t, lift,
+    # n) is the probability of it for the studies of the term t, over the
+    # same for all the studies, and n the number of studies of t.  query is
+    # the one the REPL offers, towards the concepts of the Cognitive Atlas
+    # with 30 studies or more (the lift of fewer is noisy).
+    image_decoding:
+      rules: |
+        {name}_score(s, sum(w)) :- activated(i, j, k, s) & {name}_voxel(i, j, k, w)
+        {name}_hit(s) :: w :- {name}_score(s, w)
+        {name}_given_term(t, PROB) :- ({name}_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+        {name}_activated(PROB) :- {name}_hit(s) & selected_study(s)
+        {name}_term_studies(t, count(s)) :- term_in_study(s, t)
+        {name}_decoding(t, lift, n) :- {name}_given_term(t, p) & {name}_activated(q) & {name}_term_studies(t, n) & (lift == p / q)
+      query: "ans(term, lift, studies) :- {name}_decoding(term, lift, studies), cogat_term(concept, term), (studies >= 30)"
     # The Cognitive Atlas ontology, for open-world queries over concepts,
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
     # triples are facts (``rdfs:label(iri, 'Working memory')``) and its

@@ -126,9 +126,8 @@ assistant_guidance: >
   PROB[active(l, s) // cond(s)] = p with cond(s) :- recent(s),
   mentions(s, 'pain'), selected_study(s) for the studies mentioning
   pain.
-  An image loaded with .image (a z-map, say) is the relation
-  image(i, j, k, value) and the uniform choice image_voxel(i, j, k) of
-  its voxels above a threshold: decode it with the probability that a
-  study of a term reports a peak in image_voxel, over the same for all
-  the studies (see the examples), one query per term as the term is a
-  constant.
+  An image loaded with .image (a binary mask or a z-map) is the
+  relation image(i, j, k, value), and image_decoding(t, lift, studies)
+  decodes it for every term t at once: the lift of the studies of t
+  activating its voxels, and their number (a lift of few studies is
+  noisy); restrict t with cogat_term(x, t) for the Cognitive Atlas.

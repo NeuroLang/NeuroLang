@@ -453,20 +453,28 @@ def _load_arguments(arg: str):
 UPLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\Z")
 MOST_UPLOAD_BYTES = 50 << 20
 MOST_UPLOADS_BYTES = 200 << 20
+# Those of an image, which .image loads (nifti.py), not .load.
+IMAGE_SUFFIXES = (".nii", ".nii.gz")
+
+
+def is_image(name: str) -> bool:
+    """Whether the file *name* is a NIfTI image."""
+    return name.lower().endswith(IMAGE_SUFFIXES)
 
 
 def store_upload(app, name: str, data: bytes) -> None:
     """
     Keep the file *name*, of the bytes *data*, that the page uploaded, for
-    ``.load NAME``: in the memory of the session, never on a disk, and
-    gone with it. A ValueError tells why it is refused (its name, its
-    format, its size).
+    ``.load NAME`` (``.image NAME`` for a NIfTI image): in the memory of
+    the session, never on a disk, and gone with it. A ValueError tells why
+    it is refused (its name, its format, its size).
     """
     if not isinstance(name, str) or not UPLOAD_NAME.match(name) \
             or ".." in name:
         raise ValueError(f"{name!r} is not the name of a file: letters, "
                          "digits, '.', '_', '-' and spaces")
-    engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
+    if not is_image(name):
+        engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
     if len(data) > MOST_UPLOAD_BYTES:
         raise ValueError(f"{name} is over {MOST_UPLOAD_BYTES >> 20} MB")
     kept = sum(len(d) for n, d in app.uploads.items() if n != name)

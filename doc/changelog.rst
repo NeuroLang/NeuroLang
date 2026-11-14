@@ -19,6 +19,20 @@ Unreleased
 
 **New features:**
 
+* Decoding a brain image (:doc:`tutorial_decoding`): ``.image PATH`` loads a
+  NIfTI image of activations, a binary mask or a z-map, resampled to the
+  grid of the engine, as ``image(i, j, k, value)``, shows it in the brain
+  viewer, and its activated voxels ``image_voxel(i, j, k, weight)``, weight
+  the probability to choose each: those of a mask, equally likely; those of
+  a z-map of 3.1 or more (``--threshold``; ``image`` in ``viewer.yaml``), the
+  more likely the larger their value.  On the meta-analysis engines, ``image_decoding(t, lift,
+  studies)`` decodes it for every term at once (``image_decoding`` in
+  ``engines.yaml``): the probability that a study of the term activates a
+  voxel chosen in the image, over the same for all the studies.  The
+  page's *Upload data* takes ``.nii``/``.nii.gz`` images too, kept in the
+  memory of the session as the CSV files are, so a server reading none of
+  its files loads them, and puts the decoding query in the box.
+
 * The page of the REPL shows the answers of a program with several queries
   (``ans[name]``) in a tab each, named after its query, with its number of
   rows.  ``.view`` (and the brain tab) draws all those it can and leaves
