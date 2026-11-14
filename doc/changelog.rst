@@ -41,6 +41,16 @@ Unreleased
   fail, the chased predicates broke ``solve_all``, an aggregate over a
   rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
   ``C(x) → B(x)``.
+* ``neurolang-repl-serve --local`` loads the text embeddings of an engine
+  when it builds it (its documents', from their cache or computed into it,
+  and the SPECTER2 query model): with ``--users`` in the builder, before
+  forking the sessions, which share them; their first ``query_similarity``
+  (``similar_study``, ``lift_llm``) no longer loads the model, and no
+  longer crashes a session on macOS. ``--no-preload-embeddings``
+  (``preload_embeddings: false``) leaves them to the first query, as
+  before. Queries are embedded with the numpy SPECTER2 encoder whenever its
+  weights are next to the model, not only without torch; encoders of an
+  engine built again share torch's model.
 * The network of the brain viewer names what is under the mouse on a
   slice: a node, the name of its region; an edge, the names of the two
   regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,
@@ -193,6 +203,14 @@ Unreleased
 
 **Performance:**
 
+* The query assistant caches its prompts on the Anthropic API, and on
+  OpenRouter for Claude: the steps of
+  an answer repeat the system prompt and the conversation so far, which are
+  then read from the cache at a tenth of the price of input tokens or less,
+  making an answer about three times cheaper.  The line after the query
+  counts the tokens read from the cache, also for the providers that cache
+  by themselves, such as DeepSeek on OpenRouter.
+
 * A natural join on a unique key of strings, such as the NeuroStore study
   ids joined with the probabilities of ``selected_study``, looks the keys
   up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
@@ -203,6 +221,12 @@ Unreleased
   j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
+
+* Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
+  taken for an aggregation, the operator applied to each group's values,
+  and gave rows of missing values or failed in pandas; it is now refused
+  with a ``ForbiddenExpressionError`` that tells how to compute the value
+  in the body, ``(v == n / 2)``.
 
 * The threshold sliders of the brain viewer sit over the values they set
   on the histogram. In percentile mode a thumb was placed at its percentile

@@ -245,7 +245,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
-    if flat_query_body == FALSE or (
+    if FALSE in (
+        flat_query_body,
+        lift_optimization_for_choice_predicates(flat_query_body, cpl_program)
+    ) or (
         isinstance(flat_query_body, Conjunction)
         and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
     ):
@@ -362,10 +365,9 @@ def _prepare_and_optimise_query(
     flat_query_body = _normal_form(
         convert_to_dnf_existential_ucq, flat_query.antecedent
     )
-    flat_query_body = RTO.walk(Disjunction(tuple(
-        lift_optimization_for_choice_predicates(f, cpl_program)
-        for f in flat_query_body.formulas
-    )))
+    flat_query_body = RTO.walk(lift_optimization_for_choice_predicates(
+        flat_query_body, cpl_program
+    ))
     flat_query = Implication(flat_query.consequent, flat_query_body)
     unified_query = UnifyVariableEqualities().walk(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(

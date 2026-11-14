@@ -82,14 +82,17 @@ def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
 
 # -- In the builder's process ---------------------------------------------
 
-def _builder(conn, address, authkey, options: dict, build) -> None:
+def _builder(conn, address, authkey, options: dict, build,
+             preload_embeddings: bool = True) -> None:
     """Build the engines asked for, once each, and fork a session's
     process from them for each ``("fork", key, start, engine, env)`` of
     *conn* (*start* numbering each start of a session once, *env* the
     variables of its user, *feedback* where its ratings go); end when the
-    server does."""
+    server does. With *preload_embeddings*, an engine's text embeddings
+    are loaded before its first fork, for its sessions to share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
-    backend = LocalBackend(build=build, **options)
+    backend = LocalBackend(build=build,
+                           preload_embeddings=preload_embeddings, **options)
     engines = {}
     while True:
         try:
@@ -100,7 +103,7 @@ def _builder(conn, address, authkey, options: dict, build) -> None:
             os._exit(0)
         try:
             if engine not in engines:
-                engines[engine] = backend._build(
+                engines[engine] = backend.build(
                     engine,
                     lambda text: conn.send(("status", key, start, text)),
                 )
@@ -487,8 +490,11 @@ class Sessions:
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`. At most
     *running* queries (and downloads) run at once (by default, as many as
     the machine has CPUs), the others waiting; one running longer than
-    *query_seconds*, if given, ends its session's process. *build* must be
-    importable by name, as the builder is started anew.
+    *query_seconds*, if given, ends its session's process. With
+    *preload_embeddings*, the builder loads the text embeddings of an
+    engine (its documents' and its query model) before forking its
+    sessions, which share them. *build* must be importable by name, as the
+    builder is started anew.
     """
 
     def __init__(
@@ -499,6 +505,7 @@ class Sessions:
         identity: Optional[Callable] = None, feedback_db=None,
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
+        preload_embeddings: bool = True,
     ):
         env = env or {}
         self.identity = identity or (lambda user: (env.get(user, {}), ""))
@@ -530,7 +537,8 @@ class Sessions:
                    "light": light, "feedback": feedback}
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
-            args=(theirs, self._listener.address, authkey, options, build),
+            args=(theirs, self._listener.address, authkey, options, build,
+                  preload_embeddings),
         )
         # The variables *withhold* (the server's keys) are not the
         # builder's, nor so of the sessions it forks: a session has those
