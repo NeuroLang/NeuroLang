@@ -273,7 +273,9 @@ The ``api`` of a provider is one of:
 
 ``openai``
     The OpenAI chat completions API, spoken by OpenRouter, Albert, vLLM,
-    Ollama and most open services.
+    Ollama and most open services. OpenRouter caches the prompts of
+    DeepSeek and OpenAI models by itself, and those of Claude (``anthropic/``
+    models) because the assistant asks it to.
 ``anthropic``
     The Anthropic messages API, with prompt caching: each request of the
     assistant repeats the system prompt and the conversation so far, which
