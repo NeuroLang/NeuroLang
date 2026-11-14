@@ -81,7 +81,15 @@ LABELS = {
     "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
     "neurosynth_iit": "Neurosynth + tracts",
     "neurostore_iit": "NeuroStore + tracts",
+    "neurosynth_disconnectome7t": "Neurosynth + 7 T tracts",
+    "neurostore_disconnectome7t": "NeuroStore + 7 T tracts",
 }
+# The engines of a server whose Python answers the page
+# (neurolang-repl-serve --local): the page's, and those whose data a
+# browser tab cannot hold, such as the 300,000 streamlines of
+# Disconnectome7T.
+LOCAL_ENGINES = ENGINES + (
+    "neurosynth_disconnectome7t", "neurostore_disconnectome7t")
 # The engines that have the studies of another and so its text embeddings.
 EMBEDDINGS_FROM = {
     "neurosynth_iit": "neurosynth", "neurostore_iit": "neurostore",
