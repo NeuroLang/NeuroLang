@@ -48,9 +48,9 @@ class and ``p`` a property: whatever an ``A`` reaches through ``p`` is an
 
 (III) *The Cognitive Atlas*.  The ``neurosynth`` and ``neurostore`` engines
 load ``cogat.v2.owl`` (see :doc:`tutorial_cognitive_atlas`).  It gives
-10,399 constraints: three for each of its 2,724 ``someValuesFrom``
-restrictions, one for each of its 1,797 subclass axioms and 430
-``allValuesFrom`` restrictions.  The 430
+10,405 constraints: three for each of its 2,724 ``someValuesFrom``
+restrictions, one for each of its 1,797 subclass axioms, 430
+``allValuesFrom`` restrictions and 6 ``domain`` and ``range`` axioms.  The 430
 ``allValuesFrom`` constraints lie in one recursive component of 3,364
 predicates.  The engine has no instance of any class.  We add one, of the
 class ``CAO_01600``, to measure what happens when data meets the hierarchy.
@@ -254,8 +254,8 @@ alternatives multiply across atoms [Calvanese2007]_.
 
 (III) shows both effects.  The query ``ans(x) :- ro:has_part(x, y)`` is
 rewritten with the constraints whose body can hold: none without an
-instance, so it runs in 0.7 s.  One instance of ``CAO_01600`` makes 8,560 of
-the 10,399 constraints hold.  Rewriting with all of them, as NeuroLang did
+instance, so it runs in 0.7 s.  One instance of ``CAO_01600`` makes 8,566 of
+the 10,405 constraints hold.  Rewriting with all of them, as NeuroLang did
 before the split, did not end within 120 s.  With the split, the full
 constraints run in the chase, the rewriting holds 333 conjunctive queries,
 built in 0.8 s, and the query returns the instance in 1.7 s.  rdflib gives
@@ -336,7 +336,10 @@ expresses, as (II) shows; OWL 2 QL, the profile designed for such
 rewritings, has no transitive properties.
 
 Finally, the rewriting ends.  It does on (I) and on (III), with 333
-rewritings for ``ro:has_part`` and 615 for ``ro:part_of``.  On random
+rewritings for ``ro:has_part`` and 615 for ``ro:part_of``.  The rewritings
+of the domain and range constraints, computed once for the predicates with
+values, are part of the program of every query: if one of them does not
+end, no query does.  On random
 ontologies of 4 classes whose full constraints are not recursive, the
 answers of 1,080 random queries of 1 to 3 atoms match those of a chase with
 unnamed values bounded at depth 6; 120 of them are the test
@@ -359,11 +362,13 @@ The property axioms were checked the same way.  On 720 more random
 queries, of 1 to 3 atoms, over the ontologies of the first check with 1 to
 3 property axioms added, drawn from all seven kinds for half of the
 queries and without transitivity for the others, the bounded chase was run
-at depths 3 and 5, and the two agreed.  For 12 queries it did not end
-within 30 s; of the 708 others, 702 got the certain answers and none an
+at depths 3 and 5, and the two agreed.  For 15 queries it did not end
+within 30 s; of the 705 others, 699 got the certain answers and none an
 answer that is not certain.  Three missed an answer, all through an
 ``allValuesFrom`` reached back from an unnamed value by a symmetric or
-inverse property, and three did not end within 10 s.  The test
+inverse property.  Three did not end within 10 s, all with an
+``allValuesFrom`` on a property that an inverse or a domain and a
+sub-property axiom also constrain.  The test
 ``test_certain_answers_with_property_axioms`` runs 48 more.
 
 One more limit concerns rules.  XRewrite rewrites each rule of the program
@@ -421,7 +426,7 @@ of [Zanitti2023]_ reasons on top of them.
 What would confirm and what limits this
 ---------------------------------------
 
-The completeness claim rests on an argument and on 2,268 random queries,
+The completeness claim rests on an argument and on 2,265 random queries,
 not on a mechanised proof.  A cross-check against an OWL reasoner, such as
 HermiT or Konclude, on ontologies with instances of the Cognitive Atlas,
 would test it at scale.  The termination of the rewriting on recursive
