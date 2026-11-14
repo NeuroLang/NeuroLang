@@ -262,11 +262,11 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     assert list(described["engines"]) == [
         "neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit"]
     assert described["engines"]["neurosynth_iit"]["files"] == {
-        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
+        "neurosynth/model.npz": ["neurosynth-model.npz"]}
     assert described["engines"]["neurostore_iit"] == {
         "label": "NeuroStore + tracts",
         "data": "neurolang-neurostore_iit-data.zip",
-        "files": {"neurostore_iit/model.npz": ["neurostore-model.npz"]},
+        "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
     }
     assert described["engines"]["neurostore"] == {
         "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
@@ -275,7 +275,7 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     # What a page of before the choice of the engine reads: the default's.
     assert described["data"] == "neurolang-neurosynth_iit-data.zip"
     assert described["files"] == {
-        "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
+        "neurosynth/model.npz": ["neurosynth-model.npz"]}
 
 
 def test_an_engine_of_shared_embeddings_is_built_alone(
@@ -475,14 +475,11 @@ def test_an_engine_with_the_studies_of_another_shares_its_embeddings(bundle):
         },
     }
     entry = {"cache_keys": {"study_abstracts": "k"}, "files": {}}
-    bundle.share_embeddings("neurosynth_iit", entry, donor)
-    assert entry["files"] == {
-        "neurosynth_iit/embeddings/study_abstracts.npz": ["a.0", "a.1"],
-        "neurosynth_iit/embeddings/models/m.npz": ["m"],
-    }
+    bundle.share_embeddings(entry, donor)
+    assert entry["files"] == donor["files"]
     entry = {"cache_keys": {"study_abstracts": "other"}, "files": {}}
     with pytest.raises(ValueError, match="cache_key"):
-        bundle.share_embeddings("neurosynth_iit", entry, donor)
+        bundle.share_embeddings(entry, donor)
 
 
 def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
@@ -502,6 +499,6 @@ def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
     assert described["engines"]["neurosynth_iit"] == {
         "label": "Neurosynth + tracts",
         "data": "neurolang-neurosynth_iit-data.zip",
-        "files": {"neurosynth_iit/model.npz": ["neurosynth-model.npz"]},
+        "files": {"neurosynth/model.npz": ["neurosynth-model.npz"]},
     }
     assert all("cache_keys" not in e for e in described["engines"].values())

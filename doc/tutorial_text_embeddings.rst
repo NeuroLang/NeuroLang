@@ -26,7 +26,8 @@ similarity downloads them (about three minutes for the 14,371 NeuroSynth
 studies), downloads SPECTER2 and its adapters (about 430 MB), embeds the
 studies (minutes on a GPU, longer on a CPU), and caches all of it under
 ``{data_dir}/neurosynth/embeddings/``, the model and its tokenizer in
-``models/``.  To do it ahead of time::
+``models/``; the engines extending ``neurosynth`` (``neurosynth_iit``...)
+read them there too.  To do it ahead of time::
 
     python -m neurolang.utils.text_embeddings -e neurosynth -d neurolang_data
 
