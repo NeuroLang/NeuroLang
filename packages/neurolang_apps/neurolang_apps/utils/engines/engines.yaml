@@ -208,8 +208,8 @@ engines:
       relative_risk_llm(q, i, j, k, r) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & (r == pat * (1 - pt) / (pa - pat * pt))
       uniformity_llm(q, i, j, k, u) :- p_a_given_similar(q, i, j, k, pat) & p_any_voxel_given_similar(q, pbar) & (u == pat / pbar)
       ratios_llm(q, i, j, k, lift, relative_risk, uniformity) :- p_a_given_similar(q, i, j, k, pat) & p_a(i, j, k, pa) & p_similar(q, pt) & p_any_voxel_given_similar(q, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
-      cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
-      cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+      cogat_subclass_of(x, y) :- rdfs:subClassOf(x, y), startswith('http', y)
+      cogat_subclass_of(x, z) :- cogat_subclass_of(x, y), rdfs:subClassOf(y, z), startswith('http', z)
       cogat_term(x, t) :- rdfs:label(x, l), (t == lcase(l))
       cogat_definition(t, d) :- cogat_term(x, t), skos:definition(x, d)
       cogat_measures(x, c) :- rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cognitiveatlas.org/ontology/cogat.owl#measures>), owl:someValuesFrom(r, c)
@@ -231,6 +231,10 @@ engines:
       - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
         individuals: true
         names: prefixed
+        # The file declares no prefix for its own namespace: its classes and
+        # properties are cogat:CAO_00587, cogat:measures.
+        prefixes:
+          cogat: http://www.cognitiveatlas.org/ontology/cogat.owl#
     text_embeddings:
       study_abstracts:
         ids_from: study
