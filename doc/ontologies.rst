@@ -6,10 +6,9 @@ Ontologies
 Which answers does a query owe when the data are incomplete and an ontology
 says what must exist beyond them?  The classical answer, a rewriting of the
 query into a union of conjunctive queries, is finite only for restricted
-ontology languages and can be exponential even there.  NeuroLang applies the
-axioms that create no new values as Datalog rules, by the chase, and rewrites
-the query only with the axioms that do, with the XRewrite algorithm
-[Gottlob2014]_.
+ontology languages and can be exponential even there.  NeuroLang chases the
+axioms that create no value as Datalog rules, and rewrites the query with
+the others by XRewrite [Gottlob2014]_.
 
 This page states what that procedure computes, why it is split in two, for
 which ontologies its answers are complete, and what negation, aggregation
@@ -49,8 +48,9 @@ class and ``p`` a property: whatever an ``A`` reaches through ``p`` is an
 
 (III) *The Cognitive Atlas*.  The ``neurosynth`` and ``neurostore`` engines
 load ``cogat.v2.owl`` (see :doc:`tutorial_cognitive_atlas`).  It gives
-10,399 constraints: 2,724 ``someValuesFrom`` restrictions, 1,797
-subclass axioms and 430 ``allValuesFrom`` restrictions.  The 430
+10,399 constraints: three for each of its 2,724 ``someValuesFrom``
+restrictions, one for each of its 1,797 subclass axioms and 430
+``allValuesFrom`` restrictions.  The 430
 ``allValuesFrom`` constraints lie in one recursive component of 3,364
 predicates.  The engine has no instance of any class.  We add one, of the
 class ``CAO_01600``, to measure what happens when data meets the hierarchy.
@@ -75,12 +75,15 @@ becomes constraints, ``body → head`` implications kept apart from the rules
 of the program.  The *ABox*, the facts on individuals, becomes relations: the
 data added with ``add_tuple_set``, or, with ``individuals=True``, every triple
 ``s p o`` as the fact ``p(s, o)`` and every ``s rdf:type C`` also as
-``C(s)``.  On (I), loaded from Python as in :ref:`python-ontology`:
+``C(s)``.  On (I), with the Turtle above in ``deans.ttl`` and loaded from
+Python as in :ref:`python-ontology`:
 
 .. code-block:: python
 
+   from neurolang.frontend import NeurolangPDL
+
    nl = NeurolangPDL()
-   nl.load_ontology(io.StringIO(DEAN_DEPT_UNIT), format="turtle")
+   nl.load_ontology("deans.ttl")
    nl.add_tuple_set([("Juan",)], name="Dean")
    nl.add_tuple_set([("Ana", "Physics")], name="headOf")
    nl.add_tuple_set([("Physics",)], name="Dept")
@@ -253,8 +256,8 @@ restriction on ``ro:has_part``.
      - 2.4 s
 
 Without the instance, the five queries keep their answers and their times,
-under 2 s.  In short, the chase takes the recursion and the hierarchy; the
-rewriting is left with the values the existential constraints create.
+under 2 s.  The chase takes the recursion and the hierarchy; the rewriting
+is left with the values the existential constraints create.
 
 When the answers are complete
 -----------------------------
@@ -265,7 +268,8 @@ They are the certain answers under three assumptions.
 
 Firstly, the constraints are Horn: one atom in each head, no disjunction.
 With ``unionOf`` on the right of a subclass axiom, query answering is
-coNP-hard in the data [Calvanese2013]_, and no Datalog program computes it.
+coNP-hard in the data [Calvanese2013]_, and, unless PTime = coNP, no
+Datalog program computes it.
 NeuroLang drops these axioms, so its answers are then incomplete.
 
 Secondly, no full constraint derives an atom over named values only from an
@@ -286,8 +290,9 @@ rewritings for ``ro:has_part`` and 615 for ``ro:part_of``.  On random
 ontologies of 4 classes whose full constraints are not recursive, the
 answers of 1,080 random queries of 1 to 3 atoms match those of a chase with
 unnamed values bounded at depth 6; 120 of them are the test
-``test_certain_answers_on_random_horn_ontologies``.  Two of the 1,080 took
-more than 20 s, and one of these more than 5 minutes: its two atoms over
+``test_certain_answers_on_random_horn_ontologies``.  With four checks
+running at once, three of the 1,080 took between 5 and 11 s, and one more
+than 5 minutes, alone: its two atoms over
 variables out of the head, ``C3(y)`` and ``C2(x)``, are rewritten
 independently and their alternatives multiply.  The rewriting need not end
 at all when recursive ``allValuesFrom`` constraints apply to a variable out
@@ -369,7 +374,7 @@ ends.
 
 .. [Cali2012b] A. Calì, G. Gottlob and A. Pieris. *Towards more expressive
    ontology languages: The query answering problem*. Artificial
-   Intelligence, 193, 87–128, 2012.
+   Intelligence, 193, 87–128, 2012. doi:10.1016/j.artint.2012.08.002
 
 .. [Cali2013] A. Calì, G. Gottlob and M. Kifer. *Taming the infinite
    chase: Query answering under expressive relational constraints*.
@@ -384,6 +389,7 @@ ends.
 .. [Calvanese2013] D. Calvanese, G. De Giacomo, D. Lembo, M. Lenzerini and
    R. Rosati. *Data complexity of query answering in description logics*.
    Artificial Intelligence, 195, 335–360, 2013.
+   doi:10.1016/j.artint.2012.10.003
 
 .. [Fagin2005] R. Fagin, P. G. Kolaitis, R. J. Miller and L. Popa. *Data
    exchange: semantics and query answering*. Theoretical Computer Science,
@@ -401,11 +407,12 @@ ends.
 .. [Kontchakov2011] R. Kontchakov, C. Lutz, D. Toman, F. Wolter and
    M. Zakharyaschev. *The combined approach to ontology-based data access*.
    In Proceedings of the 22nd International Joint Conference on Artificial
-   Intelligence (IJCAI), 2656–2661, 2011.
+   Intelligence (IJCAI), 2656–2660, 2011.
+   doi:10.5591/978-1-57735-516-8/IJCAI11-442
 
 .. [Lutz2009] C. Lutz, D. Toman and F. Wolter. *Conjunctive query answering
    in the description logic EL using a relational database system*. In
    Proceedings of the 21st International Joint Conference on Artificial
-   Intelligence (IJCAI), 2070–2075, 2009.
+   Intelligence (IJCAI), 2070–2074, 2009.
 
 [Zanitti2023]_ is listed in :doc:`tutorial_squall`.

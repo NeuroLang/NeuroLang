@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+* Ontologies: the constraints without existential variables (subclass,
+  ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
+  Datalog rules; XRewrite rewrites the query with the existential ones, the
+  others only on atoms that can stand for a value they introduce.  A query
+  on the Cognitive Atlas with an instance of a class high in its hierarchy
+  now ends (``ans(x) :- ro:has_part(x, y)``: 1.7 s, was > 120 s).  New page
+  :doc:`ontologies`.  Fixes on the way: XRewrite's factorisation dropped the
+  rest of the body, a renamed constraint variable could take a query
+  variable's name, a negated atom made XRewrite fail, an aggregate over a
+  rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
+  ``C(x) → B(x)``.
+
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
   downloads and its tables kept in ``--data-dir``, so that a session starts
