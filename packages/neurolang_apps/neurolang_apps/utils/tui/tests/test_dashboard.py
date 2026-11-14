@@ -135,3 +135,117 @@ def test_a_log_made_before_the_tokens_takes_them(tmp_path):
     log.add("ann", "submit", text=".ask x", tokens_in=5, tokens_out=1)
     [totals] = log.totals()
     assert (totals["tokens_in"], totals["tokens_out"]) == (5, 1)
+
+
+# -- The activity page's data (ActivityLog.report, inputs, uptime) ----------
+
+NOON = datetime(2026, 11, 14, 12, 0, tzinfo=timezone.utc)
+
+
+def _log_at(log, user, when, **fields):
+    log.add(user, "submit", text=fields.pop("text", "ans(x) :- p(x)"),
+            engine=fields.pop("engine", "neurosynth"), failed=False,
+            created=when.isoformat(timespec="microseconds"), **fields)
+
+
+def test_a_period_starts_at_its_time_not_at_its_day(tmp_path):
+    log = ActivityLog(tmp_path / "a.sqlite")
+    _log_at(log, "ann", NOON - timedelta(hours=35, minutes=30))  # 00:30
+    _log_at(log, "bob", NOON - timedelta(hours=3), cpu=2.0)
+    report = log.report(since=NOON - timedelta(days=1), now=NOON)
+    assert report["figures"]["inputs"] == 1
+    assert [u["user"] for u in report["users"]] == ["bob"]
+
+
+def test_the_buckets_are_every_hour_or_day_of_the_zone(tmp_path):
+    from zoneinfo import ZoneInfo
+
+    log = ActivityLog(tmp_path / "a.sqlite")
+    _log_at(log, "ann", NOON - timedelta(days=10))  # the log began then
+    _log_at(log, "ann", NOON - timedelta(minutes=30), cpu=1.5)
+    hours = log.report(since=NOON - timedelta(days=1), now=NOON)
+    assert hours["bucket"] == "hour" and len(hours["series"]) == 25
+    assert sum(b["inputs"] for b in hours["series"]) == 1
+    assert hours["series"][-2]["cpu"] == 1.5  # 11:30 is in 11:00
+    paris = ZoneInfo("Europe/Paris")
+    days = log.report(since=NOON - timedelta(days=7), now=NOON, tz=paris)
+    assert days["bucket"] == "day" and len(days["series"]) == 8
+    assert days["series"][0]["start"].endswith("T00:00:00+01:00")
+    assert not days["clipped"]
+
+
+def test_the_period_starts_when_the_log_began(tmp_path):
+    log = ActivityLog(tmp_path / "a.sqlite")
+    _log_at(log, "ann", NOON - timedelta(hours=5))
+    report = log.report(since=NOON - timedelta(days=7), now=NOON)
+    assert report["clipped"] and report["bucket"] == "hour"
+    assert len(report["series"]) == 6
+
+
+def test_the_uptime_counts_from_the_first_run_and_tells_the_crashes(
+    tmp_path
+):
+    log = ActivityLog(tmp_path / "a.sqlite")
+    db = sqlite3.connect(log.path)
+    stamp = lambda t: t.isoformat(timespec="microseconds")  # noqa: E731
+    with db:
+        db.executemany(
+            "INSERT INTO runs (started, last_seen, stopped) VALUES (?, ?, ?)",
+            [(stamp(NOON - timedelta(hours=24)),
+              stamp(NOON - timedelta(hours=18)), None),       # crashed
+             (stamp(NOON - timedelta(hours=12)),
+              stamp(NOON - timedelta(hours=6)),
+              stamp(NOON - timedelta(hours=6))),               # stopped
+             (stamp(NOON - timedelta(hours=3)),
+              stamp(NOON - timedelta(minutes=1)), None)])      # running
+    db.close()
+    up = log.uptime(since=NOON - timedelta(days=7), now=NOON)
+    assert up["since"].startswith("2026-11-13T12:00")  # the first run
+    assert up["percent"] == pytest.approx(100 * 15 / 24, abs=0.01)
+    hows = [r["how"] for r in up["runs"]]
+    assert hows == ["running", "stopped", "crashed"]
+    assert up["crashes"] == 1
+    assert log.uptime(now=NOON + timedelta(hours=1))["runs"][0]["how"] \
+        == "crashed"  # silent for an hour: not running any more
+    assert ActivityLog(tmp_path / "b.sqlite").uptime()["percent"] is None
+
+
+def test_the_inputs_are_sorted_searched_and_cut(tmp_path):
+    from neurolang_apps.utils.tui.activity import SNIPPET_CHARS
+
+    log = ActivityLog(tmp_path / "a.sqlite")
+    _log_at(log, "ann", NOON - timedelta(hours=3), seconds=9.0,
+            text="ans(x) :- slow(x)", response="r" * 1000)
+    _log_at(log, "bob", NOON - timedelta(hours=2), seconds=1.0,
+            text=".ask which studies?", tokens_in=500, tokens_out=50)
+    log.add("bob", "submit", text="ans(x :-", failed=True,
+            created=(NOON - timedelta(hours=1)).isoformat())
+    latest = log.inputs()
+    assert [r["text"] for r in latest] == ["ans(x :-", ".ask which studies?",
+                                           "ans(x) :- slow(x)"]
+    assert log.inputs(sort="slowest")[0]["text"] == "ans(x) :- slow(x)"
+    assert log.inputs(sort="tokens")[0]["user"] == "bob"
+    assert [r["text"] for r in log.inputs(failed=True)] == ["ans(x :-"]
+    assert [r["text"] for r in log.inputs(search="STUDIES")] == [
+        ".ask which studies?"]
+    slow = log.inputs(search="slow")[0]
+    assert len(slow["snippet"]) == SNIPPET_CHARS and slow["cut"]
+    assert len(log.entry(slow["id"])["response"]) == 1000
+    assert log.entry(999) == {}
+    assert len(log.inputs(limit=1, offset=1)) == 1
+    with pytest.raises(ValueError, match="sort"):
+        log.inputs(sort="id; DROP TABLE activity")
+
+
+def test_a_query_of_the_last_day_leaves_out_the_earlier_hours_of_its_day(
+    log
+):
+    # Datasette's queries compared ISO times with SQLite's (a space for
+    # the T): the whole first day passed.
+    now = datetime.now(timezone.utc)
+    early = (now - timedelta(days=1)).replace(hour=0, minute=0, second=1)
+    if early >= now - timedelta(days=1):
+        pytest.skip("too close to midnight to tell")
+    log.add("eve", "submit", text="x", created=early.isoformat())
+    assert "eve" not in {r["user"] for r in _query(log, "by_user", "1")}
+    assert "eve" in {r["user"] for r in _query(log, "by_user", "2")}

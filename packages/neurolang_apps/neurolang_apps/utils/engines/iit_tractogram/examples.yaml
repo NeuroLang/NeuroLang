@@ -1,7 +1,8 @@
-# Merged into the entry of neurosynth_iit in ../engines.yaml (see
+# Merged into the entry of iit_tractogram in ../engines.yaml (see
 # doc/engine_configuration.rst).
 #
-# Questions on neurosynth_iit, added after those of neurosynth_tracts.
+# Questions on neurosynth_iit and neurostore_iit, added after those of
+# neurosynth_tracts and neurostore_tracts.
 # The engine has loaded a tractogram and imported the bundles of
 # tract_querier's freesurfer_queries.dl (uf, af, cst, ilf, ifof...): a
 # bundle is a predicate of a streamline x and a hemisphere h, "left" or

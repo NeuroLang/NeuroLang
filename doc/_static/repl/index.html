@@ -186,6 +186,16 @@
   .asked-actions time { margin-left: auto; color: var(--faint); font-size: .75rem; }
   body[data-busy] .asked-actions button { pointer-events: none; opacity: .4; }
   #summary-question:empty { display: none; }
+  /* The assistant found no query: said where the question is, with what to try. */
+  #no-answer { display: grid; gap: .45rem; padding: .75rem .9rem; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: var(--radius); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); scroll-margin-top: 4.5rem; }
+  #no-answer-title { margin: 0; display: flex; gap: .5rem; align-items: flex-start; font-weight: 650; }
+  #no-answer-title .icon { margin-top: .15rem; color: var(--warn); }
+  #no-answer-title q { font-weight: 500; }
+  #no-answer-reason { margin: 0; }
+  #no-answer-said { margin: 0; padding: .35rem .7rem; border-left: 2px solid var(--border-strong); color: var(--muted); font-style: italic; white-space: pre-wrap; max-height: 9rem; overflow: auto; }
+  #no-answer-box:empty { display: none; }
+  .no-answer-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .no-answer-actions button { min-height: 1.85rem; font-size: .8125rem; }
   .divider { display: flex; align-items: center; gap: .75rem; color: var(--faint); font-size: .75rem; margin: .1rem 0 -.25rem; }
   .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 
@@ -448,6 +458,18 @@
           <span id="ask-help" class="note"><kbd>Ctrl</kbd> <kbd>Enter</kbd> asks</span>
         </div>
       </form>
+      <section id="no-answer" role="alert" hidden aria-labelledby="no-answer-title">
+        <p id="no-answer-title"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8.5 8.5l5 5M13.5 8.5l-5 5"/></svg><span>The assistant found no query for <q id="no-answer-question"></q></span></p>
+        <p id="no-answer-reason"></p>
+        <blockquote id="no-answer-said" hidden></blockquote>
+        <p id="no-answer-box" class="note"></p>
+        <div class="no-answer-actions">
+          <button id="no-answer-edit" type="button">Edit the question</button>
+          <button id="no-answer-query" type="button" class="quiet" hidden>Edit its last query</button>
+          <button id="no-answer-steps" type="button" class="quiet">See its steps</button>
+          <button id="no-answer-examples" type="button" class="quiet">Browse examples</button>
+        </div>
+      </section>
       <p id="log-note" class="note" hidden></p>
       <details id="llm-details" class="disclosure">
         <summary id="llm-summary">bring your own API key</summary>

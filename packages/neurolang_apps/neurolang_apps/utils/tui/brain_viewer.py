@@ -49,25 +49,27 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+import yaml
 
 # The release of NiiVue the page inlines.
 NIIVUE_VERSION = "0.69.0"
 
+# The defaults of the viewer, the one place they are written.
+DEFAULTS_FILE = Path(__file__).with_name("viewer.yaml")
+DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
+
 # The colormap used when none is asked for.
-DEFAULT_CMAP = "plasma"
+DEFAULT_CMAP = DEFAULTS["colormap"]
 
 # The colormaps of the overlays after the first, in turn: the first has
 # the colormap asked for, :data:`DEFAULT_CMAP` by default.
-OVERLAY_CMAPS = ("viridis", "cool", "hot", "cividis", "magma")
+OVERLAY_CMAPS = tuple(DEFAULTS["overlay_colormaps"])
 
 # The colormaps the page offers, from matplotlib and nilearn.
-COLORMAPS = (
-    "hot", "inferno", "viridis", "plasma", "magma", "cividis", "cold_hot",
-    "RdBu_r", "bwr", "coolwarm", "gray",
-)
+COLORMAPS = tuple(DEFAULTS["colormaps"])
 
 # The largest background embedded, in voxels: the 1 mm MNI grid fits.
-BACKGROUND_MAX_VOXELS = 2 ** 24
+BACKGROUND_MAX_VOXELS = DEFAULTS["background_max_voxels"]
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -297,6 +299,8 @@ def viewer_state(
             background, volumes[0].shape, affine
         ),
         "colormaps": colormap_luts(cmaps),
+        # What the script of the page takes from viewer.yaml.
+        "settings": DEFAULTS["page"],
         "initial": {
             "cursor": initial_cursor(volumes[0]), "active": 0,
             "layers": [
@@ -313,19 +317,19 @@ def viewer_state(
 
 # The radius, in millimetres, of the largest node and of the thickest edge
 # of a network.
-NODE_RADIUS = 4.0
-EDGE_RADIUS = 1.5
+NODE_RADIUS = DEFAULTS["network"]["node_radius"]
+EDGE_RADIUS = DEFAULTS["network"]["edge_radius"]
 
 # The opacity the overlays of a network or of streamlines start with, for
 # its edges or them to show on the slices.
-NETWORK_OVERLAY_OPACITY = 0.5
+NETWORK_OVERLAY_OPACITY = DEFAULTS["network"]["overlay_opacity"]
 
 # The number of edges a percentile threshold shows at least, all of them
 # when there are fewer.
-MIN_SHOWN_EDGES = 20
+MIN_SHOWN_EDGES = DEFAULTS["network"]["min_shown_edges"]
 
 # The number of edges, the largest, given to the page to threshold there.
-MAX_EDGES = 20000
+MAX_EDGES = DEFAULTS["network"]["max_edges"]
 
 
 def edge_threshold(values, threshold, at_least: int = 0) -> float:
@@ -393,7 +397,7 @@ def shown_edges(connectome: dict) -> list:
 
 
 # The number of streamlines drawn at most, evenly subsampled.
-MAX_STREAMLINES = 20000
+MAX_STREAMLINES = DEFAULTS["streamlines"]["max_shown"]
 
 
 def shown_streamlines(ids, cap=None) -> list:

@@ -1,13 +1,14 @@
 // The questions asked in English to the assistant, each with the query it
 // gave (or none), kept between visits: the history of the box of the
 // assistant, beside that of the code box (history.js).
+import { SETTINGS } from "./settings.js";
 
 const KEY = "neurolang-repl-asked";
 
 export class AskedHistory {
   // *storage* keeps the entries between visits (localStorage), if given;
   // *now* gives the time of an entry, in ms.
-  constructor(storage = null, now = Date.now, limit = 100) {
+  constructor(storage = null, now = Date.now, limit = SETTINGS.history.questions) {
     this.storage = storage;
     this.now = now;
     this.limit = limit;

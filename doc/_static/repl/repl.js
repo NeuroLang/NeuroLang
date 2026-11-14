@@ -1,11 +1,12 @@
 // The page of the in-browser REPL: a box for the AI assistant, a box for
 // the code, and the result as a table or in the brain viewer. It shows what
 // worker.js answers.
+import { SETTINGS } from "./settings.js";
 import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { imageButtons, renderTable } from "./table_view.js";
-import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
+import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
 import { layoutQuery } from "./layout.js";
@@ -197,7 +198,7 @@ function showGuide() {
     hideSummary();
     input.focus();
   }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
-  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, 200, (query) => {
+  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, SETTINGS.guide.relations_shown, (query) => {
     putQuery(query);
     hideSummary();
     input.focus();
@@ -255,6 +256,44 @@ function restoreShared() {
   editor.value = shared.code;
 }
 
+// An answer of the assistant with no query, *missing* (noAnswer), to the
+// *asked* question: said where the question is, why, and what to try; null
+// hides it.
+let missingQuery = "";
+function showNoAnswer(missing, asked = "") {
+  $("no-answer").hidden = !missing;
+  if (!missing) return;
+  $("no-answer-question").textContent = asked;
+  $("no-answer-reason").textContent = missing.reason;
+  Object.assign($("no-answer-said"), { textContent: missing.said ? `In its words: ${missing.said}` : "", hidden: !missing.said });
+  missingQuery = missing.query;
+  $("no-answer-query").hidden = !missing.query;
+  $("no-answer-box").textContent = input.value.trim()
+    ? "The query box still holds the query that was there before; the result shown is not an answer to this question."
+    : "";
+  $("no-answer-edit").dataset.question = asked;
+}
+$("no-answer-edit").addEventListener("click", (event) => {
+  question.value = event.currentTarget.dataset.question || question.value;
+  question.focus();
+  question.select();
+});
+$("no-answer-query").addEventListener("click", () => {
+  putQuery(missingQuery);
+  hideSummary();
+  input.focus();
+});
+$("no-answer-steps").addEventListener("click", () => {
+  live.hidden = false;
+  live.open = true;
+  live.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+$("no-answer-examples").addEventListener("click", () => {
+  $("guide").open = true;
+  showGuide();
+  $("guide").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
 // The past questions, the newest first, each with the query it gave: to put
 // that query back in the box, in its language, or to ask the question again.
 function showAsked() {
@@ -262,14 +301,14 @@ function showAsked() {
   $("asked").hidden = !entries.length;
   $("asked-summary").textContent = `Past questions (${entries.length})`;
   const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
-  $("asked-list").replaceChildren(...entries.slice(0, 50).map((entry) => {
+  $("asked-list").replaceChildren(...entries.slice(0, SETTINGS.history.questions_shown).map((entry) => {
     const item = document.createElement("li");
     const text = Object.assign(document.createElement("p"), { className: "asked-question", textContent: entry.question });
     const shown = entry.valid && entry.query
       ? Object.assign(document.createElement("pre"), { className: "asked-query" })
       : Object.assign(document.createElement("p"), { className: "asked-none", textContent: "No valid query came of it." });
     const squall = entry.language === "squall";
-    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, 58), squall));
+    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, SETTINGS.history.question_width), squall));
     const actions = Object.assign(document.createElement("div"), { className: "asked-actions" });
     if (entry.valid && entry.query) {
       actions.append(Object.assign(document.createElement("button"), {
@@ -537,11 +576,13 @@ const workerMessages = {
     agentLog.apply(data);
     showAgent();
     if (data.event === "ask") {
+      showNoAnswer(null);
       asking = { question: data.question ?? "", language: data.language ?? $("mode").value };
       hideSummary();
       hideRating();
     }
     if (data.event === "done") {
+      showNoAnswer(noAnswer(data), asking?.question);
       showSummary(data, asking?.question);
       showRating();
       if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
@@ -586,7 +627,8 @@ const workerMessages = {
     else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
     // On a narrow screen the result is under the query: it is brought into view.
-    if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (stacked.matches && !$("no-answer").hidden) $("no-answer").scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
   },
 };
 
@@ -752,7 +794,10 @@ function run(text, { remember = false } = {}) {
   lastRun = text;
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
-  if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
+  if (!text.startsWith(".ask") && !text.startsWith(".llm")) {
+    hideSummary();
+    showNoAnswer(null); // a query of one's own: the notice is of the past
+  }
   hideRating();
   worker.postMessage({ text });
 }

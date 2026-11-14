@@ -26,6 +26,31 @@ Unreleased
   were none, the engine's notes). The browser REPL has a *Refine* button next
   to *Ask*. The agents take ``run(question, previous=Previous(question,
   query, outcome))``.
+* ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
+  ``/admin/activity``: filters of the period, user and engine above
+  figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
+  memory of a session), a strip of the runs of the server, charts of the
+  inputs, CPU, tokens and active users over time (Chart.js, served by the
+  server), the users, and the inputs, sortable, searchable and each opening
+  on its result. Datasette (``--dashboard``) stays, as *Raw data and SQL*.
+  Its queries of the last days no longer take the whole first day (they
+  compared ISO times with SQLite's), and its uptime counts from the first
+  run logged.
+* The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
+  tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
+  Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
+  tractogram and tract_querier's bundles). The page of the REPL offers
+  ``neurostore_iit`` as *NeuroStore + tracts*, with the text embeddings of
+  ``neurostore``. What they share is two abstract engines,
+  ``meta_analysis_tracts`` and ``iit_tractogram``.
+  
+* The login page of ``neurolang-repl-serve --users`` is the REPL's: its logo
+  and colours, in the theme the visitor chose in the REPL (or the system's), a
+  card with the name and the password, which can be shown, a button that waits
+  while the server answers, the error above the form, *Sign in with ORCID* and
+  *Continue as a guest* under *or*, and the request for an account as a card of
+  its own. It is still one file, with the logo in it: the server refuses every
+  other file before a login.
 
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
@@ -117,14 +142,66 @@ Unreleased
   values, the range shown in the colours it is drawn with.
 * In the browser REPL, a result has a *Brain* tab beside *Table* and
   *Graph*: it shows the result in the brain viewer.
+* The assistant takes at most 16 steps by default (``max_steps``, was 8),
+  for questions that need more tool calls before a query that runs.  The
+  defaults of the LLM configuration are in one file,
+  ``utils/llm/defaults.yaml``, which the configuration reads; the example
+  configuration and the docs quote it, and the tests check that they agree.
+  So are the other tunable defaults: those of the brain viewer and
+  ``.view`` (``utils/tui/viewer.yaml``), the options of
+  ``neurolang-repl-serve`` (``tools/serve_repl/defaults.yaml``) and the
+  limits of the browser REPL's page (``doc/_static/repl/settings.yaml``,
+  which the page reads at start).
+* When the assistant of the browser REPL finds no query, a notice under the
+  question says so, why (the steps it used up, its last query's error, or
+  in its words what it found), that the query box still holds the query of
+  before, and what to try: edit the question, edit its last query, see its
+  steps, browse the examples.
 * The browser REPL keeps the questions asked in English, each with the
   query the assistant gave, between visits (*Past questions*, under the
   box of the assistant): *Use this query* puts it back in the box, in its
   language, with what the assistant said of it and the question it answers;
   *Ask again* puts the question back.
+* The query assistant answers a question naming a cognitive process, task
+  or concept ("studies about working memory", "the n-back task") without
+  saying mention, term or word with the studies closest to the concept's
+  Cognitive Atlas definition (``cogat_definition`` with
+  ``similar_study``), looked up with ``search_values`` over
+  ``cogat_term``, or to the question's own words when the atlas does not
+  have it; ``mentions`` is kept for the questions about mentions, terms
+  or words.  The guidance and the examples of the
+  ``coordinate_meta_analysis`` engines say so.
+
+**Performance:**
+
+* A natural join on a unique key of strings, such as the NeuroStore study
+  ids joined with the probabilities of ``selected_study``, looks the keys
+  up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
+  takes 23 s instead of 81 s (2 mm grid).
+* A function of a rule's variables, such as ``query_similarity(q, s)``
+  over the 65,000 studies of NeuroStore, is given each row as a tuple read
+  by column, not as a pandas row: ``uniformity_llm('auditory stimuli', i,
+  j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
 
+* The threshold sliders of the brain viewer sit over the values they set
+  on the histogram. In percentile mode a thumb was placed at its percentile
+  along the slider while the histogram's axis is the value, so for skewed
+  maps the low thumb could be far from its line (128 px of 360 at the 50th
+  percentile of cubed values); the thumbs are now placed by value, and the
+  histogram is inset by half a thumb so its ends meet the thumbs' travel.
+* Checking or running a query on an ontology's predicates, as
+  ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
+  cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying
+  the ontology's 6.5k rules, one recursive component of 3364 predicates,
+  ran for more than 30 minutes.
+* ``.view`` of streamlines with the regions they join, as
+  ``ans(s, l1, l2) :- connects(s, l1, l2)``, draws the streamlines, their
+  column of the sort ``streamline``: it drew the network of the regions.
+  The engine ``tracts`` declares the relations of a tractogram
+  (``endpoint_point``, ``streamline_label``...), so that their streamline
+  is of that sort.
 * A disjunction of functions whose variables a positive atom outside it
   binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
   startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.
@@ -160,6 +237,14 @@ Unreleased
 * The assistant's ``search_values`` searches a predicate whose columns have
   the same name, as ``cogat_subclass_of(iri, iri)``: it failed with
   ``'DataFrame' object has no attribute 'str'``.
+
+**Performance:**
+
+* A Python function computing a column of a rule, as ``query_similarity``,
+  runs once per distinct row (pandas and polars backends): it ran on the
+  duplicates of its input, 2 M rows instead of 14 k in
+  ``cogat_definition('memory', d), similar_study(d, s),
+  study_journal(s, 'Neuron')``, which took 70 s instead of 3 s.
 
 
 v0.1a22 (2026-11-13)

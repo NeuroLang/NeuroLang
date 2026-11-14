@@ -2,9 +2,10 @@
 // <pre> showing the same text coloured (highlight.js). Both have the same
 // font, padding and wrapping; the box grows with its text, so that they never
 // scroll apart.
+import { SETTINGS } from "./settings.js";
 import { highlightNodes } from "./highlight.js";
 
-const MAX_HEIGHT = 24 * 16; // px: beyond it the box scrolls, and the colours follow
+const MAX_HEIGHT = SETTINGS.editor.max_height_px; // beyond it the box scrolls, and the colours follow
 
 export class Editor {
   constructor(textarea, mirror, isSquall = () => false) {

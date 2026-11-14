@@ -1,8 +1,9 @@
 // The history of what the REPL was given, kept between visits.
+import { SETTINGS } from "./settings.js";
 
 export class History {
   // *storage* keeps the entries between visits (localStorage), if given.
-  constructor(storage = null, key = "neurolang-repl-history", limit = 500) {
+  constructor(storage = null, key = "neurolang-repl-history", limit = SETTINGS.history.queries) {
     this.storage = storage;
     this.key = key;
     this.limit = limit;
