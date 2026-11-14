@@ -200,13 +200,13 @@ def reachable_code(query, datalog):
         if isinstance(rules, Constant):
             continue
         for rule in rules.formulas:
-            if (
-                rule in seen_rules or
-                isinstance(rule, RightImplication)
-            ):
+            if rule in seen_rules:
                 continue
             seen_rules.add(rule)
-            reachable_code.append(rule)
+            # A constraint is not code to solve, but the predicates of
+            # its antecedent are: their rules give the values it applies to.
+            if not isinstance(rule, RightImplication):
+                reachable_code.append(rule)
             for predicate in extract_logic_atoms(rule.antecedent):
                 functor = predicate.functor
                 if functor not in reached and functor in idb:

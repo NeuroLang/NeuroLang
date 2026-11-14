@@ -162,12 +162,21 @@ class OntologyRewriter:
     rewrite only atoms with a variable not in the rule's head, the only
     ones that can stand for a value an existential introduces.
     Transitivity is left to the chase.
+
+    With ``holds``, the predicates with facts or rules, a rewriting with
+    an atom that is never rewritten and has no values is left out, with
+    all the rewritings it would give (see :meth:`_dead`).
     """
 
-    def __init__(self, query, union_of_constraints, chased=False):
+    def __init__(
+        self, query, union_of_constraints, chased=False, holds=None
+    ):
         self.query = query
         self.union_of_constraints = union_of_constraints
         self.chased = chased
+        self.holds = holds
+        self._null_positions_cache = {}
+        self._backward_cache = {}
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -194,17 +203,109 @@ class OntologyRewriter:
                 for sigma in selected_sigmas:
                     list_q0 = self.rewriting_step(q0, sigma, rename_count)
                     for new_q0 in list_q0:
-                        if self._is_new_rewriting(new_q0, Q_rew, Q_explored):
+                        if (
+                            self._is_new_rewriting(new_q0, Q_rew, Q_explored)
+                            and not self._dead(new_q0)
+                        ):
                             Q_rew.add((new_q0, "r", "u"))
                     list_q0 = self.factorization_step(q0, sigma)
                     for new_q0 in list_q0:
-                        if self._is_new_factorization(new_q0, Q_rew, Q_explored):
+                        if (
+                            self._is_new_factorization(
+                                new_q0, Q_rew, Q_explored
+                            )
+                            and not self._dead(new_q0)
+                        ):
                             Q_rew.add((new_q0, "f", "u"))
 
                 Q_rew.remove(q)
                 Q_explored.add(q[0])
 
         return Q_explored
+
+    def _dead(self, q):
+        """
+        Whether no rewriting of ``q`` can be evaluated.  An atom ``P(…)``
+        whose predicate has no facts or rules, derived only by constraints
+        with an existential in position ``i``, is rewritten only once its
+        term ``t`` in position ``i`` is a variable that occurs nowhere
+        else.  A constant or a variable of the head stays one in every
+        rewriting, as does an occurrence of ``t`` in a negated atom, which
+        is not rewritten.  Rewriting an atom keeps ``t``, at the positions
+        of the constraint's variable, unless ``t`` is in its existential
+        position, which is blocked while ``t`` is shared.  Hence ``t``
+        leaves the other atoms only into an atom ``P(…)`` with ``t`` in
+        position ``i``, factorised with this one: if an occurrence of ``t``
+        cannot reach it, the atom over ``P``, which has no values, is in
+        every rewriting of ``q``.
+        """
+        if self.holds is None:
+            return False
+        formulas = getattr(q.antecedent, "formulas", (q.antecedent,))
+        for atom in formulas:
+            if not hasattr(atom, "functor"):
+                continue
+            for i in self._null_positions(atom.functor):
+                term = atom.args[i]
+                if (
+                    isinstance(term, Constant)
+                    or self._is_distinguished(term, q)
+                    or any(
+                        not hasattr(f, "functor") and term in f._symbols
+                        for f in formulas
+                    )
+                ):
+                    return True
+                if any(
+                    (atom.functor, i) not in self._backward(other.functor, j)
+                    for other in formulas if hasattr(other, "functor")
+                    for j, arg in enumerate(other.args)
+                    if arg == term and (other is not atom or j != i)
+                ):
+                    return True
+        return False
+
+    def _null_positions(self, functor):
+        """The positions of the existential of every constraint deriving
+        ``functor``, none if one has none or ``functor`` has values."""
+        if functor not in self._null_positions_cache:
+            positions = set()
+            sigmas = self.union_of_constraints.get(functor, ())
+            if sigmas and functor not in self.holds:
+                positions = set.intersection(*(
+                    {
+                        i for v in _existential_variables(sigma)
+                        for i in self._get_position_existential(
+                            sigma.consequent, v
+                        )
+                    }
+                    for sigma in sigmas
+                ))
+            self._null_positions_cache[functor] = positions
+        return self._null_positions_cache[functor]
+
+    def _backward(self, functor, position):
+        """The predicates and positions a term in ``position`` of an atom
+        over ``functor`` can be moved to by rewriting steps that keep it."""
+        key = (functor, position)
+        if key not in self._backward_cache:
+            reach, todo = {key}, [key]
+            while todo:
+                head, j = todo.pop()
+                for sigma in self.union_of_constraints.get(head, ()):
+                    v = sigma.consequent.args[j]
+                    if (
+                        not isinstance(v, Symbol)
+                        or v in _existential_variables(sigma)
+                    ):
+                        continue
+                    for body in extract_logic_atoms(sigma.antecedent):
+                        for k, arg in enumerate(body.args):
+                            if arg == v and (body.functor, k) not in reach:
+                                reach.add((body.functor, k))
+                                todo.append((body.functor, k))
+            self._backward_cache[key] = reach
+        return self._backward_cache[key]
 
     def _get_related_sigmas(self, q0, sigma_free_vars):
         new_sigmas = []

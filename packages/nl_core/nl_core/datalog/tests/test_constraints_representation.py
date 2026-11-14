@@ -4,8 +4,12 @@ from nl_expr.logic import Union
 from ..constraints_representation import (
     RightImplication,
 )
-from ..constraints_representation import DatalogConstraintsProgram
+from ..constraints_representation import (
+    DatalogConstraintsProgram,
+    reachable_code,
+)
 from ..expressions import Implication
+from ..basic_representation import UnionOfConjunctiveQueries
 
 
 class Datalog(DatalogConstraintsProgram, ExpressionBasicEvaluator):
@@ -94,3 +98,19 @@ def test_mix_constraints():
     assert len(dl1.constraints().formulas) == 2
     assert P in dl2.symbol_table
     assert P in dl1.symbol_table
+
+
+def test_reachable_code_through_constraints():
+    """The rules of the antecedent of a constraint are reachable from its
+    consequent; the constraint itself is not code."""
+    A, R = Symbol("A"), Symbol("R")
+    rule_p = Implication(P(x), R(x))
+    query = Implication(A(x), Q(x))
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(R, [("a",)])
+    dl.walk(Union((rule_p, query)))
+    # as load_ontology stores the constraints of a predicate
+    dl.symbol_table[Q.cast(UnionOfConjunctiveQueries)] = Union((
+        RightImplication(P(x), Q(x)),
+    ))
+    assert set(reachable_code(query, dl).formulas) == {query, rule_p}

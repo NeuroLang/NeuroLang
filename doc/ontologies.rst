@@ -212,6 +212,35 @@ into ``aux(x, y)``, where ``y`` occurs once; finally, the existential
 constraint rewrites ``aux(x, y)`` into ``Dean(x)``.  The rules over
 ``aux``, which has no values, are dropped before evaluation.
 
+**Dead rewritings.**  Some rewritings are dropped as soon as they appear,
+with all those they would give.  Let ``P`` be a predicate without facts or
+rules whose constraints are all existential in a position ``i``, as
+``aux``, and ``P(…)`` an atom of a rewriting with the term ``t`` in position
+``i``.  ``P(…)`` can only be rewritten once ``t`` is a variable that occurs
+nowhere else.  A constant, a variable of the head and an occurrence in a
+negated atom stay so in every rewriting.  A rewriting step on another atom
+keeps ``t``, at the positions of the constraint's variable it unifies with,
+since a full constraint has all its head's variables in its body and an
+existential one applies to ``t`` in its existential position only if ``t``
+occurs once.  Hence ``t`` leaves the other atoms only by becoming the term
+in position ``i`` of an atom over ``P`` that is factorised with this one.
+NeuroLang follows, for each occurrence of ``t``, the predicates and
+positions the rewriting steps that keep it can move it to; if one
+occurrence cannot reach position ``i`` of ``P``, every rewriting of the
+query has an atom over ``P``, which has no values, and none is evaluated.
+On (III) these are the rewritings ``aux_i(s, c), aux_j(z, c)`` of
+``measures(s, c), CAO_00587(c)`` with ``i ≠ j``: ``c`` is shared, in the
+existential position of both, and neither atom can become the other.  The
+rewritings evaluated are the same with and without this step.
+
+The rules of the program that define a predicate in the body of a
+constraint are solved with the query, even when the query names only what
+the constraint derives: the code a query needs is followed through the
+constraints.  With ``Dean(x) :- professor(x), chairs(x)`` in place of the
+facts of ``Dean``, ``ans(x) :- headOf(x, y)`` is rewritten into ``ans(x)
+:- Dean(x)``, and the rule of ``Dean`` is part of the program that answers
+it.
+
 **The split.**  Full constraints are in the rewriting too: (I) needs
 ``Dept ⊑ Unit`` applied to Juan's unnamed department, which the chase never
 creates.  However, they rewrite only an atom with a variable out of the
@@ -355,6 +384,24 @@ alternatives multiply.  The rewriting need not end at all when recursive
 ``C1 ⊑ ∀p.C2``, ``C2 ⊑ C1`` and ``C1 ⊑ ∃p.C3`` with the query
 ``ans(y) :- C3(z), p(z, y)``.
 
+The same multiplication sets the time on (III).  With one instance of the
+contrast ``cogat:CAO_01210`` (N-back 2-back, which measures some working
+memory), ``ans(s) :- cogat:measures(s, c)`` takes 7 s, and ``ans(s) :-
+cogat:measures(s, c), cogat:CAO_00587(c)`` 60 s without the dropping of
+dead rewritings: the 522 ``someValuesFrom`` restrictions on ``measures``
+give as many ``aux_i(s, c)`` for the first atom, the subclasses of working
+memory and the restrictions to them as many atoms for the second, and
+XRewrite explores their 26,600 pairs.  Dropping the dead ones leaves 224 to
+explore, and the query takes 24 s, most of it in building the rewritings
+that are then dropped.  A query of three such atoms, ``ans(s) :-
+cogpo:has_contrast(s, x), cogat:measures(x, c), cogat:CAO_00487(c)``
+(the tasks with a contrast that measures some response inhibition), did
+not end within 16 minutes.  In its first 210 s the rewritings kept no more
+than three atoms and grew to 2,826, while 146,000 more were built and
+dropped as dead: the time goes into building rewritings that are then
+dropped.  Testing a rewriting step for this before building its result is
+the next step.
+
 Outside these assumptions the answers stay sound.  On 480 more random
 queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half
 of them, recursive full constraints, none returned an answer that is not
@@ -378,10 +425,13 @@ One more limit concerns rules.  XRewrite rewrites each rule of the program
 on its own, so an unnamed value does not pass from one rule to another:
 with ``heads(x, y) :- headOf(x, y)``, ``ans(x) :- heads(x, y)`` returns Ana
 and not Juan, as ``y`` is in the head of ``heads``.  ``heads(x) :- headOf(x,
-y)`` returns both.  These assumptions delimit the guarantee: complete
-answers for Horn ontologies in which ``allValuesFrom`` reaches no named
-value from an unnamed one and no existential value meets a transitive
-property, for queries whose rewriting ends.
+y)`` returns both.  A class defined by a rule over a probabilistic
+predicate, as ``Dean(x) :- p(x)`` with ``p`` a probabilistic fact, gives no
+instance to the constraints of a deterministic query.  These assumptions
+delimit the guarantee: complete answers for Horn ontologies in which
+``allValuesFrom`` reaches no named value from an unnamed one and no
+existential value meets a transitive property, for queries whose rewriting
+ends.
 
 Negation and aggregation
 ------------------------
@@ -430,7 +480,24 @@ What would confirm and what limits this
 ---------------------------------------
 
 The completeness claim rests on an argument and on 2,265 random queries,
-not on a mechanised proof.  A cross-check against an OWL reasoner, such as
+not on a mechanised proof.  The W3C OWL test cases [OWLTest2004]_ check
+the reading of OWL itself: of the 84 tests of the approved and proposed
+archives, the 8 entailment and non-entailment tests whose premises are in
+the fragment NeuroLang reads and whose conclusion is a set of facts on
+individuals (on ``allValuesFrom``, ``someValuesFrom``, ``inverseOf``,
+``SymmetricProperty``, ``TransitiveProperty`` and an unread
+``owl:imports``) pass, as ``test_w3c_owl_tests.py``.  The 76 others are
+skipped, each with its reason in
+``frontend/tests/w3c_owl_tests/skipped.tsv``: 13 consistency and
+inconsistency tests (NeuroLang does not check consistency), 7 on
+``owl:imports``, 5 not about an OWL feature, 44 whose premises use what
+NeuroLang does not read (functional and inverse functional properties,
+``owl:samePropertyAs``, cardinalities, equality of individuals and
+classes, ``unionOf``, ``complementOf``, ``oneOf``, ``disjointWith``,
+``intersectionOf`` other than as a superclass, a class expression as a
+subclass) and 7 whose conclusion is an axiom on classes or properties
+rather than a query.  The OWL 2 test repository no longer
+resolves.  A cross-check against an OWL reasoner, such as
 HermiT or Konclude, on ontologies with instances of the Cognitive Atlas,
 would test it at scale.  The termination of the rewriting on recursive
 ``allValuesFrom`` is not guaranteed.  A Datalog rewriting of the anonymous
@@ -486,6 +553,10 @@ ends.
    In Proceedings of the 22nd International Joint Conference on Artificial
    Intelligence (IJCAI), 2656–2660, 2011.
    doi:10.5591/978-1-57735-516-8/IJCAI11-442
+
+.. [OWLTest2004] J. J. Carroll and J. De Roo (eds.). *OWL Web Ontology
+   Language Test Cases*. W3C Recommendation, 10 February 2004.
+   https://www.w3.org/TR/owl-test/
 
 .. [Lutz2009] C. Lutz, D. Toman and F. Wolter. *Conjunctive query answering
    in the description logic EL using a relational database system*. In
