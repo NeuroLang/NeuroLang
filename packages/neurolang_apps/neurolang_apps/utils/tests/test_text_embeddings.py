@@ -622,6 +622,18 @@ def test_an_engine_keeps_the_embeddings_in_its_directory(
     assert index.encoder.document_calls == 0
 
 
+def test_preload_reads_the_owners_embeddings(extending_yaml, tmp_path):
+    """The REPL server's preload of an engine reads its owner's caches."""
+    _similar("b", tmp_path / "data", extending_yaml)
+    nl = engine_registry.build_engine(
+        "c", tmp_path / "data", yaml_path=extending_yaml
+    )
+    te.preload(nl)
+    index = nl.text_embedding_indexes["docs"]
+    assert index._matrix is not None and index.encoder.document_calls == 0
+    assert not (tmp_path / "data/c").exists()
+
+
 def test_engine_yaml_unknown_source(engine_yaml, tmp_path):
     engine_yaml.write_text(
         engine_yaml.read_text().replace(
