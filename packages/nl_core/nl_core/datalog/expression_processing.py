@@ -1128,42 +1128,22 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         )
         eq_sets = list()
         for equality_predicate in equality_predicates:
-            if all(isinstance(arg, Symbol) for arg in equality_predicate.args):
-                UnifyVariableEqualities.add_equality_with_symbol(
-                    eq_sets, *equality_predicate.args
-                )
-            elif isinstance(equality_predicate.args[0], Symbol):
-                UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, *equality_predicate.args
-                )
-            else:
-                UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, *reversed(equality_predicate.args)
-                )
+            UnifyVariableEqualities.add_equality(
+                eq_sets, *equality_predicate.args
+            )
         return eq_sets
 
     @staticmethod
-    def add_equality_with_constant(eq_sets, symb, const):
-        found_eq_set = False
-        for eq_set in eq_sets:
-            if any(term == symb for term in eq_set):
-                eq_set.add(const)
-                found_eq_set = True
-        if not found_eq_set:
-            eq_sets.append({symb, const})
-
-    @staticmethod
-    def add_equality_with_symbol(eq_sets, first, second):
-        found_eq_set = False
-        for eq_set in eq_sets:
-            if any(term == first for term in eq_set):
-                eq_set.add(second)
-                found_eq_set = True
-            elif any(term == second for term in eq_set):
-                eq_set.add(first)
-                found_eq_set = True
-        if not found_eq_set:
-            eq_sets.append({first, second})
+    def add_equality(eq_sets, first, second):
+        """Merge the sets of the terms equal to `first` and to `second`:
+        the terms equal by transitivity are in one set, whatever the
+        order of the equalities."""
+        merged = {first, second}
+        for eq_set in list(eq_sets):
+            if any(term == first or term == second for term in eq_set):
+                merged |= eq_set
+                eq_sets.remove(eq_set)
+        eq_sets.append(merged)
 
     @staticmethod
     def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:

@@ -411,13 +411,15 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
                 y = predicates[pred_idx].args[var_idx]
                 if x == y:
                     continue
-                eq_set.add(
-                    (
-                        min(x, y, key=lambda symb: symb.name),
-                        max(x, y, key=lambda symb: symb.name),
-                    )
-                )
+                eq_set.add(tuple(sorted((x, y), key=_term_order)))
     return eq_set
+
+
+def _term_order(term):
+    """Variables by name, before constants."""
+    if isinstance(term, Constant):
+        return (True, repr(term.value))
+    return (False, term.name)
 
 
 def lift_optimization_for_choice_predicates(query, program):
@@ -446,18 +448,22 @@ def lift_optimization_for_choice_predicates(query, program):
     # optimised apart, and the atoms of a conjunction are not unified with
     # those within its disjunctions.
     if isinstance(query, Disjunction):
-        return Disjunction(tuple(
-            lift_optimization_for_choice_predicates(formula, program)
-            for formula in query.formulas
-        ))
+        formulas = tuple(
+            formula for formula in (
+                lift_optimization_for_choice_predicates(formula, program)
+                for formula in query.formulas
+            ) if formula != FALSE
+        )
+        return Disjunction(formulas) if formulas else FALSE
     if isinstance(query, Conjunction) and any(
         isinstance(formula, Disjunction) for formula in query.formulas
     ):
-        return Conjunction(tuple(
+        formulas = tuple(
             lift_optimization_for_choice_predicates(formula, program)
             if isinstance(formula, Disjunction) else formula
             for formula in query.formulas
-        ))
+        )
+        return FALSE if FALSE in formulas else Conjunction(formulas)
     positive_predicates = OrderedSet()
     negative_predicates = OrderedSet()
     for pred in extract_logic_predicates(query):
@@ -480,9 +486,16 @@ def lift_optimization_for_choice_predicates(query, program):
         else:
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
-            rule = Implication(Symbol.fresh()(tuple()), conj)
+            rule = Implication(Symbol.fresh()(), conj)
             unified_antecedent = unifier.walk(rule).antecedent
             unified_conj = GuaranteeConjunction().walk(unified_antecedent)
+            # The atoms of the choice not unified into one are different
+            # tuples, which are not true together
+            if sum(
+                getattr(formula, "functor", None) == functor
+                for formula in unified_conj.formulas
+            ) > 1:
+                return FALSE
             new_formulas |= OrderedSet(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
