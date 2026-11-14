@@ -280,6 +280,21 @@ Unreleased
   ``cogat_definition('memory', d), similar_study(d, s),
   study_journal(s, 'Neuron')``, which took 70 s instead of 3 s.
 
+**Changes:**
+
+* ``similar_study(q, s)``, the studies about a text, keeps the top 5% of
+  the studies closest to it only if the mean similarity of its 20
+  closest studies reaches the ``similarity_gate`` of the engine's
+  ``text_embeddings`` entry (0.75 by default), and none otherwise: a text
+  that no study is about, as 'stock market crash', got its 719 studies.
+  The gate and the 95th percentile are the function
+  ``query_similarity_cutoff(q)``, ``inf`` when the gate fails, computed
+  once per text, rather than the aggregation ``cutoff_similarity``,
+  removed: the studies of a Cognitive Atlas definition in the journal
+  Neuron per year take 1.3 s instead of 70 s.  *Choosing the similarity
+  threshold* in :doc:`tutorial_text_embeddings` describes how to
+  calibrate the gate against texts off the domain.
+
 
 v0.1a22 (2026-11-13)
 --------------------

@@ -424,7 +424,7 @@ def vocabulary_engine():
         ].splitlines()
         if re.match(
             r"(term_in_study|activated|p_[a-z_]+|study_similarity|"
-            r"cutoff_similarity|similar_study|"
+            r"similar_study|"
             r"lift|relative_risk|uniformity|ratios)(_llm)?\(", line
         )
     ]
@@ -433,6 +433,11 @@ def vocabulary_engine():
         return {10: 0.9, 11: 0.5}[study]
 
     nl.add_symbol(query_similarity, name="query_similarity")
+
+    def query_similarity_cutoff(query: str) -> float:
+        return 0.9
+
+    nl.add_symbol(query_similarity_cutoff, name="query_similarity_cutoff")
     nl.execute_datalog_program(
         _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
         # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid

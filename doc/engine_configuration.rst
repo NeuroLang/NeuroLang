@@ -337,7 +337,20 @@ relation (see :doc:`tutorial_text_embeddings`)::
         document_adapter: allenai/specter2
         query_adapter: allenai/specter2_adhoc_query
         function: query_similarity
+        similarity_gate: 0.75           # the default
         description: "Similarity between a query and a study abstract"
+
+It also registers ``function_cutoff(query)``, here
+``query_similarity_cutoff``, computed once per text: the 95th percentile
+of the positive similarities of the documents to the query text, or
+``inf`` if the mean similarity of its 20 closest documents is below
+``similarity_gate``, a text that no document is about.  The
+meta-analysis engines define with them the studies about a text::
+
+    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c)
+
+the top 5% of the studies closest to the text, or none (see
+:ref:`similarity-threshold`).
 
 ``source`` is ``pubmed`` (titles and abstracts fetched from the NCBI
 E-utilities), a table of texts, local or remote::
