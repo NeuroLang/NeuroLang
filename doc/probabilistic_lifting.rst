@@ -562,16 +562,18 @@ Deterministic builtins
    :math:`s_2 \neq s` becoming :math:`s \neq s`, is true, and is removed
    (:class:`~neurolang.probabilistic.expression_processing.UnifyChoicesInNegations`).
 
-   A negated atom of a choice :math:`C` of one column is another tuple of
-   :math:`C`, exactly one of its tuples being true:
+   A negated atom of a choice :math:`C` is another tuple of :math:`C`,
+   exactly one of its tuples being true:
 
    .. math::
 
-      \lnot C(u) \equiv \exists f\, (C(f) \land f \neq u),
+      \lnot C(\bar u) \equiv \exists \bar f\, (C(\bar f) \land
+      \bar f \neq \bar u),
 
-   :math:`f` fresh, after the absorption, so that a contradicting
-   disjunct :math:`\lnot C(s)` is first removed
-   (:class:`~neurolang.probabilistic.expression_processing.NegatedChoicesAsOtherTuples`). The
+   :math:`\bar f` fresh, after the absorption, so that a contradicting
+   disjunct :math:`\lnot C(\bar s)` is first removed
+   (:class:`~neurolang.probabilistic.expression_processing.NegatedChoicesAsOtherTuples`).
+   With one column, :math:`\bar f \neq \bar u` is :math:`f \neq u`. The
    query :math:`\exists x\, R(x) \land \lnot C(x)` becomes
    :math:`\exists f\, (C(f) \land \exists x\, (R(x) \land x \neq f))`,
    the disjoint projection on :math:`f` of a query that the comparison
@@ -582,9 +584,29 @@ Deterministic builtins
 
       1 - \sum_a p_C(a) \prod_{b \neq a} (1 - p_R(b)).
 
-   A negated atom of a choice of several columns would give a
-   disjunction of comparisons, :math:`\bigvee_i f_i \neq u_i`, which the
-   comparison rule does not select, and is left as it is.
+   With several columns, :math:`\bar f \neq \bar u`, that is
+   :math:`f_1 \neq u_1 \lor \dots \lor f_n \neq u_n`, is a single
+   comparison of the tuples :math:`(f_1, \dots, f_n)` and :math:`(u_1,
+   \dots, u_n)`, which the normal forms do not distribute over
+   :math:`C(\bar f)`, and which the comparison rule selects as any
+   other. The query :math:`\exists x\, R(x) \land \lnot C(x, 1)` is
+   the disjoint projection on :math:`(f, g)` of :math:`C(f, g) \land
+   \exists x\, (R(x) \land (f, g) \neq (x, 1))`, with the probability
+
+   .. math::
+
+      \sum_{(a, b)} p_C(a, b)\, \Big(1 - \prod_{c : (a, b) \neq (c, 1)}
+      (1 - p_R(c))\Big).
+
+   The comparison of tuples makes no single variable different from a
+   term, so the comparison rule declines it when the existential conjunct
+   shares a relation with the rest of the query, as in
+   :math:`R(1) \land \exists x\, (R(x) \land \lnot C(x, 2))`. It also
+   declines :math:`\exists x\, \exists y\,
+   S(x, y) \land \lnot C(x, y)`, whose existential conjunct has two
+   variables compared, although its probability, :math:`\sum_{\bar a}
+   p_C(\bar a) (1 - \prod_{\bar b \neq \bar a} (1 - p_S(\bar b)))`, is
+   computable.
 
 Equalities within disjuncts
    The variables an equality makes the same are unified, in each disjunct
@@ -1654,26 +1676,36 @@ Rewriting of the choices
    every step of the rewriting is an equivalence.
 
    *Negated atom of a choice.* In every world exactly one tuple
-   :math:`C(a)` of a choice is true: the probabilities of its tuples add
-   up to one, which
+   :math:`C(\bar a)` of a choice is true: the probabilities of its tuples
+   add up to one, which
    :func:`~neurolang.probabilistic.expression_processing.check_probabilistic_choice_set_probabilities_sum_to_one`
    checks when the choice is added to the program, so there is no world
-   without a true tuple of :math:`C`. For a value :math:`u` of the term,
-   :math:`\lnot C(u)` holds if and only if :math:`a \neq u`, that is if
-   and only if :math:`\exists f\, (C(f) \land f \neq u)` holds, with
-   :math:`f = a`, the only value for which :math:`C(f)` holds. The fresh
-   :math:`f` captures no variable, and the rewriting is an equivalence in
-   every world. It adds no negation, so it applies once to each negated
-   choice atom (``NegatedChoicesAsOtherTuplesMixin`` matches the negation
-   of an atom of one argument, and leaves those of other relations
-   unchanged); the query
+   without a true tuple of :math:`C`. For values :math:`\bar u` of the
+   terms, :math:`\lnot C(\bar u)` holds if and only if :math:`\bar a \neq
+   \bar u`, that is :math:`a_i \neq u_i` for some column :math:`i`, if
+   and only if :math:`\exists \bar f\, (C(\bar f) \land \bar f \neq \bar
+   u)` holds, with :math:`\bar f = \bar a`, the only tuple for which
+   :math:`C(\bar f)` holds. The comparison of tuples
+   (``_tuple``, compared by ``operator.ne``) is this disjunction of the
+   comparisons of their columns. The fresh :math:`\bar f` capture no
+   variable, and the rewriting is an equivalence in every world. It adds
+   no negation, so it applies once to each negated choice atom
+   (``NegatedChoicesAsOtherTuplesMixin`` matches the negation of an atom,
+   and leaves those of other relations unchanged); the query
    :math:`\exists x\, R(x) \land \lnot C(x)` is then planned by the
    disjoint projection on :math:`f` (Lemma 2, and the projection on a
    variable below) of :math:`C(f) \land \exists x\, (R(x) \land x \neq f)`,
    whose second conjunct shares no relation with :math:`C(f)`, and is
    independent of it by Lemma 1: :math:`\sum_a p_C(a)\, (1 - \prod_{b
    \neq a} (1 - p_R(b)))`, equal to the closed form above as
-   :math:`\sum_a p_C(a) = 1`.
+   :math:`\sum_a p_C(a) = 1`. With several columns the plan is the same,
+   the disjoint projection being on :math:`\bar f`, and the comparison
+   rule selecting the comparison of tuples, whose value is fixed, as that
+   of any comparison, once the tuple of :math:`C` and the separator
+   variable are (see the comparisons in an existential conjunct below);
+   ``_terms_different_from`` gets no term from it, as it makes no single
+   variable different from a term, so the rule only applies when
+   :math:`\psi` shares no probabilistic relation with the rest.
 
 Answer variables as constants
    For an answer, the free variables have values, and their equalities

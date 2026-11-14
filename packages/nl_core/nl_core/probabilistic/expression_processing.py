@@ -584,21 +584,33 @@ class UnifyChoicesInNegations(
 
 class NegatedChoicesAsOtherTuplesMixin(PatternWalker):
     """
-    Rewrite a negated atom ¬C(u) of a probabilistic choice of one column
-    of `choice_symbols` as ∃f (C(f) ∧ f ≠ u), f fresh: exactly one tuple
-    of C is true, and C(u) is false if and only if it is another one.
+    Rewrite a negated atom ¬C(ū) of a probabilistic choice of
+    `choice_symbols` as ∃f̄ (C(f̄) ∧ f̄ ≠ ū), f̄ fresh: exactly one tuple
+    of C is true, and C(ū) is false if and only if it is another one.
+    With several columns, f̄ ≠ ū, that is f₁ ≠ u₁ ∨ … ∨ fₙ ≠ uₙ, is a
+    single comparison of tuples, which the normal forms do not distribute.
     Other negated atoms are left as they are.
     """
 
-    @add_match(Negation(FunctionApplication(Symbol, (Expression,))))
+    @add_match(Negation(FunctionApplication(Symbol, ...)))
     def negated_atom(self, negation):
         atom = negation.formula
         if atom.functor not in self.choice_symbols:
             return negation
-        f = Symbol[atom.args[0].type].fresh()
-        return ExistentialPredicate(f, Conjunction((
-            atom.functor(f), Constant(operator.ne)(f, atom.args[0])
-        )))
+        fs = tuple(Symbol[u.type].fresh() for u in atom.args)
+        terms = (fs[0], atom.args[0]) if len(fs) == 1 else (
+            Constant(_tuple)(*fs), Constant(_tuple)(*atom.args)
+        )
+        formula = Conjunction((
+            atom.functor(*fs), Constant(operator.ne)(*terms)
+        ))
+        for f in fs:
+            formula = ExistentialPredicate(f, formula)
+        return formula
+
+
+def _tuple(*terms):
+    return terms
 
 
 class NegatedChoicesAsOtherTuples(
