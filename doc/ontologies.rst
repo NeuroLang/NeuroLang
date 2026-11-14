@@ -245,19 +245,22 @@ restriction on ``ro:has_part``.
      - > 120 s
      - 2.3 s
    * - ``ans(x, y) :- ro:part_of(x, y)``
-     - 3.0 s
+     - 3.0–4.5 s
      - 1.3 s
    * - ``ans(n) :- AGGREGATE[](skos:Concept(c) @ count(c)) = n``
      - > 120 s
      - 1.8 s
    * - ``ans(t) :- cogat_term(c, 'language comprehension'),
        ro:has_part(c, x), cogat_term(x, t)``
-     - 13.0 s
+     - 13–19 s
      - 2.4 s
 
-Without the instance, the five queries keep their answers and their times,
-under 2 s.  The chase takes the recursion and the hierarchy; the rewriting
-is left with the values the existential constraints create.
+The machine ran other work during every run, and times vary by up to a
+factor of 2 between runs: "before" gives the range of two runs, "after" the
+faster of two, the slower one under 4.3 s for each query.  Without the
+instance, the five queries keep their answers and their times, under 2 s.
+The chase takes the recursion and the hierarchy; the rewriting is left with
+the values the existential constraints create.
 
 When the answers are complete
 -----------------------------
@@ -292,12 +295,18 @@ answers of 1,080 random queries of 1 to 3 atoms match those of a chase with
 unnamed values bounded at depth 6; 120 of them are the test
 ``test_certain_answers_on_random_horn_ontologies``.  With four checks
 running at once, three of the 1,080 took between 5 and 11 s, and one more
-than 5 minutes, alone: its two atoms over
-variables out of the head, ``C3(y)`` and ``C2(x)``, are rewritten
-independently and their alternatives multiply.  The rewriting need not end
-at all when recursive ``allValuesFrom`` constraints apply to a variable out
-of the head, as ``C1 ⊑ ∀p.C2``, ``C2 ⊑ C1`` and ``C1 ⊑ ∃p.C3`` with the
-query ``ans(y) :- C3(z), p(z, y)``.
+than 5 minutes, alone: its two atoms over variables out of the head,
+``C3(y)`` and ``C2(x)``, are rewritten independently and their
+alternatives multiply.  The rewriting need not end at all when recursive
+``allValuesFrom`` constraints apply to a variable out of the head, as
+``C1 ⊑ ∀p.C2``, ``C2 ⊑ C1`` and ``C1 ⊑ ∃p.C3`` with the query
+``ans(y) :- C3(z), p(z, y)``.
+
+Outside these assumptions the answers stay sound.  On 480 more random
+queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half
+of them, recursive full constraints, none returned an answer that is not
+certain.  One missed an answer, through the ``hasValue`` exception above,
+and 7, all over recursive constraints, did not end within 10 s.
 
 One more limit concerns rules.  XRewrite rewrites each rule of the program
 on its own, so an unnamed value does not pass from one rule to another:
@@ -353,7 +362,7 @@ of [Zanitti2023]_ reasons on top of them.
 What would confirm and what limits this
 ---------------------------------------
 
-The completeness claim rests on an argument and on 1,080 random queries,
+The completeness claim rests on an argument and on 1,560 random queries,
 not on a mechanised proof.  A cross-check against an OWL reasoner, such as
 HermiT or Konclude, on ontologies with instances of the Cognitive Atlas,
 would test it at scale.  The termination of the rewriting on recursive

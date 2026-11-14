@@ -26,8 +26,10 @@ Unreleased
   on the Cognitive Atlas with an instance of a class high in its hierarchy
   now ends (``ans(x) :- ro:has_part(x, y)``: 1.7 s, was > 120 s).  New page
   :doc:`ontologies`.  Fixes on the way: XRewrite's factorisation dropped the
-  rest of the body, a renamed constraint variable could take a query
-  variable's name, a negated atom made XRewrite fail, an aggregate over a
+  rest of the body, a rewriting step bound a query variable only in the
+  rewritten atom (wrong answers with ``hasValue``), a renamed constraint
+  variable could take a query variable's name, a negated atom made XRewrite
+  fail, the chased predicates broke ``solve_all``, an aggregate over a
   rewritten body counted per rewriting, and ``C ⊑ B ⊓ ∃p.D`` is read as
   ``C(x) → B(x)``.
 
