@@ -32,4 +32,5 @@ page:
   network_xray: 0.6       # how much a network shows through the 3D render
   network_slab_mm: 6      # the slab of a slice a network is drawn in
   thinnest_edge: 0.2      # the edge at the threshold, a share of the largest
+  hover_mm: 2             # a node or edge is named within this of the mouse
   histogram_bins: 60      # the bins of the histogram of the values
