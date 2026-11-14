@@ -100,8 +100,9 @@ def functional(work: Path, tian_names: list, parts: Path,
         dataset / "parquet" / "functional_subjects.parquet", index=False)
     for a, (_, regions) in cortical(work).items():
         names = regions + tian_names
-        r = matrix(np.tanh(mean_z[a]), names)
-        np.fill_diagonal(r.values, 1.0)
+        values = np.tanh(mean_z[a])
+        np.fill_diagonal(values, 1.0)
+        r = matrix(values, names)
         write_matrix(r, dataset / "parquet" / f"{a}_functional_mean.parquet")
         write_matrix(matrix(sd_z[a], names),
                      dataset / "parquet" / f"{a}_functional_z_sd.parquet")
