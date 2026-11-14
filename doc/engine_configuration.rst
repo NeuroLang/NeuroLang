@@ -81,7 +81,11 @@ may specify the following keys, all of them optional:
   ``EUCLIDEAN(x, y, z, x2, y2, z2) <= r``, finds the pairs with a k-d
   tree instead of comparing every pair; the engines extending
   ``mni_atlases`` have ``schaefer_points``, ``destrieux_points`` and
-  ``tian_points`` (236,000 rows, 13 MB).
+  ``tian_points`` (236,000 rows, 13 MB).  The key of an atlas is its
+  kind unless it has ``kind``: ``structural_connectivity`` has
+  ``schaefer400: {kind: schaefer, predicate_name: schaefer400, n_rois:
+  400, ...}`` beside the ``schaefer`` of 100 parcels it inherits, each
+  with its own grid and sort of labels.
   ``tian`` is the Melbourne subcortex atlas (Tian et al.,
   2020, Nat Neurosci, doi:10.1038/s41593-020-00711-6, whose licence asks
   for this citation), 3T, ``scale`` 1 to 4 (16, 32, 50 or 54 regions),

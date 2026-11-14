@@ -147,3 +147,22 @@ assistant_examples:
     datalog: |-
       position(l, a, b) :- destrieux_structural_gradient(l, 1, a), destrieux_structural_gradient(l, 2, b)
       ans(l, d) :- position(l, a, b), position('L G front sup', a0, b0), (d == ((a - a0) ** 2 + (b - b0) ** 2) ** 0.5), (d < 2), (l != 'L G front sup')
+
+  # The finer Schaefer atlas, 400 parcels (schaefer400), of the same 17
+  # networks: its own relations and labels.
+  - question: Which parcels of the Schaefer atlas of 400 are the most strongly structurally connected to the left prefrontal parcel '17Networks LH DefaultA PFCd 1'?
+    datalog: |-
+      ans(l, n) :- schaefer400_structural_connectivity('17Networks LH DefaultA PFCd 1', l, n), (n > 1000)
+
+  - question: What is the structural network of the left default mode network at 400 parcels?
+    datalog: |-
+      default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
+      ans(l1, l2, n) :- schaefer400_structural_connectivity(l1, l2, n), default_left(l1), default_left(l2), (l1 < l2), (n > 500)
+
+  - question: What is the first gradient of the structural connectivity of the cortex at 400 parcels?
+    datalog: |-
+      ans(l, v) :- schaefer400_structural_gradient(l, 1, v)
+
+  - question: How much of the variance of the structural connectivity does each gradient explain at 400 parcels?
+    datalog: |-
+      ans(d, h, e) :- schaefer400_structural_gradient_variance(d, h, e)

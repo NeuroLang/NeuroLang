@@ -57,7 +57,12 @@ Unreleased
   https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
   those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
   standard deviations, in parquet; ``.view`` draws a result of them as a
-  network. There is no subcortex in them, so no Tian. Its questions and
+  network. The Schaefer atlas of 400 parcels (17 networks) is also there,
+  as ``schaefer400(label, region)`` (a second atlas of the engine, with
+  its own ``kind: schaefer`` option and label sort) and
+  ``schaefer400_structural_connectivity``,
+  ``schaefer400_structural_gradient`` and
+  ``schaefer400_structural_gradient_variance``, finer than the 100 parcels. There is no subcortex in them, so no Tian. Its questions and
   their queries teach the query assistant to tell the structural
   connectivity (white-matter streamlines) from the functional one (the
   meta-analytic co-activation of regions by the same studies): the

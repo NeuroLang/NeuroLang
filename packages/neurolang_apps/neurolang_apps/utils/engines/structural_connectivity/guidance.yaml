@@ -43,6 +43,15 @@ assistant_guidance: >
   (Schaefer's name the network, as '17Networks LH DefaultA pCunPCC 1',
   so startswith('17Networks LH Default', l) selects the left default
   network; Destrieux's start with the hemisphere, as 'L G front sup').
+  The Schaefer atlas has two scales, both of 17 networks: 100 parcels
+  (schaefer_structural_connectivity, schaefer_structural_gradient,
+  schaefer_structural_gradient_variance, schaefer(l, r)), the default,
+  coarser, and 400 parcels (schaefer400_structural_connectivity,
+  schaefer400_structural_gradient, schaefer400_structural_gradient_variance,
+  schaefer400(l, r)), finer, for a question asking for 400 parcels or a
+  finer parcellation; the labels of the two are different (as
+  '17Networks LH DefaultA PFCd 1' of 400), so a query uses the atlas of
+  its relation: schaefer400(l, r) lists the 400, schaefer_label(l) the 100.
   The connectivity is of the cortex only: the subcortex (thalamus, basal
   ganglia, hippocampus, amygdala, the tian regions) and the cerebellum
   have none; say so rather than query it.

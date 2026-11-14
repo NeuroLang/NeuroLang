@@ -593,7 +593,8 @@ def get_predicates(
             default_desc=f"{atl_name} atlas regions",
         )
         # Probabilistic atlases also register a probability predicate
-        if _ATLAS_REGISTRY.get(atl_name, {}).get("probabilistic"):
+        kind = atl_params.get("kind", atl_name)
+        if _ATLAS_REGISTRY.get(kind, {}).get("probabilistic"):
             prob_name = atl_params.get(
                 "prob_predicate_name", f"{pred_name}_prob"
             )
@@ -1311,10 +1312,11 @@ def _load_deterministic_atlas(
     """
     from neurolang.atlases import Atlas, label_colours, label_table
 
-    info = _ATLAS_REGISTRY[atlas_name]
+    kind = params.get("kind", atlas_name)
+    info = _ATLAS_REGISTRY[kind]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated", "points")
+        if k not in ("predicate_name", "activated", "points", "kind")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
@@ -1356,7 +1358,7 @@ def _load_deterministic_atlas(
         warnings.simplefilter("ignore")
         atlas = Atlas.from_labels(
             atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
-            normalise=True, kind=atlas_name,
+            normalise=True, kind=kind,
         )
         on_template = _atlas_on_template(nl, atlas, cache_dir)
     _register_grid(nl, atlas_name, on_template.image)
@@ -1391,8 +1393,10 @@ def _load_probabilistic_atlas(
     """
     from neurolang.atlases import label_name
 
-    info = _ATLAS_REGISTRY[atlas_name]
-    fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
+    info = _ATLAS_REGISTRY[params.get("kind", atlas_name)]
+    fetch_kw = {
+        k: v for k, v in params.items() if k not in ("predicate_name", "kind")
+    }
     fetch_kw["data_dir"] = str(data_dir)
     atl_data = info["fetch"](**fetch_kw)
 
@@ -1455,10 +1459,11 @@ def _load_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """Download a brain atlas via nilearn and register it as a predicate."""
-    info = _ATLAS_REGISTRY.get(atlas_name)
+    kind = params.get("kind", atlas_name)
+    info = _ATLAS_REGISTRY.get(kind)
     if info is None:
         raise ValueError(
-            f"Unknown atlas {atlas_name!r}. "
+            f"Unknown atlas {kind!r}. "
             f"Available: {', '.join(sorted(_ATLAS_REGISTRY))}"
         )
     if info["probabilistic"]:
