@@ -56,9 +56,9 @@ def chase_rules(constraints, holds, rules, edb):
         name: {s for s in sigmas if not _existential_variables(s)}
         for name, sigmas in constraints.items()
     }
-    valued, kept = set(holds), None
-    while kept is None or not heads <= valued:
-        valued |= {rule.consequent.functor for rule in kept or ()}
+    valued, heads = set(holds), None
+    while heads is None or not heads <= valued:
+        valued |= heads or set()
         full = constraints_that_can_hold(without_existentials, valued)
         unvalued = {
             sigma.consequent.functor for sigmas in constraints.values()

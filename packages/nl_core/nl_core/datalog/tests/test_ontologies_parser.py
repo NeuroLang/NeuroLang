@@ -495,8 +495,6 @@ def test_ontology_format_is_guessed_from_the_extension(tmp_path):
     ]
 
 
-
-
 PROPERTY_AXIOMS = """
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
