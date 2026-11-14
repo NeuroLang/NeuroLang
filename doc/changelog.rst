@@ -219,7 +219,11 @@ Unreleased
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:
-  the atlases, Neurosynth, the IIT Human Brain Atlas and the HCP.
+  the MNI template, the atlases, Neurosynth and PubMed, NeuroStore, the
+  Cognitive Atlas, SPECTER2, the tractography atlases, the IIT Human Brain
+  Atlas and the HCP; a test checks every engine names some. The REPL page
+  has a second page, *Credits* (``credits.html``), that lists them for
+  each of its engines, with links to their DOIs and a button to copy them.
 
 * ``neurolang-repl-serve --config server.yaml``: the server's options in a
   YAML file, each by its name, its paths relative to it, the command line

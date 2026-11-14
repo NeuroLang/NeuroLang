@@ -486,6 +486,7 @@ function start({ restore = null } = {}) {
   const [repo, ref] = [params.get("repo") || DEFAULT_REPO, params.get("ref") || ""];
   const { name: engine, full } = engineChoice(params, bundle);
   engineSelect.value = engine;
+  $("credits").href = `credits.html#${engine}`;
   Object.assign(version.elements.repo, { value: repo });
   Object.assign(version.elements.ref, { value: ref });
   $("version-summary").textContent =

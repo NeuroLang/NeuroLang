@@ -279,7 +279,8 @@ Every command
      - the engine's relations, and the engines
      - both
    * - ``.credits``
-     - the sources of the engine's data, and how to acknowledge them
+     - the sources of the engine's data, and how to acknowledge them; on
+       the page, **Credits** lists them for each of its engines
      - both
    * - ``.datalog [PREDICATE]``
      - the Datalog of the last SQUALL query, or the rules of a relation

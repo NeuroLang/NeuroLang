@@ -43,6 +43,12 @@ engines:
         points: {predicate_name: tian_points}
     acknowledgements:
       - >-
+        MNI152 template and brain mask, ICBM 2009a nonlinear symmetric
+        (nilearn's): Fonov V, Evans AC, Botteron K, Almli CR, McKinstry RC,
+        Collins DL. Unbiased average age-appropriate atlases for pediatric
+        studies. NeuroImage 54:313-327 (2011).
+        doi:10.1016/j.neuroimage.2010.07.033
+      - >-
         Schaefer 2018 parcellation, 100 parcels, 17 networks (nilearn's):
         Schaefer A, Kong R, Gordon EM, Laumann TO, Zuo XN, Holmes AJ,
         Eickhoff SB, Yeo BTT. Local-global parcellation of the human
@@ -855,6 +861,18 @@ engines:
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
     # triples are facts (``rdfs:label(iri, 'Working memory')``) and its
     # subclass axioms rewrite the queries.
+    acknowledgements:
+      - >-
+        Cognitive Atlas (its ontology, cogat.v2.owl, and its tasks):
+        Poldrack RA, Kittur A, Kalar D, Miller E, Seppa C, Gil Y, Parker
+        DS, Sabb FW, Bilder RM. The Cognitive Atlas: toward a knowledge
+        foundation for cognitive neuroscience. Frontiers in
+        Neuroinformatics 5:17 (2011). doi:10.3389/fninf.2011.00017
+      - >-
+        SPECTER2 (allenai/specter2_base and its adapters), the embeddings
+        of the studies' titles and abstracts: Singh A, D'Arcy M, Cohan A,
+        Downey D, Feldman S. SciRepEval: A Multi-Format Benchmark for
+        Scientific Document Representations. EMNLP 2023
     ontologies:
       - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
         individuals: true
@@ -1295,6 +1313,9 @@ engines:
         Wager TD. Large-scale automated synthesis of human functional
         neuroimaging data. Nature Methods 8:665-670 (2011).
         doi:10.1038/nmeth.1635
+      - >-
+        The titles and abstracts of the studies: PubMed, courtesy of the
+        U.S. National Library of Medicine (https://pubmed.ncbi.nlm.nih.gov)
 
   neurostore:
     extends: coordinate_meta_analysis
@@ -1305,6 +1326,12 @@ engines:
       abstracts, plus the abstracts, titles and LLM-extracted cognitive
       concepts and domains of the studies.
     python_init: "neurolang_apps.utils.engines.neurostore.init"
+    acknowledgements:
+      - >-
+        NeuroStore (https://neurostore.org), the database of Neurosynth
+        Compose: its studies, peaks, titles, abstracts and LLM-extracted
+        concepts and domains, its release read as NiMARE's
+        nimare-studyset-parquet
     # Twice as many studies as neurosynth: 200 replicates keep a query
     # within the time and memory the query assistant gives it.
     resamplings:
@@ -1343,6 +1370,18 @@ engines:
       Destrieux cortical parcellation, each mapped to a volumetric
       brain region (ExplicitVBR).
     requires_mni_mask: true
+    acknowledgements:
+      - >-
+        MNI152 template and brain mask, ICBM 2009a nonlinear symmetric
+        (nilearn's): Fonov V, Evans AC, Botteron K, Almli CR, McKinstry RC,
+        Collins DL. Unbiased average age-appropriate atlases for pediatric
+        studies. NeuroImage 54:313-327 (2011).
+        doi:10.1016/j.neuroimage.2010.07.033
+      - >-
+        Destrieux 2009 atlas (nilearn's): Destrieux C, Fischl B, Dale A,
+        Halgren E. Automatic parcellation of human cortical gyri and sulci
+        using standard anatomical nomenclature. NeuroImage 53:1-15 (2010).
+        doi:10.1016/j.neuroimage.2010.06.010
     use_base_symbols: true
     builtins: [exp, log, startswith]
     atlases:
@@ -1407,6 +1446,33 @@ engines:
     # of the ids x and the hooks of .view, over what the commands load;
     # .index_tracts finds the atlases of the engine, loaded after it
     python_init: "neurolang_apps.utils.engines.tracts.frontend"
+    acknowledgements:
+      - >-
+        The bundles (bundles/*.dl), tract_querier's queries: Wassermann D,
+        Makris N, Rathi Y, Shenton M, Kikinis R, Kubicki M, Westin CF. The
+        white matter query language: a novel approach for describing human
+        white matter anatomy. Brain Structure and Function 221:4705-4721
+        (2016). doi:10.1007/s00429-015-1179-4
+      - >-
+        The HCP842 atlas, when a program fetches it (CC BY 4.0): Yeh FC et
+        al. Population-averaged atlas of the macroscale human structural
+        connectome and its network topology. NeuroImage 178:57-68 (2018).
+        doi:10.1016/j.neuroimage.2018.05.027; as curated for DIPY's
+        RecoBundles (doi:10.6084/m9.figshare.7375883): Garyfallidis E et
+        al. Recognition of white matter bundles using local and global
+        streamline-based registration and clustering. NeuroImage
+        170:283-295 (2018). doi:10.1016/j.neuroimage.2017.07.015
+      - >-
+        The HCP1065 atlas, when a program fetches it (CC BY-SA 4.0): Yeh
+        FC. Population-based tract-to-region connectome of the human brain
+        and its hierarchical topology. Nature Communications 13:4933
+        (2022). doi:10.1038/s41467-022-32595-4. Data were provided [in
+        part] by the Human Connectome Project, WU-Minn Consortium
+        (Principal Investigators: David Van Essen and Kamil Ugurbil;
+        1U54MH091657) funded by the 16 NIH Institutes and Centers that
+        support the NIH Blueprint for Neuroscience Research; and by the
+        McDonnell Center for Systems Neuroscience at Washington
+        University.
     # The sorts of the arguments of the vocabulary and of the bundles, as
     # their %% documentation gives them (uncinate(x: streamline, h:
     # hemisphere)); the query assistant is told their descriptions.
@@ -1525,11 +1591,7 @@ engines:
         its Desikan-Killiany wmparc, under the IIT Human Brain Template
         License (non-commercial educational and research use, with
         attribution; https://www.nitrc.org/projects/iit/); FreeSurfer's
-        colour LUT; the bundles of tract_querier (Wassermann D, Makris N,
-        Rathi Y, Shenton M, Kikinis R, Kubicki M, Westin CF. The white
-        matter query language: a novel approach for describing human white
-        matter anatomy. Brain Structure and Function 221:4705-4721 (2016).
-        doi:10.1007/s00429-015-1179-4)
+        colour LUT
     # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain
     # Template License: non-commercial research, attribution): its
     # whole-brain tractogram and its Desikan-Killiany wmparc, from the OSF
