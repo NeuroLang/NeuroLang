@@ -466,7 +466,9 @@ def test_negation_beside_a_class_with_subclasses():
 
 def test_query_a_property_the_ontology_only_constrains():
     """``headOf`` has a constraint, no rule and no fact: it is queried as
-    an EDB predicate, not by magic sets, which found no rule to adorn."""
+    an EDB predicate, not by magic sets, which found no rule to adorn. A
+    Dean heads something, so is an answer when ``b`` is projected out,
+    once there are Deans."""
     owl = '''<?xml version="1.0"?>
     <rdf:RDF xmlns:owl="http://www.w3.org/2002/07/owl#"
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -482,6 +484,7 @@ def test_query_a_property_the_ontology_only_constrains():
     </rdf:RDF>'''
     nl = NeurolangPDL()
     nl.load_ontology(io.StringIO(owl))
+    assert not set(nl.execute_datalog_program("ans(a) :- headOf(a, b)"))
     nl.add_tuple_set([('Juan',)], name='Dean')
     with nl.scope as e:
         e.answer[e.a, e.b] = e.headOf[e.a, e.b]
@@ -489,4 +492,5 @@ def test_query_a_property_the_ontology_only_constrains():
 
     res = nl.execute_datalog_program("ans(a, b) :- headOf(a, b)")
     assert set(res) == expected
-    nl.execute_datalog_program("ans(a) :- headOf(a, b)")
+    res = nl.execute_datalog_program("ans(a) :- headOf(a, b)")
+    assert set(res) == {('Juan',)}

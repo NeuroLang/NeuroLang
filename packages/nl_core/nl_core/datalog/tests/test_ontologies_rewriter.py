@@ -13,7 +13,7 @@ from nl_expr.logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import OntologyParser, RightImplication
-from ..ontologies_rewriter import OntologyRewriter
+from ..ontologies_rewriter import OntologyRewriter, constraints_that_can_hold
 
 S_ = Symbol
 C_ = Constant
@@ -414,3 +414,22 @@ def test_ontology_parsed_rewrite():
         assert rewritten[index_1].antecedent.args[0] == rewritten[index_1].consequent.args[0]
     else:
         assert False
+
+
+def test_constraints_that_can_hold():
+    """A constraint is kept when its antecedent's predicates hold, or are
+    derived by kept constraints: ``Dean`` holds, so ``headOf`` can, and
+    ``Chair`` neither holds nor is derived."""
+    Dean, Chair, headOf, Person = S_("Dean"), S_("Chair"), S_("headOf"), S_(
+        "Person"
+    )
+    x, y = S_("x"), S_("y")
+    dean = RI_(Dean(x), headOf(x, y))
+    chair = RI_(Chair(x), headOf(x, y))
+    person = RI_(headOf(x, y), Person(x))
+    constraints = _categorize_constraints([dean, chair, person])
+
+    assert constraints_that_can_hold(constraints, {Dean}) == {
+        "headOf": {dean}, "Person": {person}
+    }
+    assert constraints_that_can_hold(constraints, set()) == {}
