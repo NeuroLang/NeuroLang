@@ -1448,6 +1448,21 @@ class TestImage:
             (1, 2, 3, 5.0), (0, 0, 0, 3.0), (3, 3, 3, -2.0)
         }
 
+    def test_the_assistant_is_told_what_the_image_is(self, tiny, zmap):
+        """The query assistant sees the image among the relations, with
+        how to decode it (its agent's schema of the engine)."""
+        from neurolang_apps.utils.llm.context import EngineContext
+
+        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        schema = EngineContext(
+            tiny._nl, "tiny", tiny.loaded_relations
+        ).schema_summary()
+        line = next(row for row in schema.splitlines()
+                    if row.startswith("- image(i, j, k, value)"))
+        assert "brain image" in line and "(value >= 3.1)" in line
+        assert line.count("brain image") == 1  # loaded again, told once
+
     def test_the_name(self, tiny, zmap):
         tiny._handle_dot_command(f".image {zmap} --name z")
         assert "loaded z(i, j, k, value)" in _output(tiny)

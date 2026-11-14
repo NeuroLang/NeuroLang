@@ -2051,6 +2051,15 @@ Load it again with --name and the same NAME to replace it."""
 
 HELP_TOPICS["image"] = IMAGE_HELP
 
+# What the query assistant is told of an image .image loaded (.document).
+IMAGE_DESCRIPTION = (
+    "A brain image loaded with .image or uploaded: its voxels (i, j, k) "
+    "on the grid of the engine, with their value. A binary mask (a single "
+    "value) is decoded from its voxels of (value > 0), a z-map from those "
+    f"of (value >= {IMAGE_DEFAULTS['threshold']}): see the examples "
+    "decoding an image."
+)
+
 
 def nifti_from_bytes(data: bytes, most: Optional[int] = None):
     """
@@ -2184,6 +2193,9 @@ def cmd_image(app, arg: str) -> None:
         del app._nl.program_ir.symbol_table[Symbol(name)]
     app._nl.add_tuple_set(rows, name=name)
     app.loaded_relations[name] = ["i", "j", "k", "value"]
+    app._nl.execute_datalog_program(
+        f'.document({name}, "{IMAGE_DESCRIPTION}")'
+    )
     kind = "a mask" if mask else "a map of values"
     app.console.print(
         f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "

@@ -133,5 +133,12 @@ assistant_guidance: >
   weight, is the probability of a probabilistic fact of the study
   (hit(s) :: p :- ...), conditioned on the studies of each term and
   divided by its probability over all the studies: the lift of the
-  term.  Never join the image with p_a_given_t over its voxels: it
-  computes every term at every voxel.
+  term.  Its activated voxels are those of (w > 0) for a binary mask
+  and of (w >= 3.1) for a z-map: when the question does not say which
+  the image is, ask min(v) and max(v) over image(i, j, k, v) first (a
+  mask has one value).  Decode towards the concepts with
+  cogat_term(concept, term) and answer with the term, not the IRI of the
+  concept.  Compare the lifts of two terms on the same
+  bootstrap replicate, as the Bayes factors are.  Never join the image
+  with p_a_given_t over its voxels: it computes every term at every
+  voxel.
