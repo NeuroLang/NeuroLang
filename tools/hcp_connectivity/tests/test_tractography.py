@@ -81,7 +81,7 @@ def test_matrix_check_of_a_planted_matrix():
 
 def test_assigned_fraction(tmp_path):
     path = tmp_path / "a.txt"
-    path.write_text("1 2\n0 3\n4 4\n5 6\n")
+    path.write_text("# tck2connectome x, y\n1 2\n0 3\n4 4\n5 6\n")
     out = t.assigned_fraction(path, np.array([1.0, 1, 1, 1]))
     assert out["streamlines"] == 4
     assert out["assigned"] == 0.75 and out["assigned_distinct"] == 0.5
@@ -89,7 +89,7 @@ def test_assigned_fraction(tmp_path):
 
 def test_read_matrix_and_part(tmp_path):
     path = tmp_path / "m.csv"
-    path.write_text("\n".join(",".join(["1"] * 3) for _ in range(3)))
+    path.write_text("# a, b\n" + "\n".join(",".join(["1"] * 3) for _ in range(3)))
     assert t.read_matrix(path, 3).shape == (3, 3)
     part = Part(tmp_path / "part-0.npz", every=1)
     part.add("100206", {t.NAME: np.eye(2)}, total=1.0)
@@ -113,7 +113,7 @@ def test_subjects_with_diffusion(tmp_path):
 
 
 def test_read_weights_either_separator(tmp_path):
-    (tmp_path / "a").write_text("0.5,1.5,0\n")
+    (tmp_path / "a").write_text("# command: x, y\n0.5,1.5,0\n")
     (tmp_path / "b").write_text("0.5 1.5 0\n")
     assert t.read_weights(tmp_path / "a").tolist() == [0.5, 1.5, 0.0]
     assert t.read_weights(tmp_path / "b").tolist() == [0.5, 1.5, 0.0]

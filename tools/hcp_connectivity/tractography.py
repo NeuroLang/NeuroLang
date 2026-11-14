@@ -210,17 +210,18 @@ def atlas_check(labels: np.ndarray, segmentation: np.ndarray,
 
 def read_matrix(path: Path, n: int = N_CORTEX + N_TIAN) -> np.ndarray:
     """The connectome of tck2connectome (a CSV), checked to be square."""
-    matrix = pd.read_csv(path, header=None, sep=r"[,\s]+",
+    matrix = pd.read_csv(path, header=None, sep=r"[,\s]+", comment="#",
                          engine="python").values.astype(float)
     assert matrix.shape == (n, n), matrix.shape
     return matrix
 
 
 def read_weights(path: Path) -> np.ndarray:
-    """The SIFT2 weights of the streamlines (comma or space separated)."""
+    """The SIFT2 weights of the streamlines (comma or space separated, after
+    the comment lines of MRtrix3)."""
     with open(path) as handle:
-        comma = "," in handle.read(1000)
-    return np.loadtxt(path, delimiter="," if comma else None)
+        text = " ".join(line for line in handle if not line.startswith("#"))
+    return np.array(text.replace(",", " ").split(), dtype=float)
 
 
 def assigned_fraction(path: Path, weights: np.ndarray = None) -> dict:
@@ -228,7 +229,8 @@ def assigned_fraction(path: Path, weights: np.ndarray = None) -> dict:
     two nodes of each streamline, 0 for none), the fraction of the
     streamlines with both ends assigned (to two different nodes: *inter*),
     and of the weights *weights* if given."""
-    nodes = pd.read_csv(path, header=None, sep=r"\s+").values
+    nodes = pd.read_csv(path, header=None, sep=r"\s+", comment="#",
+                        dtype=np.int64).values
     both = (nodes > 0).all(axis=1)
     different = both & (nodes[:, 0] != nodes[:, 1])
     out = {"streamlines": len(nodes),
