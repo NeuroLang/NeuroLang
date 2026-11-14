@@ -91,9 +91,10 @@ def test_unknown_base_and_cycle():
 
 def test_builtin_engines():
     assert list_engine_names() == [
-        "destrieux", "neurostore", "neurostore_iit", "neurostore_tracts",
-        "neurosynth", "neurosynth_iit", "neurosynth_tracts",
-        "structural_connectivity", "tracts",
+        "destrieux", "functional_connectivity", "neurostore",
+        "neurostore_iit", "neurostore_tracts", "neurosynth",
+        "neurosynth_iit", "neurosynth_tracts", "structural_connectivity",
+        "tracts",
     ]
     for name in ("neurosynth", "neurostore"):
         cfg = get_engine_config(name)
@@ -331,8 +332,10 @@ def test_the_guidance_of_the_assistant_is_inherited():
     assert resolve_engine_config(engines, "meta")["assistant_guidance"] == (
         "Connectivity is stored.\nUse PROB over studies.")
     guidance = get_engine_config("neurosynth")["assistant_guidance"]
-    assert guidance.index("schaefer_structural_connectivity") < \
-        guidance.index("selected_study")
+    # the connectivities' guidance first, then the meta-analyses'
+    assert guidance.index("Three connectivities") < \
+        guidance.index("The resting-state functional connectivity is") < \
+        guidance.index("A question asking how many")
 
 
 def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
@@ -402,3 +405,76 @@ def test_the_subcortical_connectivity_files_are_pairs_of_engine_regions(
         swapped = table.set_index(["region2", "region1"]).streamlines
         swapped.index.names = both.index.names
         assert both.sort_index().equals(swapped.sort_index())
+
+
+def test_the_meta_analyses_have_the_three_connectivities_told_apart():
+    from neurolang_apps.utils.engine_registry import (
+        get_acknowledgements,
+        get_predicates,
+    )
+
+    predicates = get_predicates("neurosynth")
+    for name in ("schaefer_functional_connectivity",
+                 "schaefer400_functional_connectivity",
+                 "destrieux_functional_connectivity",
+                 "tian_functional_connectivity",
+                 "schaefer_tian_functional_connectivity",
+                 "schaefer400_tian_functional_connectivity",
+                 "destrieux_tian_functional_connectivity"):
+        text = " ".join(predicates[name]["description"].split())
+        assert "Resting-state functional connectivity" in text, name
+        assert "not structural" in text and "co-activation" in text, name
+    guidance = " ".join(
+        get_engine_config("neurosynth")["assistant_guidance"].split())
+    assert "Three connectivities" in guidance
+    assert "meta-analytic co-activation" in guidance
+    texts = get_acknowledgements("functional_connectivity")
+    for doi in ("10.1016/j.neuroimage.2013.05.039",
+                "10.1016/j.neuroimage.2013.11.046",
+                "10.1016/j.neuroimage.2017.10.037"):
+        assert any(doi in t for t in texts), doi
+    # the connectivity engines share the atlas of 400, others do not load it
+    assert "schaefer400" in get_predicates("functional_connectivity")
+    assert "schaefer400" not in get_predicates("tracts")
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("relation,columns,regions", [
+    ("schaefer_functional_connectivity", ["region1", "region2", "r"], 100),
+    ("schaefer400_functional_connectivity", ["region1", "region2", "r"],
+     400),
+    ("destrieux_functional_connectivity", ["region1", "region2", "r"], 148),
+    ("tian_functional_connectivity", ["region1", "region2", "r"], 32),
+    ("schaefer_tian_functional_connectivity", ["region", "tian_region", "r"],
+     100),
+    ("schaefer400_tian_functional_connectivity",
+     ["region", "tian_region", "r"], 400),
+    ("destrieux_tian_functional_connectivity",
+     ["region", "tian_region", "r"], 148),
+])
+def test_the_functional_connectivity_files(relation, columns, regions,
+                                           tmp_path):
+    table = _fetched(relation, tmp_path)
+    assert list(table.columns) == columns
+    assert table[columns[0]].nunique() == regions
+    assert table.r.between(-1, 1).all() and table.r.notna().all()
+    if columns[1] == "tian_region":
+        assert table.tian_region.nunique() == 32
+    else:
+        both = table.set_index(columns[:2]).r
+        swapped = table.set_index(columns[1::-1]).r
+        swapped.index.names = both.index.names
+        assert both.sort_index().equals(swapped.sort_index())
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("atlas,regions", [("schaefer", 100),
+                                           ("schaefer400", 400),
+                                           ("destrieux", 148)])
+def test_the_functional_gradients_are_ten_per_region(atlas, regions,
+                                                     tmp_path):
+    gradients = _fetched(f"{atlas}_functional_gradient", tmp_path)
+    assert gradients.region.nunique() == regions
+    assert (gradients.groupby("region").dimension.nunique() == 10).all()
+    variance = _fetched(f"{atlas}_functional_gradient_variance", tmp_path)
+    assert (variance.groupby("hemisphere").explained.sum() <= 1).all()

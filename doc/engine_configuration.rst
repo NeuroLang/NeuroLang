@@ -494,8 +494,11 @@ built-in engines keep there
   and the questions of the query assistant (``assistant_examples``);
 - ``<engine>/guidance.yaml``: the ``assistant_guidance``.
 
-``structural_connectivity/`` holds those of the structural connectivity
-of the cortex, which ``coordinate_meta_analysis`` extends;
+``structural_connectivity/`` and ``functional_connectivity/`` hold those
+of the structural and of the resting-state functional connectivity, which
+``coordinate_meta_analysis`` extends (both, after the abstract
+``connectivity_atlases``, the atlas of 400 Schaefer parcels and the sorts
+of the gradients they share);
 ``coordinate_meta_analysis/`` holds the examples and the guidance shared by
 ``neurosynth`` and ``neurostore``, and ``neurostore/examples.yaml`` adds the
 questions on NeuroStore's own predicates: an engine inherits

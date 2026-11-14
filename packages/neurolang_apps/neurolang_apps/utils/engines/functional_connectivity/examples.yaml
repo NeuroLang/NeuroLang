@@ -1,0 +1,98 @@
+# The example queries of functional_connectivity, merged into its entry of
+# ../engines.yaml (see doc/engine_configuration.rst): the questions the
+# REPL shows first (questions), the queries it shows (examples) and the
+# few-shot examples of the query assistant (assistant_examples), which
+# the engines extending it (neurosynth, neurostore) inherit. Every query
+# is checked against the engine by the tests (NEUROLANG_TEST_DATA_DIR).
+questions:
+  - Which cortical regions are functionally connected at rest with the left posterior cingulate (precuneus)?
+  - Which cortical regions is the left thalamus functionally connected to at rest?
+  - What is the first gradient of the resting-state functional connectivity of the cortex?
+examples:
+  datalog:
+    - "ans(l, r) :- schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0.3)"
+    - "ans(l1, l2, r) :- schaefer_functional_connectivity(l1, l2, r), (l1 < l2), (r > 0.6)"
+    - "ans(l, v) :- schaefer_functional_gradient(l, 1, v)"
+
+# Questions on the resting-state functional connectivity: the correlation
+# of the spontaneous fMRI activity of two regions at rest, stored, read
+# with thresholds, sums and counts (no PROB), or turned into
+# probabilities, computed or as a probabilistic program. Never the
+# structural connectivity (white-matter streamlines) nor the
+# co-activation of regions by task studies (the meta-analysis engines).
+assistant_examples:
+  - question: Which cortical regions are functionally connected at rest with the left posterior cingulate (precuneus)?
+    datalog: |-
+      ans(l, r) :- schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0.3)
+
+  - question: What is the resting-state functional network of the left default mode network?
+    datalog: |-
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      ans(l1, l2, r) :- schaefer_functional_connectivity(l1, l2, r), default_left(l1), default_left(l2), (l1 < l2)
+
+  - question: Which pairs of parcels are the most strongly functionally connected at rest, with a correlation above 0.6?
+    datalog: |-
+      ans(l1, l2, r) :- schaefer_functional_connectivity(l1, l2, r), (l1 < l2), (r > 0.6)
+
+  - question: Which cortical regions are anticorrelated at rest with the left default mode network?
+    datalog: |-
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      ans(l, r) :- schaefer_functional_connectivity(d, l, r), default_left(d), (r < -0.05)
+
+  - question: Which cortical regions is the left thalamus functionally connected to at rest?
+    datalog: |-
+      left_thalamus(t) :- tian(t, x), (t == 'THA DA lh')
+      left_thalamus(t) :- tian(t, x), (t == 'THA DP lh')
+      left_thalamus(t) :- tian(t, x), (t == 'THA VA lh')
+      left_thalamus(t) :- tian(t, x), (t == 'THA VP lh')
+      ans(t, l, r) :- schaefer_tian_functional_connectivity(l, t, r), left_thalamus(t), (r > 0.2)
+
+  - question: What is the resting-state functional connectivity among the subcortical regions, its pairs correlated above 0.2?
+    datalog: |-
+      ans(t1, t2, r) :- tian_functional_connectivity(t1, t2, r), (t1 < t2), (r > 0.2)
+
+  - question: Which gyri and sulci are functionally connected at rest with the left hippocampus?
+    datalog: |-
+      ans(l, r) :- destrieux_tian_functional_connectivity(l, 'aHIP lh', r), (r > 0.2)
+
+  - question: Which Schaefer parcels have the strongest resting-state functional connectivity, their positive correlations summed?
+    datalog: |-
+      ans(l, sum(r)) :- schaefer_functional_connectivity(l, l2, r), (r > 0)
+
+  - question: How much of its resting-state activity does each region share with the left posterior cingulate (precuneus), the square of their correlation?
+    datalog: |-
+      ans(l, f) :- schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (f == r * r)
+
+  - question: Taking each positive resting-state correlation above 0.2 as the probability of a coupling, what is the probability that each Schaefer parcel is coupled to the left default mode network?
+    datalog: |-
+      coupled(l1, l2) :: r :- schaefer_functional_connectivity(l1, l2, r), (r > 0.2)
+      default_left(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      to_default(x) :- coupled(x, l), default_left(l)
+      ans(x, p) :- PROB[to_default(x)] = p
+
+  - question: If a partner of the left posterior cingulate (precuneus) is drawn in proportion to its positive resting-state correlation, what is the probability that it is in the default mode network?
+    datalog: |-
+      strength(sum(r)) :- schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0)
+      partner(l) ^ (r / t) :- schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0), strength(t)
+      default(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      default(l) :- schaefer_label(l), startswith('17Networks RH Default', l)
+      in_default(x) :- partner(l), default(l), (x == 'default')
+      ans(p) :- PROB[in_default(x)] = p
+
+  - question: What is the first gradient of the resting-state functional connectivity of the cortex?
+    datalog: |-
+      ans(l, v) :- schaefer_functional_gradient(l, 1, v)
+
+  - question: Show the first three resting-state functional connectivity gradients of the 400 Schaefer parcels on the cortex.
+    datalog: |-
+      ans(l, g1, g2, g3) :- schaefer400_functional_gradient(l, 1, g1), schaefer400_functional_gradient(l, 2, g2), schaefer400_functional_gradient(l, 3, g3)
+
+  - question: How much of the variance of the resting-state functional connectivity does each gradient explain?
+    datalog: |-
+      ans(d, h, e) :- schaefer_functional_gradient_variance(d, h, e)
+
+  - question: Where are the networks along the principal gradient of the resting-state functional connectivity, the default mode network on average?
+    datalog: |-
+      default(l) :- schaefer_label(l), startswith('17Networks LH Default', l)
+      default(l) :- schaefer_label(l), startswith('17Networks RH Default', l)
+      ans(mean(v)) :- schaefer_functional_gradient(l, 1, v), default(l)

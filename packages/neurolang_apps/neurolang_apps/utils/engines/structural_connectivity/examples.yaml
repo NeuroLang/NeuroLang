@@ -19,8 +19,8 @@ examples:
 
 # Questions on the structural connectivity: the anatomical wiring of the
 # cortex, white-matter streamlines of diffusion MRI tractography, never
-# the co-activation of regions by studies (the functional connectivity of
-# the meta-analysis engines). Its values are mean streamline counts,
+# the resting-state functional connectivity (functional_connectivity) nor
+# the co-activation of regions by studies (the meta-analysis engines). Its values are mean streamline counts,
 # stored: they are answered without PROB, as counts, sums, thresholds;
 # or turned into probabilities, either computed (a fraction of the
 # streamlines) or as the probabilities of probabilistic facts or choices,

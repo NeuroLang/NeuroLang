@@ -19,6 +19,29 @@ Unreleased
 
 **New features:**
 
+* The resting-state functional connectivity, a small engine of its own,
+  ``functional_connectivity``, which ``coordinate_meta_analysis`` extends
+  with ``structural_connectivity``: the correlation of the spontaneous
+  fMRI activity of two regions at rest over 964 HCP subjects (four runs,
+  ICA-FIX, MSMAll; the tanh of the mean Fisher z), between the parcels of
+  Schaefer (100 or 400, 17 networks) or Destrieux
+  (``schaefer_functional_connectivity``...), the subcortical regions of
+  Tian (``tian_functional_connectivity``), and the cortex and the
+  subcortex (``schaefer_tian_functional_connectivity``...), and its linear
+  gradients (``schaefer_functional_gradient``...; the first is the
+  principal gradient, from sensory to default cortex). It is dataset
+  ``v2.0`` (``tools/hcp_connectivity``; against the ENIGMA toolbox's HCP
+  functional connectivity, Pearson 0.992). Its examples teach the query
+  assistant seeds, networks, anticorrelations, the subcortex, shared
+  variance (r²), the correlations as probabilistic facts and choices, the
+  gradients, and with the structural connectivity and the meta-analytic
+  co-activation on the meta-analysis engines; the guidance of the engines
+  tells the three connectivities apart (the examples that called the
+  co-activation the functional connectivity call it the meta-analytic
+  co-activation). ``connectivity_atlases`` (abstract) holds the atlas of
+  400 Schaefer parcels and the gradient sorts the connectivity engines
+  share.
+
 * Structural connectivity of the subcortex, a stop-gap, in
   ``structural_connectivity``: ``schaefer400_tian_structural_connectivity(l,
   t, n)`` (a Schaefer 400 parcel and a Tian region) and

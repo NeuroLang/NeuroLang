@@ -6,18 +6,23 @@
 # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
 # questions on the structural connectivity: added to its system prompt.
 assistant_guidance: >
-  Two connectivities are not to be mixed up. The structural connectivity
-  is anatomical: the white-matter fibres joining two regions, streamlines
-  of diffusion MRI tractography (asked as structural, anatomical,
+  Three connectivities are not to be mixed up. The structural
+  connectivity is anatomical: the white-matter fibres joining two
+  regions, streamlines of diffusion MRI tractography
+  (*_structural_connectivity; asked as structural, anatomical,
   white-matter, fibre or tract connectivity, wiring, streamlines). The
-  functional connectivity is of activity: regions active together, which
-  the meta-analysis engines give as the co-activation of regions by the
-  same studies (asked as functional connectivity, co-activation,
-  meta-analytic connectivity, MACM); an engine without studies has none.
-  A question saying only connectivity or connected is answered with the
-  one its words point to (studies, tasks, terms, activation: the
-  functional; fibres, tracts, streamlines: the structural), and the
-  answer says which it gives.
+  functional connectivity is the correlation of two regions' spontaneous
+  activity in resting-state fMRI (*_functional_connectivity, of the
+  functional_connectivity engine; asked as functional connectivity,
+  resting-state connectivity, correlated or synchronised activity). The
+  meta-analytic co-activation is the activation of two regions by the
+  same task studies, PROB over selected_study on the meta-analysis
+  engines (asked as co-activation, co-activated, meta-analytic
+  connectivity, MACM, task studies). A question saying only connectivity
+  or connected is answered with the one its words point to (fibres,
+  tracts, streamlines: the structural; rest, correlation, functional: the
+  functional; studies, tasks, terms, activation: the co-activation), and
+  the answer says which it gives.
   Structural connectivity (how strongly two cortical regions are wired,
   which regions a region connects to, white-matter or anatomical
   connectivity, a structural network or connectome) is
@@ -73,4 +78,4 @@ assistant_guidance: >
   region and values is painted on the cortex by .view --threshold 0
   (every region; the default shows the highest values only), one column
   per gradient shown. They are structural (tractography), not the functional
-  gradients of resting-state fMRI, which no engine has.
+  gradients of resting-state fMRI (*_functional_gradient).
