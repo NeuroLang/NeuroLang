@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,28 @@ def test_banks_are_inherited():
     neurostore = load_examples("neurostore")
     assert neurostore[:len(shared)] == shared
     assert len(neurostore) > len(shared)
+
+
+ANSWER_HEAD = re.compile(r"^\s*ans\s*(?:\[\s*\w+\s*\])?\s*\(([^)]*)\)", re.M)
+VOXEL_INDICES = {"i", "j", "k"}
+
+
+@pytest.mark.parametrize("engine", ("neurostore", "neurosynth_iit"))
+def test_bank_answers_name_their_columns(engine):
+    """
+    The columns of the answers of the examples say what they hold,
+    ans(region, probability) and not ans(l, p): the model writes its
+    answers as the examples do. The voxel indices keep their names.
+    """
+    short = []
+    for example in load_examples(engine):
+        heads = ANSWER_HEAD.findall(example.query("datalog") or "")
+        assert heads, example.question
+        for head in heads:
+            names = {n.strip() for n in head.split(",") if n.strip()}
+            if any(len(n) == 1 for n in names - VOXEL_INDICES):
+                short.append(f"{example.question}: ans({head})")
+    assert not short, "\n".join(short)
 
 
 def test_engines_without_bank():

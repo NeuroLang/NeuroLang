@@ -318,9 +318,12 @@ def test_the_engine_of_the_page_has_its_own_questions():
     from neurolang_apps.utils.llm.examples import load_examples
 
     bank = load_examples("neurosynth_iit")
-    assert bank[:-2] == load_examples("neurosynth_tracts")
-    assert "uncinate" in bank[-2].question
-    assert bank[-2].queries["datalog"] == 'ans(x) :- uf(x, "left")'
+    assert bank[:-3] == load_examples("neurosynth_tracts")
+    assert "uncinate" in bank[-3].question
+    assert bank[-3].queries["datalog"] == \
+        'ans(streamline) :- uf(streamline, "left")'
+    # The regions at both ends of the bundle are an answer of their own.
+    assert "ans[uf_end_regions]" in bank[-1].queries["datalog"]
 
 
 def test_a_download_has_a_name_and_a_checksum(monkeypatch, tmp_path):
