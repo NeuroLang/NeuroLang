@@ -200,6 +200,12 @@ Unreleased
 
 **Bug fixes:**
 
+* Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
+  taken for an aggregation, the operator applied to each group's values,
+  and gave rows of missing values or failed in pandas; it is now refused
+  with a ``ForbiddenExpressionError`` that tells how to compute the value
+  in the body, ``(v == n / 2)``.
+
 * The threshold sliders of the brain viewer sit over the values they set
   on the histogram. In percentile mode a thumb was placed at its percentile
   along the slider while the histogram's axis is the value, so for skewed
