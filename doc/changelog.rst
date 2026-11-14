@@ -177,15 +177,17 @@ Unreleased
 **Changes:**
 
 * ``similar_study(q, s)``, the studies about a text, keeps the top 5% of
-  the studies closest to it only above a similarity floor,
-  ``similarity_floor`` of the engine's ``text_embeddings`` entry (0.75 by
-  default): a text that no study is about, as 'stock market crash', got
-  its 719 studies.  Its 95th percentile is the function
-  ``query_similarity_cutoff(q)``, computed once per text, rather than the
-  aggregation ``cutoff_similarity``, removed: the studies of a Cognitive
-  Atlas definition in the journal Neuron per year take 1.4 s instead of
-  70 s.  *Choosing the similarity threshold* in
-  :doc:`tutorial_text_embeddings` describes how to calibrate the floor.
+  the studies closest to it only if the mean similarity of its 20
+  closest studies reaches the ``similarity_gate`` of the engine's
+  ``text_embeddings`` entry (0.75 by default), and none otherwise: a text
+  that no study is about, as 'stock market crash', got its 719 studies.
+  The gate and the 95th percentile are the function
+  ``query_similarity_cutoff(q)``, ``inf`` when the gate fails, computed
+  once per text, rather than the aggregation ``cutoff_similarity``,
+  removed: the studies of a Cognitive Atlas definition in the journal
+  Neuron per year take 1.3 s instead of 70 s.  *Choosing the similarity
+  threshold* in :doc:`tutorial_text_embeddings` describes how to
+  calibrate the gate against texts off the domain.
 
 
 v0.1a22 (2026-11-13)

@@ -125,33 +125,58 @@ Choosing the similarity threshold
 ---------------------------------
 
 The meta-analysis engines define the studies about a text, ``similar_study(q,
-s)``, with two thresholds: the studies in the top 5% closest to the text
-(``query_similarity_cutoff(q)``, the 95th percentile of the positive
-similarities, computed once per text), and of similarity at least an
-absolute floor, the ``similarity_floor`` of the engine's ``text_embeddings``
-entry (0.75 by default, see :ref:`text-embeddings-section`)::
+s)``, in two steps.  A gate decides whether any study is about the text:
+the mean similarity of its 20 closest studies must reach the
+``similarity_gate`` of the engine's ``text_embeddings`` entry (0.75 by
+default, see :ref:`text-embeddings-section`).  If it does, the cutoff
+keeps the top 5% of the studies closest to the text, the 95th percentile
+of its positive similarities.  ``query_similarity_cutoff(q)`` does both,
+once per text, and returns ``inf`` when the gate fails::
 
-    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c) & (v >= 0.75)
+    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c)
 
-The top 5% adapts to the narrow, text-dependent range of the SPECTER2
-similarities, but every text has a top 5%, even one that no study is
-about: 'stock market crash' gets 719 studies of NeuroSynth.  The floor
-removes them.  To calibrate it for an engine or an embedding model:
+Every text has a top 5%, even one that no study is about: 'stock market
+crash' would get 719 studies of NeuroSynth.  A floor on each study's
+similarity, ``v >= 0.75``, does not fix this well.  SPECTER2 similarities
+have a baseline that depends on the text: over NeuroSynth, the median
+similarity of a text to the studies ranges from 0.57 to 0.76.  So a floor
+measures how much the wording of a text looks like neuroscience more than
+how many studies are about it.  Within the top 5%, it keeps a fragment
+decided by a few outlying studies: 5 studies for 'tapping fingers in
+sequence', 32 for 'imagining future events', and all 719 for the
+Cognitive Atlas definition of 'memory'.
 
-1. List texts of the domain (definitions of the Cognitive Atlas, as
-   ``cogat_definition('working memory', d)`` gives, and free phrases such
-   as 'tapping fingers in sequence') and texts no study is about
-   ('chocolate cake recipe', 'medieval castle architecture').
-2. Score every study against each text with
-   :meth:`~neurolang_apps.utils.text_embeddings.EmbeddingIndex.scores`.
-3. For each text, report the largest score, the 95th percentile, and the
-   number of studies at or above each candidate floor, overall and within
-   its top 5%.
-4. A floor separates the two lists if every text of the domain keeps at
-   least 20 studies and every unrelated text keeps none.  The separating
-   floors are those above the largest score of the unrelated texts and at
-   most the smallest 20th-largest score of the texts of the domain.
-5. Set the floor as ``similarity_floor`` in the engine's
+Standardising the similarities of each text, as ``z = (v - median) /
+MAD`` or ``(v - mean) / sd``, does not tell the two kinds of texts apart
+either.  A text off the domain also has a few studies standing out from
+its own distribution, so the largest ``z``, the mean ``z`` of the 20
+closest studies and the number of studies above ``z >= k`` all have a ROC
+AUC of 0.50 to 0.65.  What separates them is how close the closest
+studies are: the mean similarity of the 20 closest studies has an AUC of
+0.93.  The gate is therefore a statistic of the text, and the cutoff then
+chooses its studies.
+
+To calibrate the gate for an engine or an embedding model:
+
+1. Write a null set: a few hundred texts that no study is about, of
+   varied topics (cooking, sport, finance, history, law...) and lengths,
+   from short phrases to definition-length paragraphs.
+2. Write an in-domain set: the definitions of the Cognitive Atlas
+   (``cogat_definition(t, d)``), the topics users ask about, and short
+   task phrases such as 'tapping fingers in sequence'.
+3. Split each set into two halves at random: a fit half and a check half.
+4. Score every study against each text with
+   :meth:`~neurolang_apps.utils.text_embeddings.EmbeddingIndex.scores`, and
+   compute the candidate statistics of each text: the largest score, the
+   mean of the 20 largest, and their standardised versions.
+5. On the fit half, compare the in-domain texts with the null by the ROC
+   AUC of each statistic, and keep the simplest statistic with a high AUC.
+6. Set the threshold at a high percentile of the statistic over the null
+   texts of the fit half.  Its false-positive rate is about one minus that
+   percentile: 5% at the 95th, 1% at the 99th.
+7. On the check half, measure the share of null texts that pass and the
+   share of in-domain texts kept.
+8. Set the threshold as ``similarity_gate`` in the engine's
    ``text_embeddings`` entry.
 
 In Python, for one text:
@@ -166,24 +191,42 @@ In Python, for one text:
     nl = build_engine("neurosynth", Path("neurolang_data"))
     index = nl.text_embedding_indexes["study_abstracts"]
     scores = index.scores("medieval castle architecture")
-    top = scores[scores >= np.percentile(scores[scores > 0], 95)]
-    print(scores.max(), [(floor, (top >= floor).sum()) for floor in (0.7, 0.75, 0.8)])
+    print(np.sort(scores[scores > 0])[-20:].mean())   # 0.730: below the gate
 
-The script ``scripts/similarity_floor.py`` of
+The script ``scripts/similarity_gate.py`` of
 `neurolang-text2query-bench <https://github.com/NeuroLang/neurolang-text2query-bench>`_
-(branch ``neurosynth-v2``) runs these steps over two lists of texts.  With
-SPECTER2 on NeuroSynth, no floor separates them:
+(branch ``neurosynth-v2``) runs these steps.  Its null set has 328 texts.
+Its in-domain set has 1138 Cognitive Atlas definitions, 27 topics of the
+benchmark's questions and 94 task phrases.  With SPECTER2 on NeuroSynth:
 
-* at 0.7, unrelated texts keep up to 719 studies of their top 5%
-  ('stock market crash');
-* the largest score of an unrelated text is 0.750 ('medieval castle
-  architecture');
-* at 0.75, unrelated texts keep 0 or 1 studies, while short phrases of the
-  domain keep 5 to 16 ('tapping fingers in sequence', 'being socially
-  excluded in a ball-tossing game'), and definitions of the Cognitive
-  Atlas keep 74 ('working memory') to 719 ('memory') of their 719.
+==============================  =======  ==========================
+statistic                       AUC      AUC, topics and phrases
+==============================  =======  ==========================
+mean of the 20 largest          0.934    0.962
+largest                         0.920    0.959
+median                          0.855    0.866
+mean of the 20 largest, ``z``   0.62     0.83
+largest ``z``                   0.54     0.76
+studies with ``z >= 5``         0.53     0.63
+==============================  =======  ==========================
 
-0.75 is the default, as the best compromise between the two lists.
+The 95th percentile of the null, on the fit half, is 0.750, and the 99th
+is 0.763.  On the check half, a gate at 0.75 lets 2.4% of the null texts
+through.  It keeps 63% of the in-domain texts: 61% of the Cognitive Atlas
+definitions, 79% of the benchmark topics and 85% of the task phrases.  The
+99th percentile passes no null text of the check half, but keeps only 48%
+of the in-domain texts and drops four more benchmark topics, among them
+'disgust at rotten food' and 'gambling with risky odds'.  0.75 is the
+default.  A text that passes gets its whole top 5%.
+
+Short texts are the hardest: 'tasting bitter drinks' (0.730) and
+'tapping fingers in sequence' (0.746) get no study.  A fuller
+description of the task, or the definition of a Cognitive Atlas concept,
+does better.  A few texts outside the domain pass the gate, as 'golf
+handicap calculation' (0.772).  Some studies are close to many texts: one
+is in the top 5% of 69% of the in-domain texts.  Subtracting each study's
+mean similarity to the null texts improves the AUC only a little (0.955
+against 0.939 on the check half), so the gate does not correct for it.
 
 Activations within a radius of the peaks
 ----------------------------------------

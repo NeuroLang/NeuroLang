@@ -157,7 +157,7 @@ def llm_engine():
         [query_similarity(query, s) for s in studies]
     ))
     nl.add_symbol(
-        text_embeddings.make_cutoff_function(index),
+        text_embeddings.make_cutoff_function(index, gate=0),
         name="query_similarity_cutoff",
     )
     rules = [
@@ -169,7 +169,6 @@ def llm_engine():
     # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
     nl.execute_datalog_program(
         "\n".join(rules).replace("{kernel_radius_voxels}", "3")
-        .replace("{similarity_floor}", "0.75")
     )
     return nl
 

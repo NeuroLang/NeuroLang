@@ -442,7 +442,6 @@ def vocabulary_engine():
         _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
         # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
         .replace("{kernel_radius_voxels}", "3")
-        .replace("{similarity_floor}", "0.75")
     )
     return nl
 

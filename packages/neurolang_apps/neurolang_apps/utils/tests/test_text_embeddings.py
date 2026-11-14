@@ -455,39 +455,46 @@ class CountingScores:
         return float(self.scores(query)[doc])
 
 
-def _similar_study_engine(index, floor):
+def _similar_study_engine(index, gate):
     nl = NeurolangPDL()
     nl.add_tuple_set([(s,) for s in index.ids], name="study")
     nl.add_tuple_set([("a", "a text"), ("b", "another text")], name="text")
     nl.add_symbol(te.make_similarity_function(index), name="query_similarity")
     nl.add_symbol(
-        te.make_cutoff_function(index), name="query_similarity_cutoff"
+        te.make_cutoff_function(index, gate), name="query_similarity_cutoff"
     )
     rule = next(
         line for line in engine_registry.get_engine_config("neurosynth")[
             "datalog_init"
         ].splitlines() if line.startswith("similar_study(")
     )
-    nl.execute_datalog_program(
-        OLD_SIMILAR_STUDY + rule.replace("{similarity_floor}", str(floor))
-    )
+    nl.execute_datalog_program(OLD_SIMILAR_STUDY + rule)
     return nl
 
 
-def test_cutoff_function_is_the_cached_95th_percentile():
+def _top20(index, text):
+    scores = index.scores(text)
+    return np.sort(scores[scores > 0])[-20:].mean()
+
+
+def test_cutoff_function_is_the_cached_95th_percentile_above_the_gate():
     index = CountingScores()
-    cutoff = te.make_cutoff_function(index)
+    top = _top20(index, "a text")
+    cutoff = te.make_cutoff_function(index, gate=top)
     scores = index.scores("a text")
     assert cutoff("a text") == np.percentile(scores[scores > 0], 95)
     assert cutoff("a text") == cutoff("a text")
-    assert index.calls == ["a text", "a text"]
+    assert index.calls == ["a text"] * 3
     assert cutoff.__annotations__ == {"query": str, "return": float}
+    assert te.make_cutoff_function(index, gate=top + 1e-6)("a text") == (
+        float("inf")
+    )
 
 
-@pytest.mark.parametrize("floor", [0, 0.99])
-def test_similar_study_is_the_old_rule_above_the_floor(floor):
+@pytest.mark.parametrize("gate", [0, 0.9, 1])
+def test_similar_study_is_the_old_rule_above_the_gate(gate):
     index = CountingScores()
-    nl = _similar_study_engine(index, floor)
+    nl = _similar_study_engine(index, gate)
     assert index.calls == []
     for label, text in [("a", "a text"), ("b", "another text")]:
         # The text bound by magic sets, as cogat_definition('memory', d).
@@ -497,10 +504,7 @@ def test_similar_study_is_the_old_rule_above_the_floor(floor):
             )) for name in ("old_similar_study", "similar_study")
         )
         assert len(old) == 3
-        assert new == {
-            (s,) for s, in old if index.similarity(text, s) >= floor
-        }
-        assert (new == old) == (floor == 0)
+        assert new == (old if _top20(index, text) >= gate else set())
 
 
 def test_torch_runs_on_one_thread_in_forked_children(monkeypatch):
@@ -572,6 +576,19 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
     assert "query_similarity" not in preds
 
 
+def test_engine_yaml_similarity_gate(engine_yaml, tmp_path):
+    engine_yaml.write_text(engine_yaml.read_text().replace(
+        "function: query_similarity", "function: query_similarity\n"
+        "        similarity_gate: 1.5"
+    ))
+    nl = engine_registry.build_engine(
+        "mini", tmp_path / "data", yaml_path=engine_yaml
+    )
+    assert not nl.execute_datalog_program(
+        "ans(c) :- (c == query_similarity_cutoff('motor hand')) & (c < 2)"
+    )
+
+
 def test_engine_yaml_unknown_source(engine_yaml, tmp_path):
     engine_yaml.write_text(
         engine_yaml.read_text().replace(
@@ -593,10 +610,7 @@ def test_neurosynth_yaml_declares_similarity_function():
     assert "query_similarity" not in engine_registry.get_predicates(
         "neurosynth"
     )
-    assert engine_registry.similarity_floor(cfg) == 0.75
-    assert engine_registry.similarity_floor({}) == 0.75
-    entry["similarity_floor"] = 0.6
-    assert engine_registry.similarity_floor(cfg) == 0.6
+    assert entry["similarity_gate"] == 0.75
 
 
 # ---------------------------------------------------------------------------
