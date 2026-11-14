@@ -521,6 +521,28 @@ def get_engine_config(
     return resolve_engine_config(engines, name)
 
 
+def embeddings_owner(
+    name: str, entry: str, yaml_path: Optional[Path] = None
+) -> str:
+    """
+    Return the engine whose ``embeddings`` directory holds the caches of
+    the ``text_embeddings`` entry *entry* of the engine *name*: the most
+    basic non-abstract engine of its ``extends`` chain, itself included,
+    whose resolved entry is the same.
+    """
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+
+    def resolved(engine):
+        config = resolve_engine_config(engines, engine)
+        return (config.get("text_embeddings") or {}).get(entry)
+
+    mine = resolved(name)
+    return next(
+        engine for engine in _linearized(engines, name)
+        if not _is_abstract(engines, engine) and resolved(engine) == mine
+    )
+
+
 def show_engines(yaml_path: Optional[Path] = None) -> None:
     """
     Print a formatted description of all available engines.
@@ -1742,22 +1764,33 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
         nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
 
 
-def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
+def _phase_text_embeddings(
+    nl, cfg, data_dir, engine_name, rel_base_dir, yaml_path=None
+):
     """
     Register the document indexes declared in ``text_embeddings``.
 
     Only the ids are read here; texts are fetched and embedded on first use.
+    The caches are in the directory of the :func:`embeddings_owner`; in the
+    engine's own when only it has them, or when the owner's embeddings are
+    of other documents.
     """
     entries = cfg.get("text_embeddings", {})
     if not entries:
         return
     from neurolang_apps.utils import text_embeddings
 
-    emb_dir = data_dir / engine_name / "embeddings"
+    own_dir = data_dir / engine_name / "embeddings"
     nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
     for emb_name, emb_cfg in entries.items():
+        owner = embeddings_owner(engine_name, emb_name, yaml_path)
+
+        def cache(file, owner_dir=data_dir / owner / "embeddings"):
+            own, shared = own_dir / file, owner_dir / file
+            return own if own.exists() and not shared.exists() else shared
+
         encoder = text_embeddings.Specter2Encoder(
-            model_dir=emb_dir / "models",
+            model_dir=cache("models"),
             **{
                 key: emb_cfg[key]
                 for key in ("model", "document_adapter", "query_adapter")
@@ -1767,12 +1800,16 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(
-                nl, emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                nl, emb_cfg, cache(f"{emb_name}_pubmed.json"),
                 engine_name, data_dir, rel_base_dir,
             ),
             encoder=encoder,
-            cache_path=emb_dir / f"{emb_name}.npz",
+            cache_path=cache(f"{emb_name}.npz"),
         )
+        if index.cache_path.exists() and (
+            text_embeddings.cached_key(index.cache_path) != index.cache_key
+        ):
+            index.cache_path = own_dir / f"{emb_name}.npz"
         nl.text_embedding_indexes[emb_name] = index
         nl.add_symbol(
             text_embeddings.make_similarity_function(index),
@@ -1942,7 +1979,7 @@ def build_engine(
         tell(f"Defining the rules of {name}")
     _phase_datalog_init(nl, cfg, data_dir, mask)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
-    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
+    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir, yaml_path)
     _phase_probabilistic_choices(nl, cfg)
     if cfg.get("resamplings"):
         tell("Drawing the bootstrap replicates")

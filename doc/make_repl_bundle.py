@@ -367,8 +367,10 @@ def export_embeddings(
     has them, and saved in it when made, which needs torch: without it,
     or if they cannot be made, the page goes without them.
 
-    They are kept in *embedded* under the engine's name, or *kept_as*, an
-    engine of the same studies, whose embeddings they are.
+    They are under the engine's name, or *kept_as*, the engine of the same
+    studies whose embeddings it reads
+    (:func:`~neurolang_apps.utils.engine_registry.embeddings_owner`), in
+    *embedded* as in *data_dir*.
 
     They are left out of *data_dir*, not to be zipped with the data.
     Return the names of the files of each, by its path in the data
@@ -377,7 +379,7 @@ def export_embeddings(
     from neurolang.utils import engine_registry, text_embeddings
     from neurolang_apps.utils import specter2_numpy
 
-    emb_dir = data_dir / engine / "embeddings"
+    emb_dir = data_dir / (kept_as or engine) / "embeddings"
     saved = None
     if embedded is not None:
         saved = Path(embedded) / (kept_as or engine) / "embeddings"
@@ -462,22 +464,18 @@ def bundle_engine(
     }
 
 
-def share_embeddings(engine: str, entry: dict, donor: dict) -> None:
-    """Give the entry *entry* of *engine* the files of the text embeddings
-    of *donor*, the entry of the engine whose studies it has, under its own
-    data directory (``neurosynth/embeddings/x.npz`` is
-    ``neurosynth_iit/embeddings/x.npz`` there): the files are those of
-    the donor's, which the page downloads once, whichever engine asks.
-    The embeddings are of the same studies, which their ``cache_key`` tells."""
+def share_embeddings(entry: dict, donor: dict) -> None:
+    """Give the entry *entry* of an engine the files of the text embeddings
+    of *donor*, the entry of the engine whose studies it has and whose
+    embeddings it reads: the page downloads them once, whichever engine
+    asks.  The embeddings are of the same studies, which their
+    ``cache_key`` tells."""
     if entry["cache_keys"] != donor["cache_keys"]:
         raise ValueError(
             "its studies are not those of the engine whose embeddings it "
             "would share (EmbeddingIndex.cache_key differs)"
         )
-    entry["files"] = {
-        f"{engine}/{path.split('/', 1)[1]}": names
-        for path, names in donor["files"].items()
-    }
+    entry["files"] = dict(donor["files"])
 
 
 def main(
@@ -495,7 +493,7 @@ def main(
             )
             if shared:
                 share_embeddings(
-                    engine, built[engine], built[EMBEDDINGS_FROM[engine]]
+                    built[engine], built[EMBEDDINGS_FROM[engine]]
                 )
         except Exception as error:
             if engine == default:

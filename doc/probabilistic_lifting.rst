@@ -366,7 +366,9 @@ Inclusion–exclusion
    transitively. The test is sound but not complete: a negated atom
    :math:`\lnot R(\bar x)` is matched only by the same negated atom,
    through the relation :math:`\bar R` of ``NegatedSymbol``
-   (``negations_as_atoms``). The disjunctions contained in each other are
+   (``negations_as_atoms``), and a disjunct with the negation of another
+   formula, as :math:`\lnot\exists x\, R(x)`, is found contained in
+   none. The disjunctions contained in each other are
    one term, lifted once, and the weight of each term is
    :math:`\mu(S) = 1 - \sum_{T \prec S} \mu(T)`
    (``mobius_weights``, ``mobius_function``), so that a term whose weight
@@ -749,7 +751,18 @@ Disjoint separator
    computed as a set (marked with ``Materialise``, as the deterministic
    subqueries above) when the tuples of its relations are known as sets,
    and otherwise as the support of its plan. Otherwise the union is
-   lifted for every :math:`\bar a` by the other rules. The rule applies
+   lifted for every :math:`\bar a` by the other rules. When they decline
+   it and no other atom has the relation of a choice atom, the rest is
+   independent of the choices:
+   :math:`P[\bigvee_i (C(\bar a) \land R_i(\bar a))] = P[C(\bar a)]\,
+   P[\bigvee_i (D_C(\bar a) \land R_i(\bar a))]`, :math:`D_C` the
+   deterministic relation of the tuples of :math:`C`. This gives every
+   disjunct of the rest the variables of :math:`C`, as a union needs:
+   :math:`\exists x, y\, (C(x, y) \land R(x)) \lor \exists x, y\,
+   (C(y, x) \land T(x))`, renamed into :math:`\exists x, y\, C(x, y)
+   \land (R(x) \lor T(y))`, has the rest :math:`R(a) \lor T(b)`, whose
+   disjuncts have different columns, lifted as :math:`(D_C(a, b) \land
+   R(a)) \lor (D_C(a, b) \land T(b))`. The rule applies
    when every disjunct has an atom of the choice, at each position either
    a quantified variable or the same free variable or constant in all of
    them, and every free variable of the query. A free variable or a
@@ -1105,7 +1118,7 @@ Projection on a variable
    holds for at least two values of :math:`x`, a ``HAVING COUNT(*) >= 2``
    query of Ré and Suciu [Re2009]_. It is the complement, within
    :math:`\exists x\, R(\bar u)`, of exactly one value
-   (``_at_least_two_plan``):
+   (``_at_least_plan``):
 
    .. math::
 
@@ -1116,6 +1129,47 @@ Projection on a variable
    computed with ``Subtraction``, the second query being projected
    exclusively. It is tried last, and only on this shape: other
    conjuncts, or other quantified variables in the atoms, are declined.
+
+   *At least k.* More generally, the query :math:`Q_k` with :math:`k`
+   copies :math:`R(\bar u[x_i/x])` and one strict comparison of each pair
+   :math:`x_i, x_j`, :math:`\neq`, :math:`<` or :math:`>`, satisfied by
+   some order of :math:`x_1, \dots, x_k`, holds when :math:`R(\bar u)`
+   holds for at least :math:`k` values of :math:`x`, ``HAVING COUNT(*) >=
+   k`` [Re2009]_. It is the complement, within at least :math:`k - 1`
+   values, the query :math:`Q_{k-1}` of :math:`k - 1` copies and pairwise
+   :math:`\neq`, of exactly :math:`k - 1` values (``_at_least_plan``):
+
+   .. math::
+
+      P[Q_k] = P[Q_{k-1}] - \frac{1}{(k-1)!} \sum_{a_1, \dots, a_{k-1}}
+      P[E(a_1, \dots, a_{k-1})], \quad
+      E(\bar x) = \textstyle\bigwedge_i R(\bar u[x_i/x]) \land
+      \bigwedge_{i < j} x_i \neq x_j \land
+      \lnot\exists w\, (R(\bar u[w/x]) \land \bigwedge_i w \neq x_i),
+
+   with :math:`Q_1 = \exists x\, R(\bar u)`, so that :math:`k = 2` is the
+   formula above. The sum is the projection on :math:`x_1, \dots,
+   x_{k-1}` of the plan of :math:`E`, which the comparison rule lifts once
+   they are free, summing like the disjoint projection, scaled by
+   ``WeightedNaturalJoin``; :math:`Q_{k-1}` is lifted by the same rule.
+   The plan computes, for a relation of :math:`n` tuples, a row for each
+   :math:`k - 1` values and a projection over the :math:`n` tuples, in
+   :math:`O(n^k)` time, rather than the :math:`O(nk)` of the dynamic
+   programme of the Poisson-binomial distribution; :math:`k` is thus at
+   most ``MAX_AT_LEAST``, 4 (at :math:`k = 4`, 50 tuples take about 40
+   seconds, model counting more than 300). For instance, at least three
+   studies mentioning a term,
+
+   .. math::
+
+      \exists s_1\, \exists s_2\, \exists s_3\, (\mathrm{mentions}(s_1,
+      t) \land \mathrm{mentions}(s_2, t) \land \mathrm{mentions}(s_3, t)
+      \land s_1 \neq s_2 \land s_2 \neq s_3 \land s_1 \neq s_3),
+
+   is lifted for each term :math:`t`. Without a comparison of each pair,
+   as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
+   :math:`x_1 = x_3`, or with comparisons no order satisfies, as in
+   :math:`x_1 < x_2 < x_3 < x_1`, the query is declined.
 
    For instance, the segregation of a term on the selected study,
 
@@ -1512,6 +1566,18 @@ Disjoint separator
    label is not in the support of a provenance set, which the plan of
    :math:`D` ends with.
 
+   *Independent rest.* In every world, :math:`C(\bar a)` implies
+   :math:`D_C(\bar a)`, a true tuple of :math:`C` being one of its
+   tuples, so :math:`C(\bar a) \land R_i \equiv C(\bar a) \land
+   D_C(\bar a) \land R_i`, and the conjunct :math:`C(\bar a)` of every
+   disjunct factors out of the union. An atom of the rest equal to
+   :math:`C(\bar a)` is true under it, as :math:`D_C(\bar a)` is, and is
+   replaced by it too. No other atom of the rest has the relation of a
+   choice atom, and the choices are independent of the other relations
+   and of each other, so the probability of the conjunction of the
+   choice atoms and the rest is the product of theirs: the join of the
+   plans of the choice atoms and of the rest.
+
    *Free variables.* Every disjunct has all the free variables of the
    query: a disjunct without one, true for every value of it, could not be
    given by a plan, whose rows are a finite set of values.
@@ -1526,7 +1592,9 @@ Disjoint separator
    deterministic rest :math:`D`, whose plan selects on it.
 
    *Termination.* The rule lifts the union with the variables of the
-   choice free, one quantifier less, or lifts nothing (deterministic rest).
+   choice free, one quantifier less, then, if needed, the rest with them
+   free, with fewer probabilistic atoms (independent rest), or lifts
+   nothing (deterministic rest).
 
    *Sign of the other literals.* Let :math:`Q = \exists \bar z\,
    \bigvee_i Q_i`, each :math:`Q_i` a conjunction of literals, positive
@@ -1860,6 +1928,35 @@ Projection on a variable
    :math:`P[Q] = P[\exists x\, R(\bar u)] - P[\text{exactly one}]`, which
    ``Subtraction`` computes, each plan being lifted, and checked, by the
    rules of this page.
+
+   *At least k.* Take a world, the free variables being fixed. If
+   :math:`R(\bar u[a/x])` holds for :math:`k` values :math:`a_1, \dots,
+   a_k`, distinct, give the :math:`i`-th least of them to the
+   :math:`i`-th variable of an order satisfying the comparisons: each
+   :math:`<` and :math:`>` holds, the order of the values being total, as
+   for the order comparisons above, and each :math:`\neq`, the values
+   being distinct, so :math:`Q_k` holds. Conversely, the comparison of
+   each pair makes the :math:`k` values different. :math:`Q_k` thus holds
+   when :math:`R(\bar u)` holds for at least :math:`k` values, and
+   :math:`Q_{k-1}`, of pairwise :math:`\neq`, which needs no order, when
+   it holds for at least :math:`k - 1`; their difference is the worlds
+   where it holds for exactly :math:`k - 1` values, which imply
+   :math:`Q_{k-1}`, so :math:`P[Q_k] = P[Q_{k-1}] - P[\text{exactly } k -
+   1]`, which ``Subtraction`` computes. In a world where :math:`R(\bar
+   u)` holds for exactly :math:`k - 1` values, :math:`E(\bar a)` holds
+   for the :math:`(k - 1)!` orders :math:`\bar a` of these values, the
+   copies and the inequalities holding and the negated conjunct, no other
+   value holding; in any other world, it holds for none, as the
+   inequalities make :math:`k - 1` values hold and the negated conjunct no
+   other. By linearity of expectation, :math:`\sum_{\bar a}
+   P[E(\bar a)]`, the expected number of tuples :math:`\bar a` for which
+   :math:`E` holds, is :math:`(k - 1)!\, P[\text{exactly } k - 1]`; the
+   projection sums the probabilities of the plan of :math:`E`, each
+   lifted, and ``WeightedNaturalJoin`` multiplies the sum by
+   :math:`1 / (k - 1)!`. For :math:`k = 2` the events of different values
+   are exclusive (Lemma 2), and the sum is the disjoint projection. The
+   rule recurses on :math:`Q_{k-1}`, with one copy less, down to
+   :math:`Q_1`, which it does not match.
 
 Algorithms from the literature
    The rules of `Algorithms from the literature`_ are proved in the papers
