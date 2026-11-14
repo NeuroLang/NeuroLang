@@ -52,6 +52,7 @@ from nl_core.datalog.ontologies_rewriter import (
     chase_rules,
     constraints_that_can_hold,
     projecting_rules,
+    valued_rules,
 )
 
 from nl_expr.exceptions import (
@@ -1169,11 +1170,13 @@ class NeurolangPDL(QueryBuilderDatalog):
     @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
     def _projecting_rewritings(self, holds):
         """The rewritings of the projecting constraints that can hold, the
-        same for every query."""
+        same for every query, which can have values, and the predicates
+        with values with them."""
         constraints = self._constraints_that_can_hold(holds)
-        return tuple(OntologyRewriter(
+        rules, valued, _ = valued_rules(constraints, holds, OntologyRewriter(
             Union(projecting_rules(constraints)), constraints, chased=True
         ).Xrewrite())
+        return tuple(rules), frozenset(valued)
 
     def _rewrite_program_with_ontology(self, deterministic_program, holds):
         """Xrewrite with the constraints that can hold, those without
@@ -1188,9 +1191,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             ), ())),
             constraints, chased=True,
         ).Xrewrite()
+        projecting, valued = self._projecting_rewritings(holds)
         return Union(chase_rules(
-            constraints, holds,
-            tuple(rewrite) + self._projecting_rewritings(holds),
+            constraints, valued, tuple(rewrite) + projecting,
             self.program_ir.extensional_database(),
         ))
 

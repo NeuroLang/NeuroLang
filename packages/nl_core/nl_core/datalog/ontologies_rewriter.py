@@ -43,14 +43,12 @@ def constraints_that_can_hold(constraints, holds):
         holding |= heads
 
 
-def chase_rules(constraints, holds, rules, edb):
+def valued_rules(constraints, holds, rules):
     """
-    Return ``rules`` with, as Datalog rules, the ``constraints`` without
-    existential variables that can hold from ``holds`` and that ``rules``
-    depend on. Rules over a consequent of the constraints that has no
-    values are left out; the heads of the others have values. A predicate
-    of ``edb`` these derive is replaced by a copy of its facts, as a rule
-    cannot derive into it.
+    Return the ``rules`` without an atom over a consequent of the
+    ``constraints`` that has no values, the predicates with values, from
+    ``holds`` and the heads of these rules, and the constraints without
+    existential variables that can hold from them.
     """
     without_existentials = {
         name: {s for s in sigmas if not _existential_variables(s)}
@@ -69,8 +67,22 @@ def chase_rules(constraints, holds, rules, edb):
                 atom.functor for atom in extract_logic_atoms(rule.antecedent)
             }
         ]
-        heads = {rule.consequent.functor for rule in kept}
-    rules = kept
+        heads = {
+            rule.consequent.functor for rule in kept
+            if rule.consequent.functor.name in constraints
+        }
+    return kept, valued, full
+
+
+def chase_rules(constraints, holds, rules, edb):
+    """
+    Return ``rules`` with, as Datalog rules, the ``constraints`` without
+    existential variables that can hold from ``holds`` and that ``rules``
+    depend on, as ``valued_rules`` keeps them. A predicate of ``edb`` these
+    derive is replaced by a copy of its facts, as a rule cannot derive
+    into it.
+    """
+    rules, _, full = valued_rules(constraints, holds, rules)
     chase, seen, todo = [], set(), list(rules)
     while todo:
         for atom in extract_logic_atoms(todo.pop().antecedent):
