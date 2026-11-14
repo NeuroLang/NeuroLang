@@ -422,6 +422,8 @@ _FAKE_ATLASES = {
     "schaefer": "17Networks LH DefaultA PCC 1",
     "destrieux": "L G temporal middle",
     "tian": "lAMY lh",
+    # the finer Schaefer atlas of the connectivity engines
+    "schaefer400": "17Networks LH DefaultA PFCd 1",
 }
 
 
@@ -449,6 +451,30 @@ def _fake_schaefer(nl, cfg, data_dir, name, use_cache=True):
         points = cfg["atlases"][name].get("points")
         if points:
             engine_registry._register_atlas_points(nl, atlas, points)
+
+
+def _fake_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
+    """
+    Register one row of each relation of *cfg* (the connectivity's, which
+    the engines download), as ``_phase_relations``, its values of the
+    declared sorts: a label of a sort of an atlas that of the fake atlas
+    (``_FAKE_ATLASES``), so that it is one of the atlas's.
+    """
+    import pandas as pd
+
+    from neurolang_apps.utils import engine_registry
+
+    sorts = cfg.get("sorts", {})
+    signatures = engine_registry.get_signatures(engine_name)
+    for name in cfg.get("relations", {}):
+        row = []
+        for argument in signatures[name]:
+            atlas = sorts.get(argument.sort, {}).get("atlas")
+            if atlas:
+                row.append(_FAKE_ATLASES[atlas])
+            else:
+                row.append({"int": 1, "float": 0.5}.get(argument.type, "L"))
+        nl.add_tuple_set(pd.DataFrame([row]), name=name)
 
 
 # The predicates of a free-text query: computed for the text a query gives
@@ -511,6 +537,8 @@ def _build_small_neurosynth(free_text=True):
             patch.object(engine_registry, "_resolve_mask",
                          return_value=mask), \
             patch.object(engine_registry, "_phase_atlases", _fake_schaefer), \
+            patch.object(engine_registry, "_phase_relations",
+                         _fake_relations), \
             patch(f"{init}.fetch_pubmed_abstracts", _fake_abstracts):
         if free_text:
             return engine_registry.build_engine("neurosynth", DATA_DIR)
