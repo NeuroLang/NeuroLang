@@ -141,6 +141,11 @@ Unreleased
 
 **Bug fixes:**
 
+* Checking or running a query on an ontology's predicates, as
+  ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
+  cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying
+  the ontology's 6.5k rules, one recursive component of 3364 predicates,
+  ran for more than 30 minutes.
 * ``.view`` of streamlines with the regions they join, as
   ``ans(s, l1, l2) :- connects(s, l1, l2)``, draws the streamlines, their
   column of the sort ``streamline``: it drew the network of the regions.
