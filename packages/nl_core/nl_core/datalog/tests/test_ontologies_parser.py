@@ -307,7 +307,7 @@ def test_3():
 
     assert set(constraints.keys()) == set(['Person', 'headOf', 'Department', 'Professor', 'rdf-schema:label', c])
 
-    imp1 = RightImplication(supportChair(x, y), Person(x))
+    imp1 = RightImplication(Chair(x), Person(x))
     imp2 = RightImplication(Chair(x), supportChair(x, y))
     imp3 = RightImplication(supportChair(x, y), headOf(x, y))
     imp4 = RightImplication(supportChair(x, y), Department(y))
@@ -319,7 +319,7 @@ def test_3():
     assert len(PersonConstraint) == 1 and isinstance(PersonConstraint, set)
     PersonConstraint = next(iter(PersonConstraint))
     assert isinstance(PersonConstraint, RightImplication)
-    assert len(PersonConstraint.antecedent.args) == 2
+    assert len(PersonConstraint.antecedent.args) == 1
     assert len(PersonConstraint.consequent.args) == 1
     assert PersonConstraint.antecedent.args[0] == PersonConstraint.consequent.args[0]
     assert PersonConstraint.antecedent.functor == imp1.antecedent.functor

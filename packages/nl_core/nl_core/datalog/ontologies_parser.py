@@ -293,11 +293,10 @@ class OntologyParser:
                 self._categorize_constraints(res)
             con = Symbol(self._parse_name(inter_entity))
             x = Symbol.fresh()
-            y = Symbol.fresh()
             imp = RightImplication(
                 FunctionApplication[bool](
-                    support_prop,
-                    (x, y),
+                    Symbol(self._parse_name(entity)),
+                    (x,),
                     verify_type=False
                 ),
                 FunctionApplication[bool](con, (x,), verify_type=False)
