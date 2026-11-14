@@ -222,6 +222,12 @@ Unreleased
 
 **Bug fixes:**
 
+* The semi-naive chase missed tuples in the first iteration of a recursive
+  stratum: a rule's recursive atom saw only the tuples found earlier in that
+  iteration, not those of earlier strata.  With ``rr(y, x) :- rr(x, y)``,
+  ``p(x, y) :- rr(x, y)`` and ``rr(x, y) :- p(x, y)``, ``p`` lacked the
+  first tuple of ``rr``.  In the first iteration a recursive atom now sees
+  its whole relation.
 * Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
   taken for an aggregation, the operator applied to each group's values,
   and gave rows of missing values or failed in pandas; it is now refused
