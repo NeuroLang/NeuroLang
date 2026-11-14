@@ -29,6 +29,10 @@ Unreleased
   before. Queries are embedded with the numpy SPECTER2 encoder whenever its
   weights are next to the model, not only without torch; encoders of an
   engine built again share torch's model.
+* The network of the brain viewer names what is under the mouse on a
+  slice: a node, the name of its region; an edge, the names of the two
+  regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,
+  2 mm, of the sphere or tube drawn).
 * ``neurolang-repl-serve --activity-db`` gives the admins an activity page,
   ``/admin/activity``: filters of the period, user and engine above
   figures (uptime, users, inputs and failures, CPU time, LLM tokens, the most
@@ -361,9 +365,11 @@ v0.1a22 (2026-11-13)
 * The meta-analysis engines (``neurosynth``, ``neurostore`` and those
   extending them) have the year, journal and abstract of each study,
   ``study_year``, ``study_journal`` and ``study_abstract``, next to
-  ``study_title``: Neurosynth's abstracts are PubMed's, NeuroStore's years
-  those it lists for its studies, asked for at the first build and kept in
-  the data directory. A query, and the query assistant, restricts the
+  ``study_title``, and its identifiers, ``study_pmid`` and ``study_doi``,
+  the same in both engines, so that their studies are matched:
+  Neurosynth's abstracts are PubMed's, NeuroStore's years, PubMed ids and
+  DOIs those it lists for its studies, asked for at the first build and
+  kept in the data directory. A query, and the query assistant, restricts the
   studies to years or journals. The SPECTER2 similarity of ``neurosynth``
   embeds its ``study_abstract``, as ``neurostore`` does. See *The
   publications of the studies* in the engine configuration documentation.
