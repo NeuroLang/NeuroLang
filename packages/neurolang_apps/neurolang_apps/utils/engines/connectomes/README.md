@@ -28,9 +28,10 @@ subjects:
   to fsaverage.
 
 The connectomes have no subcortex: there is no Tian connectivity. Checked
-against the authors' own parcellation with Glasser's atlas, subject by
-subject (`validation.tsv` of the tools), the streamlines between distinct
-parcels correlate at r = 0.999.
+against the authors' own parcellation with Glasser's atlas, for the 1,000
+subjects they parcellated (`validation.tsv` of the tools), the streamlines
+between distinct parcels of each subject correlate at r = 0.9988 (median;
+0.9959 at the least), the matrices differing by 6% of their streamlines.
 
 ## Acknowledgements
 
