@@ -3,7 +3,7 @@ from nl_expr.expression_walker import (
     ReplaceSymbolWalker,
     add_match,
 )
-from nl_expr.expressions import Symbol
+from nl_expr.expressions import FunctionApplication, Symbol
 from nl_expr.logic import (
     Constant, Implication, NaryLogicOperator, Negation, Union
 )
@@ -43,27 +43,46 @@ def constraints_that_can_hold(constraints, holds):
         holding |= heads
 
 
+def valued_rules(constraints, holds, rules):
+    """
+    Return the ``rules`` without an atom over a consequent of the
+    ``constraints`` that has no values, the predicates with values, from
+    ``holds`` and the heads of these rules, and the constraints without
+    existential variables that can hold from them.
+    """
+    without_existentials = {
+        name: {s for s in sigmas if not _existential_variables(s)}
+        for name, sigmas in constraints.items()
+    }
+    valued, heads = set(holds), None
+    while heads is None or not heads <= valued:
+        valued |= heads or set()
+        full = constraints_that_can_hold(without_existentials, valued)
+        unvalued = {
+            sigma.consequent.functor for sigmas in constraints.values()
+            for sigma in sigmas if sigma.consequent.functor.name not in full
+        } - valued
+        kept = [
+            rule for rule in rules if not unvalued & {
+                atom.functor for atom in extract_logic_atoms(rule.antecedent)
+            }
+        ]
+        heads = {
+            rule.consequent.functor for rule in kept
+            if rule.consequent.functor.name in constraints
+        }
+    return kept, valued, full
+
+
 def chase_rules(constraints, holds, rules, edb):
     """
     Return ``rules`` with, as Datalog rules, the ``constraints`` without
     existential variables that can hold from ``holds`` and that ``rules``
-    depend on. Rules over a consequent of the constraints that has no
-    values are left out. A predicate of ``edb`` these derive is replaced
-    by a copy of its facts, as a rule cannot derive into it.
+    depend on, as ``valued_rules`` keeps them. A predicate of ``edb`` these
+    derive is replaced by a copy of its facts, as a rule cannot derive
+    into it.
     """
-    full = constraints_that_can_hold({
-        name: {s for s in sigmas if not _existential_variables(s)}
-        for name, sigmas in constraints.items()
-    }, holds)
-    unvalued = {
-        sigma.consequent.functor for sigmas in constraints.values()
-        for sigma in sigmas if sigma.consequent.functor.name not in full
-    } - set(holds)
-    rules = [
-        rule for rule in rules if not unvalued & {
-            atom.functor for atom in extract_logic_atoms(rule.antecedent)
-        }
-    ]
+    rules, _, full = valued_rules(constraints, holds, rules)
     chase, seen, todo = [], set(), list(rules)
     while todo:
         for atom in extract_logic_atoms(todo.pop().antecedent):
@@ -75,7 +94,9 @@ def chase_rules(constraints, holds, rules, edb):
                         Implication(sigma.consequent, sigma.antecedent)
                     )
                     todo.append(sigma)
-    heads = {rule.consequent.functor: rule.consequent for rule in chase}
+    heads = {
+        rule.consequent.functor: rule.consequent for rule in rules + chase
+    }
     copies = {p.name: Symbol.fresh() for p in heads if p in edb}
     copy_rules = []
     for name, copy in copies.items():
@@ -102,6 +123,36 @@ def _existential_variables(sigma):
     return ExtractFreeVariablesRightImplicationWalker().walk(sigma)
 
 
+def _projects(sigma):
+    """Whether the body of ``sigma`` is one atom with a variable out of its
+    head, as ``p(x, y) → C(x)``: the head may hold of named values only
+    while the body holds of an unnamed one."""
+    return isinstance(sigma.antecedent, FunctionApplication) and bool(
+        set(sigma.antecedent.args) - set(sigma.consequent.args)
+    )
+
+
+def projecting_rules(constraints):
+    """The ``constraints`` whose body is one atom with a variable out of
+    their head, as the domain ``p(x, y) → D(x)``, as rules. Their head can
+    hold of named values through an unnamed one, which only the rewriting
+    of their body finds: the chase applies their rewritings."""
+    return tuple(
+        Implication(sigma.consequent, sigma.antecedent)
+        for sigmas in constraints.values() for sigma in sigmas
+        if _projects(sigma)
+    )
+
+
+def _chased_only(sigma):
+    """Whether the body of ``sigma`` has two atoms of its head's predicate,
+    as ``p(x, y) ∧ p(y, z) → p(x, z)``: a rewriting with it never ends."""
+    return sum(
+        atom.functor == sigma.consequent.functor
+        for atom in extract_logic_atoms(sigma.antecedent)
+    ) > 1
+
+
 class OntologyRewriter:
     """
     Rewrite ``query`` with ``union_of_constraints`` (Xrewrite).
@@ -110,6 +161,7 @@ class OntologyRewriter:
     on the named values, as the chase applied them as rules. They then
     rewrite only atoms with a variable not in the rule's head, the only
     ones that can stand for a value an existential introduces.
+    Transitivity is left to the chase.
     """
 
     def __init__(self, query, union_of_constraints, chased=False):
@@ -133,8 +185,11 @@ class OntologyRewriter:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
                 q0 = q[0]
+                # discard: equality of expressions is not symmetric across
+                # parametrised classes, as FunctionApplication[Unknown] and
+                # [Any], so q may have left with an equal one.
                 if q0 in Q_explored:
-                    Q_rew.remove(q)
+                    Q_rew.discard(q)
                     continue
                 selected_sigmas = self._get_related_sigmas(
                     q0, self.union_of_constraints
@@ -149,7 +204,7 @@ class OntologyRewriter:
                         if self._is_new_factorization(new_q0, Q_rew, Q_explored):
                             Q_rew.add((new_q0, "f", "u"))
 
-                Q_rew.remove(q)
+                Q_rew.discard(q)
                 Q_explored.add(q[0])
 
         return Q_explored
@@ -283,6 +338,8 @@ class OntologyRewriter:
     def _get_applicable(self, sigma, q):
         S = self._get_term(q.antecedent, sigma.consequent)
         if self.chased and not _existential_variables(sigma):
+            if _chased_only(sigma):
+                return []
             S = [
                 s for s in S if any(
                     isinstance(arg, Symbol)
