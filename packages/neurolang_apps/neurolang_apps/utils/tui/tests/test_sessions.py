@@ -34,7 +34,36 @@ def build(name, say):
     nl.add_tuple_set([(2,)], name="short")
     nl.add_tuple_set([(60,)], name="long")
     nl.add_symbol(wait, name="wait")
+    if name in ("destrieux", "tracts"):
+        # Text embeddings, which count their loads (and fail to load in
+        # tracts).
+        nl.text_embedding_indexes = {"docs": _Index(name == "tracts")}
+        nl.add_symbol(lambda engine: nl.text_embedding_indexes["docs"].loads,
+                      name="loads")
     return nl
+
+
+class _Index:
+    """An index of text embeddings counting its loads, its own encoder."""
+
+    def __init__(self, fails: bool):
+        self.fails = fails
+        self.loads = 0
+        self.encoder = self
+
+    def build(self):
+        if self.fails:
+            raise ImportError("no torch")
+        self.loads += 1
+
+    def _uses_numpy(self):
+        return False
+
+    def download(self):
+        pass
+
+    def _fork_safe(self):
+        pass
 
 
 def wait(seconds: int) -> int:
@@ -682,3 +711,32 @@ def test_the_tokens_of_an_answer_are_logged(tmp_path):
                 if e["kind"] == "submit"]
     assert (answer["tokens_in"], answer["tokens_out"], answer["llm"],
             answer["llm_key"]) == (10, 3, "albert/m", "server")
+
+
+def test_the_text_embeddings_are_loaded_once_before_the_sessions_fork(
+    sessions,
+):
+    for user in ("ann", "bob"):
+        session = sessions.session(user, "1")
+        session.start("destrieux")
+        assert _rows(session.submit(
+            "ans(n) :- engine(e), (n == loads(e))")) == [[1]]
+    told = sessions.session("ann", "2")
+    listener = told.listen()
+    told.start("tracts")  # its embeddings fail: the start does not
+    assert _rows(told.submit("ans(n) :- engine(e), (n == loads(e))")) == [[0]]
+    messages = []
+    while not listener.empty():
+        messages.append(listener.get())
+    assert any("Loading the text embeddings" in m for m in messages)
+
+
+def test_the_text_embeddings_may_be_left_to_the_sessions(tmp_path):
+    sessions = Sessions(tmp_path, build=build, preload_embeddings=False)
+    try:
+        ann = sessions.session("ann", "1")
+        ann.start("destrieux")
+        assert _rows(ann.submit(
+            "ans(n) :- engine(e), (n == loads(e))")) == [[0]]
+    finally:
+        sessions.close()

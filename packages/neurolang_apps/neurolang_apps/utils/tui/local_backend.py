@@ -82,18 +82,22 @@ class LocalBackend:
     signed (see :meth:`~.web.WebRepl.set_feedback_store`). *build*,
     ``build(name, say)``, builds an engine, telling its steps with ``say``:
     by default
-    :func:`~neurolang_apps.utils.engine_registry.build_engine`.
+    :func:`~neurolang_apps.utils.engine_registry.build_engine`. With
+    *preload_embeddings*, an engine built has its text embeddings loaded
+    too (see :meth:`build`).
     """
 
     def __init__(
         self, data_dir, resolution: float = 2.0, light: bool = False,
         feedback: Optional[tuple] = None, build: Optional[Callable] = None,
+        preload_embeddings: bool = False,
     ):
         self.data_dir = Path(data_dir).resolve()
         self.resolution = resolution
         self.light = light
         self.feedback = feedback
         self._build = build or self._build_engine
+        self.preload_embeddings = preload_embeddings
         self.repl: Optional[web.WebRepl] = None
         self._page_key = False  # whether the page gave the assistant's key
         # The values the variables of the user's identity had before it
@@ -133,6 +137,22 @@ class LocalBackend:
         self.emit({"type": "status", "message": message + "…"})
 
     # -- The requests of the page -----------------------------------------
+
+    def build(self, name: str, say: Callable):
+        """Build the engine *name*, telling its steps with *say*; with
+        ``preload_embeddings``, load its text embeddings (the documents',
+        from their cache or computed into it, and the query model), so
+        that its first query of them does not, nor do the sessions forked
+        from this process (see
+        :func:`~neurolang_apps.utils.text_embeddings.preload`)."""
+        nl = self._build(name, say)
+        if self.preload_embeddings and \
+                getattr(nl, "text_embedding_indexes", None):
+            from neurolang_apps.utils import text_embeddings
+
+            say("Loading the text embeddings")
+            text_embeddings.preload(nl)
+        return nl
 
     def _build_engine(self, name: str, say: Callable):
         yaml_path = None
@@ -175,7 +195,7 @@ class LocalBackend:
         return self._working(lambda: self._start(engine))
 
     def _start(self, engine: str) -> dict:
-        nl = self._build(engine, self.say)
+        nl = self.build(engine, self.say)
         self.say("Starting the REPL")
         options = {}
         # The metadata of the studies of Neurosynth, whose ids are

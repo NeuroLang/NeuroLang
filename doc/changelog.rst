@@ -31,6 +31,16 @@ Unreleased
 * ``add_probabilistic_facts_from_tuples`` and
   ``add_probabilistic_choice_from_tuples`` take a ``DataFrame`` (its
   column names were taken for its rows' type, and they failed).
+* ``neurolang-repl-serve --local`` loads the text embeddings of an engine
+  when it builds it (its documents', from their cache or computed into it,
+  and the SPECTER2 query model): with ``--users`` in the builder, before
+  forking the sessions, which share them; their first ``query_similarity``
+  (``similar_study``, ``lift_llm``) no longer loads the model, and no
+  longer crashes a session on macOS. ``--no-preload-embeddings``
+  (``preload_embeddings: false``) leaves them to the first query, as
+  before. Queries are embedded with the numpy SPECTER2 encoder whenever its
+  weights are next to the model, not only without torch; encoders of an
+  engine built again share torch's model.
 * The network of the brain viewer names what is under the mouse on a
   slice: a node, the name of its region; an edge, the names of the two
   regions it joins and its value (within ``hover_mm`` of ``viewer.yaml``,
