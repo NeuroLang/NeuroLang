@@ -1,0 +1,81 @@
+# Merged into the entry of structural_connectivity in ../engines.yaml
+# (see doc/engine_configuration.rst); the engines extending it
+# (coordinate_meta_analysis: neurosynth, neurostore) add their guidance
+# after it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to answer the
+# questions on the structural connectivity: added to its system prompt.
+assistant_guidance: >
+  Three connectivities are not to be mixed up. The structural
+  connectivity is anatomical: the white-matter fibres joining two
+  regions, streamlines of diffusion MRI tractography
+  (*_structural_connectivity; asked as structural, anatomical,
+  white-matter, fibre or tract connectivity, wiring, streamlines). The
+  functional connectivity is the correlation of two regions' spontaneous
+  activity in resting-state fMRI (*_functional_connectivity, of the
+  functional_connectivity engine; asked as functional connectivity,
+  resting-state connectivity, correlated or synchronised activity). The
+  meta-analytic co-activation is the activation of two regions by the
+  same task studies, PROB over selected_study on the meta-analysis
+  engines (asked as co-activation, co-activated, meta-analytic
+  connectivity, MACM, task studies). A question saying only connectivity
+  or connected is answered with the one its words point to (fibres,
+  tracts, streamlines: the structural; rest, correlation, functional: the
+  functional; studies, tasks, terms, activation: the co-activation), and
+  the answer says which it gives.
+  Structural connectivity (how strongly two cortical regions are wired,
+  which regions a region connects to, white-matter or anatomical
+  connectivity, a structural network or connectome) is
+  schaefer_structural_connectivity(l1, l2, n) for the parcels of the
+  Schaefer networks and destrieux_structural_connectivity(l1, l2, n) for
+  the gyri and sulci of Destrieux: n is the mean number of streamlines
+  of tractography joining the two regions over 1,064 HCP subjects, a
+  stored value, not a probability, so the answers over it use no PROB.
+  Each pair is stored both ways round: a network gives each pair once
+  with (l1 < l2); the regions a seed connects to fix the seed in the
+  first argument. A strong connection is a large n: compare with a
+  threshold, (n > 1000), or sum n over a region's pairs for its
+  strength, sum(n); a value computed from n is computed in the body,
+  (f == n / t), never in the head. A probability of the structural
+  connectivity is either computed, the fraction n / t of a region's
+  streamlines t = sum(n) (where a streamline leaving it ends), or that of
+  a probabilistic program queried with PROB: a choice, ends_in(l) ^ (n /
+  t) :- ..., for the region a random streamline of a seed ends in, or
+  probabilistic facts, wired(l1, l2) :: 1 - exp(-n / 5000.0) :- ...,
+  (n > 100), each connection present independently, for the probability
+  of a path or of reaching a network; that mapping of counts to
+  probabilities is a choice of the model, which the answer states. The labels are those of schaefer and destrieux
+  (Schaefer's name the network, as '17Networks LH DefaultA pCunPCC 1',
+  so startswith('17Networks LH Default', l) selects the left default
+  network; Destrieux's start with the hemisphere, as 'L G front sup').
+  The Schaefer atlas has two scales, both of 17 networks: 100 parcels
+  (schaefer_structural_connectivity, schaefer_structural_gradient,
+  schaefer_structural_gradient_variance, schaefer(l, r)), the default,
+  coarser, and 400 parcels (schaefer400_structural_connectivity,
+  schaefer400_structural_gradient, schaefer400_structural_gradient_variance,
+  schaefer400(l, r)), finer, for a question asking for 400 parcels or a
+  finer parcellation; the labels of the two are different (as
+  '17Networks LH DefaultA PFCd 1' of 400), so a query uses the atlas of
+  its relation: schaefer400(l, r) lists the 400, schaefer_label(l) the 100.
+  The connectivity above is of the cortex only. The subcortex (thalamus,
+  basal ganglia, nucleus accumbens, hippocampus, amygdala: the regions of
+  tian, 'THA DA lh', 'aHIP rh') has a stop-gap structural connectivity,
+  schaefer400_tian_structural_connectivity(l, t, n) between a parcel of
+  schaefer400 and a Tian region and tian_structural_connectivity(t1, t2,
+  n) between two Tian regions: n is a number of streamlines of ONE
+  population-average tractogram (the HCP1065 atlas of 1,065 subjects),
+  not a mean over subjects and not of the scale of the cortical counts, so
+  never compare or add them with schaefer_structural_connectivity; say that
+  caveat in the answer. The cerebellum has none; say so rather than query
+  it.
+  The gradients of the structural connectivity,
+  schaefer_structural_gradient(l, d, v) and
+  destrieux_structural_gradient(l, d, v), are its principal components
+  within each hemisphere: v is the position of region l along gradient d
+  (1 the axis that varies most, to 10; their variance in
+  *_structural_gradient_variance); a question on gradients, an
+  embedding or axes of the connectivity fixes d, and a result of a
+  region and values is painted on the cortex by .view --threshold 0
+  (every region; the default shows the highest values only), one column
+  per gradient shown. They are structural (tractography), not the functional
+  gradients of resting-state fMRI (*_functional_gradient).
