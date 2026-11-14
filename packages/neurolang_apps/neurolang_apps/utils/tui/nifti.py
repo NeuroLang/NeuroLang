@@ -1591,17 +1591,13 @@ def last_result_images(app, block, request: SaveRequest) -> Optional[list]:
 
     The block is converted as ``.save`` converts it, as *request* asks,
     into an image per value column (:func:`value_columns`). Return the
-    (column name, path) of each, or None, telling why, if it has no
+    (column name, path) of each; an exception tells why it has no
     voxels.
     """
-    try:
-        saved = [
-            result_image(app, block, request._replace(value=column))
-            for column in value_columns(app, block, request)
-        ]
-    except Exception as exc:
-        app.console.print(f"View failed: {exc}", style="red", markup=False)
-        return None
+    saved = [
+        result_image(app, block, request._replace(value=column))
+        for column in value_columns(app, block, request)
+    ]
     return [
         (str(image.value or "mask"), _view_image_file(app, image))
         for image in saved
@@ -1652,42 +1648,38 @@ def last_result_network(app, block, request: ViewRequest):
 
     Return the layer of the strength of its nodes, (name, path) of a
     temporary NIfTI file, and the network as the viewer draws it
-    (:func:`~.brain_viewer.connectome_state`), or None, telling why, if
-    it cannot be built.
+    (:func:`~.brain_viewer.connectome_state`); an exception tells why it
+    cannot be built.
     """
     sorts = _engine_sorts(app.settings.engine_name)
-    try:
-        groups = network_nodes(block.frame, sorts, block.sorts)
-        choices = network_value_columns(
-            block.frame, groups, sorts, request.save, block.sorts
+    groups = network_nodes(block.frame, sorts, block.sorts)
+    choices = network_value_columns(
+        block.frame, groups, sorts, request.save, block.sorts
+    )
+    threshold = (
+        request.threshold if request.threshold_given else VIEW_THRESHOLD
+    )
+    states, networks = [], []
+    for choice in choices or [request.save.value]:
+        network = result_network(
+            app._nl, block.frame, sorts, groups,
+            request.save._replace(value=choice), block.sorts,
         )
-        threshold = (
-            request.threshold if request.threshold_given else VIEW_THRESHOLD
-        )
-        states, networks = [], []
-        for choice in choices or [request.save.value]:
-            network = result_network(
-                app._nl, block.frame, sorts, groups,
-                request.save._replace(value=choice), block.sorts,
+        if not network.edges:
+            raise SaveError(
+                "The result has no pair of two known regions or points."
             )
-            if not network.edges:
-                raise SaveError(
-                    "The result has no pair of two known regions or points."
-                )
-            networks.append(network)
-            states.append(brain_viewer.connectome_state(
-                network.names, network.coordinates, network.edges, threshold
-            ))
-        network, connectome = networks[0], states[0]
-        if len(states) > 1:  # each value column, for the page to choose
-            connectome["value"] = str(choices[0])
-            connectome["values"] = [
-                {"value": str(choice), **state}
-                for choice, state in zip(choices, states)
-            ]
-    except Exception as exc:
-        app.console.print(f"View failed: {exc}", style="red", markup=False)
-        return None
+        networks.append(network)
+        states.append(brain_viewer.connectome_state(
+            network.names, network.coordinates, network.edges, threshold
+        ))
+    network, connectome = networks[0], states[0]
+    if len(states) > 1:  # each value column, for the page to choose
+        connectome["value"] = str(choices[0])
+        connectome["values"] = [
+            {"value": str(choice), **state}
+            for choice, state in zip(choices, states)
+        ]
     shown = len(brain_viewer.shown_edges(connectome))
     value = repr(str(network.value)) if network.value else "1 (pairs)"
     if len(states) > 1:
@@ -1784,31 +1776,27 @@ def last_result_streamlines(app, block):
     the background, (name, path) of a temporary NIfTI file, and the
     keyword arguments of the viewer: the streamlines
     (:func:`~.brain_viewer.streamlines_state`) and the background
-    (:func:`streamline_background`); or None, telling why, if they cannot
+    (:func:`streamline_background`); an exception tells why they cannot
     be built.
     """
     column = streamline_column(block.frame, block.sorts)
-    try:
-        if not has_streamlines(app._nl):
-            raise SaveError(
-                f"The column {str(column)!r} holds streamline ids, but the "
-                "engine has no streamlines: it gives their points with "
-                "streamline_points(ids) (.help view)."
-            )
-        ids = sorted(int(s) for s in pd.unique(block.frame[column]))
-        if not ids:
-            raise SaveError("The result has no streamlines.")
-        shown = brain_viewer.shown_streamlines(ids)
-        lines = [
-            np.asarray(points, dtype=np.float32).reshape(-1, 3)
-            for points in app._nl.streamline_points(shown)
-        ]
-        background, space = streamline_background(app._nl)
-        counts = _visits(lines, background.shape, background.affine)
-        state = brain_viewer.streamlines_state(lines, len(ids))
-    except Exception as exc:
-        app.console.print(f"View failed: {exc}", style="red", markup=False)
-        return None
+    if not has_streamlines(app._nl):
+        raise SaveError(
+            f"The column {str(column)!r} holds streamline ids, but the "
+            "engine has no streamlines: it gives their points with "
+            "streamline_points(ids) (.help view)."
+        )
+    ids = sorted(int(s) for s in pd.unique(block.frame[column]))
+    if not ids:
+        raise SaveError("The result has no streamlines.")
+    shown = brain_viewer.shown_streamlines(ids)
+    lines = [
+        np.asarray(points, dtype=np.float32).reshape(-1, 3)
+        for points in app._nl.streamline_points(shown)
+    ]
+    background, space = streamline_background(app._nl)
+    counts = _visits(lines, background.shape, background.affine)
+    state = brain_viewer.streamlines_state(lines, len(ids))
     subsampled = (
         f", evenly subsampled to {brain_viewer.MAX_STREAMLINES} at most"
         if len(lines) < len(ids) else ""
@@ -1858,7 +1846,7 @@ def _one_of_a_kind(extra: dict, found: dict, console, title: str) -> bool:
 def _block_layers(app, block, request: ViewRequest):
     """
     Return the layers of the result *block* for the viewer, as
-    (kind, layers, extra), or None, telling why, if it cannot be shown.
+    (kind, layers, extra); an exception tells why it cannot be shown.
 
     *kind* is what the block holds (:func:`_result_kind`), *layers* are
     (name, path) pairs of temporary NIfTI files and *extra* the keyword
@@ -1866,22 +1854,18 @@ def _block_layers(app, block, request: ViewRequest):
     """
     kind = _result_kind(app, block, request.save)
     if kind == "network":
-        built = last_result_network(app, block, request)
-        if built is not None:
-            built = (built[0], {"connectome": built[1]})
-    elif kind == "streamlines":
-        built = last_result_streamlines(app, block)
-    else:
-        layers = last_result_images(app, block, request.save)
-        built = None if layers is None else (layers, {})
-        if built is not None and kind == "regions":
-            regions = result_regions(app, block, request.save)
-            if regions is not None:
-                masks = all(name == "mask" for name, _ in layers)
-                built = (layers, {"regions": regions._replace(
-                    coloured=masks
-                )})
-    return None if built is None else (kind, *built)
+        layers, connectome = last_result_network(app, block, request)
+        return kind, layers, {"connectome": connectome}
+    if kind == "streamlines":
+        return (kind, *last_result_streamlines(app, block))
+    layers = last_result_images(app, block, request.save)
+    regions = None
+    if kind == "regions":
+        regions = result_regions(app, block, request.save)
+    if regions is None:
+        return kind, layers, {}
+    masks = all(name == "mask" for name, _ in layers)
+    return kind, layers, {"regions": regions._replace(coloured=masks)}
 
 
 def result_regions(app, block, request: SaveRequest):
@@ -1905,12 +1889,14 @@ def result_regions(app, block, request: SaveRequest):
 def last_results_layers(app, request: ViewRequest):
     """
     Return the layers of all the results of *app*, as (layers, extra,
-    request), or None, telling why, if they cannot be shown.
+    request, titles), or None, telling why, if none can be shown.
 
     Each block of the last result, a query's or an ``obtain``'s or the
     ``ans[name]`` of a program with several, gives its images, network
     or streamlines; the viewer shows them together, the layers of a
-    result of several named after its block. The *request*'s threshold
+    result of several named after its block, whose *titles* are those
+    drawn. A block that cannot be drawn among several, as a table of
+    terms beside regions, is told and left out. The *request*'s threshold
     (the top 5% by default) is 0 for results neither of voxels nor of
     regions with a value (regions alone, networks, streamlines), unless
     it is given: the one the viewer starts all the layers with.
@@ -1922,15 +1908,25 @@ def last_results_layers(app, request: ViewRequest):
         )
         return None
     several = len(app.results) > 1
-    layers, extra, kinds = [], {}, set()
+    layers, extra, kinds, titles = [], {}, set(), []
     for block in app.results:
-        built = _block_layers(app, block, request)
-        if built is None:
-            return None
-        kind, block_layers, found = built
+        try:
+            kind, block_layers, found = _block_layers(app, block, request)
+        except Exception as exc:
+            if not several:
+                app.console.print(
+                    f"View failed: {exc}", style="red", markup=False
+                )
+                return None
+            app.console.print(
+                f"{block.title or 'A result'} is not drawn: {exc}",
+                style="yellow", markup=False,
+            )
+            continue
         if not _one_of_a_kind(extra, found, app.console, block.title):
             continue
         kinds.add(kind)
+        titles.append(block.title)
         # regions with a value, not a mask: their top 5% as voxels'
         if kind == "regions" and any(
             name != "mask" for name, _ in block_layers
@@ -1941,9 +1937,18 @@ def last_results_layers(app, request: ViewRequest):
              path)
             for name, path in block_layers
         ]
+    if not layers:
+        app.console.print(
+            "View failed: none of the results can be drawn.",
+            style="red", markup=False,
+        )
+        return None
     if not kinds & {"voxels", "values"} and not request.threshold_given:
         request = request._replace(threshold=0.0)
-    return layers, extra, request
+    if len(titles) > 1 and "regions" in extra:
+        # the answers are told apart by the colours of their overlays
+        extra["regions"] = extra["regions"]._replace(coloured=False)
+    return layers, extra, request, titles
 
 
 @command(
@@ -1969,7 +1974,7 @@ def cmd_view(app, arg: str) -> None:
         shown = last_results_layers(app, request)
         if shown is None:
             return
-        layers, extra, request = shown
+        layers, extra, request, titles = shown
     elif not request.path.is_file():
         app.console.print(
             f"File not found: {request.path}", style="red", markup=False
@@ -1977,17 +1982,19 @@ def cmd_view(app, arg: str) -> None:
         return
     else:
         layers = [(request.path.name, request.path)]
+        titles = []
     _view_nifti(
-        app, layers, request, _view_title(app, request, layers[0][1]),
+        app, layers, request, _view_title(request, layers[0][1], titles),
         **extra,
     )
 
 
-def _view_title(app, request: ViewRequest, path: Path) -> str:
-    """Return the title of the viewer: the image's name, or the result's."""
+def _view_title(request: ViewRequest, path: Path, titles) -> str:
+    """Return the title of the viewer: the image's name, or the titles of
+    the results drawn."""
     if request.path is not None:
         return path.name
-    titles = [block.title for block in app.results if block.title]
+    titles = [title for title in titles if title]
     if len(titles) > 1:
         return f"Last results: {', '.join(titles)}"
     return f"Last result: {titles[0]}" if titles else "Last result"

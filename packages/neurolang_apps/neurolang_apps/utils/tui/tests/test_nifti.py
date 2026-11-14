@@ -1390,6 +1390,29 @@ class TestViewSeveralQueries:
         assert isinstance(images, nib.Nifti1Image)  # a single layer
         assert "Only one streamlines is drawn: that of b" in out
 
+    def test_a_result_that_cannot_be_drawn_is_left_out(self, tiny, viewed):
+        """A query without voxels, regions or streamlines, as the terms of
+        a Bayes factor beside the regions of the same program, is told and
+        left out: the others are drawn."""
+        out = self._view(
+            tiny, SEVERAL_QUERIES + "ans[studies](s) :- study(s)\n"
+        )
+        (images, kwargs), = viewed
+        assert [name for name, _ in images] == [
+            "seen: mask", "weighted: w"
+        ]
+        assert "studies is not drawn:" in out
+        assert "View failed" not in out
+        assert "Last results: seen, weighted" in kwargs["title"]
+
+    def test_the_view_fails_when_no_result_can_be_drawn(self, tiny, viewed):
+        out = self._view(
+            tiny, "ans[a](s) :- study(s)\nans[b](s) :- study(s)\n"
+        )
+        assert viewed == []
+        assert "a is not drawn:" in out and "b is not drawn:" in out
+        assert "View failed: none of the results can be drawn" in out
+
     def test_the_threshold_is_the_default_with_voxels(self, tiny, viewed):
         self._view(tiny, SEVERAL_QUERIES)
         assert viewed[0][1]["threshold"] == "95%"

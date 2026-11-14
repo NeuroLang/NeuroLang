@@ -785,6 +785,7 @@
     });
     canvas.dataset.ticks = ticks.join(' ');
     canvas.style.opacity = settings(l).visible ? 1 : 0.4;
+    if (viewer.layers[l].shown) viewer.layers[l].shown.checked = settings(l).visible;
   }
 
   // The millimetres of the voxel ijk of the images, and its inverse.
@@ -991,8 +992,9 @@
     redraw();
   }
 
-  // A colour bar per layer, labelled with its name when there are
-  // several, and the list of the layers, shown with several.
+  // A colour bar per layer, labelled with its name and a box showing or
+  // hiding it when there are several, and the list of the layers, shown
+  // with several.
   function setUpLayers() {
     var several = viewer.layers.length > 1;
     $('layer-control').style.display = several ? '' : 'none';
@@ -1004,9 +1006,18 @@
         canvas.height = $('colorbar').height;
       }
       layer.colorbar = canvas;
-      layer.label = document.createElement('div');
+      // The name of the layer, with whether it is shown: the answers of a
+      // program with several, each an overlay, are shown or hidden here.
+      layer.label = document.createElement('label');
       layer.label.className = 'colorbar-name';
-      layer.label.textContent = layer.name;
+      layer.shown = document.createElement('input');
+      layer.shown.type = 'checkbox';
+      layer.shown.addEventListener('change', function (e) {
+        settings(l).visible = e.target.checked;
+        syncControls();
+        redraw();
+      });
+      layer.label.append(layer.shown, ' ' + layer.name);
     });
   }
 
