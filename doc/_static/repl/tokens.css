@@ -1,0 +1,32 @@
+/* The colours of the REPL's pages (index.html, credits.html): those of the
+   logo kit (../logo/README.md), as the documentation's (neurolang.css): ink,
+   the blue of rule heads, the red of the answer, the teal of the docs. Dark
+   first, as the head script of each page sets. */
+:root {
+  color-scheme: dark;
+  --ground: #0b1220; --panel: #0f1a2e; --raised: #15223b; --sunken: #0a1322; --term: #070d19;
+  --border: #22324f; --border-strong: #34476b; --hover: #1a2944; --zebra: #0d1729; --row-hover: #172a48;
+  --text: #e8eef9; --muted: #a9b8d0; --faint: #7d8daa;
+  --accent: #5aa3f6; --accent-hover: #7db7f8; --on-accent: #06121f; --accent-soft: #15315a;
+  --answer: #ff6b70; --teal: #4cc3de; --teal-soft: #0f3340;
+  --ok: #4ccf8a; --bad: #ff8f87; --bad-soft: #3a1418; --warn: #f2c14e;
+  --track: #24324d; --head: #e8eef9;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px rgb(0 0 0 / .35);
+  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px; --radius-lg: 12px;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E");
+  --chart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E");
+  --info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5v.5'/%3E%3C/svg%3E");
+}
+:root[data-theme=light] {
+  color-scheme: light;
+  --ground: #f3f6fb; --panel: #ffffff; --raised: #ffffff; --sunken: #f6f8fc; --term: #0f1b33;
+  --border: #d9e1ee; --border-strong: #b9c6db; --hover: #edf2f9; --zebra: #f7f9fc; --row-hover: #e8f1fd;
+  --text: #0f1b33; --muted: #4a5874; --faint: #66748f;
+  --accent: #1a63c2; --accent-hover: #15529f; --on-accent: #ffffff; --accent-soft: #e6effb;
+  --answer: #e03a3e; --teal: #0e7490; --teal-soft: #e3f4f8;
+  --ok: #1d7a4b; --bad: #b42318; --bad-soft: #fdecea; --warn: #8a5a00;
+  --track: #dde5f1; --head: #0f1b33;
+  --shadow: 0 1px 2px rgb(15 27 51 / .08), 0 8px 24px rgb(15 27 51 / .12);
+}

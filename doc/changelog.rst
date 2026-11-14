@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+* A dense whole-brain tractogram for tract_querier's bundles, the engines
+  ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
+  Disconnectome7T's tractography of the Human Connectome Project's 7 T
+  diffusion MRI (Thiebaut de Schotten et al. 2020), 300,000 streamlines of
+  at least 30 mm of 20 subjects (44 MB, 8 times the IIT tractogram's
+  38,000), mapped into the HCP's MNI152 space, the space of the atlases, by
+  an affine fitted on their subjects' own segmentations, all within the
+  brain (the 7 T data are distorted over the orbits and under the
+  cerebellum), with the FreeSurfer segmentation of those subjects.
+  ``tools/hcp_connectivity`` downloads an OSF project (``osf``), checks
+  and fits the space of a tractogram (``check-space``, ``fit-space``) and
+  makes the tractogram (``dense``).
+
 * The page of the REPL shows the answers of a program with several queries
   (``ans[name]``) in a tab each, named after its query, with its number of
   rows.  ``.view`` (and the brain tab) draws all those it can and leaves
@@ -219,7 +232,11 @@ Unreleased
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:
-  the atlases, Neurosynth, the IIT Human Brain Atlas and the HCP.
+  the MNI template, the atlases, Neurosynth and PubMed, NeuroStore, the
+  Cognitive Atlas, SPECTER2, the tractography atlases, the IIT Human Brain
+  Atlas and the HCP; a test checks every engine names some. The REPL page
+  has a second page, *Credits* (``credits.html``), that lists them for
+  each of its engines, with links to their DOIs and a button to copy them.
 
 * ``neurolang-repl-serve --config server.yaml``: the server's options in a
   YAML file, each by its name, its paths relative to it, the command line
