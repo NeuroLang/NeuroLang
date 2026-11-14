@@ -343,4 +343,4 @@ def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
         "kind": "schaefer", "predicate_name": "schaefer400", "n_rois": 400,
         "resolution_mm": 2, "yeo_networks": 17}
     assert cfg["sorts"]["schaefer400_label"]["atlas"] == "schaefer400"
-    assert "schaefer400" not in get_engine_config("mni_atlases")["atlases"]
+    assert "schaefer400" not in get_engine_config("destrieux")["atlases"]
