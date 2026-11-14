@@ -30,6 +30,16 @@ Unreleased
   guarantee of :doc:`ontologies`.  A predicate only in the bodies of
   constraints, with no facts or rules, answers the empty relation.
   
+* The page of the REPL shows the answers of a program with several queries
+  (``ans[name]``) in a tab each, named after its query, with its number of
+  rows.  ``.view`` (and the brain tab) draws all those it can and leaves
+  out, telling why, those with nothing to draw, such as a table of terms
+  and Bayes factors beside the regions of the same program: it failed as a
+  whole.  Each answer is an overlay of the viewer, which a box by its
+  colour bar shows or hides; the masks of several answers have each a
+  colour of their own (``mask_colormaps`` in ``viewer.yaml``: Blues,
+  Oranges, Greens...), and the colours of the atlas start off, which would
+  hide them.
 * The query assistant names the columns of its answers after what they
   hold, ``ans(region, probability)`` rather than ``ans(l, p)``, and gives
   the entities an answer is computed over that the question names (the

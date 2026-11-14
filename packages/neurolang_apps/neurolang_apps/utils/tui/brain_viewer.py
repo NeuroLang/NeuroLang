@@ -42,6 +42,7 @@ import base64
 import gzip
 import html
 import io
+import itertools
 import json
 import re
 import zlib
@@ -64,6 +65,8 @@ DEFAULT_CMAP = DEFAULTS["colormap"]
 # The colormaps of the overlays after the first, in turn: the first has
 # the colormap asked for, :data:`DEFAULT_CMAP` by default.
 OVERLAY_CMAPS = tuple(DEFAULTS["overlay_colormaps"])
+# Those of the masks among several overlays, in turn.
+MASK_CMAPS = tuple(DEFAULTS["mask_colormaps"])
 
 # The colormaps the page offers, from matplotlib and nilearn.
 COLORMAPS = tuple(DEFAULTS["colormaps"])
@@ -262,14 +265,23 @@ def _layers(img) -> list:
     return layers
 
 
-def _overlay_cmaps(cmap, count: int) -> list:
+def _overlay_cmaps(cmap, names) -> list:
     """
-    Return the colormaps of *count* overlays: *cmap* for the first, then
-    those of :data:`OVERLAY_CMAPS` other than it, in turn.
+    Return the colormaps of the overlays *names*: *cmap* for the first,
+    then those of :data:`OVERLAY_CMAPS` other than it, in turn; but the
+    masks among several (``mask`` or ``answer: mask``) take those of
+    :data:`MASK_CMAPS` in turn, which keep them apart.
     """
     first = cmap or DEFAULT_CMAP
     others = [name for name in OVERLAY_CMAPS if name != first]
-    return [first] + [others[n % len(others)] for n in range(count - 1)]
+    values = itertools.chain([first], itertools.cycle(others))
+    masks = itertools.cycle(MASK_CMAPS)
+    several = len(names) > 1
+    return [
+        next(masks) if several and (name == "mask" or name.endswith(": mask"))
+        else next(values)
+        for name in names
+    ]
 
 
 def viewer_state(
@@ -285,7 +297,7 @@ def viewer_state(
     first = layers[0][1]
     volumes = [overlay_values(image.dataobj) for _, image in layers]
     affine = first.affine
-    cmaps = _overlay_cmaps(cmap, len(layers))
+    cmaps = _overlay_cmaps(cmap, [name for name, _ in layers])
     if isinstance(symmetric, (bool, np.bool_)):
         symmetric = [symmetric] * len(layers)
     return {

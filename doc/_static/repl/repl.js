@@ -5,7 +5,7 @@ import { SETTINGS } from "./settings.js";
 import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
-import { imageButtons, renderTable } from "./table_view.js";
+import { answerTabs, imageButtons, renderTable } from "./table_view.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
@@ -639,18 +639,21 @@ function applyReply(data) {
   else editor.refresh();
 }
 
-// The tables of a reply, each with the queries that go on from it when it is the only one.
+// The tables of a reply, each with the queries that go on from it when it is the only one;
+// those of a program with several queries (ans[name]) in a tab each.
 function showTables({ tables, prompt }) {
   lastTables = tables;
   // A result is a relation to go on from only if the query that made it is known.
   const query = prompt || (lastRun.trim().startsWith(".") ? "" : lastRun);
   const squall = $("mode").value === "squall";
-  show("table", ...tables.map((table) => renderTable(table, {
+  const render = (table) => renderTable(table, {
     download: requestDownload,
     pmc,
     followUps: tables.length === 1 ? (payload) => followUps(payload, query, { squall, peaks: hasPeaks() }) : null,
     use: goOn,
-  })));
+  });
+  if (tables.length > 1) show("table", answerTabs(tables, render));
+  else show("table", ...tables.map(render));
 }
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.

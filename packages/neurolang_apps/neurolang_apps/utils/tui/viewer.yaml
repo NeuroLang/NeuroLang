@@ -10,6 +10,11 @@ view_threshold: "95%"
 # first, in turn; and those the page offers (matplotlib's and nilearn's).
 colormap: plasma
 overlay_colormaps: [viridis, cool, hot, cividis, magma]
+# Those of the masks among several overlays (the answers of a program with
+# several queries), in turn: a mask is drawn in the top colour of its
+# colormap, which single hues keep apart (plasma's and viridis' are both
+# yellow).
+mask_colormaps: [Blues, Oranges, Greens, Purples, Reds]
 colormaps: [hot, inferno, viridis, plasma, magma, cividis, cold_hot, RdBu_r,
             bwr, coolwarm, gray]
 

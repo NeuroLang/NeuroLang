@@ -182,9 +182,11 @@ soon as it is entered and shows its answer as a table:
 A rule without ``ans`` only defines a relation, for the queries to come.
 
 A submission can hold several queries, each with a name in brackets,
-``ans[name](...)``; the REPL shows each answer under its name, and ``.view``
-shows them all at once, as one image per query, with the networks and
-streamlines of the others:
+``ans[name](...)``; the REPL shows each answer under its name (the page in
+the browser, in a tab each), and ``.view`` shows them all at once, as one
+image per query, with the networks and streamlines of the others.  A query
+with nothing to draw, a table of terms beside regions, is left out of the
+view, which says so:
 
 .. code-block:: neurolang
 
