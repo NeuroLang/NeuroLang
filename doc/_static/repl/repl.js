@@ -1,13 +1,16 @@
 // The page of the in-browser REPL: a box for the AI assistant, a box for
 // the code, and the result as a table or in the brain viewer. It shows what
 // worker.js answers.
+import { SETTINGS } from "./settings.js";
 import { History } from "./history.js";
+import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { imageButtons, renderTable } from "./table_view.js";
-import { AgentLog, renderAgentLog, tickWaiting } from "./agent_view.js";
+import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
-import { renderCommands, renderExamples, renderPredicates, suggestedQuestion } from "./guide.js";
+import { layoutQuery } from "./layout.js";
+import { renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -30,6 +33,15 @@ const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+// A query the page puts in the box, laid out for its width: a long rule a line
+// per atom of its body (layout.js). What the visitor typed is kept as it is.
+const laidOut = (text) => ($("mode").value === "squall" ? text : layoutQuery(text, editor.columns()));
+const putQuery = (text) => { editor.value = laidOut(text); };
+function formatQuery() {
+  const text = laidOut(editor.value);
+  if (text !== editor.value) editor.value = text;
+  input.focus();
+}
 loadWords().then(() => editor.refresh()); // the words of the grammars, from highlight.json
 
 const store = (kind) => {
@@ -40,6 +52,9 @@ const store = (kind) => {
   }
 };
 const history = new History(store("localStorage"));
+// The questions asked to the assistant, each with the query it gave.
+const asked = new AskedHistory(store("localStorage"));
+let asking = null; // the question being answered, and its language
 const llmSettings = new LlmSettings(store("localStorage"), store("sessionStorage"));
 let worker = null;
 let providers = []; // those of the AI assistant, from the worker
@@ -58,8 +73,9 @@ const summary = $("summary");
 function hideSummary() {
   summary.hidden = true;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }) {
-  if (!valid || !(explanation || reads)) return hideSummary();
+function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "") {
+  if (!valid || !(explanation || reads || question)) return hideSummary();
+  $("summary-question").textContent = question ? `Asked: ${question}` : "";
   $("summary-text").textContent = explanation ?? "";
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
   $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
@@ -175,13 +191,15 @@ function showGuide() {
     question.value = text;
     question.focus();
   }, "Put this question in the box of the assistant");
-  renderExamples($("guide-examples"), guide.examples[squall ? "squall" : "datalog"], (query) => {
-    editor.value = query;
+  const list = $("guide-examples");
+  const width = Math.max(30, Math.floor((list.clientWidth - 24) / 7.5)); // 12.5px monospace
+  renderExamples(list, guide.examples[squall ? "squall" : "datalog"], (query) => {
+    putQuery(query);
     hideSummary();
     input.focus();
-  });
-  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, 200, (query) => {
-    editor.value = query;
+  }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
+  renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, SETTINGS.guide.relations_shown, (query) => {
+    putQuery(query);
     hideSummary();
     input.focus();
   });
@@ -215,7 +233,7 @@ builder.addEventListener("submit", (event) => {
   const template = TEMPLATES.find((t) => t.id === $("builder-template").value);
   try {
     const query = buildQuery(template, Object.fromEntries(new FormData(builder)));
-    editor.value = query;
+    putQuery(query);
     hideSummary();
     input.focus();
     $("builder-error").textContent = "";
@@ -224,6 +242,7 @@ builder.addEventListener("submit", (event) => {
   }
 });
 $("guide").addEventListener("toggle", showGuide);
+$("guide-queries").addEventListener("toggle", showGuide); // the examples are laid out for the width of their list
 $("guide-filter").addEventListener("input", showGuide);
 
 // A query shared as a link is put in the box, not run.
@@ -235,6 +254,89 @@ function restoreShared() {
     run(`.mode ${shared.mode}`);
   }
   editor.value = shared.code;
+}
+
+// An answer of the assistant with no query, *missing* (noAnswer), to the
+// *asked* question: said where the question is, why, and what to try; null
+// hides it.
+let missingQuery = "";
+function showNoAnswer(missing, asked = "") {
+  $("no-answer").hidden = !missing;
+  if (!missing) return;
+  $("no-answer-question").textContent = asked;
+  $("no-answer-reason").textContent = missing.reason;
+  Object.assign($("no-answer-said"), { textContent: missing.said ? `In its words: ${missing.said}` : "", hidden: !missing.said });
+  missingQuery = missing.query;
+  $("no-answer-query").hidden = !missing.query;
+  $("no-answer-box").textContent = input.value.trim()
+    ? "The query box still holds the query that was there before; the result shown is not an answer to this question."
+    : "";
+  $("no-answer-edit").dataset.question = asked;
+}
+$("no-answer-edit").addEventListener("click", (event) => {
+  question.value = event.currentTarget.dataset.question || question.value;
+  question.focus();
+  question.select();
+});
+$("no-answer-query").addEventListener("click", () => {
+  putQuery(missingQuery);
+  hideSummary();
+  input.focus();
+});
+$("no-answer-steps").addEventListener("click", () => {
+  live.hidden = false;
+  live.open = true;
+  live.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+$("no-answer-examples").addEventListener("click", () => {
+  $("guide").open = true;
+  showGuide();
+  $("guide").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+// The past questions, the newest first, each with the query it gave: to put
+// that query back in the box, in its language, or to ask the question again.
+function showAsked() {
+  const entries = asked.newest();
+  $("asked").hidden = !entries.length;
+  $("asked-summary").textContent = `Past questions (${entries.length})`;
+  const when = (at) => new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+  $("asked-list").replaceChildren(...entries.slice(0, SETTINGS.history.questions_shown).map((entry) => {
+    const item = document.createElement("li");
+    const text = Object.assign(document.createElement("p"), { className: "asked-question", textContent: entry.question });
+    const shown = entry.valid && entry.query
+      ? Object.assign(document.createElement("pre"), { className: "asked-query" })
+      : Object.assign(document.createElement("p"), { className: "asked-none", textContent: "No valid query came of it." });
+    const squall = entry.language === "squall";
+    if (shown.tagName === "PRE") shown.append(...highlightNodes(squall ? entry.query : layoutQuery(entry.query, SETTINGS.history.question_width), squall));
+    const actions = Object.assign(document.createElement("div"), { className: "asked-actions" });
+    if (entry.valid && entry.query) {
+      actions.append(Object.assign(document.createElement("button"), {
+        type: "button", textContent: "Use this query", title: "Put this query in the box, with what the assistant said of it",
+        onclick: () => useAsked(entry),
+      }));
+    }
+    actions.append(
+      Object.assign(document.createElement("button"), {
+        type: "button", className: "quiet", textContent: "Ask again", title: "Put this question in the box of the assistant",
+        onclick: () => { question.value = entry.question; question.focus(); },
+      }),
+      Object.assign(document.createElement("time"), { dateTime: new Date(entry.at).toISOString(), textContent: when(entry.at) }),
+    );
+    item.append(text, shown, actions);
+    return item;
+  }));
+}
+
+// The query of a past question back in the box, in its language, with its summary.
+function useAsked(entry) {
+  if ($("mode").value !== entry.language) {
+    $("mode").value = entry.language;
+    run(`.mode ${entry.language}`);
+  }
+  putQuery(entry.query);
+  showSummary({ valid: true, explanation: entry.explanation }, entry.question);
+  input.focus();
 }
 
 function showHistory() {
@@ -458,6 +560,9 @@ const workerMessages = {
     if (restore) return replay(restore);
     setBusy(false);
     restoreShared();
+    // A first visit has a query to run in the box, not an empty one.
+    const first = decodeShare(location.hash) ? "" : startingQuery(guide.examples, $("mode").value, { box: input.value, visited: history.entries.length > 0 });
+    if (first) putQuery(first);
   },
   uploaded: (data) => uploaded?.(data),
   file: (data) => {
@@ -470,12 +575,18 @@ const workerMessages = {
     agentLog.apply(data);
     showAgent();
     if (data.event === "ask") {
+      showNoAnswer(null);
+      asking = { question: data.question ?? "", language: data.language ?? $("mode").value };
       hideSummary();
       hideRating();
     }
     if (data.event === "done") {
-      showSummary(data);
+      showNoAnswer(noAnswer(data), asking?.question);
+      showSummary(data, asking?.question);
       showRating();
+      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
+      asking = null;
+      showAsked();
     }
   },
   rated: (data) => {
@@ -501,7 +612,7 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
-    setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.");
+    setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
     if (data.ratable) showRating();
@@ -514,6 +625,9 @@ const workerMessages = {
     else if (data.tables?.length) markViewerStale();
     else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
+    // On a narrow screen the result is under the query: it is brought into view.
+    if (stacked.matches && !$("no-answer").hidden) $("no-answer").scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
   },
 };
 
@@ -522,7 +636,7 @@ function applyReply(data) {
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
-  if (data.prompt) editor.value = data.prompt; // what the assistant wrote
+  if (data.prompt) putQuery(data.prompt); // what the assistant wrote
   else editor.refresh();
 }
 
@@ -547,15 +661,17 @@ function showViewer(page) {
   setViewerStale(false);
 }
 
-// The viewer shown is of an earlier result once a query gives a new one:
-// selecting its tab then views the new result (.view), rather than the old.
+// The viewer shown is of an earlier result once a query gives a new one, or
+// there is none yet: selecting its tab then views the last result (.view).
 let viewerStale = false;
 function setViewerStale(stale) {
   viewerStale = stale;
   $("tab-brain").title = stale ? "View the last result in the brain" : "";
 }
+// A result can always be tried in the brain: its tab is there, and views it.
 function markViewerStale() {
-  if (!$("tab-brain").hidden) setViewerStale(true);
+  $("tab-brain").hidden = false;
+  setViewerStale(true);
 }
 
 // No viewer: that of an earlier result is not to be taken for the last one's.
@@ -629,10 +745,10 @@ const session = new Session();
 let replaying = null; // the statements being run again, silently, and how many failed
 let rerun = null; // what runs again once the rules of a session the server ended are back
 function goOn(text) {
-  editor.value = text;
+  putQuery(text);
   hideSummary();
   input.focus();
-  input.setSelectionRange(text.length, text.length);
+  input.setSelectionRange(editor.value.length, editor.value.length);
 }
 
 // Run again, one after the other, the statements that give back a session's rules.
@@ -693,7 +809,10 @@ function run(text, { remember = false } = {}) {
   lastRun = text;
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
-  if (!text.startsWith(".ask") && !text.startsWith(".llm")) hideSummary();
+  if (!text.startsWith(".ask") && !text.startsWith(".llm")) {
+    hideSummary();
+    showNoAnswer(null); // a query of one's own: the notice is of the past
+  }
   hideRating();
   worker.postMessage({ text });
 }
@@ -722,6 +841,8 @@ applyTheme(chosen());
 // The question box is narrow on a phone: its example is left out there.
 const askPlaceholder = question.placeholder;
 const narrow = matchMedia("(max-width: 40rem)");
+// The panes of the page side by side (index.html), or one under the other.
+const stacked = matchMedia("(max-width: 71.99rem)");
 const placeAsk = () => (question.placeholder = narrow.matches ? "Ask in English…" : askPlaceholder);
 narrow.addEventListener("change", placeAsk);
 placeAsk();
@@ -735,6 +856,9 @@ input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
     run(input.value, { remember: true });
+  } else if (event.altKey && event.shiftKey && event.code === "KeyF") {
+    event.preventDefault();
+    formatQuery();
   }
 });
 // A dot-command is a line: the lines of the question are joined.
@@ -779,6 +903,10 @@ $("mode").addEventListener("change", (event) => {
   run(`.mode ${event.target.value}`);
 });
 $("view").addEventListener("click", () => run(".view"));
+$("format").addEventListener("click", () => {
+  formatQuery();
+  $("format").closest("details").open = false;
+});
 $("explain").addEventListener("click", () => run(".explain"));
 history_.addEventListener("change", () => {
   if (history_.value) {
@@ -886,4 +1014,5 @@ engineSelect.addEventListener("change", () => {
   start();
 });
 showHistory();
+showAsked();
 loadEngines().then(() => start());

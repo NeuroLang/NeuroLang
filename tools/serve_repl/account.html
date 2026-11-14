@@ -49,6 +49,28 @@
 </section>
 <p class="note" id="orcid-note" hidden>You sign in with ORCID: you have no password here.</p>
 
+<section id="orcid-box" hidden>
+<h2>ORCID</h2>
+<div id="orcid-link" hidden>
+  <p>Sign in with your ORCID iD too: you prove it yours at ORCID, then log in here with either your password or ORCID. If your iD has an account of its own here, it is merged into this one (its groups and settings too).</p>
+  <p><a id="orcid-link-go" href="/login/orcid?link=1">Link my ORCID iD</a></p>
+</div>
+<div id="orcid-linked" hidden>
+  <p>You sign in with the ORCID iD <a id="orcid-id" target="_blank" rel="noopener"></a> too.</p>
+  <button type="button" id="orcid-unlink">Unlink it</button>
+  <p class="note">Unlinked, you log in with your password only, and ORCID signs in no one with that iD.</p>
+</div>
+<div id="orcid-merge" hidden>
+  <p>Have an account here with a password? Merge this one into it: you then log in there with your password or ORCID, in the groups of both.</p>
+  <form id="merge">
+    <label>Its name <input name="name" autocomplete="username" required></label>
+    <label>Its password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button>Merge into it</button>
+  </form>
+</div>
+<p id="orcid-message" role="status"></p>
+</section>
+
 <script>
 const $ = (id) => document.getElementById(id);
 function say(text, ok) {
@@ -58,11 +80,19 @@ function say(text, ok) {
 const WHOSE = { own: "your own key", server: "the server's key", none: "no key: give yours in the page or below", unneeded: "no key needed" };
 function showMe() {
   return fetch("/account/api/me").then((response) => response.json()).then((me) => {
-    $("name").textContent = me.orcid_name ? `${me.orcid_name} (${me.name})` : me.name;
+    // an ORCID account by its name at ORCID; a user of a name of their own by it
+    $("name").textContent = me.orcid_only && me.orcid_name ? `${me.orcid_name} (${me.name})`
+      : me.name + (me.orcid ? `, who signs in with ORCID ${me.orcid}${me.orcid_name ? ` (${me.orcid_name})` : ""} too` : "");
     // one who signs in with ORCID only has no password to change
     $("password-box").hidden = Boolean(me.orcid_only);
     $("orcid-note").hidden = !me.orcid_only;
     $("groups").textContent = me.groups.length ? `, in ${me.groups.join(", ")}` : "";
+    // ORCID: link one's iD, unlink it, or merge an ORCID account into one of a password
+    $("orcid-box").hidden = !(me.orcid_signs_in || me.orcid || me.orcid_only);
+    $("orcid-link").hidden = Boolean(me.orcid || me.orcid_only || !me.orcid_signs_in);
+    $("orcid-linked").hidden = !me.orcid;
+    $("orcid-merge").hidden = !me.orcid_only;
+    if (me.orcid) Object.assign($("orcid-id"), { textContent: me.orcid, href: `https://orcid.org/${me.orcid}` });
     $("admin").hidden = !me.admin;
     const a = me.assistant;
     const whose = a.assistant === "group" ? `the key of your group ${a.group}` : WHOSE[a.assistant] ?? a.assistant;
@@ -74,6 +104,41 @@ function showMe() {
   });
 }
 showMe();
+// Back from ORCID, linking: how it went.
+const LINKED = {
+  linked: ["Your ORCID iD is linked: you log in with it too.", true],
+  merged: ["The account of your ORCID iD is merged into this one: you log in with it too.", true],
+  taken: ["That ORCID iD signs in another account here: ask an admin.", false],
+  refused: ["Your ORCID iD could not be linked (you may have one already).", false],
+  expired: ["The link with ORCID took too long, or began in another browser: try again.", false],
+};
+const linked = LINKED[new URLSearchParams(location.search).get("orcid")];
+if (linked) orcidSay(...linked);
+function orcidSay(text, ok) {
+  $("orcid-message").textContent = text;
+  $("orcid-message").className = ok ? "ok" : "error";
+}
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  return [response.ok, await response.json().catch(() => ({ error: response.statusText }))];
+}
+$("orcid-unlink").addEventListener("click", async () => {
+  if (!confirm("Unlink your ORCID iD? You then log in with your password only.")) return;
+  const [ok, answer] = await post("/account/api/unlink-orcid", {});
+  orcidSay(ok ? `${answer.orcid} is unlinked.` : answer.error, ok);
+  if (ok) showMe();
+});
+$("merge").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const [ok, answer] = await post("/account/api/merge-into", { name: form.get("name"), password: form.get("password") });
+  if (!ok) return orcidSay(answer.error, false);
+  event.target.reset();
+  orcidSay(`Merged into ${answer.name}: you are logged in as ${answer.name}.`, true);
+  showMe();
+});
 async function saveLlm(body, done) {
   const response = await fetch("/account/api/llm", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),

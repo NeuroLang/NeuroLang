@@ -58,11 +58,14 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    loginctl enable-linger $USER   # keep it running after you log out
 
 Then open ``https://SERVER:8443/``, log in as ``ann``, and open the admin
-console at ``https://SERVER:8443/admin`` to add the other users.  The
-first start downloads the engines' data into ``--data-dir`` and builds the
-engine, which takes a few minutes; later, the first session of an engine
-takes the time of a build (about a minute for Neurosynth with ``--light``),
-and the next ones under a second.
+console at ``https://SERVER:8443/admin`` to add the other users.  Before
+serving, the server prepares each engine: it downloads its data into
+``--data-dir`` and finds the tables it takes long to find, kept there, which
+takes a few minutes the first time and is quicker after; an engine it
+cannot prepare (a source down) is told in the log, and its first session
+tries again.  A session then starts from the data kept, without the
+network: the first one of an engine takes the time of a build (about a
+minute for Neurosynth with ``--light``), the next ones under a second.
 
 
 Requirements
@@ -101,6 +104,9 @@ Serving
 ``--data-dir DIR``
    The engines' data directory (default ``neurolang_data``, relative to
    where the command runs; give an absolute path for a service).
+``--no-prepare``
+   Do not prepare the engines before serving; the first session of each
+   downloads what it lacks.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -218,11 +224,13 @@ Storing the ratings
 
 ``--activity-db activity.sqlite``
    With ``--local`` and ``--users``, log what each user runs, its result
-   and the resources it took (see `Activity and usage`_).
+   and the resources it took (see `Activity and usage`_), which the admins
+   read at ``/admin/activity`` (see `The activity page`_).
 
 ``--dashboard``
-   With ``--activity-db``, a dashboard of the log, the ratings and the
-   uptime, for the admins, at ``/admin/logs/`` (see `The dashboard`_).
+   With ``--activity-db``, Datasette on the log and the ratings, for the
+   admins, at ``/admin/logs/``: every table and any read-only SQL (see
+   `Raw data and SQL`_).
 
 Running as a service
 ~~~~~~~~~~~~~~~~~~~~
@@ -466,6 +474,38 @@ From the command line::
 In the console, *Add* with an iD as the user's name and no password adds a
 user who signs in with ORCID.
 
+**Merging and separating.**  A user of a name of their own may sign in with
+an ORCID iD too: merging the ORCID user named by the iD into them (the
+console's *merge into…*, or ``--merge-orcid ID USER``) gives them
+``orcid: ID``, the groups of both, and the ORCID user's assistant,
+variables and own key where they have none; the ORCID user is no more, and
+their sessions end.  They then log in with their password, or with ORCID::
+
+   users:
+     bob:
+       password: scrypt$16384$8$1$...
+       groups: [imaging, lab]
+       orcid: 0000-0002-1694-233X
+       orcid_name: Sofia Garcia
+
+Users do it themselves on their account page too:
+
+- a user with a password links their iD (*Link my ORCID iD*): they sign in
+  at ORCID, which proves the iD theirs, and log in with either then; an
+  iD with an account of its own is merged into theirs, as above.  They
+  unlink it there (*Unlink it*), and log in with their password only.
+- a user who signs in with ORCID only merges their account into one of
+  theirs with a password (*Merge into it*, giving its name and password):
+  they are logged in as it then.
+
+An iD that signs in another user is not linked: an admin decides.
+
+Separating it (*Separate ORCID*, or ``--separate-orcid USER``) makes the iD a
+user of its own again, named by it, in the user's groups but ``admin``,
+which an admin gives again if it is theirs.  An iD signs in one user only:
+the server refuses a users file where it names a user and is another's
+``orcid``.
+
 
 Guests
 ------
@@ -593,11 +633,48 @@ SQLite reads it too::
    sqlite3 activity.sqlite "SELECT created, kind, text, seconds, cpu, memory FROM activity WHERE user = 'bob'"
 
 
-The dashboard
--------------
+The activity page
+-----------------
 
-With ``--dashboard`` (and ``--activity-db``), the admins explore the log
-at ``/admin/logs/`` (linked from the console): `Datasette
+With ``--activity-db``, the admins have ``/admin/activity`` (*Activity*,
+linked from the console): what the users ran and what it took, read at a
+glance.
+
+- **Filters**, one row above everything they scope: the period (24 hours,
+  7 days, 30 days, all), a user, an engine.  The view is in the page's
+  address, so that it can be kept and shared; times are in the browser's
+  time zone.
+- **Figures** of the period: the uptime, the users and the sessions they
+  started, the inputs and the share that failed, the CPU time, the LLM
+  tokens and the share spent on the server's keys, the most memory of one
+  session.
+- **Uptime**: a strip of the runs of the server over the period (a gap, a
+  time it was down; a tick, a run that ended without stopping), and the
+  latest runs.  A period starts when the log began, if later: nothing is
+  known before, which is not a time the server was down.
+- **Over time**: the inputs, the CPU time, the LLM tokens and the active
+  users, by hour over 2 days at most, else by day, each in a chart of its
+  own on the same time axis, with its table.
+- **Users**: each user's inputs, failures, time, CPU, tokens, most memory
+  and last input, sortable; choosing one shows only theirs, and a link to
+  their whole log.
+- **Inputs**: the latest, slowest, or those that took the most CPU or
+  tokens, searched by their text, the failed ones only if asked; each
+  opens on its result, its memory and the assistant's model and key.
+- **Why sessions ended**.
+
+The charts are drawn with `Chart.js <https://www.chartjs.org>`_ (MIT),
+which the server serves itself (``tools/serve_repl/vendor/chartjs``): the
+page needs nothing from another site.  It follows the computer's light or
+dark theme, or the one chosen at its foot.
+
+
+Raw data and SQL
+----------------
+
+With ``--dashboard`` (and ``--activity-db``), the admins also explore the
+log at ``/admin/logs/`` (*Raw data and SQL*, linked from the console):
+`Datasette
 <https://datasette.io/>`_ on the activity log and the ratings
 (``--feedback-db``), with its charts (`datasette-vega
 <https://github.com/simonw/datasette-vega>`_).  Install them with the
@@ -622,7 +699,8 @@ activity database, each over the last ``days`` (empty: all):
   *The runs of the server* (see `Uptime`_).
 
 *Show charting options*, above a result, draws it (a line of the inputs
-by hour, a bar of the CPU by user…).
+by hour, a bar of the CPU by user…); the queries by time and by user link
+to their charts.
 
 Datasette runs in a process of its own, started and ended with the
 server, listening on a unix socket in a directory only the server's user
@@ -768,8 +846,10 @@ The service does not start
    apps --extra tui --extra llm`` and ``--daemon reinstall``.
 The page says *The engine could not start*
    Open *Technical details* on the page; the full traceback is in the
-   service's log.  On a first start, the engine downloads its data into
-   ``--data-dir``: check that the server reaches the internet and has room.
+   service's log.  The log tells, before *The REPL is at*, whether each
+   engine was prepared; one that was not downloads its data into
+   ``--data-dir`` at its first session: check that the server reaches the
+   internet (and its sources, OSF and GitHub, are up) and has room.
 *The builder of the engines ended*
    The process building the engines died (out of memory, most often): see
    the log, and give the server more memory or ``--light``.

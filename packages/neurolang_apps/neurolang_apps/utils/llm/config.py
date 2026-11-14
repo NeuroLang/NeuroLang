@@ -26,6 +26,11 @@ import yaml
 CONFIG_ENV = "NEUROLANG_LLM_CONFIG"
 USER_CONFIG = Path("~/.config/neurolang/llm.yaml")
 EXAMPLE_CONFIG = Path(__file__).with_name("llm.example.yaml")
+# The defaults of the settings, those a configuration file does not give.
+DEFAULTS_FILE = Path(__file__).with_name("defaults.yaml")
+DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
+_PROVIDER = DEFAULTS["provider"]
+_ASSISTANT = DEFAULTS["assistant"]
 
 APIS = ("openai", "anthropic", "command")
 TOOL_CALLING = ("text", "native")
@@ -61,8 +66,8 @@ class ProviderConfig:
     base_url: str = ""
     api_key_env: Optional[str] = None
     headers: dict = field(default_factory=dict)
-    tool_calling: str = "text"
-    max_tokens: int = 2048
+    tool_calling: str = _PROVIDER["tool_calling"]
+    max_tokens: int = _PROVIDER["max_tokens"]
     command: tuple = ()
     requests_per_minute: Optional[float] = None
 
@@ -103,20 +108,21 @@ class AssistantConfig:
     turns the verification off.
     """
 
-    strategy: str = "react"
-    language: str = "auto"
-    max_steps: int = 8
-    max_repairs: int = 3
-    few_shot_k: int = 6
-    samples: int = 1
+    # Their defaults are those of defaults.yaml.
+    strategy: str = _ASSISTANT["strategy"]
+    language: str = _ASSISTANT["language"]
+    max_steps: int = _ASSISTANT["max_steps"]
+    max_repairs: int = _ASSISTANT["max_repairs"]
+    few_shot_k: int = _ASSISTANT["few_shot_k"]
+    samples: int = _ASSISTANT["samples"]
     fallback_provider: Optional[ProviderConfig] = None
-    temperature: float = 0.0
-    timeout: float = 60.0
-    preview_rows: int = 10
-    query_timeout: float = 30.0
-    query_memory_mb: float = 4096.0
-    verify_rounds: int = 1
-    comment_rules: bool = True
+    temperature: float = _ASSISTANT["temperature"]
+    timeout: float = _ASSISTANT["timeout"]
+    preview_rows: int = _ASSISTANT["preview_rows"]
+    query_timeout: float = _ASSISTANT["query_timeout"]
+    query_memory_mb: float = _ASSISTANT["query_memory_mb"]
+    verify_rounds: int = _ASSISTANT["verify_rounds"]
+    comment_rules: bool = _ASSISTANT["comment_rules"]
 
 
 @dataclass(frozen=True)

@@ -37,6 +37,16 @@ def test_relational_algebra_set_semantics_empty(ra_module):
     assert ras.arity == 2
 
 
+def test_projection_of_an_empty_set_keeps_the_columns_projected(ra_module):
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(("a", "b"), [])
+    unnamed = empty.to_unnamed()
+    assert unnamed.projection(1).arity == 1
+    assert unnamed.projection(1, 0, 1).arity == 3
+    assert empty.projection_to_unnamed("b").arity == 1
+    assert unnamed.projection(1).is_empty()
+    assert unnamed.projection() == ra_module.RelationalAlgebraFrozenSet.dum()
+
+
 def test_relational_algebra_set_semantics(ra_module):
     a = [5, 4, 3, 2, 3, 1]
     ras = ra_module.RelationalAlgebraSet(a)
@@ -1081,6 +1091,30 @@ def test_extended_projection(ra_module):
     assert initial_set == new_set
 
 
+def test_extended_projection_of_a_function_reads_a_row_as_its_callers_do(
+    ra_module
+):
+    """A function of the row reads a column as an attribute, by its label or
+    among the row's values, as the solvers' functions do, whatever its name
+    (``_n``, which a namedtuple renames); with pandas, the labels may be
+    integers (polars makes them strings)."""
+    rows = [("a1", 7, 0.5), ("b2", 9, 0.25)]
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("s", "_n", "p"), rows
+    )
+    new_set = initial_set.extended_projection({
+        "s": RelationalAlgebraColumnStr("s"),
+        "a": lambda r: f"{r.s}:{r['_n']}",
+        "b": lambda r: list(r)[2] * r._n,
+    })
+    assert set(new_set) == {("a1", "a1:7", 3.5), ("b2", "b2:9", 2.25)}
+    if ra_module is not pandas:
+        return
+    unnamed = ra_module.NamedRelationalAlgebraFrozenSet((1, 2), [(7, 8)])
+    assert set(unnamed.extended_projection({"z": lambda r: r[1] - r[2]})) \
+        == {(-1,)}
+
+
 def test_extended_projection_on_dee(ra_module):
     ras_a = (
         ra_module.NamedRelationalAlgebraFrozenSet.dee().extended_projection(
@@ -1105,6 +1139,26 @@ def test_extended_projection_on_python_sets(ra_module):
 
     new_set = ras.extended_projection({"l": lambda x: len(x)})
     assert expected_len == new_set
+
+
+def test_extended_projection_callable_runs_once_per_distinct_row(ra_module):
+    calls = []
+
+    def f(r):
+        calls.append(r.x)
+        return r.x * 10
+
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(1, 2), (1, 3), (1, 4), (2, 5)]
+    ).projection("x")
+    new_set = ras.extended_projection(
+        {"x": RelationalAlgebraColumnStr("x"), "z": f}
+    )
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "z"), [(1, 10), (2, 20)]
+    )
+    assert new_set == expected
+    assert sorted(calls) == [1, 2]
 
 
 def test_rename_columns(ra_module):
@@ -1393,6 +1447,36 @@ def test_naturaljoin_on_a_unique_key_takes_little_memory():
     finally:
         tracemalloc.stop()
     assert peak < 1.5 * frame.memory_usage(index=False).sum()
+
+
+@pytest.mark.parametrize("small_first", [True, False])
+def test_naturaljoin_on_a_unique_string_key(small_first):
+    """
+    The look-up join on a unique key of pandas' strings, held by Arrow as
+    the study ids of NeuroStore are, matches the rows a merge matches, the
+    keys of the larger relation missing from the smaller one left out.
+    """
+    import numpy as np
+    import pandas as pd
+
+    small_rows = [("a1", 0.5), ("b2", 0.25), ("c3", 0.125)]
+    keys = ["b2", "a1", "zz", "b2", "c3"]
+    large_rows = [(k, n) for n, k in enumerate(keys)]
+    small = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "p"), pd.DataFrame(small_rows, columns=["s", "p"])
+    )
+    large = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "n"), pd.DataFrame(large_rows, columns=["s", "n"])
+    )
+    assert not isinstance(large._container["s"].dtype, np.dtype)
+    p = dict(small_rows)
+    if small_first:
+        joined = small.naturaljoin(large)
+        expected = {(k, p[k], n) for k, n in large_rows if k in p}
+    else:
+        joined = large.naturaljoin(small)
+        expected = {(k, n, p[k]) for k, n in large_rows if k in p}
+    assert set(joined.to_unnamed()) == expected
 
 
 def test_aggregate_sum_of_floats_is_python_sum(ra_module):

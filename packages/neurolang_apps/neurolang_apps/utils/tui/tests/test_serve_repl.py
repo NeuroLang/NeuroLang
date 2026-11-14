@@ -65,7 +65,7 @@ def test_the_bundle_is_built_once_unless_asked_again(
         built.append(embeddings)
         (repl / "bundle.json").write_text(
             json.dumps({"engines": dict.fromkeys(
-                    ["neurosynth", "neurosynth_iit", "neurostore"], {})})
+                    serve.bundle_script().ENGINES, {})})
         )
 
     monkeypatch.setattr(serve, "build_bundle", build)
@@ -101,10 +101,44 @@ def test_the_bundle_is_built_by_the_bundle_script(
 ):
     commands = []
     monkeypatch.setattr(serve.subprocess, "check_call", commands.append)
-    serve.build_bundle(tmp_path, None)
-    serve.build_bundle(tmp_path, "emb")
+    serve.build_bundle(tmp_path, None, downloads=None)
+    serve.build_bundle(tmp_path, "emb", downloads=None)
     assert commands[0][1:] == [str(serve.BUNDLE_SCRIPT), str(tmp_path)]
     assert commands[1][-1] == "emb"
+
+
+def test_the_bundle_keeps_what_it_downloads(serve, monkeypatch, tmp_path):
+    """A source down (OSF, GitHub) does not stop a rebuild: what an engine
+    downloaded is kept, by default in DEFAULT_DOWNLOADS."""
+    commands = []
+    monkeypatch.setattr(serve.subprocess, "check_call", commands.append)
+    serve.build_bundle(tmp_path, None)
+    assert commands[0][-2:] == ["--downloads", str(serve.DEFAULT_DOWNLOADS)]
+    serve.build_bundle(tmp_path, None, downloads=tmp_path / "d")
+    assert commands[1][-2:] == ["--downloads", str(tmp_path / "d")]
+    args = serve.parse_args(["--downloads", str(tmp_path / "d")])
+    assert args.downloads == tmp_path / "d"
+
+
+def test_the_local_engines_are_prepared_before_serving(serve, capsys):
+    """Each engine is built once, its downloads and tables kept in the
+    data directory; one that fails is told, and the others are built."""
+    built = []
+
+    def run(name):
+        built.append(name)
+        return name != "neurostore"
+
+    failed = serve.prepare_engines(
+        Path("data"), ["neurosynth", "neurostore", "neurosynth_iit"], run=run,
+    )
+    assert built == ["neurosynth", "neurostore", "neurosynth_iit"]
+    assert failed == ["neurostore"]
+    out = capsys.readouterr().out
+    assert "neurosynth is ready" in out
+    assert "neurostore could not be prepared" in out
+    assert serve.parse_args(["--local"]).prepare
+    assert not serve.parse_args(["--local", "--no-prepare"]).prepare
 
 
 def test_the_bundle_is_built_with_the_engines_asked_for(
@@ -127,8 +161,7 @@ def test_a_bundle_lacking_an_engine_asked_for_is_built_again(
 
     def build(repl, embeddings, engines=None):
         built.append(engines)
-        names = engines or [
-                "neurosynth", "neurosynth_iit", "neurostore"]
+        names = engines or serve.bundle_script().ENGINES
         (repl / "bundle.json").write_text(
             json.dumps({"engines": {name: {} for name in names}})
         )
@@ -573,6 +606,12 @@ def test_the_service_serves_as_asked_with_absolute_paths(
     assert after["--data-dir"] == str(tmp_path / "data")
     assert after["--engine"] == "neurosynth"
     assert "--local" in command
+    assert after["--downloads"] == str(serve.DEFAULT_DOWNLOADS)
+    assert "--no-prepare" not in command
+    command = serve.service_command(_daemon_args(
+        serve, tmp_path, "--local", "--no-prepare",
+    ))
+    assert "--no-prepare" in command
 
 
 def test_the_service_runs_the_python_of_the_virtual_environment(
@@ -1648,6 +1687,18 @@ def _login(port, name, password):
     return status, cookie.split(";")[0]
 
 
+def test_the_login_page_needs_no_other_file(serve):
+    """Before a login every file but the login's is refused: the page has
+    its logo, its style and its script in it, and the ids its script reads."""
+    page = serve.LOGIN_PAGE.read_text()
+    assert not re.search(r"<link\b|<script[^>]*\bsrc=|@import|url\((?!data:)", page)
+    assert not re.search(r'<img[^>]*\bsrc="(?!data:)', page)
+    ids = re.findall(r'\$\("([\w-]+)"\)', page.split("<script>\n// Where")[1])
+    assert {"login", "message", "password", "reveal", "orcid-in", "guest-in",
+            "ask", "request"} <= set(ids)
+    assert all(f'id="{name}"' in page for name in set(ids))
+
+
 def test_users_log_in_on_a_page_and_out(console):
     port, users = console
     # A page the browser opens leads to the login page; the rest is
@@ -2586,6 +2637,7 @@ def test_a_sigterm_stops_the_server_as_a_stop(serve, tmp_path):
         sys.executable, str(SCRIPT), "--local", "--users", str(users.path),
         "--activity-db", str(db), "--data-dir", str(tmp_path / "data"),
         "--site", str(tmp_path / "site"), "--port", "0", "--no-browser",
+        "--no-prepare",  # no engine built: it stops before any is used
     ])
     try:
         deadline = time.monotonic() + 120
@@ -2655,3 +2707,299 @@ def test_the_statements_of_a_server_of_users_are_confined(
                         "--data-dir", str(data), *lifted,
                         *(["--local"] if lifted else [])])
         assert CONFINE_ENV not in os.environ
+
+
+# --- an ORCID user merged into a user, and separated -----------------------
+
+def test_an_orcid_user_merges_into_a_user_and_separates(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    users.change(ORCID_NEW, groups=["imaging"], create=True,
+                 orcid_name="Sofia Garcia", env={"A_KEY": "k"})
+    users.merge_orcid(ORCID_NEW, "bob")
+    entry = users.current()["bob"]
+    assert ORCID_NEW not in users.current()
+    assert entry["orcid"] == ORCID_NEW
+    assert entry["orcid_name"] == "Sofia Garcia"
+    assert entry["groups"] == ["imaging", "lab"]
+    assert entry["env"] == {"A_KEY": "k"}  # theirs where bob had none
+    assert users.check("bob", b"bob-pw")  # their password stays
+    assert users.by_orcid(ORCID_NEW) == "bob"
+    # an iD signs in one user only, and a user one iD
+    users.change(ORCID_ANN, groups=[], create=True)
+    with pytest.raises(ValueError, match="already: separate it first"):
+        users.merge_orcid(ORCID_ANN, "bob")
+    with pytest.raises(ValueError, match="signs in both"):
+        users.change(ORCID_NEW, groups=[], create=True)
+    for orcid_id, into in ((ORCID_ANN, ORCID_ANN), ("ann", "bob"),
+                           (ORCID_ANN, "nobody")):
+        with pytest.raises(ValueError):
+            users.merge_orcid(orcid_id, into)
+    # separated, the iD is a user of its own again, in bob's groups
+    assert users.separate_orcid("bob") == ORCID_NEW
+    assert "orcid" not in users.current()["bob"]
+    assert users.current()[ORCID_NEW]["groups"] == ["imaging", "lab"]
+    assert users.current()[ORCID_NEW]["orcid_name"] == "Sofia Garcia"
+    assert users.by_orcid(ORCID_NEW) == ORCID_NEW
+    with pytest.raises(ValueError, match="no ORCID iD to separate"):
+        users.separate_orcid("bob")
+
+
+def test_an_admin_separated_is_no_admin(serve, tmp_path):
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin", "lab"]))
+    users.change(ORCID_NEW, groups=[], create=True)
+    users.merge_orcid(ORCID_NEW, "ann")
+    users.separate_orcid("ann")
+    assert users.groups(ORCID_NEW) == ["lab"]
+    assert users.is_admin("ann")
+
+
+def test_a_users_file_of_an_id_twice_is_refused(serve, tmp_path):
+    path = tmp_path / "users.yaml"
+    hashed = serve.hash_password("pw")
+    path.write_text(f"users:\n  ann:\n    password: {hashed}\n"
+                    f"    orcid: '{ORCID_ANN}'\n"
+                    f"  '{ORCID_ANN}':\n    groups: [lab]\n")
+    with pytest.raises(SystemExit, match="signs in both"):
+        serve.read_users(path)
+    path.write_text(f"users:\n  ann:\n    password: {hashed}\n"
+                    "    orcid: not-an-id\n")
+    with pytest.raises(SystemExit, match="is not an ORCID iD"):
+        serve.read_users(path)
+
+
+def test_a_user_merged_signs_in_with_orcid(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["lab"], create=True)
+    admin = _basic("ann-pw", "ann")
+    status, _ = _json_at(port, "POST", "/admin/api/merge-orcid", admin,
+                         {"name": ORCID_ANN, "into": "bob"})
+    assert status == 200
+    state = _json_at(port, "GET", "/admin/api/state", admin)[1]
+    [bob] = [u for u in state["users"] if u["name"] == "bob"]
+    assert bob["orcid"] == ORCID_ANN
+    assert ORCID_ANN not in [u["name"] for u in state["users"]]
+    # ORCID's sign-in of the iD is bob's now
+    _, back = _sign_in(port, "c-ann", "/")
+    login = {"Cookie": _cookie_of(back, "neurolang_login")}
+    me = _json_at(port, "GET", "/account/api/me", login)[1]
+    assert (me["name"], me["orcid"], me["orcid_only"]) == (
+        "bob", ORCID_ANN, False)
+    # separated, it signs in the ORCID user again
+    status, answer = _json_at(port, "POST", "/admin/api/separate-orcid",
+                              admin, {"name": "bob"})
+    assert (status, answer["orcid"]) == (200, ORCID_ANN)
+    _, back = _sign_in(port, "c-ann", "/")
+    login = {"Cookie": _cookie_of(back, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", login)[1]["name"] \
+        == ORCID_ANN
+    status, answer = _json_at(port, "POST", "/admin/api/separate-orcid",
+                              admin, {"name": "bob"})
+    assert status == 400 and "no ORCID iD" in answer["error"]
+
+
+def test_merge_and_separate_from_the_command_line(serve, tmp_path, capsys):
+    path = tmp_path / "users.yaml"
+    serve.main(["--users", str(path), "--add-user", ORCID_NEW,
+                "--groups", "admin"])
+    users = serve.Users(path)
+    users.change("bob", password="bob-pw-long", groups=["lab"], create=True)
+    serve.main(["--users", str(path), "--merge-orcid", ORCID_NEW, "bob"])
+    assert "bob signs in with the ORCID iD" in capsys.readouterr().out
+    assert serve.read_users(path)["bob"]["orcid"] == ORCID_NEW
+    serve.main(["--users", str(path), "--separate-orcid", "bob"])
+    assert ORCID_NEW in serve.read_users(path)
+    with pytest.raises(SystemExit, match="no ORCID iD to separate"):
+        serve.main(["--users", str(path), "--separate-orcid", "bob"])
+
+
+# --- a user links their own ORCID iD, or merges into an account -------------
+
+def _link(port, cookie, code):
+    """Link the iD of *code* to the user of the login *cookie*, as their
+    account page does: the status and the headers of the way back."""
+    status, headers = _http(port, "GET", "/login/orcid?link=1",
+                            {"Cookie": cookie})
+    if status != 303:
+        return status, headers
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    started = _cookie_of(headers, "neurolang_orcid")
+    return _http(port, "GET",
+                 f"/login/orcid/callback?code={code}&state={state}",
+                 {"Cookie": f"{started}; {cookie}"})
+
+
+def test_a_user_links_their_orcid_id(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    status, back = _link(port, bob, "c-new")
+    assert (status, back["Location"]) == (303, "/account?orcid=linked")
+    assert users.current()["bob"]["orcid"] == ORCID_NEW
+    assert users.current()["bob"]["orcid_name"] == "Sofia Garcia"
+    # they sign in with it now
+    _, back = _sign_in(port, "c-new", "/")
+    me = _json_at(port, "GET", "/account/api/me",
+                  {"Cookie": _cookie_of(back, "neurolang_login")})[1]
+    assert (me["name"], me["orcid"]) == ("bob", ORCID_NEW)
+    # once only, and unlinked again
+    assert _link(port, bob, "c-new")[1]["Location"] == \
+        "/account?orcid=taken"
+    status, answer = _json_at(port, "POST", "/account/api/unlink-orcid",
+                              {"Cookie": bob}, {})
+    assert (status, answer["orcid"]) == (200, ORCID_NEW)
+    assert "orcid" not in users.current()["bob"]
+    assert _json_at(port, "POST", "/account/api/unlink-orcid",
+                    {"Cookie": bob}, {})[0] == 400
+
+
+def test_a_user_links_the_id_of_an_orcid_account(orcid_server):
+    """The account of the iD is merged into theirs."""
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    assert _link(port, bob, "c-ann")[1]["Location"] == \
+        "/account?orcid=merged"
+    assert ORCID_ANN not in users.current()
+    assert users.current()["bob"]["groups"] == ["imaging", "lab"]
+    assert users.by_orcid(ORCID_ANN) == "bob"
+
+
+def test_linking_needs_the_login_it_began_with(orcid_server):
+    port, users = orcid_server
+    assert _http(port, "GET", "/login/orcid?link=1")[0] == 401
+    users.change("bob", password="bob-pw-long", groups=[], create=True)
+    _, bob = _login(port, "bob", "bob-pw-long")
+    _, ann = _login(port, "ann", "ann-pw")
+    status, headers = _http(port, "GET", "/login/orcid?link=1",
+                            {"Cookie": bob})
+    state = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(headers["Location"]).query)["state"][0]
+    started = _cookie_of(headers, "neurolang_orcid")
+    # back in a browser logged in as someone else
+    _, back = _http(port, "GET",
+                    f"/login/orcid/callback?code=c-new&state={state}",
+                    {"Cookie": f"{started}; {ann}"})
+    assert back["Location"] == "/account?orcid=expired"
+    assert "orcid" not in users.current()["ann"]
+    assert "orcid" not in users.current()["bob"]
+
+
+def test_an_orcid_user_merges_into_their_account(orcid_server):
+    port, users = orcid_server
+    users.change("bob", password="bob-pw-long", groups=["imaging"],
+                 create=True)
+    _, back = _sign_in(port, "c-ann", "/")
+    mine = {"Cookie": _cookie_of(back, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", mine)[1][
+        "orcid_signs_in"]
+    status, answer = _json_at(port, "POST", "/account/api/merge-into", mine,
+                              {"name": "bob", "password": "wrong"})
+    assert status == 403
+    status, headers = _http(port, "POST", "/account/api/merge-into", mine,
+                            {"name": "bob", "password": "bob-pw-long"})
+    assert status == 200
+    assert users.by_orcid(ORCID_ANN) == "bob"
+    assert users.current()["bob"]["groups"] == ["imaging", "lab"]
+    # logged in as bob now; the ORCID account is no more
+    login = {"Cookie": _cookie_of(headers, "neurolang_login")}
+    assert _json_at(port, "GET", "/account/api/me", login)[1]["name"] \
+        == "bob"
+    assert _http(port, "GET", "/bundle.json", mine)[0] == 401
+    # a user of a password merges nothing so
+    _, bob = _login(port, "bob", "bob-pw-long")
+    assert _json_at(port, "POST", "/account/api/merge-into",
+                    {"Cookie": bob},
+                    {"name": "ann", "password": "ann-pw"})[0] == 403
+
+
+def test_the_defaults_of_the_options_are_those_of_their_file(serve):
+    """The options take their defaults from serve_repl/defaults.yaml, and
+    the docs that quote them agree."""
+    import yaml
+
+    defaults = yaml.safe_load(serve.DEFAULTS_FILE.read_text())
+    args = serve.parse_args([])
+    for name, value in defaults.items():
+        given = getattr(args, name)
+        if isinstance(given, Path):
+            assert given == Path(value).expanduser(), name
+        else:
+            assert given == value, name
+    docs = SCRIPT.parents[2] / "doc"
+    if not docs.exists():  # not a checkout
+        return
+    server = " ".join((docs / "repl_server.rst").read_text().split())
+    assert f"({defaults['max_sessions']}, at least 1)" in server
+    assert f"({defaults['idle_minutes']}, above 0)" in server
+    assert f"({defaults['query_minutes']}; 0, never)" in server
+    assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    contributing = " ".join((docs / "contributing.rst").read_text().split())
+    assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
+    assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing
+
+
+def test_the_activity_page_is_the_admins(serve, tmp_path):
+    from neurolang_apps.utils.tui.activity import ActivityLog
+
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.activity = ActivityLog(tmp_path / "activity.sqlite")
+    sessions.activity.add("bob", "submit", text="ans(x) :- p(x)",
+                          engine="neurosynth", response="x\n1",
+                          failed=False, seconds=0.5, cpu=0.4)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        for path in ("/admin/activity", "/admin/vendor/chart.umd.min.js",
+                     "/admin/api/activity/report?days=7"):
+            assert _status(port, path, _basic("bob-pw", "bob")) == 403
+            assert _status(port, path, _basic("ann-pw", "ann")) == 200
+        report = _json_of(port, "/admin/api/activity/report?days=7&"
+                          "tz=Europe/Paris", "ann", "ann-pw")
+        assert report["figures"]["inputs"] == 1
+        assert report["names"] == ["bob"] and report["engines"] == [
+            "neurosynth"]
+        [row] = _json_of(port, "/admin/api/activity/inputs?user=bob&q=p(x",
+                         "ann", "ann-pw")
+        entry = _json_of(port, f"/admin/api/activity/entry?id={row['id']}",
+                         "ann", "ann-pw")
+        assert entry["response"] == "x\n1"
+        for bad in ("inputs?sort=id", "report?days=-1", "inputs?offset=x",
+                    "entry?id=x"):
+            assert _status(port, f"/admin/api/activity/{bad}",
+                           _basic("ann-pw", "ann")) == 400
+        assert _status(port, "/admin/api/activity/entry?id=99",
+                       _basic("ann-pw", "ann")) == 404
+        assert _json_of(port, "/admin/api/state", "ann", "ann-pw")[
+            "activity"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_without_an_activity_log_the_page_says_how(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        assert _status(port, "/admin/activity", _basic("ann-pw", "ann")) \
+            == 200
+        with pytest.raises(urllib.error.HTTPError) as error:
+            _json_of(port, "/admin/api/activity/report", "ann", "ann-pw")
+        with error.value:
+            assert error.value.code == 404
+            assert "--activity-db" in json.load(error.value)["error"]
+    finally:
+        server.shutdown()
+        server.server_close()

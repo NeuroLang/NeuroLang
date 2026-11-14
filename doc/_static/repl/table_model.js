@@ -37,6 +37,8 @@ export class TableModel {
     this.texts = null; // the lower-case text of each row's cells, when needed
     // The most probable rows first, as a probabilistic result is read.
     this.probability = this.probabilityColumn();
+    // The answer: the largest probability, or null; its bar is drawn apart.
+    this.top = this.probability >= 0 ? this.range(this.probability).high : null;
     if (this.probability >= 0) {
       this.sort = { column: this.probability, direction: "desc" };
       this.refresh();

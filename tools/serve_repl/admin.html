@@ -28,7 +28,7 @@
 </head>
 <body>
 <h1>NeuroLang REPL: admin</h1>
-<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="dashboard-link" hidden> · <a href="/admin/logs/">Dashboard of the activity</a></span> · <a href="/logout">Log out</a></p>
+<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="activity-link" hidden> · <a href="/admin/activity">Activity</a></span><span id="dashboard-link" hidden> · <a href="/admin/logs/">Raw data and SQL</a></span> · <a href="/logout">Log out</a></p>
 <p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
 <p id="message" role="status"></p>
 
@@ -68,7 +68,7 @@
   <label><span><input name="drop" type="checkbox"> remove</span></label>
   <button>Set their assistant</button>
 </form>
-<p class="note" id="orcid-note" hidden>A user named by an ORCID iD (0000-0002-1825-0097) signs in with ORCID, and needs no password.</p>
+<p class="note" id="orcid-note" hidden>A user named by an ORCID iD (0000-0002-1825-0097) signs in with ORCID, and needs no password. Merged into a user of a name of their own (<em>merge into…</em> in the list above), that user signs in with the iD too; <em>Separate ORCID</em> makes it a user of its own again.</p>
 <p class="note">A user's assistant: the key their page gives (if allowed), else their own (set here or on their account page), else their groups', else the server's, else none: they give theirs in the page.</p>
 
 <h2>Groups</h2>
@@ -180,6 +180,46 @@ function assistant(user, labels = ASSISTANT) {
   return cell;
 }
 
+// An ORCID iD: a user named by one signs in with ORCID.
+const ORCID_ID = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
+
+// Who a user is: their name, their name at ORCID, the iD they sign in with too.
+function who(user) {
+  const text = user.orcid_name ? `${user.name} (${user.orcid_name})` : user.name;
+  if (!user.orcid) return text;
+  const cell = document.createElement("div");
+  const note = Object.assign(document.createElement("div"), { className: "note" });
+  note.append("ORCID ", Object.assign(document.createElement("a"), {
+    href: `https://orcid.org/${user.orcid}`, target: "_blank", rel: "noopener", textContent: user.orcid }));
+  cell.append(text, note);
+  return cell;
+}
+
+// What an admin does to a user: an ORCID user merged into a user of a name of
+// their own (*named*), the iD of a user separated, a user removed.
+function actions(user, named) {
+  const cell = document.createElement("span");
+  if (ORCID_ID.test(user.name) && named.length) {
+    const into = document.createElement("select");
+    into.append(new Option("merge into…", ""), ...named.map((n) => new Option(n, n)));
+    into.addEventListener("change", () => {
+      const target = into.value;
+      into.value = "";
+      if (target && confirm(`Merge ${user.name} into ${target}? ${target} then signs in with this ORCID iD too, in the groups of both; ${user.name} is no more.`)) {
+        change("/admin/api/merge-orcid", { name: user.name, into: target }, `${target} signs in with ${user.name} now.`);
+      }
+    });
+    cell.append(into, " ");
+  }
+  if (user.orcid) {
+    cell.append(button("Separate ORCID", () => confirm(`Separate ${user.orcid} from ${user.name}? It becomes a user of its own, in ${user.name}'s groups but admin.`)
+      && change("/admin/api/separate-orcid", { name: user.name }, `${user.orcid} is a user of its own again.`)), " ");
+  }
+  cell.append(button("Remove", () => confirm(`Remove the user ${user.name} and end their sessions?`)
+    && change("/admin/api/remove-user", { name: user.name }, `${user.name} is removed.`)));
+  return cell;
+}
+
 function minutes(seconds) {
   return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
 }
@@ -188,11 +228,11 @@ async function show() {
   const state = await call("/admin/api/state");
   $("me").textContent = state.me;
   $("names").replaceChildren(...state.users.map((u) => Object.assign(document.createElement("option"), { value: u.name })));
+  const named = state.users.filter((u) => !ORCID_ID.test(u.name) && !u.orcid).map((u) => u.name);
   $("users").replaceChildren(...state.users.map((user) => row([
-    user.orcid_name ? `${user.name} (${user.orcid_name})` : user.name, user.groups.join(", "), assistant(user), user.variables.join(", "),
+    who(user), user.groups.join(", "), assistant(user), user.variables.join(", "),
     (user.own_key ? "allowed" : "not allowed") + (user.own_key_set === undefined || user.own_key_set === null ? "" : " (theirs)"),
-    button("Remove", () => confirm(`Remove the user ${user.name} and end their sessions?`)
-      && change("/admin/api/remove-user", { name: user.name }, `${user.name} is removed.`)),
+    actions(user, named),
   ])));
   $("orcid-note").hidden = $("requests-box").hidden = !state.orcid;
   $("requests").replaceChildren(...(state.requests.length ? state.requests.map((asked) => {
@@ -226,6 +266,7 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  $("activity-link").hidden = !state.activity;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
@@ -257,7 +298,8 @@ async function showUsage(logged) {
     $("usage-note").textContent = "No log of the activity: start the server with --activity-db FILE.";
     return $("usage").replaceChildren();
   }
-  $("usage-note").textContent = "Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log.";
+  $("usage-note").replaceChildren("Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log. By period, over time, and each input with its result: ",
+    Object.assign(document.createElement("a"), { href: "/admin/activity", textContent: "Activity" }), ".");
   const users = await call("/admin/api/usage");
   $("usage").replaceChildren(...(users.length ? users.map((u) => row([
     u.user, u.inputs, u.failed, `${u.seconds ?? 0} s`, `${u.cpu ?? 0} s`, u.memory == null ? "-" : `${u.memory} MB`,

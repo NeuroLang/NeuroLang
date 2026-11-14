@@ -865,3 +865,182 @@ def test_the_regions_are_named_under_the_mouse(tmp_path):
     assert result["readout"] in ("left part", "right part")
     assert result["control"]
     assert (result["before"], result["after"]) == (0, 1)
+
+
+_RANGE_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var out = {};
+  var volume = brainViewer.nv.volumes[1];
+  var histogram = document.getElementById('threshold-histogram');
+  out.bins = histogram.dataset.bins;
+  out.rangeBefore = histogram.dataset.range;
+  var before = pixels();
+  set('threshold-high', '2.5', 'change');
+  out.calMax = volume.cal_max;
+  out.hidden = changed(before, pixels());
+  out.rangeAfter = histogram.dataset.range;
+  brainViewer.moveCursor([2, 2, 3]);  // 3, above the high threshold
+  out.value = document.getElementById('value').textContent;
+  set('threshold-high-slider', '1000', 'input');
+  out.sliderTop = document.getElementById('threshold-high').value;
+  set('threshold-high', '2', 'change');
+  click('reset');
+  out.resetHigh = document.getElementById('threshold-high').value;
+  out.resetRange = histogram.dataset.range;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_a_range_of_values_with_their_histogram_in_a_headless_browser(
+    tmp_path,
+):
+    """Check the high threshold hides the voxels above it, the value
+    under the cursor staying the image's, and the histogram of the
+    values marks the range shown."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[0, 0, 3], data[1, 1, 3], data[2, 2, 3] = 1.0, 2.0, 3.0
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="range", threshold=0.5, cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _RANGE_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    bins = [int(count) for count in result["bins"].split()]
+    assert sum(bins) == 3  # the three nonzero values
+    assert result["rangeBefore"] == "0.5 3"
+    assert result["calMax"] == 2.5
+    assert result["hidden"]
+    assert result["rangeAfter"] == "0.5 2.5"
+    assert result["value"] == "3"
+    assert result["sliderTop"] == "3"
+    assert result["resetHigh"] == "3" and result["resetRange"] == "0.5 3"
+
+
+_SLIDER_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  // The x of a thumb, its centre running from 7px to 7px short of the
+  // end of its 14px-thumbed range, against the x of the threshold drawn
+  // on the histogram.
+  var histogram = document.getElementById('threshold-histogram');
+  function offsets() {
+    var box = histogram.getBoundingClientRect();
+    var range = histogram.dataset.range.split(' ').map(Number);
+    return ['threshold-slider', 'threshold-high-slider'].map(function (id, i) {
+      var input = document.getElementById(id), r = input.getBoundingClientRect();
+      var thumb = r.left + 7 + input.value / 1000 * (r.width - 14);
+      return Math.abs(thumb - (box.left + range[i] / 3 * box.width));
+    });
+  }
+  var out = {percentile: offsets()};
+  set('threshold-slider', '500', 'input');
+  out.dragged = Number(histogram.dataset.range.split(' ')[0]);
+  out.draggedOffsets = offsets();
+  set('threshold-mode', 'value', 'change');
+  set('threshold', '0.75', 'change');
+  out.value = offsets();
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_threshold_sliders_follow_the_histogram(tmp_path):
+    """Check a thumb of the threshold sliders sits over the value it
+    sets on the histogram, also in percentiles of skewed values."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data.flat[:20] = 3 * (np.arange(1, 21) / 20) ** 3  # most values small
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="sliders", threshold="50%", cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _SLIDER_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    for offsets in ("percentile", "draggedOffsets", "value"):
+        assert max(result[offsets]) < 2, (offsets, result[offsets])
+    assert result["dragged"] >= 1.5  # half way along the values, not percentiles
+
+_EDGE_VALUE_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var out = {};
+  out.shown = !document.getElementById('edge-value-control').hidden;
+  out.options = Array.from(document.getElementById('edge-value').options)
+    .map(function (o) { return o.textContent; });
+  out.before = document.getElementById('edges').textContent;
+  set('edge-value', '1', 'change');
+  out.after = document.getElementById('edges').textContent;
+  out.threshold = document.getElementById('edge-threshold').value;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+def _network_of_two_values():
+    """A page of a network whose edges have two value columns, p and q."""
+    names, coordinates = ["a", "b"], np.array([[0.0, 0, 0], [10, 0, 0]])
+    states = [
+        brain_viewer.connectome_state(names, coordinates, [(0, 1, w)], 0)
+        for w in (0.25, 3.0)
+    ]
+    connectome = dict(states[0], value="p", values=[
+        dict(state, value=name) for name, state in zip("pq", states)
+    ])
+    img = nib.Nifti1Image(np.ones((4, 4, 4), np.float32), np.eye(4))
+    return brain_viewer.viewer_html(
+        img, None, title="t", threshold=0, cmap=None, symmetric=False,
+        connectome=connectome,
+    )
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_edge_value_of_a_network_in_a_headless_browser(tmp_path):
+    """Check a network of several value columns offers each, and draws
+    its edges and threshold anew when another is chosen."""
+    result = _run_in_chrome(
+        tmp_path, _network_of_two_values(), _EDGE_VALUE_CHECK
+    )
+    assert result["errors"] == [] and "failed" not in result
+    assert result["shown"] and result["options"] == ["p", "q"]
+    assert "0.25" in result["before"] and "3" in result["after"]
+    assert result["threshold"] == "0"
+
+
+def test_the_defaults_of_the_viewer_are_those_of_its_file():
+    """The constants are read from viewer.yaml, the page's script is
+    given its part, and the help of .view quotes the threshold."""
+    import yaml
+    from neurolang_apps.utils.tui import nifti
+
+    defaults = yaml.safe_load(brain_viewer.DEFAULTS_FILE.read_text())
+    assert brain_viewer.DEFAULT_CMAP == defaults["colormap"]
+    assert brain_viewer.OVERLAY_CMAPS == tuple(defaults["overlay_colormaps"])
+    assert brain_viewer.COLORMAPS == tuple(defaults["colormaps"])
+    assert brain_viewer.BACKGROUND_MAX_VOXELS == defaults[
+        "background_max_voxels"]
+    network = defaults["network"]
+    assert (brain_viewer.NODE_RADIUS, brain_viewer.EDGE_RADIUS) == (
+        network["node_radius"], network["edge_radius"])
+    assert brain_viewer.NETWORK_OVERLAY_OPACITY == network["overlay_opacity"]
+    assert brain_viewer.MIN_SHOWN_EDGES == network["min_shown_edges"]
+    assert brain_viewer.MAX_EDGES == network["max_edges"]
+    assert brain_viewer.MAX_STREAMLINES == defaults["streamlines"][
+        "max_shown"]
+    assert nifti.VIEW_THRESHOLD == defaults["view_threshold"]
+    help_text = " ".join(nifti.VIEW_HELP.split())
+    assert f"default: {defaults['view_threshold']}" in help_text
+    assert f"default: {defaults['colormap']}" in help_text
+    img = nib.Nifti1Image(np.ones((2, 2, 2), np.float32), np.eye(4))
+    state = _state(brain_viewer.viewer_html(
+        img, None, title="t", threshold=0, cmap=None, symmetric=False,
+    ))
+    assert state["settings"] == defaults["page"]
+    script = (brain_viewer._STATIC / "brain_viewer.js").read_text()
+    for name in defaults["page"]:
+        assert f"pageSettings.{name}" in script, name

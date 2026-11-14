@@ -100,6 +100,7 @@ test("a column of probabilities is found, and the most probable rows come first"
     [["a", 0.2], ["b", 0.9], ["c", 0.5], ["d", null]], ["str", "float"], ["s", "p"],
   ));
   assert.equal(model.probability, 1);
+  assert.equal(model.top, 0.9); // the answer: the largest probability, whatever the page or the sort
   assert.deepEqual(names(model), ["b", "c", "a", "d"]);
   model.toggleSort(1);
   assert.equal(model.sort, null); // the next click clears the sort
@@ -108,6 +109,7 @@ test("a column of probabilities is found, and the most probable rows come first"
 test("a float column is a probability only by its name and its range", () => {
   const rows = [["a", 0.2], ["b", 0.9]];
   assert.equal(new TableModel(payload(rows, ["str", "float"], ["s", "weight"])).probability, -1);
+  assert.equal(new TableModel(payload(rows, ["str", "float"], ["s", "weight"])).top, null);
   assert.equal(new TableModel(payload([["a", 2.5], ["b", 0.9]], ["str", "float"], ["s", "p"])).probability, -1);
   assert.equal(new TableModel(payload(rows, ["str", "int"], ["s", "p"])).probability, -1);
   assert.equal(new TableModel(payload(rows, ["str", "float"], ["s", "Probability"])).probability, 1);

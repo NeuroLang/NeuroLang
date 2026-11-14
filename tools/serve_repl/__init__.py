@@ -19,11 +19,14 @@ Usage, from a checkout::
 
 the command of the workspace's root project, or ``python -m serve_repl``.
 The page offers the engines ``neurosynth_iit`` (Neurosynth with the tracts
-of the IIT atlas, which it starts with), ``neurosynth`` and ``neurostore`` (a
-select at its top, or ``?engine=neurostore``): the bundle has the data of
+of the IIT atlas, which it starts with), ``neurosynth``, ``neurostore`` and
+``neurostore_iit`` (NeuroStore with the same tracts; a select at its top, or
+``?engine=neurostore``): the bundle has the data of
 all, unless
 ``--engine`` names the ones to build, and is built again when it lacks one that
-is asked for. It opens the page in the browser. The text embeddings of
+is asked for. What the engines download (atlases, templates, studies) is
+kept in ``--downloads`` (by default ``~/.cache/neurolang/repl-downloads``),
+for the next build. It opens the page in the browser. The text embeddings of
 ``query_similarity`` are kept in ``--embeddings`` (by default
 ``~/.cache/neurolang/repl-embeddings``): the bundle has them if they are
 there, or if torch is installed to make them (``--extra embeddings``),
@@ -33,12 +36,15 @@ The REPL with NeuroLang in the Python of this machine::
 
     uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local
         [--data-dir DIR]
-        [--resolution MM] [--light] [--engine NAME ...]
+        [--resolution MM] [--light] [--engine NAME ...] [--no-prepare]
 
 builds no bundle: the page's worker sends what it is asked to this server,
 which builds the engine from DIR (``neurolang_data`` by default, as
 ``neurolang-query``), with all of its analyses unless ``--light``, and runs
-the REPL (``neurolang_apps.utils.tui.local_backend``). The page is the same,
+the REPL (``neurolang_apps.utils.tui.local_backend``). Before serving, it
+builds each engine once, in a process of its own, unless ``--no-prepare``:
+what it downloads and the tables it finds are kept in DIR, so that a
+session starts from them, without the network. The page is the same,
 in SITE/local, and it is as fast, and has as much memory, as this machine.
 It serves this machine only, unless ``--host``: anyone it serves can run
 queries, and save files, in its Python.
@@ -156,13 +162,26 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
+import yaml
+
 DOC = Path(__file__).resolve().parents[2] / "doc"
 BUNDLE_SCRIPT = DOC / "make_repl_bundle.py"
 PAGE = DOC / "_static" / "repl"
 LOGO = DOC / "_static" / "logo"
-DEFAULT_SITE = Path("~/.cache/neurolang/repl-site").expanduser()
+# The defaults of the options, the one place they are written.
+DEFAULTS_FILE = Path(__file__).with_name("defaults.yaml")
+DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
+DEFAULT_SITE = Path(DEFAULTS["site"]).expanduser()
 # The admin console of the users (--users), served at /admin.
 ADMIN_PAGE = Path(__file__).with_name("admin.html")
+# The page of the activity of the users (--activity-db), and the chart
+# library it draws with (Chart.js, MIT, in vendor/ as NiiVue is in the
+# REPL's).
+ACTIVITY_PAGE = Path(__file__).with_name("activity.html")
+CHART_JS = Path(__file__).parent / "vendor" / "chartjs" / "chart.umd.min.js"
+ACTIVITY_PATHS = ("/admin/activity", "/admin/vendor/chart.umd.min.js",
+                  "/admin/api/activity/report", "/admin/api/activity/inputs",
+                  "/admin/api/activity/entry")
 # The page of a user's account (--users), served at /account.
 ACCOUNT_PAGE = Path(__file__).with_name("account.html")
 # The page where a user logs in (--users), served at /login, and the cookie
@@ -200,7 +219,11 @@ OWN_KEY_ENV = "NEUROLANG_REPL_OWN_KEY"
 SHORTEST_PASSWORD = 8
 # Where the text embeddings are kept between builds: making them takes
 # torch, the abstracts of the studies from PubMed and a while.
-DEFAULT_EMBEDDINGS = Path("~/.cache/neurolang/repl-embeddings").expanduser()
+DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
+# What the engines of the bundle download (atlases, templates, studies), a
+# directory each, kept for the next build: a source down (OSF, GitHub) then
+# stops no rebuild.
+DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -247,13 +270,18 @@ def built_engines(repl: Path) -> set:
     return set(bundle.get("engines") or ["neurosynth"])
 
 
-def build_bundle(repl: Path, embeddings, engines=None) -> None:
+def build_bundle(
+    repl: Path, embeddings, engines=None, downloads=DEFAULT_DOWNLOADS,
+) -> None:
     """Build the page's bundle in *repl*, with the text embeddings of the
     data directory *embeddings* if given, and the data of the *engines*
-    (by default all those of the page)."""
+    (by default all those of the page), what they download kept in
+    *downloads* (none if None)."""
     command = [sys.executable, str(BUNDLE_SCRIPT), str(repl)]
     if embeddings:
         command.append(str(embeddings))
+    if downloads is not None:
+        command += ["--downloads", str(downloads)]
     for engine in engines or ():
         command += ["--engine", engine]
     subprocess.check_call(command)
@@ -261,7 +289,7 @@ def build_bundle(repl: Path, embeddings, engines=None) -> None:
 
 def prepare_site(
     site: Path, rebuild: bool = False, embeddings=None, clear: bool = False,
-    engines=None,
+    engines=None, downloads=DEFAULT_DOWNLOADS,
 ) -> Path:
     """
     Put the page and the logo in *site*, build the bundle if it is not
@@ -280,7 +308,10 @@ def prepare_site(
     repl.mkdir(parents=True, exist_ok=True)
     wanted = set(engines or bundle_engines())
     if rebuild or not wanted <= built_engines(repl):
-        build_bundle(repl, embeddings, engines)
+        if downloads == DEFAULT_DOWNLOADS:
+            build_bundle(repl, embeddings, engines)
+        else:
+            build_bundle(repl, embeddings, engines, downloads=downloads)
     return copy_page(site)
 
 
@@ -294,6 +325,64 @@ def copy_page(site: Path) -> Path:
         if path.is_file():
             shutil.copy(path, repl / path.name)
     return repl / "index.html"
+
+
+def _prepare_engine(data_dir, name, resolution, light) -> None:
+    """Build the engine *name* on *data_dir*, as a session does, telling its
+    steps: what it downloads, and the tables it finds, are kept there."""
+    from neurolang_apps.utils.tui.local_backend import LocalBackend
+
+    backend = LocalBackend(data_dir, resolution=resolution, light=light)
+    backend._build_engine(
+        name, lambda step: print(f"  {name}: {step}", flush=True)
+    )
+
+
+def _prepare_in_child(data_dir, resolution, light):
+    """Return the function building an engine in a process of its own,
+    which tells whether it could: the memory of the engine is not kept by
+    the server's process."""
+    import multiprocessing
+
+    context = multiprocessing.get_context("spawn")
+
+    def run(name) -> bool:
+        child = context.Process(
+            target=_prepare_engine, args=(data_dir, name, resolution, light),
+        )
+        child.start()
+        child.join()
+        return child.exitcode == 0
+    return run
+
+
+def prepare_engines(
+    data_dir: Path, engines, resolution: float = 2.0, light: bool = False,
+    run=None,
+) -> list:
+    """
+    Build each of the *engines* once on *data_dir*, before the server
+    serves: what they download (atlases, templates, studies) and the
+    tables they take long to find are kept there, so that a session starts
+    from them, without the network. Tell how each went; return the names
+    of those that could not be built, whose sessions download what they
+    lack, if they can. *run*(name) builds one and tells whether it could
+    (by default in a process of its own).
+    """
+    run = run or _prepare_in_child(data_dir, resolution, light)
+    failed = []
+    for name in engines:
+        print(f"Preparing the engine {name} in {data_dir}…", flush=True)
+        start = time.monotonic()
+        if run(name):
+            print(f"The engine {name} is ready "
+                  f"({time.monotonic() - start:.0f} s)", flush=True)
+        else:
+            failed.append(name)
+            print(f"The engine {name} could not be prepared (see above): "
+                  "its sessions download what it lacks, if they can",
+                  flush=True)
+    return failed
 
 
 def prepare_local_site(site: Path, engines=None, users=False) -> Path:
@@ -588,7 +677,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._reply_json({
                 "name": self.user, "groups": self.users.groups(self.user),
                 "orcid_name": entry.get("orcid_name", ""),
+                "orcid": entry.get("orcid", ""),
                 "orcid_only": "password" not in entry,
+                "orcid_signs_in": self.orcid is not None,
                 "admin": self.users.is_admin(self.user),
                 "assistant": self.users.status(self.user),
                 "providers": _providers(),
@@ -603,6 +694,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                   "provider", "model", "base_url", "key")})
             self._refresh_sessions([self.user])
             return self._reply_json({"ok": True})
+        if path == "/account/api/unlink-orcid" and self.command == "POST":
+            self._body()
+            orcid_id = self.users.unlink_orcid(self.user)
+            self._refresh_sessions([self.user])
+            return self._reply_json({"ok": True, "orcid": orcid_id})
+        if path == "/account/api/merge-into" and self.command == "POST":
+            # an ORCID user into an account of theirs, proved by its
+            # password: logged in as it then
+            body = self._body()
+            into = str(body.get("name", ""))
+            password = str(body.get("password", "")).encode()
+            if not orcid.is_orcid(self.user):
+                return self._reply_json({"error": "Your account is not one "
+                                         "of ORCID"}, 403)
+            if not self.users.check(into, password):
+                return self._reply_json(
+                    {"error": "That name and password are not a user's"}, 403)
+            self.users.merge_orcid(self.user, into)
+            if self.sessions:
+                self.sessions.end(self.user)
+            self._refresh_sessions([into])
+            return self._reply_json({"ok": True, "name": into}, 200, [
+                ("Set-Cookie", self._cookie(into, LOGIN_DAYS * 86400))])
         if path == "/account/api/password" and self.command == "POST":
             body = self._body()
             current = str(body.get("current", "")).encode()
@@ -671,6 +785,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         activity = getattr(self.sessions, "activity", None)
         if path == "/admin/api/usage":
             return self._reply_json(activity.totals() if activity else [])
+        if path in ACTIVITY_PATHS:
+            return self._activity(path, activity)
         if path == "/admin/activity.jsonl" and activity:
             # The log of a user, ?user=NAME, an event a line.
             query = urllib.parse.urlsplit(self.path).query
@@ -717,6 +833,46 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._reply(status, body, mime,
                     [h for h in headers if h[0].title() != "Content-Type"])
 
+    def _activity(self, path: str, activity):
+        """The page of the activity of the users (--activity-db), its data
+        and the chart library it draws with."""
+        if path == "/admin/activity":
+            return self._reply(200, ACTIVITY_PAGE.read_bytes(),
+                               "text/html; charset=utf-8")
+        if path == "/admin/vendor/chart.umd.min.js":
+            return self._reply(200, CHART_JS.read_bytes(),
+                               "text/javascript; charset=utf-8",
+                               [("Cache-Control", "max-age=86400")])
+        if activity is None:
+            return self._reply_json({"error": "no activity log: start the "
+                                     "server with --activity-db FILE"}, 404)
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+
+        def get(name, default=""):
+            return query.get(name, [default])[0]
+
+        since, user, engine = _since(get("days")), get("user"), get("engine")
+        if path == "/admin/api/activity/report":
+            return self._reply_json(activity.report(
+                since, user or None, engine or None, _zone(get("tz"))))
+        if path == "/admin/api/activity/inputs":
+            try:
+                offset = max(0, int(get("offset", "0")))
+                limit = min(100, max(1, int(get("limit", "50"))))
+            except ValueError:
+                raise ValueError("offset and limit are numbers")
+            return self._reply_json(activity.inputs(
+                since, user or None, engine or None,
+                failed=get("failed") == "1", search=get("q")[:200],
+                sort=get("sort", "latest"), limit=limit, offset=offset))
+        try:
+            entry = activity.entry(int(get("id", "0")))
+        except ValueError:
+            raise ValueError("id is a number")
+        if not entry:
+            return self._reply_json({"error": "no such input"}, 404)
+        return self._reply_json(entry)
+
     def _admin_state(self) -> dict:
         users = self.users.current()
         groups = self.users.group_envs()
@@ -727,6 +883,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "users": [{"name": name, "groups": entry["groups"],
                        "own_key_set": entry.get("own_key"),
                        "orcid_name": entry.get("orcid_name", ""),
+                       "orcid": entry.get("orcid", ""),
                        "orcid_only": "password" not in entry,
                        **self.users.status(name)}
                       for name, entry in sorted(users.items())],
@@ -784,8 +941,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _admin_change(self, path: str, body: dict) -> dict:
         answer = self._admin_changed(path, body)
         name = str(body.get("name", ""))
-        if path == "/admin/api/user":
+        if path in ("/admin/api/user", "/admin/api/separate-orcid"):
             self._refresh_sessions([name])
+        elif path == "/admin/api/merge-orcid":
+            self._refresh_sessions([str(body.get("into", ""))])
         elif path == "/admin/api/group":  # its members
             self._refresh_sessions([n for n, e in self.users.current().items()
                                     if name in e["groups"]])
@@ -805,6 +964,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.users.change_group(name, body.get("env"), body.get("llm"),
                                     body.get("own_key"))
             return {"ok": True}
+        if path == "/admin/api/merge-orcid":
+            into = str(body.get("into", ""))
+            self.users.merge_orcid(name, into)
+            if self.sessions:  # the ORCID user is no more
+                self.sessions.end(name)
+            return {"ok": True}
+        if path == "/admin/api/separate-orcid":
+            return {"ok": True, "orcid": self.users.separate_orcid(name)}
         if path in ("/admin/api/approve-request",
                     "/admin/api/decline-request"):
             if self.account_requests is None:
@@ -950,12 +1117,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         target = query.get("next", ["/"])[0]
         if not target.startswith("/") or target.startswith("//"):
             target = "/"  # a page of this site only
-        state = secrets.token_urlsafe(24)
+        started = {"s": secrets.token_urlsafe(24), "n": target}
+        if query.get("link"):  # a user's own iD, for them to sign in with
+            if not self._authorised() or self.user.startswith(GUEST_PREFIX):
+                return self._reply_json({"error": "log in first: /login"},
+                                        401)
+            started.update(l=self.user, n="/account")
         return self._reply(303, b"", "text/plain", [
             ("Location", self.orcid.authorize_url(self._redirect_uri(),
-                                                  state)),
-            ("Set-Cookie", self._signed(ORCID_COOKIE, {
-                "s": state, "n": target}, ORCID_MINUTES * 60))])
+                                                  started["s"])),
+            ("Set-Cookie", self._signed(ORCID_COOKIE, started,
+                                        ORCID_MINUTES * 60))])
 
     def _orcid_callback(self):
         """``/login/orcid/callback?code=&state=``: ORCID tells who signed
@@ -976,16 +1148,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except orcid.OrcidError:
             return self._reply(303, b"", "text/plain", [forget, (
                 "Location", "/login?orcid=failed")])
-        if orcid_id in self.users.current():
-            self.users.seen_orcid(orcid_id, name)
+        if started.get("l"):
+            return self._orcid_linked(started["l"], orcid_id, name, forget)
+        user = self.users.by_orcid(orcid_id)
+        if user is not None:
+            self.users.seen_orcid(user, name)
             return self._reply(303, b"", "text/plain", [forget, (
-                "Set-Cookie", self._cookie(orcid_id,
-                                           LOGIN_DAYS * 86400)), (
+                "Set-Cookie", self._cookie(user, LOGIN_DAYS * 86400)), (
                 "Location", started.get("n") or "/")])
         return self._reply(303, b"", "text/plain", [forget, (
             "Set-Cookie", self._signed(REQUEST_COOKIE, {
                 "o": orcid_id, "m": name}, ORCID_MINUTES * 60)), (
             "Location", "/login?orcid=request")])
+
+    def _orcid_linked(self, user: str, orcid_id: str, name: str, forget):
+        """The iD *orcid_id* proved by *user*, still logged in in this
+        browser, who asked to sign in with it too: linked to them, or
+        the ORCID user of it merged into them. Back to their account,
+        ``?orcid=`` telling how it went."""
+        if not self._authorised() or self.user != user:
+            outcome = "expired"
+        else:
+            try:
+                outcome = self.users.link_orcid(user, orcid_id, name)
+                if outcome == "merged" and self.sessions:
+                    self.sessions.end(orcid_id)  # that user is no more
+                self._refresh_sessions([user])
+            except ValueError as error:
+                outcome = "taken" if "signs in" in str(error) else "refused"
+        return self._reply(303, b"", "text/plain", [forget, (
+            "Location", f"/account?orcid={outcome}")])
 
     def _account_request(self):
         """``/login/request``: who signed in with ORCID and is no user, and
@@ -1484,6 +1676,8 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
                      "is an ORCID iD")
         if not isinstance(entry.get("orcid_name", ""), str):
             sys.exit(f"{path}: the orcid_name of {name} is a text")
+        if "orcid" in entry and not orcid.is_orcid(str(entry["orcid"])):
+            sys.exit(f"{path}: the orcid of {name} is not an ORCID iD")
         entry["env"] = _env(path, name, entry.get("env"))
         _read_assistant(path, f"the user {name}", entry)
         member = entry.get("groups") or []
@@ -1494,6 +1688,16 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
             sys.exit(f"{path}: the groups of the user {name} are a list of "
                      "names")
         entry["groups"] = sorted({str(group) for group in member})
+    # An iD signs in one user: the one it names, or the one it is merged
+    # into (orcid).
+    seen = {}
+    for name, entry in users.items():
+        for orcid_id in {str(name), str(entry.get("orcid", ""))}:
+            if orcid.is_orcid(orcid_id):
+                if orcid_id in seen:
+                    sys.exit(f"{path}: the ORCID iD {orcid_id} signs in "
+                             f"both {seen[orcid_id]} and {name}")
+                seen[orcid_id] = str(name)
     kept = {}
     for name, entry in groups.items():
         if not isinstance(entry or {}, dict):
@@ -1740,12 +1944,125 @@ class Users:
             self._keep_an_admin(users)
             self._write(users)
 
-    def seen_orcid(self, orcid_id: str, name: str) -> None:
-        """Keep the name ORCID gives the user *orcid_id*, who signed in, if
+    def by_orcid(self, orcid_id: str):
+        """Return the user who signs in with the ORCID iD *orcid_id*: the
+        one it names, or the one it was merged into (``orcid``); None."""
+        users = self.current()
+        if orcid_id in users:
+            return orcid_id
+        return next((name for name, entry in users.items()
+                     if entry.get("orcid") == orcid_id), None)
+
+    def seen_orcid(self, user: str, name: str) -> None:
+        """Keep the name ORCID gives the *user* who signed in with it, if
         it changed."""
-        entry = self.current().get(orcid_id, {})
+        entry = self.current().get(user, {})
         if name and entry.get("orcid_name") != name:
-            self.change(orcid_id, orcid_name=name)
+            self.change(user, orcid_name=name)
+
+    def merge_orcid(self, orcid_id: str, into: str) -> None:
+        """
+        Merge the user named by the ORCID iD *orcid_id* into the user
+        *into*, who then signs in with it too (their ``orcid``): their
+        groups together; *into*'s own assistant, variables and own key
+        kept, the ORCID user's taken where *into* has none. The ORCID user
+        is no more.
+        """
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            source, target = users.get(orcid_id), users.get(into)
+            if source is None or not orcid.is_orcid(orcid_id):
+                raise ValueError(f"No user named by the ORCID iD {orcid_id}")
+            if target is None or orcid.is_orcid(into):
+                raise ValueError(f"{into} is not a user with a name of their "
+                                 "own")
+            if target.get("orcid"):
+                raise ValueError(f"{into} signs in with the ORCID iD "
+                                 f"{target['orcid']} already: separate it "
+                                 "first")
+            target["orcid"] = orcid_id
+            if source.get("orcid_name"):
+                target["orcid_name"] = source["orcid_name"]
+            target["groups"] = sorted(set(target["groups"])
+                                      | set(source["groups"]))
+            for key in ("llm", "own_key"):
+                if key in source and key not in target:
+                    target[key] = source[key]
+            for variable, value in source["env"].items():
+                target["env"].setdefault(variable, value)
+            del users[orcid_id]
+            self._write(users)
+
+    def link_orcid(self, user: str, orcid_id: str, orcid_name: str = "") \
+            -> str:
+        """
+        Let *user*, of a name of their own, sign in with the ORCID iD
+        *orcid_id* too, which they proved theirs by signing in with it:
+        ``"linked"``; if the iD names an ORCID user, merge them into
+        *user* (:meth:`merge_orcid`): ``"merged"``. ValueError if the iD
+        signs in another user, or *user* has one already.
+        """
+        owner = self.by_orcid(orcid_id)
+        if owner == orcid_id:
+            self.merge_orcid(orcid_id, user)
+            return "merged"
+        if owner is not None:
+            raise ValueError(f"The ORCID iD {orcid_id} signs in "
+                             f"{'you' if owner == user else owner} already")
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(user)
+            if entry is None or orcid.is_orcid(user):
+                raise ValueError(f"{user} is not a user with a name of "
+                                 "their own")
+            if entry.get("orcid"):
+                raise ValueError(f"You sign in with the ORCID iD "
+                                 f"{entry['orcid']} already")
+            entry["orcid"] = orcid_id
+            if orcid_name:
+                entry["orcid_name"] = orcid_name
+            self._write(users)
+        return "linked"
+
+    def unlink_orcid(self, user: str) -> str:
+        """Let *user* sign in with their password only, no more with their
+        ORCID iD; return it. ValueError if they have none, or no
+        password."""
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(user) or {}
+            if not entry.get("orcid"):
+                raise ValueError("You have no ORCID iD to unlink")
+            if "password" not in entry:
+                raise ValueError("Without a password you would not log in")
+            orcid_id = entry.pop("orcid")
+            entry.pop("orcid_name", None)
+            self._write(users)
+            return orcid_id
+
+    def separate_orcid(self, name: str) -> str:
+        """
+        Separate the ORCID iD of the user *name* from them: a user of its
+        own again, named by it, in the groups of *name* but ``admin``
+        (which an admin gives again, if it is theirs); return the iD.
+        """
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            entry = users.get(name)
+            if entry is None or not entry.get("orcid"):
+                raise ValueError(f"{name} has no ORCID iD to separate")
+            orcid_id = entry.pop("orcid")
+            separated = {"env": {}, "groups": [
+                g for g in entry["groups"] if g != self.ADMIN]}
+            if entry.get("orcid_name"):
+                separated["orcid_name"] = entry.pop("orcid_name")
+            users[orcid_id] = separated
+            self._write(users)
+            return orcid_id
 
     def remove(self, name: str) -> None:
         with self._changing():
@@ -1983,6 +2300,34 @@ def check_login(secret: bytes, value: str, users, guests: bool = False,
     return name
 
 
+def _since(days: str):
+    """The start of the last *days* days (a number, of the page), as an
+    aware datetime; None for all (empty)."""
+    from datetime import datetime, timedelta, timezone
+
+    if not days:
+        return None
+    try:
+        days = float(days)
+    except ValueError:
+        raise ValueError("days is a number of days, or empty for all")
+    if not 0 < days <= 3660:
+        raise ValueError("days is between 0 and 3660")
+    return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _zone(name: str):
+    """The time zone *name* (IANA, the page's), UTC if none or unknown."""
+    from datetime import timezone
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(name) if name else timezone.utc
+    except (ValueError, KeyError, OSError, ImportError):
+        return timezone.utc
+
+
 def read_password(path: Path) -> str:
     """Return the password in the first line of the file *path*, as it is
     but for its line ending."""
@@ -1998,7 +2343,8 @@ NOT_CONFIGURED = {"help", "config", "daemon", "hash_password", "list_users",
                   "add_user", "set_password", "set_groups", "set_key",
                   "set_group_key", "set_llm", "set_group_llm", "own_key",
                   "remove_user", "list_requests", "approve_request",
-                  "decline_request", "groups"}
+                  "decline_request", "merge_orcid", "separate_orcid",
+                  "groups"}
 
 
 def read_config(parser, path: Path) -> dict:
@@ -2172,6 +2518,7 @@ def service_command(args) -> list:
         "--host", args.host, "--port", str(args.port),
         "--site", str(args.site.resolve()),
         "--embeddings", str(args.embeddings.resolve()),
+        "--downloads", str(args.downloads.resolve()),
     ]
     for engine in args.engines or ():
         command += ["--engine", engine]
@@ -2181,6 +2528,7 @@ def service_command(args) -> list:
         command += ["--local", "--data-dir", str(args.data_dir.resolve()),
                     "--resolution", str(args.resolution)]
         command += ["--light"] if args.light else []
+        command += [] if args.prepare else ["--no-prepare"]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
@@ -2384,9 +2732,9 @@ def parse_args(argv=None):
         "password (of --password-file), key_password (of "
         "--key-password-file)",
     )
-    parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument("--port", type=int, default=DEFAULTS["port"])
     parser.add_argument(
-        "--host", default="127.0.0.1",
+        "--host", default=DEFAULTS["host"],
         help="0.0.0.0 to serve the other machines of the network too (with "
         "--password-file or --server-name)",
     )
@@ -2408,6 +2756,11 @@ def parse_args(argv=None):
         "--embeddings", type=Path, default=DEFAULT_EMBEDDINGS,
         help="data directory keeping the text embeddings (default: "
         "%(default)s)",
+    )
+    parser.add_argument(
+        "--downloads", type=Path, default=DEFAULT_DOWNLOADS,
+        help="directory keeping what the engines of the bundle download, "
+        "for the next build (default: %(default)s)",
     )
     parser.add_argument(
         "--engine", action="append", choices=bundle_engines(), dest="engines",
@@ -2468,17 +2821,21 @@ def parse_args(argv=None):
         "send the login cookie over HTTPS only",
     )
     parser.add_argument(
-        "--max-guest-sessions", type=int, default=2, metavar="N",
+        "--max-guest-sessions", type=int,
+        default=DEFAULTS["max_guest_sessions"], metavar="N",
         help="with --guests, the sessions the guests have at most at once "
         "(default: %(default)s)",
     )
     parser.add_argument(
-        "--max-sessions", type=int, default=8, metavar="N",
+        "--max-sessions", type=int, default=DEFAULTS["max_sessions"],
+        metavar="N",
         help="with --users and --local, the sessions at most at once "
         "(default: %(default)s)",
     )
     parser.add_argument(
-        "--idle-minutes", type=float, default=120, metavar="M",
+        "--idle-minutes", type=float,
+        default=float(DEFAULTS["idle_minutes"]),
+        metavar="M",
         help="with --users and --local, end a session unused for M minutes "
         "(default: %(default)s)",
     )
@@ -2489,7 +2846,9 @@ def parse_args(argv=None):
         "number of CPUs of this machine)",
     )
     parser.add_argument(
-        "--query-minutes", type=float, default=60.0, metavar="M",
+        "--query-minutes", type=float,
+        default=float(DEFAULTS["query_minutes"]),
+        metavar="M",
         help="with --users and --local, stop a query running for more than "
         "M minutes, ending its session's process (0: never; default: "
         "%(default)s)",
@@ -2557,6 +2916,12 @@ def parse_args(argv=None):
                         "inherit: as their groups say)")
     manage.add_argument("--remove-user", metavar="NAME",
                         help="remove the user NAME")
+    manage.add_argument("--merge-orcid", nargs=2, metavar=("ORCID", "USER"),
+                        help="merge the user named by the ORCID iD into the "
+                        "user USER, who then signs in with it too")
+    manage.add_argument("--separate-orcid", metavar="USER",
+                        help="separate the ORCID iD of USER: a user of its "
+                        "own again, in USER's groups but admin")
     manage.add_argument("--list-requests", action="store_true",
                         help="list the requests of an account of those who "
                         "signed in with ORCID (--orcid)")
@@ -2593,12 +2958,13 @@ def parse_args(argv=None):
         "the browser: no bundle is built",
     )
     parser.add_argument(
-        "--data-dir", type=Path, default=Path("neurolang_data"),
+        "--data-dir", type=Path, default=Path(DEFAULTS["data_dir"]),
         help="with --local, the data directory of the engines (default: "
         "%(default)s)",
     )
     parser.add_argument(
-        "--resolution", type=float, default=2.0, metavar="MM",
+        "--resolution", type=float, default=float(DEFAULTS["resolution"]),
+        metavar="MM",
         help="with --local, the resolution of the engines' MNI grid "
         "(default: %(default)s)",
     )
@@ -2606,6 +2972,12 @@ def parse_args(argv=None):
         "--light", action="store_true",
         help="with --local, leave out the analyses a browser cannot hold, "
         "as the page does",
+    )
+    parser.add_argument(
+        "--no-prepare", action="store_false", dest="prepare",
+        default=DEFAULTS["prepare"],
+        help="with --local, do not build each engine before serving (which "
+        "keeps what it downloads in --data-dir): its first session does",
     )
     built = parser.add_mutually_exclusive_group()
     built.add_argument(
@@ -2738,7 +3110,15 @@ def manage_users(args) -> None:
                 print(f"{asked['orcid']}\t{asked['name'] or '-'}\t{when}"
                       f"\t{asked['message']}")
             return
-        if args.approve_request or args.decline_request:
+        if args.merge_orcid:
+            orcid_id, into = args.merge_orcid
+            users.merge_orcid(orcid_id, into)
+            done = f"{into} signs in with the ORCID iD {orcid_id} now"
+        elif args.separate_orcid:
+            orcid_id = users.separate_orcid(args.separate_orcid)
+            done = (f"Separated {orcid_id} from {args.separate_orcid}: a "
+                    "user of its own")
+        elif args.approve_request or args.decline_request:
             orcid_id = args.approve_request or args.decline_request
             asked = requests.current().get(orcid_id)
             if asked is None:
@@ -2827,7 +3207,8 @@ def main(argv=None) -> None:
             or args.set_groups or args.set_key or args.set_group_key
             or args.set_llm or args.set_group_llm or args.own_key
             or args.remove_user or args.list_requests
-            or args.approve_request or args.decline_request):
+            or args.approve_request or args.decline_request
+            or args.merge_orcid or args.separate_orcid):
         return manage_users(args)
     # A certificate, a password or a key that cannot serve fails now, not
     # in the service.
@@ -2879,6 +3260,12 @@ def main(argv=None) -> None:
 
         args.site = args.site / "local"
         page = prepare_local_site(args.site, args.engines, bool(users))
+        if args.prepare:
+            prepare_engines(
+                args.data_dir.resolve(),
+                list(args.engines or bundle_engines()),
+                args.resolution, args.light,
+            )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
         if users:
@@ -2927,7 +3314,7 @@ def main(argv=None) -> None:
     else:
         page = prepare_site(
             args.site, args.rebuild, args.embeddings, clear=args.clear,
-            engines=args.engines,
+            engines=args.engines, downloads=args.downloads,
         )
     write_index(args.site, page)
     board = None

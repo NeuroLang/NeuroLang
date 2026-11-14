@@ -238,6 +238,24 @@ def test_disjunction_in_deterministic_rule_of_probabilistic_program():
     assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
 
 
+def test_disjunction_of_functions_in_probabilistic_program():
+    """The variables of a disjunct of functions are bound outside it."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="t")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.2, 2), (0.3, 3)], name="p"
+    )
+    nl.add_symbol(lambda prefix, s: s.startswith(prefix), name="startswith")
+    res = nl.execute_datalog_program(
+        """
+        q(x) :- t(x, y), (startswith("a", y) | startswith("b", y))
+        ans(x, PROB) :- q(x), p(x)
+        """
+    )
+
+    assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
+
+
 def test_disjunction_with_a_constant_in_the_query(capsys):
     """Magic sets rewrite a disjunctive rule queried with a constant."""
     nl = NeurolangPDL()
@@ -2903,6 +2921,36 @@ def test_probabilistic_facts_of_a_program_text():
     )
     rows = result.as_pandas_dataframe().itertuples(index=False, name=None)
     assert set(rows) == {(1, 0.5), (2, 0.2)}
+
+
+@pytest.mark.parametrize("solver", ["default", "wmc"])
+@pytest.mark.parametrize("empty", [[], pd.DataFrame(columns=["a"])])
+def test_empty_deterministic_relation(solver, empty):
+    """An empty relation has the arity of its atoms: ~t(0) holds, and
+    t(y) does not."""
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query,
+    )
+
+    solvers = {} if solver == "default" else dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    )
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 0), (0.5, 1), (0.5, 2), (0.5, 3)], name="r"
+    )
+    nl.add_tuple_set(empty, name="t")
+    nl.execute_datalog_program(
+        "a(PROB) :- r(x), ~t(0)\n"
+        "b(PROB) :- r(x), t(y), (x < y), ~t(0)"
+    )
+    solution = nl.solve_all()
+    assert solution["a"].as_pandas_dataframe().iloc[0, 0] == pytest.approx(
+        1 - 0.5 ** 4
+    )
+    assert "b" not in solution or solution["b"].is_empty()
 
 
 def test_the_rules_of_the_magic_sets_rewriting_are_not_warned_about():

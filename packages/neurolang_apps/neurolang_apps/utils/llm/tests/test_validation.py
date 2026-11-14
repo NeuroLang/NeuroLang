@@ -279,6 +279,32 @@ def test_search_all_stored_relations(nl):
     )
 
 
+def test_search_a_rule_whose_columns_have_the_same_name(nl, monkeypatch):
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.declared_predicates",
+        lambda name: {"below": {"columns": ["iri", "iri"]}},
+    )
+    nl.add_tuple_set(
+        [("http://x.org/A", "http://x.org/B"),
+         ("http://x.org/B", "http://x.org/C")], name="sub",
+    )
+    nl.execute_datalog_program(
+        "below(x, y) :- sub(x, y)\nbelow(x, z) :- below(x, y), sub(y, z)"
+    )
+    context = EngineContext(nl, "neurosynth")
+    facts = [
+        "below(<http://x.org/A>, <http://x.org/C>)",
+        "below(<http://x.org/B>, <http://x.org/C>)",
+    ]
+    assert context.search_values("x.org/C", "below", 1).splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/C", "below").splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/A", "below", 1).endswith(
+        "its values are: 'http://x.org/B', 'http://x.org/C'"
+    )
+
+
 def test_rows_of_a_rule(nl):
     nl.execute_datalog_program("pain_study(s) :- mentions(s, 'pain')")
     context = EngineContext(nl)
@@ -387,6 +413,31 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
         nl, "ans(s) :- study(s)", "datalog", timeout=20, memory_mb=200
     )
     assert not preview.ok and "too much memory" in preview.text
+
+
+def test_memory_of_a_child_is_not_that_it_reads(forking):
+    """A child reading the memory of its parent, as a query reads the
+    engine's relations, shares it: only what it allocates counts."""
+    import time
+
+    import numpy as np
+
+    from ..validation import QueryTooLarge, _in_child
+
+    data = np.ones(300 * 2 ** 20 // 8)
+
+    def read():
+        time.sleep(2)  # polled while it holds the pages it read
+        return float(data.sum())
+
+    def copy():
+        hoard = data.copy()
+        time.sleep(30)
+        return float(hoard.sum())
+
+    assert _in_child(read, 20, 200) == data.size
+    with pytest.raises(QueryTooLarge):
+        _in_child(copy, 20, 200)
 
 
 def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
