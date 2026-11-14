@@ -18,6 +18,7 @@ from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Query, Symbol
 from .atlases import FETCHERS, Atlas
 from .regions import ExplicitVBR
+from .confine import ConfinedError, check_read
 from .utils.nilearn_compat import fetch_files as _fetch_files
 
 #: The kinds of ``.load_atlas`` that read a label image and a table.
@@ -96,6 +97,10 @@ class CommandsMixin(PatternWalker):
             )
 
         try:
+            check_read(url, "table")
+        except ConfinedError as e:
+            raise InvalidCommandExpression(str(e)) from e
+        try:
             data = pd.read_csv(url, **kwargs)
         except ParserError as e:
             raise InvalidCommandExpression(
@@ -160,6 +165,15 @@ class CommandsMixin(PatternWalker):
             _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
         }
         kind = options.pop("kind", "csv")
+        # the files and addresses of the statement, the directory it
+        # downloads to (see neurolang.confine)
+        for value in [*args[1:], options.get("data_dir"),
+                      options.get("data_home")]:
+            if isinstance(value, (str, Path)):
+                try:
+                    check_read(value, "atlas")
+                except ConfinedError as e:
+                    raise InvalidCommandExpression(str(e)) from e
         if not args:
             raise InvalidCommandExpression(
                 ".load_atlas needs the name of the atlas"
@@ -424,6 +438,14 @@ class CommandsMixin(PatternWalker):
                 Path(d) / name for d in self.module_directories
             ]
             path = next((p for p in candidates if p.is_file()), candidates[0])
+            # a module of the engine's, or else one the statements may read
+            shipped = any(path.resolve().is_relative_to(Path(d).resolve())
+                          for d in self.module_directories)
+            if not shipped:
+                try:
+                    check_read(path, "Datalog module")
+                except ConfinedError as e:
+                    raise DatalogModuleError(str(e)) from e
         if not path.is_file():
             raise DatalogModuleError(f"No Datalog module {str(path)!r}")
         return path.resolve()

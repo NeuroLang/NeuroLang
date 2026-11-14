@@ -417,7 +417,7 @@ def test_load_errors(app, tmp_path, file_name, text, message):
 
 
 def test_load_usage(app):
-    assert "Usage: .load PATH [NAME]" in _command(app, ".load")
+    assert "Usage: .load PATH|UPLOADED [NAME]" in _command(app, ".load")
 
 
 def test_clear_removes_loaded_relations(app, tmp_path, capsys):
@@ -444,7 +444,7 @@ def test_drop_loaded_relation(app, tmp_path):
 def test_help_lists_new_commands(app):
     out = _command(app, ".help")
     for usage in (".idb [PREDICATE]", ".drop PREDICATE [N]",
-                  ".load PATH [NAME]", ".format [table|csv|json]"):
+                  ".load PATH|UPLOADED [NAME]", ".format [table|csv|json]"):
         assert usage in out
 
 

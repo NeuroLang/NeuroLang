@@ -526,11 +526,13 @@
               <hr>
               <button id="session-save" type="button" title="Save the statements of this session in a file">Save session</button>
               <button id="session-open" type="button" title="Open a saved session: its rules replace those of this one">Open session</button>
+              <button id="upload" type="button" title="Upload a CSV or TSV file of yours (.csv, .tsv, gzipped or not): it is loaded as a relation, and .load NAME loads it again">Upload data</button>
               <hr>
               <button id="restart" type="button" title="Start the engine again, without the rules of this session">Restart</button>
             </div>
           </details>
           <input id="session-file" type="file" accept=".json,application/json" hidden>
+          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,text/csv,text/tab-separated-values" hidden>
           <span class="spacer"></span>
           <span id="run-help" class="note"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs</span>
         </div>

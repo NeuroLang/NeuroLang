@@ -170,6 +170,15 @@ gzipped) into a relation whose columns are the file's header:
    nl(neurosynth:DL)> .load my_terms.csv my_terms
    loaded my_terms(term, group): 2 rows from my_terms.csv
 
+On the page, **Upload data** sends a CSV or TSV file of yours (at most
+50 MB) to the session and loads it, with ``.load NAME``; ``.load NAME``
+loads it again later, under another relation name if given.  The file is
+kept in the memory of the session only, never written on a disk; the page
+sends it again when it gives the session's rules back (after **Stop**, or
+when a saved session is opened), and forgets it on **Restart**.  A server
+(``neurolang-repl-serve``) loads the files you upload, and no path of its
+own.
+
 
 Results
 -------
@@ -262,9 +271,10 @@ Every command
    * - ``.idb``, ``.drop``, ``.clear``, ``.scope``
      - the session's rules (see `The session`_)
      - both
-   * - ``.load PATH [NAME]``
-     - a CSV or TSV file as a relation
-     - terminal
+   * - ``.load PATH|UPLOADED [NAME]``
+     - a CSV or TSV file as a relation: a path in a terminal, a file
+       uploaded (**Upload data**) on the page
+     - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines
      - both

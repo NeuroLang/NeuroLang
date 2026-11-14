@@ -24,6 +24,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
+from neurolang.confine import lifted
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.tui import web
 from neurolang_apps.utils.tui.interrupt import _raise_in_thread
@@ -195,7 +196,8 @@ class LocalBackend:
         return self._working(lambda: self._start(engine))
 
     def _start(self, engine: str) -> dict:
-        nl = self.build(engine, self.say)
+        with lifted():  # the engine's commands are the server's
+            nl = self.build(engine, self.say)
         self.say("Starting the REPL")
         options = {}
         # The metadata of the studies of Neurosynth, whose ids are
@@ -350,6 +352,10 @@ class LocalBackend:
     def rate(self, verdict: str, comment: str = "") -> dict:
         """Share the last answer of the assistant with its rating."""
         return self._repl().rate_answer(verdict, comment)
+
+    def upload(self, name: str, data: bytes) -> dict:
+        """Keep the file the page uploaded (WebRepl.upload)."""
+        return self._working(lambda: self._repl().upload(name, data))
 
     def download(self, block: int, kind: str, value: str = "") -> web.Download:
         """Return the file of a result for the page to save."""

@@ -16,6 +16,7 @@ const answers = {
         : { html: text, failed: false },
   llm: ({ key }) => (key === "bad" ? { status: 500, body: { error: "ValueError: Unknown provider 'x'." } } : {}),
   rate: ({ verdict }) => ({ ok: true, message: verdict }),
+  upload: ({ name, size }) => (name === "x.txt" ? { status: 400, body: { error: "'x.txt' is not a CSV" } } : { name, statement: `.load ${name}`, size }),
   download: () => ({ bytes: new Uint8Array([97, 44, 98]), headers: { "X-File-Name": "r%C3%A9sultat.csv", "Content-Type": "text/csv" } }),
 };
 let events = null;
@@ -30,10 +31,14 @@ globalThis.EventSource = class {
   close() {}
 };
 const urls = [];
-globalThis.fetch = async (url, { body }) => {
+const types = [];
+globalThis.fetch = async (url, { body, headers }) => {
   urls.push(url);
+  types.push(headers["Content-Type"]);
   const action = url.replace("/api/", "").split("?")[0];
-  const data = JSON.parse(body);
+  const data = body instanceof Uint8Array
+    ? { name: new URL(url, "http://x").searchParams.get("name"), size: body.length }
+    : JSON.parse(body);
   asked.push([action, data]);
   const answer = answers[action](data);
   if (answer.bytes) {
@@ -115,4 +120,13 @@ test("an expired login has the page log in again", async () => {
   } finally {
     answers.submit = submit;
   }
+});
+
+test("an uploaded file goes as it is, named in the address, of a type no form sends", async () => {
+  const [ok] = await send({ type: "upload", name: "my data.csv", bytes: new Uint8Array([97, 10, 49]) });
+  assert.deepEqual(ok, { type: "uploaded", name: "my data.csv", statement: ".load my data.csv", size: 3 });
+  assert.match(urls.at(-1), /^\/api\/upload\?(session=[^&]*&)?name=my%20data\.csv$/);
+  assert.equal(types.at(-1), "application/x-neurolang-upload");
+  const [refused] = await send({ type: "upload", name: "x.txt", bytes: new Uint8Array([1]) });
+  assert.deepEqual(refused, { type: "uploaded", error: "'x.txt' is not a CSV" });
 });

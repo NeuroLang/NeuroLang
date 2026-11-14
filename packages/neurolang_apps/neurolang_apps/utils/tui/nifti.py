@@ -40,6 +40,7 @@ from typing import List, NamedTuple, Optional, Tuple
 import nibabel as nib
 import numpy as np
 import pandas as pd
+from neurolang.confine import ConfinedError, check_read, check_write
 
 from neurolang_apps.utils import engine_registry
 
@@ -1578,6 +1579,11 @@ def cmd_save(app, arg: str) -> None:
     except SaveError as exc:
         _save_failed(app, str(exc))
         return
+    try:  # a server writes no file of a statement (neurolang.confine)
+        check_write(request.path, "result")
+    except ConfinedError as exc:
+        _save_failed(app, str(exc))
+        return
     request.path.parent.mkdir(parents=True, exist_ok=True)
     several = len(app.results) > 1
     for block in app.results:
@@ -1946,6 +1952,17 @@ def last_results_layers(app, request: ViewRequest):
     return layers, extra, request
 
 
+def _readable(app, path) -> bool:
+    """Whether the statements may read the image *path* (on a server, of
+    its data only: neurolang.confine); else say why."""
+    try:
+        check_read(path, "image")
+    except ConfinedError as exc:
+        app.console.print(f"View failed: {exc}", style="red", markup=False)
+        return False
+    return True
+
+
 @command(
     ".view", "Show a NIfTI image, or the last result, in an interactive "
     "viewer in the browser (.help view)", VIEW_USAGE,
@@ -1970,6 +1987,8 @@ def cmd_view(app, arg: str) -> None:
         if shown is None:
             return
         layers, extra, request = shown
+    elif not _readable(app, request.path):
+        return
     elif not request.path.is_file():
         app.console.print(
             f"File not found: {request.path}", style="red", markup=False
