@@ -8,7 +8,7 @@ extracted from it, next to it; both are reused by the calls after.
     The HCP842 atlas (Yeh et al. 2018, NeuroImage 178:57-68), as curated
     by E. Garyfallidis for DIPY's RecoBundles ("Advanced Atlas of 80
     Bundles in MNI space", figshare 10.6084/m9.figshare.7375883, CC BY 4.0;
-    cite Garyfallidis et al. 2018, NeuroImage 170:283-295, and Yeh et al.
+    cite Garyfallidis et al. 2017, NeuroImage 170:283-297, and Yeh et al.
     2018): 78 expert-labelled bundles (79 files, ``IF0F_R.trk`` being a
     copy of ``IFOF_R.trk``) and the whole-brain tractogram (144,678
     streamlines, 37 of one point), ``.trk`` in MNI152 (ICBM 2009a).

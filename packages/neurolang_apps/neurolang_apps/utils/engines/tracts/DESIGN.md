@@ -698,7 +698,7 @@ two public atlases of F.-C. Yeh, whose bundles were labelled by experts:
 | Bundles | 78, `bundles/<stem>.trk` (79 files: `IF0F_R.trk` is a copy of `IFOF_R.trk`; `F_L_R` is both fornices) | 87, `<group>/<stem>.trk.gz` |
 | Whole brain | `whole_brain/whole_brain_MNI.trk`, 144,678 streamlines, 37 of one point | none |
 | Space | MNI152, ICBM 2009a (the zip's README) | MNI152, ICBM 2009a nonlinear asymmetric, 1 mm |
-| Licence | CC BY 4.0, "(c) Eleftherios Garyfallidis", the curation for DIPY's RecoBundles (figshare 10.6084/m9.figshare.7375883); cite Garyfallidis et al. 2018 (NeuroImage 170:283-295) and Yeh et al. 2018. Yeh's own distribution of HCP842 (brain.labsolver.org) is CC BY-SA 4.0 | CC BY-SA 4.0 (brain.labsolver.org/hcp_trk_atlas.html); cite Yeh 2022; data of the Human Connectome Project, whose terms ask for an acknowledgement |
+| Licence | CC BY 4.0, "(c) Eleftherios Garyfallidis", the curation for DIPY's RecoBundles (figshare 10.6084/m9.figshare.7375883); cite Garyfallidis et al. 2017 (NeuroImage 170:283-297) and Yeh et al. 2018. Yeh's own distribution of HCP842 (brain.labsolver.org) is CC BY-SA 4.0 | CC BY-SA 4.0 (brain.labsolver.org/hcp_trk_atlas.html); cite Yeh 2022; data of the Human Connectome Project, whose terms ask for an acknowledgement |
 
 `fetch_tractogram(atlas="hcp842", bundle=None, data_dir=None, url=None,
 md5=None) -> Path` keeps the archive in `<data_dir>/<atlas>/`, by default
