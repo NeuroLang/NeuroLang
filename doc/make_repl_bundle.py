@@ -6,6 +6,8 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
   page's default, ``neurostore`` and ``neurostore_iit``), the data it
   needs, as a zip in the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
+  with the acknowledgements of each engine's data, which
+  ``doc/_static/repl/credits.html`` lists,
 - ``highlight.json``, the words the page's code box colours, and
 - with torch installed (the ``embeddings`` extra), the files of the
   engines' text embeddings, which the page fetches when a query first
@@ -304,6 +306,14 @@ def subsample_tractogram(
     )
 
 
+def acknowledgements(engine: str) -> list:
+    """The sources of the data of *engine*, and how to acknowledge them,
+    which the page's credits (``credits.html``) list."""
+    from neurolang_apps.utils import engine_registry
+
+    return engine_registry.get_acknowledgements(engine)
+
+
 def tractogram_entry(engine: str):
     """The ``tractogram`` entry of *engine* in engines.yaml, or None."""
     from neurolang_apps.utils import engine_registry
@@ -499,8 +509,9 @@ def main(
             if engine == default:
                 raise  # the page's default: there is no page without it
             print(f"The engine {engine} is left out of the bundle: {error!r}")
-    for entry in built.values():
+    for engine, entry in built.items():
         entry.pop("cache_keys", None)
+        entry["acknowledgements"] = acknowledgements(engine)
     (output / "bundle.json").write_text(
         json.dumps({
             "wheels": wheels, "default": default, "engines": built,

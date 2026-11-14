@@ -1,0 +1,43 @@
+# Merged into the entry of functional_connectivity in ../engines.yaml
+# (see doc/engine_configuration.rst); the engines extending it
+# (coordinate_meta_analysis: neurosynth, neurostore) add their guidance
+# after it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to answer the
+# questions on the resting-state functional connectivity: added to its
+# system prompt.
+assistant_guidance: >
+  The resting-state functional connectivity is the correlation r (-1 to
+  1) of the spontaneous fMRI activity of two regions at rest, over 964
+  HCP subjects: *_functional_connectivity(l1, l2, r) between two
+  parcels of an atlas (schaefer of 100 parcels, schaefer400, destrieux),
+  tian_functional_connectivity(t1, t2, r) between two subcortical
+  regions of Tian's atlas, and schaefer_tian_functional_connectivity(l,
+  t, r) (schaefer400_..., destrieux_...) between a parcel and a
+  subcortical region. It is not the structural connectivity
+  (white-matter streamlines, *_structural_connectivity) nor the
+  meta-analytic co-activation of regions by task studies (PROB over
+  selected_study, on the meta-analysis engines); a question on
+  functional connectivity, connectivity at rest or correlated activity
+  is answered with it, and the answer says it is the resting-state one.
+  r is stored, not a probability: the answers over it use no PROB, but
+  thresholds ((r > 0.3) strong, (r < 0) an anticorrelation, few and weak
+  as no global signal was regressed), sums and counts. Each pair is
+  stored both ways round: a network gives each pair once with (l1 <
+  l2); a seed fixes the first argument. A probability is either
+  computed (r * r, the fraction of the variance two regions share, in
+  the body, (f == r * r), never in the head) or that of a probabilistic
+  program queried with PROB: probabilistic facts, coupled(l1, l2) :: r
+  :- ..., (r > 0.2), each positive correlation a probability of a
+  coupling (a choice of the model, which the answer states), or a
+  choice over a seed's partners weighted by r / sum(r). The subcortex
+  is in it (Tian's regions, as 'THA DA lh', 'aHIP rh'), unlike the
+  structural connectivity of the cortex; its correlations are weaker
+  (0.3 at most between two subcortical regions, about 0.2 to the
+  cortex), so their thresholds are lower, (r > 0.2). Its gradients,
+  schaefer_functional_gradient(l, d, v) (schaefer400_, destrieux_) and
+  their variance (*_functional_gradient_variance), are the principal
+  components of the parcels' functional connectivity within each
+  hemisphere: the first is the principal gradient, from sensory
+  (visual, somatomotor) to transmodal (default) cortex; .view
+  --threshold 0 paints a result of a region and values on the cortex.

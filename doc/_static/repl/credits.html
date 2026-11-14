@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credits of the NeuroLang REPL</title>
+<meta name="description" content="The data each engine of NeuroLang's REPL is built from, and how to acknowledge them.">
+<script>
+  // The theme of the REPL's page, before the first paint (as index.html).
+  (() => {
+    let choice = "system";
+    try { choice = localStorage.getItem("neurolang-repl-theme") || choice; } catch {}
+    const light = choice === "light" || (choice === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+  })();
+</script>
+<link rel="icon" href="../logo/favicon/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../logo/favicon/favicon.ico" sizes="48x48">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--text); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-underline-offset: .2em; }
+  code { font-family: var(--mono); font-size: .85em; color: var(--muted); font-weight: 400; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  header { display: flex; align-items: center; gap: 1rem; padding: .75rem 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header img { height: 28px; display: block; }
+  header a.back { margin-left: auto; color: var(--muted); font-size: .875rem; text-decoration: none; }
+  header a.back:hover { color: var(--text); text-decoration: underline; }
+  :root[data-theme=dark] .logo-light, :root[data-theme=light] .logo-dark { display: none; }
+  main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 16px 4rem; }
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: .5rem 0 .75rem; }
+  .intro { color: var(--muted); margin: 0 0 1rem; }
+  .note { color: var(--muted); font-size: .875rem; margin: 0; }
+  nav ul { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; list-style: none; padding: 0; margin: 0 0 1.5rem; font-size: .875rem; }
+  section { padding: 1.25rem 0 .5rem; border-top: 1px solid var(--border); scroll-margin-top: 1rem; }
+  section:target h2 { color: var(--accent); }
+  .head { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+  h2 { font-size: 1.15rem; margin: 0 0 .5rem; }
+  ol { margin: 0; padding-left: 1.4rem; }
+  li { margin: 0 0 .7rem; overflow-wrap: anywhere; }
+  li::marker { color: var(--faint); }
+  button { margin-left: auto; min-height: 2rem; padding: .25rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--raised); color: var(--muted); font: 500 .8125rem/1.2 var(--sans); cursor: pointer; }
+  button:hover { color: var(--text); border-color: var(--border-strong); }
+  @media (max-width: 720px) { button, header a.back { min-height: 44px; display: inline-flex; align-items: center; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="https://neurolang.github.io/" aria-label="NeuroLang"><img class="logo-dark" src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"><img class="logo-light" src="../logo/svg/neurolang-lockup.svg" alt="NeuroLang"></a>
+  <a class="back" id="back" href="index.html">Back to the REPL</a>
+</header>
+<main id="credits">
+  <h1>Credits</h1>
+  <p class="intro">Each engine of the REPL is built from the data of others: atlases, databases of studies, ontologies, connectomes, tractograms and models. Here are, for each engine, the sources of its data and how to acknowledge them. If you report a result of an engine, cite its sources; in the REPL, <code>.credits</code> prints those of the engine of the session.</p>
+  <p class="note" id="status">Reading the engines of the page…</p>
+</main>
+<script type="module">
+  import { renderCredits } from "./credits.js";
+  const engine = location.hash.slice(1);
+  if (engine) document.getElementById("back").href = `index.html?engine=${encodeURIComponent(engine)}`;
+  const status = document.getElementById("status");
+  try {
+    const response = await fetch("bundle.json");
+    if (!response.ok) throw new Error(response.statusText);
+    renderCredits(await response.json(), document.getElementById("credits"));
+    status.remove();
+    if (engine) document.getElementById(engine)?.scrollIntoView();
+  } catch (error) {
+    status.textContent = `The engines of the page could not be read (${error.message}); .credits in the terminal prints the sources of an engine.`;
+  }
+</script>
+</body>
+</html>

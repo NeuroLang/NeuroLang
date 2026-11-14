@@ -263,14 +263,17 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
         "neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit"]
     assert described["engines"]["neurosynth_iit"]["files"] == {
         "neurosynth/model.npz": ["neurosynth-model.npz"]}
+    neurostore = bundle.acknowledgements("neurostore")
     assert described["engines"]["neurostore_iit"] == {
         "label": "NeuroStore + tracts",
         "data": "neurolang-neurostore_iit-data.zip",
         "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
+        "acknowledgements": bundle.acknowledgements("neurostore_iit"),
     }
     assert described["engines"]["neurostore"] == {
         "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
         "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
+        "acknowledgements": neurostore,
     }
     # What a page of before the choice of the engine reads: the default's.
     assert described["data"] == "neurolang-neurosynth_iit-data.zip"
@@ -500,5 +503,18 @@ def test_the_embeddings_of_neurosynth_are_in_both_engines_of_the_bundle(
         "label": "Neurosynth + tracts",
         "data": "neurolang-neurosynth_iit-data.zip",
         "files": {"neurosynth/model.npz": ["neurosynth-model.npz"]},
+        "acknowledgements": bundle.acknowledgements("neurosynth_iit"),
     }
     assert all("cache_keys" not in e for e in described["engines"].values())
+
+
+def test_the_credits_name_each_source_of_an_engine(bundle):
+    """The page's credits list what an engine has of the engines it
+    extends: NeuroStore + tracts names NeuroStore, the atlases and the
+    tractogram, each once."""
+    texts = bundle.acknowledgements("neurostore_iit")
+    assert len(texts) == len(set(texts))
+    for source in ("NeuroStore", "Schaefer 2018", "Cognitive Atlas",
+                   "SPECTER2", "MNI152 template", "IIT Human Brain Atlas",
+                   "tract_querier"):
+        assert any(source in text for text in texts), source

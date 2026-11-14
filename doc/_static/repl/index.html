@@ -21,38 +21,8 @@
 <link rel="icon" href="../logo/favicon/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../logo/favicon/favicon.ico" sizes="48x48">
 <link rel="apple-touch-icon" href="../logo/favicon/apple-touch-icon.png">
+<link rel="stylesheet" href="tokens.css">
 <style>
-  /* The page's colours: those of the logo kit (../logo/README.md), as the
-     documentation's (neurolang.css): ink, the blue of rule heads, the red of
-     the answer, the teal of the docs. Dark first, as the head script sets. */
-  :root {
-    color-scheme: dark;
-    --ground: #0b1220; --panel: #0f1a2e; --raised: #15223b; --sunken: #0a1322; --term: #070d19;
-    --border: #22324f; --border-strong: #34476b; --hover: #1a2944; --zebra: #0d1729; --row-hover: #172a48;
-    --text: #e8eef9; --muted: #a9b8d0; --faint: #7d8daa;
-    --accent: #5aa3f6; --accent-hover: #7db7f8; --on-accent: #06121f; --accent-soft: #15315a;
-    --answer: #ff6b70; --teal: #4cc3de; --teal-soft: #0f3340;
-    --ok: #4ccf8a; --bad: #ff8f87; --bad-soft: #3a1418; --warn: #f2c14e;
-    --track: #24324d; --head: #e8eef9;
-    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px rgb(0 0 0 / .35);
-    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    --radius: 8px; --radius-lg: 12px;
-    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E");
-    --chart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M4 20h16M7 16v-5M12 16V6M17 16v-8'/%3E%3C/svg%3E");
-    --info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5v.5'/%3E%3C/svg%3E");
-  }
-  :root[data-theme=light] {
-    color-scheme: light;
-    --ground: #f3f6fb; --panel: #ffffff; --raised: #ffffff; --sunken: #f6f8fc; --term: #0f1b33;
-    --border: #d9e1ee; --border-strong: #b9c6db; --hover: #edf2f9; --zebra: #f7f9fc; --row-hover: #e8f1fd;
-    --text: #0f1b33; --muted: #4a5874; --faint: #66748f;
-    --accent: #1a63c2; --accent-hover: #15529f; --on-accent: #ffffff; --accent-soft: #e6effb;
-    --answer: #e03a3e; --teal: #0e7490; --teal-soft: #e3f4f8;
-    --ok: #1d7a4b; --bad: #b42318; --bad-soft: #fdecea; --warn: #8a5a00;
-    --track: #dde5f1; --head: #0f1b33;
-    --shadow: 0 1px 2px rgb(15 27 51 / .08), 0 8px 24px rgb(15 27 51 / .12);
-  }
   :root { --tk-comment: #8d9cb6; --tk-keyword: #c9a2ff; --tk-operator: #7cc4ff; --tk-predicate: #5aa3f6; --tk-string: #7ee0a0; --tk-number: #4cc3de; }
   :root[data-theme=light] { --tk-comment: #5f6d86; --tk-keyword: #7c3aed; --tk-operator: #0b4f9c; --tk-predicate: #1a63c2; --tk-string: #17723c; --tk-number: #0e7490; }
   /* On the terminal's dark ground, whatever the theme. */
@@ -441,7 +411,7 @@
     <a class="brand" href="https://neurolang.github.io/" aria-label="NeuroLang"><img class="logo-dark" src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"><img class="logo-light" src="../logo/svg/neurolang-lockup.svg" alt="NeuroLang"></a>
     <select id="engine" aria-label="Engine" title="The database to query" hidden></select>
     <span id="status" class="busy" role="status">Starting…</span>
-    <nav aria-label="NeuroLang"><details id="docs" class="nav-menu"><summary>Docs</summary><div id="docs-links" class="nav-menu-items"></div></details><a href="https://github.com/NeuroLang/NeuroLang">GitHub</a><a id="account" href="/account" hidden title="Your account">Account</a><a id="logout" href="/logout" hidden>Log out</a><div id="theme" role="group" aria-label="Theme">
+    <nav aria-label="NeuroLang"><details id="docs" class="nav-menu"><summary>Docs</summary><div id="docs-links" class="nav-menu-items"></div></details><a id="credits" href="credits.html" title="The data of the engines, and how to acknowledge them">Credits</a><a href="https://github.com/NeuroLang/NeuroLang">GitHub</a><a id="account" href="/account" hidden title="Your account">Account</a><a id="logout" href="/logout" hidden>Log out</a><div id="theme" role="group" aria-label="Theme">
         <button type="button" data-theme="system" title="System theme" aria-label="System theme"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
         <button type="button" data-theme="light" title="Light" aria-label="Light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
         <button type="button" data-theme="dark" title="Dark" aria-label="Dark"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
@@ -571,7 +541,7 @@
       <details id="engine-details" class="disclosure">
         <summary>Engine and version</summary>
         <p class="note">The engine here leaves out the precomputed analyses <code>lift</code>, <code>relative_risk</code>, <code>uniformity</code> and <code>ratios</code>: they need several GB, more than a browser tab is given. Add <code>?engine=full</code> to the address to build them on a machine with the memory; the terminal command has them. The first query using <code>query_similarity</code> downloads the SPECTER2 query model and the embeddings of the studies, about 310 MB.</p>
-        <p class="note"><strong>Neurosynth + tracts</strong> (<code>?engine=neurosynth_iit</code>) adds to the studies of Neurosynth the whole-brain tractogram of the IIT Human Brain Atlas v3, 15,000 of its 37,980 streamlines chosen at random and thinned, indexed by the atlas's Desikan&ndash;Killiany wmparc (labels of FreeSurfer's colour LUT), and tract_querier's bundles (<code>uf</code>, <code>af</code>, <code>cst</code>&hellip;) as Datalog rules. The tractogram and the wmparc are those of the IIT Human Brain Atlas (Illinois Institute of Technology; Qi, Arfanakis et al.), under the <a href="https://www.nitrc.org/projects/iit/">IIT Human Brain Template License</a> (non-commercial educational and research use, with attribution); the colour LUT is FreeSurfer's.</p>
+        <p class="note"><strong>Neurosynth + tracts</strong> (<code>?engine=neurosynth_iit</code>) adds to the studies of Neurosynth the whole-brain tractogram of the IIT Human Brain Atlas v3, 15,000 of its 37,980 streamlines chosen at random and thinned, indexed by the atlas's Desikan&ndash;Killiany wmparc (labels of FreeSurfer's colour LUT), and tract_querier's bundles (<code>uf</code>, <code>af</code>, <code>cst</code>&hellip;) as Datalog rules. Its licence, and the sources of the data of every engine, are in the <a href="credits.html#neurosynth_iit">credits</a>.</p>
         <div id="banner"></div>
         <form id="version" class="row">
           NeuroLang from <input name="repo" value="NeuroLang/NeuroLang" aria-label="GitHub repository" spellcheck="false">
