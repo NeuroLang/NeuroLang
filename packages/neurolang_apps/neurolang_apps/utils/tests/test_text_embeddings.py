@@ -219,8 +219,8 @@ def test_encoder_import_error_says_the_cause(monkeypatch):
 
 
 def _fake_loads(monkeypatch):
-    """Make Specter2Encoder load a fake model; return the list of its
-    loads and moves."""
+    """Make Specter2Encoder load a fake model, as if torch were installed;
+    return the list of its loads and moves."""
     loads = []
 
     class Model:
@@ -234,6 +234,7 @@ def _fake_loads(monkeypatch):
             loads.append(("load", self.device))
 
     monkeypatch.setattr(te.Specter2Encoder, "_load", fake_load)
+    monkeypatch.setattr(te, "_torch_available", lambda: True)
     return loads
 
 
