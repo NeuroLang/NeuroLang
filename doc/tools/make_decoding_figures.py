@@ -14,7 +14,6 @@ documentation.
 
 import argparse
 import io
-import shutil
 import time
 from pathlib import Path
 
@@ -132,12 +131,12 @@ def main() -> None:
 
     mask_path = args.output / "amygdala_mask.nii.gz"
     nib.save(amygdala_mask(nl.template), mask_path)
-    zmap_path = args.output / "motor_zmap.nii.gz"
-    shutil.copy(datasets.load_sample_motor_activation_image(), zmap_path)
+    # NeuroVault's image, which nilearn downloads: not kept with the docs
+    zmap_path = Path(datasets.load_sample_motor_activation_image())
 
     for stem, path, title in (
         ("amygdala", mask_path, "A mask of the right amygdala"),
-        ("motor", zmap_path, "The motor z-map, left vs right button press"),
+        ("motor", zmap_path, "The motor map, left vs right button press"),
     ):
         app._handle_dot_command(f".image {path} --name image")
         query = nifti.image_decoding(app, "image")["query"]

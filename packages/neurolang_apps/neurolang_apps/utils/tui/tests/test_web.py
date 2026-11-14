@@ -870,3 +870,37 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
         "statement": ".image 'my map.nii.gz' --name image",
         "query": "",
     }
+
+
+def test_a_server_loads_shows_and_tells_an_uploaded_image(
+    repl, monkeypatch, tmp_path
+):
+    """The whole path of an image on a server (neurolang.confine): the
+    page uploads it, runs the statement the upload returns, and gets the
+    viewer back; an engine without the peaks of studies says it does not
+    decode it."""
+    import gzip
+    import re
+
+    import nibabel as nib
+    import numpy as np
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+    monkeypatch.setattr(
+        nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"
+    )
+    repl.app._nl.template = nib.Nifti1Image(
+        np.ones((4, 4, 4), dtype=np.uint8), np.eye(4)
+    )
+    data = np.zeros((4, 4, 4), dtype=np.uint8)
+    data[1, 1, 1] = data[2, 2, 2] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    answer = repl.upload("my roi.nii.gz", image)
+    reply = repl.submit(answer["statement"])
+    text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
+    assert not reply.failed, text
+    assert "the 2 voxels of the mask, equally likely" in text
+    assert "not decoded: the engine has no activated" in text
+    assert reply.viewers == ["<html>page</html>"]
+    assert not (tmp_path / "data").exists()  # nothing written there

@@ -8,7 +8,7 @@ decodes an image towards the terms of a meta-analysis engine, Neurosynth's
 or NeuroStore's, with the probabilistic model those engines already use
 for their maps (:doc:`tutorial_neurosynth_tests`): this page loads an
 image, explains the model, and decodes two images, a mask of the amygdala
-and a z-map of a motor task.
+and a statistical map of a motor task.
 
 Loading an image
 ----------------
@@ -122,7 +122,7 @@ term.  Writing the choice of the voxel as a second probabilistic choice
 beside that of the study gives the same probabilities, but the engine
 then pairs every activated voxel of the image with every term of the
 study before summing: the motor map below took 96 s on the neurosynth
-engine, instead of 8, and more than 34 GB on the neurostore engine.  A
+engine, instead of 5 to 8, and more than 34 GB on the neurostore engine.  A
 term none of whose studies activates the image has a probability of 0,
 and is no answer.
 
@@ -176,24 +176,25 @@ often as the average study:
    :class: only-dark
    :alt: The ten concepts of the largest lift for the amygdala
 
-A z-map: pressing a button
---------------------------
+A statistical map: pressing a button
+------------------------------------
 
-``motor_zmap.nii.gz`` (:download:`download
-<_static/decoding/motor_zmap.nii.gz>`) is the contrast of pressing a
-button with the left hand against the right, of a group of subjects,
-NeuroVault's image 10426 (the sample motor activation image of nilearn),
-on a grid of 3 mm.  Its positive values are the right motor cortex, which
+The statistical map of pressing a button with the left hand against the
+right, NeuroVault's `image 10426 <https://neurovault.org/images/10426/>`_,
+is the sample motor activation image of nilearn, on a grid of 3 mm, with
+values from -7.9 to 7.9; in Python,
+``nilearn.datasets.load_sample_motor_activation_image()`` downloads it and
+returns its path.  Its positive values are the right motor cortex, which
 moves the left hand; ``.image`` resamples it to the grid of 2 mm of the
-engine, and takes the voxels of z ≥ 3.1:
+engine, and takes its voxels of 3.1 or more, as of a z-map:
 
 .. image:: _static/decoding/motor_image.png
-   :alt: The motor z-map, thresholded at 3.1, on the MNI template
+   :alt: The motor map, thresholded at 3.1, on the MNI template
 
 .. code-block:: text
 
-    nl(neurosynth:datalog)> .image doc/_static/decoding/motor_zmap.nii.gz --name image
-    loaded image(i, j, k, value): 179612 voxels from doc/_static/decoding/motor_zmap.nii.gz;
+    nl(neurosynth:datalog)> .image image_10426.nii.gz --name image
+    loaded image(i, j, k, value): 179612 voxels from image_10426.nii.gz;
     image_voxel(i, j, k, weight): the 8219 voxels with a value of 3.1 or more,
     the more likely the larger their value
 
@@ -206,11 +207,11 @@ somatosensory cortex behind the motor one, and the parietal operculum
 
 .. image:: _static/decoding/motor_decoding_light.png
    :class: only-light
-   :alt: The ten concepts of the largest lift for the motor z-map
+   :alt: The ten concepts of the largest lift for the motor map
 
 .. image:: _static/decoding/motor_decoding_dark.png
    :class: only-dark
-   :alt: The ten concepts of the largest lift for the motor z-map
+   :alt: The ten concepts of the largest lift for the motor map
 
 What the decoding does not say
 ------------------------------
@@ -228,11 +229,11 @@ for the lift of one term, that of *fear* for the amygdala, say:
         image_decoding('fear', lift, n), lift_replicate(b, x)
     ans(lift, ci_low, ci_high) :- interval(lift, ci_low, ci_high)
 
-gives 4.10 within [3.47, 4.64], in 11 s: the replicates of the studies
+gives 4.10 within [3.47, 4.64], in about 10 s: the replicates of the studies
 never bring it near 1.  Two terms are compared on the same replicate
 ``b``, as in :doc:`tutorial_neurosynth_tests`.
 
-On the neurosynth engine at 2 mm, each image is decoded in about 8 s,
+On the neurosynth engine at 2 mm, each image is decoded in 5 to 8 s,
 the 257 voxels of the amygdala as the 8,219 of the motor map; on the
 neurostore engine, of twice as many studies, in about 25 s, with less
 than 1 GB of memory beyond that of the engine.

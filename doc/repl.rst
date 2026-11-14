@@ -179,6 +179,11 @@ when a saved session is opened), and forgets it on **Restart**.  A server
 (``neurolang-repl-serve``) loads the files you upload, and no path of its
 own.
 
+**Upload data** also takes a NIfTI image of activations (``.nii`` or
+``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``,
+shows it, and puts in the box the query decoding it towards the terms of
+the studies (:doc:`tutorial_decoding`).
+
 
 Results
 -------
@@ -274,6 +279,10 @@ Every command
    * - ``.load PATH|UPLOADED [NAME]``
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
+     - both
+   * - ``.image PATH|UPLOADED``
+     - a NIfTI image of activations, shown and decoded (see
+       :doc:`tutorial_decoding`)
      - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines
