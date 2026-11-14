@@ -155,6 +155,54 @@ and 36 GB on 300,000 streamlines; on all 3.2 million that fit in 480 MB, one
 bundle takes 52 s (cst) to 11 min (af) and 20 GB, and all of them at once
 do not fit in 64 GB.
 
+## Tractography
+
+The structural connectivity of each subject from its own tractography
+(`tractography.py`), over Schaefer's 400 parcels (17 networks) and the 32
+regions of Tian's subcortex (scale 2): 432 × 432. It needs MRtrix3 (3.0.4
+tested), the HCP's preprocessed diffusion data in the subject's T1w space
+(`T1w/Diffusion/{data.nii.gz,bvals,bvecs,nodif_brain_mask.nii.gz}`), its
+`T1w/aparc+aseg.nii.gz` and the warp `MNINonLinear/xfms/standard2acpc_dc`;
+no FSL.
+
+1. `python -m hcp_connectivity volume-atlas WORK` (needs the internet):
+   Schaefer's volume and Tian's atlas in MNI space, combined (cortex
+   1-400, Tian 401-432) in `WORK/atlases`; `WORK` is also where
+   `atlases.npz` (above) names the parcels.
+2. `python -m hcp_connectivity tractography WORK HCP_DIR OUT --task I
+   --tasks N [--limit 100] [--streamlines 5000000] [--scratch DIR]`, a task
+   of the subjects that have diffusion data (the first `--limit`, sorted).
+   The MRtrix3 commands are run by `$MRTRIX_CMD`: for a container,
+   `MRTRIX_CMD="singularity exec mrtrix3.sif"` (with the folders of the
+   data bound, `SINGULARITY_BIND`); empty, those on the `PATH`. The threads
+   are `$SLURM_CPUS_PER_TASK`, or all the CPUs. For each subject, in
+   `--scratch` (default `WORK/tractography`): `dwi2response dhollander`,
+   `dwi2fod msmt_csd` (white matter and CSF), `5ttgen freesurfer
+   -sgm_amyg_hipp`, `tckgen` (iFOD2, ACT, backtracking, cropped at the
+   grey/white interface, dynamic seeding, 5 million streamlines), `tcksift2`,
+   the atlas brought to the subject through the HCP's warp (nearest
+   neighbour, `nibabel`/`scipy`, no FSL) and checked against its
+   segmentation (Dice of Tian's structures and aseg's), and
+   `tck2connectome -symmetric -zero_diagonal -assignment_radial_search 2`.
+   The steps done are marked, so that a task started again goes on after
+   the last one; the intermediate files, the tractogram included, are
+   deleted once the matrix is made (`--keep` to keep them).
+3. The outputs, in `OUT`: `part-<task>.npz` (as above; the sum of the
+   subjects' matrices of `schaefer400_17_tian`, the SIFT2 weights between
+   two regions times SIFT2's proportionality coefficient so that the
+   subjects are comparable, and of `schaefer400_17_tian_count`, the
+   streamlines), `matrices/<subject>.npz` (the two matrices of the
+   subject), `qc/<subject>.json` (the time of each step, the streamlines
+   with both ends assigned, the atlas's Dice, and what the matrix should
+   show: the thalamus to the cortex, the striatum to the frontal cortex,
+   the hippocampus to the temporal, the interhemispheric share).
+4. `python -m hcp_connectivity combine tractography WORK PARTS DATASET`:
+   the mean and standard deviation of both matrices
+   (`parquet/schaefer400_17_tian[_count]_{mean,sd}.parquet`), the subjects
+   (`tractography_subjects.parquet`) and the tables of the engines
+   (`tsv/..._tian.tsv.gz`: a parcel and a Tian region; `..._tian_tian`;
+   the parcels between them).
+
 ## Gradients
 
 `gradients.py`: a principal component analysis of the regions'

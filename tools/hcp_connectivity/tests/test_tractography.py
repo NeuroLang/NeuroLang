@@ -110,3 +110,10 @@ def test_subjects_with_diffusion(tmp_path):
          "standard2acpc_dc.nii.gz").write_text("")
     assert t.subjects_with_diffusion(tmp_path) == ["1", "2"]
     assert t.subjects_with_diffusion(tmp_path, 1) == ["1"]
+
+
+def test_read_weights_either_separator(tmp_path):
+    (tmp_path / "a").write_text("0.5,1.5,0\n")
+    (tmp_path / "b").write_text("0.5 1.5 0\n")
+    assert t.read_weights(tmp_path / "a").tolist() == [0.5, 1.5, 0.0]
+    assert t.read_weights(tmp_path / "b").tolist() == [0.5, 1.5, 0.0]

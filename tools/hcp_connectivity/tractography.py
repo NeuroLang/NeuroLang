@@ -216,6 +216,13 @@ def read_matrix(path: Path, n: int = N_CORTEX + N_TIAN) -> np.ndarray:
     return matrix
 
 
+def read_weights(path: Path) -> np.ndarray:
+    """The SIFT2 weights of the streamlines (comma or space separated)."""
+    with open(path) as handle:
+        comma = "," in handle.read(1000)
+    return np.loadtxt(path, delimiter="," if comma else None)
+
+
 def assigned_fraction(path: Path, weights: np.ndarray = None) -> dict:
     """From the assignments of tck2connectome (``-out_assignments``: the
     two nodes of each streamline, 0 for none), the fraction of the
@@ -360,13 +367,15 @@ def subject_matrix(subject: str, hcp: Path, work: Path, scratch: Path,
             t("mask.mif"), "-force")))
     step("response", lambda: run(
         "dwi2response", "dhollander", t("dwi.mif"), t("wm.txt"),
-        t("gm.txt"), t("csf.txt"), "-mask", t("mask.mif"), "-force"))
+        t("gm.txt"), t("csf.txt"), "-mask", t("mask.mif"),
+        "-scratch", folder, "-force"))
     step("fod", lambda: run(
         "dwi2fod", "msmt_csd", t("dwi.mif"), t("wm.txt"), t("wmfod.mif"),
         t("csf.txt"), t("csffod.mif"), "-mask", t("mask.mif"), "-force"))
     step("5tt", lambda: run(
         "5ttgen", "freesurfer", home / "T1w" / "aparc+aseg.nii.gz",
-        t("5tt.mif"), "-sgm_amyg_hipp", "-nocrop", "-force"))
+        t("5tt.mif"), "-sgm_amyg_hipp", "-nocrop", "-scratch", folder,
+        "-force"))
     step("tckgen", lambda: run(
         "tckgen", t("wmfod.mif"), t("tracks.tck"), "-act", t("5tt.mif"),
         "-backtrack", "-crop_at_gmwmi", "-seed_dynamic", t("wmfod.mif"),
@@ -399,7 +408,7 @@ def subject_matrix(subject: str, hcp: Path, work: Path, scratch: Path,
     step("connectome", connectome)
 
     mu = float(t("mu.txt").read_text())
-    weights = np.loadtxt(t("weights.csv"))
+    weights = read_weights(t("weights.csv"))
     counts = read_matrix(t("count.csv"))
     weighted = read_matrix(t("weighted.csv")) * mu
     labels = np.asarray(nib.load(t("labels.nii.gz")).dataobj)
