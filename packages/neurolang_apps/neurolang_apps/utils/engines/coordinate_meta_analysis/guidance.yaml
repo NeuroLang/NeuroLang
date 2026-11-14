@@ -4,6 +4,11 @@
 # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
 # questions on these engines: added to its system prompt.
 assistant_guidance: >
+  The functional connectivity of a region, its co-activation, is the
+  probability that the studies activating it activate another,
+  PROB[active(l, s) // seed(s)] over selected_study (meta-analytic
+  connectivity); the structural connectivity, white-matter streamlines,
+  is *_structural_connectivity: two different answers, each named as such.
   A question asking how many (combien) gets a count, not a
   probability: AGGREGATE[](mentions(s, 'pain') @ count(s)) = n over
   the stored relations, AGGREGATE[x] for each x, or over the rows of

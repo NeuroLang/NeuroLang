@@ -6,6 +6,18 @@
 # How the LLM assistant (.ask, neurolang-query --ask) is to answer the
 # questions on the structural connectivity: added to its system prompt.
 assistant_guidance: >
+  Two connectivities are not to be mixed up. The structural connectivity
+  is anatomical: the white-matter fibres joining two regions, streamlines
+  of diffusion MRI tractography (asked as structural, anatomical,
+  white-matter, fibre or tract connectivity, wiring, streamlines). The
+  functional connectivity is of activity: regions active together, which
+  the meta-analysis engines give as the co-activation of regions by the
+  same studies (asked as functional connectivity, co-activation,
+  meta-analytic connectivity, MACM); an engine without studies has none.
+  A question saying only connectivity or connected is answered with the
+  one its words point to (studies, tasks, terms, activation: the
+  functional; fibres, tracts, streamlines: the structural), and the
+  answer says which it gives.
   Structural connectivity (how strongly two cortical regions are wired,
   which regions a region connects to, white-matter or anatomical
   connectivity, a structural network or connectome) is
@@ -19,7 +31,15 @@ assistant_guidance: >
   first argument. A strong connection is a large n: compare with a
   threshold, (n > 1000), or sum n over a region's pairs for its
   strength, sum(n); a value computed from n is computed in the body,
-  (f == n / t), never in the head. The labels are those of schaefer and destrieux
+  (f == n / t), never in the head. A probability of the structural
+  connectivity is either computed, the fraction n / t of a region's
+  streamlines t = sum(n) (where a streamline leaving it ends), or that of
+  a probabilistic program queried with PROB: a choice, ends_in(l) ^ (n /
+  t) :- ..., for the region a random streamline of a seed ends in, or
+  probabilistic facts, wired(l1, l2) :: 1 - exp(-n / 5000.0) :- ...,
+  (n > 100), each connection present independently, for the probability
+  of a path or of reaching a network; that mapping of counts to
+  probabilities is a choice of the model, which the answer states. The labels are those of schaefer and destrieux
   (Schaefer's name the network, as '17Networks LH DefaultA pCunPCC 1',
   so startswith('17Networks LH Default', l) selects the left default
   network; Destrieux's start with the hemisphere, as 'L G front sup').

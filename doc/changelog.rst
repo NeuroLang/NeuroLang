@@ -58,10 +58,19 @@ Unreleased
   those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
   standard deviations, in parquet; ``.view`` draws a result of them as a
   network. There is no subcortex in them, so no Tian. Its questions and
-  their queries teach the query assistant the connectivity of a region,
-  a network, the strength of a parcel, and, on the meta-analysis
-  engines, the connectivity of the regions a term activates or
-  co-activates; ``assistant_guidance`` is inherited, the base's first.
+  their queries teach the query assistant to tell the structural
+  connectivity (white-matter streamlines) from the functional one (the
+  meta-analytic co-activation of regions by the same studies): the
+  structural connectivity of a region, a network, the strength of a
+  parcel; its counts turned into probabilities, computed (the fraction
+  of a region's streamlines) or as a probabilistic program (a choice of
+  where a random streamline ends; probabilistic facts, each connection
+  present with probability 1 - exp(-n / 5000), for the probability of a
+  path or of reaching a network); and, on the meta-analysis engines, the
+  two connectivities of a region side by side, the structural
+  connectivity of the regions a term activates or co-activates, and the
+  probability that a random streamline of a region ends in one a term
+  activates. ``assistant_guidance`` is inherited, the base's first.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:
