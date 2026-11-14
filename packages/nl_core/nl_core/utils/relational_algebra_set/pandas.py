@@ -1251,6 +1251,9 @@ class NamedRelationalAlgebraFrozenSet(
                 columns=proj_columns,
                 iterable=[],
             )
+        if any(callable(op) for op in eval_expressions.values()):
+            # Python callables run once per row: don't run them on duplicates
+            self._drop_duplicates_if_needed()
         new_container = self._container.copy()
         new_container = new_container.infer_objects()
         seen_pure_columns = set()
