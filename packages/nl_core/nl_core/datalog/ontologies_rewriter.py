@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from nl_expr.expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
@@ -29,7 +31,7 @@ def constraints_that_can_hold(constraints, holds):
                 sigma for sigma in sigmas
                 if all(
                     atom.functor in holding
-                    for atom in extract_logic_atoms(sigma.antecedent)
+                    for atom in _body(sigma)
                 )
             }
             for name, sigmas in constraints.items()
@@ -119,6 +121,11 @@ def _arguments(formula):
     return getattr(formula, "args", formula._symbols)
 
 
+def _body(sigma):
+    return getattr(sigma.antecedent, "formulas", (sigma.antecedent,))
+
+
+@lru_cache(maxsize=1 << 16)
 def _existential_variables(sigma):
     return ExtractFreeVariablesRightImplicationWalker().walk(sigma)
 
@@ -149,7 +156,7 @@ def _chased_only(sigma):
     as ``p(x, y) ∧ p(y, z) → p(x, z)``: a rewriting with it never ends."""
     return sum(
         atom.functor == sigma.consequent.functor
-        for atom in extract_logic_atoms(sigma.antecedent)
+        for atom in _body(sigma)
     ) > 1
 
 
@@ -177,6 +184,7 @@ class OntologyRewriter:
         self.holds = holds
         self._null_positions_cache = {}
         self._backward_cache = {}
+        self._moves_cache = {}
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -284,6 +292,21 @@ class OntologyRewriter:
             self._null_positions_cache[functor] = positions
         return self._null_positions_cache[functor]
 
+    def _moves(self, functor, position):
+        """``(functor, position)`` and the positions of the bodies of the
+        constraints deriving ``functor`` a rewriting step moves its term to."""
+        key = (functor, position)
+        if key not in self._moves_cache:
+            self._moves_cache[key] = {key} | {
+                (body.functor, k)
+                for sigma in self.union_of_constraints.get(functor, ())
+                if isinstance(v := sigma.consequent.args[position], Symbol)
+                and v not in _existential_variables(sigma)
+                for body in _body(sigma)
+                for k, arg in enumerate(body.args) if arg == v
+            }
+        return self._moves_cache[key]
+
     def _backward(self, functor, position):
         """The predicates and positions a term in ``position`` of an atom
         over ``functor`` can be moved to by rewriting steps that keep it."""
@@ -291,19 +314,9 @@ class OntologyRewriter:
         if key not in self._backward_cache:
             reach, todo = {key}, [key]
             while todo:
-                head, j = todo.pop()
-                for sigma in self.union_of_constraints.get(head, ()):
-                    v = sigma.consequent.args[j]
-                    if (
-                        not isinstance(v, Symbol)
-                        or v in _existential_variables(sigma)
-                    ):
-                        continue
-                    for body in extract_logic_atoms(sigma.antecedent):
-                        for k, arg in enumerate(body.args):
-                            if arg == v and (body.functor, k) not in reach:
-                                reach.add((body.functor, k))
-                                todo.append((body.functor, k))
+                for move in self._moves(*todo.pop()) - reach:
+                    reach.add(move)
+                    todo.append(move)
             self._backward_cache[key] = reach
         return self._backward_cache[key]
 
@@ -379,8 +392,7 @@ class OntologyRewriter:
 
     def _get_factorizable(self, sigma, q):
         factorizable = []
-        efvw = ExtractFreeVariablesRightImplicationWalker()
-        free_vars = efvw.walk(sigma)
+        free_vars = _existential_variables(sigma)
         for fv in free_vars:
             pos = self._get_position_existential(sigma.consequent, fv)
             S = self._get_term(q, sigma.consequent)
@@ -443,12 +455,40 @@ class OntologyRewriter:
                     isinstance(arg, Symbol)
                     and not self._is_distinguished(arg, q)
                     for arg in s.args
-                )
+                ) and not self._splits_piece(sigma, s, q)
             ]
         if self._is_applicable(sigma, q, S):
             return S
 
         return []
+
+    def _splits_piece(self, sigma, s, q):
+        """Whether rewriting ``s`` with ``sigma`` moves a term ``t`` into a
+        null position ``(B, i)`` while ``t`` is a constant, a head variable
+        or occurs out of one step from ``(B, i)`` (see doc/ontologies.rst)."""
+        if self.holds is None:
+            return False
+        head = sigma.consequent.args
+        formulas = getattr(q.antecedent, "formulas", (q.antecedent,))
+        for body in _body(sigma):
+            for i in self._null_positions(body.functor):
+                if body.args[i] not in head:
+                    continue
+                k = head.index(body.args[i])
+                t = s.args[k]
+                if (
+                    isinstance(t, Constant) or self._is_distinguished(t, q)
+                    or any(
+                        (body.functor, i) not in self._moves(
+                            getattr(o, "functor", None), j
+                        )
+                        for o in formulas
+                        for j, arg in enumerate(_arguments(o))
+                        if arg == t and (o is not s or j != k)
+                    )
+                ):
+                    return True
+        return False
 
     def _get_term(self, q, sigma_con):
         q_args = []
@@ -477,8 +517,7 @@ class OntologyRewriter:
         return all(most_general_unifier(term, sigma) for term in S)
 
     def _not_in_existential(self, q, S, sigma):
-        efvw = ExtractFreeVariablesRightImplicationWalker()
-        free_vars = efvw.walk(sigma)
+        free_vars = _existential_variables(sigma)
         for fv in free_vars:
             existential_position = self._get_position_existential(sigma.consequent, fv)
             if self._position_shared_or_constant(q, S, existential_position):
