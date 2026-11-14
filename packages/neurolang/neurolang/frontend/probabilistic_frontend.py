@@ -349,6 +349,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         self._rewrite_det_idb.cache_clear(self)
         self._constraints_that_can_hold.cache_clear(self)
+        self._projecting_rewritings.cache_clear(self)
         return self.connector_symbol
 
     @property
@@ -1165,6 +1166,15 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.program_ir.get_constraints(), holds
         )
 
+    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    def _projecting_rewritings(self, holds):
+        """The rewritings of the projecting constraints that can hold, the
+        same for every query."""
+        constraints = self._constraints_that_can_hold(holds)
+        return tuple(OntologyRewriter(
+            Union(projecting_rules(constraints)), constraints, chased=True
+        ).Xrewrite())
+
     def _rewrite_program_with_ontology(self, deterministic_program, holds):
         """Xrewrite with the constraints that can hold, those without
         existential variables only on values they introduce; the chase
@@ -1175,11 +1185,12 @@ class NeurolangPDL(QueryBuilderDatalog):
             Union(sum((
                 _split_aggregation(rule, constraints)
                 for rule in deterministic_program.formulas
-            ), ()) + projecting_rules(constraints)),
+            ), ())),
             constraints, chased=True,
         ).Xrewrite()
         return Union(chase_rules(
-            constraints, holds, rewrite,
+            constraints, holds,
+            tuple(rewrite) + self._projecting_rewritings(holds),
             self.program_ir.extensional_database(),
         ))
 
