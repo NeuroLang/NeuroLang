@@ -633,7 +633,9 @@ tract_querier is the engine's ``examples/uncinate.dl``::
 The ``neurosynth_tracts`` engine
 --------------------------------
 
-``neurosynth_tracts`` is both, ``extends: [neurosynth, tracts]``: the
+``neurosynth_tracts`` is both, ``extends: [neurosynth,
+meta_analysis_tracts]``, the abstract engine ``meta_analysis_tracts``
+extending ``coordinate_meta_analysis`` and ``tracts``: the
 studies, terms, peaks and Cognitive Atlas of ``neurosynth``, its atlases
 with the studies that activate their regions (``schaefer_activated(label,
 study)``...) and the centres of their voxels in millimetres
@@ -651,6 +653,14 @@ concepts the studies of the parcels the uncinate fasciculus connects are
 about::
 
    neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
+
+``neurosynth_iit`` adds the abstract engine ``iit_tractogram``: the
+downloads and the commands that load the whole-brain tractogram of the IIT
+Human Brain Atlas v3, index it by its wmparc and import tract_querier's
+bundles.  ``neurostore_tracts`` (``extends: [neurostore,
+meta_analysis_tracts]``) and ``neurostore_iit`` (``extends:
+[neurostore_tracts, iit_tractogram]``) are the same over the studies of
+``neurostore``, with the same questions of the query assistant.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

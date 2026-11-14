@@ -37,8 +37,8 @@ examples:
 # activations, co-activations and co-occurrences of a term or region, with
 # probabilistic query answering over selected_study, the uniform choice
 # of a study: a study is chosen at random and the answer is the
-# probability of what the question asks, conditioned on the term it
-# names. A study activates a point when one
+# probability of what the question asks, conditioned on the term or
+# topic it names. A study activates a point when one
 # of its peaks is within kernel_radius_mm (6 mm):
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
@@ -46,11 +46,14 @@ examples:
 # and the Tian atlas of the subcortex for the functional anatomy
 # (schaefer_activated, tian_activated).
 #
-# A topic given as a description, or a Cognitive Atlas concept, is
-# matched to the studies by the similarity of their title and abstract
-# (similar_study: the 5% closest), with whichever text encoder the
-# engine uses; a Cognitive Atlas definition comes from cogat_definition
-# and is joined in the queried rule itself.
+# A topic given as a description, or a cognitive process, task or
+# concept, is matched to the studies by the similarity of their title
+# and abstract (similar_study: the 5% closest), with whichever text
+# encoder the engine uses: a concept by its Cognitive Atlas definition
+# (cogat_definition, joined in the queried rule itself) when
+# cogat_term has it, else by the question's words. mentions is for the
+# questions about mentions, terms or words, and for the topics that are
+# no cognitive concept (anatomy, disorders, populations, stimuli).
 #
 # A question asking how certain an answer is (a confidence interval, an
 # error bar) resamples the studies: RESAMPLE[boot_studies](pred(x)) = b
@@ -103,23 +106,29 @@ assistant_examples:
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(p) :- PROB[active(s) // term_association(s, 'fear')] = p
 
+  # A cognitive process, task or concept is looked up in the Cognitive
+  # Atlas (search_values over cogat_term): the studies are those closest
+  # to its definition when it is there (language), to the question's own
+  # words when it is not (speech).
   - question: Which gyri and sulci are activated by studies about language?
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'language')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(l, p) :- cogat_definition('language', d), p_active_given_close(d, l, p)
 
   - question: Is the left superior temporal gyrus activated by studies on speech?
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active('L G temp sup Lateral', s) // term_association(s, 'speech')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      ans(p) :- PROB[active('L G temp sup Lateral', s) // close('speech', s)] = p
 
   - question: Which subcortical regions are activated by studies about fear?
     datalog: |-
       active(l, s) :- tian_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'fear')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(l, p) :- cogat_definition('fear', d), p_active_given_close(d, l, p)
 
   - question: Which parcels of the functional networks are activated by studies about the default mode?
     datalog: |-
@@ -132,8 +141,9 @@ assistant_examples:
       functional_region(l, s) :- schaefer_activated(l, s)
       functional_region(l, s) :- tian_activated(l, s)
       active(l, s) :- functional_region(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'reward')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(l, p) :- cogat_definition('reward', d), p_active_given_close(d, l, p)
 
   # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
   # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
@@ -155,45 +165,45 @@ assistant_examples:
       amygdala(s) :- tian_activated('lAMY lh', s)
       amygdala(s) :- tian_activated('mAMY lh', s)
       active_roi(s) :- amygdala(s), selected_study(s)
-      mentioned_term(t) :- mentions(s, t), selected_study(s)
-      cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      close_and_roi(q, s) :- similar_study(q, s), amygdala(s), selected_study(s)
       roi_probability(p_r) :- PROB[active_roi(s)] = p_r
-      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
-      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
-      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
-      ans(bf) :- bayes_factor('fear', bf)
+      close_probability(q, PROB) :- close(q, s)
+      joint_probability(q, PROB) :- close_and_roi(q, s)
+      bayes_factor(q, bf) :- joint_probability(q, p_rt), roi_probability(p_r), close_probability(q, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(bf) :- cogat_definition('fear', d), bayes_factor(d, bf)
 
   - question: What is the Bayes factor of fear for the activation of the left amygdala, with its 95% confidence interval?
     datalog: |-
       amygdala(s) :- tian_activated('lAMY lh', s)
       amygdala(s) :- tian_activated('mAMY lh', s)
       active_roi(s) :- amygdala(s), selected_study(s)
-      mentioned_term(t) :- mentions(s, t), selected_study(s)
-      cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      close_and_roi(q, s) :- similar_study(q, s), amygdala(s), selected_study(s)
       roi_probability(p_r) :- PROB[active_roi(s)] = p_r
-      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
-      joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
-      bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
-      bf_replicate(b, t, bf) :- RESAMPLE[boot_studies](bayes_factor(t, bf)) = b
-      ans(bf, percentile(x, 2.5), percentile(x, 97.5)) :- bayes_factor('fear', bf), bf_replicate(b, 'fear', x)
+      close_probability(q, PROB) :- close(q, s)
+      joint_probability(q, PROB) :- close_and_roi(q, s)
+      bayes_factor(q, bf) :- joint_probability(q, p_rt), roi_probability(p_r), close_probability(q, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      bf_replicate(b, q, bf) :- RESAMPLE[boot_studies](bayes_factor(q, bf)) = b
+      ans(bf, percentile(x, 2.5), percentile(x, 97.5)) :- cogat_definition('fear', d), bayes_factor(d, bf), bf_replicate(b, d, x)
 
   - question: How likely is the left superior temporal gyrus to be activated by studies on speech, and how certain is it?
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      p_active_given_term(l, t, p) :- PROB[active(l, s) // term_association(s, t)] = p
-      p_replicate(b, l, t, p) :- RESAMPLE[boot_studies](p_active_given_term(l, t, p)) = b
-      ans(p, percentile(x, 2.5), percentile(x, 97.5)) :- p_active_given_term('L G temp sup Lateral', 'speech', p), p_replicate(b, 'L G temp sup Lateral', 'speech', x)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      p_replicate(b, q, l, p) :- RESAMPLE[boot_studies](p_active_given_close(q, l, p)) = b
+      ans(p, percentile(x, 2.5), percentile(x, 97.5)) :- p_active_given_close('speech', 'L G temp sup Lateral', p), p_replicate(b, 'speech', 'L G temp sup Lateral', x)
 
   - question: Is the left amygdala activated more often by studies about fear than by studies about pain? Give a 95% confidence interval of the difference.
     datalog: |-
       amygdala(s) :- tian_activated('lAMY lh', s)
       amygdala(s) :- tian_activated('mAMY lh', s)
       active_roi(s) :- amygdala(s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      p_roi_given_term(t, p) :- PROB[active_roi(s) // term_association(s, t)] = p
-      p_replicate(b, t, p) :- RESAMPLE[boot_studies](p_roi_given_term(t, p)) = b
-      difference(b, d) :- p_replicate(b, 'fear', p_fear), p_replicate(b, 'pain', p_pain), (d == p_fear - p_pain)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_roi_given_close(q, PROB) :- active_roi(s) // close(q, s)
+      p_replicate(b, q, p) :- RESAMPLE[boot_studies](p_roi_given_close(q, p)) = b
+      difference(b, d) :- cogat_definition('fear', fear), cogat_definition('pain', pain), p_replicate(b, fear, p_fear), p_replicate(b, pain, p_pain), (d == p_fear - p_pain)
       ans(percentile(d, 2.5), percentile(d, 50.0), percentile(d, 97.5)) :- difference(b, d)
 
   - question: Which terms are associated with the MNI point (40, -60, 10), with a Bayes factor above 3.16?
@@ -217,15 +227,17 @@ assistant_examples:
     datalog: |-
       active(l, s) :- schaefer_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
+      ans(l1, l2, p) :- (l1 < l2), cogat_definition('reading', d), p_co_active_given_close(d, l1, l2, p)
 
   - question: What is the co-activation network of the subcortical regions in studies about fear?
     datalog: |-
       active(l, s) :- tian_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'fear')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
+      ans(l1, l2, p) :- (l1 < l2), cogat_definition('fear', d), p_co_active_given_close(d, l1, l2, p)
 
   - question: Which cortical regions are co-activated with the left amygdala?
     datalog: |-
@@ -296,6 +308,14 @@ assistant_examples:
       p_right(p) :- PROB[right(s)] = p
       p_both(p) :- PROB[both(s)] = p
       ans(lift) :- p_both(p12), p_left(p1), p_right(p2), (lift == p12 / (p1 * p2))
+
+  - question: How likely are the studies of the n-back task to activate the left dorsal attention network?
+    datalog: |-
+      dorsal_label(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+      dorsal(s) :- dorsal_label(l), schaefer_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_dorsal_given_close(q, PROB) :- dorsal(s) // close(q, s)
+      ans(p) :- cogat_definition('n-back task', d), p_dorsal_given_close(d, p)
 
   - question: Which studies are about the visual word form area? Give their titles.
     datalog: |-
@@ -415,8 +435,9 @@ assistant_examples:
   - question: "Is right middle occipital sulcus and lunate sulcus activated by studies on emotions?"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active('R S oc middle and Lunatus', s) // term_association(s, 'emotions')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(p) :- cogat_definition('emotion', d), p_active_given_close(d, 'R S oc middle and Lunatus', p)
 
   - question: "What fraction of studies mention perceptual?"
     datalog: |-
@@ -535,8 +556,9 @@ assistant_examples:
       limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
       limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
       active(l, s) :- limbic_label(l), schaefer_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // term_association(s, 'naming')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+      ans(l, p) :- cogat_definition('naming', d), p_active_given_close(d, l, p)
 
   - question: "Which studies activate both globus pallidus and thalamus?"
     datalog: |-
@@ -566,8 +588,9 @@ assistant_examples:
       vp(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
       vp(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
       active(s) :- vp(l), schaefer_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(p) :- PROB[active(s) // term_association(s, 'cognition')] = p
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      p_active_given_close(q, PROB) :- active(s) // close(q, s)
+      ans(p) :- cogat_definition('cognition', d), p_active_given_close(d, p)
 
   - question: "Is caudate activated by studies that mention consciousness?"
     datalog: |-
@@ -620,8 +643,9 @@ assistant_examples:
     datalog: |-
       recent(s) :- study_year(s, y), (y >= 2010), (y <= 2015)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      cond(s) :- recent(s), mentions(s, 'pain'), selected_study(s)
-      ans(l, p) :- PROB[active(l, s) // cond(s)] = p
+      cond(q, s) :- similar_study(q, s), recent(s), selected_study(s)
+      p_active_given_cond(q, l, PROB) :- active(l, s) // cond(q, s)
+      ans(l, p) :- cogat_definition('pain', d), p_active_given_cond(d, l, p)
 
   - question: "How many studies mention working memory each year?"
     datalog: |-
@@ -630,6 +654,7 @@ assistant_examples:
 
   - question: "How many studies about memory were published in Neuron each year?"
     datalog: |-
-      item(y, s) :- study_journal(s, 'Neuron'), mentions(s, 'memory'), study_year(s, y)
+      neuron(s) :- study_journal(s, 'Neuron')
+      item(y, s) :- cogat_definition('memory', d), similar_study(d, s), neuron(s), study_year(s, y)
       ans(y, n) :- AGGREGATE[y](item(y, s) @ count(s)) = n
 

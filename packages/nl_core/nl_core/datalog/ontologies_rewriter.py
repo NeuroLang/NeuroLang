@@ -8,7 +8,37 @@ from nl_expr.logic import Constant, Implication, NaryLogicOperator, Negation
 from nl_expr.logic.expression_processing import ExtractFreeVariablesWalker
 from nl_expr.logic.transformations import CollapseConjunctions
 from nl_expr.logic.unification import apply_substitution, most_general_unifier
+from .expression_processing import extract_logic_atoms
 from .ontologies_parser import RightImplication
+
+
+def constraints_that_can_hold(constraints, holds):
+    """
+    Return the ``constraints``, indexed by the name of their consequent's
+    predicate as ``get_constraints`` does, whose antecedent can hold: each
+    of its predicates is in ``holds`` or is the consequent of such a
+    constraint. A rewriting step with another constraint gives a rule
+    whose body never holds.
+    """
+    holding = set(holds)
+    while True:
+        kept = {
+            name: {
+                sigma for sigma in sigmas
+                if all(
+                    atom.functor in holding
+                    for atom in extract_logic_atoms(sigma.antecedent)
+                )
+            }
+            for name, sigmas in constraints.items()
+        }
+        heads = {
+            sigma.consequent.functor
+            for sigmas in kept.values() for sigma in sigmas
+        }
+        if heads <= holding:
+            return {name: sigmas for name, sigmas in kept.items() if sigmas}
+        holding |= heads
 
 
 class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
@@ -226,10 +256,7 @@ class OntologyRewriter:
         )
 
     def _is_distinguished(self, var, q):
-        if var in q.consequent.args:
-            return True
-
-        return False
+        return var in q.consequent._symbols
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):

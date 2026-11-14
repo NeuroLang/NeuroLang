@@ -8,12 +8,13 @@ from nl_expr.logic import (
     ExistentialPredicate,
     FunctionApplication,
     Implication,
+    Union,
 )
 from nl_expr.logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import OntologyParser, RightImplication
-from ..ontologies_rewriter import OntologyRewriter
+from ..ontologies_rewriter import OntologyRewriter, constraints_that_can_hold
 
 S_ = Symbol
 C_ = Constant
@@ -414,3 +415,35 @@ def test_ontology_parsed_rewrite():
         assert rewritten[index_1].antecedent.args[0] == rewritten[index_1].consequent.args[0]
     else:
         assert False
+
+
+def test_constraints_that_can_hold():
+    """A constraint is kept when its antecedent's predicates hold, or are
+    derived by kept constraints: ``Dean`` holds, so ``headOf`` can, and
+    ``Chair`` neither holds nor is derived."""
+    Dean, Chair, headOf, Person = S_("Dean"), S_("Chair"), S_("headOf"), S_(
+        "Person"
+    )
+    x, y = S_("x"), S_("y")
+    dean = RI_(Dean(x), headOf(x, y))
+    chair = RI_(Chair(x), headOf(x, y))
+    person = RI_(headOf(x, y), Person(x))
+    constraints = _categorize_constraints([dean, chair, person])
+
+    assert constraints_that_can_hold(constraints, {Dean}) == {
+        "headOf": {dean}, "Person": {person}
+    }
+    assert constraints_that_can_hold(constraints, set()) == {}
+
+
+def test_variable_in_a_head_term_is_distinguished():
+    """``b`` in ``count(b)`` is distinguished: the existential of
+    ``Dean(x) -> headOf(x, y)`` does not rewrite ``headOf(a, b)``."""
+    Dean, headOf, q, count = S_("Dean"), S_("headOf"), S_("q"), S_("count")
+    x, y, a, b = S_("x"), S_("y"), S_("a"), S_("b")
+    constraints = _categorize_constraints([RI_(Dean(x), headOf(x, y))])
+
+    rule = I_(q(count(a)), headOf(a, b))
+    assert len(OntologyRewriter(Union((rule,)), constraints).Xrewrite()) == 2
+    rule = I_(q(count(b)), headOf(a, b))
+    assert OntologyRewriter(Union((rule,)), constraints).Xrewrite() == {rule}

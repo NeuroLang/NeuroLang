@@ -4,50 +4,170 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroLang REPL: log in</title>
+<meta name="theme-color" content="#0b1220">
+<script>
+  // The theme of the REPL before the first paint: the saved choice, or the system's.
+  (() => {
+    let choice = "system";
+    try { choice = localStorage.getItem("neurolang-repl-theme") || choice; } catch {}
+    const light = choice === "light" || (choice === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+  })();
+</script>
 <style>
-  /* The login page of neurolang-repl-serve --users. */
-  :root { color-scheme: light dark; --bad: #cf222e; }
-  body { margin: 0 auto; max-width: 22rem; padding: 3rem 1rem; font: 15px/1.45 system-ui, sans-serif; }
-  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
-  form { display: grid; gap: .7rem; }
-  label { display: grid; gap: .2rem; font-size: .9rem; }
-  input, button { font: inherit; padding: .45rem .6rem; }
-  #message { color: var(--bad); min-height: 1.2rem; }
-  #guest, #orcid, #request { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #8884; }
-  #guest[hidden], #orcid[hidden], #request[hidden], #login[hidden] { display: none; }
-  #orcid a { display: inline-flex; align-items: center; gap: .5rem; padding: .45rem .8rem; border: 1px solid #8888; border-radius: 4px; color: inherit; text-decoration: none; }
-  #orcid svg { width: 1.3rem; height: 1.3rem; }
-  textarea { font: inherit; padding: .45rem .6rem; min-height: 5rem; }
-  .note { font-size: .9rem; color: #888; }
+  /* The login page of neurolang-repl-serve --users: one file, as the page it
+     comes before, with its colours (doc/_static/repl/index.html). */
+  :root {
+    color-scheme: dark;
+    --ground: #0b1220; --panel: #0f1a2e; --raised: #15223b; --sunken: #0a1322;
+    --border: #22324f; --border-strong: #34476b; --hover: #1a2944;
+    --text: #e8eef9; --muted: #a9b8d0; --faint: #7d8daa;
+    --accent: #5aa3f6; --accent-hover: #7db7f8; --on-accent: #06121f; --accent-soft: #15315a;
+    --bad: #ff8f87; --bad-soft: #3a1418; --ok: #4ccf8a;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 12px 32px rgb(0 0 0 / .4);
+    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --radius: 8px; --radius-lg: 14px;
+  }
+  :root[data-theme=light] {
+    color-scheme: light;
+    --ground: #f3f6fb; --panel: #ffffff; --raised: #ffffff; --sunken: #f6f8fc;
+    --border: #d9e1ee; --border-strong: #b9c6db; --hover: #edf2f9;
+    --text: #0f1b33; --muted: #4a5874; --faint: #66748f;
+    --accent: #1a63c2; --accent-hover: #15529f; --on-accent: #ffffff; --accent-soft: #e6effb;
+    --bad: #b42318; --bad-soft: #fdecea; --ok: #1d7a4b;
+    --shadow: 0 1px 2px rgb(15 27 51 / .08), 0 12px 32px rgb(15 27 51 / .12);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
+    padding: 1.5rem 1rem; background: var(--ground); color: var(--text);
+    font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  main { width: 100%; max-width: 24rem; }
+  .brand { display: grid; justify-items: center; gap: .6rem; margin-bottom: 1.5rem; text-align: center; }
+  .brand img { width: 4.25rem; height: auto; }
+  .logo-light, :root[data-theme=light] .logo-dark { display: none; }
+  :root[data-theme=light] .logo-light { display: block; }
+  h1 { margin: 0; font-size: 1.45rem; line-height: 1.2; letter-spacing: -.01em; }
+  h1 span { color: var(--accent); }
+  .brand p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow); padding: 1.5rem;
+  }
+  form { display: grid; gap: 1rem; }
+  label { display: grid; gap: .35rem; font-size: .9rem; font-weight: 600; }
+  label .hint { font-weight: 400; color: var(--muted); }
+  input, textarea {
+    width: 100%; min-height: 2.75rem; padding: .6rem .75rem; font: inherit; font-weight: 400;
+    color: var(--text); background: var(--sunken); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); transition: border-color .15s, box-shadow .15s;
+  }
+  textarea { min-height: 6rem; resize: vertical; }
+  input:hover, textarea:hover { border-color: var(--faint); }
+  input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  input:focus-visible, textarea:focus-visible { border-color: var(--accent); outline-offset: 0; }
+  .secret { position: relative; }
+  .secret input { padding-right: 3.1rem; }
+  .secret button {
+    position: absolute; top: 50%; right: .3rem; transform: translateY(-50%);
+    display: grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0;
+    color: var(--muted); background: none; border: 0; border-radius: 6px; cursor: pointer;
+  }
+  .secret button:hover { color: var(--text); background: var(--hover); }
+  .secret svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .secret .eye-off { display: none; }
+  .secret [aria-pressed=true] .eye { display: none; }
+  .secret [aria-pressed=true] .eye-off { display: block; }
+  .button {
+    display: inline-flex; align-items: center; justify-content: center; gap: .6rem; width: 100%;
+    min-height: 2.75rem; padding: .6rem 1rem; font: inherit; font-weight: 600; text-decoration: none;
+    color: var(--text); background: var(--raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .button:hover { background: var(--hover); border-color: var(--faint); }
+  .button.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+  .button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .button:disabled { opacity: .6; cursor: progress; }
+  #message {
+    margin: 0 0 1rem; padding: .6rem .75rem; font-size: .9rem; color: var(--bad);
+    background: var(--bad-soft); border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
+  }
+  #message:empty { display: none; }
+  .or {
+    display: flex; align-items: center; gap: .75rem; margin: 1.25rem 0; color: var(--faint);
+    font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
+  }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .methods { display: grid; gap: .75rem; }
+  .methods p { margin: .5rem 0 0; font-size: .85rem; color: var(--muted); text-align: center; }
+  #orcid svg { width: 1.4rem; height: 1.4rem; flex: none; }
+  #request h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
+  #request p { margin: 0 0 1rem; }
+  #request a { color: var(--accent); }
+  .note { margin: 1rem 0 0; font-size: .9rem; color: var(--muted); }
+  .note:empty { display: none; }
+  @media (max-width: 26rem) { .card { padding: 1.15rem; } body { place-items: start center; padding-top: 2rem; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<h1>NeuroLang REPL</h1>
-<form id="login">
-  <label>Name <input name="name" autocomplete="username" required autofocus></label>
-  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-  <button>Log in</button>
-</form>
-<p id="message" role="alert"></p>
-<div id="orcid" hidden>
-  <!-- ORCID's iD icon, as orcid.org serves it (assets/vectors/orcid.logo.icon.svg) -->
-  <a id="orcid-in" href="/login/orcid">
-    <svg viewBox="0 0 72 72" aria-hidden="true"><path fill="#A6CE39" d="M72,36 C72,55.884375 55.884375,72 36,72 C16.115625,72 0,55.884375 0,36 C0,16.115625 16.115625,0 36,0 C55.884375,0 72,16.115625 72,36 Z"/><g transform="translate(18.868966, 12.910345)" fill="#FFF"><polygon points="5.03734929 39.1250878 0.695429861 39.1250878 0.695429861 9.14431787 5.03734929 9.14431787 5.03734929 22.6930505 5.03734929 39.1250878"/><path d="M11.409257,9.14431787 L23.1380784,9.14431787 C34.303014,9.14431787 39.2088191,17.0664074 39.2088191,24.1486995 C39.2088191,31.846843 33.1470485,39.1530811 23.1944669,39.1530811 L11.409257,39.1530811 L11.409257,9.14431787 Z M15.7511765,35.2620194 L22.6587756,35.2620194 C32.49858,35.2620194 34.7541226,27.8438084 34.7541226,24.1486995 C34.7541226,18.1301509 30.8915059,13.0353795 22.4332213,13.0353795 L15.7511765,13.0353795 L15.7511765,35.2620194 Z" id="Shape"/><path d="M5.71401206,2.90182329 C5.71401206,4.441452 4.44526937,5.72914146 2.86638958,5.72914146 C1.28750978,5.72914146 0.0187670918,4.441452 0.0187670918,2.90182329 C0.0187670918,1.33420133 1.28750978,0.0745051096 2.86638958,0.0745051096 C4.44526937,0.0745051096 5.71401206,1.36219458 5.71401206,2.90182329 Z"/></g></svg>
-    Sign in with ORCID
-  </a>
-</div>
-<div id="request" hidden>
-  <p>You signed in with ORCID as <strong id="request-name"></strong> (<a id="request-id" target="_blank" rel="noopener"></a>), who has no account here yet.</p>
-  <form id="ask">
-    <label>A message for the admins (who you are, what you would use it for) <textarea name="message" maxlength="1000"></textarea></label>
-    <button>Ask for an account</button>
-  </form>
-  <p class="note" id="request-note"></p>
-</div>
-<div id="guest" hidden>
-  <p>Or try it without an account: a guest's AI assistant answers with an API key you give in the page.</p>
-  <button type="button" id="guest-in">Continue as a guest</button>
-</div>
+<main>
+  <header class="brand">
+    <img class="logo-dark" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NDAiIGhlaWdodD0iNDYwIiB2aWV3Qm94PSItMjQgLTI0IDU0MCA0NjAiPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcC1iYXJzLWRhcmsiPjxwYXRoIGQ9Ik0xNzguMTUgNDA1LjUzQzE4My4xNCA0MDIuMzQgMTg4LjkzIDM4Ni44NiAxOTguMDAgMzczLjkyQzIwOC41OSAzNDEuOTcgMjEyLjcwIDM1Mi41MiAyMjIuODMgMzQ0LjQwQzIyNy4xMSAzNDAuOTcgMjMyLjk2IDMzNS45MyAyMzUuODQgMzMzLjE5TDI0MS4wNiAzMjguMjFMMjQ1LjQyIDMzMi4wMEMyNjMuNTYgMzQ3Ljc1IDI2OS4yNiAzNDcuMjggMjc4LjQyIDM0OS44OEMyODkuNTcgMzUzLjA0IDMwNS42OCAzNDkuMjQgMzI3LjQwIDM0MC4zM0MzNDkuMTkgMzMxLjM4IDM1Ni42MyAzMjguNTAgMzU5Ljc5IDMwMy41OUwzNjEuMTIgMjkzLjA1TDM2Ny4zOCAyOTIuNTdDMzcwLjgyIDI5Mi4zMCAzNzguNzEgMjkyLjA3IDM4NC45MCAyOTIuMDZDNDAwLjg0IDI5Mi4wMiA0MTguNjggMjkwLjgyIDQyNS40MSAyODkuMzFDNDM3Ljg3IDI4Ni41NCA0NTMuMDEgMjc4Ljc1IDQ2MS45OSAyNzAuNTBDNDc4LjIyIDI1NS42MSA0ODcuNjggMjMwLjQ5IDQ4Ni40OSAyMDUuNDhDNDg1LjU4IDE4Ni4yOCA0ODIuMjkgMTczLjcxIDQ3My42MSAxNTYuMzFDNDY1LjE4IDEzOS40MiA0NTYuOTIgMTI2LjQ3IDQ0NC4yOSAxMTAuMjlDNDI5LjcwIDkxLjYzIDQyMi44NiA4NS4wNCA0MDEuMzUgNjguOTRDMzgyLjI1IDU0LjY0IDM2OC40MSA0Ni44MyAzMzUuMTYgMzEuNTRDMzA2LjU3IDE4LjQwIDMwMC44OSAxNi4zOSAyODQuNTEgMTMuNjZDMjc2LjY3IDEyLjM2IDI2Ni43NSAxMC4yNCAyNjIuNDggOC45N0MyNDkuNTkgNS4xMiAyNDUuMzYgNC40OCAyMjYuNzIgMy41OEMyMTYuODkgMy4xMCAyMDUuMzkgMi4zOCAyMDEuMTggMS45N0MxODAuODcgMC4wMCAxNzQuNTQgMS4xMyAxNDYuNjYgMTEuNjhDMTAzLjg5IDI3Ljg1IDk2LjI4IDMzLjY2IDYzLjEzIDc1LjQxQzQyLjMzIDEwMS42MCAzNS4wNyAxMTMuNzggMTcuMjcgMTUyLjM1QzMuMTUgMTgyLjk0IDAuMzEgMTk0LjQ3IDEuMTIgMjE3LjgyQzEuNTkgMjMxLjEyIDIuNzkgMjM2LjMwIDcuNjYgMjQ2LjA1QzExLjI0IDI1My4yMCAxMi44NiAyNTUuMjYgMjMuMjAgMjY1LjgxQzI4LjY0IDI3MS4zNyAzMi41MyAyNzYuMDUgMzMuNDggMjc4LjE5QzM0LjcyIDI4MC45NyAzNS4xOCAyODQuNzAgMzUuODcgMjk3LjQ5QzM2LjgzIDMxNS4yMiA0MS4wMSAzMjEuNTYgNDUuMTEgMzMxLjEwQzYyLjk4IDM1Ni43OSA3Ni43OCAzNjkuODUgMTAzLjY5IDM3OC44NkMxMTAuMjkgMzgxLjA3IDEyMi41NSAzNzkuMTkgMTMxLjgyIDM5MC4wNUMxNTIuNzMgMzkwLjExIDE0My41NSA0MDMuNzQgMTQ5LjM2IDQwNS44NkMxNjMuOTIgNDA2LjUyIDE3MC4yMSA0MDYuNTIgMTc4LjE1IDQwNS41M0wxNzguMTUgNDA1LjUzIi8+PC9jbGlwUGF0aD48L2RlZnM+PGcgY2xpcC1wYXRoPSJ1cmwoI2NsaXAtYmFycy1kYXJrKSI+PHJlY3QgeD0iMTAzLjA5MzE5MjM3ODYyMzM5IiB5PSI0OSIgd2lkdGg9IjQyIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNUFBM0Y2IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIxMDIuMDkzMTkyMzc4NjIzMzkiIHk9IjQ4IiB3aWR0aD0iMzAuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiM1QUEzRjYiLz48Y2lyY2xlIGN4PSIxNTkuMDkzMTkyMzc4NjIzMzciIGN5PSI1MC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNTkuMDkzMTkyMzc4NjIzMzciIGN5PSI3NS41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNjkuMDkzMTkyMzc4NjIzMzciIGN5PSI1MC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNjkuMDkzMTkyMzc4NjIzMzciIGN5PSI3NS41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSIxODMuMDkzMTkyMzc4NjIzMzciIHk9IjQ5IiB3aWR0aD0iMTI0LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjE4Mi4wOTMxOTIzNzg2MjMzNyIgeT0iNDgiIHdpZHRoPSI4MS45IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjUyLjMxMTk4MDcwMDk2MTA4IiB5PSIxMTQiIHdpZHRoPSIyMDEuMjQ2MTE3OTc0OTgxMDgiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjNUFBM0Y2Ii8+PGNpcmNsZSBjeD0iMjY5LjU1ODA5ODY3NTk0MjIiIGN5PSIxMTYuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PGNpcmNsZSBjeD0iMjY5LjU1ODA5ODY3NTk0MjIiIGN5PSIxNDEuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMjc3LjU1ODA5ODY3NTk0MjIiIHk9IjEyNy40IiB3aWR0aD0iMTQiIGhlaWdodD0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMzAzLjU1ODA5ODY3NTk0MjIiIHk9IjExNCIgd2lkdGg9IjkwLjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iNTguODU2Njc4MzE4NDQyODkiIHk9IjE4MSIgd2lkdGg9Ijg4LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjU3Ljg1NjY3ODMxODQ0Mjg5IiB5PSIxODAiIHdpZHRoPSI0NS4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjE2Ny42Mzk2NDkzMjk0NDExIiB5PSIxODEiIHdpZHRoPSI4OC4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRThFRUY5IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIxNjYuNjM5NjQ5MzI5NDQxMSIgeT0iMTgwIiB3aWR0aD0iNzIuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSIyNzYuNDIyNjIwMzQwNDM5NCIgeT0iMTgxIiB3aWR0aD0iMTI0LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjI3NS40MjI2MjAzNDA0Mzk0IiB5PSIxODAiIHdpZHRoPSIzMC4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjQyMS4yMDU1OTEzNTE0Mzc2NSIgeT0iMTgxIiB3aWR0aD0iNDQuNzAwMjU4NzM0ODg2NDYiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjQyMC4yMDU1OTEzNTE0Mzc2NSIgeT0iMTgwIiB3aWR0aD0iMzAuNCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSI4NS4xNDIxNDg5MDgyMzMiIHk9IjI0NyIgd2lkdGg9IjE5Ni4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRThFRUY5IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSI4NC4xNDIxNDg5MDgyMzMiIHk9IjI0NiIgd2lkdGg9IjM5LjYiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMzAxLjkyNTExOTkxOTIzMTI0IiB5PSIyNDciIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGNkI3MCIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMzAwLjkyNTExOTkxOTIzMTI0IiB5PSIyNDYiIHdpZHRoPSIxMTAuOSIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNGRjZCNzAiLz48cmVjdCB4PSI2OS4wNjA3MzExNzg3NjQ5NSIgeT0iMzEyIiB3aWR0aD0iMTIwLjc0NzY3MDc4NDk4ODY0IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzVBQTNGNiIvPjxjaXJjbGUgY3g9IjIwNS44MDg0MDE5NjM3NTM2MiIgY3k9IjMxNC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIyMDUuODA4NDAxOTYzNzUzNjIiIGN5PSIzMzkuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMjEzLjgwODQwMTk2Mzc1MzYyIiB5PSIzMjUuNCIgd2lkdGg9IjE0IiBoZWlnaHQ9IjMuMiIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjIzOS44MDg0MDE5NjM3NTM2MiIgeT0iMzEyIiB3aWR0aD0iNjcuNDMyMzkwNDYwMjU0NTciIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PC9nPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0U4RUVGOSIgc3Ryb2tlLXdpZHRoPSIxMCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMTc4LjE1IDQwNS41M0MxODMuMTQgNDAyLjM0IDE4OC45MyAzODYuODYgMTk4LjAwIDM3My45MkMyMDguNTkgMzQxLjk3IDIxMi43MCAzNTIuNTIgMjIyLjgzIDM0NC40MEMyMjcuMTEgMzQwLjk3IDIzMi45NiAzMzUuOTMgMjM1Ljg0IDMzMy4xOUwyNDEuMDYgMzI4LjIxTDI0NS40MiAzMzIuMDBDMjYzLjU2IDM0Ny43NSAyNjkuMjYgMzQ3LjI4IDI3OC40MiAzNDkuODhDMjg5LjU3IDM1My4wNCAzMDUuNjggMzQ5LjI0IDMyNy40MCAzNDAuMzNDMzQ5LjE5IDMzMS4zOCAzNTYuNjMgMzI4LjUwIDM1OS43OSAzMDMuNTlMMzYxLjEyIDI5My4wNUwzNjcuMzggMjkyLjU3QzM3MC44MiAyOTIuMzAgMzc4LjcxIDI5Mi4wNyAzODQuOTAgMjkyLjA2QzQwMC44NCAyOTIuMDIgNDE4LjY4IDI5MC44MiA0MjUuNDEgMjg5LjMxQzQzNy44NyAyODYuNTQgNDUzLjAxIDI3OC43NSA0NjEuOTkgMjcwLjUwQzQ3OC4yMiAyNTUuNjEgNDg3LjY4IDIzMC40OSA0ODYuNDkgMjA1LjQ4QzQ4NS41OCAxODYuMjggNDgyLjI5IDE3My43MSA0NzMuNjEgMTU2LjMxQzQ2NS4xOCAxMzkuNDIgNDU2LjkyIDEyNi40NyA0NDQuMjkgMTEwLjI5QzQyOS43MCA5MS42MyA0MjIuODYgODUuMDQgNDAxLjM1IDY4Ljk0QzM4Mi4yNSA1NC42NCAzNjguNDEgNDYuODMgMzM1LjE2IDMxLjU0QzMwNi41NyAxOC40MCAzMDAuODkgMTYuMzkgMjg0LjUxIDEzLjY2QzI3Ni42NyAxMi4zNiAyNjYuNzUgMTAuMjQgMjYyLjQ4IDguOTdDMjQ5LjU5IDUuMTIgMjQ1LjM2IDQuNDggMjI2LjcyIDMuNThDMjE2Ljg5IDMuMTAgMjA1LjM5IDIuMzggMjAxLjE4IDEuOTdDMTgwLjg3IDAuMDAgMTc0LjU0IDEuMTMgMTQ2LjY2IDExLjY4QzEwMy44OSAyNy44NSA5Ni4yOCAzMy42NiA2My4xMyA3NS40MUM0Mi4zMyAxMDEuNjAgMzUuMDcgMTEzLjc4IDE3LjI3IDE1Mi4zNUMzLjE1IDE4Mi45NCAwLjMxIDE5NC40NyAxLjEyIDIxNy44MkMxLjU5IDIzMS4xMiAyLjc5IDIzNi4zMCA3LjY2IDI0Ni4wNUMxMS4yNCAyNTMuMjAgMTIuODYgMjU1LjI2IDIzLjIwIDI2NS44MUMyOC42NCAyNzEuMzcgMzIuNTMgMjc2LjA1IDMzLjQ4IDI3OC4xOUMzNC43MiAyODAuOTcgMzUuMTggMjg0LjcwIDM1Ljg3IDI5Ny40OUMzNi44MyAzMTUuMjIgNDEuMDEgMzIxLjU2IDQ1LjExIDMzMS4xMEM2Mi45OCAzNTYuNzkgNzYuNzggMzY5Ljg1IDEwMy42OSAzNzguODZDMTEwLjI5IDM4MS4wNyAxMjIuNTUgMzc5LjE5IDEzMS44MiAzOTAuMDVDMTUyLjczIDM5MC4xMSAxNDMuNTUgNDAzLjc0IDE0OS4zNiA0MDUuODZDMTYzLjkyIDQwNi41MiAxNzAuMjEgNDA2LjUyIDE3OC4xNSA0MDUuNTNMMTc4LjE1IDQwNS41MyIvPjwvZz48L3N2Zz4=" alt="">
+    <img class="logo-light" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NDAiIGhlaWdodD0iNDYwIiB2aWV3Qm94PSItMjQgLTI0IDU0MCA0NjAiPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcC1iYXJzLWxpZ2h0Ij48cGF0aCBkPSJNMTc4LjE1IDQwNS41M0MxODMuMTQgNDAyLjM0IDE4OC45MyAzODYuODYgMTk4LjAwIDM3My45MkMyMDguNTkgMzQxLjk3IDIxMi43MCAzNTIuNTIgMjIyLjgzIDM0NC40MEMyMjcuMTEgMzQwLjk3IDIzMi45NiAzMzUuOTMgMjM1Ljg0IDMzMy4xOUwyNDEuMDYgMzI4LjIxTDI0NS40MiAzMzIuMDBDMjYzLjU2IDM0Ny43NSAyNjkuMjYgMzQ3LjI4IDI3OC40MiAzNDkuODhDMjg5LjU3IDM1My4wNCAzMDUuNjggMzQ5LjI0IDMyNy40MCAzNDAuMzNDMzQ5LjE5IDMzMS4zOCAzNTYuNjMgMzI4LjUwIDM1OS43OSAzMDMuNTlMMzYxLjEyIDI5My4wNUwzNjcuMzggMjkyLjU3QzM3MC44MiAyOTIuMzAgMzc4LjcxIDI5Mi4wNyAzODQuOTAgMjkyLjA2QzQwMC44NCAyOTIuMDIgNDE4LjY4IDI5MC44MiA0MjUuNDEgMjg5LjMxQzQzNy44NyAyODYuNTQgNDUzLjAxIDI3OC43NSA0NjEuOTkgMjcwLjUwQzQ3OC4yMiAyNTUuNjEgNDg3LjY4IDIzMC40OSA0ODYuNDkgMjA1LjQ4QzQ4NS41OCAxODYuMjggNDgyLjI5IDE3My43MSA0NzMuNjEgMTU2LjMxQzQ2NS4xOCAxMzkuNDIgNDU2LjkyIDEyNi40NyA0NDQuMjkgMTEwLjI5QzQyOS43MCA5MS42MyA0MjIuODYgODUuMDQgNDAxLjM1IDY4Ljk0QzM4Mi4yNSA1NC42NCAzNjguNDEgNDYuODMgMzM1LjE2IDMxLjU0QzMwNi41NyAxOC40MCAzMDAuODkgMTYuMzkgMjg0LjUxIDEzLjY2QzI3Ni42NyAxMi4zNiAyNjYuNzUgMTAuMjQgMjYyLjQ4IDguOTdDMjQ5LjU5IDUuMTIgMjQ1LjM2IDQuNDggMjI2LjcyIDMuNThDMjE2Ljg5IDMuMTAgMjA1LjM5IDIuMzggMjAxLjE4IDEuOTdDMTgwLjg3IDAuMDAgMTc0LjU0IDEuMTMgMTQ2LjY2IDExLjY4QzEwMy44OSAyNy44NSA5Ni4yOCAzMy42NiA2My4xMyA3NS40MUM0Mi4zMyAxMDEuNjAgMzUuMDcgMTEzLjc4IDE3LjI3IDE1Mi4zNUMzLjE1IDE4Mi45NCAwLjMxIDE5NC40NyAxLjEyIDIxNy44MkMxLjU5IDIzMS4xMiAyLjc5IDIzNi4zMCA3LjY2IDI0Ni4wNUMxMS4yNCAyNTMuMjAgMTIuODYgMjU1LjI2IDIzLjIwIDI2NS44MUMyOC42NCAyNzEuMzcgMzIuNTMgMjc2LjA1IDMzLjQ4IDI3OC4xOUMzNC43MiAyODAuOTcgMzUuMTggMjg0LjcwIDM1Ljg3IDI5Ny40OUMzNi44MyAzMTUuMjIgNDEuMDEgMzIxLjU2IDQ1LjExIDMzMS4xMEM2Mi45OCAzNTYuNzkgNzYuNzggMzY5Ljg1IDEwMy42OSAzNzguODZDMTEwLjI5IDM4MS4wNyAxMjIuNTUgMzc5LjE5IDEzMS44MiAzOTAuMDVDMTUyLjczIDM5MC4xMSAxNDMuNTUgNDAzLjc0IDE0OS4zNiA0MDUuODZDMTYzLjkyIDQwNi41MiAxNzAuMjEgNDA2LjUyIDE3OC4xNSA0MDUuNTNMMTc4LjE1IDQwNS41MyIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwLWJhcnMtbGlnaHQpIj48cmVjdCB4PSIxMDMuMDkzMTkyMzc4NjIzMzkiIHk9IjQ5IiB3aWR0aD0iNDIiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMxQTYzQzIiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjEwMi4wOTMxOTIzNzg2MjMzOSIgeT0iNDgiIHdpZHRoPSIzMC4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzFBNjNDMiIvPjxjaXJjbGUgY3g9IjE1OS4wOTMxOTIzNzg2MjMzNyIgY3k9IjUwLjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE1OS4wOTMxOTIzNzg2MjMzNyIgY3k9Ijc1LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE2OS4wOTMxOTIzNzg2MjMzNyIgY3k9IjUwLjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE2OS4wOTMxOTIzNzg2MjMzNyIgY3k9Ijc1LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9IjE4My4wOTMxOTIzNzg2MjMzNyIgeT0iNDkiIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMTgyLjA5MzE5MjM3ODYyMzM3IiB5PSI0OCIgd2lkdGg9IjgxLjkiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iNTIuMzExOTgwNzAwOTYxMDgiIHk9IjExNCIgd2lkdGg9IjIwMS4yNDYxMTc5NzQ5ODEwOCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMxQTYzQzIiLz48Y2lyY2xlIGN4PSIyNjkuNTU4MDk4Njc1OTQyMiIgY3k9IjExNi41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48Y2lyY2xlIGN4PSIyNjkuNTU4MDk4Njc1OTQyMiIgY3k9IjE0MS41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIyNzcuNTU4MDk4Njc1OTQyMiIgeT0iMTI3LjQiIHdpZHRoPSIxNCIgaGVpZ2h0PSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIzMDMuNTU4MDk4Njc1OTQyMiIgeT0iMTE0IiB3aWR0aD0iOTAuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSI1OC44NTY2NzgzMTg0NDI4OSIgeT0iMTgxIiB3aWR0aD0iODguMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iNTcuODU2Njc4MzE4NDQyODkiIHk9IjE4MCIgd2lkdGg9IjQ1LjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iMTY3LjYzOTY0OTMyOTQ0MTEiIHk9IjE4MSIgd2lkdGg9Ijg4LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjFCMzMiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjE2Ni42Mzk2NDkzMjk0NDExIiB5PSIxODAiIHdpZHRoPSI3Mi4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9IjI3Ni40MjI2MjAzNDA0Mzk0IiB5PSIxODEiIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMjc1LjQyMjYyMDM0MDQzOTQiIHk9IjE4MCIgd2lkdGg9IjMwLjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iNDIxLjIwNTU5MTM1MTQzNzY1IiB5PSIxODEiIHdpZHRoPSI0NC43MDAyNTg3MzQ4ODY0NiIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iNDIwLjIwNTU5MTM1MTQzNzY1IiB5PSIxODAiIHdpZHRoPSIzMC40IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9Ijg1LjE0MjE0ODkwODIzMyIgeT0iMjQ3IiB3aWR0aD0iMTk2LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjFCMzMiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9Ijg0LjE0MjE0ODkwODIzMyIgeT0iMjQ2IiB3aWR0aD0iMzkuNiIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIzMDEuOTI1MTE5OTE5MjMxMjQiIHk9IjI0NyIgd2lkdGg9IjEyNC4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRTAzQTNFIiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIzMDAuOTI1MTE5OTE5MjMxMjQiIHk9IjI0NiIgd2lkdGg9IjExMC45IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0UwM0EzRSIvPjxyZWN0IHg9IjY5LjA2MDczMTE3ODc2NDk1IiB5PSIzMTIiIHdpZHRoPSIxMjAuNzQ3NjcwNzg0OTg4NjQiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMUE2M0MyIi8+PGNpcmNsZSBjeD0iMjA1LjgwODQwMTk2Mzc1MzYyIiBjeT0iMzE0LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjIwNS44MDg0MDE5NjM3NTM2MiIgY3k9IjMzOS41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIyMTMuODA4NDAxOTYzNzUzNjIiIHk9IjMyNS40IiB3aWR0aD0iMTQiIGhlaWdodD0iMy4yIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iMjM5LjgwODQwMTk2Mzc1MzYyIiB5PSIzMTIiIHdpZHRoPSI2Ny40MzIzOTA0NjAyNTQ1NyIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48L2c+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMEYxQjMzIiBzdHJva2Utd2lkdGg9IjEwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjxwYXRoIGQ9Ik0xNzguMTUgNDA1LjUzQzE4My4xNCA0MDIuMzQgMTg4LjkzIDM4Ni44NiAxOTguMDAgMzczLjkyQzIwOC41OSAzNDEuOTcgMjEyLjcwIDM1Mi41MiAyMjIuODMgMzQ0LjQwQzIyNy4xMSAzNDAuOTcgMjMyLjk2IDMzNS45MyAyMzUuODQgMzMzLjE5TDI0MS4wNiAzMjguMjFMMjQ1LjQyIDMzMi4wMEMyNjMuNTYgMzQ3Ljc1IDI2OS4yNiAzNDcuMjggMjc4LjQyIDM0OS44OEMyODkuNTcgMzUzLjA0IDMwNS42OCAzNDkuMjQgMzI3LjQwIDM0MC4zM0MzNDkuMTkgMzMxLjM4IDM1Ni42MyAzMjguNTAgMzU5Ljc5IDMwMy41OUwzNjEuMTIgMjkzLjA1TDM2Ny4zOCAyOTIuNTdDMzcwLjgyIDI5Mi4zMCAzNzguNzEgMjkyLjA3IDM4NC45MCAyOTIuMDZDNDAwLjg0IDI5Mi4wMiA0MTguNjggMjkwLjgyIDQyNS40MSAyODkuMzFDNDM3Ljg3IDI4Ni41NCA0NTMuMDEgMjc4Ljc1IDQ2MS45OSAyNzAuNTBDNDc4LjIyIDI1NS42MSA0ODcuNjggMjMwLjQ5IDQ4Ni40OSAyMDUuNDhDNDg1LjU4IDE4Ni4yOCA0ODIuMjkgMTczLjcxIDQ3My42MSAxNTYuMzFDNDY1LjE4IDEzOS40MiA0NTYuOTIgMTI2LjQ3IDQ0NC4yOSAxMTAuMjlDNDI5LjcwIDkxLjYzIDQyMi44NiA4NS4wNCA0MDEuMzUgNjguOTRDMzgyLjI1IDU0LjY0IDM2OC40MSA0Ni44MyAzMzUuMTYgMzEuNTRDMzA2LjU3IDE4LjQwIDMwMC44OSAxNi4zOSAyODQuNTEgMTMuNjZDMjc2LjY3IDEyLjM2IDI2Ni43NSAxMC4yNCAyNjIuNDggOC45N0MyNDkuNTkgNS4xMiAyNDUuMzYgNC40OCAyMjYuNzIgMy41OEMyMTYuODkgMy4xMCAyMDUuMzkgMi4zOCAyMDEuMTggMS45N0MxODAuODcgMC4wMCAxNzQuNTQgMS4xMyAxNDYuNjYgMTEuNjhDMTAzLjg5IDI3Ljg1IDk2LjI4IDMzLjY2IDYzLjEzIDc1LjQxQzQyLjMzIDEwMS42MCAzNS4wNyAxMTMuNzggMTcuMjcgMTUyLjM1QzMuMTUgMTgyLjk0IDAuMzEgMTk0LjQ3IDEuMTIgMjE3LjgyQzEuNTkgMjMxLjEyIDIuNzkgMjM2LjMwIDcuNjYgMjQ2LjA1QzExLjI0IDI1My4yMCAxMi44NiAyNTUuMjYgMjMuMjAgMjY1LjgxQzI4LjY0IDI3MS4zNyAzMi41MyAyNzYuMDUgMzMuNDggMjc4LjE5QzM0LjcyIDI4MC45NyAzNS4xOCAyODQuNzAgMzUuODcgMjk3LjQ5QzM2LjgzIDMxNS4yMiA0MS4wMSAzMjEuNTYgNDUuMTEgMzMxLjEwQzYyLjk4IDM1Ni43OSA3Ni43OCAzNjkuODUgMTAzLjY5IDM3OC44NkMxMTAuMjkgMzgxLjA3IDEyMi41NSAzNzkuMTkgMTMxLjgyIDM5MC4wNUMxNTIuNzMgMzkwLjExIDE0My41NSA0MDMuNzQgMTQ5LjM2IDQwNS44NkMxNjMuOTIgNDA2LjUyIDE3MC4yMSA0MDYuNTIgMTc4LjE1IDQwNS41M0wxNzguMTUgNDA1LjUzIi8+PC9nPjwvc3ZnPg==" alt="">
+    <h1>Neuro<span>Lang</span> REPL</h1>
+    <p>Log in to use this server's REPL.</p>
+  </header>
+  <div class="card">
+    <p id="message" role="alert"></p>
+    <form id="login">
+      <label>Name
+        <input name="name" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+      </label>
+      <label>Password
+        <span class="secret">
+          <input name="password" id="password" type="password" autocomplete="current-password" required>
+          <button type="button" id="reveal" aria-pressed="false" aria-controls="password" aria-label="Show the password" title="Show the password">
+            <svg class="eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4.2-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+          </button>
+        </span>
+      </label>
+      <button class="button primary" id="login-in">Log in</button>
+    </form>
+    <div id="alternatives" hidden>
+      <div class="or" role="separator"><span>or</span></div>
+      <div class="methods">
+        <div id="orcid" hidden>
+          <!-- ORCID's iD icon, as orcid.org serves it (assets/vectors/orcid.logo.icon.svg) -->
+          <a class="button" id="orcid-in" href="/login/orcid">
+            <svg viewBox="0 0 72 72" aria-hidden="true"><path fill="#A6CE39" d="M72,36 C72,55.884375 55.884375,72 36,72 C16.115625,72 0,55.884375 0,36 C0,16.115625 16.115625,0 36,0 C55.884375,0 72,16.115625 72,36 Z"/><g transform="translate(18.868966, 12.910345)" fill="#FFF"><polygon points="5.03734929 39.1250878 0.695429861 39.1250878 0.695429861 9.14431787 5.03734929 9.14431787 5.03734929 22.6930505 5.03734929 39.1250878"/><path d="M11.409257,9.14431787 L23.1380784,9.14431787 C34.303014,9.14431787 39.2088191,17.0664074 39.2088191,24.1486995 C39.2088191,31.846843 33.1470485,39.1530811 23.1944669,39.1530811 L11.409257,39.1530811 L11.409257,9.14431787 Z M15.7511765,35.2620194 L22.6587756,35.2620194 C32.49858,35.2620194 34.7541226,27.8438084 34.7541226,24.1486995 C34.7541226,18.1301509 30.8915059,13.0353795 22.4332213,13.0353795 L15.7511765,13.0353795 L15.7511765,35.2620194 Z" id="Shape"/><path d="M5.71401206,2.90182329 C5.71401206,4.441452 4.44526937,5.72914146 2.86638958,5.72914146 C1.28750978,5.72914146 0.0187670918,4.441452 0.0187670918,2.90182329 C0.0187670918,1.33420133 1.28750978,0.0745051096 2.86638958,0.0745051096 C4.44526937,0.0745051096 5.71401206,1.36219458 5.71401206,2.90182329 Z"/></g></svg>
+            Sign in with ORCID
+          </a>
+        </div>
+        <div id="guest" hidden>
+          <button type="button" class="button" id="guest-in">Continue as a guest</button>
+          <p>A guest's AI assistant answers with an API key you give in the page.</p>
+        </div>
+      </div>
+    </div>
+    <div id="request" hidden>
+      <h2>Ask for an account</h2>
+      <p>You signed in with ORCID as <strong id="request-name"></strong> (<a id="request-id" target="_blank" rel="noopener"></a>), who has no account here yet.</p>
+      <form id="ask">
+        <label>A message for the admins <span class="hint">Who you are, what you would use it for.</span>
+          <textarea name="message" maxlength="1000"></textarea>
+        </label>
+        <button class="button primary">Ask for an account</button>
+      </form>
+      <p class="note" id="request-note"></p>
+    </div>
+  </div>
+</main>
 <script>
 // Where to go once logged in: a page of this site only (read as the browser
 // reads an address, which drops tabs and line breaks).
@@ -70,6 +190,7 @@ fetch("/login/options").then((response) => response.json()).then(({ guests, orci
   $("guest").hidden = !guests || back === "request";
   $("orcid").hidden = !orcid || back === "request";
   $("orcid-in").href = `/login/orcid?next=${encodeURIComponent(next())}`;
+  $("alternatives").hidden = $("guest").hidden && $("orcid").hidden;
 }).catch(() => {});
 // Back from ORCID: what went wrong, or an iD of no user, who may ask for an account.
 const ORCID_SAYS = {
@@ -89,34 +210,61 @@ if (back === "request") {
     }
   }).catch(() => { $("message").textContent = ORCID_SAYS.expired; });
 }
-$("ask").addEventListener("submit", async (event) => {
+// A button that waits for the server says so, and is back when it failed.
+async function waiting(button, text, work) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = text;
+  $("message").textContent = "";
+  try {
+    await work();
+  } catch {
+    $("message").textContent = "The server did not answer: try again.";
+  }
+  button.disabled = false;
+  button.textContent = label;
+}
+const failure = (response) => response.json().catch(() => ({ error: response.statusText })).then((answer) => answer.error);
+$("ask").addEventListener("submit", (event) => {
   event.preventDefault();
-  const response = await fetch("/login/request", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: new FormData(event.target).get("message") }),
+  waiting(event.submitter ?? event.target.querySelector("button"), "Sending…", async () => {
+    const response = await fetch("/login/request", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: new FormData(event.target).get("message") }),
+    });
+    $("request-note").textContent = response.ok
+      ? "Your request is sent: an admin adds you to the server, and you sign in with ORCID then."
+      : await failure(response);
   });
-  const answer = await response.json().catch(() => ({ error: response.statusText }));
-  $("request-note").textContent = response.ok
-    ? "Your request is sent: an admin adds you to the server, and you sign in with ORCID then."
-    : answer.error;
 });
-document.getElementById("guest-in").addEventListener("click", async () => {
-  const response = await fetch("/login/guest", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-  if (response.ok) return location.assign(next());
-  const answer = await response.json().catch(() => ({ error: response.statusText }));
-  document.getElementById("message").textContent = answer.error;
+$("guest-in").addEventListener("click", (event) => {
+  waiting(event.currentTarget, "Starting…", async () => {
+    const response = await fetch("/login/guest", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (response.ok) return location.assign(next());
+    $("message").textContent = await failure(response);
+  });
 });
-document.getElementById("login").addEventListener("submit", async (event) => {
+$("login").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
-  const response = await fetch("/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: form.get("name"), password: form.get("password") }),
+  waiting($("login-in"), "Logging in…", async () => {
+    const response = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.get("name"), password: form.get("password") }),
+    });
+    if (response.ok) return location.assign(next());
+    $("message").textContent = await failure(response);
   });
-  if (response.ok) return location.assign(next());
-  const answer = await response.json().catch(() => ({ error: response.statusText }));
-  document.getElementById("message").textContent = answer.error;
+});
+// The password is shown on request (and a password manager still fills it).
+$("reveal").addEventListener("click", (event) => {
+  const shown = $("password").type === "password";
+  $("password").type = shown ? "text" : "password";
+  const label = shown ? "Hide the password" : "Show the password";
+  Object.assign(event.currentTarget, { title: label });
+  event.currentTarget.setAttribute("aria-label", label);
+  event.currentTarget.setAttribute("aria-pressed", String(shown));
 });
 </script>
 </body>

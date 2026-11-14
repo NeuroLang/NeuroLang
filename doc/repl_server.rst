@@ -224,11 +224,13 @@ Storing the ratings
 
 ``--activity-db activity.sqlite``
    With ``--local`` and ``--users``, log what each user runs, its result
-   and the resources it took (see `Activity and usage`_).
+   and the resources it took (see `Activity and usage`_), which the admins
+   read at ``/admin/activity`` (see `The activity page`_).
 
 ``--dashboard``
-   With ``--activity-db``, a dashboard of the log, the ratings and the
-   uptime, for the admins, at ``/admin/logs/`` (see `The dashboard`_).
+   With ``--activity-db``, Datasette on the log and the ratings, for the
+   admins, at ``/admin/logs/``: every table and any read-only SQL (see
+   `Raw data and SQL`_).
 
 Running as a service
 ~~~~~~~~~~~~~~~~~~~~
@@ -631,11 +633,48 @@ SQLite reads it too::
    sqlite3 activity.sqlite "SELECT created, kind, text, seconds, cpu, memory FROM activity WHERE user = 'bob'"
 
 
-The dashboard
--------------
+The activity page
+-----------------
 
-With ``--dashboard`` (and ``--activity-db``), the admins explore the log
-at ``/admin/logs/`` (linked from the console): `Datasette
+With ``--activity-db``, the admins have ``/admin/activity`` (*Activity*,
+linked from the console): what the users ran and what it took, read at a
+glance.
+
+- **Filters**, one row above everything they scope: the period (24 hours,
+  7 days, 30 days, all), a user, an engine.  The view is in the page's
+  address, so that it can be kept and shared; times are in the browser's
+  time zone.
+- **Figures** of the period: the uptime, the users and the sessions they
+  started, the inputs and the share that failed, the CPU time, the LLM
+  tokens and the share spent on the server's keys, the most memory of one
+  session.
+- **Uptime**: a strip of the runs of the server over the period (a gap, a
+  time it was down; a tick, a run that ended without stopping), and the
+  latest runs.  A period starts when the log began, if later: nothing is
+  known before, which is not a time the server was down.
+- **Over time**: the inputs, the CPU time, the LLM tokens and the active
+  users, by hour over 2 days at most, else by day, each in a chart of its
+  own on the same time axis, with its table.
+- **Users**: each user's inputs, failures, time, CPU, tokens, most memory
+  and last input, sortable; choosing one shows only theirs, and a link to
+  their whole log.
+- **Inputs**: the latest, slowest, or those that took the most CPU or
+  tokens, searched by their text, the failed ones only if asked; each
+  opens on its result, its memory and the assistant's model and key.
+- **Why sessions ended**.
+
+The charts are drawn with `Chart.js <https://www.chartjs.org>`_ (MIT),
+which the server serves itself (``tools/serve_repl/vendor/chartjs``): the
+page needs nothing from another site.  It follows the computer's light or
+dark theme, or the one chosen at its foot.
+
+
+Raw data and SQL
+----------------
+
+With ``--dashboard`` (and ``--activity-db``), the admins also explore the
+log at ``/admin/logs/`` (*Raw data and SQL*, linked from the console):
+`Datasette
 <https://datasette.io/>`_ on the activity log and the ratings
 (``--feedback-db``), with its charts (`datasette-vega
 <https://github.com/simonw/datasette-vega>`_).  Install them with the
@@ -660,7 +699,8 @@ activity database, each over the last ``days`` (empty: all):
   *The runs of the server* (see `Uptime`_).
 
 *Show charting options*, above a result, draws it (a line of the inputs
-by hour, a bar of the CPU by user…).
+by hour, a bar of the CPU by user…); the queries by time and by user link
+to their charts.
 
 Datasette runs in a process of its own, started and ended with the
 server, listening on a unix socket in a directory only the server's user
