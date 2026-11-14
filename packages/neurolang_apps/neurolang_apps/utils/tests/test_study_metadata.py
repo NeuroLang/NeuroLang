@@ -19,17 +19,22 @@ class TestRegisterPublications:
     def test_the_known_years_and_journals(self):
         nl = MagicMock()
         neurosynth.register_publications(nl, pd.DataFrame({
-            "study_id": [1, 2, 3],
+            "study_id": ["a", "b", "c"],
             "year": [2001.0, None, 2003.0],
             "journal": ["Brain", " ", None],
+            "pmid": ["101", "PMC7", None],
+            "doi": ["https://doi.org/10.1/AB", "doi:10.2/x", "not a doi"],
         }))
         tables = {
             call.kwargs["name"]: call.args[0]
             for call in nl.add_tuple_set.call_args_list
         }
-        assert _rows(tables["study_year"]) == [(1, 2001), (3, 2003)]
+        assert _rows(tables["study_year"]) == [("a", 2001), ("c", 2003)]
         assert tables["study_year"]["year"].dtype == int
-        assert _rows(tables["study_journal"]) == [(1, "Brain")]
+        assert _rows(tables["study_journal"]) == [("a", "Brain")]
+        assert _rows(tables["study_pmid"]) == [("a", 101)]
+        assert tables["study_pmid"]["pmid"].dtype == int
+        assert _rows(tables["study_doi"]) == [("a", "10.1/ab"), ("b", "10.2/x")]
 
 
 class TestAbstracts:
