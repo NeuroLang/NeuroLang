@@ -1208,6 +1208,22 @@ def test_simple_negation(solver):
         assert testing.eq_prov_relations(result, expected)
 
 
+def test_wmc_body_of_negated_ground_atoms():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(Q, [(0.2, 'a'), (0.1, 'b')])
+    cpl.add_probabilistic_choice_from_tuples(C, [(0.3, 'a'), (0.7, 'b')])
+    for body, probability in (
+        (Negation(Q(a)), 0.8),
+        (Negation(C(a)), 0.7),
+        (Conjunction((Negation(Q(a)), Negation(C(b)))), 0.8 * 0.3),
+    ):
+        result = weighted_model_counting.solve_succ_query(
+            Implication(ans(), body), cpl
+        )
+        expected = testing.make_prov_set([(probability,)], ("_p_",))
+        assert testing.eq_prov_relations(result, expected)
+
+
 @pytest.mark.parametrize("solver", [
     weighted_model_counting,
     small_dichotomy_theorem_based_solver,
