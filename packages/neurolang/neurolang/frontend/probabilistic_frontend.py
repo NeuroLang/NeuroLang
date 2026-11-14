@@ -41,12 +41,15 @@ from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
     InlineEqualityConstantsMixin,
+    extract_logic_atoms,
+    is_aggregation_rule,
 )
 from nl_core.datalog.magic_sets import magic_rewrite
 from nl_core.datalog.negation import DatalogProgramNegationMixin
 from nl_core.datalog.ontologies_parser import OntologyParser
 from nl_core.datalog.ontologies_rewriter import (
     OntologyRewriter,
+    chase_rules,
     constraints_that_can_hold,
 )
 
@@ -981,13 +984,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         -------
         Result obtained after resolution of the deterministic stratum
         '''
+        added = set()
         if "__constraints__" in self.symbol_table:
             symbol_table = self.program_ir.symbol_table
             holds = frozenset(
                 symbol for symbol in self.program_ir.constraints()._symbols
                 if not _only_constraints(symbol_table.get(symbol, Union(())))
             )
+            heads = {rule.consequent.functor for rule in det_idb.formulas}
             det_idb = self._rewrite_det_idb(det_idb, holds)
+            # The predicates of the chased constraints and their copies.
+            added = {
+                rule.consequent.functor for rule in det_idb.formulas
+            } - heads
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
@@ -998,6 +1007,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
+        for symbol in added & solution.keys():
+            del solution[symbol]
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
@@ -1154,12 +1165,21 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
 
     def _rewrite_program_with_ontology(self, deterministic_program, holds):
-        orw = OntologyRewriter(
-            deterministic_program, self._constraints_that_can_hold(holds)
-        )
-        rewrite = orw.Xrewrite()
-
-        return Union(rewrite)
+        """Xrewrite with the constraints that can hold, those without
+        existential variables only on values they introduce; the chase
+        applies the latter, as rules, to the named values."""
+        constraints = self._constraints_that_can_hold(holds)
+        rewrite = OntologyRewriter(
+            Union(sum((
+                _split_aggregation(rule, constraints)
+                for rule in deterministic_program.formulas
+            ), ())),
+            constraints, chased=True,
+        ).Xrewrite()
+        return Union(chase_rules(
+            constraints, holds, rewrite,
+            self.program_ir.extensional_database(),
+        ))
 
     def add_probabilistic_facts_from_tuples(
         self,
@@ -1468,6 +1488,25 @@ def _has_probability(head) -> bool:
     return isinstance(head, tuple) and any(
         getattr(getattr(h, "expression", None), "functor", None) == PROB
         for h in head
+    )
+
+
+def _split_aggregation(rule, constraints):
+    """``H(count(x)) :- B`` as ``H(count(x)) :- b(x)`` and ``b(x) :- B``
+    when ``B`` has a predicate the ``constraints`` derive: the aggregate is
+    then over the union of the rewritings of ``B``."""
+    if not is_aggregation_rule(rule) or not any(
+        getattr(atom.functor, "name", None) in constraints
+        for atom in extract_logic_atoms(rule.antecedent)
+    ):
+        return (rule,)
+    body = ir.Symbol.fresh()(*sorted(
+        extract_logic_free_variables(rule.antecedent)
+        & rule.consequent._symbols, key=lambda symbol: symbol.name
+    ))
+    return (
+        Implication(rule.consequent, body),
+        Implication(body, rule.antecedent),
     )
 
 
