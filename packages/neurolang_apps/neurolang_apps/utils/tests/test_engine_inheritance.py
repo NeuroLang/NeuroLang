@@ -244,6 +244,7 @@ def test_the_assistant_is_told_the_connectivity_has_no_subcortex():
 
     predicates = get_predicates("neurosynth")
     for name in ("schaefer_structural_connectivity",
+                 "schaefer400_structural_connectivity",
                  "destrieux_structural_connectivity"):
         text = " ".join(predicates[name]["description"].split())
         assert "Cortex only" in text and "thalamus" in text, name
@@ -283,6 +284,7 @@ def _fetched(relation, tmp_path):
 
 @pytest.mark.network
 @pytest.mark.parametrize("relation", ["schaefer_structural_connectivity",
+                                      "schaefer400_structural_connectivity",
                                       "destrieux_structural_connectivity"])
 def test_the_connectivity_files_are_pairs_of_engine_regions(
     relation, tmp_path
@@ -290,7 +292,9 @@ def test_the_connectivity_files_are_pairs_of_engine_regions(
     table = _fetched(relation, tmp_path)
     assert list(table.columns) == ["region1", "region2", "streamlines"]
     regions = set(table.region1)
-    assert len(regions) == (100 if "schaefer" in relation else 148)
+    assert len(regions) == (
+        400 if "schaefer400" in relation
+        else 100 if "schaefer" in relation else 148)
     # named as the engines name the parcels (neurolang.atlases.label_name)
     assert not any("-" in r or "_" in r for r in regions)
     assert (table.region1 != table.region2).all()
@@ -303,6 +307,7 @@ def test_the_connectivity_files_are_pairs_of_engine_regions(
 
 @pytest.mark.network
 @pytest.mark.parametrize("atlas,regions", [("schaefer", 100),
+                                           ("schaefer400", 400),
                                            ("destrieux", 148)])
 def test_the_gradients_are_ten_per_region(atlas, regions, tmp_path):
     gradients = _fetched(f"{atlas}_structural_gradient", tmp_path)
@@ -328,3 +333,14 @@ def test_the_guidance_of_the_assistant_is_inherited():
     guidance = get_engine_config("neurosynth")["assistant_guidance"]
     assert guidance.index("schaefer_structural_connectivity") < \
         guidance.index("selected_study")
+
+
+def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
+    cfg = get_engine_config("neurosynth")
+    atlases = cfg["atlases"]
+    assert atlases["schaefer"]["n_rois"] == 100
+    assert atlases["schaefer400"] == {
+        "kind": "schaefer", "predicate_name": "schaefer400", "n_rois": 400,
+        "resolution_mm": 2, "yeo_networks": 17}
+    assert cfg["sorts"]["schaefer400_label"]["atlas"] == "schaefer400"
+    assert "schaefer400" not in get_engine_config("mni_atlases")["atlases"]

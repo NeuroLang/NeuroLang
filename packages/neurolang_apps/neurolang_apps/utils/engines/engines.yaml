@@ -166,17 +166,29 @@ engines:
     description: >
       Structural connectivity of the cortex from diffusion MRI
       tractography: the mean number of streamlines joining two parcels of
-      the Schaefer atlas (schaefer_structural_connectivity) or two regions
+      the Schaefer atlas, 100 parcels (schaefer_structural_connectivity)
+      or 400 (schaefer400_structural_connectivity), or two regions
       of the Destrieux atlas (destrieux_structural_connectivity) over
       1,064 subjects of the Human Connectome Project (Mansour et al.
       2021), and its linear gradients, the principal components of the
       regions' connectivity within each hemisphere
-      (schaefer_structural_gradient, destrieux_structural_gradient), with
-      the atlases of the MNI brain. Cortex only: there is no structural
+      (schaefer_structural_gradient, schaefer400_structural_gradient,
+      destrieux_structural_gradient), with the atlases of the MNI brain
+      and the Schaefer atlas of 400 parcels (schaefer400), of 17 networks
+      as the 100 parcels. Cortex only: there is no structural
       connectivity of the subcortex (Tian) nor of the cerebellum.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith]
+    # The finer Schaefer parcellation the connectivity also has: the same
+    # nilearn fetcher (``kind``), its own key, grid and predicate.
+    atlases:
+      schaefer400:
+        kind: schaefer
+        predicate_name: schaefer400
+        n_rois: 400
+        resolution_mm: 2
+        yeo_networks: 17
     # The structural connectivity of the cortex between the parcels of
     # Schaefer and of Destrieux: the mean number of streamlines between two
     # parcels over the HCP subjects of Mansour et al. (2021), whose
@@ -192,24 +204,34 @@ engines:
       schaefer_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer100_17.tsv.gz
         md5: 88b8e2c1a5efced165391959e2d91b80
+      schaefer400_structural_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer400_17.tsv.gz
+        md5: 800bf8f870fa388825bdcd1170f0e13e
       destrieux_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/destrieux.tsv.gz
         md5: 2c68298ab7444215e0b0816d5400dde6
       schaefer_structural_gradient:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer100_17_gradients.tsv.gz
         md5: 9e84ae695f907ea2622893e483de2609
+      schaefer400_structural_gradient:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer400_17_gradients.tsv.gz
+        md5: 80a582ea471a5b32c9b8b0f1a6f24e58
       destrieux_structural_gradient:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/destrieux_gradients.tsv.gz
         md5: 1fab28fd676b302a1877a301e252dc37
       schaefer_structural_gradient_variance:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer100_17_gradient_variance.tsv.gz
         md5: c61c369c6c9ade23272556b93dbe934c
+      schaefer400_structural_gradient_variance:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer400_17_gradient_variance.tsv.gz
+        md5: 5f3f55e77f4e0fe07ae7794f235c2f11
       destrieux_structural_gradient_variance:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/destrieux_gradient_variance.tsv.gz
         md5: a16bdc1881a862afa1ddf42269e667cc
     acknowledgements:
       - >-
         Structural connectivity (schaefer_structural_connectivity,
+        schaefer400_structural_connectivity,
         destrieux_structural_connectivity): the mean over 1,064 subjects of
         the HCP Young Adult study of their high-resolution structural
         connectomes, by Mansour L S, Tian Y, Yeo BTT, Cropley V, Zalesky A.
@@ -254,6 +276,11 @@ engines:
         columns: [hemisphere]
         type: str
         description: "a hemisphere, L or R, as Destrieux's names begin"
+      schaefer400_label:
+        columns: [label]
+        type: str
+        atlas: schaefer400
+        description: "a Schaefer 2018 parcel label, of the 400-parcel atlas"
       explained_variance:
         columns: [explained]
         type: float
@@ -275,6 +302,27 @@ engines:
           - label
           - label
           - streamlines
+      schaefer400_structural_connectivity:
+        description: >-
+          Structural connectivity between two parcels of the Schaefer atlas
+          of 400 parcels (17 networks), the finer version of
+          schaefer_structural_connectivity: the mean number of streamlines
+          joining them over 1,064 HCP subjects, both ways round. Cortex
+          only: the subcortical structures (thalamus, basal ganglia,
+          hippocampus, amygdala, the tian regions) and the cerebellum are
+          not in it. Structural (tractography), not functional
+        arguments:
+          - schaefer400_label
+          - schaefer400_label
+          - streamlines
+      schaefer400:
+        description: >-
+          Schaefer 2018 parcel label and its region, of the atlas of 400
+          parcels, 17 networks (the labels of the 400-parcel connectivity,
+          as '17Networks LH DefaultA PFCd 1'); schaefer is the atlas of 100
+        arguments:
+          - schaefer400_label
+          - region
       destrieux_structural_connectivity:
         description: >-
           Structural connectivity between two Destrieux regions: the mean
@@ -302,6 +350,21 @@ engines:
           - label
           - gradient_dimension
           - gradient_value
+      schaefer400_structural_gradient:
+        description: >-
+          The linear gradients of the structural connectivity of the
+          Schaefer parcels of the atlas of 400, as
+          schaefer_structural_gradient: dimension 1 runs from somatomotor,
+          dorsal attention and temporo-parietal (low) to visual, limbic
+          and default (high) cortex, 2 from somatomotor and salience
+          (medial cingulate) (low) to visual and temporal (high) cortex.
+          Anatomical, from tractography: not the functional gradients of
+          resting-state fMRI. Cortex only. .view paints a value of each
+          parcel on the cortex
+        arguments:
+          - schaefer400_label
+          - gradient_dimension
+          - gradient_value
       destrieux_structural_gradient:
         description: >-
           The linear gradients of the structural connectivity of the
@@ -319,6 +382,15 @@ engines:
           The fraction of the variance of the Schaefer parcels'
           connectivity profiles, in each hemisphere, that each gradient of
           schaefer_structural_gradient explains
+        arguments:
+          - gradient_dimension
+          - gradient_hemisphere
+          - explained_variance
+      schaefer400_structural_gradient_variance:
+        description: >-
+          The fraction of the variance of the connectivity profiles of the
+          Schaefer parcels of the atlas of 400, in each hemisphere, that
+          each gradient of schaefer400_structural_gradient explains
         arguments:
           - gradient_dimension
           - gradient_hemisphere
