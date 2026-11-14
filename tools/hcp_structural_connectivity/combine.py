@@ -10,8 +10,8 @@ Writes, in OUT_DIR:
   twice), ``a:sd`` (their standard deviation across subjects),
   ``a:names`` and ``subjects``;
 - ``<a>.tsv.gz`` for each atlas: ``region1  region2  streamlines``, the
-  mean between two distinct parcels, both ways round, the pairs no
-  streamline joins left out; the regions are named as the parcels of the
+  mean between two distinct parcels, both ways round, to the thousandth,
+  the pairs no streamline joins (under a thousandth) left out; the regions are named as the parcels of the
   NeuroLang engines;
 - ``validation.tsv``: for each subject the authors also parcellated with
   Glasser's atlas, the correlation of the streamlines between distinct
@@ -62,7 +62,9 @@ def main(work: Path, out: Path, glasser_dir: Path, target: Path) -> None:
                                                0))
         arrays[f"{a}:names"] = atlases[f"{a}:names"]
         labels = atlases[f"{a}:names"]
-        i, j = np.nonzero(mean)
+        # to the thousandth of a streamline: the smoothing of the
+        # connectomes leaves less to pairs no streamline joins
+        i, j = np.nonzero(np.round(mean, 3))
         kept = i != j
         pd.DataFrame({
             "region1": labels[i[kept]], "region2": labels[j[kept]],
