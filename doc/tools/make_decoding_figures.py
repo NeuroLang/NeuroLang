@@ -29,12 +29,14 @@ AMYGDALA_MNI = (24.0, -2.0, -20.0)  # the right amygdala, in mm
 AMYGDALA_RADIUS = 8.0
 SHOWN_TERMS = 10
 # The 95% interval of the lift of a term, over the replicates of the
-# studies (doc/tutorial_decoding.rst).
+# studies, from the rules of the decoding query (doc/tutorial_decoding.rst).
 INTERVAL = (
-    "lift_replicate(b, x) :- "
-    "RESAMPLE[boot_studies](image_decoding('TERM', x, n)) = b\n"
+    "decoding(t, lift) :- p_image_given_term(t, a), p_image(b), "
+    "(lift == a / b)\n"
+    "lift_replicate(r, x) :- "
+    "RESAMPLE[boot_studies](decoding('TERM', x)) = r\n"
     "interval(lift, percentile(x, 2.5), percentile(x, 97.5)) :- "
-    "image_decoding('TERM', lift, n), lift_replicate(b, x)\n"
+    "decoding('TERM', lift), lift_replicate(r, x)\n"
     "ans(lift, ci_low, ci_high) :- interval(lift, ci_low, ci_high)\n"
 )
 
@@ -134,12 +136,13 @@ def main() -> None:
     # NeuroVault's image, which nilearn downloads: not kept with the docs
     zmap_path = Path(datasets.load_sample_motor_activation_image())
 
-    for stem, path, title in (
-        ("amygdala", mask_path, "A mask of the right amygdala"),
-        ("motor", zmap_path, "The motor map, left vs right button press"),
+    for stem, path, title, mask in (
+        ("amygdala", mask_path, "A mask of the right amygdala", True),
+        ("motor", zmap_path, "The motor map, left vs right button press",
+         False),
     ):
         app._handle_dot_command(f".image {path} --name image")
-        query = nifti.image_decoding(app, "image")["query"]
+        query, _ = nifti.decoding_query(app, "image", mask)
         start = time.perf_counter()
         app._execute_and_display(query)
         seconds = time.perf_counter() - start
@@ -153,7 +156,11 @@ def main() -> None:
         print(frame.head(SHOWN_TERMS).to_string(index=False))
         top = frame["term"].iloc[0]
         start = time.perf_counter()
-        app._execute_and_display(INTERVAL.replace("TERM", top))
+        rules = [rule for rule in query.splitlines()
+                 if not rule.startswith("ans(")]
+        app._execute_and_display(
+            "\n".join(rules) + "\n" + INTERVAL.replace("TERM", top)
+        )
         seconds = time.perf_counter() - start
         print(f"{stem}: interval of {top} in {seconds:.1f} s")
         print(app.results[-1].frame.to_string(index=False))

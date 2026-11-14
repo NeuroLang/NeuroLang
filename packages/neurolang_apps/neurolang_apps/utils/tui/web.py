@@ -724,12 +724,15 @@ class WebRepl:
         session.store_upload(self.app, name, data)
         if not session.is_image(name):
             return {"name": name, "statement": f".load {shlex.quote(name)}"}
-        decoding = nifti.image_decoding(self.app, "image")
+        try:  # a mask's query decodes all its voxels; a z-map's, the high ones
+            mask = nifti.is_mask(nifti.read_image(data))
+            query, missing = nifti.decoding_query(self.app, "image", mask)
+        except Exception:  # .image tells what is wrong with the file
+            query, missing = "", []
         return {
             "name": name,
             "statement": f".image {shlex.quote(name)} --name image",
-            "query": "" if decoding.get("missing", True)
-            else decoding["query"],
+            "query": "" if missing else query,
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

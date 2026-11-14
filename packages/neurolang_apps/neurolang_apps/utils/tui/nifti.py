@@ -2024,10 +2024,10 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     return f"Last result: {titles[0]}" if titles else "Last result"
 
 
-IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME] [--threshold T|P%]"
+IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME]"
 
-# The defaults of .image (viewer.yaml): the threshold of a z-map, and the
-# most bytes an image may take uncompressed.
+# The defaults of .image (viewer.yaml): the value from which the voxels of
+# a z-map are activated, and the most bytes an image may take uncompressed.
 IMAGE_DEFAULTS = brain_viewer.DEFAULTS["image"]
 
 IMAGE_HELP = f"""\
@@ -2035,23 +2035,17 @@ IMAGE_HELP = f"""\
 activations, a binary mask or a z-map, as the relation
 [bold]NAME(i, j, k, value)[/bold] (NAME is [bold]image[/bold] by default):
 its voxels of the brain with a value other than 0, on the grid of the engine
-(the image is resampled to it if it has another), and shows it in the brain
-viewer. UPLOADED is the name of an image the page uploaded (Upload data).
+(the image is resampled to it if it has another, a mask to the nearest
+voxel), and shows it in the brain viewer. UPLOADED is the name of an image
+the page uploaded (Upload data).
 
-Its activated voxels are [bold]NAME_voxel(i, j, k, weight)[/bold], weight
-the probability to choose the voxel among them: those of a mask, equally
-likely; those of a z-map with a value of at least the [bold]--threshold[/bold]
-(a value, by default {IMAGE_DEFAULTS["threshold"]}, or a percentile of the
-values such as 95%), the more likely the larger their value.
-
-On an engine of studies and their peaks (neurosynth, neurostore), the image
-is decoded: [bold]NAME_decoding(t, lift, studies)[/bold] is the probability
-that a study of the term t activates a voxel chosen in the image, over the
-same for all the studies, and the number of studies of t (the lift of a term
-of few studies is noisy). The command prints the query decoding it towards
-the concepts of the Cognitive Atlas, such as
-
-    ans(t, lift, n) :- image_decoding(t, lift, n), cogat_term(x, t), (n >= 30)
+On an engine of studies and their peaks (neurosynth, neurostore), it prints
+the query decoding the image towards the concepts of the Cognitive Atlas:
+the probability that a study of a term activates a voxel chosen in the
+image, the more likely the larger its value, over the same for all the
+studies. The voxels of a mask are all activated; those of a z-map, from
+{IMAGE_DEFAULTS["threshold"]}. Any relation of voxels and values,
+NAME(i, j, k, w), is decoded by the same query with its name.
 
 Load it again with --name and the same NAME to replace it."""
 
@@ -2075,6 +2069,19 @@ def nifti_from_bytes(data: bytes, most: Optional[int] = None):
         return nib.Nifti2Image.from_bytes(data)
 
 
+def read_image(data: bytes):
+    """Return the image of the bytes *data* of a NIfTI file, of at most
+    ``max_mb`` uncompressed, and its first volume if it has several."""
+    image = nifti_from_bytes(data, int(IMAGE_DEFAULTS["max_mb"]) << 20)
+    return image.slicer[..., 0] if len(image.shape) == 4 else image
+
+
+def is_mask(image) -> bool:
+    """Whether *image* is a mask: of one value other than 0."""
+    values = np.asanyarray(image.dataobj)
+    return np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
+
+
 def _image_bytes(app, word: str) -> bytes:
     """Return the bytes of the image *word*: one the page uploaded, or a
     path (on a server, which reads none of its files, an uploaded one
@@ -2091,93 +2098,68 @@ def _image_bytes(app, word: str) -> bytes:
     return path.read_bytes()
 
 
-def _image_values(image, template: nib.Nifti1Image):
-    """
-    Return the (first volume of) *image* on the grid of *template*, and
-    whether it is a mask: one value other than 0, resampled to the
-    nearest voxel to stay one.
-    """
-    if len(image.shape) == 4:
-        image = image.slicer[..., 0]
-    values = np.asanyarray(image.dataobj)
-    mask = np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
+def _image_values(image, template: nib.Nifti1Image, mask: bool):
+    """Return the values of *image* on the grid of *template*, a *mask*
+    resampled to the nearest voxel to stay one."""
     if image.shape[:3] != template.shape[:3] or not np.allclose(
         image.affine, template.affine
     ):
         from nibabel.processing import resample_from_to
 
         image = resample_from_to(image, template, order=0 if mask else 1)
-    return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float)), mask
+    return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float))
 
 
-def _image_threshold(threshold, values: np.ndarray, mask: bool) -> float:
-    """Return the value of *threshold*, or its percentile of *values*:
-    by default, every voxel of a mask and the threshold of a z-map."""
-    if threshold is None:
-        return values.min() if mask else float(IMAGE_DEFAULTS["threshold"])
-    if isinstance(threshold, str):
-        return float(np.percentile(values, float(threshold[:-1])))
-    return float(threshold)
-
-
-def image_decoding(app, name: str) -> dict:
+def decoding_query(app, name: str, mask: bool) -> Tuple[str, List[str]]:
     """
-    Return how the engine of *app* decodes the image *name*, its
-    ``image_decoding`` for *name*: the ``rules`` defining it, the ``query``
-    asking for it, and the predicates the rules read that the engine lacks,
-    ``missing``; empty for an engine that does not decode an image.
+    Return the query decoding the relation *name* of voxels and values on
+    the engine of *app* (its ``image_decoding_query``), from all the
+    voxels of a *mask* or from the threshold of a z-map, and the predicates
+    it reads that the engine lacks; an empty query on an engine without one.
     """
     config = engine_registry.get_engine_config(app.settings.engine_name) \
         if app.settings.engine_name else {}
-    decoding = {
-        key: text.replace("{name}", name)
-        for key, text in (config.get("image_decoding") or {}).items()
-    }
-    rules = decoding.get("rules", "").splitlines()
+    query = config.get("image_decoding_query") or ""
+    condition = "(w > 0)" if mask else f"(w >= {IMAGE_DEFAULTS['threshold']})"
+    query = query.replace("{image}", name).replace("{condition}", condition)
+    rules = query.splitlines()
     heads = {rule.split("(")[0].strip() for rule in rules}
     read = {
         word for rule in rules if ":-" in rule
         for word in re.findall(r"([A-Za-z_]\w*)\s*\(", rule.split(":-")[1])
     }
     symbols = app._nl.program_ir.symbol_table
-    if decoding:
-        decoding["missing"] = sorted(
-            word for word in read - heads - {f"{name}_voxel"}
-            if Symbol(word) not in symbols
-        )
-    return decoding
+    missing = sorted(
+        word for word in read - heads - {name}
+        if Symbol(word) not in symbols and word not in ("sum", "count")
+    )
+    return query, missing
 
 
 @command(
     ".image", "Load a NIfTI image of activations (a mask, a z-map) as a "
-    "relation NAME(i, j, k, value), show it and decode it (.help image)",
-    IMAGE_USAGE,
+    "relation NAME(i, j, k, value), show it and tell how to decode it "
+    "(.help image)", IMAGE_USAGE,
 )
 def cmd_image(app, arg: str) -> None:
-    """Load the NIfTI image of *arg* as relations of the session."""
+    """Load the NIfTI image of *arg* as a relation of the session."""
     from .session import _load_failed, _name_problem
 
     try:
-        words, options = split_args(
-            arg, {"--threshold": 1, "--name": 1}, IMAGE_USAGE
-        )
+        words, options = split_args(arg, {"--name": 1}, IMAGE_USAGE)
         if len(words) != 1:
             raise SaveError(f"Usage: {IMAGE_USAGE}")
         source = words[0]
-        given = options.get("--threshold", [None])[0]
-        threshold = None if given is None else view_threshold(given)
         name = options.get("--name", ["image"])[0]
-        for relation in (name, f"{name}_voxel"):
-            problem = _name_problem(app, relation, "--name" in options)
-            if problem:
-                raise SaveError(
-                    problem.replace(".load PATH", ".image PATH --name")
-                )
+        problem = _name_problem(app, name, "--name" in options)
+        if problem:
+            raise SaveError(
+                problem.replace(".load PATH", ".image PATH --name")
+            )
         template = engine_template(app._nl)
-        image = nifti_from_bytes(
-            _image_bytes(app, source), int(IMAGE_DEFAULTS["max_mb"]) << 20
-        )
-        data, mask = _image_values(image, template)
+        image = read_image(_image_bytes(app, source))
+        mask = is_mask(image)
+        data = _image_values(image, template, mask)
     except (SaveError, ConfinedError) as exc:
         _load_failed(app, str(exc))
         return
@@ -2198,35 +2180,16 @@ def cmd_image(app, arg: str) -> None:
     if rows.empty:
         _load_failed(app, f"{source} has no value other than 0 in the brain.")
         return
-    cutoff = _image_threshold(threshold, rows["value"].to_numpy(), mask)
-    chosen = rows[rows["value"] >= cutoff]
-    if chosen.empty or cutoff <= 0:
-        _load_failed(app, f"No voxel of {source} reaches the threshold "
-                     f"{cutoff:.3g} (above 0): give --threshold.")
-        return
-    for relation in (name, f"{name}_voxel"):
-        if relation in app.loaded_relations:
-            del app._nl.program_ir.symbol_table[Symbol(relation)]
+    if name in app.loaded_relations:
+        del app._nl.program_ir.symbol_table[Symbol(name)]
     app._nl.add_tuple_set(rows, name=name)
-    app._nl.add_tuple_set(
-        chosen[["i", "j", "k"]].assign(
-            weight=chosen["value"] / chosen["value"].sum()
-        ), name=f"{name}_voxel",
-    )
     app.loaded_relations[name] = ["i", "j", "k", "value"]
-    app.loaded_relations[f"{name}_voxel"] = ["i", "j", "k", "weight"]
-    activated = (
-        f"the {len(chosen)} voxels of the mask, equally likely" if mask
-        and threshold is None else
-        f"the {len(chosen)} voxels with a value of {cutoff:.3g} or more, "
-        "the more likely the larger their value"
-    )
+    kind = "a mask" if mask else "a map of values"
     app.console.print(
-        f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}; "
-        f"{name}_voxel(i, j, k, weight): {activated}", style="green",
-        markup=False,
+        f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "
+        f"{kind}", style="green", markup=False,
     )
-    _add_decoding(app, name)
+    _tell_decoding(app, name, mask)
     shown = np.zeros(template.shape[:3], dtype=np.float32)
     shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
     fd, shown_path = tempfile.mkstemp(
@@ -2234,25 +2197,26 @@ def cmd_image(app, arg: str) -> None:
     )
     os.close(fd)
     write_nifti(nib.Nifti1Image(shown, template.affine), shown_path)
-    request = parse_view_args("")._replace(
-        threshold=cutoff, threshold_given=True
-    )
+    threshold = float(IMAGE_DEFAULTS["threshold"])
+    if mask:
+        threshold = float(rows["value"].min())
+    request = parse_view_args("")
+    if (rows["value"] >= threshold).any():
+        request = request._replace(threshold=threshold, threshold_given=True)
     _view_nifti(app, [(name, Path(shown_path))], request, name)
 
 
-def _add_decoding(app, name: str) -> None:
-    """Add the rules decoding the image *name*, once, if the engine has
-    what they read, and tell how to decode it."""
-    decoding = image_decoding(app, name)
-    if not decoding:
+def _tell_decoding(app, name: str, mask: bool) -> None:
+    """Print the query decoding the image *name*, or why the engine
+    cannot."""
+    query, missing = decoding_query(app, name, mask)
+    if not query:
         return
-    if decoding["missing"]:
+    if missing:
         app.console.print(
-            "The image is not decoded: the engine has no "
-            f"{', '.join(decoding['missing'])} (in the browser, add "
-            "?engine=full to the address).", style="yellow", markup=False,
+            "The engine cannot decode the image: it has no "
+            f"{', '.join(missing)} (in the browser, add ?engine=full to the "
+            "address).", style="yellow", markup=False,
         )
         return
-    if Symbol(f"{name}_decoding") not in app._nl.program_ir.symbol_table:
-        app._nl.execute_datalog_program(decoding["rules"])
-    app.console.print(f"Decode it: {decoding['query']}", markup=False)
+    app.console.print(f"Decode it with this query:\n{query}", markup=False)

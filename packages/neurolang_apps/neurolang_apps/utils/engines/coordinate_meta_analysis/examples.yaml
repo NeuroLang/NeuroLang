@@ -699,14 +699,26 @@ assistant_examples:
 
 
   # After ``.image PATH`` (an image of activations, a binary mask or a
-  # z-map), image(i, j, k, value) holds its voxels, image_voxel(i, j, k)
-  # the choice of one of its activated voxels, and image_decoding(t, lift,
-  # studies) the probability that a study of the term t activates a voxel
-  # chosen in the image, over the same for all the studies, with the number
-  # of studies of t: its terms of the largest lift decode the image.
-  - question: Decode the image I loaded towards the concepts of the Cognitive Atlas. Which terms have the largest lift?
+  # z-map), image(i, j, k, value) holds its voxels. Decoding it: a voxel is
+  # chosen in the image, the more likely the larger its value; a study hits
+  # it with the probability of the weight of the voxels it activates; the
+  # lift of a term is the probability of a hit for the studies of the term
+  # over the same for all the studies. Any relation of voxels and values is
+  # decoded the same way. A mask keeps (w > 0); a z-map, (w >= 3.1).
+  - question: Decode the z-map I loaded towards the concepts of the Cognitive Atlas. Which terms have the largest lift?
     datalog: |-
-      ans(term, lift, studies) :- image_decoding(term, lift, studies), cogat_term(concept, term), (studies >= 30)
-  - question: Which is the lift of working memory in the image I uploaded?
+      image_score(s, sum(w)) :- image(i, j, k, w), (w >= 3.1), activated(i, j, k, s)
+      image_total(sum(w)) :- image(i, j, k, w), (w >= 3.1)
+      image_hit(s) :: p :- image_score(s, x), image_total(y), (p == x / y)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+  - question: Which is the lift of working memory in the mask I uploaded?
     datalog: |-
-      ans(lift, studies) :- image_decoding('working memory', lift, studies)
+      image_score(s, sum(w)) :- image(i, j, k, w), (w > 0), activated(i, j, k, s)
+      image_total(sum(w)) :- image(i, j, k, w), (w > 0)
+      image_hit(s) :: p :- image_score(s, x), image_total(y), (p == x / y)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      ans(lift) :- p_image_given_term('working memory', a), p_image(b), (lift == a / b)

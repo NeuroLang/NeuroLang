@@ -900,7 +900,9 @@ def test_a_server_loads_shows_and_tells_an_uploaded_image(
     reply = repl.submit(answer["statement"])
     text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
     assert not reply.failed, text
-    assert "the 2 voxels of the mask, equally likely" in text
-    assert "not decoded: the engine has no activated" in text
+    assert "loaded image(i, j, k, value): 2 voxels from my roi.nii.gz, " \
+        "a mask" in text
+    assert "cannot decode the image: it has no activated" in text
+    assert answer["query"] == ""  # nor does the page offer the query
     assert reply.viewers == ["<html>page</html>"]
     assert not (tmp_path / "data").exists()  # nothing written there

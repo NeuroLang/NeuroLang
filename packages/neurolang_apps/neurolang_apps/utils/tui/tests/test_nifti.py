@@ -1420,7 +1420,7 @@ class TestViewSeveralQueries:
 
 class TestImage:
     """Check .image loads a NIfTI image of activations, a mask or a z-map,
-    as relations of the session, and decodes it."""
+    as a relation of the session, and the query decoding it."""
 
     @pytest.fixture
     def zmap(self, tmp_path):
@@ -1439,47 +1439,18 @@ class TestImage:
         nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
         return path
 
-    @staticmethod
-    def _chosen(tiny, name="image_voxel"):
-        return {
-            tuple(row[:3]): row[3] for row in tiny._nl.symbols[name].value
-        }
-
-    def test_loads_the_voxels_and_the_chosen_ones(self, tiny, zmap):
-        tiny._handle_dot_command(f".image {zmap} --threshold 3")
+    def test_loads_the_voxels_and_their_values(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap}")
         out = " ".join(_output(tiny).split())
         assert "loaded image(i, j, k, value): 3 voxels" in out
-        assert "image_voxel(i, j, k, weight): the 2 voxels with a value of 3" \
-            in out
-        tiny._execute_and_display("ans(i, j, k, v) :- image(i, j, k, v)")
-        assert "-2" in " ".join(_output(tiny).split())
-        # the larger the value, the more likely the voxel
-        assert self._chosen(tiny) == pytest.approx(
-            {(1, 2, 3): 5 / 8, (0, 0, 0): 3 / 8}
-        )
+        assert "a map of values" in out
+        assert {tuple(row) for row in tiny._nl.symbols["image"].value} == {
+            (1, 2, 3, 5.0), (0, 0, 0, 3.0), (3, 3, 3, -2.0)
+        }
 
-    def test_a_zmap_is_thresholded_at_the_default(self, tiny, zmap):
-        tiny._handle_dot_command(f".image {zmap}")
-        threshold = nifti.IMAGE_DEFAULTS["threshold"]
-        assert f"the 1 voxels with a value of {threshold:.3g} or more" in \
-            " ".join(_output(tiny).split())
-        assert self._chosen(tiny) == {(1, 2, 3): 1.0}
-
-    def test_a_mask_is_all_its_voxels_equally_likely(self, tiny, tmp_path):
-        mask = self._mask(tmp_path, [(1, 2, 3), (0, 0, 0), (2, 2, 2)])
-        tiny._handle_dot_command(f".image {mask}")
-        assert "the 3 voxels of the mask, equally likely" in " ".join(
-            _output(tiny).split()
-        )
-        assert self._chosen(tiny) == pytest.approx(
-            {(1, 2, 3): 1 / 3, (0, 0, 0): 1 / 3, (2, 2, 2): 1 / 3}
-        )
-
-    def test_the_percentile_and_the_name(self, tiny, zmap):
-        tiny._handle_dot_command(f".image {zmap} --name z --threshold 90%")
-        out = " ".join(_output(tiny).split())
-        assert "z_voxel(i, j, k, weight): the 1 voxels with a value of 4.6" \
-            in out
+    def test_the_name(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --name z")
+        assert "loaded z(i, j, k, value)" in _output(tiny)
 
     def test_loading_again_replaces_it_when_named(self, tiny, zmap):
         tiny._handle_dot_command(f".image {zmap}")
@@ -1490,12 +1461,12 @@ class TestImage:
 
     def test_errors(self, tiny, zmap, tmp_path):
         tiny._handle_dot_command(f".image {tmp_path / 'none.nii'}")
-        tiny._handle_dot_command(f".image {zmap} --threshold 100")
         tiny._handle_dot_command(".image")
+        tiny._handle_dot_command(f".image {self._mask(tmp_path, [])}")
         out = " ".join(_output(tiny).split())
         assert "Cannot load" in out
-        assert "No voxel of" in out and "reaches the threshold 100" in out
         assert "Usage: .image PATH" in out
+        assert "has no value other than 0 in the brain" in out
 
     def test_an_image_too_large_uncompressed_is_refused(
         self, tiny, zmap, monkeypatch
@@ -1507,8 +1478,7 @@ class TestImage:
 
     def test_a_mask_on_another_grid_stays_a_mask(self, tiny, tmp_path):
         """Resampled to the nearest voxel: a mask of 2 mm voxels resampled
-        from 1 mm ones is no fraction of a voxel, whose threshold would
-        erode it."""
+        from 1 mm ones is no fraction of a voxel."""
         data = np.zeros((8, 8, 8), dtype=np.float32)
         data[2:6, 2:6, 2:6] = 4.0
         affine = TINY_AFFINE.copy()
@@ -1516,9 +1486,7 @@ class TestImage:
         path = tmp_path / "fine.nii.gz"
         nib.save(nib.Nifti1Image(data, affine), path)
         tiny._handle_dot_command(f".image {path}")
-        assert "voxels of the mask, equally likely" in " ".join(
-            _output(tiny).split()
-        )
+        assert "a mask" in _output(tiny)
         values = {row[-1] for row in tiny._nl.symbols["image"].value}
         assert values == {4.0}
 
@@ -1539,21 +1507,21 @@ class TestImage:
 
     @pytest.fixture
     def decoding(self, tiny, monkeypatch):
-        """The tiny engine with the studies, peaks and terms the rules of
-        the meta-analysis engines decode an image with: studies 10 and 11,
-        of pain, activate the voxel (1, 2, 3), and 12, of vision, (0, 0,
-        0)."""
-        from neurolang_apps.utils import engine_registry
-
+        """The tiny engine with what the query of the meta-analysis
+        engines decodes an image with: studies 10 and 11, of pain, activate
+        the voxel (1, 2, 3), and 12, of vision, (0, 0, 0)."""
         import yaml
 
+        from neurolang_apps.utils import engine_registry
+
         engines = Path(engine_registry.__file__).parent / "engines"
-        decoding = yaml.safe_load((engines / "engines.yaml").read_text())[
-            "engines"]["coordinate_meta_analysis"]["image_decoding"]
+        query = yaml.safe_load((engines / "engines.yaml").read_text())[
+            "engines"]["coordinate_meta_analysis"]["image_decoding_query"]
         config = engine_registry.get_engine_config
         monkeypatch.setattr(
             engine_registry, "get_engine_config",
-            lambda name, *a: {**config(name, *a), "image_decoding": decoding},
+            lambda name, *a: {**config(name, *a),
+                              "image_decoding_query": query},
         )
         nl = tiny._nl
         nl.add_tuple_set(
@@ -1565,34 +1533,60 @@ class TestImage:
         nl.add_uniform_probabilistic_choice_over_set(
             [(10,), (11,), (12,)], name="selected_study"
         )
+        nl.add_tuple_set([("c1", "pain"), ("c2", "vision")], name="cogat_term")
         return tiny
 
-    def _decoded(self, tiny):
-        tiny._execute_and_display(
-            "ans(t, lift, n) :- image_decoding(t, lift, n)"
-        )
-        frame = tiny.results[-1].frame
-        return {row[0]: (round(row[1], 6), row[2])
+    @staticmethod
+    def _lifts(app, mask=True, name="image"):
+        """The lifts of the query decoding *name*, without its keeping
+        the terms of 30 studies or more, which the tiny engine has not."""
+        query, missing = nifti.decoding_query(app, name, mask)
+        assert not missing
+        rules = [rule for rule in query.splitlines()
+                 if not rule.startswith("ans(")]
+        app._execute_and_display("\n".join(rules) + "\n" + (
+            "ans(term, lift) :- p_image_given_term(term, a), p_image(b), "
+            "(lift == a / b)"
+        ))
+        frame = app.results[-1].frame
+        return {row[0]: round(row[1], 6)
                 for row in frame.itertuples(index=False, name=None)}
 
-    def test_the_image_is_decoded(self, decoding, tmp_path):
+    def test_the_query_decodes_a_mask(self, decoding, tmp_path):
         mask = self._mask(tmp_path, [(1, 2, 3)])
         decoding._handle_dot_command(f".image {mask}")
-        assert "Decode it: ans(term, lift, studies) :- image_decoding(" in \
-            " ".join(_output(decoding).split())
-        # P(peak in the image | pain) = 1 over P(peak in the image) = 2/3;
-        # vision, of probability 0, is no answer
-        assert self._decoded(decoding) == {"pain": (1.5, 2)}
+        out = " ".join(_output(decoding).split())
+        assert "Decode it with this query: image_score(s, sum(w)) :- " \
+            "image(i, j, k, w), (w > 0), activated(i, j, k, s)" in out
+        # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
+        # no answer
+        assert self._lifts(decoding) == {"pain": 1.5}
 
-    def test_another_image_replaces_the_decoded_one(
-        self, decoding, tmp_path
+    def test_a_zmap_is_decoded_from_its_threshold_by_its_values(
+        self, decoding, zmap
     ):
+        """The voxels of 3.1 or more: (1, 2, 3), of 5, alone, not (0, 0, 0)
+        of 3; a voxel of twice the value is chosen twice as often."""
+        decoding._handle_dot_command(f".image {zmap}")
+        threshold = nifti.IMAGE_DEFAULTS["threshold"]
+        assert f"(w >= {threshold})" in _output(decoding)
+        assert self._lifts(decoding, mask=False) == {"pain": 1.5}
+        decoding._nl.add_tuple_set(
+            [(1, 2, 3, 4.0), (0, 0, 0, 8.0)], name="mine"
+        )
+        # P(hit) = (4/12 + 4/12 + 8/12) / 3 = 4/9; P(hit | vision) = 8/12
+        assert self._lifts(decoding, mask=False, name="mine") == {
+            "pain": round((4 / 12) / (4 / 9), 6),
+            "vision": round((8 / 12) / (4 / 9), 6),
+        }
+
+    def test_another_image_is_decoded_in_its_place(self, decoding, tmp_path):
         first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
         second = self._mask(tmp_path, [(0, 0, 0)], "second.nii")
         decoding._handle_dot_command(f".image {first}")
-        self._decoded(decoding)
+        assert self._lifts(decoding) == {"pain": 1.5}
         decoding._handle_dot_command(f".image {second} --name image")
-        assert self._decoded(decoding) == {"vision": (3.0, 1)}
+        assert self._lifts(decoding) == {"vision": 3.0}
 
     def test_an_engine_without_peaks_does_not_decode(
         self, decoding, tmp_path
@@ -1603,11 +1597,11 @@ class TestImage:
             f".image {self._mask(tmp_path, [(1, 2, 3)])}"
         )
         out = " ".join(_output(decoding).split())
-        assert "not decoded: the engine has no activated" in out
-        assert "image_decoding" not in decoding._nl.symbols
+        assert "cannot decode the image: it has no activated" in out
+        assert "Decode it" not in out
 
     def test_the_help_quotes_the_defaults(self, tiny):
         threshold = nifti.IMAGE_DEFAULTS["threshold"]
-        assert f"by default {threshold}" in " ".join(nifti.IMAGE_HELP.split())
+        assert f"from {threshold}" in " ".join(nifti.IMAGE_HELP.split())
         tiny._handle_dot_command(".help image")
-        assert "--threshold" in _output(tiny)
+        assert "--name" in _output(tiny)

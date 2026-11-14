@@ -127,7 +127,11 @@ assistant_guidance: >
   mentions(s, 'pain'), selected_study(s) for the studies mentioning
   pain.
   An image loaded with .image (a binary mask or a z-map) is the
-  relation image(i, j, k, value), and image_decoding(t, lift, studies)
-  decodes it for every term t at once: the lift of the studies of t
-  activating its voxels, and their number (a lift of few studies is
-  noisy); restrict t with cogat_term(x, t) for the Cognitive Atlas.
+  relation image(i, j, k, value); decode it, or any relation of voxels
+  and values, as the examples do: the weight of the voxels each study
+  activates, sum(w) over activated(i, j, k, s), divided by the total
+  weight, is the probability of a probabilistic fact of the study
+  (hit(s) :: p :- ...), conditioned on the studies of each term and
+  divided by its probability over all the studies: the lift of the
+  term.  Never join the image with p_a_given_t over its voxels: it
+  computes every term at every voxel.
