@@ -33,7 +33,9 @@ def pairs(frame: pd.DataFrame, rows, columns, names, value: str,
     values rounding to 0 left out: columns *names* and *value*."""
     block = frame.loc[rows, columns].round(decimals).stack().reset_index()
     block.columns = [*names, value]
-    return block[(block[names[0]] != block[names[1]]) & (block[value] != 0)]
+    # pandas 3's stack keeps the NaN: those of a region without data
+    return block[(block[names[0]] != block[names[1]]) & (block[value] != 0)
+                 & block[value].notna()]
 
 
 def write_tsv(table: pd.DataFrame, path: Path, float_format=None) -> None:
