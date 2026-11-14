@@ -3,8 +3,8 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
 - for each engine of the page (``neurosynth``, ``neurosynth_iit``, the
-  page's default, and ``neurostore``), the data it needs, as a zip in
-  the layout of its data directory, and
+  page's default, ``neurostore`` and ``neurostore_iit``), the data it
+  needs, as a zip in the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
 - with torch installed (the ``embeddings`` extra), the files of the
@@ -13,16 +13,18 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
   <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
   studies, named in ``bundle.json`` by their path in the data directory.
 
-``neurosynth_iit`` is Neurosynth with tractography. Its engines.yaml entry
+``neurosynth_iit`` is Neurosynth with tractography, and ``neurostore_iit``
+NeuroStore with the same tractogram. Their engines.yaml entry,
+``iit_tractogram``,
 downloads the IIT Human Brain Atlas v3 (its whole-brain tractogram
 ``IIT3mean.tck``, its wmparc and FreeSurfer's colour LUT) and has a
 ``tractogram`` entry (``path``, ``subsample``, ``step``, ``seed``): the file
 ``path`` of the data is replaced by its subsample (``subsample_tractogram``),
 ``subsample`` streamlines drawn at random with ``seed`` and thinned to every
 ``step``-th point, in the same format and at the same path, so that the
-engine's program is the same in the page. It has the studies of
-``neurosynth``, so it takes the files of the text embeddings of ``neurosynth``
-instead of embedding them again (the same ids give the same
+engine's program is the same in the page. Each has the studies of
+``neurosynth`` or ``neurostore``, so it takes the files of their text
+embeddings instead of embedding them again (the same ids give the same
 ``EmbeddingIndex.cache_key``, which is checked).
 
 The engine downloads its data on first use (about 100 MB, 190 MB with the
@@ -69,16 +71,19 @@ from pathlib import Path
 
 # The engines the page offers, in the order they are built: an engine
 # sharing the text embeddings of another (EMBEDDINGS_FROM) after it.
-ENGINES = ("neurosynth", "neurosynth_iit", "neurostore")
+ENGINES = ("neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit")
 ENGINE = ENGINES[0]
 # The engine the page starts with, when the bundle has it.
 DEFAULT_ENGINE = "neurosynth_iit"
 LABELS = {
     "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
     "neurosynth_iit": "Neurosynth + tracts",
+    "neurostore_iit": "NeuroStore + tracts",
 }
 # The engines that have the studies of another and so its text embeddings.
-EMBEDDINGS_FROM = {"neurosynth_iit": "neurosynth"}
+EMBEDDINGS_FROM = {
+    "neurosynth_iit": "neurosynth", "neurostore_iit": "neurostore",
+}
 RESOLUTION = 2.0
 HIGHLIGHT_WORDS = "highlight.json"
 
@@ -237,7 +242,7 @@ def trim(data_dir: Path, engine: str = ENGINE) -> None:
         for image in (data_dir / dataset).rglob("*.nii.gz"):
             if image.name not in KEPT_IMAGES:
                 image.write_bytes(b"")
-    if engine == "neurostore":
+    if engine in ("neurostore", "neurostore_iit"):
         trim_neurostore(data_dir / "neurostore")
 
 
