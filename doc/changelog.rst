@@ -129,6 +129,15 @@ Unreleased
   box of the assistant): *Use this query* puts it back in the box, in its
   language, with what the assistant said of it and the question it answers;
   *Ask again* puts the question back.
+* The query assistant answers a question naming a cognitive process, task
+  or concept ("studies about working memory", "the n-back task") without
+  saying mention, term or word with the studies closest to the concept's
+  Cognitive Atlas definition (``cogat_definition`` with
+  ``similar_study``), looked up with ``search_values`` over
+  ``cogat_term``, or to the question's own words when the atlas does not
+  have it; ``mentions`` is kept for the questions about mentions, terms
+  or words.  The guidance and the examples of the
+  ``coordinate_meta_analysis`` engines say so.
 
 **Bug fixes:**
 
