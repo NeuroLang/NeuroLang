@@ -82,7 +82,7 @@ def test_interactive_rules():
 
     res = parser('A(x):-', interactive=True)
     expected = {'Signs': {'values': {'(', '∃', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊤', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊤', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-B', interactive=True)
@@ -122,7 +122,7 @@ def test_interactive_rules():
 
     res = parser('A(x):-B(x, y),', interactive=True)
     expected = {'Signs': {'values': {'(', '@', '∃'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-B(x, y), C(3, z)', interactive=True)
@@ -132,7 +132,7 @@ def test_interactive_rules():
 
     res = parser('A(x):-~', interactive=True)
     expected = {'Signs': {'values': {'∃', '(', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊥', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊥', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-~B(x)', interactive=True)
@@ -142,7 +142,7 @@ def test_interactive_rules():
 
     res = parser('A(x):-~B(x),', interactive=True)
     expected = {'Signs': {'values': {'@', '(', '∃'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('A(x):-B(x, ...)', interactive=True)
@@ -235,7 +235,7 @@ def test_interactive_uri():
 
     res = parser(f'`{str(label.name)}`(x):-', interactive=True)
     expected = {'Signs': {'values': {'@', '(', '∃'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'False', '⊥', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'False', '⊥', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`', interactive=True)
@@ -297,7 +297,7 @@ def test_interactive_probabilistic_fact():
 
     res = parser('B(x) :: exp(-d / 5.0) :-', interactive=True)
     expected = {'Signs': {'values': {'@', '∃', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'False', '⊤', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'False', '⊤', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser('B(x) :: exp(-d / 5.0) :- A(x, d)', interactive=True)
@@ -308,7 +308,7 @@ def test_interactive_probabilistic_fact():
     res = parser(
         'B(x) :: exp(-d / 5.0) :- A(x, d) &', interactive=True)
     expected = {'Signs': {'values': {'∃', '(', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', '⊤', 'False', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', '⊤', 'False', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser(
@@ -321,7 +321,7 @@ def test_interactive_probabilistic_fact():
 def test_interactive_condition():
     res = parser('C(x) :- A(x) //', interactive=True)
     expected = {'Signs': {'values': {'@', '(', '∃'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'True', 'False', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'True', 'False', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('C(x) :- A(x) // B(x)', interactive=True)
@@ -363,7 +363,7 @@ def test_interactive_existential():
 
     res = parser('C(x) :- B(x), exists(s1;', interactive=True)
     expected = {'Signs': {'values': {'∃', '@', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊤', 'False', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('C(x) :- B(x), exists(s1; A(s1))', interactive=True)
@@ -388,7 +388,7 @@ def test_interactive_existential():
 
     res = parser('C(x) :- B(x), ∃(s1 st', interactive=True)
     expected = {'Signs': {'values': {'(', '∃', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', 'False', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', 'False', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = parser('C(x) :- B(x), ∃(s1 st A(s1))', interactive=True)
@@ -399,7 +399,7 @@ def test_interactive_existential():
     res = parser(
         'C(x) :- B(x), exists(s1, s2; A(s1),', interactive=True)
     expected = {'Signs': {'values': {'∃', '(', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊥', 'False', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊥', 'False', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser(
@@ -425,7 +425,7 @@ def test_interactive_query():
 
     res = parser('ans(x) :-', interactive=True)
     expected = {'Signs': {'values': {'∃', '@', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = parser('ans(x) :- B(x, y), C(3, y)', interactive=True)

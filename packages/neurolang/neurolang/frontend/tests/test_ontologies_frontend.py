@@ -2,6 +2,7 @@
 ``neurolang/datalog/tests/test_ontologies_parser.py``."""
 
 import io
+import re
 from typing import Callable
 from nl_expr.logic import Implication
 
@@ -759,3 +760,126 @@ def test_has_value_binds_the_variable_in_all_the_query():
     assert not set(nl.execute_datalog_program(
         "ans(x) :- p(x, w), C0(w)"
     ))
+
+
+CONTRAST_MEASURES = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix c: <http://www.cognitiveatlas.org/ontology/cogat.owl#> .
+c:K a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:measures ; owl:someValuesFrom c:WM
+] .
+c:WM a owl:Class ; rdfs:subClassOf c:CC .
+c:CC a owl:Class .
+"""
+
+
+def _contrast_measures():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(CONTRAST_MEASURES), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    return nl
+
+
+def test_constraints_apply_to_the_instances_a_rule_derives():
+    """``c:K(s) :- two_back(s)`` makes ``s1`` a ``c:K``, which measures
+    some ``c:WM``, a ``c:CC``: the rule is solved with the query, in the
+    same program or an earlier one."""
+    queries = {
+        "ans(s) :- c:measures(s, c)": {("s1",)},
+        "ans(s) :- c:measures(s, c), c:CC(c)": {("s1",)},
+        "ans(s, c) :- c:measures(s, c), c:CC(c)": set(),
+    }
+    nl = _contrast_measures()
+    for query, expected in queries.items():
+        with nl.scope:
+            assert set(nl.execute_datalog_program(
+                "c:K(s) :- two_back(s)\n" + query
+            )) == expected, query
+    nl = _contrast_measures()
+    nl.execute_datalog_program("mid(s) :- two_back(s)\nc:K(s) :- mid(s)")
+    for query, expected in queries.items():
+        assert set(nl.execute_datalog_program(query)) == expected, query
+    assert nl.execute_datalog_program("ans() :- c:measures('s1', c)")
+    assert not nl.execute_datalog_program("ans() :- c:measures('s2', c)")
+
+
+def test_full_constraints_apply_to_the_instances_a_rule_derives():
+    nl = _contrast_measures()
+    nl.add_tuple_set([("w",)], name="f")
+    assert set(nl.execute_datalog_program(
+        "c:WM(x) :- f(x)\nans(x) :- c:CC(x)"
+    )) == {("w",)}
+
+
+def test_a_class_named_by_its_iri():
+    """Without a prefix for their namespace, the classes and properties
+    are named by their IRI, written ``<iri>`` as the functor of an atom;
+    ``prefixes`` names them with a prefix."""
+    cogat = "http://www.cognitiveatlas.org/ontology/cogat.owl#"
+    ttl = re.sub(
+        r"\bc:(\w+)", f"<{cogat}\\1>",
+        CONTRAST_MEASURES.replace(f"@prefix c: <{cogat}> .", ""),
+    )
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(ttl), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    assert set(nl.execute_datalog_program(
+        f"<{cogat}K>(s) :- two_back(s)\n"
+        f"ans(s) :- <{cogat}measures>(s, c), <{cogat}CC>(c)"
+    )) == {("s1",)}
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(ttl), format="turtle", individuals=True,
+        names="prefixed", prefixes={"cogat": cogat},
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    assert set(nl.execute_datalog_program(
+        "cogat:K(s) :- two_back(s)\n"
+        "ans(s) :- cogat:measures(s, c), cogat:CC(c)"
+    )) == {("s1",)}
+
+
+CONTRAST_OF_A_TASK = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix c: <http://www.cognitiveatlas.org/ontology/cogat.owl#> .
+c:Cond a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:part_of ; owl:someValuesFrom c:T
+] .
+c:T a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:has_contrast ;
+    owl:someValuesFrom c:K
+] .
+c:K a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:measures ; owl:someValuesFrom c:WM
+] .
+c:WM a owl:Class ; rdfs:subClassOf c:CC .
+c:CC a owl:Class .
+"""
+
+
+def test_a_chain_of_existentials_to_what_a_task_measures():
+    """The Cognitive Atlas's condition, part of a task, which has a
+    contrast that measures a concept: the condition itself measures
+    nothing (an N-back condition is not its contrast)."""
+    for program in ("", "c:Cond(s) :- d(s)\n"):
+        nl = NeurolangPDL()
+        nl.load_ontology(
+            io.StringIO(CONTRAST_OF_A_TASK), format="turtle",
+            individuals=True, names="prefixed",
+        )
+        nl.add_tuple_set([("s1",)], name="d" if program else "c:Cond")
+        assert set(nl.execute_datalog_program(
+            program + "ans(s) :- c:part_of(s, t), c:has_contrast(t, k), "
+            "c:measures(k, c), c:CC(c)"
+        )) == {("s1",)}
+        assert not set(nl.execute_datalog_program(
+            program + "ans(s) :- c:measures(s, c)"
+        ))

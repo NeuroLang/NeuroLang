@@ -192,6 +192,14 @@ into ``aux(x, y)``, where ``y`` occurs once; finally, the existential
 constraint rewrites ``aux(x, y)`` into ``Dean(x)``.  The rules over
 ``aux``, which has no values, are dropped before evaluation.
 
+The rules of the program that define a predicate in the body of a
+constraint are solved with the query, even when the query names only what
+the constraint derives: the code a query needs is followed through the
+constraints.  With ``Dean(x) :- professor(x), chairs(x)`` in place of the
+facts of ``Dean``, ``ans(x) :- headOf(x, y)`` is rewritten into ``ans(x)
+:- Dean(x)``, and the rule of ``Dean`` is part of the program that answers
+it.
+
 **The split.**  Full constraints are in the rewriting too: (I) needs
 ``Dept ⊑ Unit`` applied to Juan's unnamed department, which the chase never
 creates.  However, they rewrite only an atom with a variable out of the
@@ -301,6 +309,19 @@ alternatives multiply.  The rewriting need not end at all when recursive
 ``allValuesFrom`` constraints apply to a variable out of the head, as
 ``C1 ⊑ ∀p.C2``, ``C2 ⊑ C1`` and ``C1 ⊑ ∃p.C3`` with the query
 ``ans(y) :- C3(z), p(z, y)``.
+
+The same multiplication sets the time on (III).  With one instance of the
+contrast ``cogat:CAO_01210`` (N-back 2-back, which measures some working
+memory), ``ans(s) :- cogat:measures(s, c)`` takes 7 s, and ``ans(s) :-
+cogat:measures(s, c), cogat:CAO_00587(c)`` 57 s, for its answer: the 522
+``someValuesFrom`` restrictions on ``measures`` give as many ``aux_i(s,
+c)`` for the first atom, the subclasses of working memory and the
+restrictions to them as many atoms for the second, and XRewrite explores
+their 26,600 pairs.  All but the pairs of one ``aux`` factorised in one
+atom are dead ends: ``aux_i(s, c), aux_j(z, c)`` with ``i ≠ j`` has
+``c`` twice, in the position of the unnamed value of both, so it is
+neither rewritten further nor true of named values.  With
+``cogat:CAO_00670`` (cognitive control), a class higher up, it takes 88 s.
 
 Outside these assumptions the answers stay sound.  On 480 more random
 queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half

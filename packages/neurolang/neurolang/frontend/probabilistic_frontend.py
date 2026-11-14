@@ -283,6 +283,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         format=None,
         individuals=False,
         names="local",
+        prefixes=None,
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -307,8 +308,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         names : str
             ``local`` names classes and properties by their local name
             (``Dean``, ``rdf-schema:label``); ``prefixed`` by the
-            prefixes the files declare (``pv:name``, ``rdfs:label``),
-            else by their full IRI.
+            prefixes the files declare (``pv:name``, ``rdfs:label``)
+            and the ``prefixes``, else by their full IRI.
+        prefixes : dict, optional
+            more prefixes for ``names="prefixed"``, from prefix to
+            namespace, such as ``{"cogat":
+            "http://www.cognitiveatlas.org/ontology/cogat.owl#"}`` for a
+            file that declares none for it.
 
         Returns
         -------
@@ -323,6 +329,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         onto = OntologyParser(
             paths, connector_symbol=self.connector_symbol.expression,
             load_format=format, individuals=individuals, names=names,
+            prefixes=prefixes,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.ontology_predicates.update(constraints)
