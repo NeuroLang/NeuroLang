@@ -959,3 +959,21 @@ def test_semi_naive_solution_is_the_naive_one(program, cq_class, seed):
         dl.walk(Eb_(SEMI_NAIVE_PROGRAMS[program]))
         solutions.append(C(dl).build_chase_solution())
     assert solutions[0] == solutions[1]
+
+
+def test_semi_naive_first_iteration_sees_the_tuples_of_earlier_strata():
+    """P(1, 2), from a stratum before the recursive one, is seen by
+    Q(x, y) :- P(x, y) in its first iteration, although P(y, x) :- P(x, y)
+    has found P(2, 1) before it."""
+    from ..chase import Chase
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(E, {(1, 2)})
+    dl.walk(Eb_((
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(y, x), P(x, y)),
+        Imp_(Q(x, y), P(x, y)),
+        Imp_(P(x, y), Q(x, y)),
+    )))
+    solution = Chase(dl).build_chase_solution()
+    assert set(solution[Q].value) == {(1, 2), (2, 1)}

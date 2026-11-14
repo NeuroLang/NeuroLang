@@ -51,6 +51,8 @@ from nl_core.datalog.ontologies_rewriter import (
     OntologyRewriter,
     chase_rules,
     constraints_that_can_hold,
+    projecting_rules,
+    valued_rules,
 )
 
 from nl_expr.exceptions import (
@@ -348,6 +350,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         self._rewrite_det_idb.cache_clear(self)
         self._constraints_that_can_hold.cache_clear(self)
+        self._projecting_rewritings.cache_clear(self)
         return self.connector_symbol
 
     @property
@@ -1164,10 +1167,22 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.program_ir.get_constraints(), holds
         )
 
+    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    def _projecting_rewritings(self, holds):
+        """The rewritings of the projecting constraints that can hold, the
+        same for every query, which can have values, and the predicates
+        with values with them."""
+        constraints = self._constraints_that_can_hold(holds)
+        rules, valued, _ = valued_rules(constraints, holds, OntologyRewriter(
+            Union(projecting_rules(constraints)), constraints, chased=True
+        ).Xrewrite())
+        return tuple(rules), frozenset(valued)
+
     def _rewrite_program_with_ontology(self, deterministic_program, holds):
         """Xrewrite with the constraints that can hold, those without
         existential variables only on values they introduce; the chase
-        applies the latter, as rules, to the named values."""
+        applies the latter, as rules, to the named values, with the
+        rewritings of those that project a variable out."""
         constraints = self._constraints_that_can_hold(holds)
         rewrite = OntologyRewriter(
             Union(sum((
@@ -1176,8 +1191,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             ), ())),
             constraints, chased=True,
         ).Xrewrite()
+        projecting, valued = self._projecting_rewritings(holds)
         return Union(chase_rules(
-            constraints, holds, rewrite,
+            constraints, valued, tuple(rewrite) + projecting,
             self.program_ir.extensional_database(),
         ))
 

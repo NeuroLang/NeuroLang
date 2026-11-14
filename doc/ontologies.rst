@@ -48,9 +48,9 @@ class and ``p`` a property: whatever an ``A`` reaches through ``p`` is an
 
 (III) *The Cognitive Atlas*.  The ``neurosynth`` and ``neurostore`` engines
 load ``cogat.v2.owl`` (see :doc:`tutorial_cognitive_atlas`).  It gives
-10,399 constraints: three for each of its 2,724 ``someValuesFrom``
-restrictions, one for each of its 1,797 subclass axioms and 430
-``allValuesFrom`` restrictions.  The 430
+10,405 constraints: three for each of its 2,724 ``someValuesFrom``
+restrictions, one for each of its 1,797 subclass axioms, 430
+``allValuesFrom`` restrictions and 6 ``domain`` and ``range`` axioms.  The 430
 ``allValuesFrom`` constraints lie in one recursive component of 3,364
 predicates.  The engine has no instance of any class.  We add one, of the
 class ``CAO_01600``, to measure what happens when data meets the hierarchy.
@@ -89,9 +89,9 @@ Python as in :ref:`python-ontology`:
    nl.add_tuple_set([("Physics",)], name="Dept")
 
 :class:`~neurolang.datalog.ontologies_parser.OntologyParser` reads the
-axioms of each class ``C`` as follows, where ``x`` and ``y`` are variables,
-``p`` a property, ``D`` and ``B`` classes, ``v`` a value and ``aux`` a fresh
-predicate:
+axioms of each class ``C`` and each property ``p`` as follows, where ``x``,
+``y`` and ``z`` are variables, ``q`` a property, ``D`` and ``B`` classes,
+``v`` a value and ``aux`` a fresh predicate:
 
 .. list-table::
    :header-rows: 1
@@ -112,13 +112,30 @@ predicate:
      - ``C(x) → B(x)`` and the ``someValuesFrom`` constraints
    * - annotation ``C p v``, as ``rdfs:label``
      - ``C(x) → p(x, v)``
+   * - ``p rdfs:subPropertyOf q``
+     - ``p(x, y) → q(x, y)``
+   * - ``p owl:equivalentProperty q``
+     - ``p(x, y) → q(x, y)``, ``q(x, y) → p(x, y)``
+   * - ``p owl:inverseOf q``
+     - ``p(x, y) → q(y, x)``, ``q(y, x) → p(x, y)``
+   * - ``p rdfs:domain D``
+     - ``p(x, y) → D(x)``
+   * - ``p rdfs:range D``
+     - ``p(x, y) → D(y)``
+   * - ``p a owl:SymmetricProperty``
+     - ``p(x, y) → p(y, x)``
+   * - ``p a owl:TransitiveProperty``
+     - ``p(x, y) ∧ p(y, z) → p(x, z)``
 
 Furthermore, the structure of the TBox is kept as facts on class names,
 ``neurolang:subClassOf('C', 'D')`` and ``neurolang:label('C', 'v')``, so a
 query can walk the hierarchy itself.  ``unionOf``, ``complementOf``,
 ``equivalentClass``, enumerated classes and cardinality restrictions are
-read with a warning and dropped; property axioms (``subPropertyOf``,
-``domain``, ``range``, ``inverseOf``, transitivity) are not read.  Dropping
+read with a warning and dropped, as is a property axiom on a class
+expression, such as the range ``A ⊔ B`` or the anonymous inverse
+``[ owl:inverseOf p ]``.  A datatype range, as ``xsd:integer``, gives no
+constraint, and property chains, functional and reflexive properties are
+not read.  Dropping
 an axiom removes answers, never adds one.  Hence the constraints NeuroLang
 uses are a subset of the ontology's, and every answer is entailed by the
 ontology.
@@ -157,8 +174,8 @@ Two mechanisms
 
 A constraint is *full* if every variable of its head is in its body; it is
 *existential* otherwise.  Subclass, ``allValuesFrom``, ``hasValue``,
-annotation and ``aux(x, y) → p(x, y)`` constraints are full; ``C(x) → ∃y
-aux(x, y)`` is existential.
+annotation, property and ``aux(x, y) → p(x, y)`` constraints are full;
+``C(x) → ∃y aux(x, y)`` is existential.
 
 **The chase of full constraints.**  A full constraint is a Datalog rule:
 ``Dept(x) → Unit(x)`` is ``Unit(x) :- Dept(x)``.  Its chase creates no value
@@ -203,6 +220,20 @@ NeuroLang's Datalog engine.  Hence each full constraint reaches the named
 values through the chase, and the unnamed ones only through the atoms that
 can stand for them.
 
+Two kinds of full constraints depart from this rule.  Firstly, a constraint
+whose body is one atom with a variable out of its head, as the domain
+``p(x, y) → D(x)``, derives a fact on named values from an atom with an
+unnamed one.  On (I), with ``headOf rdfs:domain Manager``,
+``Manager('Juan')`` holds through Juan's unnamed department, which the chase
+never creates.  NeuroLang rewrites such a constraint as the rule
+``Manager(x) :- headOf(x, y)``, whose atom ``headOf(x, y)`` has a variable
+out of the head, and adds its rewritings, among which ``Manager(x) :-
+Dean(x)``, to the chased rules.  Hence ``Manager('Juan')`` is a named fact
+of the chase, and every full constraint applies to it.  Secondly,
+transitivity, ``p(x, y) ∧ p(y, z) → p(x, z)``, is applied by the chase
+only.  A rewriting step with it replaces ``p(x, y)`` by ``p(x, w) ∧ p(w,
+y)``, whose two atoms it rewrites again, without end.
+
 Why split
 ---------
 
@@ -223,8 +254,8 @@ alternatives multiply across atoms [Calvanese2007]_.
 
 (III) shows both effects.  The query ``ans(x) :- ro:has_part(x, y)`` is
 rewritten with the constraints whose body can hold: none without an
-instance, so it runs in 0.7 s.  One instance of ``CAO_01600`` makes 8,560 of
-the 10,399 constraints hold.  Rewriting with all of them, as NeuroLang did
+instance, so it runs in 0.7 s.  One instance of ``CAO_01600`` makes 8,566 of
+the 10,405 constraints hold.  Rewriting with all of them, as NeuroLang did
 before the split, did not end within 120 s.  With the split, the full
 constraints run in the chase, the rewriting holds 333 conjunctive queries,
 built in 0.8 s, and the query returns the instance in 1.7 s.  rdflib gives
@@ -275,21 +306,40 @@ coNP-hard in the data [Calvanese2013]_, and, unless PTime = coNP, no
 Datalog program computes it.
 NeuroLang drops these axioms, so its answers are then incomplete.
 
-Secondly, no full constraint derives an atom over named values only from an
-atom with an unnamed value.  Under this assumption the named facts of the
-universal model are those of the chase of full constraints.  A query atom
-that the rewriting must replace then stands for an atom with an unnamed
-value, so it has a variable out of the head: the rewritings left out are
-those that only re-derive named facts, and XRewrite's completeness argument
-[Gottlob2014]_ goes through with the remaining steps.  The constraints of the
-parser satisfy it, with one exception: an ``allValuesFrom`` on a property to
-which a ``hasValue`` restriction or an annotation gives a constant.  There,
-an unnamed ``x`` with ``C(x)`` and ``p(x, v)`` makes ``D(v)`` hold for the
-named ``v``, and NeuroLang does not find it.  An ``intersectionOf`` was such
-a case, as ``aux(x, y) → B(x)``, and is now read as ``C(x) → B(x)``.
+Secondly, no full constraint with two or more atoms in its body derives an
+atom over named values only from an atom with an unnamed value.  A
+constraint with one such atom is chased with its rewritings, as above.
+Under this assumption the named facts of the universal model are those of
+the chase of full constraints and of these rewritings.  A query atom that
+the rewriting must replace then stands for an atom with an unnamed value,
+so it has a variable out of the head: the rewritings left out are those
+that only re-derive named facts, and XRewrite's completeness argument
+[Gottlob2014]_ goes through with the remaining steps.  An
+``intersectionOf``, once read as ``aux(x, y) → B(x)``, is now read as
+``C(x) → B(x)``.  The constraints of the parser satisfy the assumption,
+with two exceptions.  The first is an
+``allValuesFrom`` on a property that leads from an unnamed value to a named
+one: a property to which a ``hasValue`` restriction or an annotation gives
+a constant, the inverse of a property in a ``someValuesFrom``, or a
+symmetric one.  There, an unnamed ``x`` with ``C(x)`` and ``p(x, v)``
+makes ``D(v)`` hold for the named ``v``, and NeuroLang does not find it.
+On (I), with ``headedBy`` the inverse of ``headOf`` and ``Dept ⊑
+∀headedBy.Boss``, Juan is a ``Boss``, and is not returned.  The second is
+transitivity, which the rewriting never applies.  With a symmetric and
+transitive ``headOf``, ``headOf('Juan', n1)`` and ``headOf(n1, 'Juan')``
+give ``headOf('Juan', 'Juan')``, which NeuroLang does not find.  Moreover,
+a chain through unnamed values is lost too: with ``A ⊑ ∃p.B``, ``B ⊑
+∃p.C`` and a transitive ``p``, ``ans(x) :- p(x, y), C(y)`` misses the
+instances of ``A``.  In general, a transitive property makes a certain
+answer a question of reachability, which no union of conjunctive queries
+expresses, as (II) shows; OWL 2 QL, the profile designed for such
+rewritings, has no transitive properties.
 
 Finally, the rewriting ends.  It does on (I) and on (III), with 333
-rewritings for ``ro:has_part`` and 615 for ``ro:part_of``.  On random
+rewritings for ``ro:has_part`` and 615 for ``ro:part_of``.  The rewritings
+of the domain and range constraints, computed once for the predicates with
+values, are part of the program of every query: if one of them does not
+end, no query does.  On random
 ontologies of 4 classes whose full constraints are not recursive, the
 answers of 1,080 random queries of 1 to 3 atoms match those of a chase with
 unnamed values bounded at depth 6; 120 of them are the test
@@ -308,13 +358,27 @@ of them, recursive full constraints, none returned an answer that is not
 certain.  One missed an answer, through the ``hasValue`` exception above,
 and 7, all over recursive constraints, did not end within 10 s.
 
+The property axioms were checked the same way.  On 720 more random
+queries, of 1 to 3 atoms, over the ontologies of the first check with 1 to
+3 property axioms added, drawn from all seven kinds for half of the
+queries and without transitivity for the others, the bounded chase was run
+at depths 3 and 5, and the two agreed.  For 15 queries it did not end
+within 30 s; of the 705 others, 699 got the certain answers and none an
+answer that is not certain.  Three missed an answer, all through an
+``allValuesFrom`` reached back from an unnamed value by a symmetric or
+inverse property.  Three did not end within 10 s, all with an
+``allValuesFrom`` on a property that an inverse or a domain and a
+sub-property axiom also constrain.  The test
+``test_certain_answers_with_property_axioms`` runs 48 more.
+
 One more limit concerns rules.  XRewrite rewrites each rule of the program
 on its own, so an unnamed value does not pass from one rule to another:
 with ``heads(x, y) :- headOf(x, y)``, ``ans(x) :- heads(x, y)`` returns Ana
 and not Juan, as ``y`` is in the head of ``heads``.  ``heads(x) :- headOf(x,
 y)`` returns both.  These assumptions delimit the guarantee: complete
-answers for Horn ontologies without constants reached through
-``allValuesFrom``, for queries whose rewriting ends.
+answers for Horn ontologies in which ``allValuesFrom`` reaches no named
+value from an unnamed one and no existential value meets a transitive
+property, for queries whose rewriting ends.
 
 Negation and aggregation
 ------------------------
@@ -362,7 +426,7 @@ of [Zanitti2023]_ reasons on top of them.
 What would confirm and what limits this
 ---------------------------------------
 
-The completeness claim rests on an argument and on 1,560 random queries,
+The completeness claim rests on an argument and on 2,265 random queries,
 not on a mechanised proof.  A cross-check against an OWL reasoner, such as
 HermiT or Konclude, on ontologies with instances of the Cognitive Atlas,
 would test it at scale.  The termination of the rewriting on recursive
@@ -370,8 +434,9 @@ would test it at scale.  The termination of the rewriting on recursive
 part, as in the combined approach [Lutz2009]_ [Kontchakov2011]_, which
 materialises one unnamed value per existential constraint and filters the
 spurious answers, would remove that limit, at the cost of a filtration step
-for each query.  Until then, the guarantee holds for Horn ontologies without
-constants reached through ``allValuesFrom``, on queries whose rewriting
+for each query.  Until then, the guarantee holds for Horn ontologies in
+which ``allValuesFrom`` reaches no named value from an unnamed one and no
+existential value meets a transitive property, on queries whose rewriting
 ends.
 
 .. rubric:: References

@@ -495,3 +495,59 @@ def test_ontology_format_is_guessed_from_the_extension(tmp_path):
     ]
 
 
+PROPERTY_AXIOMS = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://ex.org/> .
+:headOf rdfs:subPropertyOf :worksFor ; rdfs:domain :Person ;
+    owl:inverseOf :headedBy ; owl:equivalentProperty :leads .
+:worksFor rdfs:range :Org .
+:knows a owl:SymmetricProperty, owl:TransitiveProperty .
+:age rdfs:range xsd:integer .
+:p rdfs:range [ owl:unionOf ( :A :B ) ] .
+"""
+
+
+def _shapes(constraints):
+    """The constraints as strings over the variables x, y, z, named in
+    the order of their first occurrence."""
+    shapes = set()
+    for sigmas in constraints.values():
+        for sigma in sigmas:
+            names = {}
+            text = []
+            for atom in (
+                getattr(sigma.antecedent, "formulas", None)
+                or (sigma.antecedent,)
+            ) + (sigma.consequent,):
+                for a in atom.args:
+                    if a not in names:
+                        names[a] = "xyz"[len(names)]
+                args = ", ".join(names[a] for a in atom.args)
+                text.append(f"{atom.functor.name}({args})")
+            shapes.add(" & ".join(text[:-1]) + " -> " + text[-1])
+    return shapes
+
+
+def test_property_axioms_are_constraints():
+    """Each property axiom gives its constraints; a datatype range and a
+    range that is a class expression give none."""
+    import pytest
+
+    parser = OntologyParser(
+        io.StringIO(PROPERTY_AXIOMS), load_format="turtle"
+    )
+    with pytest.warns(UserWarning, match="BNode"):
+        constraints, _, _ = parser.parse_ontology()
+    assert _shapes(constraints) == {
+        "headOf(x, y) -> worksFor(x, y)",
+        "headOf(x, y) -> Person(x)",
+        "headOf(x, y) -> headedBy(y, x)",
+        "headedBy(x, y) -> headOf(y, x)",
+        "headOf(x, y) -> leads(x, y)",
+        "leads(x, y) -> headOf(x, y)",
+        "worksFor(x, y) -> Org(y)",
+        "knows(x, y) -> knows(y, x)",
+        "knows(x, y) & knows(y, z) -> knows(x, z)",
+    }

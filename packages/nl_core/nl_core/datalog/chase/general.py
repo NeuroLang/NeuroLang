@@ -529,7 +529,8 @@ class ChaseSemiNaive:
         has it bound to the tuples new since the previous iteration, its
         delta, or found earlier in this one: its other results are already
         in ``instance``. From the second iteration, it is not evaluated if
-        they are none. Other rules see the whole instance.
+        they are none; in the first one, the delta is the whole relation.
+        Other rules see the whole instance.
         """
         continue_chase = not instance_update.is_empty()
         functors = {rule.consequent.functor for rule in rules}
@@ -552,7 +553,12 @@ class ChaseSemiNaive:
                     "Consider adding a depth bound or increasing max_iterations in config.ini."
                 )
             instance = instance | instance_update
-            delta = instance_update if iteration > 1 else MapInstance()
+            # In the first iteration, the delta of a relation of an earlier
+            # stratum is all of it.
+            delta = instance_update if iteration > 1 else MapInstance({
+                f: instance.elements[f] for f in functors
+                if f in instance.elements
+            })
             instance_update = MapInstance()
             continue_chase = False
             for rule in rules:

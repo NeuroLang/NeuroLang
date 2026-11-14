@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+* Ontologies: the property axioms ``subPropertyOf``, ``equivalentProperty``,
+  ``inverseOf``, ``domain``, ``range``, ``SymmetricProperty`` and
+  ``TransitiveProperty`` are read as constraints without existential
+  variables, applied by the chase.  A domain or range constraint, whose body
+  has a variable out of its head, is chased with its rewritings, so
+  ``Manager('Juan')`` holds when Juan heads an unnamed department of a
+  ``headOf`` whose domain is ``Manager``.  Transitivity is never a rewriting
+  step; its answers through unnamed values are outside the completeness
+  guarantee of :doc:`ontologies`.
 * Ontologies: the constraints without existential variables (subclass,
   ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
   Datalog rules; XRewrite rewrites the query with the existential ones, the
@@ -213,6 +222,12 @@ Unreleased
 
 **Bug fixes:**
 
+* The semi-naive chase missed tuples in the first iteration of a recursive
+  stratum: a rule's recursive atom saw only the tuples found earlier in that
+  iteration, not those of earlier strata.  With ``rr(y, x) :- rr(x, y)``,
+  ``p(x, y) :- rr(x, y)`` and ``rr(x, y) :- p(x, y)``, ``p`` lacked the
+  first tuple of ``rr``.  In the first iteration a recursive atom now sees
+  its whole relation.
 * An engine extending another with the same ``text_embeddings`` entry
   (``neurosynth_iit``, ``neurostore_iit``, the ``_tracts`` ones) shares its
   caches (document embeddings, PubMed texts, model copies) in the
