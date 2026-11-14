@@ -69,6 +69,7 @@ def _row_type(columns):
 
     return Row
 
+
 # The reductions computed a chunk at a time, and the reduction of their
 # partial results giving that of the whole.
 _COMBINED_REDUCTIONS = {
