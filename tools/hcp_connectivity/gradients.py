@@ -48,7 +48,8 @@ def gradients(mean: pd.DataFrame, dimensions: int, transform=np.log1p):
     names = mean.index.to_numpy()
     sides = np.array([hemisphere(n) for n in names])
     assert set(sides) == {"L", "R"}, set(sides)
-    connectivity = transform(mean.to_numpy(dtype=float))
+    # a copy: pandas 3 frames give read-only arrays
+    connectivity = np.array(transform(mean.to_numpy(dtype=float)))
     np.fill_diagonal(connectivity, 0)
     scores, totals = {}, {}
     for side in "LR":
