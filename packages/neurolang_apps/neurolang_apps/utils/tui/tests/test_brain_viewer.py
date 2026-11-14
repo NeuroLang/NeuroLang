@@ -363,6 +363,13 @@ function changed(a, b) {
   for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
   return false;
 }
+function changes(a, b) {
+  var n = 0;
+  for (var i = 0; i < a.length; i += 4) {
+    if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) n++;
+  }
+  return n;
+}
 function set(id, value, kind) {
   var el = document.getElementById(id);
   if (el.type === 'checkbox') el.checked = value; else el.value = value;
@@ -1113,3 +1120,51 @@ def test_the_defaults_of_the_viewer_are_those_of_its_file():
     script = (brain_viewer._STATIC / "brain_viewer.js").read_text()
     for name in defaults["page"]:
         assert f"pageSettings.{name}" in script, name
+
+
+_CONSTANT_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var volume = brainViewer.nv.volumes[1];
+  var shown = pixels();
+  volume.opacity = 0;
+  brainViewer.nv.updateGLVolume();
+  var out = {drawn: changes(shown, pixels())};
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+def _pixels_of_a_region(directory, region, value, symmetric):
+    """The pixels drawn of the *region* of an image, its voxels of one
+    *value*, at the default threshold, a percentile, which is that value."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[region] = value
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="region", threshold="95%", cmap="hot",
+        symmetric=symmetric,
+    )
+    directory.mkdir()
+    result = _run_in_chrome(directory, html, _CONSTANT_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    return result["drawn"]
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+@pytest.mark.parametrize("value, symmetric", [
+    (1.0, False), (0.25, False), (1.0, True), (-1.0, True),
+])
+def test_a_region_is_drawn_at_a_percentile_threshold(
+    tmp_path, value, symmetric,
+):
+    """Check a region, or a constant overlay, is drawn at a percentile
+    threshold, all its voxels at the threshold, and its other voxels
+    are not: a region of one voxel draws fewer pixels."""
+    region = _pixels_of_a_region(
+        tmp_path / "region", np.s_[1:3, 1:3, 1:3], value, symmetric
+    )
+    voxel = _pixels_of_a_region(
+        tmp_path / "voxel", np.s_[1, 1, 1], value, symmetric
+    )
+    assert 0 < voxel < region, (voxel, region)

@@ -643,6 +643,14 @@
     return Math.round(255 * Math.min(1, Math.max(0, t)));
   }
 
+  // The bottom of the range NiiVue colours, from lo to hi: lo, unless the
+  // range is one value, as when all the voxels shown are of one value (a
+  // region, a constant): NiiVue draws nothing of such a range, which then
+  // starts a colour below hi, drawn in the top colour.
+  function rangeBottom(lo, hi) {
+    return hi > lo ? lo : hi - (Math.abs(hi) || 1) / 255;
+  }
+
   // Set the NiiVue volume of the layer l as its settings and scale s
   // tell.
   function applyLayer(l, s) {
@@ -651,13 +659,13 @@
       volume.colormap = colormapKey(settingsOf.cmap, 'positive');
       volume.colormapNegative = colormapKey(settingsOf.cmap, 'negative');
       volume.colormapType = ZERO_TO_MAX_TRANSPARENT;
-      volume.cal_min = s.threshold;
       volume.cal_max = Math.max(s.hi, s.threshold);
+      volume.cal_min = rangeBottom(s.threshold, volume.cal_max);
     } else {
       volume.colormap = colormapKey(settingsOf.cmap);
       volume.colormapNegative = '';
       volume.colormapType = MIN_TO_MAX;
-      volume.cal_min = s.lo;
+      volume.cal_min = rangeBottom(s.lo, s.hi);
       volume.cal_max = s.hi;
     }
     volume.cal_minNeg = NaN;

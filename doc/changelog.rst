@@ -265,6 +265,12 @@ Unreleased
 
 **Bug fixes:**
 
+* ``.view`` drew nothing of a region, a result of voxels without a value,
+  or of an overlay of one value: its default threshold, the 95th
+  percentile, is that value, and NiiVue draws nothing of a colour range of
+  one value.  Such a range now starts a colour below it, and the voxels
+  are drawn in the top colour of the colormap.
+
 * The semi-naive chase missed tuples in the first iteration of a recursive
   stratum: a rule's recursive atom saw only the tuples found earlier in that
   iteration, not those of earlier strata.  With ``rr(y, x) :- rr(x, y)``,
