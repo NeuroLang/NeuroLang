@@ -42,7 +42,10 @@ def gradients(mean: pd.DataFrame, dimensions: int, transform=np.log1p):
     connectivity's own Fisher z), and the fraction of the variance of each
     hemisphere each explains. A region of NaN values (without data) has
     NaN gradients."""
-    defined = ~mean.isna().all(axis=1)
+    # a region is undefined when it has no value but its diagonal
+    off_diagonal = mean.to_numpy(dtype=float, copy=True)
+    np.fill_diagonal(off_diagonal, np.nan)
+    defined = ~np.isnan(off_diagonal).all(axis=1)
     result_index = mean.index
     mean = mean.loc[defined, defined]
     names = mean.index.to_numpy()
