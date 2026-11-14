@@ -185,11 +185,8 @@ class OntologyRewriter:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
                 q0 = q[0]
-                # discard: equality of expressions is not symmetric across
-                # parametrised classes, as FunctionApplication[Unknown] and
-                # [Any], so q may have left with an equal one.
                 if q0 in Q_explored:
-                    Q_rew.discard(q)
+                    Q_rew.remove(q)
                     continue
                 selected_sigmas = self._get_related_sigmas(
                     q0, self.union_of_constraints
@@ -204,7 +201,7 @@ class OntologyRewriter:
                         if self._is_new_factorization(new_q0, Q_rew, Q_explored):
                             Q_rew.add((new_q0, "f", "u"))
 
-                Q_rew.discard(q)
+                Q_rew.remove(q)
                 Q_explored.add(q[0])
 
         return Q_explored
