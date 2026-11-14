@@ -256,12 +256,18 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     bundle.main(tmp_path)
     described = json.loads((tmp_path / "bundle.json").read_text())
     # the page starts with Neurosynth and the tracts, built after
-    # Neurosynth, whose text embeddings it shares
+    # Neurosynth, whose text embeddings it shares, as NeuroStore and the
+    # tracts share those of NeuroStore
     assert described["default"] == "neurosynth_iit"
     assert list(described["engines"]) == [
-        "neurosynth", "neurosynth_iit", "neurostore"]
+        "neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit"]
     assert described["engines"]["neurosynth_iit"]["files"] == {
         "neurosynth_iit/model.npz": ["neurosynth-model.npz"]}
+    assert described["engines"]["neurostore_iit"] == {
+        "label": "NeuroStore + tracts",
+        "data": "neurolang-neurostore_iit-data.zip",
+        "files": {"neurostore_iit/model.npz": ["neurostore-model.npz"]},
+    }
     assert described["engines"]["neurostore"] == {
         "label": "NeuroStore", "data": "neurolang-neurostore-data.zip",
         "files": {"neurostore/model.npz": ["neurostore-model.npz"]},
@@ -305,7 +311,8 @@ def test_the_embeddings_of_an_engine_are_kept_as_those_of_another(
 def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
     bundle, monkeypatch, tmp_path, capsys
 ):
-    _fake_bundle(bundle, monkeypatch, failing={"neurostore"})
+    _fake_bundle(bundle, monkeypatch,
+                 failing={"neurostore", "neurostore_iit"})
     bundle.main(tmp_path)
     described = json.loads((tmp_path / "bundle.json").read_text())
     assert list(described["engines"]) == ["neurosynth", "neurosynth_iit"]
@@ -333,8 +340,9 @@ def test_the_files_of_the_embeddings_are_named_for_their_engine(bundle):
     assert name == "neurostore-a_b.npz"
 
 
+@pytest.mark.parametrize("engine", ["neurostore", "neurostore_iit"])
 def test_a_neurostore_release_keeps_the_tables_and_columns_the_engine_reads(
-    bundle, tmp_path
+    bundle, tmp_path, engine
 ):
     pd = pytest.importorskip("pandas")
     pytest.importorskip("pyarrow")
@@ -356,7 +364,7 @@ def test_a_neurostore_release_keeps_the_tables_and_columns_the_engine_reads(
     for name in ("analyses", "images", "metadata", "texts"):
         (release / f"{name}.parquet").write_bytes(b"x")
     (release / "studyset.json").write_text("{}")
-    bundle.trim(tmp_path, "neurostore")
+    bundle.trim(tmp_path, engine)
     assert sorted(p.name for p in release.iterdir()) == [
         "annotations.parquet", "coordinates.parquet", "studies.parquet"
     ]

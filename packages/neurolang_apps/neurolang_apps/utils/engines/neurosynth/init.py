@@ -24,9 +24,11 @@ Registers the following predicates:
   probability, 25% threshold, 2 mm).
 * ``cognitive_task(task_id, name, description)`` — the tasks of the
   Cognitive Atlas, with their descriptions.
-* ``study_title(study_id, title)``, ``study_year(study_id, year)`` and
-  ``study_journal(study_id, journal)`` — the titles, years and journals of
-  the studies, from the NeuroSynth metadata.
+* ``study_title(study_id, title)``, ``study_year(study_id, year)``,
+  ``study_journal(study_id, journal)`` and ``study_doi(study_id, doi)`` —
+  the titles, years, journals and DOIs of the studies, from the NeuroSynth
+  metadata, and ``study_pmid(study_id, pmid)``, their PubMed ids, which
+  are their ids.
 * ``study_abstract(study_id, abstract)`` — their abstracts, from PubMed
   (see :func:`study_abstracts`).
 
@@ -98,9 +100,9 @@ def init_engine(
     metadata = metadata.rename(columns={"id": "study_id"}).astype(
         {"study_id": StudyID}
     )
-    register_publications(
-        nl, metadata[metadata["study_id"].isin(study_ids["study_id"])]
-    )
+    metadata = metadata[metadata["study_id"].isin(study_ids["study_id"])]
+    # The id of a NeuroSynth study is its PubMed id.
+    register_publications(nl, metadata.assign(pmid=metadata["study_id"]))
     nl.add_tuple_set(
         study_abstracts(study_ids["study_id"], data_dir),
         name="study_abstract",
@@ -119,16 +121,45 @@ def study_titles(
 
 def register_publications(nl: NeurolangPDL, studies: pd.DataFrame) -> None:
     """
-    Add to *nl* ``study_year(study_id, year)`` and ``study_journal(study_id,
-    journal)``, the rows of *studies* (``study_id``, ``year``, ``journal``)
-    where they are known.
+    Add to *nl* ``study_year(study_id, year)``, ``study_journal(study_id,
+    journal)``, ``study_pmid(study_id, pmid)`` and ``study_doi(study_id,
+    doi)``, the rows of *studies* (``study_id``, ``year``, ``journal``,
+    ``pmid``, ``doi``) where they are known: the PubMed ids as integers and
+    the DOIs as :func:`normal_doi` writes them, the same in every engine,
+    so that the studies of two engines are matched on them.
     """
-    for column, kind in (("year", int), ("journal", str)):
-        table = studies.reindex(columns=["study_id", column]).dropna()
-        if kind is str:
-            table = table[table[column].astype(str).str.strip() != ""]
-        table = table.astype({column: kind}).drop_duplicates()
-        nl.add_tuple_set(table, name=f"study_{column}")
+    studies = studies.reindex(
+        columns=["study_id", "year", "journal", "pmid", "doi"]
+    )
+    journals = studies["journal"]
+    values = {
+        "year": pd.to_numeric(studies["year"], errors="coerce"),
+        "journal": journals.where(journals.astype(str).str.strip() != ""),
+        "pmid": pd.to_numeric(studies["pmid"], errors="coerce"),
+        "doi": studies["doi"].map(normal_doi).replace("", None),
+    }
+    for column, kind in (
+        ("year", int), ("journal", str), ("pmid", int), ("doi", str)
+    ):
+        table = pd.DataFrame({
+            "study_id": studies["study_id"].values,
+            column: values[column].values,
+        }).dropna()
+        nl.add_tuple_set(
+            table.astype({column: kind}).drop_duplicates(),
+            name=f"study_{column}",
+        )
+
+
+def normal_doi(doi) -> str:
+    """The DOI *doi* in lower case without its resolver, or ''."""
+    if not isinstance(doi, str):
+        return ""
+    doi = doi.strip().lower()
+    for prefix in ("https://doi.org/", "http://doi.org/", "doi:"):
+        if doi.startswith(prefix):
+            doi = doi[len(prefix):]
+    return doi if doi.startswith("10.") else ""
 
 
 def study_abstracts(study_ids: pd.Series, data_dir: Path) -> pd.DataFrame:

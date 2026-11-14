@@ -544,10 +544,20 @@ are PubMed's, asked for at the first build of the engine (about 70
 requests of two hundred studies, four to five minutes; less with an
 ``NCBI_API_KEY``) and kept in
 ``<data_dir>/neurosynth/pubmed_abstracts.json``. A NeuroStore release holds
-the titles, abstracts and journals but not the years: they are those
-NeuroStore lists for its studies, about twenty requests of ten thousand
+the titles, abstracts and journals but not the years, PubMed ids and DOIs:
+they are those NeuroStore lists for its studies, about twenty requests of ten thousand
 studies (700 MB, a few minutes) at the first build, kept in
-``<data_dir>/neurostore/<version>-studies.parquet``. The next builds ask for
+``<data_dir>/neurostore/<version>-studies.parquet``. Both also have the identifiers of each study,
+``study_pmid(study_id, pmid)``, its PubMed id as an integer, and
+``study_doi(study_id, doi)``, its DOI in lower case without
+``https://doi.org/``, the same in every engine: a Neurosynth study's id is
+its PubMed id, and NeuroStore lists those of its studies (97% have one, 99%
+a DOI; 14,358 of the 14,371 Neurosynth studies are in NeuroStore's 2026-11
+release). The PubMed ids match the studies of the two databases: the
+studies of a NeuroStore query saved with ``.save`` and loaded in
+Neurosynth, joined on ``study_pmid``. Match on them rather than on the
+DOIs, which the two databases give differently for 1.8% of their common
+studies (one of them wrong: Neurosynth gives two studies the same DOI). The next builds ask for
 nothing; without the network, the studies not kept have no abstract or
 year, with a warning, until the next build. The journals are named as each
 database names them (``Neuron``, but ``The Journal of neuroscience : the
@@ -611,7 +621,9 @@ tract_querier is the engine's ``examples/uncinate.dl``::
 The ``neurosynth_tracts`` engine
 --------------------------------
 
-``neurosynth_tracts`` is both, ``extends: [neurosynth, tracts]``: the
+``neurosynth_tracts`` is both, ``extends: [neurosynth,
+meta_analysis_tracts]``, the abstract engine ``meta_analysis_tracts``
+extending ``coordinate_meta_analysis`` and ``tracts``: the
 studies, terms, peaks and Cognitive Atlas of ``neurosynth``, its atlases
 with the studies that activate their regions (``schaefer_activated(label,
 study)``...) and the centres of their voxels in millimetres
@@ -629,6 +641,14 @@ concepts the studies of the parcels the uncinate fasciculus connects are
 about::
 
    neurolang-query --engine neurosynth_tracts --file uncinate_cogat.dl
+
+``neurosynth_iit`` adds the abstract engine ``iit_tractogram``: the
+downloads and the commands that load the whole-brain tractogram of the IIT
+Human Brain Atlas v3, index it by its wmparc and import tract_querier's
+bundles.  ``neurostore_tracts`` (``extends: [neurostore,
+meta_analysis_tracts]``) and ``neurostore_iit`` (``extends:
+[neurostore_tracts, iit_tractogram]``) are the same over the studies of
+``neurostore``, with the same questions of the query assistant.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the

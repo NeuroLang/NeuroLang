@@ -38,9 +38,11 @@
   #controls label { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 6px; align-items: center; }
   #threshold, #threshold-high { width: 7em; }
   #threshold-control { display: grid; gap: 4px; }
-  /* The two sliders over the histogram of the values, a thumb each. */
+  /* The two sliders over the histogram of the values, a thumb each. The
+     centre of a 14px thumb runs from 7px to 7px short of the end, so the
+     histogram is inset by 7px to keep a thumb over its value. */
   #threshold-range { position: relative; width: 360px; max-width: 100%; height: 62px; }
-  #threshold-histogram { position: absolute; left: 0; top: 0; width: 100%; height: 44px; }
+  #threshold-histogram { position: absolute; left: 7px; top: 0; width: calc(100% - 14px); height: 44px; }
   #threshold-range input[type=range] {
     position: absolute; left: 0; bottom: 0; width: 100%; margin: 0;
     background: none; border: 0; pointer-events: none; -webkit-appearance: none; appearance: none;
@@ -49,11 +51,11 @@
   #threshold-range input[type=range]::-moz-range-thumb { pointer-events: auto; }
   #threshold-range input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--line); border-radius: 2px; }
   #threshold-range input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px;
+    -webkit-appearance: none; box-sizing: border-box; width: 14px; height: 14px; margin-top: -5px;
     border-radius: 50%; background: var(--strong); border: 2px solid var(--bg); cursor: pointer;
   }
   #threshold-range input[type=range]::-moz-range-thumb {
-    width: 12px; height: 12px; border-radius: 50%; background: var(--strong); border: 2px solid var(--bg);
+    box-sizing: border-box; width: 14px; height: 14px; border-radius: 50%; background: var(--strong); border: 2px solid var(--bg);
   }
   #opacity { width: 100px; }
   #threshold-value { color: var(--dim); min-width: 6em; }
@@ -111,7 +113,7 @@
       <span id="threshold-value"></span>
     </label>
     <div id="threshold-range">
-      <canvas id="threshold-histogram" width="360" height="44"
+      <canvas id="threshold-histogram" width="346" height="44"
         title="The nonzero values of the overlay (|v| when symmetric), the range shown in colour"></canvas>
       <input id="threshold-slider" type="range" min="0" max="1000" step="1" aria-label="Low threshold">
       <input id="threshold-high-slider" type="range" min="0" max="1000" step="1" aria-label="High threshold">

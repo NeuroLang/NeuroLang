@@ -24,8 +24,8 @@ assistant_guidance: >
   joining selected_study(s), as active(l, s) :-
   destrieux_activated(l, s), selected_study(s), never over stored
   relations directly; and for a question about
-  a term and the brain the conditional probability given the term,
-  PROB[activation // term] = p, or a ratio of probabilities (lift,
+  a term or topic and the brain the conditional probability given it,
+  PROB[activation // topic] = p, or a ratio of probabilities (lift,
   Bayes factor) when it asks for an association: the lift of A given B,
   how much B raises the chance of A, is P(A | B) / P(A), from PROB rules
   of yours (the rules lift and relative_risk are those of a term at
@@ -67,19 +67,28 @@ assistant_guidance: >
   term if the question names one; for the regions or points
   co-activated with a seed, PROB[active(l, s) // seed(s)] = p; for
   "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
-  A question about a topic given as a description, or about a
-  Cognitive Atlas concept, uses the similarity of the study texts to
-  it: similar_study(q, s), the studies closest to the text q, the
-  question's own words for the topic (no stored value holds them: do
-  not look for them with search_values), with
-  their titles from study_title; p_a_given_similar, lift_llm and
-  uniformity_llm for the brain.  A Cognitive Atlas definition reaches
-  them from the queried rule itself, cogat_definition('working
-  memory', d) joined with similar_study(d, s) or uniformity_llm(d, i,
-  j, k, u), or with a rule of yours taking the text as its first
-  argument, close(q, s) :- similar_study(q, s), selected_study(s);
-  inside another rule the text is not known and the query fails.
-  Rank by similarity rather than with a fixed threshold.
+  A question naming a cognitive process, task or concept (studies
+  about working memory, regions for response inhibition, the n-back
+  task) without saying mention, term or word: look it up with
+  search_values over cogat_term (lower-case labels); found (the label
+  itself or its singular, not a longer label), the studies are those
+  closest to its definition, cogat_definition('working memory', d)
+  with similar_study(d, s); not found, those closest to the question's
+  own words, similar_study('emotion regulation', s).  mentions(s, t)
+  is for the questions saying mention, term or word, or asking about
+  the vocabulary, and for the topics that are no cognitive concept
+  (anatomy, disorders, populations, stimuli).  A topic given as a
+  description uses its own words with similar_study (no stored value
+  holds them: do not look for them with search_values), with their
+  titles from study_title; p_a_given_similar, lift_llm and
+  uniformity_llm for the brain.  The text reaches similar_study from
+  the queried rule itself, cogat_definition('working memory', d)
+  joined with similar_study(d, s) or uniformity_llm(d, i, j, k, u), or
+  with a rule of yours taking the text as its first argument, close(q,
+  s) :- similar_study(q, s), selected_study(s), then p(q, l, PROB) :-
+  active(l, s) // close(q, s); inside another rule the text is not
+  known and the query fails.  Rank by similarity rather than with a
+  fixed threshold.
   Cognitive Atlas classes are named by cogat_term, their lower-case
   label (the terms of mentions), both to find a class and to answer
   with one, not by rdfs:label or skos:prefLabel; cogat_subclass_of(x,
@@ -97,8 +106,11 @@ assistant_guidance: >
   The publications of the studies restrict them to a time or a
   journal: study_year(s, y), study_journal(s, j), with the journal
   named as the engine names it (find it with search_values), and
-  study_title(s, t), study_abstract(s, a) for their texts.  Restrict
+  study_title(s, t), study_abstract(s, a) for their texts;
+  study_pmid(s, p) and study_doi(s, d) identify a paper, as PubMed
+  and the DOI do (an integer, and the DOI in lower case).  Restrict
   the studies in a rule of their own, recent(s) :- study_year(s, y),
   (y >= 2010), (y <= 2015), then condition on it as on a term:
   PROB[active(l, s) // cond(s)] = p with cond(s) :- recent(s),
-  mentions(s, 'pain'), selected_study(s).
+  mentions(s, 'pain'), selected_study(s) for the studies mentioning
+  pain.
