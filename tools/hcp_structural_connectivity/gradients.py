@@ -65,13 +65,19 @@ def components(profiles: np.ndarray, dimensions: int):
     return u[:, :dimensions] * s[:dimensions], (s ** 2).sum()
 
 
-def gradients(mean: pd.DataFrame, dimensions: int):
-    """The gradients of the regions of the connectivity *mean*, and the
-    fraction of the variance of each hemisphere each explains."""
+def gradients(mean: pd.DataFrame, dimensions: int, transform=np.log1p):
+    """The gradients of the regions of the connectivity *mean*, *transform*
+    of its values the profiles (log(1 + streamlines); the functional
+    connectivity's own Fisher z), and the fraction of the variance of each
+    hemisphere each explains. A region of NaN values (without data) has
+    NaN gradients."""
+    defined = ~mean.isna().all(axis=1)
+    result_index = mean.index
+    mean = mean.loc[defined, defined]
     names = mean.index.to_numpy()
     sides = np.array([hemisphere(n) for n in names])
     assert set(sides) == {"L", "R"}, set(sides)
-    connectivity = np.log1p(mean.to_numpy(dtype=float))
+    connectivity = transform(mean.to_numpy(dtype=float))
     np.fill_diagonal(connectivity, 0)
     scores, totals = {}, {}
     for side in "LR":
@@ -93,7 +99,7 @@ def gradients(mean: pd.DataFrame, dimensions: int):
                                    np.arange(left.shape[1])])
     left, right = left * flip, right * flip
     columns = [str(d) for d in range(1, left.shape[1] + 1)]
-    result = pd.concat([left, right]).loc[mean.index]
+    result = pd.concat([left, right]).reindex(result_index)
     result.columns = columns
     result.index.name = "region"
     variance = pd.DataFrame([
@@ -111,6 +117,8 @@ def main() -> None:
     parser.add_argument("--dimensions", type=int, default=10)
     args = parser.parse_args()
     for path in sorted((args.dataset / "parquet").glob("*_mean.parquet")):
+        if "_functional" in path.name:  # hcp_functional_connectivity's
+            continue
         atlas = path.name[:-len("_mean.parquet")]
         scores, variance, matched = gradients(pd.read_parquet(path),
                                               args.dimensions)
@@ -122,11 +130,14 @@ def main() -> None:
         long = scores.reset_index().melt(
             id_vars="region", var_name="dimension", value_name="value")
         long["dimension"] = long["dimension"].astype(int)
+        # gzip without the time, so that a file made again is the same
+        gzip = {"method": "gzip", "mtime": 0}
         long.to_csv(args.dataset / "tsv" / f"{atlas}_gradients.tsv.gz",
-                    sep="\t", index=False, float_format="%.6g")
+                    sep="\t", index=False, float_format="%.6g",
+                    compression=gzip)
         variance.to_csv(
             args.dataset / "tsv" / f"{atlas}_gradient_variance.tsv.gz",
-            sep="\t", index=False, float_format="%.6g")
+            sep="\t", index=False, float_format="%.6g", compression=gzip)
         left = variance[variance.hemisphere == "L"].explained
         print(f"{atlas}: {matched} homologous pairs; left explained "
               + ", ".join(f"{x:.3f}" for x in left[:4]))
