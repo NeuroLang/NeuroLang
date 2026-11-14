@@ -3,6 +3,7 @@
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 
@@ -600,20 +601,22 @@ def test_the_own_memory_of_a_fork_is_apart_from_the_shared():
 
     if process_usage(os.getpid()) is None:
         pytest.skip("the usage of a process is read on Linux")
-    shared = bytearray(os.urandom(1 << 20)) * 100  # 100 MB, of the parent
-    ready, done = os.pipe(), os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        own = bytearray(os.urandom(1 << 20)) * 50  # 50 MB of its own
-        os.write(ready[1], b"x")
-        os.read(done[0], 1)
-        os._exit(len(own) and len(shared) and 0)
-    try:
-        os.read(ready[0], 1)
-        usage = process_usage(pid)
-    finally:
-        os.write(done[1], b"x")
-        os.waitpid(pid, 0)
+    # The fork is of a fresh interpreter, as the builder is: that of the
+    # test process, large after all the packages' tests, fails (ENOMEM).
+    script = (
+        "import os, sys\n"
+        "shared = bytearray(os.urandom(1 << 20)) * 100  # 100 MB\n"
+        "if os.fork() == 0:\n"
+        "    own = bytearray(os.urandom(1 << 20)) * 50  # 50 MB of its own\n"
+        "    print(os.getpid(), flush=True)\n"
+        "    sys.stdin.read()\n"
+        "    os._exit(0)\n"
+        "os.wait()\n"
+    )
+    with subprocess.Popen([sys.executable, "-c", script], text=True,
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE) as p:
+        usage = process_usage(int(p.stdout.readline()))
+        p.stdin.close()
     assert 45 < usage["private"] < 80  # its 50 MB, not the parent's 100
     assert usage["rss"] > usage["private"] + 80  # the rss counts them
 
