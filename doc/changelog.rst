@@ -130,6 +130,13 @@ Unreleased
   language, with what the assistant said of it and the question it answers;
   *Ask again* puts the question back.
 
+**Performance:**
+
+* A natural join on a unique key of strings, such as the NeuroStore study
+  ids joined with the probabilities of ``selected_study``, looks the keys
+  up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
+  takes 23 s instead of 81 s (2 mm grid).
+
 **Bug fixes:**
 
 * ``.view`` of streamlines with the regions they join, as
