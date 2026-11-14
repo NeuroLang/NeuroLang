@@ -476,10 +476,10 @@ assistant_examples:
       topic(s) :- mentions(s, 'music'), selected_study(s)
       ans(l, p) :- PROB[covered(l, s) // topic(s)] = p
 
-  - question: "What share of the left opercular inferior frontal gyrus do syntax studies cover?"
+  - question: "What share of the left opercular inferior frontal gyrus do studies of syntactic processing cover?"
     datalog: |-
       covered(s) :- destrieux_covered('L G front inf Opercular', s), selected_study(s)
-      topic(s) :- mentions(s, 'syntax'), selected_study(s)
+      topic(s) :- mentions(s, 'syntactic'), selected_study(s)
       ans(p) :- PROB[covered(s) // topic(s)] = p
 
   - question: "Which subcortical regions do reward studies cover more than studies in general do?"
