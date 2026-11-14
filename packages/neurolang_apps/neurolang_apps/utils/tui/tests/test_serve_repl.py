@@ -2699,13 +2699,13 @@ def test_the_statements_of_a_server_of_users_are_confined(
     data = tmp_path / "data"
     with pytest.raises(KeyboardInterrupt):
         serve.main(["--secrets", str(path), "--no-browser", "--local",
-                    "--data-dir", str(data)])
+                    "--no-prepare", "--data-dir", str(data)])
     assert os.environ.pop(CONFINE_ENV) == str(data.resolve())
     for lifted in (["--unconfined"], []):  # in the browser, none needed
         with pytest.raises(KeyboardInterrupt):
             serve.main(["--secrets", str(path), "--no-browser",
                         "--data-dir", str(data), *lifted,
-                        *(["--local"] if lifted else [])])
+                        *(["--local", "--no-prepare"] if lifted else [])])
         assert CONFINE_ENV not in os.environ
 
 
