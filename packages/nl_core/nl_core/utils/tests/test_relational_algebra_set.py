@@ -1117,6 +1117,26 @@ def test_extended_projection_on_python_sets(ra_module):
     assert expected_len == new_set
 
 
+def test_extended_projection_callable_runs_once_per_distinct_row(ra_module):
+    calls = []
+
+    def f(r):
+        calls.append(r.x)
+        return r.x * 10
+
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(1, 2), (1, 3), (1, 4), (2, 5)]
+    ).projection("x")
+    new_set = ras.extended_projection(
+        {"x": RelationalAlgebraColumnStr("x"), "z": f}
+    )
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "z"), [(1, 10), (2, 20)]
+    )
+    assert new_set == expected
+    assert sorted(calls) == [1, 2]
+
+
 def test_rename_columns(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"),
@@ -1403,6 +1423,36 @@ def test_naturaljoin_on_a_unique_key_takes_little_memory():
     finally:
         tracemalloc.stop()
     assert peak < 1.5 * frame.memory_usage(index=False).sum()
+
+
+@pytest.mark.parametrize("small_first", [True, False])
+def test_naturaljoin_on_a_unique_string_key(small_first):
+    """
+    The look-up join on a unique key of pandas' strings, held by Arrow as
+    the study ids of NeuroStore are, matches the rows a merge matches, the
+    keys of the larger relation missing from the smaller one left out.
+    """
+    import numpy as np
+    import pandas as pd
+
+    small_rows = [("a1", 0.5), ("b2", 0.25), ("c3", 0.125)]
+    keys = ["b2", "a1", "zz", "b2", "c3"]
+    large_rows = [(k, n) for n, k in enumerate(keys)]
+    small = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "p"), pd.DataFrame(small_rows, columns=["s", "p"])
+    )
+    large = pandas.NamedRelationalAlgebraFrozenSet(
+        ("s", "n"), pd.DataFrame(large_rows, columns=["s", "n"])
+    )
+    assert not isinstance(large._container["s"].dtype, np.dtype)
+    p = dict(small_rows)
+    if small_first:
+        joined = small.naturaljoin(large)
+        expected = {(k, p[k], n) for k, n in large_rows if k in p}
+    else:
+        joined = large.naturaljoin(small)
+        expected = {(k, n, p[k]) for k, n in large_rows if k in p}
+    assert set(joined.to_unnamed()) == expected
 
 
 def test_aggregate_sum_of_floats_is_python_sum(ra_module):
