@@ -624,6 +624,9 @@ engines:
       reported activation peaks, TF-IDF term frequencies, and a
       probabilistic choice over studies.
     python_init: "neurolang_apps.utils.engines.neurosynth.init"
+    # The embeddings of its studies, those of the engines extending it too.
+    text_embeddings:
+      study_abstracts: {dest: neurosynth}
 
   neurostore:
     extends: coordinate_meta_analysis
@@ -634,6 +637,9 @@ engines:
       abstracts, plus the abstracts, titles and LLM-extracted cognitive
       concepts and domains of the studies.
     python_init: "neurolang_apps.utils.engines.neurostore.init"
+    # The embeddings of its studies, those of the engines extending it too.
+    text_embeddings:
+      study_abstracts: {dest: neurostore}
     # Twice as many studies as neurosynth: 200 replicates keep a query
     # within the time and memory the query assistant gives it.
     resamplings:

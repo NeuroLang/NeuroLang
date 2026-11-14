@@ -548,6 +548,29 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
     assert "query_similarity" not in preds
 
 
+def test_engine_yaml_embeddings_shared_through_dest(engine_yaml, tmp_path):
+    """An engine extending one with ``dest`` reads its embeddings rather
+    than embedding the documents again under its own name."""
+    engine_yaml.write_text(
+        engine_yaml.read_text().replace(
+            "        function: query_similarity\n",
+            "        function: query_similarity\n        dest: mini\n",
+        ) + "  mini_plus:\n    extends: mini\n"
+    )
+    query = (
+        "ans(s) :- study(s) & (x == query_similarity('motor hand', s)) "
+        "& (x > 0.5)"
+    )
+    for name, calls in (("mini", 1), ("mini_plus", 0)):
+        nl = engine_registry.build_engine(
+            name, tmp_path / "data", yaml_path=engine_yaml
+        )
+        index = nl.text_embedding_indexes["docs"]
+        assert index.cache_path == tmp_path / "data/mini/embeddings/docs.npz"
+        assert set(nl.execute_datalog_program(query)) == {(2,), (4,)}
+        assert index.encoder.document_calls == calls
+
+
 def test_engine_yaml_unknown_source(engine_yaml, tmp_path):
     engine_yaml.write_text(
         engine_yaml.read_text().replace(

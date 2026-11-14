@@ -1735,9 +1735,9 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         return
     from neurolang_apps.utils import text_embeddings
 
-    emb_dir = data_dir / engine_name / "embeddings"
     nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
     for emb_name, emb_cfg in entries.items():
+        emb_dir = data_dir / emb_cfg.get("dest", engine_name) / "embeddings"
         encoder = text_embeddings.Specter2Encoder(
             model_dir=emb_dir / "models",
             **{

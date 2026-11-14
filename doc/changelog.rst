@@ -192,6 +192,12 @@ Unreleased
 
 **Bug fixes:**
 
+* The engines extending ``neurosynth`` or ``neurostore`` (``neurosynth_iit``,
+  ``neurostore_iit``, the ``_tracts`` ones) read the SPECTER2 embeddings of
+  their studies where those do (``dest`` of a ``text_embeddings`` entry),
+  instead of embedding all the abstracts again under their own name: the
+  first ``lift_llm`` or ``similar_study`` of a session took minutes on
+  Neurosynth and half an hour on NeuroStore.
 * The threshold sliders of the brain viewer sit over the values they set
   on the histogram. In percentile mode a thumb was placed at its percentile
   along the slider while the histogram's axis is the value, so for skewed

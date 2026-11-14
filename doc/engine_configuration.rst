@@ -359,7 +359,11 @@ the studies*)::
 ``model``, ``document_adapter`` and ``query_adapter`` default to the values
 above.  The engine build only reads the ids.  Texts are fetched and
 embedded on the first query that uses the function, and cached under
-``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
+``{data_dir}/{engine}/embeddings/``, or ``{data_dir}/{dest}/embeddings/``
+with ``dest``: ``neurosynth`` and ``neurostore`` set it to their own name,
+so that the engines extending them (``neurosynth_iit``...) read their
+embeddings instead of embedding all the abstracts again.  The embeddings can
+be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
 
