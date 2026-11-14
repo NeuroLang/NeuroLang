@@ -22,14 +22,15 @@ Unreleased
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T
-  diffusion MRI (Thiebaut de Schotten et al. 2020), 3.2 million streamlines
-  of at least 30 mm of 20 subjects (480 MB, 85 times the IIT tractogram's
+  diffusion MRI (Thiebaut de Schotten et al. 2020), 300,000 streamlines of
+  at least 30 mm of 20 subjects (44 MB, 8 times the IIT tractogram's
   38,000), mapped into the HCP's MNI152 space, the space of the atlases, by
-  an affine fitted on their subjects' own segmentations, with the
-  FreeSurfer segmentation of those subjects.  ``tools/hcp_connectivity``
-  downloads an OSF project (``osf``), checks and fits the space of a
-  tractogram (``check-space``, ``fit-space``) and makes the tractogram
-  within a size (``dense``).
+  an affine fitted on their subjects' own segmentations, all within the
+  brain (the 7 T data are distorted over the orbits and under the
+  cerebellum), with the FreeSurfer segmentation of those subjects.
+  ``tools/hcp_connectivity`` downloads an OSF project (``osf``), checks
+  and fits the space of a tractogram (``check-space``, ``fit-space``) and
+  makes the tractogram (``dense``).
 
 * The page of the REPL shows the answers of a program with several queries
   (``ans[name]``) in a tab each, named after its query, with its number of

@@ -1627,14 +1627,15 @@ engines:
         white matter query language: a novel approach for describing human
         white matter anatomy. Brain Structure and Function 221:4705-4721
         (2016). doi:10.1007/s00429-015-1179-4)
-    # A dense tractogram of 20 HCP subjects of Disconnectome7T and their
-    # group FreeSurfer segmentation, both in the HCP's MNI152 space
-    # (tools/hcp_connectivity, dense.py and space.py), in the dataset
+    # 300,000 streamlines of 20 HCP subjects of Disconnectome7T, all
+    # within the MNI152 brain, and their group FreeSurfer segmentation,
+    # both in the HCP's MNI152 space (tools/hcp_connectivity, dense.py and
+    # space.py), in the dataset
     # https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity at a tag.
     downloads:
       - url: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.1/tractography/disconnectome7t.tck
         name: disconnectome7t.tck
-        md5: 370816c89f32ae676380698a11103619
+        md5: 340d63f180395d40ca7f39ee80eae7b5
         dest: tracts/disconnectome7t
       - url: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.1/tractography/disconnectome7t_wmparc.nii.gz
         name: disconnectome7t_wmparc.nii.gz
@@ -1658,9 +1659,9 @@ engines:
       Neurosynth with a dense whole-brain tractogram and tract_querier's
       bundles: neurosynth_tracts after the commands that load a dense
       tractogram of the Human Connectome Project's 7 T diffusion MRI
-      (Disconnectome7T: 3.2 million streamlines of at least 30 mm of 20
-      subjects, 480 MB, downloaded into the data directory's
-      tracts/disconnectome7t), load the FreeSurfer segmentation of those
+      (Disconnectome7T: 300,000 streamlines of at least 30 mm of 20
+      subjects, all within the brain, 44 MB, downloaded into the data
+      directory's tracts/disconnectome7t), load the FreeSurfer segmentation of those
       subjects (the label most of them give each voxel; FreeSurfer's codes,
       so the term mapping freesurfer_aseg_aparc applies), both in the
       HCP's MNI152 space, the space of the atlases, index the one by the
@@ -1668,15 +1669,15 @@ engines:
       freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view
       work at the prompt. Denser than neurosynth_iit (38,000 streamlines of
       one template), and of real subjects: the bundles have more
-      streamlines, and smaller ones are found.
+      streamlines, and some IIT does not find (af, slf_i, ec) are found.
 
   neurostore_disconnectome7t:
     extends: [neurostore_tracts, disconnectome7t_tractogram]
     description: >
       NeuroStore with a dense whole-brain tractogram and tract_querier's
       bundles: neurostore_tracts after the commands of
-      neurosynth_disconnectome7t (Disconnectome7T, 3.2 million streamlines
-      of 20 HCP subjects at 7 T, and their FreeSurfer segmentation, in the
+      neurosynth_disconnectome7t (Disconnectome7T, 300,000 streamlines of
+      20 HCP subjects at 7 T, and their FreeSurfer segmentation, in the
       HCP's MNI152 space), so that ans(x) :- uf(x, "left") and .view work
       at the prompt.
 

@@ -137,17 +137,23 @@ tractography of 180 HCP subjects' 7 T diffusion MRI, one `.trk` each
    subjects by 0.016 to 0.023 and the fraction of their points in the
    white matter by 0.7 to 1.2 points.
 4. `python -m hcp_connectivity dense TRK_DIR HCP_DIR OUT --subjects 20
-   --affine hcp_connectivity/disconnectome7t_to_mni152.txt` (`dense.py`):
-   the streamlines of at least 30 mm of the first 20 subjects, mapped,
-   compressed within 0.5 mm (dipy), pooled, shuffled, as many as fit in
-   480 MB (3,227,189 of 7,570,429): `disconnectome7t.tck`; and
+   --affine hcp_connectivity/disconnectome7t_to_mni152.txt --count 300000
+   --brain` (`dense.py`): the streamlines of at least 30 mm of the first 20
+   subjects, mapped, compressed within 0.5 mm (dipy), pooled (7,570,429),
+   shuffled; with `--brain` only those whose points are all within the
+   MNI152 brain mask (nilearn's; 6,835,647: the 7 T data are distorted
+   over the orbits and under the cerebellum, where 8 to 16 % of the points
+   of a subject's streamlines leave its own brain, against 1.3 to 1.7 %
+   elsewhere); the first `--count` of them, within `--megabytes`:
+   `disconnectome7t.tck` (300,000 streamlines, 44 MB); and
    `disconnectome7t_wmparc.nii.gz`, the label most of the 20 subjects'
-   segmentations give each voxel. Needs dipy.
+   segmentations give each voxel. Needs dipy and nilearn.
 
-On a laptop (pandas backend), the engine loads and indexes it in 51 s; a
-bundle takes 52 s (cst) to 11 min (af), 20 GB at most; all 58 bundles of
-freesurfer_queries at once do not fit in 64 GB (a sample of 300,000
-streamlines: 12 min, 36 GB).
+The size is set by what the engine can query, not by the disk: on a laptop
+(pandas backend), all 58 bundles of freesurfer_queries at once take 12 min
+and 36 GB on 300,000 streamlines; on all 3.2 million that fit in 480 MB, one
+bundle takes 52 s (cst) to 11 min (af) and 20 GB, and all of them at once
+do not fit in 64 GB.
 
 ## Gradients
 
