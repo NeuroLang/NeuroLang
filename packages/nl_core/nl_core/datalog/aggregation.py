@@ -9,11 +9,13 @@ in the set ``Q``.
    Datalog and Recursive Query Processing.
    FNT in Databases. 5, 105–195 (2012).
 """
+import operator
 import typing
 
 import numpy
 
 from nl_expr.exceptions import (
+    ForbiddenExpressionError,
     ForbiddenUnstratifiedAggregation,
     NeuroLangException,
     NotConjunctiveExpressionNestedPredicates,
@@ -93,6 +95,15 @@ class BuiltinAggregationMixin:
         )
 
 
+# The operators of arithmetic, which compute a value of each row, not of
+# a group: in the head of a rule they are no aggregation.
+ARITHMETIC_OPERATORS = {
+    operator.add: "+", operator.sub: "-", operator.mul: "*",
+    operator.truediv: "/", operator.floordiv: "//", operator.mod: "%",
+    operator.pow: "**", operator.neg: "-",
+}
+
+
 class TranslateToLogicWithAggregation(TranslateToLogic):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Expression),
@@ -109,6 +120,17 @@ class TranslateToLogicWithAggregation(TranslateToLogic):
                 isinstance(arg, FunctionApplication)
                 and get_generic_type(type(arg)) is FunctionApplication
             ):
+                if (
+                    isinstance(arg.functor, Constant)
+                    and arg.functor.value in ARITHMETIC_OPERATORS
+                ):
+                    raise ForbiddenExpressionError(
+                        "An arithmetic operation in the head of a rule "
+                        f"({ARITHMETIC_OPERATORS[arg.functor.value]} in "
+                        f"{rule.consequent.functor.name}) is not an "
+                        "aggregation: compute its value in the body, as "
+                        "ans(x, v) :- r(x, n), (v == n / 2)"
+                    )
                 arg = AggregationApplication(*arg.unapply())
             consequent_arguments += (arg,)
 

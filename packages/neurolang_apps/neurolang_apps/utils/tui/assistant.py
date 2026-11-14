@@ -258,7 +258,8 @@ def _done_event(result) -> dict:
     return {
         "event": "done", "valid": result.valid, "query": result.query,
         "explanation": result.explanation, "error": result.error,
-        "calls": result.calls, "tokens": sum(result.usage.values()),
+        "calls": result.calls, "tokens": result.usage.get("input", 0)
+        + result.usage.get("output", 0),
         "seconds": result.seconds, "verified": result.verified,
         "back_translation": result.back_translation,
         "verification": result.verification,
@@ -342,6 +343,8 @@ def _show_result(app, result) -> None:
     usage = f"{result.calls} LLM calls"
     if tokens:
         usage += f", {tokens} tokens"
+    if result.usage.get("cached"):
+        usage += f", {result.usage['cached']} read from the cache"
     app.err_console.print(f"[dim]{usage}[/dim]")
     if result.query:
         _switch_language(app, result.language)

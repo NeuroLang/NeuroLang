@@ -101,7 +101,8 @@ class AgentResult:
     """
     The outcome of an agent: its query, if *valid*, or its *error*.
 
-    *usage* counts the tokens sent (``input``) and received
+    *usage* counts the tokens sent (``input``, of which ``cached`` read
+    from the cache of the provider) and received
     (``output``), *calls* the requests to the model and *seconds* the
     time it took. The ReAct agent translates its query back into English
     (*back_translation*) and sets *verified* to whether the model judged
