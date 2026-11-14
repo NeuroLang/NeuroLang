@@ -213,9 +213,9 @@ def test_the_downloads_are_kept_even_when_the_build_fails(
     monkeypatch.setattr(bundle, "build_engine", build)
     with pytest.raises(requests.HTTPError):
         bundle.main(tmp_path / "out", downloads=downloads)
-    # neurosynth is left out, and the default, neurosynth_iit, stops the
-    # build: each found the downloads kept for it
-    assert found == [["fsl/atlas.nii.gz"], []]
+    # neurosynth and neurostore are left out, and the default,
+    # neurosynth_iit, stops the build: each found the downloads kept for it
+    assert found == [["fsl/atlas.nii.gz"], ["release.parquet"], []]
     kept = downloads / "neurosynth"
     assert sorted(
         str(p.relative_to(kept)) for p in kept.rglob("*") if p.is_file()
@@ -260,7 +260,10 @@ def test_the_bundle_names_the_data_and_files_of_each_engine(
     # tracts share those of NeuroStore
     assert described["default"] == "neurosynth_iit"
     assert list(described["engines"]) == [
-        "neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit"]
+        "neurosynth", "neurostore", "neurosynth_iit", "neurostore_iit",
+        "neurosynth_disconnectome7t", "neurostore_disconnectome7t"]
+    assert described["engines"]["neurosynth_disconnectome7t"]["files"] == {
+        "neurosynth/model.npz": ["neurosynth-model.npz"]}
     assert described["engines"]["neurosynth_iit"]["files"] == {
         "neurosynth/model.npz": ["neurosynth-model.npz"]}
     neurostore = bundle.acknowledgements("neurostore")
@@ -314,11 +317,12 @@ def test_the_embeddings_of_an_engine_are_kept_as_those_of_another(
 def test_an_engine_that_cannot_be_built_is_left_out_unless_it_is_the_default(
     bundle, monkeypatch, tmp_path, capsys
 ):
-    _fake_bundle(bundle, monkeypatch,
-                 failing={"neurostore", "neurostore_iit"})
+    _fake_bundle(bundle, monkeypatch, failing={
+        "neurostore", "neurostore_iit", "neurostore_disconnectome7t"})
     bundle.main(tmp_path)
     described = json.loads((tmp_path / "bundle.json").read_text())
-    assert list(described["engines"]) == ["neurosynth", "neurosynth_iit"]
+    assert list(described["engines"]) == [
+        "neurosynth", "neurosynth_iit", "neurosynth_disconnectome7t"]
     assert "neurostore is left out" in capsys.readouterr().out
     _fake_bundle(bundle, monkeypatch, failing={"neurosynth_iit"})
     with pytest.raises(RuntimeError):
@@ -518,3 +522,21 @@ def test_the_credits_name_each_source_of_an_engine(bundle):
                    "SPECTER2", "MNI152 template", "IIT Human Brain Atlas",
                    "tract_querier"):
         assert any(source in text for text in texts), source
+
+
+def test_the_engines_of_the_page_are_those_of_engines_yaml_with_a_label(
+    bundle
+):
+    """engines.yaml names the engines of the page and their labels, an
+    engine's own: neurosynth_tracts, which extends neurosynth, has none."""
+    import yaml
+
+    engines = yaml.safe_load(bundle.ENGINES_YAML.read_text())["engines"]
+    assert bundle.ENGINES == tuple(
+        name for name, entry in engines.items() if "label" in (entry or {}))
+    assert bundle.LABELS["neurosynth_disconnectome7t"] == (
+        "Neurosynth + 7 T tracts")
+    assert "neurosynth_tracts" not in bundle.ENGINES
+    assert bundle.embeddings_from("neurostore_disconnectome7t") == (
+        "neurostore")
+    assert bundle.embeddings_from("neurosynth") is None

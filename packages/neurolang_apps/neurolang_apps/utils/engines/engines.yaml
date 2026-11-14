@@ -1306,6 +1306,9 @@ engines:
 
   neurosynth:
     extends: coordinate_meta_analysis
+    # The name of the engine on the REPL page, which offers the engines
+    # with one (doc/make_repl_bundle.py reads it here, not inherited).
+    label: "Neurosynth"
     description: >
       Neurosynth database — forward and reverse inference over
       reported activation peaks, TF-IDF term frequencies, and a
@@ -1323,6 +1326,7 @@ engines:
 
   neurostore:
     extends: coordinate_meta_analysis
+    label: "NeuroStore"
     description: >
       NeuroStore database (the one NiMARE fetches with
       ``fetch_neurostore``, behind Neurosynth Compose) — the predicates of
@@ -1639,6 +1643,7 @@ engines:
 
   neurosynth_iit:
     extends: [neurosynth_tracts, iit_tractogram]
+    label: "Neurosynth + tracts"
     description: >
       Neurosynth with a whole-brain tractogram and tract_querier's bundles:
       neurosynth_tracts after the commands that load the whole-brain
@@ -1664,6 +1669,7 @@ engines:
 
   neurostore_iit:
     extends: [neurostore_tracts, iit_tractogram]
+    label: "NeuroStore + tracts"
     description: >
       NeuroStore with a whole-brain tractogram and tract_querier's bundles:
       neurostore_tracts after the commands of neurosynth_iit, which load the
@@ -1721,6 +1727,7 @@ engines:
 
   neurosynth_disconnectome7t:
     extends: [neurosynth_tracts, disconnectome7t_tractogram]
+    label: "Neurosynth + 7 T tracts"
     description: >
       Neurosynth with a dense whole-brain tractogram and tract_querier's
       bundles: neurosynth_tracts after the commands that load a dense
@@ -1739,6 +1746,7 @@ engines:
 
   neurostore_disconnectome7t:
     extends: [neurostore_tracts, disconnectome7t_tractogram]
+    label: "NeuroStore + 7 T tracts"
     description: >
       NeuroStore with a dense whole-brain tractogram and tract_querier's
       bundles: neurostore_tracts after the commands of
