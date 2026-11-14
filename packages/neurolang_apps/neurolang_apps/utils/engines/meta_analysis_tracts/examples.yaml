@@ -23,4 +23,5 @@ assistant_examples:
       concept_definition(t, d) :- cogat_concept(c, t), skos:definition(c, d)
       about(t, s) :- concept_definition(t, d), similar_study(d, s), selected_study(s)
       p_concept_given_uf(t, PROB) :- about(t, s) // uf_study(s)
-      ans(t, p) :- p_concept_given_uf(t, p)
+      ans[uf_parcels](parcel) :- uf_parcel(parcel)
+      ans[concepts](concept, probability) :- p_concept_given_uf(concept, probability)

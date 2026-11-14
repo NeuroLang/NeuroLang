@@ -9,7 +9,7 @@ import rdflib
 from rdflib import BNode, Literal, URIRef
 from rdflib.util import guess_format
 from rdflib.extras.infixowl import EnumeratedClass
-from rdflib.namespace import OWL, RDF, RDFS, SKOS
+from rdflib.namespace import OWL, RDF, RDFS, SKOS, XSD
 
 from nl_expr.config import config
 from nl_expr.exceptions import NeuroLangException, NeuroLangNotImplementedError
@@ -24,6 +24,23 @@ from .constraints_representation import RightImplication
 
 
 NAMING_STYLES = ("local", "prefixed")
+# The constraints ``(antecedent, consequent)`` of ``p axiom q``, or of
+# ``p rdf:type axiom``, over the variables x, y, z.
+PROPERTY_AXIOMS = {
+    RDFS.subPropertyOf: lambda p, q, x, y, z: [(p(x, y), q(x, y))],
+    OWL.equivalentProperty: lambda p, q, x, y, z: [
+        (p(x, y), q(x, y)), (q(x, y), p(x, y))
+    ],
+    OWL.inverseOf: lambda p, q, x, y, z: [
+        (p(x, y), q(y, x)), (q(y, x), p(x, y))
+    ],
+    RDFS.domain: lambda p, q, x, y, z: [(p(x, y), q(x))],
+    RDFS.range: lambda p, q, x, y, z: [(p(x, y), q(y))],
+    OWL.SymmetricProperty: lambda p, q, x, y, z: [(p(x, y), p(y, x))],
+    OWL.TransitiveProperty: lambda p, q, x, y, z: [
+        (Conjunction((p(x, y), p(y, z))), p(x, z))
+    ],
+}
 _PREFIXED_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*:[A-Za-z_][A-Za-z0-9_-]*\Z")
 
 
@@ -97,6 +114,7 @@ class OntologyParser:
         rules using the rule consequent functor.
         """
         self._parse_classes()
+        self._parse_properties()
         self._parse_related_individuals()
 
         return (
@@ -140,6 +158,29 @@ class OntologyParser:
                         self._parse_property(entity, prop, value)
                     else:
                         raise NeuroLangNotImplementedError
+
+    def _parse_properties(self):
+        """Constraints of the property axioms (see ``PROPERTY_AXIOMS``)
+        between named properties and classes; the others are dropped."""
+        for p, axiom, q in self.rdfGraph:
+            if axiom == RDF.type:
+                axiom = q
+            if axiom not in PROPERTY_AXIOMS or (
+                axiom == RDFS.range
+                and (q == RDFS.Literal or str(q).startswith(str(XSD)))
+            ):
+                continue
+            if isinstance(p, BNode) or isinstance(q, BNode):
+                warnings.warn(f"Not implemented yet: {axiom} on a BNode")
+                continue
+            p, q = Symbol(self._parse_name(p)), Symbol(self._parse_name(q))
+            x, y, z = Symbol.fresh(), Symbol.fresh(), Symbol.fresh()
+            self._categorize_constraints([
+                RightImplication(antecedent, consequent)
+                for antecedent, consequent in PROPERTY_AXIOMS[axiom](
+                    p, q, x, y, z
+                )
+            ])
 
     def _get_all_classes(self):
         """

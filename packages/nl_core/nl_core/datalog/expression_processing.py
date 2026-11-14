@@ -540,9 +540,16 @@ def dependency_matrix(datalog, rules=None, instance=None):
         existential_symbols = set(
             rule.functor for rule in datalog.existential_rules.keys()
         )
+        # A predicate only in constraint bodies is an empty relation.
+        signature = set(
+            atom.functor
+            for formula in datalog.constraints().formulas
+            for atom in extract_logic_atoms(formula.antecedent)
+        )
     else:
         constraint_symbols = set()
         existential_symbols = set()
+        signature = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -565,6 +572,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
             elif (
                 isinstance(functor, Symbol)
                 and functor not in previous_symbols
+                and functor not in signature
                 and (
                     functor not in datalog.symbol_table
                     or functor in datalog.intensional_database()

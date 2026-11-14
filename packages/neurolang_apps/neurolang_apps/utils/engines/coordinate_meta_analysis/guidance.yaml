@@ -10,8 +10,8 @@ assistant_guidance: >
   a PROB rule when it counts those with a given probability.  A
   question asking for a list (which studies, list the parcels of a
   network, which terms a study mentions) gets the entities themselves,
-  without PROB: ans(s) :- mentions(s, 'pain'), or ans(s) :- study(s),
-  ~mentions(s, 'pain').  The regions not activated by the studies
+  without PROB: ans(study) :- mentions(study, 'pain'), or
+  ans(study) :- study(study), ~mentions(study, 'pain').  The regions not activated by the studies
   about a topic get their probability of not being activated, given
   the topic: not_active(l, s) :- destrieux(l, r), selected_study(s),
   ~destrieux_activated(l, s), then PROB[not_active(l, s) // topic(s)].
