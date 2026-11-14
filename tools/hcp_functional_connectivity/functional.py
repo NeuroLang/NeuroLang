@@ -69,9 +69,10 @@ def tian_averaging(work: Path, axis) -> sp.csr_matrix:
     parcels = np.zeros(axis.size - N_CORTEX, dtype=int)
     for name, rows, model in axis.iter_structures():
         if "CORTEX" not in name:
+            start, stop, _ = rows.indices(axis.size)
             i, j, k = model.voxel.T
-            parcels[rows.start - N_CORTEX:rows.stop - N_CORTEX] = \
-                labels[i, j, k]
+            parcels[start - N_CORTEX:stop - N_CORTEX] = labels[i, j, k]
+    assert (np.bincount(parcels, minlength=labels.max() + 1)[1:] > 0).all()
     return averaging(parcels, labels.max())
 
 
