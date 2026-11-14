@@ -23,8 +23,10 @@ pandas in `WORK/.venv`, and this repository in `WORK/NeuroLang`:
      with scp.
    Both skip what is done, so they resume, and end with `STAGING/DONE`,
    which ends the workers.
-4. `python combine.py WORK OUT STAGING/glasser OUT_DIR`: the mean matrices
-   (`hcp_structural_connectivity.npz`), a TSV per atlas, and
+4. `python combine.py WORK OUT STAGING/glasser OUT_DIR`: the mean and
+   standard deviation matrices of each atlas (`<atlas>_mean.parquet`,
+   `<atlas>_sd.parquet`, their columns and index the regions), the
+   subjects (`subjects.parquet`), a TSV per atlas, and
    `validation.tsv`, our Glasser matrices against the authors', subject by
    subject.
 

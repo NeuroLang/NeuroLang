@@ -5,20 +5,24 @@ of streamlines between two parcels.
 
 Writes, in OUT_DIR:
 
-- ``hcp_structural_connectivity.npz``: for each atlas ``a``, ``a`` (the
-  mean matrix, its diagonal the streamlines within a parcel, counted
-  twice), ``a:sd`` (their standard deviation across subjects),
-  ``a:names`` and ``subjects``;
+- ``<a>_mean.parquet`` and ``<a>_sd.parquet`` for each atlas ``a``: the
+  mean over the subjects of the streamlines between two parcels, and their
+  standard deviation, square matrices whose columns and index (``region``)
+  are the parcels, named as those of the NeuroLang engines; the diagonal
+  is the streamlines within a parcel, counted twice;
+- ``subjects.parquet``: the subjects and their streamlines (counted twice);
 - ``<a>.tsv.gz`` for each atlas: ``region1  region2  streamlines``, the
   mean between two distinct parcels, both ways round, to the thousandth,
-  the pairs no streamline joins (under a thousandth) left out; the regions are named as the parcels of the
-  NeuroLang engines;
+  the pairs no streamline joins (under a thousandth) left out;
 - ``validation.tsv``: for each subject the authors also parcellated with
   Glasser's atlas, the correlation of the streamlines between distinct
   parcels of theirs and of ours, and the fraction of the streamlines on
   which they differ.
 
     python combine.py WORK OUT GLASSER_DIR OUT_DIR
+
+``python combine.py --from-npz NPZ OUT_DIR`` writes the parquet files of
+the ``hcp_structural_connectivity.npz`` an earlier version wrote.
 """
 
 import sys
@@ -26,6 +30,27 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+def write_parquet(arrays, atlases: list, target: Path) -> None:
+    """Write the mean and the standard deviation matrices of each atlas,
+    and the subjects, in parquet files of *target*."""
+    for a in atlases:
+        regions = pd.Index([str(x) for x in arrays[f"{a}:names"]],
+                           name="region")
+        for statistic, key in (("mean", a), ("sd", f"{a}:sd")):
+            pd.DataFrame(arrays[key], index=regions, columns=list(regions)
+                         ).to_parquet(target / f"{a}_{statistic}.parquet")
+    pd.DataFrame({"subject": [str(s) for s in arrays["subjects"]],
+                  "streamlines": arrays["totals"]}).to_parquet(
+        target / "subjects.parquet", index=False)
+
+
+def from_npz(npz: Path, target: Path) -> None:
+    arrays = np.load(npz)
+    atlases = [k for k in arrays.files
+               if ":" not in k and k not in ("subjects", "totals")]
+    write_parquet(arrays, atlases, target)
 
 
 def main(work: Path, out: Path, glasser_dir: Path, target: Path) -> None:
@@ -70,7 +95,7 @@ def main(work: Path, out: Path, glasser_dir: Path, target: Path) -> None:
             "region1": labels[i[kept]], "region2": labels[j[kept]],
             "streamlines": np.round(mean[i[kept], j[kept]], 3),
         }).to_csv(target / f"{a}.tsv.gz", sep="\t", index=False)
-    np.savez_compressed(target / "hcp_structural_connectivity.npz", **arrays)
+    write_parquet(arrays, names, target)
     validation = pd.DataFrame(rows)
     validation.to_csv(target / "validation.tsv", sep="\t", index=False)
     print(f"{n} subjects; streamlines per subject (counted twice): "
@@ -82,4 +107,7 @@ def main(work: Path, out: Path, glasser_dir: Path, target: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(*map(Path, sys.argv[1:5]))
+    if sys.argv[1] == "--from-npz":
+        from_npz(Path(sys.argv[2]), Path(sys.argv[3]))
+    else:
+        main(*map(Path, sys.argv[1:5]))
