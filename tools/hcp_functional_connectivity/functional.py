@@ -78,8 +78,10 @@ def tian_averaging(work: Path, axis) -> sp.csr_matrix:
 
 def connectivity(series: np.ndarray) -> np.ndarray:
     """The Fisher z of the correlations of the columns of *series*, its
-    diagonal 0."""
-    r = np.corrcoef(series, rowvar=False)
+    diagonal 0; NaN those of a region without grayordinates (two parcels
+    of Schaefer's 1000 lie under the medial wall)."""
+    with np.errstate(invalid="ignore", divide="ignore"):
+        r = np.corrcoef(series, rowvar=False)
     np.fill_diagonal(r, 0)
     return np.arctanh(np.clip(r, -0.999999, 0.999999))
 
