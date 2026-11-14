@@ -554,10 +554,20 @@ class TestSquallGrammarCompletion:
         # build the grammar first: this measures each completion, not the
         # one-time construction of the parser (about 4 times longer)
         _words(squall_app, "obtain every ")
-        start = time.perf_counter()
-        words = _words(squall_app, sentence)
-        _words(squall_app, "obtain every study that ")
-        assert (time.perf_counter() - start) / 2 < 0.2
+
+        # The fastest of 3 rounds: the time of the code, not of a busy
+        # machine (CI's). The two sentences alternate, as the options of
+        # the last one are cached.
+        texts = (sentence, "obtain every study that ")
+        times = {text: [] for text in texts}
+        for _ in range(3):
+            for text in texts:
+                start = time.perf_counter()
+                found = _words(squall_app, text)
+                times[text].append(time.perf_counter() - start)
+                if text == sentence:
+                    words = found
+        assert sum(min(t) for t in times.values()) / 2 < 0.2
         assert "mentions" in words and "has" in words
 
     def test_long_sentence_falls_back(self, squall_app):
