@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, gt, lt
 from typing import AbstractSet
 
 import pytest
@@ -19,6 +19,10 @@ from nl_expr.logic import (
     Negation,
     Union,
     UniversalPredicate,
+)
+from nl_expr.logic.expression_processing import (
+    extract_logic_atoms,
+    extract_logic_free_variables,
 )
 from ...relational_algebra import (
     ColumnInt,
@@ -49,6 +53,8 @@ from .test_lifted_negation import check
 
 TNRA = TranslateToNamedRA()
 EQ = Constant(eq)
+GT = Constant(gt)
+LT = Constant(lt)
 
 
 def test_has_separator_variable_existential():
@@ -1327,3 +1333,60 @@ def test_negated_component_without_the_unate_check(check_unate_off):
         }
 
     check(probabilistic_facts, {}, rules, Implication(ans(x), H(x)), oracle)
+
+
+def test_extremum_conjunct_of_a_subquery():
+    """In S(x, y) ∧ V(z, w) ∧ y < w, the greatest w of ∃z V(z, w), whose
+    events for different values of w have different tuples, implies the
+    query; y is no candidate in R(x) ∧ S(x, y) ∧ y < w, ∃x R(x) ∧ S(x, y)
+    sharing R(x) across the values of y, nor w with a comparison x < z of
+    a variable of its subquery, or within a term."""
+    R, S, V = (Symbol(n) for n in ("R", "S", "V"))
+    x, y, z, w = (Symbol(n) for n in ("x", "y", "z", "w"))
+    symbol_table = {
+        s: ProbabilisticFactSet(Symbol(s.name.lower()), Constant(0))
+        for s in (R, S, V)
+    }
+    variables = {x, y, z, w}
+    extremum = dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, w)), symbol_table
+    )
+    assert isinstance(extremum, Negation)
+    assert extract_logic_free_variables(extremum) == {w}
+    atoms = extract_logic_atoms(extremum)
+    assert {atom.functor for atom in atoms} == {V, GT}
+    assert next(a for a in atoms if a.functor == GT).args[1] == w
+    assert dalvi_suciu_lift._extremum_conjunct(
+        y, variables, (R(x), S(x, y), V(z, w), LT(y, w)), symbol_table
+    ) is None
+    assert dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, w), LT(x, z)), symbol_table
+    ) is None
+    assert dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, Constant(abs)(w))),
+        symbol_table
+    ) is None
+
+
+def test_order_across_subqueries():
+    """∃x ∃y ∃z R(x) ∧ S(x, y) ∧ T(z) ∧ y < z is projected on the greatest
+    value m of T, ∃x R(x) ∧ ∃y (S(x, y) ∧ y < m) being lifted with m bound
+    by the pairs of values of S and T in order."""
+    R, S, T, Z, ans = (Symbol(n) for n in ("R", "S", "T", "Z", "ans"))
+    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(R, [(0.5, 1)])
+    cpl_program.add_probabilistic_facts_from_tuples(
+        S, [(0.6, 1, 1), (0.7, 1, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(T, [(0.8, 2), (0.4, 4)])
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), S(x, y), T(z), LT(y, z)))),
+    )))
+    result = dalvi_suciu_lift.solve_succ_query(
+        Implication(ans(), Z()), cpl_program
+    )
+    expected = 0.5 * (0.4 * (1 - 0.4 * 0.3) + 0.6 * 0.8 * 0.6)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )

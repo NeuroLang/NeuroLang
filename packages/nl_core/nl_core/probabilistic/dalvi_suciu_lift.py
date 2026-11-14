@@ -100,6 +100,7 @@ from .probabilistic_ra_utils import (
     GetProbabilisticSetAtom,
     NonLiftable,
     ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
     classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
@@ -744,10 +745,58 @@ def _disjoint_projection_plan(rule, symbol_table):
     if split is None:
         return None
     projected, other_variables, conjuncts = split
-    return _projected_plan(
+    plan = _projected_plan(
         rule.antecedent, Conjunction(conjuncts), projected, other_variables,
         rap.DisjointProjection, symbol_table
     )
+    if plan is None:
+        conjuncts = _comparisons_as_relations(
+            projected, other_variables, conjuncts, symbol_table
+        )
+        if conjuncts is not None:
+            plan = _projected_plan(
+                rule.antecedent, Conjunction(conjuncts), projected,
+                other_variables, rap.DisjointProjection, symbol_table
+            )
+    return plan
+
+
+def _comparisons_as_relations(projected, quantified, conjuncts, symbol_table):
+    """The conjuncts with each comparison `t ⊲ v` of a `projected`
+    variable `v` and a `quantified` one `t` replaced by `L(t, v)`, `L`
+    being the deterministic relation of the values of `t` and `v` in the
+    tuples of conjunct atoms `A(t)` and `B(v)` which satisfy it, as
+    `A(t) ∧ B(v) ∧ t ⊲ v ≡ A(t) ∧ B(v) ∧ L(t, v)`; `L` binds `v` where
+    only the comparison has it. None if there is no such comparison or
+    an atom or the tuples of its relation are missing.
+    """
+    atoms = [
+        f for f in conjuncts
+        if isinstance(f, FunctionApplication) and isinstance(f.functor, Symbol)
+    ]
+    replaced = tuple(
+        f for f in conjuncts if is_comparison(f) and
+        len(projected & set(f.args)) == len(quantified & set(f.args)) == 1
+    )
+    if not replaced:
+        return None
+    relations = {}
+    for comparison in replaced:
+        domains = tuple(
+            next((atom for atom in atoms if term in atom.args), None)
+            for term in comparison.args
+        )
+        if any(domain is None for domain in domains):
+            return None
+        relations[comparison] = _materialised_atom(
+            add_existentials_except(
+                Conjunction(domains + (comparison,)), set(comparison.args)
+            ),
+            comparison.args, symbol_table
+        )
+    if any(r is None for r in relations.values()):
+        return None
+    return tuple(relations.get(f, f) for f in conjuncts)
 
 
 def _separator_projection_plan(rule, symbol_table):
@@ -882,51 +931,79 @@ def _split_exclusive_projection(antecedent, symbol_table):
     variables, body = _existential_variables_and_body(antecedent, True)
     conjuncts = extract_conjuncts(body)
     for variable in sorted(variables, key=lambda v: v.name):
-        extremum = _extremum_conjunct(variable, variables, conjuncts)
+        extremum = _extremum_conjunct(
+            variable, variables, conjuncts, symbol_table
+        )
         if extremum is not None:
             return {variable}, variables - {variable}, conjuncts + (extremum,)
     return None
 
 
-def _extremum_conjunct(variable, variables, conjuncts):
-    """`¬∃w (R(ū[w/v]) ∧ w < v)`, `v` being *variable*, if `R(ū)` is the
-    only conjunct with `v` but comparisons, `v` is its only variable of
-    `variables`, and `v` is the lesser side of every comparison with it,
-    whose other side is a term without `v`, or the same with `w > v` if
-    it is the greater side, or None. The
-    least (greatest) value of `v` for which `R(ū)` holds satisfies
-    the comparisons of any other value, so the conjunct is implied.
+def _extremum_conjunct(variable, variables, conjuncts, symbol_table):
+    """`¬∃w ∃Y' (K[w/v, Y'/Y] ∧ w < v)`, `v` being *variable*, if `v` is
+    the lesser side of every comparison with it, whose other side is a
+    term without `v`, `K` being the conjuncts
+    with `v` but these comparisons and those connected to them by the
+    other variables `Y` of `variables`, which the comparisons do not have,
+    and `K` an atom whose only variable of `variables` is `v` or `∃Y K`
+    independent for different values of `v`; or the same with `w > v` if
+    it is the greater side, or None. The least (greatest) value of `v` for
+    which `∃Y K` holds satisfies the comparisons of any other value, so
+    the conjunct is implied.
     """
     sides = set()
-    others = []
-    for conjunct in conjuncts:
-        if variable not in extract_logic_free_variables(conjunct):
-            continue
-        if not is_comparison(conjunct):
-            others.append(conjunct)
-        elif conjunct.functor.value in ORDER_SIDES and variable in (
-            conjunct.args
-        ) and [
+    comparisons = [
+        f for f in conjuncts
+        if is_comparison(f) and variable in extract_logic_free_variables(f)
+    ]
+    for comparison in comparisons:
+        if comparison.functor.value not in ORDER_SIDES or variable not in (
+            comparison.args
+        ) or [
             variable in extract_logic_free_variables(arg)
-            for arg in conjunct.args
-        ].count(True) == 1:
-            sides.add(ORDER_SIDES[conjunct.functor.value][
-                conjunct.args.index(variable)
-            ])
-        else:
+            for arg in comparison.args
+        ].count(True) != 1:
             return None
-    if not (
-        len(sides) == 1 and len(others) == 1 and
-        isinstance(others[0], FunctionApplication) and
-        isinstance(others[0].functor, Symbol) and
-        variables & set(others[0].args) == {variable}
+        sides.add(ORDER_SIDES[comparison.functor.value][
+            comparison.args.index(variable)
+        ])
+    formulas = Conjunction(tuple(
+        f for f in conjuncts if f not in comparisons
+    ))
+    group = next(
+        (
+            Conjunction(tuple(formulas.formulas[i] for i in component))
+            for component in connected_components(
+                args_co_occurence_graph(formulas, variables)
+            )
+            if any(
+                variable in extract_logic_free_variables(formulas.formulas[i])
+                for i in component
+            )
+        ),
+        None
+    )
+    if len(sides) != 1 or group is None:
+        return None
+    others = extract_logic_free_variables(group) & variables - {variable}
+    if (
+        others & extract_logic_free_variables(Conjunction(comparisons)) or
+        not _separates(
+            variable, add_existentials_except(
+                group, extract_logic_free_variables(group) - others
+            ), symbol_table
+        ) and not (len(group.formulas) == 1 and not others)
     ):
         return None
     w = Symbol.fresh()
-    return Negation(ExistentialPredicate(w, Conjunction((
-        ReplaceExpressionWalker({variable: w}).walk(others[0]),
-        sides.pop()(w, variable)
-    ))))
+    renaming = {variable: w, **{y: Symbol.fresh() for y in others}}
+    return Negation(add_existentials_except(
+        Conjunction(
+            ReplaceExpressionWalker(renaming).walk(group).formulas +
+            (sides.pop()(w, variable),)
+        ),
+        extract_logic_free_variables(group) - others
+    ))
 
 
 class ExcludingNegations(PatternWalker):
@@ -2063,24 +2140,16 @@ def disjoint_separator(query, symbol_table):
             ))
         else:
             deterministic = add_existentials_except(deterministic, kept)
-        relations = {
-            atom.functor: _tuples_of(atom, symbol_table)
-            for atom in extract_logic_atoms(deterministic)
-            if isinstance(atom.functor, Symbol)
-        }
-        if all(r is not None for r in relations.values()):
-            # D is computed as a set, the choice atoms in it being
-            # replaced by their tuples.
-            columns = sorted(kept, key=lambda v: v.name)
-            relation, functor = Symbol.fresh(), Symbol.fresh()
-            symbol_table[relation] = materialised_relation(
-                deterministic, columns, relations
-            )
-            symbol_table[functor] = DeterministicFactSet(relation)
+        # D is computed as a set, the choice atoms in it being
+        # replaced by their tuples.
+        deterministic_atom = _materialised_atom(
+            deterministic, sorted(kept, key=lambda v: v.name), symbol_table
+        )
+        if deterministic_atom is not None:
             plan = reduce(
                 rap.NaturalJoin,
                 (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
-                TranslateToNamedRA().walk(functor(*columns)),
+                TranslateToNamedRA().walk(deterministic_atom),
             )
             return True, rap.DisjointProjection(plan, attributes)
         # Otherwise D(a) is given by its support, the choice atoms in it
@@ -2114,9 +2183,28 @@ def disjoint_separator(query, symbol_table):
     return True, rap.DisjointProjection(plan, attributes)
 
 
+def _materialised_atom(formula, columns, symbol_table):
+    """The atom, on the variables `columns`, of a deterministic relation
+    of the tuples of `formula`, its relations being replaced by their
+    tuples, or None if one of them is not known as a set."""
+    relations = {
+        atom.functor: _tuples_of(atom, symbol_table)
+        for atom in extract_logic_atoms(formula)
+        if isinstance(atom.functor, Symbol)
+    }
+    if any(r is None for r in relations.values()):
+        return None
+    relation, functor = Symbol.fresh(), Symbol.fresh()
+    symbol_table[relation] = materialised_relation(
+        formula, columns, relations
+    )
+    symbol_table[functor] = DeterministicFactSet(relation)
+    return functor(*columns)
+
+
 def _tuples_of(atom, symbol_table):
-    """The set of the tuples of a deterministic or choice atom, without
-    their probabilities, or None if it is not known as a set."""
+    """The set of the tuples of an atom, without their probabilities, or
+    None if it is not known as a set."""
     entry = symbol_table[atom.functor]
     relation = entry.relation
     if isinstance(relation, Symbol):
@@ -2126,7 +2214,7 @@ def _tuples_of(atom, symbol_table):
     ):
         return relation
     if (
-        isinstance(entry, ProbabilisticChoiceSet) and
+        isinstance(entry, (ProbabilisticChoiceSet, ProbabilisticFactSet)) and
         isinstance(relation, Constant[AbstractSet]) and
         entry.probability_column == int2columnint_constant(0)
     ):
@@ -2520,6 +2608,9 @@ def _functions_of(atom, variables, symbol_table):
             )
         relation = symbol_table[relation]
     relation = relation.value
+    if relation.is_empty():
+        # Its columns may be unknown, and its atom is false.
+        return set()
     key = tuple(
         relation.columns[i]
         for i, arg in enumerate(atom.args) if arg in variables
