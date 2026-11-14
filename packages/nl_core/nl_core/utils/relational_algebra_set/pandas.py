@@ -799,8 +799,19 @@ class NamedRelationalAlgebraFrozenSet(
             for name in taken
         ):
             return None
-        index = pd.Index(small_key)
-        keys = large_key.to_numpy()
+        if isinstance(large_key.dtype, np.dtype):
+            index = pd.Index(small_key)
+            keys = large_key.to_numpy()
+        else:
+            # Keys such as pandas' strings, held by Arrow, are looked up as
+            # their codes: those of the small relation's keys, unique and
+            # first, are their positions.
+            codes, _ = pd.factorize(
+                pd.concat([small_key, large_key], ignore_index=True),
+                use_na_sentinel=False,
+            )
+            index = pd.RangeIndex(len(small_key))
+            keys = codes[len(small_key):]
         chunks = range(0, len(keys), _CHUNK_ROWS)
         # The rows matched, then the columns taken, a chunk at a time: the
         # positions of the rows matched are never whole.

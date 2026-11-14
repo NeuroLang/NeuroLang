@@ -139,6 +139,13 @@ Unreleased
   or words.  The guidance and the examples of the
   ``coordinate_meta_analysis`` engines say so.
 
+**Performance:**
+
+* A natural join on a unique key of strings, such as the NeuroStore study
+  ids joined with the probabilities of ``selected_study``, looks the keys
+  up by their codes: ``uniformity('pain', i, j, k, u)`` on ``neurostore``
+  takes 23 s instead of 81 s (2 mm grid).
+
 **Bug fixes:**
 
 * Checking or running a query on an ontology's predicates, as
