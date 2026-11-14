@@ -85,7 +85,31 @@ def test_openai_request_and_tool_calls(monkeypatch):
     assert reply.tool_calls == [
         ToolCall("c3", "run_query", {"query": "ans(s) :- study(s)"})
     ]
-    assert reply.usage == {"input": 12, "output": 3}
+    assert "cache_control" not in body
+    assert reply.usage == {"input": 12, "output": 3, "cached": 0}
+
+
+def test_openrouter_caches_the_prompts_of_claude(monkeypatch):
+    """OpenRouter is asked to cache Claude's prompts, and says how much."""
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "ans(s)"}}],
+            "usage": {"prompt_tokens": 1200, "completion_tokens": 3,
+                      "prompt_tokens_details": {"cached_tokens": 1000}},
+        })
+
+    monkeypatch.setenv("TEST_LLM_KEY", "secret")
+    provider = ProviderConfig(
+        "openrouter", "openai", "anthropic/claude-sonnet-5.5",
+        "https://openrouter.test/api/v1", api_key_env="TEST_LLM_KEY",
+    )
+    llm = make_client(provider, transport=httpx.MockTransport(handler))
+    reply = llm.complete(CONVERSATION)
+    assert bodies[0]["cache_control"] == {"type": "ephemeral"}
+    assert reply.usage == {"input": 1200, "output": 3, "cached": 1000}
 
 
 def test_anthropic_request_and_tool_calls(monkeypatch):

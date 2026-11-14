@@ -212,6 +212,11 @@ class OpenAIChatClient(ChatClient):
             payload["tools"] = [
                 {"type": "function", "function": tool} for tool in tools
             ]
+        # OpenRouter caches the prompts of Claude only when asked to (it
+        # caches those of OpenAI, DeepSeek and others by itself); other
+        # look-alikes of the API may reject the field.
+        if self.provider.model.startswith("anthropic/"):
+            payload["cache_control"] = CACHED
         return payload
 
     def _reply(self, data: dict) -> Reply:
@@ -230,6 +235,10 @@ class OpenAIChatClient(ChatClient):
             {
                 "input": usage.get("prompt_tokens", 0),
                 "output": usage.get("completion_tokens", 0),
+                # Of the input, the tokens read from the cache.
+                "cached": (usage.get("prompt_tokens_details") or {}).get(
+                    "cached_tokens"
+                ) or 0,
             },
         )
 
