@@ -62,6 +62,12 @@ HEMISPHERES = {"L": "CIFTI_STRUCTURE_CORTEX_LEFT",
                "R": "CIFTI_STRUCTURE_CORTEX_RIGHT"}
 
 
+def engine_name(name: str) -> str:
+    """The name of a parcel as the engines name it (neurolang.atlases):
+    '-' and '_' as spaces."""
+    return str(name).replace("-", " ").replace("_", " ")
+
+
 def fetch(url: str, folder: Path) -> Path:
     """The file of *url* in *folder*, downloaded once."""
     path = folder / urllib.request.unquote(url.rsplit("/", 1)[1])
@@ -129,7 +135,7 @@ def destrieux(folder: Path, vertices: dict):
               for x in atlas["labels"]]
     kept = [i for i, name in enumerate(labels)
             if name not in ("Unknown", "Medial_wall")]
-    names = [f"{h} {labels[i].replace('_', ' ')}" for h in HEMISPHERES
+    names = [f"{h} {engine_name(labels[i])}" for h in HEMISPHERES
              for i in kept]
     parcels = []
     for offset, (hemisphere, side) in enumerate(
@@ -160,7 +166,7 @@ def main(work: Path) -> None:
             parcels, names = dlabel(fetch(CBIG.format(n=n, k=k), folder),
                                     vertices)
             atlases[f"schaefer{n}_{k}"] = (
-                parcels, [name.replace("_", " ") for name in names])
+                parcels, [engine_name(name) for name in names])
     parcels, names = dlabel(fetch(GLASSER, folder), vertices)
     # in the order of the authors' Glasser matrices
     order = json.loads(fetch(GLASSER_ORDER, folder).read_text())

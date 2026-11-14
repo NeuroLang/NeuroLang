@@ -492,6 +492,9 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     assert engine_registry.list_engine_names(
         path
     ) == engine_registry.list_engine_names()
+    # the files of its relations are those of the package
+    for relation in light["relations"].values():
+        assert Path(relation["file"]).is_file(), relation
 
 
 
