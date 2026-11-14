@@ -2972,3 +2972,20 @@ def test_the_rules_of_the_magic_sets_rewriting_are_not_warned_about():
         warnings.simplefilter("always")
         nl.program_ir.walk(Implication(Symbol("q2")(x), Symbol("p")(x)))
     assert [w for w in caught if "symbol table" in str(w.message)]
+
+
+def test_probabilistic_facts_of_values_of_several_types():
+    """The column of `r` has ints, strs and a float: the joins of its
+    relations, whose types are inferred from a tuple of each, do not
+    have to unify their types."""
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, 1), (0.3, "b"), (0.4, 2.5), (0.5, "d")], name="r"
+    )
+    result = nl.execute_datalog_program(
+        "ans(PROB) :- r(x), r(y), (x != y)"
+    )
+    # 1 - P[no fact] - P[exactly one fact]
+    assert result.as_pandas_dataframe().iloc[0, 0] == pytest.approx(
+        1 - 0.168 - 0.394
+    )
