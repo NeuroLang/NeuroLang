@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* The engines ``neurostore_tracts`` and ``neurostore_iit``: NeuroStore with
+  tractography, as ``neurosynth_tracts`` and ``neurosynth_iit`` are
+  Neurosynth with it (the vocabulary of tracts; the IIT whole-brain
+  tractogram and tract_querier's bundles). The page of the REPL offers
+  ``neurostore_iit`` as *NeuroStore + tracts*, with the text embeddings of
+  ``neurostore``. What they share is two abstract engines,
+  ``meta_analysis_tracts`` and ``iit_tractogram``.
 * ``neurolang-repl-serve --local`` prepares each engine before serving
   (``--no-prepare`` not to): it builds it once, in a process of its own, its
   downloads and its tables kept in ``--data-dir``, so that a session starts
