@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroLang REPL: activity</title>
+<script>
+  // The theme chosen (Light, Dark), before the first paint; Computer: none.
+  try {
+    const theme = localStorage.getItem("theme");
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  } catch (error) { /* storage blocked: the computer's */ }
+</script>
+<style>
+  /* The activity of the users of neurolang-repl-serve (--activity-db), for
+     the admins. Colours are tokens; the dark ones are written twice, for the
+     theme chosen and for the computer's. What users wrote is shown as text
+     only. */
+  :root {
+    color-scheme: light;
+    --bg: #FFFFFF; --surface: #FFFFFF; --tint: #EFF4FB;
+    --ink: #0F1B33; --muted: #4A5874; --line: #D3DCEA; --line-ctl: #7F93B5;
+    --deep: #1E3A8A; --accent: #1A63C2; --on-accent: #FFFFFF;
+    --series: #1A63C2; --series-hover: #1E3A8A;
+    --t12: 12px; --t13: 13px; --t14: 14px; --t16: 16px; --t18: 18px; --t20: 20px; --t28: 28px;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0B1220; --surface: #101A2E; --tint: #16243F;
+    --ink: #E8EEF9; --muted: #A9B8D0; --line: #263653; --line-ctl: #6D83A8;
+    --deep: #9DBBFA; --accent: #5AA3F6; --on-accent: #0B1220;
+    --series: #4A93EE; --series-hover: #9DBBFA;
+  }
+  @media screen and (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      color-scheme: dark;
+      --bg: #0B1220; --surface: #101A2E; --tint: #16243F;
+      --ink: #E8EEF9; --muted: #A9B8D0; --line: #263653; --line-ctl: #6D83A8;
+      --deep: #9DBBFA; --accent: #5AA3F6; --on-accent: #0B1220;
+      --series: #4A93EE; --series-hover: #9DBBFA;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--t16)/1.5 var(--sans); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  @media (min-width: 720px) { .wrap { padding: 0 32px; } }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  .plain { text-decoration: none; } .plain:hover { text-decoration: underline; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .label { font: 500 var(--t12)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .note { color: var(--muted); font-size: var(--t14); margin: 4px 0 0; }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; text-wrap: balance; margin: 0; }
+  h1 { font-size: var(--t28); }
+  h2 { font-size: var(--t20); margin: 0 0 4px; }
+  h3 { font-size: var(--t16); }
+  section { padding: 32px 0 0; }
+
+  /* Header: the rule, the name of the page, where else to go. */
+  header { padding: 24px 0 8px; }
+  .rule { width: 96px; height: 4px; border-radius: 2px; margin-bottom: 16px;
+          background: linear-gradient(90deg, var(--deep), var(--accent), #0891B2); }
+  .title { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: var(--t14); }
+
+  /* Filters: one row, above all they scope. */
+  .filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; padding: 16px 0;
+             border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; }
+  .field { display: grid; gap: 4px; }
+  select, input[type="search"], button { font: inherit; font-size: var(--t14); color: var(--ink); }
+  select, input[type="search"] { background: var(--surface); border: 1px solid var(--line-ctl); border-radius: 6px;
+                                 padding: 6px 10px; min-height: 36px; }
+  .seg { display: inline-flex; border: 1px solid var(--line-ctl); border-radius: 6px; overflow: hidden; }
+  .seg button { background: var(--surface); border: 0; border-left: 1px solid var(--line-ctl); padding: 6px 12px;
+                min-height: 34px; cursor: pointer; }
+  .seg button:first-child { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .seg button:not([aria-pressed="true"]):hover { background: var(--tint); }
+  .link { background: none; border: 0; padding: 6px 0; color: var(--accent); cursor: pointer; text-underline-offset: 3px; }
+  .link:hover { text-decoration: underline; }
+  .zone { margin-left: auto; }
+  @media (max-width: 719px) {
+    select, input[type="search"], .seg button, .link, nav a { min-height: 44px; }
+    nav a { display: inline-flex; align-items: center; }
+    .zone { margin-left: 0; }
+  }
+
+  /* While the data come back the page keeps what it shows, dimmed. */
+  #content { transition: opacity .15s; }
+  #content.busy { opacity: .55; }
+  @media (prefers-reduced-motion: reduce) { #content { transition: none; } }
+  #error { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--tint); margin: 16px 0 0; }
+
+  /* Figures: the numbers of the period, hairlines between them. */
+  .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 16px 0; margin: 0; }
+  .figure { padding: 0 16px; border-left: 1px solid var(--line); margin: 0; }
+  .figure dd { margin: 4px 0 0; }
+  .figure .value { font-size: var(--t28); font-weight: 600; line-height: 1.2; }
+  .figure .sub { color: var(--muted); font-size: var(--t14); }
+
+  /* Uptime: a strip of the runs over the period, then the runs. */
+  .strip { position: relative; height: 16px; background: var(--tint); border-radius: 4px; margin: 12px 0 4px; }
+  .run { position: absolute; top: 0; bottom: 0; background: var(--series); border-radius: 4px; min-width: 2px; }
+  .crash { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--ink); }
+  .strip-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--t13); }
+  .rows { list-style: none; margin: 12px 0 0; padding: 0; }
+  .rows li { display: grid; grid-template-columns: 16em 1fr auto; gap: 4px 16px; align-items: baseline;
+             padding: 8px 0; border-top: 1px solid var(--line); font-size: var(--t14); }
+  .rows li:last-child { border-bottom: 1px solid var(--line); }
+  @media (max-width: 719px) { .rows li { grid-template-columns: 1fr auto; } .rows .label { grid-column: 1 / -1; } }
+
+  /* Charts: small multiples of one measure each, on one time axis. */
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 32px; margin-top: 12px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .chart-head .sub { color: var(--muted); font-size: var(--t14); }
+  .canvas { position: relative; height: 200px; margin-top: 8px; }
+  .empty { color: var(--muted); font-size: var(--t14); padding: 24px 0; }
+
+  /* Tables: hairline rows, numbers aligned. */
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--t14); }
+  th, td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 500 var(--t12)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+  th button { all: unset; cursor: pointer; } th button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  th[aria-sort] button::after { content: " ↓"; } th[aria-sort="ascending"] button::after { content: " ↑"; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .meter { display: block; height: 4px; border-radius: 2px; background: var(--tint); margin-top: 4px; min-width: 48px; }
+  .meter span { display: block; height: 100%; border-radius: 2px; background: var(--series); }
+  .who { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+  .who:hover { text-decoration: underline; text-underline-offset: 3px; }
+  details.table-view { margin-top: 8px; font-size: var(--t14); }
+  details.table-view summary { cursor: pointer; color: var(--accent); width: max-content; }
+  details.table-view .scroll { max-height: 240px; overflow-y: auto; }
+
+  /* Inputs: a list, each opening on its result. */
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; margin: 12px 0; }
+  .check { display: inline-flex; gap: 8px; align-items: center; font-size: var(--t14); min-height: 36px; }
+  .inputs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .inputs > li { border-bottom: 1px solid var(--line); }
+  .input-row { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; padding: 10px 0;
+               display: grid; grid-template-columns: 9.5em 1fr auto; gap: 4px 16px; align-items: start; }
+  .input-row:hover { background: var(--tint); }
+  .input-row:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .when { color: var(--muted); font-size: var(--t13); font-variant-numeric: tabular-nums; }
+  .text { font: var(--t14)/1.45 var(--mono); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          white-space: pre-wrap; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: var(--t13); }
+  .stats { text-align: right; font-size: var(--t13); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .failed { font: 500 var(--t12)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--ink);
+            border: 1px solid var(--line-ctl); border-radius: 4px; padding: 0 6px; margin-right: 8px; white-space: nowrap; }
+  .detail { padding: 0 0 16px; display: grid; gap: 12px; }
+  .detail pre { margin: 4px 0 0; font: var(--t13)/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+                background: var(--tint); border-radius: 6px; padding: 10px 12px; max-height: 360px; overflow: auto; }
+  @media (max-width: 719px) {
+    .input-row { grid-template-columns: 1fr; }
+    .stats { text-align: left; }
+  }
+
+  /* Why sessions ended: a name, a bar and a figure per row. */
+  .meters { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
+  .meters li { display: grid; grid-template-columns: minmax(8em, 16em) 1fr 3em; gap: 12px; align-items: center; font-size: var(--t14); }
+  .meters .bar { height: 8px; background: var(--tint); border-radius: 4px; }
+  .meters .bar span { display: block; height: 100%; background: var(--series); border-radius: 4px; }
+  .meters .n { text-align: right; font-variant-numeric: tabular-nums; }
+
+  footer { margin: 48px 0 32px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap;
+           gap: 12px 24px; justify-content: space-between; align-items: center; font-size: var(--t14); color: var(--muted); }
+  .theme { display: inline-flex; gap: 8px; align-items: center; }
+  @media print { .filters, footer .theme, .controls, #more, nav { display: none; } #content { opacity: 1; } }
+</style>
+<script src="/admin/vendor/chart.umd.min.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="rule" aria-hidden="true"></div>
+  <div class="title">
+    <div>
+      <p class="label" style="margin:0">NeuroLang REPL</p>
+      <h1>Activity</h1>
+    </div>
+    <nav aria-label="Elsewhere">
+      <a class="plain" href="/admin">Console</a>
+      <a class="plain" href="/admin/logs/" id="raw" hidden>Raw data and SQL</a>
+      <a class="plain" href="/">The REPL</a>
+    </nav>
+  </div>
+</header>
+
+<form class="filters" id="filters" aria-label="Filters" onsubmit="return false">
+  <div class="field">
+    <span class="label" id="period-label">Period</span>
+    <div class="seg" role="group" aria-labelledby="period-label" id="period">
+      <button type="button" data-days="1">24 hours</button><button type="button" data-days="7">7 days</button><button type="button" data-days="30">30 days</button><button type="button" data-days="">All</button>
+    </div>
+  </div>
+  <label class="field"><span class="label">User</span><select id="user"><option value="">All users</option></select></label>
+  <label class="field"><span class="label">Engine</span><select id="engine"><option value="">All engines</option></select></label>
+  <button type="button" class="link" id="clear" hidden>Clear filters</button>
+  <p class="note zone" id="zone"></p>
+</form>
+<p id="error" role="alert" hidden></p>
+
+<main id="content">
+  <section aria-labelledby="h-figures">
+    <h2 class="sr-only" id="h-figures">The period in figures</h2>
+    <dl class="figures" id="figures"></dl>
+  </section>
+
+  <section aria-labelledby="h-uptime">
+    <h2 id="h-uptime">Uptime</h2>
+    <p class="note" id="uptime-text"></p>
+    <div class="strip" id="strip" role="img"></div>
+    <div class="strip-axis"><span id="strip-from"></span><span id="strip-to"></span></div>
+    <ul class="rows" id="runs"></ul>
+  </section>
+
+  <section aria-labelledby="h-time">
+    <h2 id="h-time">Over time</h2>
+    <p class="note" id="time-note"></p>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <section aria-labelledby="h-users">
+    <h2 id="h-users">Users</h2>
+    <p class="note">Choose a user to see only theirs.</p>
+    <div class="scroll"><table id="users"></table></div>
+  </section>
+
+  <section aria-labelledby="h-inputs">
+    <h2 id="h-inputs">Inputs</h2>
+    <div class="controls">
+      <div class="field">
+        <span class="label" id="sort-label">Sort</span>
+        <div class="seg" role="group" aria-labelledby="sort-label" id="sort">
+          <button type="button" data-sort="latest">Latest</button><button type="button" data-sort="slowest">Slowest</button><button type="button" data-sort="cpu">Most CPU</button><button type="button" data-sort="tokens">Most tokens</button>
+        </div>
+      </div>
+      <label class="field"><span class="label">Search</span><input type="search" id="search" placeholder="text of the input" maxlength="200"></label>
+      <label class="check"><input type="checkbox" id="failed"> Failed only</label>
+    </div>
+    <ol class="inputs" id="inputs"></ol>
+    <p class="note" id="inputs-note"></p>
+    <button type="button" class="link" id="more" hidden>Show 20 more</button>
+  </section>
+
+  <section aria-labelledby="h-ends">
+    <h2 id="h-ends">Why sessions ended</h2>
+    <ul class="meters" id="ends"></ul>
+  </section>
+</main>
+
+<footer>
+  <span id="download"></span>
+  <span class="theme">
+    <span class="label" id="theme-label">Theme</span>
+    <span class="seg" role="group" aria-labelledby="theme-label" id="theme">
+      <button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button><button type="button" data-theme="">Computer</button>
+    </span>
+  </span>
+</footer>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const state = Object.assign({ days: "7", user: "", engine: "", sort: "latest", q: "", failed: "" },
+  Object.fromEntries(new URLSearchParams(location.search)));
+let report = null;
+let charts = [];
+let offset = 0;
+
+// -- Numbers and times, as people read them ---------------------------------
+const integer = new Intl.NumberFormat();
+const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+const count = (n) => (n >= 10000 ? compact.format(n) : integer.format(n ?? 0));
+function duration(seconds) {
+  if (seconds == null) return "–";
+  if (seconds < 1) return seconds ? "< 1 s" : "0 s";
+  if (seconds < 90) return `${Math.round(seconds)} s`;
+  if (seconds < 5400) return `${(seconds / 60).toFixed(1)} min`;
+  if (seconds < 172800) return `${(seconds / 3600).toFixed(1)} h`;
+  return `${(seconds / 86400).toFixed(1)} days`;
+}
+const memory = (mb) => (mb == null ? "–" : mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`);
+const at = (iso, options) => new Date(iso).toLocaleString(undefined, { timeZone: ZONE, ...options });
+const when = (iso) => at(iso, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const percent = (part, whole) => (whole ? `${((100 * part) / whole).toFixed(part && part < whole / 100 ? 1 : 0)}%` : "0%");
+
+function el(tag, attributes = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes)) {
+    if (name === "class") node.className = value;
+    else if (name.startsWith("on")) node.addEventListener(name.slice(2), value);
+    else if (value !== false && value != null) node.setAttribute(name, value === true ? "" : value);
+  }
+  node.append(...children.flat().filter((c) => c != null && c !== false));
+  return node; // children are nodes or text: what users wrote is never HTML
+}
+
+// -- The filters: in the address, so that a view can be kept and shared -----
+function query(extra = {}) {
+  const params = new URLSearchParams({ days: state.days, user: state.user, engine: state.engine, tz: ZONE, ...extra });
+  for (const [key, value] of [...params]) if (value === "") params.delete(key);
+  return params;
+}
+function remember() {
+  const params = new URLSearchParams();
+  for (const key of ["days", "user", "engine", "sort", "q", "failed"]) if (state[key]) params.set(key, state[key]);
+  if (state.days === "") params.set("days", "");
+  history.replaceState(null, "", params.size ? `?${params}` : location.pathname);
+}
+function pressed(group, attribute, value) {
+  for (const button of $(group).querySelectorAll("button")) button.setAttribute("aria-pressed", String(button.dataset[attribute] === value));
+}
+
+async function call(path) {
+  const response = await fetch(path, { headers: { Accept: "application/json" } });
+  if (response.status === 401) location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+  const data = await response.json().catch(() => ({ error: response.statusText }));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+async function load() {
+  pressed("period", "days", state.days);
+  pressed("sort", "sort", state.sort);
+  $("search").value = state.q;
+  $("failed").checked = state.failed === "1";
+  $("clear").hidden = !(state.user || state.engine);
+  $("zone").textContent = `Times in ${ZONE}`;
+  $("content").classList.add("busy");
+  try {
+    report = await call(`/admin/api/activity/report?${query()}`);
+    $("error").hidden = true;
+    render();
+    await loadInputs(true);
+  } catch (error) {
+    $("error").hidden = false;
+    $("error").textContent = error.message;
+  } finally {
+    $("content").classList.remove("busy");
+  }
+}
+
+function options(select, values, all) {
+  const current = select.value;
+  select.replaceChildren(el("option", { value: "" }, all), ...values.map((v) => el("option", { value: v }, v)));
+  select.value = values.includes(state[select.id]) ? state[select.id] : "";
+  if (select.value !== current) select.value = state[select.id] || "";
+}
+
+function render() {
+  options($("user"), report.names, "All users");
+  options($("engine"), report.engines, "All engines");
+  renderFigures();
+  renderUptime();
+  renderCharts();
+  renderUsers();
+  renderEnds();
+  const user = state.user;
+  $("download").replaceChildren(user
+    ? el("a", { href: `/admin/activity.jsonl?user=${encodeURIComponent(user)}`, class: "plain" }, `Download the whole log of ${user} (JSON lines)`)
+    : "");
+}
+
+// -- Figures ------------------------------------------------------------------
+function renderFigures() {
+  const f = report.figures;
+  const up = report.uptime;
+  const tokens = f.tokens_in + f.tokens_out;
+  const items = [
+    ["Uptime", up.percent == null ? "–" : `${up.percent}%`,
+      up.percent == null ? "no run logged" : up.crashes ? `${up.crashes} ended without stopping` : "no crash"],
+    ["Users", count(f.users), `${count(f.sessions)} sessions started`],
+    ["Inputs", count(f.inputs), f.inputs ? `${count(f.failed)} failed (${percent(f.failed, f.inputs)})` : "none in this period"],
+    ["CPU time", duration(f.cpu), f.inputs ? `${duration(f.cpu / f.inputs)} per input` : ""],
+    ["LLM tokens", count(tokens), tokens ? `${percent(f.tokens_server, tokens)} on the server's keys` : "no question to the assistant"],
+    ["Most memory", memory(f.memory), "of one session, its own"],
+  ];
+  $("figures").replaceChildren(...items.map(([label, value, sub]) =>
+    el("div", { class: "figure" }, el("dt", { class: "label" }, label),
+      el("dd", {}, el("div", { class: "value" }, value), el("div", { class: "sub" }, sub)))));
+}
+
+// -- Uptime -----------------------------------------------------------------
+function renderUptime() {
+  const up = report.uptime;
+  const from = new Date(report.since).getTime();
+  const to = new Date(report.now).getTime();
+  const span = Math.max(to - from, 1);
+  const x = (iso) => Math.min(100, Math.max(0, ((new Date(iso).getTime() - from) / span) * 100));
+  $("strip-from").textContent = report.clipped ? `${when(report.since)}, when the log began` : when(report.since);
+  $("strip-to").textContent = "now";
+  if (up.percent == null) {
+    $("uptime-text").textContent = "No run of the server is logged yet.";
+    $("strip").replaceChildren();
+    $("runs").replaceChildren();
+    return;
+  }
+  const since = report.clipped ? `since ${when(up.since)}, when the log began` : "over the period";
+  $("uptime-text").textContent = `The server served ${up.percent}% of the time ${since}. A blue stretch is a run; a gap, a time it was down; a black tick, a run that ended without stopping (killed or crashed).`;
+  const marks = [];
+  for (const run of up.runs) {
+    const left = x(run.start);
+    const right = x(run.end);
+    const title = `${when(run.start)} to ${run.how === "running" ? "now" : when(run.end)}: ${HOW[run.how]}`;
+    marks.push(el("div", { class: "run", style: `left:${left}%;width:${Math.max(right - left, 0.2)}%`, title }));
+    if (run.how === "crashed") marks.push(el("div", { class: "crash", style: `left:calc(${right}% - 1px)`, title: `Ended without stopping, ${when(run.end)}` }));
+  }
+  $("strip").replaceChildren(...marks);
+  $("strip").setAttribute("aria-label", `Runs of the server over the period: ${up.runs.length}, ${up.crashes} ended without stopping.`);
+  $("runs").replaceChildren(...up.runs.slice(0, 6).map((run) => el("li", {},
+    el("span", { class: "label" }, HOW[run.how]),
+    el("span", {}, `${when(run.start)} → ${run.how === "running" ? "now" : when(run.end)}`),
+    el("span", { class: "note", style: "margin:0;text-align:right" }, duration((new Date(run.end) - new Date(run.start)) / 1000)))));
+}
+const HOW = { running: "Running", stopped: "Stopped", crashed: "Ended without stopping" };
+
+// -- Charts: one measure each, on the same buckets --------------------------
+// A duration is charted in one unit, that of its largest value, so that the
+// ticks of its axis are round numbers of it.
+function unitOf(values) {
+  const most = Math.max(...values, 0);
+  return most < 90 ? [1, "s"] : most < 5400 ? [60, "min"] : most < 172800 ? [3600, "h"] : [86400, "days"];
+}
+const MEASURES = [
+  { key: "inputs", title: "Inputs", value: count, axis: count, sum: (s) => `${count(s)} in all` },
+  { key: "cpu", title: "CPU time", value: duration, sum: (s) => `${duration(s)} in all`, unit: unitOf },
+  { key: "tokens", title: "LLM tokens", value: count, axis: (v) => compact.format(v), sum: (s) => `${count(s)} in all` },
+  { key: "users", title: "Active users", value: count, axis: count, sum: () => "different users each time" },
+];
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function bucketLabel(iso, long) {
+  if (report.bucket === "day") return at(iso, { day: "numeric", month: "short", ...(long ? { weekday: "short", year: "numeric" } : {}) });
+  return long ? at(iso, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    : at(iso, { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderCharts() {
+  for (const chart of charts) chart.destroy();
+  charts = [];
+  const series = report.series;
+  $("time-note").textContent = `By ${report.bucket}, ${series.length} ${report.bucket}${series.length === 1 ? "" : "s"}.`;
+  if (!report.figures.inputs) {
+    $("charts").replaceChildren(el("p", { class: "empty" }, "No inputs in this period."));
+    return;
+  }
+  const labels = series.map((b) => b.start);
+  // with one user, "active users" is only 0 or 1: their inputs say it
+  const cards = MEASURES.filter((m) => !(state.user && m.key === "users")).map((measure) => {
+    const raw = series.map((b) => b[measure.key]);
+    const [scale, unit] = measure.unit ? measure.unit(raw) : [1, ""];
+    const values = raw.map((v) => v / scale);
+    const axis = measure.unit ? (v) => `${integer.format(v)} ${unit}` : measure.axis;
+    const total = measure.key === "users" ? null : raw.reduce((a, b) => a + b, 0);
+    const canvas = el("canvas", { role: "img", "aria-label": `${measure.title} by ${report.bucket}` });
+    const table = el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, report.bucket === "day" ? "Day" : "Hour"), el("th", { class: "num" }, measure.title))),
+      el("tbody", {}, ...series.filter((b) => b[measure.key]).map((b) =>
+        el("tr", {}, el("td", {}, bucketLabel(b.start, true)), el("td", { class: "num" }, measure.value(b[measure.key]))))));
+    const card = el("figure", { style: "margin:0" },
+      el("div", { class: "chart-head" }, el("h3", {}, measure.title), el("span", { class: "sub" }, total == null ? "" : measure.sum(total))),
+      raw.some((v) => v) ? el("div", { class: "canvas" }, canvas) : el("p", { class: "empty" }, `None in this period.`),
+      raw.some((v) => v) && el("details", { class: "table-view" }, el("summary", {}, "Table"), el("div", { class: "scroll" }, table)));
+    return { card, canvas, values, raw, axis, measure };
+  });
+  $("charts").replaceChildren(...cards.map((c) => c.card));
+  if (!window.Chart) return; // the tables still say it all
+  const font = { family: css("--sans"), size: 12 };
+  for (const { canvas, values, raw, axis, measure } of cards) {
+    if (!raw.some((v) => v)) continue;
+    charts.push(new Chart(canvas, {
+      type: "bar",
+      data: { labels, datasets: [{
+        data: values, backgroundColor: css("--series"), hoverBackgroundColor: css("--series-hover"),
+        borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "bottom", maxBarThickness: 24,
+        categoryPercentage: 0.9, barPercentage: 0.9, minBarLength: 0,
+      }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: css("--surface"), titleColor: css("--muted"), bodyColor: css("--ink"),
+            borderColor: css("--line-ctl"), borderWidth: 1, padding: 10, displayColors: false,
+            titleFont: font, bodyFont: { ...font, size: 14, weight: "600" },
+            callbacks: {
+              title: (items) => bucketLabel(labels[items[0].dataIndex], true),
+              label: (item) => {
+                const bucket = series[item.dataIndex];
+                const text = `${measure.value(raw[item.dataIndex])} ${measure.title.toLowerCase()}`;
+                return measure.key === "inputs" && bucket.failed ? [text, `${count(bucket.failed)} failed`] : text;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { color: css("--line-ctl") },
+               ticks: { color: css("--muted"), font, maxRotation: 0, autoSkip: true, autoSkipPadding: 16,
+                        callback: (value) => bucketLabel(labels[value]) } },
+          y: { beginAtZero: true, grid: { color: css("--line") }, border: { display: false },
+               ticks: { color: css("--muted"), font, maxTicksLimit: 4, precision: measure.unit ? undefined : 0, callback: axis } },
+        },
+      },
+    }));
+  }
+}
+
+// -- Users --------------------------------------------------------------------
+const USER_COLUMNS = [
+  ["user", "User"], ["groups", "Groups"], ["inputs", "Inputs", "num"], ["failed", "Failed", "num"],
+  ["seconds", "Time", "num"], ["cpu", "CPU", "num"], ["tokens", "Tokens", "num"], ["memory", "Most memory", "num"], ["last", "Last seen"],
+];
+let userSort = { key: "cpu", down: true };
+function renderUsers() {
+  const rows = report.users.map((u) => ({ ...u, tokens: (u.tokens_in || 0) + (u.tokens_out || 0) }));
+  if (!rows.length) {
+    $("users").replaceChildren(el("tbody", {}, el("tr", {}, el("td", { class: "empty" }, "No one used the REPL in this period."))));
+    return;
+  }
+  const { key, down } = userSort;
+  rows.sort((a, b) => ((a[key] ?? -1) > (b[key] ?? -1) ? 1 : (a[key] ?? -1) < (b[key] ?? -1) ? -1 : 0) * (down ? -1 : 1));
+  const most = Math.max(...rows.map((r) => r.cpu || 0), 1e-9);
+  const head = el("tr", {}, ...USER_COLUMNS.map(([k, title, kind]) => el("th", {
+    class: kind, scope: "col", "aria-sort": k === key ? (down ? "descending" : "ascending") : false,
+  }, el("button", { type: "button", onclick: () => { userSort = { key: k, down: k === key ? !down : true }; renderUsers(); } }, title))));
+  const body = rows.map((u) => el("tr", {},
+    el("td", {}, el("button", { type: "button", class: "who", onclick: () => choose({ user: u.user }) }, u.user)),
+    el("td", {}, u.groups || ""),
+    el("td", { class: "num" }, count(u.inputs)),
+    el("td", { class: "num" }, count(u.failed)),
+    el("td", { class: "num" }, duration(u.seconds)),
+    el("td", { class: "num" }, duration(u.cpu), el("span", { class: "meter", "aria-hidden": "true" },
+      el("span", { style: `width:${Math.round(((u.cpu || 0) / most) * 100)}%` }))),
+    el("td", { class: "num" }, u.tokens ? count(u.tokens) : "–"),
+    el("td", { class: "num" }, memory(u.memory)),
+    el("td", {}, u.last ? when(u.last) : "")));
+  $("users").replaceChildren(el("thead", {}, head), el("tbody", {}, ...body));
+}
+
+// -- Inputs -------------------------------------------------------------------
+async function loadInputs(fresh) {
+  if (fresh) offset = 0;
+  const limit = fresh ? 10 : 20;
+  const rows = await call(`/admin/api/activity/inputs?${query({ sort: state.sort, q: state.q, failed: state.failed, offset, limit })}`);
+  const items = rows.map(inputItem);
+  if (fresh) $("inputs").replaceChildren(...items);
+  else $("inputs").append(...items);
+  offset += rows.length;
+  $("more").hidden = rows.length < limit;
+  $("inputs-note").textContent = !offset ? (state.q || state.failed ? "No input matches." : "No inputs in this period.") : "";
+}
+
+function inputItem(row) {
+  const detail = el("div", { class: "detail", hidden: true });
+  const stats = [duration(row.seconds), row.cpu == null ? null : `CPU ${duration(row.cpu)}`,
+    row.tokens_in || row.tokens_out ? `${count((row.tokens_in || 0) + (row.tokens_out || 0))} tokens` : null].filter(Boolean).join(" · ");
+  const button = el("button", { type: "button", class: "input-row", "aria-expanded": "false" },
+    el("span", {}, el("span", { class: "when" }, when(row.created)), el("br"), el("span", { class: "meta" }, `${row.user} · ${row.engine || ""}`)),
+    el("span", { class: "text" }, row.failed ? el("span", { class: "failed" }, "✕ Failed") : null, row.text || ""),
+    el("span", { class: "stats" }, stats));
+  button.addEventListener("click", async () => {
+    const open = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(open));
+    detail.hidden = !open;
+    if (open && !detail.childElementCount) {
+      detail.append(el("p", { class: "note" }, "Loading…"));
+      try {
+        const entry = await call(`/admin/api/activity/entry?id=${row.id}`);
+        detail.replaceChildren(
+          el("div", {}, el("span", { class: "label" }, "Input"), el("pre", {}, entry.text || "")),
+          el("div", {}, el("span", { class: "label" }, entry.failed ? "Error" : "Result"), el("pre", {}, entry.response || "(nothing)")),
+          el("p", { class: "note" }, [
+            `Memory ${memory(entry.memory)}`,
+            entry.llm ? `assistant ${entry.llm}, ${entry.llm_key === "page" ? "the user's key" : "the server's key"}, ${count(entry.tokens_in || 0)} tokens sent, ${count(entry.tokens_out || 0)} received` : null,
+            `groups ${entry.groups || "none"}`,
+          ].filter(Boolean).join(" · ")));
+      } catch (error) {
+        detail.replaceChildren(el("p", { class: "note" }, error.message));
+      }
+    }
+  });
+  return el("li", {}, button, detail);
+}
+
+// -- Why sessions ended ----------------------------------------------------
+function renderEnds() {
+  const ends = report.ends;
+  if (!ends.length) {
+    $("ends").replaceChildren(el("li", { class: "empty" }, "No session ended in this period."));
+    return;
+  }
+  const most = Math.max(...ends.map((e) => e.sessions));
+  $("ends").replaceChildren(...ends.map((e) => el("li", {},
+    el("span", {}, e.reason), el("span", { class: "bar", "aria-hidden": "true" }, el("span", { style: `width:${(e.sessions / most) * 100}%` })),
+    el("span", { class: "n" }, count(e.sessions)))));
+}
+
+// -- Controls ---------------------------------------------------------------
+function choose(changes) {
+  Object.assign(state, changes);
+  remember();
+  load();
+  if ("user" in changes) document.getElementById("h-figures").scrollIntoView({ block: "nearest" });
+}
+$("period").addEventListener("click", (event) => { const b = event.target.closest("button"); if (b) choose({ days: b.dataset.days }); });
+$("user").addEventListener("change", (event) => choose({ user: event.target.value }));
+$("engine").addEventListener("change", (event) => choose({ engine: event.target.value }));
+$("clear").addEventListener("click", () => choose({ user: "", engine: "" }));
+$("sort").addEventListener("click", (event) => {
+  const b = event.target.closest("button");
+  if (!b) return;
+  state.sort = b.dataset.sort; pressed("sort", "sort", state.sort); remember(); loadInputs(true);
+});
+let typing;
+$("search").addEventListener("input", (event) => {
+  clearTimeout(typing);
+  typing = setTimeout(() => { state.q = event.target.value.trim(); remember(); loadInputs(true); }, 250);
+});
+$("failed").addEventListener("change", (event) => { state.failed = event.target.checked ? "1" : ""; remember(); loadInputs(true); });
+$("more").addEventListener("click", () => loadInputs(false));
+
+// The theme: Light, Dark, or the computer's; the charts take its colours.
+function theme(choice) {
+  if (choice) document.documentElement.dataset.theme = choice;
+  else delete document.documentElement.dataset.theme;
+  try { if (choice) localStorage.setItem("theme", choice); else localStorage.removeItem("theme"); } catch (error) { /* this page only */ }
+  pressed("theme", "theme", choice);
+  if (report) renderCharts();
+}
+$("theme").addEventListener("click", (event) => { const b = event.target.closest("button"); if (b) theme(b.dataset.theme); });
+pressed("theme", "theme", document.documentElement.dataset.theme || "");
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (report && !document.documentElement.dataset.theme) renderCharts(); });
+addEventListener("storage", (event) => { if (event.key === "theme") theme(event.newValue || ""); });
+
+// Raw data: the Datasette of the server, if it has one (--dashboard).
+fetch("/admin/api/state").then((r) => r.ok && r.json()).then((s) => { if (s && s.dashboard) $("raw").hidden = false; }).catch(() => {});
+addEventListener("DOMContentLoaded", load);
+</script>
+</body>
+</html>

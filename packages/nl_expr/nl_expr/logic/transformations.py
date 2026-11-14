@@ -978,7 +978,8 @@ class PushExistentialsDownConjunctionsMixin(PatternWalker):
     """
     Push the existentials into conjunctions, ∃v (A ∧ B) ≡ A ∧ ∃v B when
     `v` is not free in `A`, keeping within them the conjuncts that share
-    variables with negations, and swap nested existentials to push them.
+    variables with negations of `v`, and swap nested existentials to push
+    them.
     """
     @add_match(
         ExistentialPredicate(..., Conjunction),
@@ -998,7 +999,10 @@ class PushExistentialsDownConjunctionsMixin(PatternWalker):
         out_ = tuple()
         negative_logic_free_variables = set()
         for formula in body_formulas:
-            if isinstance(formula, Negation):
+            if (
+                isinstance(formula, Negation) and
+                variable in extract_logic_free_variables(formula)
+            ):
                 negative_logic_free_variables |= extract_logic_free_variables(
                     formula
                 )

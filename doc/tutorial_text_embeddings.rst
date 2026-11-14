@@ -26,7 +26,8 @@ similarity downloads them (about three minutes for the 14,371 NeuroSynth
 studies), downloads SPECTER2 and its adapters (about 430 MB), embeds the
 studies (minutes on a GPU, longer on a CPU), and caches all of it under
 ``{data_dir}/neurosynth/embeddings/``, the model and its tokenizer in
-``models/``.  To do it ahead of time::
+``models/``; the engines extending ``neurosynth`` (``neurosynth_iit``...)
+read them there too.  To do it ahead of time::
 
     python -m neurolang.utils.text_embeddings -e neurosynth -d neurolang_data
 
@@ -61,20 +62,21 @@ Similarity of every study to a query
 title and abstract of study ``s`` and the text ``query``, or ``nan`` if
 ``s`` is not a NeuroSynth study.  It is a function, so a rule gets the
 similarity with an equality and ranges over the studies with ``study``.
-Here with the ``neurolang-query`` command line
-(``python -m neurolang.utils.cli``)::
+Here with the ``neurolang-query`` command line::
 
-    python -m neurolang.utils.cli -e neurosynth --sort sim:desc \
+    neurolang-query --engine neurosynth --sort sim:desc \
         "ans(s, sim) :- study(s) & \
             (sim == query_similarity('visual word form reading', s)) \
             & (sim > 0.78)"
 
 The query text can also be a variable of a rule, as long as the rule is
-queried, or called, with a constant for it: magic sets pass the constant
-to the rule.  In the ``neurolang-query`` interactive mode::
+queried, or called, with a constant for it, or with a variable bound by a
+rule left of it: magic sets pass the constant, or the values of that
+rule, to the rule.  In the ``neurolang-query`` interactive mode::
 
     close(w, s) :- study(s) & (sim == query_similarity(w, s)) & (sim > .78)
     ans(s) :- close('visual word form reading', s)
+    ans(t, s) :- cogat_definition(t, d), close(d, s)
 
 Querying ``close(w, s)`` without a constant for ``w`` fails with an
 :class:`~neurolang.exceptions.UnboundVariablesError`: the similarity
@@ -117,6 +119,36 @@ lie, and ``close`` keeps them, whatever the query::
 Each query text is embedded once and the similarities of all the studies
 to it are cached (the 16 most recent query texts), so each call is a
 lookup.
+
+.. _similarity-threshold:
+
+Choosing the similarity threshold
+---------------------------------
+
+The meta-analysis engines define the studies about a text, ``similar_study(q,
+s)``, in two steps.  A gate decides whether any study is about the text:
+the mean similarity of its 20 closest studies must reach the
+``similarity_gate`` of the engine's ``text_embeddings`` entry (0.75 by
+default, see :ref:`text-embeddings-section`).  If it does, the cutoff
+keeps the top 5% of the studies closest to the text, the 95th percentile
+of its positive similarities.  ``query_similarity_cutoff(q)`` does both,
+once per text, and returns ``inf`` when the gate fails::
+
+    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c)
+
+Every text has a top 5%, even one that no study is about: 'stock market
+crash' would get 719 studies of NeuroSynth.  A floor on each study's
+similarity, ``v >= 0.75``, does not fix this: SPECTER2 similarities have a
+baseline that depends on the text, and the mean similarity of the 20
+closest studies separates the texts about the studies from the others
+better (ROC AUC 0.93) than a floor or standardised similarities.  The gate
+is set at the 95th percentile of this statistic over texts off the domain:
+0.75 for NeuroSynth, which lets 2.4% of these texts through and keeps 63%
+of the texts about the domain, and 0.76 for NeuroStore (3.7%, 62%).
+
+:doc:`similarity_calibration` explains the choice, gives the calibration
+procedure, the script that runs it and the reference results of both
+engines, and how to recalibrate for another encoder or engine.
 
 Activations within a radius of the peaks
 ----------------------------------------
@@ -213,7 +245,7 @@ studies as are tagged with the term 'reading', with an aggregation
     from typing import Iterable
 
     import numpy as np
-    from neurolang.utils.engine_registry import build_engine
+    from neurolang_apps.utils.engine_registry import build_engine
 
     nl = build_engine("neurosynth", Path("neurolang_data"), resolution=4)
 

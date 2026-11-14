@@ -159,7 +159,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
-    if flat_query_body == FALSE or (
+    if FALSE in (
+        flat_query_body,
+        lift_optimization_for_choice_predicates(flat_query_body, cpl_program)
+    ) or (
         isinstance(flat_query_body, Conjunction)
         and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
     ):

@@ -44,9 +44,13 @@ jobs:
             - 'packages/neurolang/**'
           neurolang_apps:
             - 'packages/neurolang_apps/**'
-            # The REPL's page and bundle are tested with the applications.
+            # The REPL's page and bundle are tested with the applications,
+            # and so are the documentation's examples and Python page.
             - 'doc/_static/repl/**'
             - 'doc/make_repl_bundle.py'
+            - 'doc/*.rst'
+            - 'doc/sphinxext/**'
+            - 'doc/tools/**'
           shared:
             - 'pyproject.toml'
             - 'conftest.py'
@@ -96,6 +100,11 @@ jobs:
     - name: Run the tests of ${{ matrix.package }}
       run: uv run --no-sync python -m pytest packages/${{ matrix.package }} -v --tb=short --timeout=600
       timeout-minutes: 30
+
+    - name: Run the examples of the documentation's Python page
+      if: matrix.package == 'neurolang_apps'
+      run: uv run --no-sync python -m pytest doc/tutorial_python.rst --doctest-glob=tutorial_python.rst -v --tb=short
+      timeout-minutes: 10
 
   coverage:
     if: github.event_name == 'push'

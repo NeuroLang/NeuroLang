@@ -6,9 +6,11 @@ the files :file:`engines/<engine>/*.yaml` (their example queries and the
 query assistant's guidance) are merged with OmegaConf.  Each engine may
 define:
 
-* a **Python initialisation script** (``python_init``), whose
-  ``init_engine`` is also given the keyword arguments of
-  ``python_init_options``;
+* **Python initialisation scripts** (``python_init``): a module name, or
+  a list of them, whose ``init_engine(nl, mask, data_dir, **options)``
+  run in order, each given all the keyword arguments of
+  ``python_init_options`` (an ``init_engine`` takes ``**options`` for
+  those of the others);
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
@@ -44,7 +46,9 @@ define:
 * ``atlases`` — brain atlases downloaded via nilearn (e.g. ``destrieux``,
   ``schaefer``, ``difumo``) and registered as predicates with
   :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
-  use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
+  are :class:`~neurolang.atlases.Atlas` objects, fetched as
+  ``.load_atlas(name, kind=...)`` fetches them, added by ``add_atlas_set``
+  and recorded in the engine's ``atlases``; probabilistic atlases
   are thresholded (default 0.5) to create binary region masks.
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
@@ -55,7 +59,9 @@ define:
   adding Datalog commands ``.name(...)``; inherited parent first;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
-  ``f(query, doc) -> similarity``; see
+  ``f(query, doc) -> similarity``, with ``f_cutoff(query)`` the 95th
+  percentile of the similarities to the query, or ``inf`` if the mean of
+  its 20 largest is below ``similarity_gate`` (0.75 by default); see
   :mod:`neurolang_apps.utils.text_embeddings`::
 
       text_embeddings:
@@ -63,6 +69,7 @@ define:
           ids_from: study
           source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
+          similarity_gate: 0.75
 
 Usage
 -----
@@ -93,9 +100,11 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
 import re
+import warnings
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
@@ -107,6 +116,7 @@ import numpy as np
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
+from neurolang.utils import euclidean_join_settings
 from neurolang_apps.utils import engine_cache
 from neurolang.utils.nilearn_compat import fetch_files as _fetch_files
 from neurolang.utils.nilearn_compat import (
@@ -304,7 +314,10 @@ def _resolve_relation_file(
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
+    "python_init", "hidden_predicates",
 })
+# Keys whose value is a list, or a single item standing for a list of one.
+_LIST_KEYS = frozenset({"python_init"})
 # Keys describing the engine itself, never inherited.
 _NON_INHERITED_KEYS = frozenset({"extends", "abstract"})
 
@@ -344,7 +357,10 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     * any other value replaces the inherited one.
     """
     configs = [
-        {k: v for k, v in c.items() if k not in _NON_INHERITED_KEYS}
+        {
+            k: [v] if k in _LIST_KEYS and isinstance(v, str) else v
+            for k, v in c.items() if k not in _NON_INHERITED_KEYS
+        }
         for c in configs
     ]
     merged = OmegaConf.to_container(OmegaConf.merge(*configs))
@@ -355,13 +371,40 @@ def _merge_engine_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
     return _without_nulls(merged)
 
 
-def resolve_engine_config(
+def _linearized(
     engines: Dict[str, Dict[str, Any]],
     name: str,
     _stack: Tuple[str, ...] = (),
+) -> List[str]:
+    """
+    Return *name* after its bases, depth first in the order of their
+    ``extends``, each engine once: a base two of them extend is merged
+    once, where it is first reached.
+    """
+    if name in _stack:
+        chain = " -> ".join(_stack + (name,))
+        raise ValueError(f"Cyclic engine inheritance: {chain}")
+    if name not in engines:
+        available = ", ".join(engines.keys())
+        raise ValueError(
+            f"Unknown engine: {name!r}. Available engines: {available}"
+        )
+    order = []
+    for base in _extends(engines[name]):
+        for engine in _linearized(engines, base, _stack + (name,)):
+            if engine not in order:
+                order.append(engine)
+    return order + [name]
+
+
+def resolve_engine_config(
+    engines: Dict[str, Dict[str, Any]],
+    name: str,
 ) -> Dict[str, Any]:
     """
-    Return the configuration of *name* with all ``extends`` resolved.
+    Return the configuration of *name* with all ``extends`` resolved: the
+    configurations of its bases and its own, merged in the order of
+    :func:`_linearized`.
 
     Parameters
     ----------
@@ -377,19 +420,43 @@ def resolve_engine_config(
         chain is cyclic.
 
     """
-    if name in _stack:
-        chain = " -> ".join(_stack + (name,))
-        raise ValueError(f"Cyclic engine inheritance: {chain}")
-    if name not in engines:
-        available = ", ".join(engines.keys())
-        raise ValueError(
-            f"Unknown engine: {name!r}. Available engines: {available}"
-        )
-    raw = engines[name] or {}
-    return _merge_engine_configs(*(
-        resolve_engine_config(engines, base, _stack + (name,))
-        for base in _extends(raw)
-    ), raw)
+    return _with_kernel_radius(_merge_engine_configs(*(
+        engines[engine] or {} for engine in _linearized(engines, name)
+    )))
+
+
+def _with_kernel_radius(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return *config* with its ``kernel_radius_mm``, if it has one, written
+    where its texts say ``{kernel_radius_mm}`` (the descriptions, the
+    guidance and the examples of the assistant), and as the ``radius_mm``
+    of the activations of its atlases that do not set theirs.
+    """
+    radius = config.get("kernel_radius_mm")
+    if radius is None:
+        return config
+    for atlas in (config.get("atlases") or {}).values():
+        if isinstance(atlas.get("activated"), dict):
+            atlas["activated"].setdefault("radius_mm", radius)
+
+    def fill(value):
+        if isinstance(value, str):
+            return value.replace("{kernel_radius_mm}", f"{radius:g}")
+        if isinstance(value, dict):
+            return {k: fill(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [fill(v) for v in value]
+        return value
+
+    return fill(config)
+
+
+def kernel_radius_voxels(cfg: Dict[str, Any], mask) -> float:
+    """
+    Return the ``kernel_radius_mm`` of the engine configuration *cfg* in
+    voxels of the grid of *mask*, whose voxels are cubes.
+    """
+    return cfg["kernel_radius_mm"] / abs(float(mask.affine[0, 0]))
 
 
 @functools.lru_cache(maxsize=None)
@@ -453,6 +520,28 @@ def get_engine_config(
     if yaml_path is None:
         return copy.deepcopy(_resolved_config(_ENGINES_YAML, name))
     return resolve_engine_config(engines, name)
+
+
+def embeddings_owner(
+    name: str, entry: str, yaml_path: Optional[Path] = None
+) -> str:
+    """
+    Return the engine whose ``embeddings`` directory holds the caches of
+    the ``text_embeddings`` entry *entry* of the engine *name*: the most
+    basic non-abstract engine of its ``extends`` chain, itself included,
+    whose resolved entry is the same.
+    """
+    engines = _load_yaml_config(yaml_path).get("engines", {})
+
+    def resolved(engine):
+        config = resolve_engine_config(engines, engine)
+        return (config.get("text_embeddings") or {}).get(entry)
+
+    mine = resolved(name)
+    return next(
+        engine for engine in _linearized(engines, name)
+        if not _is_abstract(engines, engine) and resolved(engine) == mine
+    )
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
@@ -802,6 +891,21 @@ def get_signatures(
     return signatures
 
 
+def get_euclidean_join_settings(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """
+    Return the settings of the Euclidean join an engine changes.
+
+    They are the ``euclidean_join`` mapping of the engine, merged with that
+    of the engines it extends: settings of
+    :class:`~neurolang.utils.euclidean_join_settings.JoinSettings`, as
+    ``kdtree_chunk_pairs``.
+    """
+    cfg = get_engine_config(name, yaml_path)
+    return dict(cfg.get("euclidean_join") or {})
+
+
 def get_hidden_predicates(
     name: str, yaml_path: Optional[Path] = None
 ) -> frozenset:
@@ -980,90 +1084,33 @@ def _load_template(
 # Atlas helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_atlas_destrieux(**kwargs):
-    return _nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
-
-
-def _fetch_atlas_schaefer(**kwargs):
-    return _nilearn_datasets().fetch_atlas_schaefer_2018(**kwargs)
-
-
 def _fetch_atlas_difumo(**kwargs):
     return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
-TIAN_URL = (
-    "https://raw.githubusercontent.com/yetianmed/subcortex/master/"
-    "Group-Parcellation/3T/Subcortex-Only/"
-)
+def _atlas_fetcher(kind: str) -> Callable[..., Any]:
+    """The fetcher of the deterministic atlas *kind*, as ``.load_atlas(name,
+    kind=...)`` fetches it (:data:`neurolang.atlases.FETCHERS`), imported
+    when called: ``neurolang.atlases`` imports pandas."""
 
+    def fetch(**kwargs):
+        from neurolang.atlases import FETCHERS
 
-def _fetch_atlas_tian(scale: int = 2, data_dir: str = "", **kwargs):
-    """
-    Fetch the Melbourne subcortex atlas (Tian et al., 2020, Nat Neurosci,
-    doi:10.1038/s41593-020-00711-6), 3T, at *scale* 1 to 4 (16, 32, 50 or
-    54 regions), on the 2 mm grid of the MNI152 2009c asymmetric template,
-    from the authors' repository. Its label file names the region of value
-    *n* on its line *n*; region names end with the hemisphere (``-lh``,
-    ``-rh``).
-    """
-    base = f"Tian_Subcortex_S{int(scale)}_3T"
-    image, labels = _fetch_files(
-        str(Path(data_dir) / "tian"),
-        [
-            (f"{base}_2009cAsym.nii.gz",
-             f"{TIAN_URL}{base}_2009cAsym.nii.gz", {}),
-            (f"{base}_label.txt", f"{TIAN_URL}{base}_label.txt", {}),
-        ],
-        verbose=0,
-    )
-    names = Path(labels).read_text().split()
-    return {"maps": image, "labels": ["Background", *names]}
+        return FETCHERS[kind](**kwargs)
+
+    return fetch
 
 
 _ATLAS_REGISTRY = {
-    "destrieux": {
-        "fetch": _fetch_atlas_destrieux,
-        "probabilistic": False,
-    },
-    "schaefer": {
-        "fetch": _fetch_atlas_schaefer,
-        "probabilistic": False,
-    },
-    "tian": {
-        "fetch": _fetch_atlas_tian,
-        "probabilistic": False,
+    **{
+        kind: {"fetch": _atlas_fetcher(kind), "probabilistic": False}
+        for kind in ("destrieux", "schaefer", "tian")
     },
     "difumo": {
         "fetch": _fetch_atlas_difumo,
         "probabilistic": True,
     },
 }
-
-
-def _parse_labels(raw_labels):
-    """
-    Yield ``(index, name)`` pairs from a nilearn labels value.
-
-    Handles the three formats returned by different nilearn versions:
-    ``dict``, ``list``, and numpy structured array.
-
-    """
-    if isinstance(raw_labels, dict):
-        yield from raw_labels.items()
-    elif isinstance(raw_labels, list):
-        yield from enumerate(raw_labels)
-    else:
-        # numpy structured array with two columns
-        yield from raw_labels
-
-
-def _label_name(val: Any) -> str:
-    """Normalise a label value to a clean string."""
-    if isinstance(val, bytes):
-        val = val.decode("utf8")
-    name = str(val).replace("-", " ").replace("_", " ")
-    return name
 
 
 def _register_grid(nl, name: str, img) -> None:
@@ -1078,17 +1125,21 @@ def _register_grid(nl, name: str, img) -> None:
     nl.grids[name] = img
 
 
-def _register_atlas_labels(nl, name: str, labels: dict) -> None:
+def _register_colours(nl, name: str, colours) -> None:
+    """Register the colours of the atlas *name* of *nl*, ``(value,
+    "#rrggbb")`` pairs, those its authors gave its regions."""
+    if getattr(nl, "atlas_colours", None) is None:
+        nl.atlas_colours = {}
+    nl.atlas_colours[name] = {int(value): colour for value, colour in colours}
+
+
+def atlas_colours(nl, name: str) -> Dict[int, str]:
     """
-    Register the values of the image of the atlas *name* labelling each
-    of its regions, *labels* mapping each value to the region's name.
+    Return the colour, ``#rrggbb``, of each value labelling a region of
+    the atlas *name* of *nl* in the image of its grid, as its authors
+    coloured it; ``{}`` for an atlas without colours.
     """
-    if getattr(nl, "atlas_labels", None) is None:
-        nl.atlas_labels = {}
-    values = {}
-    for value, label in labels.items():
-        values.setdefault(label, []).append(int(value))
-    nl.atlas_labels[name] = values
+    return (getattr(nl, "atlas_colours", None) or {}).get(name, {})
 
 
 def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
@@ -1097,9 +1148,71 @@ def atlas_label_values(nl, name: str) -> Dict[str, List[int]]:
     in the image of its grid (``nl.grids[name]``), by region name.
 
     The names are those of the atlas's relation, ``{}`` for an atlas the
-    engine did not load.
+    engine did not load: the atlas is the one *nl* records, by name
+    (``nl.atlases``, :class:`~neurolang.atlases.Atlas`).
     """
-    return (getattr(nl, "atlas_labels", None) or {}).get(name, {})
+    atlas = (getattr(nl, "atlases", None) or {}).get(name)
+    return {} if atlas is None else atlas.label_values()
+
+
+def _peak_neighbourhoods(img, peaks_mm, studies, radius_mm, chunk):
+    """
+    Yield the labelled voxels of the atlas image *img* within *radius_mm*
+    of the *peaks_mm* of the *studies*, for chunks of about *chunk* peaks
+    of whole studies: their values in the image, their flat indices, the
+    study of the peak and the distance to it, in millimetres through the
+    affine of the image, so the atlas's grid need not be that of the peaks.
+    """
+    affine = img.affine
+    inverse = np.linalg.inv(affine)
+    spacing = np.linalg.norm(affine[:3, :3], axis=0)
+    reach = np.ceil(radius_mm / spacing).astype(int) + 1
+    # the image padded by twice the reach: the voxels within the reach of
+    # a peak within the reach of the image are in it
+    data = np.pad(np.asanyarray(img.dataobj).astype(np.int64), [
+        (2 * r, 2 * r) for r in reach
+    ])
+    offsets = np.stack(np.meshgrid(
+        *(np.arange(-r, r + 1) for r in reach), indexing="ij"
+    ), -1).reshape(-1, 3)
+    # those that can be within the radius of a peak, half a voxel's
+    # diagonal at most from the centre of its voxel, and their millimetres
+    steps = offsets @ affine[:3, :3].T
+    keep = np.linalg.norm(steps, axis=1) <= (
+        radius_mm + np.linalg.norm(affine[:3, :3] @ [0.5, 0.5, 0.5])
+    )
+    jumps = offsets[keep] @ [data.shape[1] * data.shape[2], data.shape[2], 1]
+    steps = steps[keep]
+    order = np.argsort(studies, kind="stable")
+    peaks_mm = np.asarray(peaks_mm, dtype=float)[order]
+    studies = np.asarray(studies)[order]
+    centres = np.round(nib.affines.apply_affine(inverse, peaks_mm))
+    near = np.all((centres >= -reach) & (centres < data.shape - 3 * reach), 1)
+    peaks_mm, studies, centres = peaks_mm[near], studies[near], centres[near]
+    firsts = np.flatnonzero(np.r_[True, studies[1:] != studies[:-1]])
+    bounds = np.r_[np.unique(firsts[np.searchsorted(
+        firsts, np.arange(0, len(studies), chunk), side="right"
+    ) - 1]), len(studies)]
+    for start, stop in zip(bounds[:-1], bounds[1:]):
+        shift = (
+            nib.affines.apply_affine(affine, centres[start:stop])
+            - peaks_mm[start:stop]
+        )
+        # |step + shift|², with a product of matrices
+        squared = (steps ** 2).sum(1) + (
+            (shift ** 2).sum(1)[:, None] + 2 * shift @ steps.T
+        )
+        peak, offset = np.nonzero(squared <= radius_mm ** 2)
+        flat = np.ravel_multi_index(
+            tuple((centres[start:stop] + 2 * reach).astype(int).T), data.shape
+        )[peak] + jumps[offset]
+        values = data.ravel()[flat]
+        labelled = values > 0
+        peak, offset = peak[labelled], offset[labelled]
+        yield (
+            values[labelled], flat[labelled], studies[start:stop][peak],
+            np.sqrt(np.abs(squared[peak, offset])),
+        )
 
 
 def atlas_activation(
@@ -1112,41 +1225,76 @@ def atlas_activation(
     *radius_mm* of the centre of a voxel of the region.
 
     *peaks_mm* are the peaks' MNI coordinates in millimetres, of the
-    *studies*, and *label_names* names the values of the image. Distances
-    are measured in millimetres through the affine of the image, so the
-    atlas's grid need not be that of the peaks.
+    *studies*, and *label_names* names the values of the image (see
+    :func:`_peak_neighbourhoods`).
     """
-    data = np.asanyarray(img.dataobj).astype(np.int64)
-    shape = np.array(data.shape[:3])
-    affine = img.affine
-    inverse = np.linalg.inv(affine)
-    spacing = np.linalg.norm(affine[:3, :3], axis=0)
-    reach = np.ceil(radius_mm / spacing).astype(int) + 1
-    offsets = np.stack(np.meshgrid(
-        *(np.arange(-r, r + 1) for r in reach), indexing="ij"
-    ), -1).reshape(-1, 3)
     pairs = set()
-    for start in range(0, len(peaks_mm), chunk):
-        peaks = np.asarray(peaks_mm[start:start + chunk], dtype=float)
-        owners = np.asarray(studies[start:start + chunk])
-        centres = np.round(nib.affines.apply_affine(inverse, peaks))
-        candidates = centres.astype(int)[:, None, :] + offsets[None]
-        inside = np.all((candidates >= 0) & (candidates < shape), axis=-1)
-        distances = np.linalg.norm(
-            nib.affines.apply_affine(affine, candidates) - peaks[:, None],
-            axis=-1,
-        )
-        near = inside & (distances <= radius_mm)
-        values = data[tuple(candidates[near].T)]
-        owner = np.broadcast_to(owners[:, None], near.shape)[near]
-        labelled = values > 0
-        pairs.update(zip(
-            values[labelled].tolist(), owner[labelled].tolist()
-        ))
+    for values, _, owners, _ in _peak_neighbourhoods(
+        img, peaks_mm, studies, radius_mm, chunk
+    ):
+        pairs.update(zip(values.tolist(), owners.tolist()))
     return sorted(
         (label_names[value], study) for value, study in pairs
         if value in label_names
     )
+
+
+def atlas_coverage(
+    img, label_names: dict, peaks_mm: np.ndarray, studies: np.ndarray,
+    fwhm_mm: float = 10.0, threshold: float = 1e-3, chunk: int = 4096,
+) -> "pd.DataFrame":
+    """
+    Return how much the studies cover the regions of the atlas image *img*,
+    the rows ``(probability, label, study)`` of at least *threshold*.
+
+    A study activates a voxel v by max over its peaks p of
+    exp(-|v - p|² / 2σ²), a Gaussian kernel of *fwhm_mm*, σ = fwhm_mm /
+    √(8 ln 2), truncated at 3σ; it covers a region by the mean of its
+    activation over the voxels of the region. Arguments are those of
+    :func:`atlas_activation`.
+    """
+    import pandas as pd
+
+    sigma = fwhm_mm / np.sqrt(8 * np.log(2))
+    sizes = np.bincount(np.asanyarray(img.dataobj).astype(np.int64).ravel())
+    found = []
+    for values, voxels, owners, distances in _peak_neighbourhoods(
+        img, peaks_mm, studies, 3 * sigma, chunk
+    ):
+        if not len(values):
+            continue
+        # the max over the peaks of each study at each voxel, then the sum
+        # over the voxels of each region; the voxels come by study, by peak
+        # and in order near each peak: a stable sort merges these runs
+        change = np.r_[True, owners[1:] != owners[:-1]]
+        names, codes = owners[change], np.cumsum(change) - 1
+        key = codes * (voxels.max() + 1) + voxels
+        order = np.argsort(key, kind="stable")
+        starts = np.flatnonzero(np.diff(key[order], prepend=-1))
+        first = order[starts]
+        nearest = np.minimum.reduceat(distances[order], starts)
+        pairs, pair = np.unique(
+            codes[first] * len(sizes) + values[first], return_inverse=True
+        )
+        found.append(pd.DataFrame({
+            "value": pairs % len(sizes), "study": names[pairs // len(sizes)],
+            "activation": np.bincount(
+                pair, np.exp(-nearest.astype(float) ** 2 / (2 * sigma ** 2))
+            ),
+        }))
+    found = pd.concat(found) if found else pd.DataFrame(
+        columns=["value", "study", "activation"]
+    )
+    found["activation"] /= sizes[found["value"].to_numpy(dtype=int)]
+    found = found[
+        (found["activation"] >= threshold)
+        & found["value"].isin(list(label_names))
+    ]
+    return pd.DataFrame({
+        "probability": found["activation"].to_numpy(dtype=float),
+        "label": found["value"].map(label_names).to_numpy(dtype=str),
+        "study": found["study"].to_numpy(),
+    })
 
 
 def cached_atlas_activation(
@@ -1185,6 +1333,41 @@ def cached_atlas_activation(
     return list(zip(names, arrays["studies"].tolist()))
 
 
+def cached_atlas_coverage(
+    cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
+    studies: np.ndarray, fwhm_mm: float = 10.0, threshold: float = 1e-3,
+):
+    """
+    Return the rows of :func:`atlas_coverage`, kept in *cache_dir* as the
+    pairs of :func:`cached_atlas_activation` are, by what they depend on.
+    """
+    key = engine_cache.digest(
+        float(fwhm_mm), float(threshold), engine_cache.image_digest(img),
+        sorted((int(value), str(name)) for value, name in label_names.items()),
+        np.asarray(peaks_mm, dtype=float), np.asarray(studies),
+    )
+
+    def find():
+        rows = atlas_coverage(
+            img, label_names, peaks_mm, studies, fwhm_mm, threshold
+        )
+        names, codes = np.unique(rows["label"], return_inverse=True)
+        return {
+            "names": names.astype(str), "codes": codes.astype(np.int32),
+            "studies": np.array(rows["study"].tolist()),
+            "probabilities": rows["probability"].to_numpy(np.float32),
+        }
+
+    import pandas as pd
+
+    arrays = engine_cache.keep_arrays(cache_dir, "atlas_coverage", key, find)
+    return pd.DataFrame({
+        "probability": arrays["probabilities"].astype(float),
+        "label": arrays["names"][arrays["codes"]],
+        "study": arrays["studies"],
+    })
+
+
 def _relation_frame(nl, name: str):
     """Return the rows of the stored relation *name* of *nl*, as a frame."""
     import pandas as pd
@@ -1219,41 +1402,112 @@ def _register_atlas_activation(
     nl.symbol_table[name].value.might_have_duplicates = False
 
 
+def _register_atlas_coverage(
+    nl, labels: dict, img, settings: dict, pred_name: str, cache_dir=None
+) -> None:
+    """
+    Register ``{predicate_name}(label, study)``, by default
+    ``{pred_name}_covered``, the probabilistic facts of how much each study
+    covers each region of the atlas (see :func:`atlas_coverage`), with a
+    kernel of ``fwhm_mm`` (10) and the rows of at least ``threshold``
+    (0.001), from the peaks as :func:`_register_atlas_activation`.
+    """
+    peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
+    find = atlas_coverage if cache_dir is None else functools.partial(
+        cached_atlas_coverage, cache_dir
+    )
+    rows = find(
+        img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
+        peaks.iloc[:, 3].to_numpy(), float(settings.get("fwhm_mm", 10)),
+        float(settings.get("threshold", 1e-3)),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        rows, name=settings.get("predicate_name", f"{pred_name}_covered")
+    )
+
+
+def _register_atlas_points(nl, atlas, settings: dict) -> None:
+    """
+    Register ``{predicate_name}(x, y, z, label)``: the centre of every
+    voxel of a region of *atlas*, in millimetres through its affine, with
+    the name of its region (:meth:`~neurolang.atlases.Atlas.points`);
+    stored, so that ``EUCLIDEAN`` joins it with a tree.
+    """
+    nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
+
+
+def _atlas_on_template(nl, atlas, cache_dir=None):
+    """
+    Return the *atlas* on the grid of the template of *nl*, resampled by
+    nearest neighbour, so that its voxels (i, j, k) are those of ``voxel``
+    and of the peaks (GH-1075); the *atlas* itself if *nl* has no template.
+    The image is kept in *cache_dir*, by the atlas's voxels and the grid.
+    """
+    from neurolang.atlases import Atlas
+
+    template = getattr(nl, "template", None)
+    if template is None:
+        return atlas
+    image = engine_cache.keep_image(
+        cache_dir, "atlas", engine_cache.digest(
+            engine_cache.image_digest(atlas.image),
+            engine_cache.grid_digest(template),
+        ),
+        lambda: _nilearn_image().resample_to_img(
+            atlas.image, template, interpolation="nearest"
+        ),
+    )
+    return Atlas(
+        atlas.name, np.asanyarray(image.dataobj), image.affine, atlas.table,
+        atlas.space, atlas.background, kind=atlas.kind, image=image,
+    )
+
+
 def _load_deterministic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path, cache_dir=None
 ) -> None:
     """
     Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine
-    predicates: ``{predicate_name}(label, region)``, and with ``activated``
-    the studies activating each region (see
-    :func:`_register_atlas_activation`), kept in *cache_dir* if there is one,
-    which also remembers where the atlas is and its labels, so that nilearn
+    predicates: ``{predicate_name}(label, region)``, with ``points`` its
+    voxels in millimetres (see :func:`_register_atlas_points`), and with
+    ``activated`` the studies activating each region (see
+    :func:`_register_atlas_activation`) and with ``covered`` how much they
+    cover it (see :func:`_register_atlas_coverage`), kept in *cache_dir* if
+    there is one, which also remembers where the atlas is and its labels, so that nilearn
     is not imported to find them.
     """
+    from neurolang.atlases import Atlas, label_colours, label_table
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {
         k: v for k, v in params.items()
-        if k not in ("predicate_name", "activated")
+        if k not in ("predicate_name", "activated", "covered", "points")
     }
     fetch_kw["data_dir"] = str(data_dir)
 
     def fetch():
         atl_data = info["fetch"](**fetch_kw)
         maps = Path(atl_data["maps"])
+        table = label_table(atl_data["labels"])
         return {
             "maps": str(
                 maps.relative_to(data_dir)
                 if maps.is_relative_to(data_dir) else maps
             ),
             "labels": [
-                [int(k), v.decode("utf8") if isinstance(v, bytes) else str(v)]
-                for k, v in _parse_labels(atl_data["labels"])
+                [int(k), v] for k, v in zip(table["id"], table["name"])
             ],
+            "colors": sorted(label_colours(
+                atl_data.get("lut") if isinstance(atl_data, dict)
+                else getattr(atl_data, "lut", None)
+            ).items()),
         }
 
     found = engine_cache.keep_json(
         cache_dir, "fetched", engine_cache.digest(
-            atlas_name, sorted(
+            # what is kept: the place of the atlas (Destrieux's on the
+            # MNI152 template since it was registered), its labels and colours
+            atlas_name, "colours", "mni152", sorted(
                 (k, repr(v)) for k, v in fetch_kw.items() if k != "data_dir"
             ),
         ), fetch,
@@ -1263,26 +1517,32 @@ def _load_deterministic_atlas(
         found = fetch()
         maps = Path(data_dir) / found["maps"]
 
-    from neurolang.regions import ExplicitVBR
-
-    img = nib.load(str(maps))
-    _register_grid(nl, atlas_name, img)
-    pred_name = params.get("predicate_name", atlas_name)
-    labels = [(k, v) for k, v in found["labels"] if k != 0]
-    regions = ExplicitVBR.from_spatial_image_labels(
-        img, [k for k, _ in labels]
-    )
     # A label of the look-up table may have no voxel in the image (the
-    # medial walls of Destrieux): it is no region.
-    labels = [(k, v) for k, v in labels if hasattr(regions[k], "voxels")]
-    rows = [(_label_name(v), regions[k]) for k, v in labels]
-    names = {k: _label_name(v) for k, v in labels}
-
-    nl.add_tuple_set(rows, name=pred_name)
-    _register_atlas_labels(nl, atlas_name, names)
+    # medial walls of Destrieux): it is no region, as the background.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        atlas = Atlas.from_labels(
+            atlas_name, nib.load(str(maps)), found["labels"], "MNI152",
+            normalise=True, kind=atlas_name,
+        )
+        on_template = _atlas_on_template(nl, atlas, cache_dir)
+    _register_grid(nl, atlas_name, on_template.image)
+    _register_colours(nl, atlas_name, found.get("colors", ()))
+    pred_name = params.get("predicate_name", atlas_name)
+    nl.add_atlas_set(pred_name, on_template)
+    # The points and the activations are in millimetres: those of the
+    # atlas on its own grid, which may be finer than the template.
+    if params.get("points"):
+        _register_atlas_points(nl, atlas, params["points"])
     if params.get("activated"):
         _register_atlas_activation(
-            nl, names, img, params["activated"], pred_name, cache_dir,
+            nl, atlas.region_names(), atlas.image, params["activated"],
+            pred_name, cache_dir,
+        )
+    if params.get("covered"):
+        _register_atlas_coverage(
+            nl, atlas.region_names(), atlas.image, params["covered"],
+            pred_name, cache_dir,
         )
 
 
@@ -1301,6 +1561,8 @@ def _load_probabilistic_atlas(
       ``prob_threshold``, default 0.01, to keep the set size manageable).
 
     """
+    from neurolang.atlases import label_name
+
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
     fetch_kw["data_dir"] = str(data_dir)
@@ -1327,7 +1589,7 @@ def _load_probabilistic_atlas(
     prob_frames = []
     for i in range(n_components):
         prob_map = np.asarray(img.dataobj[..., i])
-        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
+        label = label_name(labels[i] if i < len(labels) else f"component_{i}")
 
         # ── Binary region predicate (thresholded) ──
         mask = prob_map > threshold
@@ -1429,23 +1691,22 @@ def _phase_base_symbols(nl, cfg, mask):
 
 def _phase_python_init(nl, cfg, mask, data_dir):
     """
-    Run the ``init_engine`` of the ``python_init`` module.
+    Run the ``init_engine`` of each ``python_init`` module, in order.
 
     An init that takes a ``cache_dir`` is given the directory where the
     tables of the engine are kept (see
     :mod:`~neurolang_apps.utils.engine_cache`), or None without cache.
     """
-    py_init = cfg.get("python_init")
-    if not py_init:
-        return
     import importlib
     import inspect
 
-    mod = importlib.import_module(py_init)
-    kwargs = dict(cfg.get("python_init_options", {}))
-    if "cache_dir" in inspect.signature(mod.init_engine).parameters:
-        kwargs["cache_dir"] = nl.engine_cache_dir
-    mod.init_engine(nl, mask, data_dir, **kwargs)
+    py_init = cfg.get("python_init") or []
+    for module in [py_init] if isinstance(py_init, str) else py_init:
+        mod = importlib.import_module(module)
+        kwargs = dict(cfg.get("python_init_options", {}))
+        if "cache_dir" in inspect.signature(mod.init_engine).parameters:
+            kwargs["cache_dir"] = nl.engine_cache_dir
+        mod.init_engine(nl, mask, data_dir, **kwargs)
 
 
 def _solver_mixins(cfg, engine_name) -> list:
@@ -1460,6 +1721,11 @@ def _solver_mixins(cfg, engine_name) -> list:
             problem = None if isinstance(mixin, type) else "is not a class"
         except (ImportError, AttributeError) as error:
             problem = f"cannot be loaded: {error}"
+            if isinstance(error, ModuleNotFoundError):
+                problem += (
+                    "; install the package that provides it (the "
+                    "engine's description, --list-engines, says which)"
+                )
         if not colon:
             problem = "is not of the form module:Class"
         if problem:
@@ -1483,8 +1749,14 @@ def _phase_downloads(cfg, data_dir, engine_name):
             files = [(m, url, {"uncompress": True}) for m in extract_members]
             _fetch_files(dl_dest, files, verbose=1)
         else:
-            file_name = Path(url).name
-            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
+            # a name for a URL that has none, and the checksum of the file
+            file_name = dl_entry.get("name", Path(url).name)
+            options = {}
+            if "md5" in dl_entry:
+                options["md5sum"] = dl_entry["md5"]
+            if "name" in dl_entry:
+                options["move"] = file_name
+            _fetch_files(dl_dest, [(file_name, url, options)], verbose=1)
 
 
 def _phase_templates(nl, cfg, data_dir, engine_name):
@@ -1502,10 +1774,23 @@ def _phase_atlases(nl, cfg, data_dir, engine_name, use_cache=True):
         )
 
 
-def _phase_datalog_init(nl, cfg):
+def _phase_datalog_init(nl, cfg, data_dir, mask=None):
+    """
+    Run the ``datalog_init`` program of the engine, from its data directory:
+    the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
+    relative to it, where ``downloads`` puts the files. Its
+    ``{kernel_radius_voxels}`` is the ``kernel_radius_mm`` of the engine in
+    voxels of the grid of *mask*, the distances between voxel indices.
+    """
     datalog_init = cfg.get("datalog_init")
+    if datalog_init and "{kernel_radius_voxels}" in datalog_init:
+        datalog_init = datalog_init.replace(
+            "{kernel_radius_voxels}", f"{kernel_radius_voxels(cfg, mask):g}"
+        )
     if datalog_init:
-        nl.execute_datalog_program(datalog_init)
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        with contextlib.chdir(data_dir):
+            nl.execute_datalog_program(datalog_init)
 
 
 RELATION_FILE_SEPARATORS = {".csv": ",", ".tsv": "\t"}
@@ -1535,18 +1820,27 @@ def relation_file_separator(path) -> str:
     return sep
 
 
-def read_relation_file(path) -> pd.DataFrame:
+def read_relation_file(path, data: bytes = None) -> pd.DataFrame:
     """
     Return the rows of the CSV or TSV file *path* as a DataFrame.
 
     The first line of the file is the header. ``~`` in *path* is
     expanded and the separator follows from the extension (see
     :func:`relation_file_separator`); gzipped files are decompressed.
+    With *data*, the rows are those bytes (an uploaded file), *path* only
+    naming them.
     """
+    import io
+
     import pandas as pd
 
     path = Path(path).expanduser()
-    return pd.read_csv(path, sep=relation_file_separator(path))
+    sep = relation_file_separator(path)
+    if data is None:
+        return pd.read_csv(path, sep=sep)
+    gzipped = path.name.lower().endswith(".gz")
+    return pd.read_csv(io.BytesIO(data), sep=sep,
+                       compression="gzip" if gzipped else None)
 
 
 def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
@@ -1624,22 +1918,33 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
         nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
 
 
-def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
+def _phase_text_embeddings(
+    nl, cfg, data_dir, engine_name, rel_base_dir, yaml_path=None
+):
     """
     Register the document indexes declared in ``text_embeddings``.
 
     Only the ids are read here; texts are fetched and embedded on first use.
+    The caches are in the directory of the :func:`embeddings_owner`; in the
+    engine's own when only it has them, or when the owner's embeddings are
+    of other documents.
     """
     entries = cfg.get("text_embeddings", {})
     if not entries:
         return
     from neurolang_apps.utils import text_embeddings
 
-    emb_dir = data_dir / engine_name / "embeddings"
+    own_dir = data_dir / engine_name / "embeddings"
     nl.text_embedding_indexes = getattr(nl, "text_embedding_indexes", {})
     for emb_name, emb_cfg in entries.items():
+        owner = embeddings_owner(engine_name, emb_name, yaml_path)
+
+        def cache(file, owner_dir=data_dir / owner / "embeddings"):
+            own, shared = own_dir / file, owner_dir / file
+            return own if own.exists() and not shared.exists() else shared
+
         encoder = text_embeddings.Specter2Encoder(
-            model_dir=emb_dir / "models",
+            model_dir=cache("models"),
             **{
                 key: emb_cfg[key]
                 for key in ("model", "document_adapter", "query_adapter")
@@ -1649,16 +1954,26 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         index = text_embeddings.EmbeddingIndex(
             ids=[row[0] for row in nl.symbols[emb_cfg["ids_from"]].value],
             load_texts=_text_loader(
-                nl, emb_cfg, emb_dir / f"{emb_name}_pubmed.json",
+                nl, emb_cfg, cache(f"{emb_name}_pubmed.json"),
                 engine_name, data_dir, rel_base_dir,
             ),
             encoder=encoder,
-            cache_path=emb_dir / f"{emb_name}.npz",
+            cache_path=cache(f"{emb_name}.npz"),
         )
+        if index.cache_path.exists() and (
+            text_embeddings.cached_key(index.cache_path) != index.cache_key
+        ):
+            index.cache_path = own_dir / f"{emb_name}.npz"
         nl.text_embedding_indexes[emb_name] = index
         nl.add_symbol(
             text_embeddings.make_similarity_function(index),
             name=emb_cfg["function"],
+        )
+        nl.add_symbol(
+            text_embeddings.make_cutoff_function(
+                index, emb_cfg.get("similarity_gate", 0.75)
+            ),
+            name=emb_cfg["function"] + "_cutoff",
         )
 
 
@@ -1768,6 +2083,7 @@ def build_engine(
     from neurolang.frontend import NeurolangPDL
 
     cfg = get_engine_config(name, yaml_path)
+    euclidean_join_settings.override(cfg.get("euclidean_join"))
     data_dir = Path(data_dir)
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     cache_dir = (
@@ -1803,7 +2119,6 @@ def build_engine(
 
     nl.template = mask
     nl.grids = {} if mask is None else {TEMPLATE_GRID: mask}
-    nl.atlas_labels = {}
     # Where the Python init of the engine may keep its tables (None: nowhere).
     nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
@@ -1822,9 +2137,9 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg)
+    _phase_datalog_init(nl, cfg, data_dir, mask)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
-    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir)
+    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir, yaml_path)
     _phase_probabilistic_choices(nl, cfg)
     if cfg.get("resamplings"):
         tell("Drawing the bootstrap replicates")

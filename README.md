@@ -16,6 +16,12 @@
 NeuroLang enables the analysis of neuroimaging data through probabilistic logic programming. It seamlessly combines images, databases, and ontologies within a single framework.
 
 
+Getting started
+===============
+- In your browser, with nothing to install: the REPL at https://neurolang.github.io/_static/repl/index.html. Type `ans(s) :- mentions(s, "pain")` and Run.
+- In a terminal: `pip install "neurolang[apps]"`, then `neurolang-query -i --engine neurosynth`.
+- The documentation starts from the REPL (https://neurolang.github.io/repl.html); NeuroLang in Python has its own page (https://neurolang.github.io/tutorial_python.html).
+
 Important links
 ===============
 - Official source code repo: https://github.com/Neurolang/Neurolang/

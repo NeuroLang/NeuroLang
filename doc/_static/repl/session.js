@@ -6,9 +6,13 @@ const MAX_ENTRIES = 500;
 const MAX_TEXT = 20000;
 const MODES = new Set(["datalog", "squall"]);
 
-// Whether *text* defines a rule, whose head is not the answer: the statements
-// that leave something in the session. A query only asks.
+// A statement that loads a file as a relation (an uploaded one, on the page).
+const LOAD = /^\.load\s/;
+
+// Whether *text* defines a rule, whose head is not the answer, or loads a
+// relation: the statements that leave something in the session. A query only asks.
 export function definesRules(text, mode = "datalog") {
+  if (LOAD.test(text)) return true;
   if (mode === "squall") return /\bdefine\s+as\b/i.test(text);
   return text.split("\n").some((line) => {
     const head = /^\s*([A-Za-z_]\w*)\s*\(.*(:-|←)/.exec(line);
@@ -38,7 +42,7 @@ export class Session {
   // Keep *text*, run in *mode*, as the session's.
   add(text, mode) {
     const kept = text.trim();
-    if (!kept || kept.startsWith(".") || !MODES.has(mode)) return;
+    if (!kept || (kept.startsWith(".") && !LOAD.test(kept)) || !MODES.has(mode)) return;
     this.entries.push({ text: kept, mode });
     if (this.entries.length > MAX_ENTRIES) this.entries.shift();
   }

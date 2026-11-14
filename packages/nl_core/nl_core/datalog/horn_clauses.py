@@ -19,6 +19,7 @@ from typing import Callable
 
 from .expressions import Fact
 from .negation import is_conjunctive_negation
+from .range_restriction import _function
 from nl_expr.exceptions import NeuroLangException
 from nl_expr.expression_walker import ChainedWalker, PatternWalker, add_match
 from nl_expr.expressions import ExpressionBlock
@@ -236,7 +237,7 @@ class RangeRestrictedVariables(WalkLogicProgramAggregatingSets):
         )
 
 
-def convert_srnf_to_horn_clauses(head, expression):
+def convert_srnf_to_horn_clauses(head, expression, symbol_table=None):
     """
     Converts a safe range query into an union of horn clauses.
 
@@ -265,9 +266,11 @@ def convert_srnf_to_horn_clauses(head, expression):
     are added to the body of the query to ensure the range restriction. This
     restricts the result set of the auxiliary queries but does not alter the
     equivalence for the overall query because the range of those variables was
-    already restricted in some of its parents.
+    already restricted in some of its parents. The functions of
+    *symbol_table* filter variables, they do not restrict them.
     """
 
+    symbol_table = {} if symbol_table is None else symbol_table
     if not is_safe_range(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}. Each variable must occur "
@@ -291,10 +294,12 @@ def convert_srnf_to_horn_clauses(head, expression):
     while stack:
         head, exp, restrictive_atoms = stack.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
-        body = _restrict_variables(head, body, restrictive_atoms)
+        body = _restrict_variables(
+            head, body, restrictive_atoms, symbol_table
+        )
         auxiliary_heads |= {r[0].functor for r in remainder}
         restrictive_atoms = restrictive_atoms | {
-            atom for atom in _restrictive_atoms(body)
+            atom for atom in _restrictive_atoms(body, symbol_table)
             if atom.functor not in auxiliary_heads
         }
         remainder = [r + (restrictive_atoms,) for r in remainder]
@@ -314,9 +319,14 @@ def _to_horn_clause(head, body):
     return r
 
 
-def _restrict_variables(head, body, restrictive_atoms):
-    while not extract_logic_free_variables(head).issubset(_restricted_variables(body)):
-        uv = extract_logic_free_variables(head) - _restricted_variables(body)
+def _restrict_variables(head, body, restrictive_atoms, symbol_table):
+    # A variable no atom restricts is left to the queries of head,
+    # which bind it, as magic sets do, or fail in the chase.
+    variables = extract_logic_free_variables(head) & _restricted_variables(
+        restrictive_atoms, symbol_table
+    )
+    while not variables <= _restricted_variables(body, symbol_table):
+        uv = variables - _restricted_variables(body, symbol_table)
         new_atoms = _choose_restriction_atoms(uv, restrictive_atoms, head)
         body = new_atoms + body
     return body
@@ -338,19 +348,24 @@ def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
     return (a,)
 
 
-def _restricted_variables(body):
+def _restricted_variables(body, symbol_table):
     r = set()
-    for a in _restrictive_atoms(body):
+    for a in _restrictive_atoms(body, symbol_table):
         r |= _atom_variables(a)
     return r
 
 
-def _restrictive_atoms(atoms):
-    return set(a for a in atoms if _is_restriction(a))
+def _restrictive_atoms(atoms, symbol_table):
+    return set(a for a in atoms if _is_restriction(a, symbol_table))
 
 
-def _is_restriction(atom):
+def _is_restriction(atom, symbol_table):
     if isinstance(atom, FunctionApplication):
+        if (
+            isinstance(atom.functor, Symbol)
+            and _function(atom.functor, symbol_table) is not None
+        ):
+            return False
         if is_leq_informative(atom.functor.type, Unknown):
             return True
         elif atom.functor == operator.eq and any(
@@ -445,7 +460,7 @@ class TranslateHornClausesToDatalog(LogicExpressionWalker):
         return Implication(exp.head, self.walk(exp.body))
 
 
-def fol_query_to_datalog_program(head, exp):
+def fol_query_to_datalog_program(head, exp, symbol_table=None):
     """
     Returns a datalog program for a given query in first order logic.
 
@@ -453,10 +468,10 @@ def fol_query_to_datalog_program(head, exp):
     order logic, converts the expression to safe range normal form and then, if
     the query is safe range, returns an ExpressionBlock with the equivalent
     program in datalog. Throw a NeuroLangTranslateToHornClauseException
-    otherwise.
+    otherwise. The functions of *symbol_table* do not restrict variables.
     """
     exp = convert_to_srnf(exp)
-    horn_clauses = convert_srnf_to_horn_clauses(head, exp)
+    horn_clauses = convert_srnf_to_horn_clauses(head, exp, symbol_table)
     program = translate_horn_clauses_to_datalog(horn_clauses)
     return program
 
@@ -472,7 +487,7 @@ class Fol2DatalogMixin(PatternWalker):
     def translate_implication(self, imp):
         try:
             program = fol_query_to_datalog_program(
-                imp.consequent, imp.antecedent
+                imp.consequent, imp.antecedent, self.symbol_table
             )
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException(str(e)) from e

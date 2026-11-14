@@ -1,5 +1,7 @@
 from nl_expr.config import check_query_backend, config
-from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
+from .abstract import (
+    RelationalAlgebraColumnInt, RelationalAlgebraColumnStr, count_distinct
+)
 
 config.reload_on_backend_switch(__name__)
 
@@ -35,4 +37,5 @@ __all__ = [
     "RelationalAlgebraFrozenSet",
     "RelationalAlgebraSet",
     "NamedRelationalAlgebraFrozenSet",
+    "count_distinct",
 ]

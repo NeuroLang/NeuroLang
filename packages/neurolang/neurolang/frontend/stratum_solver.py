@@ -50,11 +50,15 @@ def with_empty_relations(solution, prob_idb, program):
     """
     Return the relations of ``solution`` and the empty ones ``prob_idb`` uses.
 
-    The chase leaves out of its solution the deterministic intensional
-    predicates of ``program`` without tuples; the rules of ``prob_idb``
-    need their relations, of their arity, to select constants from them.
+    The chase leaves out of its solution the deterministic predicates of
+    ``program``, intensional or extensional, without tuples; the rules of
+    ``prob_idb`` need their relations, of their arity, to select
+    constants from them.
     """
-    idb = program.intensional_database()
+    idb = (
+        program.intensional_database().keys()
+        | program.extensional_database().keys()
+    )
     relations = dict(solution.items())
     heads = {rule.consequent.functor for rule in prob_idb.formulas}
     for rule in prob_idb.formulas:

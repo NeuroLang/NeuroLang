@@ -17,28 +17,30 @@ statements:
 
 **Facts** — ground truths about the world:
 
-.. code-block:: python
+.. code-block:: neurolang
 
-   with nl.environment as e:
-       e.region["V1"] = True
-       e.region["V2"] = True
-       e.adjacent["V1", "V2"] = True
+   region("V1")
+   region("V2")
+   adjacent("V1", "V2")
 
 **Rules** — derived truths (if A and B are true, then C is true):
 
-.. code-block:: python
+.. code-block:: neurolang
 
-   with nl.environment as e:
-       # x is reachable from y if x is adjacent to y
-       e.reachable[e.x, e.y] = e.adjacent[e.x, e.y]
-       # x is reachable from y if x is adjacent to z and z is reachable from y
-       e.reachable[e.x, e.y] = e.adjacent[e.x, e.z] & e.reachable[e.z, e.y]
+   % x is reachable from y if x is adjacent to y
+   reachable(x, y) :- adjacent(x, y)
+   % x is reachable from y if x is adjacent to z and z is reachable from y
+   reachable(x, y) :- adjacent(x, z) & reachable(z, y)
+
+Both are typed in the REPL as they are written here (:doc:`repl`); Python
+writes them too (:doc:`tutorial_python`).
 
 The Datalog *engine* (the solver) computes all facts that can be derived from
 the rules. NeuroLang extends standard Datalog with:
 
 * **Aggregations** — ``COUNT``, ``MAX``, ``SUM`` over sets of tuples
-* **Built-in functions** — register any Python callable as a Datalog symbol
+* **Built-in functions** — the engines' (``startswith``, ``euclidean``…), and any
+  Python callable registered as a Datalog symbol (:doc:`tutorial_python`)
 * **Tuple-generating dependencies (TGDs)** — open-world reasoning rules
 
 
@@ -120,7 +122,8 @@ RDF Data and Ontologies
 (RDF/XML, Turtle, N-Triples…, guessed from the file extension or given
 with ``format``). The axioms of the ontology become constraints:
 ``Manager rdfs:subClassOf Employee`` makes ``Employee(x)`` hold for every
-``Manager``, by rewriting the queries.
+``Manager``. :doc:`ontologies` describes how, and which answers a query
+then gets.
 
 With ``individuals=True`` every triple is also a fact, so that a knowledge
 graph is queried as a SPARQL endpoint would be::
@@ -156,9 +159,9 @@ reads in Datalog::
 Declarative Engine Registry & CLI
 ----------------------------------
 
-NeuroLang ships a command-line interface, ``neurolang-query``, that provides
-a quick way to run Datalog queries against pre-configured datasets without
-writing Python:
+NeuroLang ships a command line, ``neurolang-query``, whose interactive mode
+(``-i``) is the REPL of :doc:`repl`, the one the browser runs too. It also
+runs a single query, or lists what an engine has:
 
 .. code-block:: bash
 

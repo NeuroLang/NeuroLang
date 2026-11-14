@@ -387,6 +387,18 @@ class SDDWMCSemiRingSolver(
         self.positive_weights = []
         self._current_var = 1
 
+    @add_match(Constant[AbstractSet], lambda e: e.value.is_dee())
+    def dee(self, relation):
+        """The relation of a conjunction without positive formulas, as
+        that of ``~R(1)``: its tuple is true in every world."""
+        column = Symbol.fresh().name
+        return ProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                (column,), [(self.manager.true(),)]
+            )),
+            str2columnstr_constant(column)
+        )
+
     def wmc_weights(self):
         if len(self.positive_weights) != self.var_count:
             raise NeuroLangException("Not all SDD variables have been used")

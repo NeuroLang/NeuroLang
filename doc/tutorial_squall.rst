@@ -27,25 +27,32 @@ introduces exactly the SQUALL feature needed for the next step, so by
 the end you will understand every line of a complete probabilistic
 SQUALL program.
 
-The full program we will build:
+Every example runs in the REPL (:doc:`repl`), in the browser or in
+``neurolang-query -i --engine neurosynth``, after ``.mode squall`` (or the
+SQUALL choice of the page's language selector): type it at the prompt, or
+follow *Run in the browser REPL* under it. An example that uses the rules of
+earlier ones has no such link: type the earlier ones first.
 
-.. code-block:: squall
+The full program we will build, on the studies of Neurosynth and the
+Destrieux atlas:
 
-    define as Selected_study as an equiprobable choice over every Study.
+.. nl-repl::
+    :mode: squall
+
+    define as Activates (?s; ?r) where Destrieux_activated (?r, ?s).
+    define as Region (?r) where Destrieux (?r, ?x).
+
     define as Active_region every Region that a Selected_study activates.
-
     define as Region_probability with inferred probability
         every Active_region.
 
     define as Mentioned_term every Term that a Selected_study mentions.
-
     define as Term_probability with inferred probability
         every Mentioned_term.
 
     define as Cooccurrence
         for every Region and for every Term
         where a Selected_study activates the Region and mentions the Term.
-
     define as Joint_probability with inferred probability
         every Cooccurrence (?r; ?t).
 
@@ -56,7 +63,7 @@ The full program we will build:
         and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
 
     obtain every Bayes_factor (?r; ?t; ?bf)
-        where ?r is 'right fusiform gyrus' as BF.
+        where ?r is 'R G oc temp lat fusifor' as BF.
 
 .. contents:: Contents
    :local:
@@ -94,59 +101,41 @@ NeuroLang with zero post-hoc pandas computation.
 1.2 The Data
 -------------
 
-The SQUALL program works with six relations:
+The program uses four relations of the ``neurosynth`` engine (``.predicates``
+lists them all):
 
 ``study(study_id)``
-    The set of all study identifiers.
-``activates(study_id, region)``
-    Activation foci from Neurosynth peaks, mapped to anatomical regions via
-    the Julich-Brain atlas.
+    The 14 371 studies of Neurosynth, by PubMed id.
 ``mentions(study_id, term)``
-    TF-IDF term associations from Neurosynth, thresholded.  The
-    ``neurosynth`` engine of the command-line tool defines ``mentions`` with
-    the same column order, see :doc:`engine_configuration`.
-``region(region)``
-    The set of all anatomical region names.
+    The terms each study mentions (TF-IDF above 0.03).
 ``term(term)``
-    The set of all cognitive term names.
+    The terms of Neurosynth's vocabulary.
 ``selected_study(study_id)``
-    A probabilistic uniform choice over all studies (defined in SQUALL
-    below, not from Python).
+    A uniform probabilistic choice over the studies: each is the selected one
+    with probability :math:`1/N` (10.2 defines such a choice in SQUALL).
 
-These are registered in Python before running SQUALL (see Appendix A for the
-full API):
+and two it defines from the Destrieux atlas, the anatomical regions and the
+studies whose peaks fall in them, with the bare predicate calls of 7.1:
 
-    >>> from neurolang.frontend import NeurolangPDL
-    >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(study_ids_df, name="study")
-    >>> nl.add_tuple_set(study_activates_df, name="activates")
-    >>> nl.add_tuple_set(study_mentions_df, name="mentions")
-    >>> nl.add_tuple_set(region_df, name="region")
-    >>> nl.add_tuple_set(term_df, name="term")
-    >>> # Selected_study is then defined directly in SQUALL (see below)
+.. nl-repl::
+    :mode: squall
 
-A complete working example is in
-``examples/plot_squall_bayes_factor_decoding.py``.
+    define as Activates (?s; ?r) where Destrieux_activated (?r, ?s).
+    define as Region (?r) where Destrieux (?r, ?x).
+
+The region we look at is ``'R G oc temp lat fusifor'``, the right fusiform gyrus in the
+labels of the atlas.
 
 1.3 Running a SQUALL Program
 ----------------------------
 
-All SQUALL code is passed as a string to ``execute_squall_program``:
-
-    >>> result = nl.execute_squall_program("""
-    ...     define as Active_region every Region
-    ...         that a Selected_study activates.
-    ...     define as Region_probability with inferred probability
-    ...         every Active_region.
-    ...     ...
-    ...     obtain every Bayes_factor (?r; ?t; ?bf)
-    ...         where ?r is 'right fusiform gyrus' as BF.
-    ... """)
-    >>> bf_df = result.as_pandas_dataframe()
-
-When the program contains exactly one ``obtain`` clause, the method returns a
-``NamedRelationalAlgebraFrozenSet`` directly.  For multiple ``obtain`` clauses
-it returns a ``dict`` keyed by name.
+In the REPL, ``.mode squall`` switches to SQUALL; in the browser, the
+language selector over the box does. A sentence ends with a full stop: a
+``define as`` adds a rule to the session (the REPL answers ``defined
+active_region/1``), and an ``obtain`` runs a query and shows its answer.
+``.datalog`` shows the Datalog that the last query was translated to.
+From Python, a SQUALL program is the text of ``execute_squall_program``
+(:ref:`part-9-appendix-a`).
 
 Now let's build this program step by step, starting from the simplest
 building blocks.
@@ -246,7 +235,7 @@ This is the syntax we will later use to select the target region:
 .. code-block:: squall
 
     obtain every Bayes_factor (?r; ?t; ?bf)
-        where ?r is 'right fusiform gyrus' as BF.
+        where ?r is 'R G oc temp lat fusifor' as BF.
 
 The ``where ?r is '...'`` clause filters ``?r`` to a fixed constant string.
 
@@ -541,7 +530,7 @@ sentences are passed as a single program string:
     ...
 
     obtain every Bayes_factor (?r; ?t; ?bf)
-        where ?r is 'right fusiform gyrus' as BF.
+        where ?r is 'R G oc temp lat fusifor' as BF.
 
 4.6 Fork Quantification — ``for NP , S``
 ------------------------------------------
@@ -911,35 +900,30 @@ Part 8: Querying and Optimization
 8.1 The ``obtain`` Clause
 --------------------------
 
-The ``obtain`` clause executes a query and returns results.  Unlike
+The ``obtain`` clause executes a query and shows its results.  Unlike
 ``define as``, which creates a rule for later use, ``obtain`` immediately
-solves the query and makes the result available to Python.
+solves the query.
 
 .. code-block:: squall
 
     obtain every Bayes_factor (?r; ?t; ?bf)
-        where ?r is 'right fusiform gyrus' as BF.
+        where ?r is 'R G oc temp lat fusifor' as BF.
 
 This asks for all ``(r, t, bf)`` triples where ``r`` is the target region.
 
 8.2 Named Results — ``as Name``
 ---------------------------------
 
-The ``as BF`` suffix names the result relation:
-
-    >>> result = nl.execute_squall_program(squall_program_with_obtain)
-    >>> bf_df = result.as_pandas_dataframe()
-    >>> bf_df.columns = ["region", "term", "bf"]
-    >>> bf_df.sort_values("bf", ascending=False).head()
-
-When there is exactly one ``obtain`` clause, ``execute_squall_program``
-returns the ``NamedRelationalAlgebraFrozenSet`` directly.  When there are
-multiple, it returns a ``dict`` keyed by name.
+The ``as BF`` suffix names the result relation: the REPL shows the answer
+under that name, and with several ``obtain`` clauses in one submission, each
+answer under its own. ``.sort bf:desc`` shows the largest Bayes factors
+first. From Python, the answers come back by name
+(:ref:`part-9-appendix-a`).
 
 8.3 Magic-Sets Optimization
 -----------------------------
 
-The ``where ?r is 'right fusiform gyrus'`` filter does more than just
+The ``where ?r is 'R G oc temp lat fusifor'`` filter does more than just
 post-filter — NeuroLang's **magic-sets** optimisation pushes the constant
 backwards through all the rules in the chain:
 
@@ -978,21 +962,27 @@ the right fusiform gyrus are evaluated.
 Part 9: The Complete Program
 ==============================
 
-Putting it all together:
+Putting it all together, the program at the top of the page:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
 
-    define as Selected_study as an equiprobable choice over every Study.
+    define as Activates (?s; ?r) where Destrieux_activated (?r, ?s).
+    define as Region (?r) where Destrieux (?r, ?x).
+
     define as Active_region every Region that a Selected_study activates.
-    define as Region_probability with inferred probability every Active_region.
+    define as Region_probability with inferred probability
+        every Active_region.
 
     define as Mentioned_term every Term that a Selected_study mentions.
-    define as Term_probability with inferred probability every Mentioned_term.
+    define as Term_probability with inferred probability
+        every Mentioned_term.
 
     define as Cooccurrence
         for every Region and for every Term
         where a Selected_study activates the Region and mentions the Term.
-    define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
+    define as Joint_probability with inferred probability
+        every Cooccurrence (?r; ?t).
 
     define as Bayes_factor (?r; ?t; ?bf)
         where Joint_probability (?r, ?t, ?p_rt)
@@ -1001,11 +991,11 @@ Putting it all together:
         and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
 
     obtain every Bayes_factor (?r; ?t; ?bf)
-        where ?r is 'right fusiform gyrus' as BF.
+        where ?r is 'R G oc temp lat fusifor' as BF.
+    .sort bf:desc
 
-Running this on real Neurosynth data (see
-``examples/plot_squall_bayes_factor_decoding.py``) produces the following
-top 20 terms (:doc:`tutorial_datalog` shows the top 10 of the same result):
+On the studies of Neurosynth it answers 3 228 terms; the top 20, the same as
+the Datalog program of :doc:`tutorial_datalog`:
 
 .. list-table:: Top terms by Bayes Factor for the right fusiform gyrus
    :header-rows: 1
@@ -1013,47 +1003,47 @@ top 20 terms (:doc:`tutorial_datalog` shows the top 10 of the same result):
    * - Term
      - Bayes Factor
    * - ffa
-     - 11.69
+     - 8.92
    * - face ffa
-     - 11.06
-   * - fusiform face
-     - 11.02
+     - 8.43
    * - fusiform gyri
-     - 7.04
-   * - fusiform
-     - 6.43
-   * - fusiform gyrus
-     - 6.39
-   * - word form
-     - 6.20
-   * - visual word
-     - 5.99
-   * - occipito temporal
-     - 5.87
-   * - orthographic
-     - 5.43
-   * - occipitotemporal cortex
-     - 5.32
+     - 7.50
+   * - fusiform face
+     - 7.34
    * - visual stream
-     - 5.22
-   * - inferior occipital
-     - 5.03
-   * - ventral visual
-     - 4.88
-   * - occipito
-     - 4.31
-   * - occipitotemporal
-     - 4.22
-   * - extrastriate
-     - 3.69
-   * - identity
-     - 3.40
-   * - characters
-     - 3.38
+     - 4.50
+   * - fusiform
+     - 4.18
    * - face recognition
-     - 3.26
+     - 3.97
+   * - ventral visual
+     - 3.95
+   * - fusiform gyrus
+     - 3.88
+   * - occipital temporal
+     - 3.80
+   * - inferior occipital
+     - 3.67
+   * - navigation
+     - 3.57
+   * - parahippocampal cortex
+     - 3.47
+   * - object recognition
+     - 3.22
+   * - occipitotemporal cortex
+     - 3.22
+   * - face
+     - 3.16
+   * - identity
+     - 3.10
+   * - recognize
+     - 3.03
+   * - occipitotemporal
+     - 3.02
+   * - scenes
+     - 3.01
 
-All 20 terms exceed the Jeffreys "substantial evidence" threshold of
+The first 15 terms exceed the Jeffreys "substantial evidence" threshold of
 :math:`\sqrt{10} \approx 3.16`.  The top cluster — FFA, face, fusiform
 face — is exactly what the right fusiform gyrus is known for.
 
@@ -1070,71 +1060,93 @@ example but available in the language.
 Aggregations summarise a set of values into a single result per group.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``average``.
 
-The examples below use the following EDB relations, following the
-NeuroSynth-style corpus of this tutorial:
+The examples below use three small relations, typed in the session as
+facts (in Datalog, before ``.mode squall``):
 
-.. code-block:: python
+.. nl-repl::
 
-    >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
-    >>> nl.add_tuple_set([("s1", 0), ("s1", 1), ("s2", 2), ("s3", 3)],
-    ...                  name="measured")
-    >>> nl.add_tuple_set([(i,) for i in range(5)], name="zscore")
+    paper("s1")
+    paper("s2")
+    paper("s3")
+    measured("s1", 0)
+    measured("s1", 1)
+    measured("s2", 2)
+    measured("s3", 3)
+    zscore(0)
+    zscore(1)
+    zscore(2)
+    zscore(3)
+    zscore(4)
 
-The ``study`` relation lists the studies, ``measured`` links each study
+The ``paper`` relation lists the papers, ``measured`` links each paper
 to the z-scores of the activation peaks it measured, and ``zscore``
-holds every possible z-score value.  (The lowercase EDB names are
-optional; NeuroLang equates ``Study`` and ``study``.)
+holds every possible z-score value.  (The lowercase names are
+optional; NeuroLang equates ``Paper`` and ``paper``.)
 
 The canonical form groups the aggregation over a subject noun, joining
-through a binary relationship — e.g. the maximum z-score each study
+through a binary relationship — e.g. the maximum z-score each paper
 measured:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    define as study_peak_z for every Study ;
-        where every Max of the Zscore that the Study measured.
+    define as paper_peak_z for every Paper ;
+        where every Max of the Zscore that the Paper measured.
 
-The ``Study`` quantifier introduces the group; the anaphoric ``the Study``
+The ``Paper`` quantifier introduces the group; the anaphoric ``the Paper``
 inside the ``where`` clause (here in a relative clause ``that … measured``)
 ties the aggregation back to it, so no auxiliary variable is needed.  The
-rule is understood as: for every study, the maximum ``zscore`` value that
-the study ``measured``.  It yields one row per study with the maximum
+rule is understood as: for every paper, the maximum ``zscore`` value that
+the paper ``measured``.  It yields one row per paper with the maximum
 measured z-score.
 
 The grouped relation is a normal relation and can be queried like any
 other — ``obtain`` without a tuple label projects every column:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    obtain every study_peak_z.          # one row per study: (study, max z)
-    obtain every study_peak_z (?s; ?z). # same, with explicit column names
+    obtain every paper_peak_z.
+    % → one row per paper: (paper, max z)
+    obtain every paper_peak_z (?s; ?z).
+    % → same, with explicit column names
 
 Grouped aggregation is not limited to ``max``: the ``count``, ``sum``,
 ``min`` and ``average`` functions combine with the same anaphoric clause:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    define as study_peak_count for every Study ;
-        where every Count of the Zscore that the Study measured.
+    define as paper_peak_count for every Paper ;
+        where every Count of the Zscore that the Paper measured.
 
-    define as study_peak_sum for every Study ;
-        where every Sum of the Zscore that the Study measured.
+    define as paper_peak_sum for every Paper ;
+        where every Sum of the Zscore that the Paper measured.
 
-    define as study_peak_mean for every Study ;
-        where every Average of the Zscore that the Study measured.
+    define as paper_peak_mean for every Paper ;
+        where every Average of the Zscore that the Paper measured.
 
 Global aggregation (no per-group clause) runs directly through
 ``obtain`` — the aggregate column is projected onto the result instead of
 being dropped:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    obtain every Count of the Zscore.     # 5
-    obtain every Sum of the Zscore.       # 10
-    obtain every Max of the Zscore.       # 4
-    obtain every Min of the Zscore.       # 0
-    obtain every Average of the Zscore.   # 2.0
+    obtain every Count of the Zscore.
+    % → 5
+    obtain every Sum of the Zscore.
+    % → 10
+    obtain every Max of the Zscore.
+    % → 4
+    obtain every Min of the Zscore.
+    % → 0
+    obtain every Average of the Zscore.
+    % → 2.0
 
 Each returns a single row with one column carrying the aggregate value.
 
@@ -1146,9 +1158,9 @@ tfidf)``:
 .. code-block:: squall
 
     obtain the Max of the Term_in_study_tfidf (_; _; ?w).
-    # the largest tf-idf
+    % the largest tf-idf
     obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s.
-    # one row per study: (study, its largest tf-idf)
+    % one row per study: (study, its largest tf-idf)
 
 Without a label (``obtain the Max of the Term_in_study_tfidf.``) the
 column is ambiguous and the query is rejected with an error showing this
@@ -1159,12 +1171,18 @@ threshold below (Top) or above (Bottom) which a quoted fraction or count
 of the values lie.  ``obtain the …`` reads like English here, so the
 definite article is preferred over ``every``:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    obtain the Top 5% of the Zscore.      # 3.8 (95th percentile)
-    obtain the Bottom 5% of the Zscore.   # 0.2 (5th percentile)
-    obtain the Top 2 of the Zscore.       # 3 (second-largest value)
-    obtain the Bottom 2 of the Zscore.    # 1 (second-smallest value)
+    obtain the Top 5% of the Zscore.
+    % → 3.8 (95th percentile)
+    obtain the Bottom 5% of the Zscore.
+    % → 0.2 (5th percentile)
+    obtain the Top 2 of the Zscore.
+    % → 3 (second-largest value)
+    obtain the Bottom 2 of the Zscore.
+    % → 1 (second-smallest value)
 
 A percentage selects the value at the corresponding percentile
 (``Top n%`` → the ``(100 − n)``-th percentile, ``Bottom n%`` → the
@@ -1176,24 +1194,28 @@ of the five, since all of them lie within the top 100.
 Tail aggregations work with the anaphoric per-group clause too, using the
 ``every`` determiner inside the rule body:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    define as study_top_threshold for every Study ;
-        where every Top 10% of the Zscore that the Study measured.
+    define as paper_top_threshold for every Paper ;
+        where every Top 10% of the Zscore that the Paper measured.
 
-    obtain every study_top_threshold.
-    # one row per study: s1 → 0.9 (90th percentile of {0, 1}),
-    #                    s2 → 2, s3 → 3
+    obtain every paper_top_threshold.
+    % one row per paper: s1 → 0.9 (90th percentile of {0, 1}),
+    %                    s2 → 2, s3 → 3
 
 The aggregated relation can be defined earlier in the same program, and
 anaphoric definite references to that relation participate in the
 aggregation:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
+    :norun:
 
-    define as measured_studies every Study that measured.
-    obtain every Count of the measured_studies.
-    # single column: 3 studies that measured at least one peak
+    define as measured_papers every Paper that measured a Zscore.
+    obtain every Count of the measured_papers.
+    % single column: the 3 papers that measured a z-score
 
 The aggregation noun may also refer to an N-ary relation, such as a
 voxel space:
@@ -1209,39 +1231,39 @@ A probabilistic choice creates a predicate whose tuples are mutually exclusive
 alternatives, each assigned a probability.  The simplest form creates a
 uniform choice:
 
-.. code-block:: squall
+.. nl-repl::
+    :mode: squall
 
-    define as Selected_study as an equiprobable choice over every Study.
+    define as Picked_study as an equiprobable choice over every Study.
 
-This registers ``selected_study`` as a probabilistic choice predicate where
-every study in the ``study`` EDB has equal probability ``1/N``.  The source
-noun phrase (``Study`` in this example) must refer to a single-column EDB
-relation registered in advance with ``add_tuple_set``.
+This registers ``picked_study`` as a probabilistic choice predicate where
+every study of the ``study`` relation has equal probability ``1/N``, as the
+engine's own ``selected_study``.  The source noun phrase (``Study`` in this
+example) must refer to a single-column stored relation, of the engine or
+typed in the session.
 
 Unlike ``define as`` rules, a choice definition does not produce an IDB
 predicate — it registers a probabilistic choice in the engine's symbol table
 that later probabilistic rules (Part 5) can reference via
-``a Selected_study`` (existential quantifier).
-
-The equivalent Python API is ``add_uniform_probabilistic_choice_over_set``;
-the general ``add_probabilistic_choice_from_tuples`` supports arbitrary
-user-specified probabilities.
+``a Picked_study`` (existential quantifier). From Python, the same choice is
+``add_uniform_probabilistic_choice_over_set`` (:doc:`tutorial_python`).
 
 **Weighted choice** — the grammar also accepts explicit probability
 expressions:
 
 .. code-block:: squall
 
-    define as Selected_study as a choice over every Study with probability ?p.
+    define as Picked_study as a choice over every Study with probability ?p.
 
-    define as Selected_study as a choice over every Study (?s; ?q)
+    define as Picked_study as a choice over every Study (?s; ?q)
         with probability (?q / ?total).
 
 Here ``?p`` is a variable bound from a multi-column source, and
 ``(?q / ?total)`` is an arithmetic expression evaluated per tuple.
 Support for executing weighted choice definitions directly from
-SQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
-in Python to register choices with non-uniform probabilities.
+SQUALL is not yet implemented: write them in Datalog
+(:doc:`tutorial_datalog`, 10.6), or in Python with
+``add_probabilistic_choice_from_tuples`` (:doc:`tutorial_python`).
 
 10.3 Program-Level Directives — ``#name(args).``
 --------------------------------------------------
@@ -1307,290 +1329,12 @@ used as the noun:
     define as Performer every person that sings a Popular_genre.
 
 
-.. _part-9-appendix-a:
-
 Appendix A: Running SQUALL from Python
 ========================================
 
-All of the SQUALL syntax shown in this tutorial can be executed from Python
-using the ``NeurolangPDL`` frontend.  The general workflow is:
-
-1. Create a ``NeurolangPDL`` engine.
-2. Register EDB facts with ``add_tuple_set``.
-3. Execute a SQUALL program string with ``execute_squall_program``.
-4. Inspect results via the direct return from ``obtain`` queries or with
-   ``solve_all()``.
-
-Registering facts and running a simple rule
---------------------------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("bob",), ("carol",)], name="person"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("carol",)], name="plays"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Active every person that plays."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['alice', 'carol']
-
-
-Querying with ``obtain`` (direct return)
------------------------------------------
-
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every person that plays."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-
-Multiple rules and an obtain clause in one program
----------------------------------------------------
-
-    >>> result = nl.execute_squall_program(
-    ...     "define as Player every person that plays. "
-    ...     "define as Runner every person that runs. "
-    ...     "obtain every Player."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-
-Transitive verbs and binary predicates
----------------------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
-    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
-    >>> nl.execute_squall_program(
-    ...     "define as Performer every person that sings a Genre."
-    ... )
-    >>> sorted(nl.solve_all()["performer"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
-
-
-Quantifiers: every, a, no
---------------------------
-
-**Every**
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program("define as Active every person that plays.")
-    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
-
-**A / an / some**
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every item ?i that has an item_count ?c."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['a', 'b']
-
-**No**
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every item ?i that has no item_count ?c."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['c']
-
-
-Relative clauses and negation
-------------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as NotPlaying every person that does not plays."
-    ... )
-    >>> sorted(nl.solve_all()["notplaying"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['bob']
-
-
-Tuple (multi-dimensional) subjects
------------------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as active every voxel (?v; ?x; ?y; ?z)."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["active"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
-    [('v1', 0, 0, 1), ('v2', 1, 2, 3)]
-
-Anonymous wildcard ``_``::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activation every Peak_reported (?i; ?j; ?k; _)."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["activation"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
-    [(10, 20, 30), (11, 21, 31)]
-
-
-Compound quantifiers and anaphora
-----------------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
-    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
-    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
-    >>> nl.execute_squall_program(
-    ...     "define as Cooccurrence "
-    ...     "for every Region and for every Term "
-    ...     "where a Selected_study activates the Region and mentions the Term."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["cooccurrence"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [('A', 'x'), ('A', 'y'), ('B', 'x')]
-
-
-Probabilistic n-ary rules
---------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",), ("s4",)], name="study")
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions"
-    ... )
-    >>> result = nl.execute_squall_program(
-    ...     "define as Selected_study as an equiprobable choice over every Study. "
-    ...     "define as Cooccurrence "
-    ...     "for every Region and for every Term "
-    ...     "where a Selected_study activates the Region and mentions the Term. "
-    ...     "define as Joint_prob with inferred probability "
-    ...     "every Cooccurrence (?r; ?t). "
-    ...     "obtain every Joint_prob (?r; ?t; ?p) as P."
-    ... )
-    >>> df = result.as_pandas_dataframe()
-    >>> df.columns = ["r", "t", "p"]
-    >>> sorted(df.itertuples(index=False, name=None))
-    [('A', 'x', 0.25), ('A', 'y', 0.25), ('B', 'x', 0.25)]
-
-Each region–term pair co-occurs in exactly one of the four equiprobable
-studies, hence the probability 1/4.
-
-
-Probabilistic choice (SQUALL)
------------------------------
-
-An equiprobable choice can be defined directly in SQUALL, avoiding the
-need for ``add_uniform_probabilistic_choice_over_set`` in Python:
-
-    >>> from neurolang.expressions import Symbol
-    >>>
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
-    >>> nl.execute_squall_program(
-    ...     "define as Selected_study "
-    ...     "as an equiprobable choice over every Study."
-    ... )
-    >>> sym = Symbol("selected_study")
-    >>> sym in nl.program_ir.pchoice_pred_symbs
-    True
-
-
-Filtering with comparisons
----------------------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Large every Item "
-    ...     "that has an item_count greater equal than 2."
-    ... )
-    >>> sorted(nl.solve_all()["large"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['b', 'c']
-
-
-Aggregations
--------------
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
-    >>> nl.execute_squall_program(
-    ...     "define as max_items for every Item ?i ;"
-    ...     " where every Max of the Quantity where ?i item_count per ?i."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(
-    ...     solution["max_items"].as_pandas_dataframe()
-    ...     .apply(tuple, axis=1).tolist()
-    ... )
-    [('a', 1), ('b', 2), ('c', 3)]
-
-
-Boolean connectives
---------------------
-
-**Conjunction (and)**
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
-    >>> nl.execute_squall_program(
-    ...     "define as Player every person that plays. "
-    ...     "define as PlayAndRun every Player that runs."
-    ... )
-    >>> sorted(nl.solve_all()["playandrun"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
-
-**Disjunction (or)**
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
-    >>> nl.execute_squall_program(
-    ...     "define as PlayOrRun every person that plays or runs."
-    ... )
-    >>> sorted(nl.solve_all()["playorrun"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'bob']
+Every program of this tutorial runs from Python too, as the text of
+``execute_squall_program``: see :ref:`part-9-appendix-a` in
+:doc:`tutorial_python`.
 
 
 .. _appendix-b:

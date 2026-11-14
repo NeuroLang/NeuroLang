@@ -456,6 +456,34 @@ def test_extended_projection():
     assert res == expected
 
 
+def test_extended_projection_of_a_string_constant_spelled_as_its_column():
+    """GH-1086: in π_{x → x, 'z' → z}, the constant 'z' is equal to the
+    column z but does not project it: z is a new constant column."""
+    relation = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[(5, 1), (6, 2)], columns=["x", "__provenance__"],
+        ),
+        "__provenance__",
+    )
+    x = str2columnstr_constant("x")
+    z = str2columnstr_constant("z")
+
+    res = RelationalAlgebraProvenanceCountingSolver().walk(ExtendedProjection(
+        relation,
+        (
+            FunctionApplicationListMember(x, x),
+            FunctionApplicationListMember(C_[str]("z"), z),
+        ),
+    ))
+
+    assert res.relation.value.projection("x", "z", "__provenance__") == (
+        NamedRelationalAlgebraFrozenSet(
+            columns=["x", "z", "__provenance__"],
+            iterable=[(5, "z", 1), (6, "z", 2)],
+        )
+    )
+
+
 def test_support_has_the_tuples_of_non_null_provenance():
     """
     The support of a provenance set has the tuples whose provenance is not

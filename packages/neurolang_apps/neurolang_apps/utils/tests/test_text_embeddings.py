@@ -218,11 +218,9 @@ def test_encoder_import_error_says_the_cause(monkeypatch):
         te.Specter2Encoder().encode_query("reading")
 
 
-def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
-    """On macOS a forked child, as the assistant checks queries in, cannot
-    load a model nor use MPS: before the assistant forks, the encoders with
-    local copies are loaded and moved to the CPU; the others are left
-    alone, and nothing is done on other systems."""
+def _fake_loads(monkeypatch):
+    """Make Specter2Encoder load a fake model, as if torch were installed;
+    return the list of its loads and moves."""
     loads = []
 
     class Model:
@@ -236,21 +234,77 @@ def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
             loads.append(("load", self.device))
 
     monkeypatch.setattr(te.Specter2Encoder, "_load", fake_load)
-    local = te.Specter2Encoder(model_dir=tmp_path, device="mps")
-    for repo in (local.model_name, local.document_adapter, local.query_adapter):
-        copy = tmp_path / repo.replace("/", "--")
+    monkeypatch.setattr(te, "_torch_available", lambda: True)
+    return loads
+
+
+def _local_copies(encoder, model_dir):
+    for repo in (encoder.model_name, encoder.document_adapter,
+                 encoder.query_adapter):
+        copy = model_dir / repo.replace("/", "--")
         copy.mkdir()
         (copy / te.COMPLETE_MARKER).touch()
+
+
+def test_encoders_are_prepared_for_fork(monkeypatch, tmp_path):
+    """On macOS a forked child, as the assistant checks queries in, cannot
+    load a model nor use MPS: before the assistant forks, the encoders with
+    local copies are loaded and moved to the CPU; the others are left
+    alone, and nothing is done on other systems."""
+    loads = _fake_loads(monkeypatch)
+    local = te.Specter2Encoder(model_dir=tmp_path, device="mps")
+    _local_copies(local, tmp_path)
     remote = te.Specter2Encoder(device="mps")       # would download
     monkeypatch.setattr(te.sys, "platform", "darwin")
     te.prepare_for_fork()
     assert loads == [("load", "mps"), "cpu"]
-    assert local.device == "cpu" and isinstance(local._model, Model)
+    assert local.device == "cpu" and local._model is not None
     assert remote._model is None and remote.device == "mps"
     monkeypatch.setattr(te.sys, "platform", "linux")
     other = te.Specter2Encoder(model_dir=tmp_path, device="mps")
     te.prepare_for_fork()
     assert other._model is None
+
+
+def test_preload_loads_the_documents_and_the_model_on_the_cpu(
+    monkeypatch, tmp_path, caplog
+):
+    """The REPL server's builder preloads an engine's text embeddings
+    before forking its sessions: the documents' and the query model, on the
+    CPU; what cannot be loaded is logged, and left to the first query."""
+    loads = _fake_loads(monkeypatch)
+    encoder = te.Specter2Encoder(model_dir=tmp_path, device="cuda")
+    _local_copies(encoder, tmp_path)
+    encoder.encode_documents = FakeEncoder().encode_documents
+    index = te.EmbeddingIndex([1, 2, 3, 4], load_documents, encoder)
+    textless = te.EmbeddingIndex([5], load_documents, FakeEncoder())
+    nl = type("Engine", (), {"text_embedding_indexes": {
+        "textless": textless, "studies": index}})
+    te.preload(nl)
+    assert index._matrix is not None and textless._matrix is None
+    assert loads == [("load", "cuda"), "cpu"] and encoder.device == "cpu"
+    assert "text embeddings textless are not preloaded" in caplog.text
+
+
+def test_queries_are_embedded_with_numpy_when_its_weights_are_there(
+    monkeypatch, tmp_path
+):
+    """With the numpy query encoder's weights, a query, and the preload
+    of a server, take them rather than torch's model."""
+    loads = _fake_loads(monkeypatch)
+    queries = []
+    monkeypatch.setattr(te.Specter2Encoder, "_numpy_query",
+                        lambda self, text: queries.append(text))
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    _local_copies(encoder, tmp_path)
+    encoder._fork_safe()
+    assert loads and not queries
+    loads.clear()
+    encoder = te.Specter2Encoder(model_dir=tmp_path)
+    encoder.numpy_path.touch()
+    encoder._fork_safe()
+    encoder.encode_query("reading")
+    assert not loads and len(queries) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +345,7 @@ def test_similarity_function():
     assert [query_similarity("visual word reading", d) for d in index.ids] \
         == pytest.approx(scores.tolist())
     assert np.isnan(query_similarity("visual word reading", 5))
-    assert index.encoder.query_calls == 2
+    assert index.encoder.query_calls == 1
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
@@ -387,7 +441,9 @@ def test_query_texts_from_a_relation(index):
 def test_similarity_function_is_cached(index):
     query_similarity = te.make_similarity_function(index)
     similarities = index.similarities("visual word reading")
-    assert query_similarity("visual word reading", 1) == similarities[1]
+    assert query_similarity("visual word reading", 1) == pytest.approx(
+        similarities[1]
+    )
     assert index.similarities("visual word reading") is similarities
     with pytest.raises(TypeError):
         similarities[1] = 0.
@@ -398,8 +454,20 @@ def test_similarity_function_is_cached(index):
     for i in range(16):
         query_similarity(f"query {i}", 1)
     query_similarity("visual word reading", 1)
-    assert index.encoder.query_calls == 19
-    assert index.similarities.cache_info().currsize == 16
+    assert index.encoder.query_calls == 18
+    assert query_similarity("motor hand", 99) != query_similarity(
+        "motor hand", 99
+    )   # nan: not in the index
+
+
+def test_similarity_function_encodes_each_query_once(index):
+    """Rows of a rule come in any order: the similarities of many query
+    texts, document by document, encode each text once."""
+    query_similarity = te.make_similarity_function(index)
+    for doc in index.ids:
+        for i in range(40):
+            query_similarity(f"query {i}", doc)
+    assert index.encoder.query_calls == 40
 
 
 def test_similarity_function_is_lazy(tmp_path):
@@ -411,6 +479,86 @@ def test_similarity_function_is_lazy(tmp_path):
     nl.execute_datalog_program(BOUND_BY_QUERY.splitlines()[1])
     assert index.encoder.query_calls == 0
     assert not index.cache_path.exists()
+
+
+# ``similar_study`` of engines.yaml before the cutoff was a function.
+OLD_SIMILAR_STUDY = """
+study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
+cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
+old_similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
+"""
+
+
+class CountingScores:
+
+    """An index of 60 studies, some without text, counting its queries."""
+
+    ids = list(range(60))
+
+    def __init__(self):
+        self.calls = []
+
+    def scores(self, query):
+        self.calls.append(query)
+        rng = np.random.default_rng(len(query))
+        scores = rng.uniform(0.5, 1, len(self.ids))
+        scores[::7] = 0
+        return scores
+
+    def similarity(self, query, doc):
+        return float(self.scores(query)[doc])
+
+
+def _similar_study_engine(index, gate):
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in index.ids], name="study")
+    nl.add_tuple_set([("a", "a text"), ("b", "another text")], name="text")
+    nl.add_symbol(te.make_similarity_function(index), name="query_similarity")
+    nl.add_symbol(
+        te.make_cutoff_function(index, gate), name="query_similarity_cutoff"
+    )
+    rule = next(
+        line for line in engine_registry.get_engine_config("neurosynth")[
+            "datalog_init"
+        ].splitlines() if line.startswith("similar_study(")
+    )
+    nl.execute_datalog_program(OLD_SIMILAR_STUDY + rule)
+    return nl
+
+
+def _top20(index, text):
+    scores = index.scores(text)
+    return np.sort(scores[scores > 0])[-20:].mean()
+
+
+def test_cutoff_function_is_the_cached_95th_percentile_above_the_gate():
+    index = CountingScores()
+    top = _top20(index, "a text")
+    cutoff = te.make_cutoff_function(index, gate=top)
+    scores = index.scores("a text")
+    assert cutoff("a text") == np.percentile(scores[scores > 0], 95)
+    assert cutoff("a text") == cutoff("a text")
+    assert index.calls == ["a text"] * 3
+    assert cutoff.__annotations__ == {"query": str, "return": float}
+    assert te.make_cutoff_function(index, gate=top + 1e-6)("a text") == (
+        float("inf")
+    )
+
+
+@pytest.mark.parametrize("gate", [0, 0.9, 1])
+def test_similar_study_is_the_old_rule_above_the_gate(gate):
+    index = CountingScores()
+    nl = _similar_study_engine(index, gate)
+    assert index.calls == []
+    for label, text in [("a", "a text"), ("b", "another text")]:
+        # The text bound by magic sets, as cogat_definition('memory', d).
+        old, new = (
+            set(nl.execute_datalog_program(
+                f"ans(s) :- text('{label}', q) & {name}(q, s)"
+            )) for name in ("old_similar_study", "similar_study")
+        )
+        assert len(old) == 3
+        assert new == (old if _top20(index, text) >= gate else set())
 
 
 def test_torch_runs_on_one_thread_in_forked_children(monkeypatch):
@@ -464,6 +612,7 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
         "mini", tmp_path / "data", yaml_path=engine_yaml
     )
     index = nl.text_embedding_indexes["docs"]
+    assert "query_similarity_cutoff" in nl.symbols
     assert index.encoder.document_calls == 0
     assert index.cache_path == tmp_path / "data/mini/embeddings/docs.npz"
     assert index.encoder.model_dir == tmp_path / "data/mini/embeddings/models"
@@ -479,6 +628,105 @@ def test_engine_yaml_text_embeddings(engine_yaml, tmp_path):
     # A function, like the builtins, is not a declared predicate.
     preds = engine_registry.get_predicates("mini", yaml_path=engine_yaml)
     assert "query_similarity" not in preds
+
+
+def test_engine_yaml_similarity_gate(engine_yaml, tmp_path):
+    engine_yaml.write_text(engine_yaml.read_text().replace(
+        "function: query_similarity", "function: query_similarity\n"
+        "        similarity_gate: 1.5"
+    ))
+    nl = engine_registry.build_engine(
+        "mini", tmp_path / "data", yaml_path=engine_yaml
+    )
+    assert not nl.execute_datalog_program(
+        "ans(c) :- (c == query_similarity_cutoff('motor hand')) & (c < 2)"
+    )
+
+
+@pytest.fixture
+def extending_yaml(engine_yaml, tmp_path):
+    """An abstract base with the entry ``docs``, ``b`` inheriting it, and
+    engines extending ``b``: ``c`` as it is, ``d`` with fewer studies,
+    ``e`` with ``docs`` of another predicate."""
+    (tmp_path / "three.tsv").write_text("study_id\n1\n2\n3\n")
+    engine_yaml.write_text(
+        engine_yaml.read_text().replace(
+            "  mini:\n", "  base:\n    abstract: true\n"
+        ) + """
+  b: {extends: base}
+  c: {extends: b}
+  d: {extends: b, relations: {study: three.tsv}}
+  e:
+    extends: b
+    relations: {paper: study.tsv}
+    text_embeddings: {docs: {ids_from: paper}}
+"""
+    )
+    return engine_yaml
+
+
+def _similar(name, data_dir, yaml_path):
+    """Build *name*, run a query of ``docs``; return its index."""
+    nl = engine_registry.build_engine(name, data_dir, yaml_path=yaml_path)
+    nl.execute_datalog_program(
+        "ans(s) :- study(s) & (x == query_similarity('motor hand', s)) "
+        "& (x > 0.5)"
+    )
+    return nl.text_embedding_indexes["docs"]
+
+
+def test_extending_engines_share_the_embeddings(extending_yaml, tmp_path):
+    owners = {
+        name: engine_registry.embeddings_owner(name, "docs", extending_yaml)
+        for name in "bcde"
+    }
+    assert owners == {"b": "b", "c": "b", "d": "b", "e": "e"}
+    shared = tmp_path / "data/b/embeddings"
+    for name, calls in (("c", 1), ("b", 0)):
+        index = _similar(name, tmp_path / "data", extending_yaml)
+        assert index.cache_path == shared / "docs.npz"
+        assert index.encoder.model_dir == shared / "models"
+        assert index.encoder.document_calls == calls
+    assert not (tmp_path / "data/c").exists()
+
+
+def test_other_documents_keep_their_own_embeddings(extending_yaml, tmp_path):
+    shared = tmp_path / "data/b/embeddings/docs.npz"
+    _similar("b", tmp_path / "data", extending_yaml)
+    key = te.cached_key(shared)
+    for name in "de":
+        index = _similar(name, tmp_path / "data", extending_yaml)
+        assert index.cache_path == tmp_path / f"data/{name}/embeddings/docs.npz"
+        assert index.encoder.document_calls == 1
+        assert te.cached_key(shared) == key
+    again = _similar("d", tmp_path / "data", extending_yaml)
+    assert again.encoder.document_calls == 0
+
+
+def test_an_engine_keeps_the_embeddings_in_its_directory(
+    extending_yaml, tmp_path
+):
+    """Embeddings made before they were shared are still read."""
+    own = tmp_path / "data/c/embeddings"
+    _similar("b", tmp_path / "data", extending_yaml)
+    (own / "models").mkdir(parents=True)
+    (tmp_path / "data/b/embeddings/docs.npz").rename(own / "docs.npz")
+    index = _similar("c", tmp_path / "data", extending_yaml)
+    assert index.cache_path == own / "docs.npz"
+    assert index.encoder.model_dir == own / "models"
+    assert index.encoder.document_calls == 0
+
+
+def test_preload_reads_the_owners_embeddings(extending_yaml, tmp_path):
+    """The REPL server's preload of an engine reads its owner's caches."""
+    _similar("b", tmp_path / "data", extending_yaml)
+    nl = engine_registry.build_engine(
+        "c", tmp_path / "data", yaml_path=extending_yaml
+    )
+    te.preload(nl)
+    index = nl.text_embedding_indexes["docs"]
+    assert index._matrix is not None and index.encoder.document_calls == 0
+    assert not (tmp_path / "data/c").exists()
 
 
 def test_engine_yaml_unknown_source(engine_yaml, tmp_path):
@@ -502,6 +750,7 @@ def test_neurosynth_yaml_declares_similarity_function():
     assert "query_similarity" not in engine_registry.get_predicates(
         "neurosynth"
     )
+    assert entry["similarity_gate"] == 0.75
 
 
 # ---------------------------------------------------------------------------
@@ -660,3 +909,18 @@ def test_in_a_browser_a_missing_model_says_the_page_was_built_without(
     with pytest.raises(ImportError, match="built without") as error:
         te.Specter2Encoder(model_dir=tmp_path).encode_query("reading")
     assert "pip install" not in str(error.value)
+
+
+@pytest.mark.parametrize("engine, owner", [
+    ("neurosynth", "neurosynth"),
+    ("neurosynth_tracts", "neurosynth"),
+    ("neurosynth_iit", "neurosynth"),
+    ("neurostore", "neurostore"),
+    ("neurostore_tracts", "neurostore"),
+    ("neurostore_iit", "neurostore"),
+])
+def test_engine_variants_use_their_parents_embeddings(engine, owner):
+    """The variants of the shipped engines read their parent's caches."""
+    assert engine_registry.embeddings_owner(
+        engine, "study_abstracts"
+    ) == owner

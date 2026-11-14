@@ -42,6 +42,7 @@ import base64
 import gzip
 import html
 import io
+import itertools
 import json
 import re
 import zlib
@@ -49,27 +50,37 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+import yaml
 
 # The release of NiiVue the page inlines.
 NIIVUE_VERSION = "0.69.0"
 
+# The defaults of the viewer, the one place they are written.
+DEFAULTS_FILE = Path(__file__).with_name("viewer.yaml")
+DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
+
 # The colormap used when none is asked for.
-DEFAULT_CMAP = "plasma"
+DEFAULT_CMAP = DEFAULTS["colormap"]
 
 # The colormaps of the overlays after the first, in turn: the first has
 # the colormap asked for, :data:`DEFAULT_CMAP` by default.
-OVERLAY_CMAPS = ("viridis", "cool", "hot", "cividis", "magma")
+OVERLAY_CMAPS = tuple(DEFAULTS["overlay_colormaps"])
+# Those of the masks among several overlays, in turn.
+MASK_CMAPS = tuple(DEFAULTS["mask_colormaps"])
 
 # The colormaps the page offers, from matplotlib and nilearn.
-COLORMAPS = (
-    "hot", "inferno", "viridis", "plasma", "magma", "cividis", "cold_hot",
-    "RdBu_r", "bwr", "coolwarm", "gray",
-)
+COLORMAPS = tuple(DEFAULTS["colormaps"])
 
 # The largest background embedded, in voxels: the 1 mm MNI grid fits.
-BACKGROUND_MAX_VOXELS = 2 ** 24
+BACKGROUND_MAX_VOXELS = DEFAULTS["background_max_voxels"]
 
 _STATIC = Path(__file__).parent / "static"
+
+
+def frame_hooks() -> str:
+    """Return the script that lets a page in a frame of the REPL take its
+    theme and say how tall it is, to inline in the page."""
+    return (_STATIC / "frame_hooks.js").read_text(encoding="utf-8")
 
 
 def encode_array(array: np.ndarray) -> str:
@@ -254,14 +265,23 @@ def _layers(img) -> list:
     return layers
 
 
-def _overlay_cmaps(cmap, count: int) -> list:
+def _overlay_cmaps(cmap, names) -> list:
     """
-    Return the colormaps of *count* overlays: *cmap* for the first, then
-    those of :data:`OVERLAY_CMAPS` other than it, in turn.
+    Return the colormaps of the overlays *names*: *cmap* for the first,
+    then those of :data:`OVERLAY_CMAPS` other than it, in turn; but the
+    masks among several (``mask`` or ``answer: mask``) take those of
+    :data:`MASK_CMAPS` in turn, which keep them apart.
     """
     first = cmap or DEFAULT_CMAP
     others = [name for name in OVERLAY_CMAPS if name != first]
-    return [first] + [others[n % len(others)] for n in range(count - 1)]
+    values = itertools.chain([first], itertools.cycle(others))
+    masks = itertools.cycle(MASK_CMAPS)
+    several = len(names) > 1
+    return [
+        next(masks) if several and (name == "mask" or name.endswith(": mask"))
+        else next(values)
+        for name in names
+    ]
 
 
 def viewer_state(
@@ -277,7 +297,7 @@ def viewer_state(
     first = layers[0][1]
     volumes = [overlay_values(image.dataobj) for _, image in layers]
     affine = first.affine
-    cmaps = _overlay_cmaps(cmap, len(layers))
+    cmaps = _overlay_cmaps(cmap, [name for name, _ in layers])
     if isinstance(symmetric, (bool, np.bool_)):
         symmetric = [symmetric] * len(layers)
     return {
@@ -291,6 +311,8 @@ def viewer_state(
             background, volumes[0].shape, affine
         ),
         "colormaps": colormap_luts(cmaps),
+        # What the script of the page takes from viewer.yaml.
+        "settings": DEFAULTS["page"],
         "initial": {
             "cursor": initial_cursor(volumes[0]), "active": 0,
             "layers": [
@@ -307,19 +329,19 @@ def viewer_state(
 
 # The radius, in millimetres, of the largest node and of the thickest edge
 # of a network.
-NODE_RADIUS = 4.0
-EDGE_RADIUS = 1.5
+NODE_RADIUS = DEFAULTS["network"]["node_radius"]
+EDGE_RADIUS = DEFAULTS["network"]["edge_radius"]
 
 # The opacity the overlays of a network or of streamlines start with, for
 # its edges or them to show on the slices.
-NETWORK_OVERLAY_OPACITY = 0.5
+NETWORK_OVERLAY_OPACITY = DEFAULTS["network"]["overlay_opacity"]
 
 # The number of edges a percentile threshold shows at least, all of them
 # when there are fewer.
-MIN_SHOWN_EDGES = 20
+MIN_SHOWN_EDGES = DEFAULTS["network"]["min_shown_edges"]
 
 # The number of edges, the largest, given to the page to threshold there.
-MAX_EDGES = 20000
+MAX_EDGES = DEFAULTS["network"]["max_edges"]
 
 
 def edge_threshold(values, threshold, at_least: int = 0) -> float:
@@ -387,7 +409,7 @@ def shown_edges(connectome: dict) -> list:
 
 
 # The number of streamlines drawn at most, evenly subsampled.
-MAX_STREAMLINES = 20000
+MAX_STREAMLINES = DEFAULTS["streamlines"]["max_shown"]
 
 
 def shown_streamlines(ids, cap=None) -> list:
@@ -432,6 +454,29 @@ def streamlines_state(lines, total: int) -> dict:
     }
 
 
+def regions_state(regions) -> dict:
+    """
+    Return the regions of a result (a :class:`~.nifti.RegionLayer`) as the
+    page reads them: the image of their numbers, which names the one under
+    the cursor, and that of their colours, RGBA, transparent elsewhere,
+    which the page draws.
+    """
+    numbers = np.asanyarray(regions.image.dataobj)
+    table = np.zeros(len(regions.names) + 1, dtype=RGBA)
+    for n, colour in enumerate(regions.colours, 1):
+        table[n] = (*bytes.fromhex(colour[1:7]), 255)
+    return {
+        "nifti": encode_nifti(numbers, regions.image.affine),
+        "colours": encode_nifti(table[numbers], regions.image.affine),
+        "names": [str(name) for name in regions.names],
+        "coloured": bool(regions.coloured),
+    }
+
+
+# The voxels of an RGBA image, as NIfTI stores them (its datatype 2304).
+RGBA = np.dtype([("R", "u1"), ("G", "u1"), ("B", "u1"), ("A", "u1")])
+
+
 def _script_json(state: dict) -> str:
     """Return *state* as JSON that cannot end the script element it is in."""
     return json.dumps(state, separators=(",", ":")).replace("<", "\\u003c")
@@ -439,7 +484,7 @@ def _script_json(state: dict) -> str:
 
 def viewer_html(
     img, background, *, title: str, threshold, cmap, symmetric: bool,
-    connectome=None, streamlines=None, space: str = "MNI",
+    connectome=None, streamlines=None, space: str = "MNI", regions=None,
 ) -> str:
     """
     Return the HTML page of an interactive viewer of the image *img*.
@@ -459,7 +504,9 @@ def viewer_html(
     direction, with a control of their visibility and opacity, on
     slices cut in millimetres, as they are drawn. *space* names the
     millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
-    a subject.
+    a subject. *regions*, a :class:`~.nifti.RegionLayer`, are the regions
+    of a result: the readout names the one under the cursor, and a
+    control shows them in their colours, those of their atlas.
     """
     state = viewer_state(
         img, background, title=title, threshold=threshold, cmap=cmap,
@@ -470,6 +517,8 @@ def viewer_html(
         state["streamlines"] = streamlines
     if connectome is not None:
         state["connectome"] = connectome
+    if regions is not None:
+        state["regions"] = regions_state(regions)
     if connectome is not None or streamlines is not None:
         state["initial"]["display"] = {"renderTile": True, "layout": "grid"}
         for layer in state["initial"]["layers"]:
@@ -481,12 +530,13 @@ def viewer_html(
             encoding="utf-8"
         ),
         "SCRIPT": (_STATIC / "brain_viewer.js").read_text(encoding="utf-8"),
+        "FRAME_HOOKS": frame_hooks(),
         "FAVICON": base64.b64encode(
             (_STATIC / "favicon.svg").read_bytes()
         ).decode("ascii"),
     }
     page = (_STATIC / "brain_viewer.html").read_text(encoding="utf-8")
     return re.sub(
-        r"__(TITLE|DATA|NIIVUE|SCRIPT|FAVICON)__",
+        r"__(TITLE|DATA|NIIVUE|SCRIPT|FRAME_HOOKS|FAVICON)__",
         lambda m: parts[m.group(1)], page,
     )

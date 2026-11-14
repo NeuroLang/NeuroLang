@@ -37,7 +37,9 @@ from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
 from .providers import LLMError, make_client
-from .validation import check_query, run_preview
+from .validation import (
+    QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
+)
 
 MAX_OBSERVATION = 2000
 EXAMPLE_QUERIES = {
@@ -99,7 +101,8 @@ class AgentResult:
     """
     The outcome of an agent: its query, if *valid*, or its *error*.
 
-    *usage* counts the tokens sent (``input``) and received
+    *usage* counts the tokens sent (``input``, of which ``cached`` read
+    from the cache of the provider) and received
     (``output``), *calls* the requests to the model and *seconds* the
     time it took. The ReAct agent translates its query back into English
     (*back_translation*) and sets *verified* to whether the model judged
@@ -125,6 +128,20 @@ class AgentResult:
     verified: Optional[bool] = None
     verification: str = ""
     frames: Optional[list] = field(default=None, repr=False)
+
+
+@dataclass
+class Previous:
+    """
+    What an agent starts from to refine an answer: the *question* that was
+    asked ("" if not known), the *query* of that attempt, which may have
+    failed, and its *outcome* ("" if not known): the error it gave, the
+    rows it gave, or what was found against it.
+    """
+
+    question: str
+    query: str
+    outcome: str
 
 
 def truncate(text: str, limit: int = MAX_OBSERVATION) -> str:
@@ -286,7 +303,8 @@ class Toolbox:
         self.preview_rows = preview_rows
         self.query_timeout = query_timeout
         self.query_memory_mb = query_memory_mb
-        # Queries whose answer of no rows has been confirmed.
+        # Queries whose answer of no rows, or with notes on its
+        # constants, has been confirmed.
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
         self.queries_with_rows = []
@@ -296,23 +314,38 @@ class Toolbox:
         self.answer_frames = None
         # The observations of the calls, by tool and arguments.
         self.observations = {}
+        # The facts search_values found, and its calls finding none new.
+        self.values_found = set()
+        self.searches_without_new_values = 0
 
     def call(self, name: str, arguments: dict):
         """
         Run the tool *name* with *arguments*: (observation, final). A call
         made already, but final_answer, is not run again: a model in a
-        loop is told so, with the result it had.
+        loop is told so, with the result it had, and after two searches
+        finding no new value, to run a query with those it found.
         """
         key = (name, json.dumps(arguments, sort_keys=True, default=str))
         if key in self.observations and name != "final_answer":
-            return (
+            observation, final = (
                 f"You already called {name} with these arguments, which "
                 f"gave:\n{truncate(self.observations[key], 500)}\n"
                 "Do not call it again: use that result and take the next "
                 "step."
             ), None
-        observation, final = self._call(name, arguments)
-        self.observations[key] = observation
+        else:
+            observation, final = self._call(name, arguments)
+            self.observations[key] = observation
+        if name == "search_values":
+            values = set(self.observations[key].splitlines()[1:])
+            stale = values <= self.values_found
+            self.searches_without_new_values += stale
+            self.values_found |= values
+            if stale and self.searches_without_new_values >= 2:
+                observation += (
+                    "\nYour searches find no new values: write the query "
+                    "with the values found so far and run it with run_query."
+                )
         return observation, final
 
     def _call(self, name: str, arguments: dict):
@@ -334,18 +367,33 @@ class Toolbox:
         return self.context.schema_summary(), None
 
     def tool_describe_predicate(self, name: str):
-        return self.context.describe(name), None
+        # Its sample rows run the rules: as long as any query may.
+        try:
+            return _in_child(
+                lambda: self.context.describe(name),
+                self.query_timeout, self.query_memory_mb,
+            ), None
+        except (QueryTimeout, QueryTooLarge):
+            return (
+                f"Computing the rows of {name} takes too long, they are "
+                f"not listed.\n{self.context._bound_usage(name)}"
+            ), None
 
     def tool_search_values(self, pattern: str, predicate=None, column=None):
         return self.context.search_values(pattern, predicate, column), None
 
     def tool_check_query(self, query: str):
-        result = check_query(self.context.nl, query, self.language)
+        result = check_query(
+            self.context.nl, query, self.language,
+            self.context.engine_name if self.context.declared else "",
+        )
         if not result.ok:
             return f"The query fails:\n{result.message}", None
         text = "The query is valid."
         if result.datalog:
             text += f" Its Datalog translation:\n{result.datalog}"
+        if result.notes:
+            text += f"\n{result.notes}"
         return text, None
 
     def tool_run_query(self, query: str):
@@ -362,7 +410,10 @@ class Toolbox:
         return preview.text, None
 
     def tool_final_answer(self, query: str, explanation: str = ""):
-        result = check_query(self.context.nl, query, self.language)
+        result = check_query(
+            self.context.nl, query, self.language,
+            self.context.engine_name if self.context.declared else "",
+        )
         if not result.ok:
             return (
                 f"The answer is rejected: the query fails:\n{result.message}"
@@ -379,14 +430,22 @@ class Toolbox:
                 f"The answer is rejected: running the query fails:\n"
                 f"{preview.text}\nCorrect it and call final_answer again."
             ), None
-        if preview.rows == 0 and normalised not in self.confirmed_empty:
+        if (
+            (preview.rows == 0 or result.notes)
+            and normalised not in self.confirmed_empty
+        ):
             self.confirmed_empty.add(normalised)
             message = (
                 "The query gives no rows. Check its constants with "
                 "search_values and its joins with run_query; if no rows is "
                 "the answer, call final_answer again with the same query."
+            ) if preview.rows == 0 else (
+                "Check the constants of the query; if it is right, call "
+                "final_answer again with the same query."
             )
-            if self.queries_with_rows:
+            if result.notes:
+                message += f"\n{result.notes}"
+            if self.queries_with_rows and preview.rows == 0:
                 message += (
                     "\nYour query that gave rows was:\n"
                     + self.queries_with_rows[-1]
@@ -437,6 +496,7 @@ class Agent:
         self.examples = examples
         self.description = description
         self.guidance = guidance
+        self.previous = None
 
     def system_prompt(self, question: str, text_tools: bool = False) -> str:
         """Return the system prompt for *question*."""
@@ -503,15 +563,26 @@ class Agent:
             ),
         ).text.strip()
 
-    def run(self, question: str) -> AgentResult:
+    def _user_message(self, question: str) -> str:
+        """Return the message asking for *question*, or, if a previous
+        attempt is to be refined, for the change of its query."""
+        if self.previous is None:
+            return question
+        return prompts.refinement_request(
+            question, self.previous, self.language
+        )
+
+    def run(self, question: str, previous=None) -> AgentResult:
         """
-        Return the query answering *question*.
+        Return the query answering *question*; the one of *previous*, a
+        :class:`Previous`, is changed for it if it is given.
 
         With the setting ``comment_rules``, the accepted query is also
         written with a comment line explaining each rule, in
         ``commented`` (see :meth:`_comment`).
         """
         start = time.perf_counter()
+        self.previous = previous
         result = self._run(question)
         if result.valid and result.query and self.config.comment_rules:
             self._comment(result, question)
@@ -642,7 +713,7 @@ class IclAgent(Agent):
         result = AgentResult(language=self.language)
         messages = [
             {"role": "system", "content": self.system_prompt(question)},
-            {"role": "user", "content": question},
+            {"role": "user", "content": self._user_message(question)},
         ]
         for _ in range(self.config.max_repairs + 1):
             reply = self._complete(result, messages, temperature=temperature)
@@ -724,7 +795,7 @@ class ReactAgent(Agent):
             {"role": "system", "content": self.system_prompt(
                 question, text_tools=not self.native
             )},
-            {"role": "user", "content": question},
+            {"role": "user", "content": self._user_message(question)},
         ]
         turn = self._native_turn if self.native else self._text_turn
         rejections = 0
@@ -849,7 +920,7 @@ class ReactAgent(Agent):
             return None
         messages.append({
             "role": "assistant", "content": reply.text,
-            "tool_calls": reply.tool_calls,
+            "tool_calls": reply.tool_calls, "blocks": reply.blocks,
         })
         accepted = None
         for call in reply.tool_calls:

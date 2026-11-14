@@ -1116,3 +1116,15 @@ def test_cross_dee_dum():
         assert po_dum.arity == p_dum.arity
 
     _cross_validate(setup, check)
+
+
+def test_an_aggregation_of_several_columns_without_groups():
+    from nl_core.utils.relational_algebra_set import count_distinct
+
+    relation = polars.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [("a", 1), ("b", 1), ("a", 2), ("a", 1)]
+    )
+    result = relation.aggregate(
+        [], [("n", ("x", "y"), lambda t: count_distinct(t.x, t.y))]
+    )
+    assert list(result) == [(3,)]

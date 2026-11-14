@@ -361,3 +361,56 @@ def test_frontend_aggregate_read_by_two_literals_one_after_the_other(frontend):
         'ans(s) :- both("a", s)'
     )
     assert set(res.as_pandas_dataframe().s) == {"c"}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_bound_rule_with_a_literal_sharing_no_variable(frontend):
+    """
+    ``other(y)`` shares no variable: the probabilistic frontend reorders the
+    rule bodies to avoid cross products when they are walked, which once
+    put ``r^bf(d, s)`` before the literal binding ``d`` in the adorned
+    query. Its magic set was left undefined, and the answer empty.
+    """
+    nl = frontend()
+    nl.add_tuple_set([("x", 1), ("y", 2)], name="e")
+    nl.add_tuple_set([("a", "x")], name="f")
+    nl.add_tuple_set([(1,), (2,)], name="other")
+    res = nl.execute_datalog_program(
+        "r(q, s) :- e(q, s)\n"
+        "c(t, d) :- f(t, d)\n"
+        "ans(d, s, y) :- c('a', d), r(d, s), other(y)"
+    )
+    assert set(map(tuple, res.as_pandas_dataframe().values)) == {
+        ("x", 1, 1), ("x", 1, 2)
+    }
+
+
+@pytest.mark.parametrize("query", [
+    "ans(p, pa) :- defn('x', d), PROB[act(s) // close(d, s)] = p, "
+    "PROB[act(s)] = pa",
+    "ans(p, pa) :- defn('x', d), PROB[act(s)] = pa, "
+    "PROB[act(s) // close(d, s)] = p",
+])
+def test_frontend_two_probabilities_one_bound_by_the_main_rule(query):
+    """
+    The text ``d`` bound by the main rule is passed to the conditional
+    probability next to a probability sharing no variable with it, which
+    once raised UnboundVariablesError on the similarity (#1091).
+    """
+    nl = NeurolangPDL()
+    studies = [(s,) for s in range(6)]
+    nl.add_tuple_set(studies, name="study")
+    nl.add_uniform_probabilistic_choice_over_set(studies, name="selected")
+    nl.add_tuple_set([(0,), (1,), (3,), (4,)], name="default_mode")
+    nl.add_tuple_set([("x", "a text")], name="definition")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    res = nl.execute_datalog_program(
+        "sim(q, s, v) :- study(s) & (v == similarity(q, s)) & (v > 0)\n"
+        "close(q, s) :- sim(q, s, v) & (v > .5) & selected(s)\n"
+        "act(s) :- default_mode(s), selected(s)\n"
+        "defn(t, d) :- definition(t, d)\n" + query
+    )
+    # close('a text', s) for s in {3, 4, 5}, of which 3 and 4 are active
+    solution = res.as_pandas_dataframe()
+    assert len(solution) == 1
+    assert solution[["p", "pa"]].values[0] == pytest.approx([2 / 3, 4 / 6])

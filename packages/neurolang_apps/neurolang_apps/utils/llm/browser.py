@@ -44,6 +44,8 @@ PROVIDERS = {
         "base_url": "https://api.anthropic.com/v1",
         "model": "claude-sonnet-5-5", "tool_calling": "native",
         "headers": {"anthropic-dangerous-direct-browser-access": "true"},
+        # Its thinking counts in max_tokens.
+        "max_tokens": 16000,
     },
     "openai": {
         "label": "OpenAI", "api": "openai",
@@ -119,6 +121,7 @@ def browser_config(
         name=provider_id, api=entry["api"],
         model=(model or entry["model"]).strip(), base_url=base_url,
         headers=dict(entry["headers"]), tool_calling=entry["tool_calling"],
+        max_tokens=entry.get("max_tokens", ProviderConfig.max_tokens),
         key=api_key.strip(),
     )
     return LLMConfig({provider_id: provider}, provider_id, AssistantConfig())

@@ -28,6 +28,8 @@ from neurolang.frontend.error_formatting import format_error
 from neurolang_apps.utils.cli import (
     _known_symbol_names,
     _show_squall_datalog,
+    left_out_symbol,
+    not_available,
     result_to_dataframe,
     squall_column_names,
     warning_note,
@@ -36,7 +38,7 @@ from neurolang_apps.utils.predicate_catalog import predicate_catalog
 
 LANGUAGE_NAMES = {"squall": "SQUALL", "datalog": "Datalog"}
 CHILD_POLL_SECONDS = 0.25
-_DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*\(")
+_DATALOG_QUERY = re.compile(r"(^|[\s.])ans\s*(\[\s*\w+\s*\]\s*)?\(")
 _CALL = re.compile(
     r"(?<![\w.:'\"])([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_-]*)?)"
     r"\s*\("
@@ -57,12 +59,15 @@ class CheckResult:
     The outcome of checking a query.
 
     *message* is the formatted error when the query is not *ok*.
-    *datalog* is the Datalog translation of a SQUALL query.
+    *datalog* is the Datalog translation of a SQUALL query. *notes* tell
+    of its constants that match nothing (see
+    :func:`~neurolang_apps.utils.tui.constant_notes.constant_notes`).
     """
 
     ok: bool
     message: str = ""
     datalog: str = ""
+    notes: str = ""
 
 
 def _parse(text: str, language: str):
@@ -140,9 +145,10 @@ def _with_timeout(function, timeout):
 _UNDEFINED = re.compile(r"Symbol (\S+) used in rule body has no entry")
 
 
-def _undefined_predicates(caught, known, text: str) -> list:
+def _undefined_predicates(caught, known, text: str, nl=None) -> list:
     """
-    Return the notes of the *caught* warnings on undefined predicates.
+    Return the notes of the *caught* warnings on undefined predicates,
+    those the engine *nl* leaves out being not available.
 
     Only the predicates written in the query *text* are reported: those
     the engine generates while rewriting it (the magic sets'
@@ -155,8 +161,11 @@ def _undefined_predicates(caught, known, text: str) -> list:
         match = _UNDEFINED.match(message)
         if match and match.group(1).lower() not in written:
             continue
-        note = warning_note(message, known)
-        if "has no facts or rules" in note:
+        left_out = left_out_symbol(nl, message)
+        note = not_available(left_out) if left_out else warning_note(
+            message, known
+        )
+        if left_out or "has no facts or rules" in note:
             notes.append(note.removeprefix("note: "))
     return list(dict.fromkeys(notes))
 
@@ -252,6 +261,9 @@ def error_message(nl, exc: BaseException, text: str, language: str) -> str:
     """Return the error *exc* of the query *text* formatted as for users."""
     if isinstance(exc, QueryCheckError):
         return str(exc)
+    missing = left_out_symbol(nl, str(exc))
+    if missing:
+        return not_available(missing)
     return format_error(
         exc, text, language=LANGUAGE_NAMES[language],
         known_symbols=_known_symbol_names(nl), color=False,
@@ -266,13 +278,17 @@ def squall_datalog(text: str) -> str:
     return output.getvalue().strip()
 
 
-def check_query(nl, text: str, language: str) -> CheckResult:
+def check_query(
+    nl, text: str, language: str, engine_name: str = ""
+) -> CheckResult:
     """
     Check that the query *text* in *language* can run on the engine *nl*.
 
     It is parsed, then dry-run: the program is rewritten for the
     engine, which finds the predicates that do not exist or are used
-    with the wrong number of arguments, but the chase is not run.
+    with the wrong number of arguments, but the chase is not run. The
+    constants matching no value of the sorts the engine *engine_name*
+    declares are noted.
     """
     text = text.strip()
     if not text:
@@ -284,7 +300,9 @@ def check_query(nl, text: str, language: str) -> CheckResult:
             _execute(nl, text, language, dry_run=True)
     except Exception as exc:
         return CheckResult(False, error_message(nl, exc, text, language))
-    problems = _undefined_predicates(caught, _known_symbol_names(nl), text)
+    problems = _undefined_predicates(
+        caught, _known_symbol_names(nl), text, nl
+    )
     datalog = ""
     if language == "squall":
         try:
@@ -296,7 +314,9 @@ def check_query(nl, text: str, language: str) -> CheckResult:
         problems += aggregation_errors(text)
     if problems:
         return CheckResult(False, "\n".join(problems), datalog)
-    return CheckResult(True, datalog=datalog)
+    return CheckResult(
+        True, datalog=datalog, notes=_notes(nl, engine_name, text, language)
+    )
 
 
 # The most cells (rows times columns) of a result kept whole, to show it
@@ -341,7 +361,26 @@ class QueryCrashed(Exception):
 
 
 def _memory_mb(pid: int) -> float:
-    """Return the resident memory of the process *pid*, in MB."""
+    """
+    Return the memory of the process *pid*, in MB: that private to it
+    where the system tells (Linux, macOS), as a forked child shares the
+    pages of its parent it only reads, else its resident memory.
+    """
+    try:
+        if sys.platform == "darwin":
+            # proc_pid_rusage(RUSAGE_INFO_V2): ri_phys_footprint is the
+            # 10th 64-bit field, after the 16 bytes of ri_uuid.
+            info = (ctypes.c_uint64 * 64)()
+            libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+            if libproc.proc_pid_rusage(pid, 2, info) == 0:
+                return info[9] / 2 ** 20
+        with open(f"/proc/{pid}/smaps_rollup") as smaps:
+            return sum(
+                int(line.split()[1]) for line in smaps
+                if line.startswith(("Private_Clean:", "Private_Dirty:"))
+            ) / 1024
+    except (OSError, ValueError, AttributeError):
+        pass
     try:
         out = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
@@ -473,8 +512,24 @@ def run_preview(
         )
 
 
+def _notes(nl, engine_name, text, language) -> str:
+    """Return the notes on the constants of the query *text*, one a line."""
+    try:
+        from neurolang_apps.utils.tui.constant_notes import constant_notes
+    except ImportError:  # without the tui dependencies
+        return ""
+    return "\n".join(
+        f"Note: {note}" for note in constant_notes(
+            nl, engine_name, text, language == "squall"
+        )
+    )
+
+
 def _preview(nl, text, language, rows, engine_name) -> Preview:
-    """Run the query *text* and return its preview (see run_preview)."""
+    """
+    Run the query *text* and return its preview (see run_preview), after
+    the notes on its constants.
+    """
     try:
         result = _execute(nl, text.strip(), language, dry_run=False)
     except Exception as exc:
@@ -502,4 +557,6 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
                 + frame.head(rows).to_string(index=False)
             )
     kept = frames if sum(f.size for _, f in frames) <= MAX_KEPT_CELLS else None
-    return Preview(True, "\n".join(parts), total, first, kept)
+    notes = _notes(nl, engine_name, text, language)
+    shown = "\n".join(filter(None, [notes, *parts]))
+    return Preview(True, shown, total, first, kept)

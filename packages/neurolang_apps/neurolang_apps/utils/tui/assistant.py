@@ -27,21 +27,22 @@ from rich.text import Text
 
 from neurolang_apps.utils import query_highlight
 
-from .commands import HELP_TOPICS, command
+from .commands import HELP_TOPICS, command, uses_predicates
 from .interrupt import call_interruptibly
 
 LLM_DEPENDENCIES = ("httpx",)
 LANGUAGE_FLAGS = {"--squall": "squall", "--datalog": "datalog"}
 STRATEGY_FLAGS = {"--icl": "icl", "--react": "react"}
 ASK_USAGE = (
-    ".ask [--squall|--datalog] [--icl|--react] [--steps N] QUESTION"
+    ".ask [--squall|--datalog] [--icl|--react] [--steps N] [--refine] "
+    "QUESTION"
 )
 LLM_SETTINGS_USAGE = (
     ".llm [provider NAME|strategy icl|react|steps N|reload]"
 )
 LLM_USAGE = (
-    ".llm [--steps N] QUESTION | .llm [provider NAME|strategy icl|react|"
-    "steps N|reload]"
+    ".llm [--steps N] [--refine] QUESTION | .llm [provider NAME|strategy "
+    "icl|react|steps N|reload]"
 )
 # The first words of .llm that change the settings rather than ask.
 LLM_SETTINGS = ("provider", "strategy", "steps", "reload")
@@ -72,6 +73,9 @@ class AssistantState:
     # What the last answer was made of, to share it when it is rated:
     # (question, result, provider, strategy).
     last_run: Optional[tuple] = None
+    # The REPL's last query when the last answer was made, to tell whether
+    # a query ran since (see :func:`_previous`).
+    last_ran: Optional[tuple] = None
 
     def config(self):
         """Return the configuration, reading it the first time."""
@@ -114,13 +118,15 @@ def _llm_available(app) -> bool:
 class AskRequest(NamedTuple):
     """
     The options and the question of ``.ask`` or ``.llm``: the language,
-    the strategy and the most steps of the agent, None when not given.
+    the strategy and the most steps of the agent, None when not given, and
+    whether to *refine* the last query rather than start afresh.
     """
 
     language: Optional[str]
     strategy: Optional[str]
     question: str
     steps: Optional[int] = None
+    refine: bool = False
 
 
 def parse_steps(text: str) -> int:
@@ -137,10 +143,11 @@ def parse_ask(arg: str, usage: str = ASK_USAGE) -> AskRequest:
     Return the request of ``.ask`` *arg*: its options and its question.
 
     The options come first: ``--squall``/``--datalog``,
-    ``--icl``/``--react`` and ``--steps N``. The question is the rest of
-    the line, as typed.
+    ``--icl``/``--react``, ``--steps N`` and ``--refine``. The question is
+    the rest of the line, as typed.
     """
     language = strategy = steps = None
+    refine = False
     rest = arg.strip()
     while rest.startswith("--"):
         flag, _, remainder = rest.partition(" ")
@@ -151,10 +158,12 @@ def parse_ask(arg: str, usage: str = ASK_USAGE) -> AskRequest:
         elif flag == "--steps":
             value, _, remainder = remainder.strip().partition(" ")
             steps = parse_steps(value)
+        elif flag == "--refine":
+            refine = True
         else:
             raise ValueError(f"Unknown option {flag}. Usage: {usage}")
         rest = remainder.strip()
-    return AskRequest(language, strategy, rest, steps)
+    return AskRequest(language, strategy, rest, steps, refine)
 
 
 def _target_language(app, flag: Optional[str], config) -> str:
@@ -258,7 +267,8 @@ def _done_event(result) -> dict:
     return {
         "event": "done", "valid": result.valid, "query": result.query,
         "explanation": result.explanation, "error": result.error,
-        "calls": result.calls, "tokens": sum(result.usage.values()),
+        "calls": result.calls, "tokens": result.usage.get("input", 0)
+        + result.usage.get("output", 0),
         "seconds": result.seconds, "verified": result.verified,
         "back_translation": result.back_translation,
         "verification": result.verification,
@@ -342,6 +352,8 @@ def _show_result(app, result) -> None:
     usage = f"{result.calls} LLM calls"
     if tokens:
         usage += f", {tokens} tokens"
+    if result.usage.get("cached"):
+        usage += f", {result.usage['cached']} read from the cache"
     app.err_console.print(f"[dim]{usage}[/dim]")
     if result.query:
         _switch_language(app, result.language)
@@ -374,10 +386,7 @@ def cmd_ask(app, arg: str) -> None:
         return
     if not _llm_available(app):
         return
-    _run_assistant(
-        app, request.question, request.language, request.strategy,
-        request.steps,
-    )
+    _run_request(app, request, request.language, request.strategy)
 
 
 def _make_agent(app, provider, assistant, language, strategy, **options):
@@ -387,20 +396,130 @@ def _make_agent(app, provider, assistant, language, strategy, **options):
     return make_agent(
         app._nl, provider, assistant, language, strategy,
         engine_name=app.settings.engine_name, loaded=app.loaded_relations,
-        **options,
+        **_without_left_out(app), **options,
+    )
+
+
+def _without_left_out(app) -> dict:
+    """
+    Return the guidance and the examples of the assistant on an engine
+    leaving out predicates (``left_out_predicates``): the engine's, told
+    that they are not available, and without the examples using them.
+    """
+    from neurolang_apps.utils import engine_registry
+    from neurolang_apps.utils.llm.examples import load_examples
+
+    left_out, engine = app.left_out_predicates, app.settings.engine_name
+    if not (left_out and engine):
+        return {}
+    guidance = engine_registry.get_engine_config(engine).get(
+        "assistant_guidance", ""
+    )
+    return {
+        "guidance": (
+            f"{guidance}\nThese predicates are not available in this "
+            f"engine, which leaves them out: {', '.join(sorted(left_out))}."
+            "  Never use them: answer with the other predicates."
+        ),
+        "examples": [
+            example for example in load_examples(engine)
+            if not any(
+                uses_predicates(query, left_out)
+                for query in example.queries.values()
+            )
+        ],
+    }
+
+
+def _rows_text(block) -> str:
+    """Return what a result *block* holds, for the model: its rows, if any."""
+    frame = block.frame
+    if not len(frame):
+        return "The query ran and gave no rows."
+    shown = frame.head(5)
+    return (
+        f"The query gave {len(frame)} rows, the first {len(shown)}:\n"
+        + shown.to_string(index=False)
+    )
+
+
+def _run_outcome(app) -> str:
+    """
+    Return what the last query that ran gave: its error, or its rows, and
+    the notes it gave, such as a predicate that has no facts or rules.
+    """
+    if app.last_error:
+        return f"Error: {app.last_error[:600]}"
+    lines = []
+    if app.results_query is app.last_query:
+        lines = [_rows_text(block) for block in app.results[:3]]
+    return "\n".join(lines + app.last_notes)
+
+
+def _attempt_outcome(result) -> str:
+    """Return what was found against the assistant's *result*, if anything."""
+    if result.error:
+        return result.error
+    if result.back_translation and result.verified is False:
+        return (
+            "The check found that it may not answer the question: "
+            f"{result.verification}"
+        )
+    return ""
+
+
+def _previous(app):
+    """
+    Return the :class:`~.llm.agent.Previous` to refine, or None: the last
+    query that ran, if one ran since the assistant's last answer (it may
+    be the visitor's correction of it), else that answer, even if it
+    failed. The question is that of the assistant's last answer.
+    """
+    from neurolang_apps.utils.llm import Previous
+
+    state = app.assistant
+    asked = state.last_run[0] if state.last_run else ""
+    ran = app.last_query
+    if ran is not None and ran is not state.last_ran:
+        return Previous(asked, ran[0], _run_outcome(app))
+    if state.last_run and state.last_run[1].query:
+        result = state.last_run[1]
+        return Previous(asked, result.query, _attempt_outcome(result))
+    return None
+
+
+def _run_request(app, request, language, strategy) -> None:
+    """
+    Run the assistant on the *request* of ``.ask`` or ``.llm`` in the
+    *language* and with the *strategy* the command gives; with ``--refine``
+    it changes the last query for the question, if there is one.
+    """
+    previous = _previous(app) if request.refine else None
+    if request.refine and previous is None:
+        app.failed = True
+        app.console.print(
+            "[yellow]Nothing to refine: ask a question or run a query "
+            "first.[/yellow]"
+        )
+        return
+    _run_assistant(
+        app, request.question, language, strategy, request.steps, previous
     )
 
 
 def _run_assistant(
     app, question: str, language: Optional[str] = None,
     strategy: Optional[str] = None, steps: Optional[int] = None,
+    previous=None,
 ) -> None:
     """
     Write a query answering *question* and put it in the next prompt.
 
     *language*, *strategy* and *steps* (the most steps of the ReAct
     agent) override those of the session and of the configuration when
-    given.
+    given. With a *previous* attempt (see :func:`_previous`), the agent
+    changes its query, and what happened to it, for the question instead of
+    starting afresh.
     """
     from neurolang_apps.utils.llm import (
         AgentResult, LLMConfigError, LLMError
@@ -441,7 +560,7 @@ def _run_assistant(
             })
         try:
             result = call_interruptibly(
-                lambda: agent.run(question), app._print_stuck_hint
+                lambda: agent.run(question, previous), app._print_stuck_hint
             )
         except LLMError as exc:  # a failure, shared too
             result = AgentResult(language=language, error=str(exc))
@@ -457,6 +576,7 @@ def _run_assistant(
         return
     _show_result(app, result)
     state.last_run = (question, result, provider, agent.strategy)
+    state.last_ran = app.last_query
     feedback = state.feedback(_say(app))
     if feedback:
         answer = feedback.share(
@@ -569,9 +689,7 @@ def cmd_llm(app, arg: str) -> None:
             app.failed = True
             app.console.print(f"[yellow]Usage: {escape(LLM_USAGE)}[/yellow]")
             return
-        _run_assistant(
-            app, request.question, "datalog", "react", request.steps
-        )
+        _run_request(app, request, "datalog", "react")
         return
     from neurolang_apps.utils.llm import LLMConfigError
     value = value.strip()

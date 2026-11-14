@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 import neurolang
+from neurolang.confine import ConfinedError, check_write
 
 from .commands import command, sort_spec_text
 from .session import _plural
@@ -309,6 +310,11 @@ def cmd_transcript(app, arg: str) -> None:
         _transcript_failed(app, f"Usage: {TRANSCRIPT_USAGE}")
         return
     path, flags = parsed
+    try:  # a server writes no file of a statement (neurolang.confine)
+        check_write(path, "transcript")
+    except ConfinedError as exc:
+        _transcript_failed(app, str(exc))
+        return
     problem = _write_problem(path, "--force" in flags)
     if problem:
         _transcript_failed(app, problem)

@@ -17,10 +17,27 @@ export function matches(predicate, filter) {
   return filter.toLowerCase().split(/\s+/).filter(Boolean).every((word) => text.includes(word));
 }
 
-// Fill *list* with a button per example; a click gives its text to *pick*.
-export function renderExamples(list, queries, pick) {
+// Fill *list* with a button per example, of the *title*; a click gives its text to *pick*.
+// The question the box of the assistant suggests: one of *questions* at
+// random (random() in [0, 1)), when the box is *current*ly empty and the
+// assistant can answer (*ready*); "" otherwise.
+export function suggestedQuestion(questions, current, ready, random = Math.random) {
+  if (!ready || current.trim() || !questions.length) return "";
+  return questions[Math.min(questions.length - 1, Math.floor(random() * questions.length))];
+}
+
+// The query a first visit starts with: the first of the *examples* of the
+// language *mode*, when the *box* is empty and the browser has no history of
+// queries run here (*visited*); "" otherwise.
+export function startingQuery(examples, mode, { box, visited }) {
+  if (box.trim() || visited) return "";
+  return examples[mode]?.[0] ?? "";
+}
+
+// *shown*(query) is the text of its button, e.g. laid out (layout.js).
+export function renderExamples(list, queries, pick, title = "Put this query in the box", shown = (query) => query) {
   list.replaceChildren(...(queries ?? []).map((query) => {
-    const button = element("button", { type: "button", className: "guide-item", textContent: query, title: "Put this query in the box" });
+    const button = element("button", { type: "button", className: "guide-item", textContent: shown(query), title });
     button.addEventListener("click", () => pick(query));
     return element("li", {}, button);
   }));

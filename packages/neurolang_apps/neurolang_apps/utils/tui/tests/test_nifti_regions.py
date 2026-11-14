@@ -1,5 +1,7 @@
 """Tests for saving and viewing results on the regions of atlases."""
 
+import base64
+import gzip
 import io
 import json
 import re
@@ -16,6 +18,7 @@ pytest.importorskip("rich")
 import nibabel as nib  # noqa: E402
 from rich.console import Console  # noqa: E402
 
+from neurolang.atlases import Atlas  # noqa: E402
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils import engine_registry  # noqa: E402
 from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
@@ -84,10 +87,9 @@ def tiny(monkeypatch, tmp_path):
         "cortex": nib.Nifti1Image(_cortex_labels(), CORTEX_AFFINE),
         "deep": nib.Nifti1Image(deep, DEEP_AFFINE),
     }
-    engine_registry._register_atlas_labels(
-        nl, "cortex", {1: "A", 5: "A", 2: "B"}
-    )
-    engine_registry._register_atlas_labels(nl, "deep", {7: "C"})
+    for name, labels in (("cortex", {1: "A", 5: "A", 2: "B"}),
+                         ("deep", {7: "C"})):
+        nl.atlases[name] = Atlas.from_labels(name, nl.grids[name], labels)
     nl.add_tuple_set(
         [("A", 1), ("B", 1), ("A", 2), ("B", 3)], name="cortex_activated"
     )
@@ -226,8 +228,22 @@ class TestViewRegions:
         tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
         tiny._handle_dot_command(".view")
         img, kwargs = view_calls[-1]
-        assert kwargs["threshold"] == 0.0 and "connectome" not in kwargs
+        assert "connectome" not in kwargs
         assert _data(img).max() == 0.75
+        _remove_view_files(_output(tiny))
+
+    def test_regions_with_a_value_keep_their_top_5_percent(
+        self, tiny, view_calls
+    ):
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == "95%"
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_all_shown(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        assert view_calls[-1][1]["threshold"] == 0.0
         _remove_view_files(_output(tiny))
 
     def test_a_threshold_given(self, tiny, view_calls):
@@ -242,6 +258,81 @@ class TestViewRegions:
         tiny._handle_dot_command(".view")
         assert view_calls[-1][1]["threshold"] == "95%"
         _remove_view_files(_output(tiny))
+
+
+class TestViewRegionNames:
+    """Check .view gives the viewer the regions of the result, by name and
+    in the colours of their atlas."""
+
+    def test_the_regions_of_a_result_with_values(self, tiny, view_calls):
+        engine_registry._register_colours(
+            tiny._nl, "cortex", [(1, "#ff0000"), (2, "#00ff00")]
+        )
+        tiny._execute_and_display("ans(l, p) :- cortex_p(l, p)")
+        tiny._handle_dot_command(".view")
+        img, kwargs = view_calls[-1]
+        regions = kwargs["regions"]
+        assert regions.names == ["A", "B"]
+        assert regions.colours == ["#ff0000", "#00ff00"]
+        # the values are shown, the colours of the atlas asked for
+        assert not regions.coloured
+        numbers = _data(regions.image)
+        assert numbers.shape == _data(img).shape
+        assert set(np.unique(numbers[_cortex_labels() == 1])) == {1}
+        assert set(np.unique(numbers[_cortex_labels() == 2])) == {2}
+        _remove_view_files(_output(tiny))
+
+    def test_regions_alone_are_in_their_colours(self, tiny, view_calls):
+        tiny._execute_and_display("ans(l) :- cortex_activated(l, s)")
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert regions.coloured
+        # an atlas without colours: those of the palette
+        assert regions.colours == list(nifti.REGION_PALETTE[:2])
+        _remove_view_files(_output(tiny))
+
+    def test_the_regions_of_several_answers_in_the_colours_of_each(
+        self, tiny, view_calls
+    ):
+        """The answers of a program with several, regions each, are told
+        apart by the colour of their overlay: the colours of the atlas
+        start hidden, the names of the regions are kept."""
+        tiny._execute_and_display(
+            "ans[a](l) :- cortex_activated(l, s), (l == 'A')\n"
+            "ans[b](l) :- cortex_activated(l, s), (l == 'B')\n"
+        )
+        tiny._handle_dot_command(".view")
+        img, kwargs = view_calls[-1]
+        assert [name for name, _ in img] == ["a: mask", "b: mask"]
+        assert not kwargs["regions"].coloured
+        assert kwargs["regions"].names
+        _remove_view_files(_output(tiny))
+
+    def test_regions_of_two_atlases(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(l) :- cortex_activated(l, s) | deep_activated(l, s)"
+        )
+        tiny._handle_dot_command(".view")
+        regions = view_calls[-1][1]["regions"]
+        assert sorted(regions.names) == ["A", "B", "C"]
+        assert regions.image.shape == (8, 8, 8)
+        _remove_view_files(_output(tiny))
+
+    def test_the_page_draws_the_colours(self):
+        image = nib.Nifti1Image(
+            np.array([[[0, 1], [2, 0]]], dtype=np.int16), np.eye(4)
+        )
+        state = brain_viewer.regions_state(nifti.RegionLayer(
+            image, ["A", "B"], ["#ff0000", "#0000ff"], True,
+        ))
+        assert state["names"] == ["A", "B"] and state["coloured"]
+        colours = nib.Nifti1Image.from_bytes(
+            gzip.decompress(base64.b64decode(state["colours"]))
+        )
+        rgba = np.asanyarray(colours.dataobj)
+        assert tuple(rgba[0, 0, 1]) == (255, 0, 0, 255)
+        assert tuple(rgba[0, 1, 0]) == (0, 0, 255, 255)
+        assert rgba[0, 0, 0]["A"] == 0
 
 
 class TestViewNetworks:
@@ -291,6 +382,22 @@ class TestViewNetworks:
         ]
         assert [n["x"] for n in network["nodes"]] == [-2.0, 2.0]
         _remove_view_files(_output(tiny))
+
+    def test_several_value_columns_each_an_edge_value(self, tiny, view_calls):
+        tiny._execute_and_display(
+            "ans(a, b, p, q) :- cortex_pair(a, b, p), (q == 2 * p)"
+        )
+        tiny._handle_dot_command(".view")
+        network = view_calls[-1][1]["connectome"]
+        # The first value column, not 1 for every pair; each one offered.
+        assert [e["value"] for e in network["edges"]] == [0.75]
+        assert network["value"] == "p"
+        assert [v["value"] for v in network["values"]] == ["p", "q"]
+        assert [e["value"] for e in network["values"][1]["edges"]] == [1.5]
+        assert network["values"][1]["threshold"] <= 1.5
+        out = _output(tiny)
+        assert "value: 'p'" in out and "'q'" in out
+        _remove_view_files(out)
 
     def test_unknown_regions(self, tiny):
         tiny._nl.add_tuple_set([("X", "Y", 0.5)], name="cortex_pair")

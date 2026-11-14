@@ -344,8 +344,8 @@ def test_interactive_condition():
     assert res == expected
 
     res = completer.complete('C(x) :- A(x) // (A(x),').token_options
-    expected = {'Signs': {'values': {'∃', '@', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'False', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
+    expected = {'Signs': {'values': {'∃', '@', '(', '...'}}, 'Numbers': {'values': {'<float>', '<integer>'}}, 'Text': {'values': set()},
+                'Operators': {'values': {'~', '¬', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'RESAMPLE', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'False', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<text>', '<iri>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
     res = completer.complete('C(x) :- A(x) // (A(x), B(x))').token_options

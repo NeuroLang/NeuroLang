@@ -40,6 +40,17 @@ from nl_expr.type_system import (
 )
 
 
+def _is_adorned(functor) -> bool:
+    """
+    Whether *functor* is a predicate of the magic-sets rewriting: an
+    AdornedSymbol, or the Symbol named after one (``p^bf_0``) once the
+    probabilistic program has its adorned rules as plain ones.
+    """
+    return isinstance(functor, AdornedSymbol) or (
+        isinstance(functor, Symbol) and "^" in functor.name
+    )
+
+
 class TypeResolutionMixin(PatternWalker):
     """
     PatternWalker mixin that infers and propagates types in Datalog rules.
@@ -63,7 +74,7 @@ class TypeResolutionMixin(PatternWalker):
         # During magic-sets rewriting the adorned-datalog walker
         # creates rules whose head functor is an AdornedSymbol.
         # The original rules were already resolved — skip here.
-        if isinstance(head.functor, AdornedSymbol):
+        if _is_adorned(head.functor):
             head.change_type(bool)
             return self.walk(expression)
 
@@ -91,8 +102,7 @@ class TypeResolutionMixin(PatternWalker):
         # this by checking whether any body functor is an
         # AdornedSymbol (only the adorned walker produces these).
         if any(
-            isinstance(p, FunctionApplication)
-            and isinstance(p.functor, AdornedSymbol)
+            isinstance(p, FunctionApplication) and _is_adorned(p.functor)
             for p in predicates
         ):
             return

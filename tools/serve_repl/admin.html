@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroLang REPL: admin</title>
+<style>
+  /* The admin console of neurolang-repl-serve --users, for the group admin.
+     What users wrote (names, questions, comments) is shown as text only. */
+  :root { color-scheme: light dark; --line: #8884; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
+  body { margin: 0 auto; max-width: 70rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  .note { color: var(--dim); font-size: .85rem; margin: .2rem 0; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; }
+  td.text { max-width: 22rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  code { font-size: .85em; }
+  form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+  form + form { margin-top: .75rem; }
+  label { display: grid; gap: .15rem; font-size: .85rem; }
+  input, select, button { font: inherit; padding: .25rem .5rem; }
+  .own { color: var(--ok); } .none { color: var(--bad); }
+  #message { min-height: 1.2rem; } #message.error { color: var(--bad); }
+</style>
+</head>
+<body>
+<h1>NeuroLang REPL: admin</h1>
+<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="activity-link" hidden> · <a href="/admin/activity">Activity</a></span><span id="dashboard-link" hidden> · <a href="/admin/logs/">Raw data and SQL</a></span> · <a href="/logout">Log out</a></p>
+<p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
+<p id="message" role="status"></p>
+
+<section id="requests-box" hidden>
+<h2>Account requests</h2>
+<p class="note">Those who signed in with ORCID and are no user. Approving one adds them, named by their ORCID iD, to the groups given; they sign in with ORCID.</p>
+<div class="scroll"><table>
+  <thead><tr><th>ORCID iD</th><th>Name</th><th>Asked</th><th>Message</th><th>Groups</th><th></th></tr></thead>
+  <tbody id="requests"></tbody>
+</table></div>
+</section>
+
+<h2>Users</h2>
+<div class="scroll"><table>
+  <thead><tr><th>User</th><th>Groups</th><th>AI assistant</th><th>Variables</th><th>Own key</th><th></th></tr></thead>
+  <tbody id="users"></tbody>
+</table></div>
+
+<h2>Add a user, or change one</h2>
+<form id="change">
+  <label>User <input name="name" required autocomplete="off" list="names"></label>
+  <datalist id="names"></datalist>
+  <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged; none for an ORCID iD"></label>
+  <label>Groups <input name="groups" placeholder="admin, lab"></label>
+  <label>Their own key in the page <select name="own_key">
+    <option value="">unchanged</option><option value="inherit">as their groups say</option>
+    <option value="yes">allowed</option><option value="no">not allowed</option></select></label>
+  <button name="create" value="1">Add</button>
+  <button>Change</button>
+</form>
+<form id="user-llm">
+  <label>User <input name="name" required autocomplete="off" list="names"></label>
+  <label>Provider <select name="provider" class="providers"></select></label>
+  <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
+  <label>Key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
+  <label><span><input name="drop" type="checkbox"> remove</span></label>
+  <button>Set their assistant</button>
+</form>
+<p class="note" id="orcid-note" hidden>A user named by an ORCID iD (0000-0002-1825-0097) signs in with ORCID, and needs no password. Merged into a user of a name of their own (<em>merge into…</em> in the list above), that user signs in with the iD too; <em>Separate ORCID</em> makes it a user of its own again.</p>
+<p class="note">A user's assistant: the key their page gives (if allowed), else their own (set here or on their account page), else their groups', else the server's, else none: they give theirs in the page.</p>
+
+<h2>Groups</h2>
+<div class="scroll"><table>
+  <thead><tr><th>Group</th><th>Members</th><th>AI assistant</th><th>Variables</th><th>Own key</th></tr></thead>
+  <tbody id="groups"></tbody>
+</table></div>
+<form id="group">
+  <label>Group <input name="name" required autocomplete="off" list="group-names"></label>
+  <datalist id="group-names"></datalist>
+  <label>Provider <select name="provider" class="providers"></select></label>
+  <label>Model <input name="model" placeholder="the provider's"></label>
+  <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
+  <label>Key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
+  <label><span><input name="drop" type="checkbox"> remove the assistant</span></label>
+  <label>Its users' own key <select name="own_key">
+    <option value="">unchanged</option><option value="yes">allowed</option><option value="no">not allowed</option></select></label>
+  <button>Set the group</button>
+</form>
+<p class="note">The users of a group have its assistant unless they have their own; of several groups, the first by name gives it. A group may forbid its users their own key (a user's own setting wins).</p>
+
+<h2>Sessions</h2>
+<p class="note" id="builder-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th>User</th><th>Tab</th><th>Engine</th><th>Unused for</th><th>State</th><th>CPU</th><th>Memory</th><th></th></tr></thead>
+  <tbody id="sessions"></tbody>
+</table></div>
+<p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
+
+<h2>Usage by user</h2>
+<p class="note" id="usage-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th>User</th><th>Inputs</th><th>Failed</th><th>Time</th><th>CPU</th><th>Most memory</th><th>Tokens (in / out)</th><th>Last</th><th></th></tr></thead>
+  <tbody id="usage"></tbody>
+</table></div>
+
+<h2>Feedback</h2>
+<p class="note" id="feedback-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th>When</th><th>User</th><th>Groups</th><th>Engine</th><th>Question</th><th>Query</th><th>Ratings</th></tr></thead>
+  <tbody id="feedback"></tbody>
+</table></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// A row of cells, each a text or a node; a text is never read as HTML.
+function row(cells) {
+  const tr = document.createElement("tr");
+  for (const cell of cells) {
+    const td = document.createElement("td");
+    if (cell instanceof Node) td.append(cell);
+    else {
+      td.textContent = cell ?? "";
+      if (String(cell ?? "").length > 40) td.className = "text";
+    }
+    tr.append(td);
+  }
+  return tr;
+}
+
+function button(text, action) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.textContent = text;
+  node.addEventListener("click", action);
+  return node;
+}
+
+function say(text, error = false) {
+  $("message").textContent = text;
+  $("message").className = error ? "error" : "";
+}
+
+async function call(path, body) {
+  const response = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({ error: response.statusText }));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+async function change(path, body, done) {
+  try {
+    await call(path, body);
+    say(done);
+    await show();
+  } catch (error) {
+    say(error.message, true);
+  }
+}
+
+const ASSISTANT = {
+  own: "their own key", server: "the server's key", none: "no key: they give theirs",
+  unneeded: "no key needed", unknown: "unknown",
+};
+function assistant(user, labels = ASSISTANT) {
+  const span = document.createElement("span");
+  span.className = user.assistant === "group" ? "own" : user.assistant;
+  span.textContent = user.assistant === "group" ? `the key of the group ${user.group}` : labels[user.assistant] ?? ASSISTANT[user.assistant] ?? user.assistant;
+  const detail = document.createElement("div");
+  detail.className = "note";
+  detail.textContent = [user.provider, user.variable].filter(Boolean).join(" · ");
+  const cell = document.createElement("div");
+  cell.append(span, detail);
+  return cell;
+}
+
+// An ORCID iD: a user named by one signs in with ORCID.
+const ORCID_ID = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
+
+// Who a user is: their name, their name at ORCID, the iD they sign in with too.
+function who(user) {
+  const text = user.orcid_name ? `${user.name} (${user.orcid_name})` : user.name;
+  if (!user.orcid) return text;
+  const cell = document.createElement("div");
+  const note = Object.assign(document.createElement("div"), { className: "note" });
+  note.append("ORCID ", Object.assign(document.createElement("a"), {
+    href: `https://orcid.org/${user.orcid}`, target: "_blank", rel: "noopener", textContent: user.orcid }));
+  cell.append(text, note);
+  return cell;
+}
+
+// What an admin does to a user: an ORCID user merged into a user of a name of
+// their own (*named*), the iD of a user separated, a user removed.
+function actions(user, named) {
+  const cell = document.createElement("span");
+  if (ORCID_ID.test(user.name) && named.length) {
+    const into = document.createElement("select");
+    into.append(new Option("merge into…", ""), ...named.map((n) => new Option(n, n)));
+    into.addEventListener("change", () => {
+      const target = into.value;
+      into.value = "";
+      if (target && confirm(`Merge ${user.name} into ${target}? ${target} then signs in with this ORCID iD too, in the groups of both; ${user.name} is no more.`)) {
+        change("/admin/api/merge-orcid", { name: user.name, into: target }, `${target} signs in with ${user.name} now.`);
+      }
+    });
+    cell.append(into, " ");
+  }
+  if (user.orcid) {
+    cell.append(button("Separate ORCID", () => confirm(`Separate ${user.orcid} from ${user.name}? It becomes a user of its own, in ${user.name}'s groups but admin.`)
+      && change("/admin/api/separate-orcid", { name: user.name }, `${user.orcid} is a user of its own again.`)), " ");
+  }
+  cell.append(button("Remove", () => confirm(`Remove the user ${user.name} and end their sessions?`)
+    && change("/admin/api/remove-user", { name: user.name }, `${user.name} is removed.`)));
+  return cell;
+}
+
+function minutes(seconds) {
+  return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
+}
+
+async function show() {
+  const state = await call("/admin/api/state");
+  $("me").textContent = state.me;
+  $("names").replaceChildren(...state.users.map((u) => Object.assign(document.createElement("option"), { value: u.name })));
+  const named = state.users.filter((u) => !ORCID_ID.test(u.name) && !u.orcid).map((u) => u.name);
+  $("users").replaceChildren(...state.users.map((user) => row([
+    who(user), user.groups.join(", "), assistant(user), user.variables.join(", "),
+    (user.own_key ? "allowed" : "not allowed") + (user.own_key_set === undefined || user.own_key_set === null ? "" : " (theirs)"),
+    actions(user, named),
+  ])));
+  $("orcid-note").hidden = $("requests-box").hidden = !state.orcid;
+  $("requests").replaceChildren(...(state.requests.length ? state.requests.map((asked) => {
+    const groups = Object.assign(document.createElement("input"), { placeholder: "lab, …", size: 12 });
+    const link = Object.assign(document.createElement("a"), {
+      href: `https://orcid.org/${asked.orcid}`, target: "_blank", rel: "noopener", textContent: asked.orcid });
+    const actions = document.createElement("span");
+    actions.append(
+      button("Approve", () => change("/admin/api/approve-request", {
+        name: asked.orcid, groups: groups.value.split(",").map((g) => g.trim()).filter(Boolean),
+      }, `${asked.orcid} is added.`)),
+      " ",
+      button("Decline", () => confirm(`Decline the request of ${asked.orcid}?`)
+        && change("/admin/api/decline-request", { name: asked.orcid }, `The request of ${asked.orcid} is declined.`)),
+    );
+    return row([link, asked.name, new Date(asked.when * 1000).toISOString().replace("T", " ").slice(0, 16), asked.message, groups, actions]);
+  }) : [row(["No requests."])]));
+  $("group-names").replaceChildren(...state.groups.map((g) => Object.assign(document.createElement("option"), { value: g.name })));
+  $("groups").replaceChildren(...(state.groups.length ? state.groups.map((group) => row([
+    group.name, group.members.join(", "), group.llm || "-", group.variables.join(", "),
+    group.own_key ? "allowed" : "not allowed",
+  ])) : [row(["No groups."])]));
+  for (const select of document.querySelectorAll("select.providers")) {
+    if (!select.options.length) select.replaceChildren(...state.providers.map((p) => new Option(p.label, p.id)));
+  }
+  const sessions = state.sessions;
+  $("sessions").replaceChildren(...(sessions === null
+    ? [row(["The server runs no sessions of its own (without --local)."])]
+    : sessions.length ? sessions.map((s) => row([
+      s.user, s.tab.slice(0, 8), s.engine, minutes(s.idle), s.busy ? "at work" : s.running ? "running" : "ended",
+      s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
+      button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
+    ])) : [row(["No sessions."])]));
+  $("activity-link").hidden = !state.activity;
+  $("dashboard-link").hidden = !state.dashboard;
+  const builder = state.builder;
+  const limits = state.limits;
+  $("builder-note").textContent = [
+    limits ? `At most ${limits.sessions} sessions, ${limits.running} queries running at once` + (limits.query_seconds ? `, each for ${minutes(limits.query_seconds)} at most.` : ".") : "",
+    builder ? `The engines' builder, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "",
+  ].join(" ");
+  await showUsage(state.activity);
+  if (!state.feedback) {
+    $("feedback-note").textContent = "No feedback database: start the server with --feedback-db FILE.";
+    return;
+  }
+  // The examples of the assistant of each engine, one per question.
+  const links = state.feedback_engines.flatMap((engine, i) => [i ? ", " : "", Object.assign(document.createElement("a"), {
+    href: `/admin/feedback.yaml?engine=${encodeURIComponent(engine)}`, textContent: engine })]);
+  $("feedback-note").replaceChildren("The latest 200 rated answers. ", ...(links.length
+    ? ["Export the rated answers of the assistant as its examples (YAML, one per question), of ", ...links, "."] : []));
+  const answers = await call("/admin/api/feedback");
+  $("feedback").replaceChildren(...answers.map((answer) => row([
+    (answer.created ?? "").replace("T", " ").slice(0, 16), answer.user, answer.groups, answer.engine,
+    answer.question, answer.query,
+    answer.ratings.map((r) => r.verdict + (r.comment ? `: ${r.comment}` : "")).join("\n"),
+  ])));
+}
+
+// What each user ran (--activity-db), and their log.
+async function showUsage(logged) {
+  if (!logged) {
+    $("usage-note").textContent = "No log of the activity: start the server with --activity-db FILE.";
+    return $("usage").replaceChildren();
+  }
+  $("usage-note").replaceChildren("Inputs run, of them failed, their time and CPU seconds, the most memory of a session (MB), the tokens the assistant sent and received for them, from the log. By period, over time, and each input with its result: ",
+    Object.assign(document.createElement("a"), { href: "/admin/activity", textContent: "Activity" }), ".");
+  const users = await call("/admin/api/usage");
+  $("usage").replaceChildren(...(users.length ? users.map((u) => row([
+    u.user, u.inputs, u.failed, `${u.seconds ?? 0} s`, `${u.cpu ?? 0} s`, u.memory == null ? "-" : `${u.memory} MB`,
+    u.tokens_in == null ? "-" : `${u.tokens_in} / ${u.tokens_out}`,
+    (u.last ?? "").replace("T", " ").slice(0, 16),
+    Object.assign(document.createElement("a"), { href: `/admin/activity.jsonl?user=${encodeURIComponent(u.user)}`, textContent: "Log" }),
+  ])) : [row(["Nothing run yet."])]));
+}
+
+$("change").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const name = form.get("name").trim();
+  const body = { name, create: event.submitter?.name === "create" };
+  if (form.get("password")) body.password = form.get("password");
+  if (form.get("groups").trim() || body.create) body.groups = form.get("groups").split(",").map((g) => g.trim()).filter(Boolean);
+  const own = form.get("own_key");
+  if (own) body.own_key = own === "inherit" ? "inherit" : own === "yes";
+  change("/admin/api/user", body, body.create ? `${name} is added.` : `${name} is changed.`)
+    .then(() => { event.target.password.value = ""; });
+});
+
+// The assistant of a user or a group: a provider, its model, its address
+// (custom's) and its key (kept if not given again for the same provider and
+// address), or none.
+function llmOf(form) {
+  if (form.get("drop")) return false;
+  return { provider: form.get("provider"), model: form.get("model").trim(), base_url: form.get("base_url").trim(), key: form.get("key") };
+}
+
+$("user-llm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const name = form.get("name").trim();
+  change("/admin/api/user", { name, llm: llmOf(form) }, `The assistant of ${name} is ${form.get("drop") ? "removed" : "set"}.`)
+    .then(() => { event.target.key.value = ""; });
+});
+
+$("group").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const name = form.get("name").trim();
+  const body = { name };
+  if (form.get("drop") || form.get("key") || form.get("model").trim() || form.get("base_url").trim()) body.llm = llmOf(form);
+  const own = form.get("own_key");
+  if (own) body.own_key = own === "yes";
+  change("/admin/api/group", body, `The group ${name} is changed.`)
+    .then(() => { event.target.key.value = ""; });
+});
+
+show().catch((error) => say(error.message, true));
+</script>
+</body>
+</html>

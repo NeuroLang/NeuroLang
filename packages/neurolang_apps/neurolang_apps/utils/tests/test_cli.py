@@ -236,10 +236,15 @@ class TestEngineRegistry:
             )
 
     def test_datalog_init_in_config(self):
-        """Every engine with python_init should have inline datalog_init."""
+        """Every engine of this package with python_init should have
+        inline datalog_init; an engine of another package (tracts, of
+        the engine tracts) brings its rules with its python_init."""
         for name in engine_registry.list_engine_names():
             cfg = engine_registry.get_engine_config(name)
-            if "python_init" in cfg:
+            if any(
+                module.startswith("neurolang_apps.")
+                for module in cfg.get("python_init", [])
+            ):
                 code = cfg.get("datalog_init")
                 assert code, (
                     f"Engine {name!r} has python_init but no datalog_init"
@@ -623,6 +628,14 @@ class TestExecuteProgram:
     def test_multiple_queries_raises(self, nl):
         with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
+
+    def test_named_queries_give_a_result_each(self, nl):
+        result = _execute_program(
+            nl, "ans[x_of_r](x) :- R(x, y)\nans[z_of_s](z) :- S(z, w)"
+        )
+        assert list(result) == ["x_of_r", "z_of_s"]
+        assert result["x_of_r"].columns == ("x",)
+        assert result["z_of_s"].columns == ("z",)
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""

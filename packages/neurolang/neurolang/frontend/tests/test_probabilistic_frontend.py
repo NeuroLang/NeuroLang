@@ -74,6 +74,24 @@ def test_add_uniform_probabilistic_choice_set():
     assert res_d2.type is AbstractSet[Tuple[float, str]]
 
 
+def test_probabilistic_tuples_from_a_dataframe():
+    nl = NeurolangPDL()
+    facts = nl.add_probabilistic_facts_from_tuples(
+        pd.DataFrame({"p": [0.5, 0.2], "x": ["a", "b"]}), name="facts"
+    )
+    choice = nl.add_probabilistic_choice_from_tuples(
+        pd.DataFrame({"p": [0.4, 0.6], "x": ["a", "b"]}), name="choice"
+    )
+    assert facts.type is AbstractSet[Tuple[float, str]]
+    assert choice.type is AbstractSet[Tuple[float, str]]
+    with nl.scope:
+        nl.execute_datalog_program("q(x, p) :- PROB[facts(x) & choice(x)] = p")
+        result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert dict(result.itertuples(index=False)) == pytest.approx(
+        {"a": 0.2, "b": 0.12}
+    )
+
+
 def build_neurosynth_like_engine():
     """
     Build a small engine with the EDB of the neurosynth engine.
@@ -231,6 +249,24 @@ def test_disjunction_in_deterministic_rule_of_probabilistic_program():
     res = nl.execute_datalog_program(
         """
         q(x) :- t(x, "a") | t(x, "b")
+        ans(x, PROB) :- q(x), p(x)
+        """
+    )
+
+    assert set(res.to_unnamed()) == {(1, 0.5), (2, 0.2)}
+
+
+def test_disjunction_of_functions_in_probabilistic_program():
+    """The variables of a disjunct of functions are bound outside it."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="t")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.2, 2), (0.3, 3)], name="p"
+    )
+    nl.add_symbol(lambda prefix, s: s.startswith(prefix), name="startswith")
+    res = nl.execute_datalog_program(
+        """
+        q(x) :- t(x, y), (startswith("a", y) | startswith("b", y))
         ans(x, PROB) :- q(x), p(x)
         """
     )
@@ -436,6 +472,24 @@ def test_marg_query_several_constants():
         + "ans(i, p, r) :- both(i, p, r)"
     )
     assert set(res) == {(1, .5, 1.)}
+
+
+def test_function_argument_bound_by_a_rule():
+    """
+    Check a function argument bound by a rule left of it, with no constant.
+
+    ``q`` of ``close(q, s)`` is bound by ``definition(t, q)``, a rule:
+    magic sets restrict ``close`` to its definitions. Without a constant
+    in the query they used not to rewrite it, and ``q`` was unbound.
+    """
+    nl = build_similarity_engine()
+    nl.add_tuple_set([("t1", "math"), ("t2", "lang")], name="topic_def")
+    res = nl.execute_datalog_program(
+        CLOSE
+        + "definition(t, q) :- topic_def(t, q)\n"
+        + "ans(t, s) :- definition(t, q), close(q, s)"
+    )
+    assert set(res) == {("t1", "a"), ("t1", "b"), ("t2", "c")}
 
 
 def test_marg_query_unbound_variable():
@@ -2604,7 +2658,7 @@ def test_query_aggregating_probabilities_in_its_head():
         ("ans(v) :- act(v, y) & (v == 'b') & (v != 'c')", {("b",)}),
         ("ans(v, w) :- act(w, y) & (v == 'b') & (w == v)", {("b", "b")}),
         ("ans(v) :- act(v, y) & (v == 'b') & ~bad(v)", {("b",)}),
-        ("ans(count(v)) :- act(v, y) & (v == 'b')", {(2,)}),
+        ("ans(count(v)) :- act(v, y) & (v == 'b')", {(1,)}),
     ],
 )
 def test_rules_with_equalities_to_constants(program, expected):
@@ -2612,6 +2666,38 @@ def test_rules_with_equalities_to_constants(program, expected):
     nl.add_tuple_set([("a", 1), ("b", 2), ("b", 3)], name="act")
     nl.add_tuple_set([("z",)], name="bad")
     assert set(nl.execute_datalog_program(program)) == expected
+
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        ("ans(u, PROB) :- pact(u, y) & (u == 'u')", {("u", 0.5)}),
+        ("ans(y, PROB) :- pact(u, y) & ('y' == y)", {("y", 0.3)}),
+        (
+            "ans(u, PROB) :- pact(u, y) & other(u) & (u == 'u')",
+            {("u", 0.5)},
+        ),
+        (
+            "ans(u, z, PROB) :- pact(u, y) & (z == 'z')",
+            {("u", "z", 0.5), ("a", "z", 0.2), ("y", "z", 0.3)},
+        ),
+    ],
+)
+def test_probabilistic_equality_to_a_string_constant_spelled_as_a_variable(
+    program, expected
+):
+    """GH-1086: the constant 'u' is a value, not the column of `u`."""
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "u", "a"), (0.2, "a", "u"), (0.3, "y", "y")], name="pact"
+    )
+    nl.add_tuple_set([("u",), ("a",)], name="other")
+    res = nl.execute_datalog_program(program)
+    assert {
+        tuple(round(v, 6) if isinstance(v, float) else v for v in row)
+        for row in res.to_unnamed()
+    } == expected
+
 
 def test_query_the_lifted_solvers_decline_without_the_unate_check():
     """
@@ -2853,3 +2939,71 @@ def test_probabilistic_facts_of_a_program_text():
     )
     rows = result.as_pandas_dataframe().itertuples(index=False, name=None)
     assert set(rows) == {(1, 0.5), (2, 0.2)}
+
+
+@pytest.mark.parametrize("solver", ["default", "wmc"])
+@pytest.mark.parametrize("empty", [[], pd.DataFrame(columns=["a"])])
+def test_empty_deterministic_relation(solver, empty):
+    """An empty relation has the arity of its atoms: ~t(0) holds, and
+    t(y) does not."""
+    from ..probabilistic_frontend import (
+        wmc_solve_marg_query,
+        wmc_solve_succ_query,
+    )
+
+    solvers = {} if solver == "default" else dict(
+        probabilistic_solvers=(wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(wmc_solve_marg_query,),
+    )
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 0), (0.5, 1), (0.5, 2), (0.5, 3)], name="r"
+    )
+    nl.add_tuple_set(empty, name="t")
+    nl.execute_datalog_program(
+        "a(PROB) :- r(x), ~t(0)\n"
+        "b(PROB) :- r(x), t(y), (x < y), ~t(0)"
+    )
+    solution = nl.solve_all()
+    assert solution["a"].as_pandas_dataframe().iloc[0, 0] == pytest.approx(
+        1 - 0.5 ** 4
+    )
+    assert "b" not in solution or solution["b"].is_empty()
+
+
+def test_the_rules_of_the_magic_sets_rewriting_are_not_warned_about():
+    """The rules of the magic-sets rewriting name their predicates after
+    the adorned ones (``p^bf_0``): they are not the visitor's, nor
+    predicates without rules to tell about."""
+    import warnings
+
+    from nl_expr.logic import Implication
+
+    nl = NeurolangPDL()
+    x = Symbol("x")
+    rule = Implication(Symbol("q")(x), Symbol("p^bf_0")(x))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        nl.program_ir.walk(rule)
+    assert not [w for w in caught if "symbol table" in str(w.message)]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        nl.program_ir.walk(Implication(Symbol("q2")(x), Symbol("p")(x)))
+    assert [w for w in caught if "symbol table" in str(w.message)]
+
+
+def test_probabilistic_facts_of_values_of_several_types():
+    """The column of `r` has ints, strs and a float: the joins of its
+    relations, whose types are inferred from a tuple of each, do not
+    have to unify their types."""
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, 1), (0.3, "b"), (0.4, 2.5), (0.5, "d")], name="r"
+    )
+    result = nl.execute_datalog_program(
+        "ans(PROB) :- r(x), r(y), (x != y)"
+    )
+    # 1 - P[no fact] - P[exactly one fact]
+    assert result.as_pandas_dataframe().iloc[0, 0] == pytest.approx(
+        1 - 0.168 - 0.394
+    )

@@ -5,6 +5,7 @@ Datalog programs.
 
 
 import collections
+import functools
 import operator
 import typing
 from typing import Iterable
@@ -161,9 +162,11 @@ def all_body_preds_in_set(implication, predicate_set):
         in the prediacte_set
 
     """
-    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
-    predicate_set = predicate_set | {implication.consequent.functor}
-    return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
+    return all(
+        not isinstance(e, Symbol) or e in predicate_set
+        or e == implication.consequent.functor
+        for e in _body_predicates(implication)
+    )
 
 
 def any_body_preds_in_set(implication, predicate_set):
@@ -184,8 +187,7 @@ def any_body_preds_in_set(implication, predicate_set):
         in the predicate_set
 
     """
-    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
-    return any(e in predicate_set for e in preds)
+    return any(e in predicate_set for e in _body_predicates(implication))
 
 
 def extract_logic_free_variables(expression):
@@ -323,48 +325,82 @@ def stratify_obtain_recursive_stratum(to_process, seen):
     strata. Without such a component, every rule of *to_process* is in
     the stratum.
     """
-    for component in _recursive_components(to_process):
-        rules = [r for r in to_process if r.consequent.functor in component]
-        if all(all_body_preds_in_set(r, seen | component) for r in rules):
-            rest = [r for r in to_process if r not in rules]
+    for rules in _recursive_components(to_process):
+        component = {r.consequent.functor for r in rules}
+        allowed = seen | component
+        if all(all_body_preds_in_set(r, allowed) for r in rules):
+            rest = [
+                r for r in to_process if r.consequent.functor not in component
+            ]
             return rules, rest
     return list(to_process), []
 
 
 def _recursive_components(rules):
-    """The sets of the predicates defined by *rules* which depend on
-    each other, by the order of their first rule."""
+    """The rules of each set of the predicates defined by *rules* which
+    depend on each other, by the order of their first rule."""
     heads = {r.consequent.functor for r in rules}
     depends_on = {head: set() for head in heads}
     for r in rules:
         depends_on[r.consequent.functor] |= _body_predicates(r) & heads
-    reachable = _reachable_predicates(depends_on)
-    for head in dict.fromkeys(r.consequent.functor for r in rules):
-        yield {
-            other for other in reachable[head] | {head}
-            if head in reachable[other] | {other}
-        }
+    component = _strongly_connected_components(depends_on)
+    components = {}
+    for r in rules:
+        components.setdefault(component[r.consequent.functor], []).append(r)
+    return components.values()
 
 
+@functools.lru_cache(maxsize=1 << 14)
 def _body_predicates(implication):
-    return {
+    """The functors of the body of *implication*, cached: stratifying a
+    program walks each body once per stratum."""
+    return frozenset(
         atom.functor for atom in extract_logic_atoms(implication.antecedent)
-    }
+    )
 
 
-def _reachable_predicates(depends_on):
-    """The predicates each predicate of *depends_on* depends on, through
-    the dependencies of *depends_on*."""
-    reachable = {}
-    for head in depends_on:
-        pending, found = list(depends_on[head]), set()
-        while pending:
-            predicate = pending.pop()
-            if predicate not in found:
-                found.add(predicate)
-                pending += depends_on.get(predicate, ())
-        reachable[head] = found
-    return reachable
+def _strongly_connected_components(edges):
+    """``{node: index of its component}``, Tarjan's algorithm without
+    recursion; the nodes with no rule of their own are in no cycle."""
+    index, low, on_stack, stack = {}, {}, set(), []
+    component, count = {}, 0
+    for root in list(edges):
+        if root in index:
+            continue
+        work = [(root, iter(edges.get(root, ())))]
+        index[root] = low[root] = len(index)
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            node, successors = work[-1]
+            advanced = False
+            for succ in successors:
+                if succ not in edges:
+                    continue
+                if succ not in index:
+                    index[succ] = low[succ] = len(index)
+                    stack.append(succ)
+                    on_stack.add(succ)
+                    work.append((succ, iter(edges.get(succ, ()))))
+                    advanced = True
+                    break
+                if succ in on_stack:
+                    low[node] = min(low[node], index[succ])
+            if advanced:
+                continue
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[node])
+            if low[node] == index[node]:
+                while True:
+                    member = stack.pop()
+                    on_stack.discard(member)
+                    component[member] = count
+                    if member == node:
+                        break
+                count += 1
+    return component
 
 
 def stratify_obtain_new_stratum(to_process, seen):
@@ -485,7 +521,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
-            if rule not in idb[functor].formulas:
+            if rule not in getattr(idb.get(functor), "formulas", ()):
                 raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog " "instance."
                 )
@@ -504,9 +540,16 @@ def dependency_matrix(datalog, rules=None, instance=None):
         existential_symbols = set(
             rule.functor for rule in datalog.existential_rules.keys()
         )
+        # A predicate only in constraint bodies is an empty relation.
+        signature = set(
+            atom.functor
+            for formula in datalog.constraints().formulas
+            for atom in extract_logic_atoms(formula.antecedent)
+        )
     else:
         constraint_symbols = set()
         existential_symbols = set()
+        signature = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -529,6 +572,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
             elif (
                 isinstance(functor, Symbol)
                 and functor not in previous_symbols
+                and functor not in signature
                 and (
                     functor not in datalog.symbol_table
                     or functor in datalog.intensional_database()
@@ -766,18 +810,27 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
         return self.walk(Implication(new_consequent, new_antecedent))
 
 
+def _rule_variables(implication):
+    return extract_logic_free_variables(implication) | OrderedSet(
+        arg for arg in implication.consequent.args if isinstance(arg, Symbol)
+    )
+
+
 class FreshenFreeVariables(PatternWalker):
+    """
+    Rename apart the variables of a rule, those of its head included, so
+    that unifying its head with a query does not mix them with the query's.
+    """
+
     @add_match(
         Implication(FunctionApplication, ...),
         lambda implication: any(
-            not var.is_fresh
-            for var in extract_logic_free_variables(implication)
+            not var.is_fresh for var in _rule_variables(implication)
         ),
     )
     def implication_with_free_variables(self, implication):
         replacements = {
-            var: Symbol.fresh()
-            for var in extract_logic_free_variables(implication)
+            var: Symbol.fresh() for var in _rule_variables(implication)
         }
         implication = ReplaceExpressionWalker(replacements).walk(implication)
         return self.walk(implication)
@@ -1092,42 +1145,22 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         )
         eq_sets = list()
         for equality_predicate in equality_predicates:
-            if all(isinstance(arg, Symbol) for arg in equality_predicate.args):
-                UnifyVariableEqualities.add_equality_with_symbol(
-                    eq_sets, *equality_predicate.args
-                )
-            elif isinstance(equality_predicate.args[0], Symbol):
-                UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, *equality_predicate.args
-                )
-            else:
-                UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, *reversed(equality_predicate.args)
-                )
+            UnifyVariableEqualities.add_equality(
+                eq_sets, *equality_predicate.args
+            )
         return eq_sets
 
     @staticmethod
-    def add_equality_with_constant(eq_sets, symb, const):
-        found_eq_set = False
-        for eq_set in eq_sets:
-            if any(term == symb for term in eq_set):
-                eq_set.add(const)
-                found_eq_set = True
-        if not found_eq_set:
-            eq_sets.append({symb, const})
-
-    @staticmethod
-    def add_equality_with_symbol(eq_sets, first, second):
-        found_eq_set = False
-        for eq_set in eq_sets:
-            if any(term == first for term in eq_set):
-                eq_set.add(second)
-                found_eq_set = True
-            elif any(term == second for term in eq_set):
-                eq_set.add(first)
-                found_eq_set = True
-        if not found_eq_set:
-            eq_sets.append({first, second})
+    def add_equality(eq_sets, first, second):
+        """Merge the sets of the terms equal to `first` and to `second`:
+        the terms equal by transitivity are in one set, whatever the
+        order of the equalities."""
+        merged = {first, second}
+        for eq_set in list(eq_sets):
+            if any(term == first or term == second for term in eq_set):
+                merged |= eq_set
+                eq_sets.remove(eq_set)
+        eq_sets.append(merged)
 
     @staticmethod
     def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:

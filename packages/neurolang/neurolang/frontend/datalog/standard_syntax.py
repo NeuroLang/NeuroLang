@@ -42,6 +42,37 @@ AGGREGATION_FUNCS = frozenset(
 )
 
 
+ANS = "ans"
+
+
+def query_symbol(name=None):
+    """
+    Return the head symbol of a query: ``ans``, or ``ans[name]`` of the
+    query ``ans[name](...) :- ...`` that is named, which a program holds
+    several of.
+    """
+    return Symbol(ANS if name is None else f"{ANS}[{name}]")
+
+
+def is_query_head(head):
+    """Return whether *head* is the head of a query, named or not."""
+    functor = getattr(head, "functor", None)
+    return isinstance(functor, Symbol) and (
+        functor.name == ANS or (
+            functor.name.startswith(f"{ANS}[") and functor.name.endswith("]")
+        )
+    )
+
+
+def query_name(head):
+    """
+    Return the name of the query of *head*, that of ``ans[name](...)``;
+    ``ans`` for a query that is not named.
+    """
+    name = head.functor.name
+    return name[len(ANS) + 1:-1] if name != ANS else ANS
+
+
 GRAMMAR = u"""
 start: expressions
 expressions : (expression)+
@@ -78,6 +109,7 @@ prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
                | "PROB" "[" predicate PROB_SEP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
+      | "ans" "[" cmd_identifier "]" "(" [ arguments ] ")" -> named_query
 
 condition : composite_predicate PROB_SEP composite_predicate
 ?composite_predicate : predicate
@@ -100,6 +132,11 @@ OR_SYMBOL : "|" | "\N{LOGICAL OR}"
 conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
 AND_SYMBOL : "\N{LOGICAL AND}"
 
+// In parentheses a comparison is a formula of its own, a disjunct or a
+// conjunct: (t == 'a' | t == 'b'), (x < 3, y > 2).
+?parenthesised_disjunction : parenthesised_conjunction (OR_SYMBOL parenthesised_conjunction)* -> disjunction
+parenthesised_conjunction : (predicate | comparison) (("," | "&" | AND_SYMBOL) (predicate | comparison))* -> conjunction
+
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
 // After "((f(x)" a "," or ")" cannot tell a parenthesised body formula
@@ -109,8 +146,7 @@ NEG_UNICODE : "\u00AC"
 predicate.2 : id_application
           | negated_predicate
           | existential_predicate
-          | "(" comparison ")"
-          | "(" disjunction ")"
+          | "(" parenthesised_disjunction ")"
           | logical_constant
           | prob_body_predicate
           | resample_body_predicate
@@ -299,6 +335,17 @@ class DatalogTransformer(Transformer):
 
         self.locals = locals
         self.globals = globals
+        # the variables written "_", each a fresh symbol
+        self.anonymous = set()
+
+    def _hide_anonymous(self, formula):
+        """``∃`` the anonymous variables of a formula: in a negation or a
+        disjunct, ``_`` is quantified there, ``~p(x, _)`` is ``~∃y p(x, y)``.
+        """
+        for v in extract_logic_free_variables(formula):
+            if v in self.anonymous:
+                formula = ExistentialPredicate(v, formula)
+        return formula
 
     def start(self, ast):
         return ast[0]
@@ -471,7 +518,7 @@ class DatalogTransformer(Transformer):
                 result = self._build_prob_rule(head, prob_specs, new_body)
                 return self._ans_main_rule_as_query(head, result)
 
-        if isinstance(head, Expression) and head.functor == Symbol("ans"):
+        if is_query_head(head):
             return Query(ast[0], body_or_cond)
         else:
             return Implication(ast[0], body_or_cond)
@@ -486,9 +533,7 @@ class DatalogTransformer(Transformer):
         ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
         queried as ``ans(t, n) :- fresh(t, n)``.
         """
-        if not (
-            isinstance(head, Expression) and head.functor == Symbol("ans")
-        ):
+        if not is_query_head(head):
             return result
         if isinstance(result, Implication):
             result = Union((result,))
@@ -681,13 +726,7 @@ class DatalogTransformer(Transformer):
             if result_var not in head_args:
                 head_args.append(result_var)
 
-        if isinstance(head, Query) or (
-            isinstance(head, Expression)
-            and hasattr(head, 'functor')
-            and head.functor == Symbol("ans")
-        ):
-            new_head = head.functor(*head_args)
-        elif hasattr(head, 'functor'):
+        if hasattr(head, 'functor'):
             new_head = head.functor(*head_args)
         else:
             new_head = head
@@ -921,9 +960,18 @@ class DatalogTransformer(Transformer):
         return Conjunction(conj)
 
     def disjunction(self, ast):
+        disjuncts = [c for c in ast if isinstance(c, Expression)]
+        if len(disjuncts) == 1:
+            # A formula in parentheses, (x < 3) or (a(x), b(x)): itself
+            formula = disjuncts[0]
+            if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
+                formula = formula.formulas[0]
+            return formula
         return Disjunction(tuple(
-            c.formulas[0]
-            if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            self._hide_anonymous(
+                c.formulas[0]
+                if isinstance(c, Conjunction) and len(c.formulas) == 1 else c
+            )
             for c in ast if isinstance(c, Expression)
         ))
 
@@ -949,7 +997,7 @@ class DatalogTransformer(Transformer):
         if isinstance(formula, Conjunction) and len(formula.formulas) == 1:
             # A formula in parentheses: ~(a(x))
             formula = formula.formulas[0]
-        return Negation(formula)
+        return Negation(self._hide_anonymous(formula))
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1].value])
@@ -1014,18 +1062,18 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        arguments_raw = ast[0]
-        if arguments_raw is not None:
-            if isinstance(arguments_raw, tuple):
-                arguments = list(arguments_raw)
-            else:
-                arguments = list(arguments_raw) if arguments_raw else []
+        return self._query_head(query_symbol(), ast[0])
 
-            arguments = self._wrap_aggregation_args(arguments)
-            arguments = self._expand_implicit_prob(arguments)
-            return Symbol("ans")(*arguments)
-        else:
-            return Symbol("ans")()
+    def named_query(self, ast):
+        return self._query_head(query_symbol(ast[0].name), ast[1])
+
+    def _query_head(self, symbol, arguments_raw):
+        if arguments_raw is None:
+            return symbol()
+        arguments = list(arguments_raw) if arguments_raw else []
+        arguments = self._wrap_aggregation_args(arguments)
+        arguments = self._expand_implicit_prob(arguments)
+        return symbol(*arguments)
 
     def statement(self, ast):
         return Statement(ast[0], ast[2])
@@ -1122,7 +1170,9 @@ class DatalogTransformer(Transformer):
         ast = ast[0]
         if isinstance(ast, Expression):
             if isinstance(ast, Symbol) and ast.name == "_":
-                return Symbol.fresh()
+                fresh = Symbol.fresh()
+                self.anonymous.add(fresh)
+                return fresh
             return ast
         else:
             return Symbol.fresh()

@@ -2,12 +2,15 @@ import pytest
 
 from ..agent import (
     IclAgent,
+    Previous,
     ReactAgent,
+    Toolbox,
     extract_query,
     make_agent,
     parse_text_action,
     parse_verdict,
 )
+from ..context import EngineContext
 from ..providers import LLMError, Reply
 from .fakes import ScriptedClient, assistant_config, provider
 
@@ -440,14 +443,34 @@ def test_repeated_call_is_not_run_again(nl):
         f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}',
     ]
     react, steps = agent(nl, ReactAgent, replies, language="datalog")
-    react.context.search_values = lambda *a: "mentions.c1: pain"
+    react.context.search_values = lambda *a: "Facts:\nmentions.c1: pain"
     result = react.run("Which studies mention pain?")
     assert result.valid
     assert steps[1].observation == (
         "You already called search_values with these arguments, which "
-        "gave:\nmentions.c1: pain\nDo not call it again: use that result "
-        "and take the next step."
+        "gave:\nFacts:\nmentions.c1: pain\nDo not call it again: use that "
+        "result and take the next step."
     )
+
+
+def test_searches_without_new_values_ask_for_a_query(nl):
+    replies = [
+        f'Action: search_values\nAction Input: {{"pattern": "{p}"}}'
+        for p in ("pain", "pai", "pain", "ache")
+    ] + [f'Action: final_answer\nAction Input: {{"query": "{PAIN_DATALOG}"}}']
+    react, steps = agent(
+        nl, ReactAgent, replies, language="datalog", max_steps=5
+    )
+    react.context.search_values = (
+        lambda pattern, *a: f"Facts with values containing {pattern!r}:\n"
+        f"term('{pattern.replace('pai', 'pain')[:4]}')"
+    )
+    assert react.run("Which studies mention pain?").valid
+    notice = "Your searches find no new values: write the query"
+    assert notice not in steps[1].observation
+    assert notice in steps[2].observation
+    assert steps[2].observation.startswith("You already called")
+    assert notice not in steps[3].observation  # 'ache' is new
 
 
 def test_engine_guidance_is_in_the_prompt(nl, monkeypatch):
@@ -633,3 +656,74 @@ def test_explain_translates_a_query_into_english(nl):
     messages = react.client.requests[0]["messages"]
     assert PAIN_DATALOG in messages[1]["content"]
     assert "# Predicates\n- mentions(" in messages[1]["content"]
+
+
+def test_describe_predicate_stops_a_rule_too_slow_to_sample(nl, monkeypatch):
+    import time
+
+    context = EngineContext(nl)
+    monkeypatch.setattr(
+        context, "describe", lambda name: time.sleep(30)
+    )
+    toolbox = Toolbox(context, "datalog", query_timeout=0.5)
+    observation, _ = toolbox.call("describe_predicate", {"name": "mentions"})
+    assert observation.startswith("Computing the rows of mentions takes too")
+
+
+PREVIOUS = Previous(
+    "Which studies mention pain?", "ans(s) :- mention(s, 'pain')",
+    "Error: Undefined symbol mention",
+)
+
+
+def _user_message(agent_, index=0):
+    return agent_.client.requests[index]["messages"][1]["content"]
+
+
+def test_icl_refines_the_previous_query_for_a_new_question(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    result = icl.run("Only those with a peak?", previous=PREVIOUS)
+    assert result.valid and result.query == PAIN_DATALOG
+    message = _user_message(icl)
+    assert "# Previous question\nWhich studies mention pain?" in message
+    assert "ans(s) :- mention(s, 'pain')" in message
+    assert "Error: Undefined symbol mention" in message
+    assert message.rstrip().endswith("Only those with a peak?") or (
+        "# New question\nOnly those with a peak?" in message
+    )
+    assert "Change the previous query" in message
+
+
+def test_react_refines_the_previous_query_for_a_new_question(nl):
+    react, _ = agent(nl, ReactAgent, [answer(PAIN_DATALOG)],
+                     language="datalog")
+    result = react.run("Only those with a peak?", previous=PREVIOUS)
+    assert result.valid
+    message = _user_message(react)
+    assert "# Previous Datalog query\nans(s) :- mention(s, 'pain')" in message
+    assert "# What happened when it ran\nError: Undefined symbol" in message
+    assert "# New question\nOnly those with a peak?" in message
+
+
+def test_a_question_without_a_previous_query_is_asked_as_it_is(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    icl.run("Which studies mention pain?")
+    assert _user_message(icl) == "Which studies mention pain?"
+    # and a refinement does not stay for the next question
+    icl.client.replies.append(fenced(PAIN_DATALOG, "datalog"))
+    icl.run("Only those with a peak?", previous=PREVIOUS)
+    icl.client.replies.append(fenced(PAIN_DATALOG, "datalog"))
+    icl.run("Another question?")
+    assert _user_message(icl, 2) == "Another question?"
+
+
+def test_the_refinement_leaves_out_what_is_not_known(nl):
+    icl, _ = agent(nl, IclAgent, [fenced(PAIN_DATALOG, "datalog")],
+                   language="datalog")
+    icl.run("Only those with a peak?", previous=Previous("", PAIN_DATALOG, ""))
+    message = _user_message(icl)
+    assert "# Previous question" not in message
+    assert "# What happened when it ran" not in message
+    assert f"# Previous Datalog query\n{PAIN_DATALOG}" in message

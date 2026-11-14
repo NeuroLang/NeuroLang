@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
+from neurolang.confine import confined_roots
 from rich import box
 from rich.table import Table
 
@@ -390,9 +391,10 @@ def _name_problem(app, name: str, explicit: bool):
     return None
 
 
-def _read_rows(path: Path) -> pd.DataFrame:
-    """Return the rows of the relation file *path*, which must have some."""
-    df = engine_registry.read_relation_file(path)
+def _read_rows(path: Path, data: bytes = None) -> pd.DataFrame:
+    """Return the rows of the relation file *path* (or of the bytes *data*
+    it names), which must have some."""
+    df = engine_registry.read_relation_file(path, data)
     if df.empty:
         raise pd.errors.EmptyDataError("no rows")
     return df
@@ -446,20 +448,59 @@ def _load_arguments(arg: str):
     return words if 1 <= len(words) <= 2 else None
 
 
+# The files a page uploads (WebRepl.upload): their names, the bytes of
+# one, and of all those of a session, which keeps them in its memory.
+UPLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\Z")
+MOST_UPLOAD_BYTES = 50 << 20
+MOST_UPLOADS_BYTES = 200 << 20
+
+
+def store_upload(app, name: str, data: bytes) -> None:
+    """
+    Keep the file *name*, of the bytes *data*, that the page uploaded, for
+    ``.load NAME``: in the memory of the session, never on a disk, and
+    gone with it. A ValueError tells why it is refused (its name, its
+    format, its size).
+    """
+    if not isinstance(name, str) or not UPLOAD_NAME.match(name) \
+            or ".." in name:
+        raise ValueError(f"{name!r} is not the name of a file: letters, "
+                         "digits, '.', '_', '-' and spaces")
+    engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
+    if len(data) > MOST_UPLOAD_BYTES:
+        raise ValueError(f"{name} is over {MOST_UPLOAD_BYTES >> 20} MB")
+    kept = sum(len(d) for n, d in app.uploads.items() if n != name)
+    if kept + len(data) > MOST_UPLOADS_BYTES:
+        raise ValueError(f"The uploads of a session hold at most "
+                         f"{MOST_UPLOADS_BYTES >> 20} MB")
+    app.uploads[name] = bytes(data)
+
+
 @command(
-    ".load", "Load a CSV or TSV file (optionally gzipped) as a relation",
-    ".load PATH [NAME]",
+    ".load", "Load a CSV or TSV file (optionally gzipped), or one the page "
+    "uploaded, as a relation",
+    ".load PATH|UPLOADED [NAME]",
 )
 def cmd_load(app, arg: str) -> None:
-    """Load the file named in *arg* as a relation of the session."""
+    """Load the file named in *arg* as a relation of the session: one the
+    page uploaded (store_upload) by its name, or a path; on a server, which
+    reads none of its files for a statement (neurolang.confine), an
+    uploaded one only."""
     words = _load_arguments(arg)
     if words is None:
-        _load_failed(app, "Usage: .load PATH [NAME]")
+        _load_failed(app, "Usage: .load PATH|UPLOADED [NAME]")
         return
-    path = Path(words[0]).expanduser()
+    data = app.uploads.get(words[0])
+    if data is None and confined_roots() is not None:
+        _load_failed(app, f"No file {words[0]} was uploaded: this server "
+                     "loads the files you upload (the Upload button) by "
+                     "their name, not its own files")
+        return
+    path = Path(words[0]) if data is not None else \
+        Path(words[0]).expanduser()
     name = words[1] if len(words) == 2 else default_relation_name(path)
     try:
-        df = _read_rows(path)
+        df = _read_rows(path, data)
     except Exception as exc:
         _load_failed(app, _load_error_message(path, exc), exc)
         return

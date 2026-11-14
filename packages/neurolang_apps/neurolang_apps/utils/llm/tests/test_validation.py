@@ -19,6 +19,8 @@ def symbols(nl):
 
 @pytest.mark.parametrize("query, language", [
     ("ans(s) :- mentions(s, 'pain')", "datalog"),
+    ("ans[pain](s) :- mentions(s, 'pain')", "datalog"),
+    ("ans() :- mentions(1, 'pain')", "datalog"),
     ("obtain every Study that mentions 'pain'.", "squall"),
 ])
 def test_valid_queries(nl, query, language):
@@ -277,6 +279,32 @@ def test_search_all_stored_relations(nl):
     )
 
 
+def test_search_a_rule_whose_columns_have_the_same_name(nl, monkeypatch):
+    monkeypatch.setattr(
+        "neurolang_apps.utils.llm.context.declared_predicates",
+        lambda name: {"below": {"columns": ["iri", "iri"]}},
+    )
+    nl.add_tuple_set(
+        [("http://x.org/A", "http://x.org/B"),
+         ("http://x.org/B", "http://x.org/C")], name="sub",
+    )
+    nl.execute_datalog_program(
+        "below(x, y) :- sub(x, y)\nbelow(x, z) :- below(x, y), sub(y, z)"
+    )
+    context = EngineContext(nl, "neurosynth")
+    facts = [
+        "below(<http://x.org/A>, <http://x.org/C>)",
+        "below(<http://x.org/B>, <http://x.org/C>)",
+    ]
+    assert context.search_values("x.org/C", "below", 1).splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/C", "below").splitlines()[1:] \
+        == facts
+    assert context.search_values("x.org/A", "below", 1).endswith(
+        "its values are: 'http://x.org/B', 'http://x.org/C'"
+    )
+
+
 def test_rows_of_a_rule(nl):
     nl.execute_datalog_program("pain_study(s) :- mentions(s, 'pain')")
     context = EngineContext(nl)
@@ -387,6 +415,31 @@ def test_previews_stop_queries_using_too_much_memory(forking, nl, monkeypatch):
     assert not preview.ok and "too much memory" in preview.text
 
 
+def test_memory_of_a_child_is_not_that_it_reads(forking):
+    """A child reading the memory of its parent, as a query reads the
+    engine's relations, shares it: only what it allocates counts."""
+    import time
+
+    import numpy as np
+
+    from ..validation import QueryTooLarge, _in_child
+
+    data = np.ones(300 * 2 ** 20 // 8)
+
+    def read():
+        time.sleep(2)  # polled while it holds the pages it read
+        return float(data.sum())
+
+    def copy():
+        hoard = data.copy()
+        time.sleep(30)
+        return float(hoard.sum())
+
+    assert _in_child(read, 20, 200) == data.size
+    with pytest.raises(QueryTooLarge):
+        _in_child(copy, 20, 200)
+
+
 def test_previews_report_a_crashed_child(forking, nl, monkeypatch):
     """A child killed by a signal (e.g. a library that cannot run after
     fork) is reported as a crash, not as a query using too much memory.
@@ -427,3 +480,18 @@ def test_previews_without_fork_run_in_a_thread(nl, monkeypatch):
         memory_mb=4096,
     )
     assert preview.ok and preview.rows == 4
+
+
+def test_a_predicate_the_engine_leaves_out_is_not_available(nl):
+    """The assistant is told that a predicate the engine leaves out (the
+    browser's, see ``WebRepl``) is not available, not that it is
+    unknown."""
+    nl.left_out_predicates = frozenset({"uniformity"})
+    result = check_query(
+        nl, "ans(i, j, k, u) :- uniformity('pain', i, j, k, u)", "datalog"
+    )
+    assert not result.ok
+    assert "uniformity is not available in the browser" in result.message
+    assert "has no facts or rules" not in result.message
+    described = EngineContext(nl).describe("uniformity")
+    assert "uniformity is not available in the browser" in described

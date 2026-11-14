@@ -6,7 +6,7 @@ import pytest
 
 from ...datalog.basic_representation import WrappedRelationalAlgebraSet
 from nl_expr.exceptions import NeuroLangException
-from nl_expr.expressions import Constant, FunctionApplication, Symbol
+from nl_expr.expressions import Constant, FunctionApplication, Symbol, Unknown
 from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -347,6 +347,23 @@ def test_sort_typed_const_named_relation_tuple_type_args():
         )
         is sorted_type
     )
+
+
+def test_difference_of_named_relations_one_of_a_known_type():
+    """A named relation of no known type has its type inferred in the order
+    of its columns; the type of another is known in the order of their
+    names: both are in the order of the names, so that they unify."""
+    left = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(1, "a"), (2, "b")])
+    )
+    right = Constant[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(("x", "h"), [(2, "b")])
+    )
+    solution = RelationalAlgebraSolver().walk(Difference(left, right))
+    assert solution.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "h"), [(1, "a")]
+    )
+    assert solution.type is AbstractSet[Tuple[int, str]]
 
 
 def test_infer_relation_type():
@@ -858,3 +875,29 @@ def test_the_type_of_a_set_operation_follows_the_columns_of_its_result(
     assert result.type == AbstractSet[Tuple[tuple(
         column_types[c] for c in result.value.columns
     )]]
+
+
+@pytest.mark.parametrize(
+    "operation", [NaturalJoin, LeftNaturalJoin, Difference, Union]
+)
+def test_a_column_of_values_of_several_types(operation):
+    """The types of the relations are inferred from a tuple of each, as
+    `int` for the column `x` of one and `str` for the other: the column is
+    of no known type, and that of the same type in both keeps it."""
+    left = C_[AbstractSet[Tuple[int, float]]](
+        NamedRelationalAlgebraFrozenSet(("x", "p"), [(1, 0.5), ("b", 0.5)])
+    )
+    right = C_[AbstractSet[Tuple[str, float]]](
+        NamedRelationalAlgebraFrozenSet(("x", "p"), [("b", 0.5), (1, 0.5)])
+    )
+    result = RelationalAlgebraSolver().walk(operation(left, right))
+    expected = {
+        NaturalJoin: [(1, 0.5), ("b", 0.5)],
+        LeftNaturalJoin: [(1, 0.5), ("b", 0.5)],
+        Difference: [],
+        Union: [(1, 0.5), ("b", 0.5)],
+    }[operation]
+    assert result.value == NamedRelationalAlgebraFrozenSet(
+        ("x", "p"), expected
+    )
+    assert result.type == AbstractSet[Tuple[Unknown, float]]

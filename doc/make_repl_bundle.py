@@ -2,9 +2,9 @@
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
-- for each engine of the page (``neurosynth``, the page's default, and
-  ``neurostore``), the data it needs, as a zip in the layout of its data
-  directory, and
+- for each engine of the page (``neurosynth``, ``neurosynth_iit``, the
+  page's default, ``neurostore`` and ``neurostore_iit``), the data it
+  needs, as a zip in the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
 - ``highlight.json``, the words the page's code box colours, and
 - with torch installed (the ``embeddings`` extra), the files of the
@@ -13,7 +13,22 @@ Build what the in-browser REPL downloads, in OUTPUT_DIR:
   <neurolang_apps.utils.specter2_numpy>` and the embeddings of the
   studies, named in ``bundle.json`` by their path in the data directory.
 
-The engine downloads its data (about 100 MB) on first use. The browser
+``neurosynth_iit`` is Neurosynth with tractography, and ``neurostore_iit``
+NeuroStore with the same tractogram. Their engines.yaml entry,
+``iit_tractogram``,
+downloads the IIT Human Brain Atlas v3 (its whole-brain tractogram
+``IIT3mean.tck``, its wmparc and FreeSurfer's colour LUT) and has a
+``tractogram`` entry (``path``, ``subsample``, ``step``, ``seed``): the file
+``path`` of the data is replaced by its subsample (``subsample_tractogram``),
+``subsample`` streamlines drawn at random with ``seed`` and thinned to every
+``step``-th point, in the same format and at the same path, so that the
+engine's program is the same in the page. Each has the studies of
+``neurosynth`` or ``neurostore``, so it takes the files of their text
+embeddings instead of embedding them again (the same ids give the same
+``EmbeddingIndex.cache_key``, which is checked).
+
+The engine downloads its data on first use (about 100 MB, 190 MB with the
+tractogram). The browser
 needs less: of the MNI152 and Harvard-Oxford images only the ones the
 engine reads are kept, and the others are emptied rather than removed,
 because the fetchers of nilearn look for every file of a dataset; of the
@@ -54,10 +69,21 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-# The engines the page offers, the first being its default.
-ENGINES = ("neurosynth", "neurostore")
+# The engines the page offers, in the order they are built: an engine
+# sharing the text embeddings of another (EMBEDDINGS_FROM) after it.
+ENGINES = ("neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit")
 ENGINE = ENGINES[0]
-LABELS = {"neurosynth": "Neurosynth", "neurostore": "NeuroStore"}
+# The engine the page starts with, when the bundle has it.
+DEFAULT_ENGINE = "neurosynth_iit"
+LABELS = {
+    "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
+    "neurosynth_iit": "Neurosynth + tracts",
+    "neurostore_iit": "NeuroStore + tracts",
+}
+# The engines that have the studies of another and so its text embeddings.
+EMBEDDINGS_FROM = {
+    "neurosynth_iit": "neurosynth", "neurostore_iit": "neurostore",
+}
 RESOLUTION = 2.0
 HIGHLIGHT_WORDS = "highlight.json"
 
@@ -134,7 +160,23 @@ def write_highlight_words(output: Path) -> None:
 
 def build_engine(
     data_dir: Path, use_cache: bool = True, engine: str = ENGINE
-) -> None:
+):
+    """Build the engine from the data directory, as ``_build_engine`` does;
+    an engine of the tractogram is run from it, as the page does, since it
+    reads its files by a relative path."""
+    if not tractogram_entry(engine):
+        return _build_engine(data_dir, use_cache, engine)
+    cwd = os.getcwd()
+    os.chdir(data_dir)
+    try:
+        return _build_engine(data_dir, use_cache, engine)
+    finally:
+        os.chdir(cwd)
+
+
+def _build_engine(
+    data_dir: Path, use_cache: bool, engine: str
+):
     """
     Build the engine on *data_dir*, which downloads what it lacks.
 
@@ -146,7 +188,7 @@ def build_engine(
     from neurolang_apps.utils import engine_registry
 
     try:
-        engine_registry.build_engine(
+        return engine_registry.build_engine(
             engine, data_dir, RESOLUTION, use_cache=use_cache
         )
     except requests.exceptions.SSLError:
@@ -154,7 +196,7 @@ def build_engine(
         if system is None:
             raise
         os.environ["REQUESTS_CA_BUNDLE"] = str(system)
-        engine_registry.build_engine(
+        return engine_registry.build_engine(
             engine, data_dir, RESOLUTION, use_cache=use_cache
         )
 
@@ -200,7 +242,7 @@ def trim(data_dir: Path, engine: str = ENGINE) -> None:
         for image in (data_dir / dataset).rglob("*.nii.gz"):
             if image.name not in KEPT_IMAGES:
                 image.write_bytes(b"")
-    if engine == "neurostore":
+    if engine in ("neurostore", "neurostore_iit"):
         trim_neurostore(data_dir / "neurostore")
 
 
@@ -230,6 +272,55 @@ def trim_neurostore(directory: Path) -> None:
                 ]
             table = parquet.read_table(path, columns=list(columns))
             parquet.write_table(table, path, compression="zstd")
+
+
+def subsample_tractogram(
+    source: Path, target: Path, count: int, step: int = 1, seed: int = 0,
+) -> None:
+    """
+    Write in *target* a tractogram, of the format of *source* (``.tck``,
+    ``.trk``), of *count* streamlines of the one *source*,
+    chosen at random with *seed* among those of two points or more, in the
+    order of the file, each thinned to every *step*-th point and its last.
+    """
+    import nibabel as nib
+    import numpy as np
+
+    full = nib.streamlines.load(str(source))
+    lines = full.streamlines
+    candidates = np.flatnonzero([len(line) > 1 for line in lines])
+    chosen = np.sort(np.random.default_rng(seed).choice(
+        candidates, min(count, len(candidates)), replace=False
+    ))
+    thinned = []
+    for k in chosen:
+        line = lines[k]
+        keep = np.union1d(np.arange(0, len(line), step), [len(line) - 1])
+        thinned.append(np.asarray(line[keep]))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    nib.streamlines.save(
+        nib.streamlines.Tractogram(thinned, affine_to_rasmm=np.eye(4)),
+        str(target), header=full.header,
+    )
+
+
+def tractogram_entry(engine: str):
+    """The ``tractogram`` entry of *engine* in engines.yaml, or None."""
+    from neurolang_apps.utils import engine_registry
+
+    return engine_registry.get_engine_config(engine).get("tractogram")
+
+
+def reduce_tractogram(data_dir: Path, entry) -> None:
+    """Replace in *data_dir* the tractogram file *entry* names (``path``)
+    by its subsample, as the entry says."""
+    path = data_dir / entry["path"]
+    subsample_tractogram(
+        path, path, int(entry["subsample"]), int(entry.get("step", 1)),
+        int(entry.get("seed", 0)),
+    )
+    size = path.stat().st_size / 1048576
+    print(f"The tractogram of the page: {size:.1f} MB")
 
 
 def zip_directory(directory: Path, archive: Path) -> None:
@@ -266,7 +357,8 @@ def bundle_name(path: Path, engine: str = ENGINE) -> str:
 
 
 def export_embeddings(
-    data_dir: Path, output: Path, embedded=None, engine: str = ENGINE
+    data_dir: Path, output: Path, embedded=None, engine: str = ENGINE,
+    kept_as: str = None,
 ) -> dict:
     """
     Write in *output* the files of the engine's text embeddings: for each
@@ -275,6 +367,11 @@ def export_embeddings(
     has them, and saved in it when made, which needs torch: without it,
     or if they cannot be made, the page goes without them.
 
+    They are under the engine's name, or *kept_as*, the engine of the same
+    studies whose embeddings it reads
+    (:func:`~neurolang_apps.utils.engine_registry.embeddings_owner`), in
+    *embedded* as in *data_dir*.
+
     They are left out of *data_dir*, not to be zipped with the data.
     Return the names of the files of each, by its path in the data
     directory.
@@ -282,10 +379,10 @@ def export_embeddings(
     from neurolang.utils import engine_registry, text_embeddings
     from neurolang_apps.utils import specter2_numpy
 
-    emb_dir = data_dir / engine / "embeddings"
+    emb_dir = data_dir / (kept_as or engine) / "embeddings"
     saved = None
     if embedded is not None:
-        saved = Path(embedded) / engine / "embeddings"
+        saved = Path(embedded) / (kept_as or engine) / "embeddings"
     if saved is not None and saved.exists():
         shutil.copytree(saved, emb_dir, dirs_exist_ok=True)
     torch = text_embeddings._torch_available()
@@ -315,13 +412,16 @@ def export_embeddings(
 
 
 def bundle_engine(
-    engine: str, output: Path, embedded=None, downloads=None
+    engine: str, output: Path, embedded=None, downloads=None,
+    shared: bool = False,
 ) -> dict:
     """
     Build the data of *engine* for the page and write its zip in *output*,
     in parts if it is larger than GitHub takes; return its entry of
     ``bundle.json``: its label, its data (the name of the zip, or those of its
-    parts, which the page joins) and the files of its text embeddings.
+    parts, which the page joins) and the files of its text embeddings, none
+    if *shared*, its embeddings being those of the engine of the same
+    studies (:data:`EMBEDDINGS_FROM`) in the bundle.
     """
     # What an engine downloads is kept apart from that of the others, so that
     # the zip of an engine holds its data only.
@@ -336,11 +436,23 @@ def bundle_engine(
         finally:
             if kept is not None:
                 keep_downloads(data_dir, kept)
+        entry = tractogram_entry(engine)
+        if entry:  # the page ships a subsample of what the engine downloaded
+            reduce_tractogram(data_dir, entry)
         check_engine_cache(data_dir, engine)
         trim(data_dir, engine)
         build_engine(data_dir, engine=engine)  # the page's way: from the kept tables
-        build_engine(data_dir, use_cache=False, engine=engine)  # and without them
-        files = export_embeddings(data_dir, output, embedded, engine)
+        # and without them
+        nl = build_engine(data_dir, use_cache=False, engine=engine)
+        keys = {
+            name: index.cache_key for name, index in
+            getattr(nl, "text_embedding_indexes", {}).items()
+        }
+        # an engine with the studies of another has its embeddings: those
+        # of the bundle, or else those kept for it
+        files = {} if shared else export_embeddings(
+            data_dir, output, embedded, engine, EMBEDDINGS_FROM.get(engine)
+        )
         archive = Path(tmp) / data_zip(engine)
         zip_directory(data_dir, archive)
         names = write_parts(archive, output, data_zip(engine))
@@ -348,7 +460,22 @@ def bundle_engine(
         "label": LABELS.get(engine, engine),
         "data": names[0] if len(names) == 1 else names,
         "files": files,
+        "cache_keys": keys,
     }
+
+
+def share_embeddings(entry: dict, donor: dict) -> None:
+    """Give the entry *entry* of an engine the files of the text embeddings
+    of *donor*, the entry of the engine whose studies it has and whose
+    embeddings it reads: the page downloads them once, whichever engine
+    asks.  The embeddings are of the same studies, which their
+    ``cache_key`` tells."""
+    if entry["cache_keys"] != donor["cache_keys"]:
+        raise ValueError(
+            "its studies are not those of the engine whose embeddings it "
+            "would share (EmbeddingIndex.cache_key differs)"
+        )
+    entry["files"] = dict(donor["files"])
 
 
 def main(
@@ -357,16 +484,23 @@ def main(
     output.mkdir(parents=True, exist_ok=True)
     wheels = build_wheels(output)
     built = {}
+    default = DEFAULT_ENGINE if DEFAULT_ENGINE in engines else engines[0]
     for engine in engines:
         try:
+            shared = EMBEDDINGS_FROM.get(engine) in built
             built[engine] = bundle_engine(
-                engine, output, embedded, downloads
+                engine, output, embedded, downloads, shared
             )
+            if shared:
+                share_embeddings(
+                    built[engine], built[EMBEDDINGS_FROM[engine]]
+                )
         except Exception as error:
-            if engine == engines[0]:
+            if engine == default:
                 raise  # the page's default: there is no page without it
             print(f"The engine {engine} is left out of the bundle: {error!r}")
-    default = engines[0]
+    for entry in built.values():
+        entry.pop("cache_keys", None)
     (output / "bundle.json").write_text(
         json.dumps({
             "wheels": wheels, "default": default, "engines": built,
@@ -405,6 +539,6 @@ def parse_args(argv=None):
 
 if __name__ == "__main__":
     args = parse_args()
-    # The default first, whatever the order of the options.
+    # In the order of ENGINES, whatever the order of the options.
     chosen = [e for e in ENGINES if e in (args.engines or ENGINES)]
     main(args.output, args.embedded, args.downloads, tuple(chosen))

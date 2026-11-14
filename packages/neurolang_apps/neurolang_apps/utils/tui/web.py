@@ -25,6 +25,7 @@ import io
 import json
 import math
 import re
+import shlex
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -40,7 +41,7 @@ from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import _declared_columns
 from neurolang_apps.utils.predicate_catalog import listed, predicate_catalog
 
-from . import nifti
+from . import nifti, query_graph, session
 from .app import InteractiveTuiApp, TuiSettings
 from .commands import COMMANDS, HELP_TOPICS, QuitRepl, engine_examples
 from .results import ResultBlock, cell_text
@@ -56,8 +57,9 @@ HTML_FORMAT = (
 )
 
 # The precomputed analyses of the meta-analysis engines: ``activated``
-# materialises every voxel within 3 mm of a reported peak, which takes
-# gigabytes, more than a browser tab is given, and what is defined from it.
+# materialises every voxel within kernel_radius_mm of a reported peak, which
+# takes gigabytes, more than a browser tab is given, and what is defined
+# from it.
 HEAVY_PREDICATES = frozenset({
     "activated", "p_a", "p_a_given_t", "p_any_voxel_given_t", "lift",
     "relative_risk", "uniformity", "ratios", "p_a_given_similar",
@@ -81,16 +83,56 @@ def lightweight_engines_yaml(directory) -> Path:
 
     config = engine_registry._load_yaml_config()
     for engine in config["engines"].values():
+        heavy = left_out(engine.get("datalog_init") or "")
         if "datalog_init" in engine:
             engine["datalog_init"] = "\n".join(
                 rule for rule in engine["datalog_init"].split("\n")
-                if rule.split("(")[0].strip() not in HEAVY_PREDICATES
+                if _head(rule) not in heavy
             )
-        for name in HEAVY_PREDICATES & set(engine.get("predicates") or {}):
+        for name in heavy & set(engine.get("predicates") or {}):
             del engine["predicates"][name]
     path = Path(directory) / "engines.yaml"
     path.write_text(yaml.safe_dump(config))
     return path
+
+
+def _head(rule: str) -> str:
+    """Return the name of the predicate the Datalog *rule* defines."""
+    return rule.split("(")[0].strip()
+
+
+def left_out(rules: str) -> frozenset:
+    """
+    Return :data:`HEAVY_PREDICATES` and the predicates the Datalog *rules*
+    (one per line) define from them, at any depth: those the lightweight
+    engines leave out.
+    """
+    heavy = set(HEAVY_PREDICATES)
+    body = {
+        _head(rule): set(re.findall(r"(\w+)\s*\(", rule.partition(":-")[2]))
+        for rule in rules.split("\n")
+    }
+    while grown := {h for h, b in body.items() if b & heavy} - heavy:
+        heavy |= grown
+    return frozenset(heavy)
+
+
+def left_out_predicates(nl, engine_name: str) -> frozenset:
+    """
+    Return the predicates of the engine *engine_name* that a lightweight
+    engine leaves out (:func:`left_out`) and *nl* does not define.
+    """
+    if not engine_name:
+        return frozenset()
+    config = engine_registry.get_engine_config(engine_name)
+    rules = config.get("datalog_init") or ""
+    engine = set(config.get("predicates") or {}) | {
+        _head(rule) for rule in rules.split("\n")
+    }
+    return frozenset(
+        name for name in left_out(rules) & engine
+        if name not in nl.symbol_table
+    )
 
 
 def _from_an_ontology(name: str) -> bool:
@@ -128,8 +170,12 @@ class Reply:
     to put in its input, and *mode* the language of the REPL, ``datalog``
     or ``squall``, which the assistant may have switched, *predicates*
     those of the engine and the session (see :meth:`WebRepl.predicates`),
-    and *ratable* whether it was a query or an answer of the assistant,
-    which :meth:`WebRepl.rate_answer` can share.
+    *ratable* whether it was a query or an answer of the assistant,
+    which :meth:`WebRepl.rate_answer` can share, and *graph* the HTML page
+    of the graph of the query it ran, or that ``.graph`` showed (see
+    :mod:`~neurolang_apps.utils.tui.query_graph`). *tokens*, if the
+    assistant answered, are the tokens it sent (``input``) and received
+    (``output``), its requests (``calls``), its ``provider`` and ``model``.
     """
 
     html: str
@@ -140,6 +186,8 @@ class Reply:
     mode: str = "datalog"
     predicates: List[dict] = field(default_factory=list)
     ratable: bool = False
+    graph: str = ""
+    tokens: dict = field(default_factory=dict)
 
 
 class Download(NamedTuple):
@@ -348,8 +396,14 @@ class WebRepl:
             TuiSettings(engine_name=engine_name, command_line=command),
             console=self.console, err_console=errors,
         )
+        # Those of a lightweight engine (lightweight_engines_yaml), which
+        # the REPL and its assistant tell are not available.
+        nl.left_out_predicates = left_out_predicates(nl, engine_name)
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
+        # and the graph of a query in a tab of its own.
+        self._graph = ""
+        self.app.show_graph = self._show_graph
         try:
             # Until the visitor gives a key, the assistant asks for it.
             self.set_llm("anthropic", "")
@@ -394,6 +448,18 @@ class WebRepl:
         self._rating = GristFeedbackClient(
             url, doc, api_key_env="", transport=transport
         ) if doc else None
+
+    def set_feedback_store(
+        self, path, user: str = "", groups: str = "",
+    ) -> None:
+        """
+        Let the page store a rated answer in the feedback database *path*
+        of this machine, signed by the *user* and their *groups* (see
+        :class:`~neurolang_apps.utils.llm.feedback.StoreFeedbackClient`).
+        """
+        from neurolang_apps.utils.llm.feedback import StoreFeedbackClient
+
+        self._rating = StoreFeedbackClient(path, user, groups)
 
     def can_rate(self) -> bool:
         """Whether the page can send the rating of an answer."""
@@ -451,6 +517,13 @@ class WebRepl:
             highlight=False,
         )
         self.app._print_banner()
+        left_out = sorted(self.app.left_out_predicates)
+        if left_out:
+            self.console.print(
+                "The analyses that need gigabytes are not in the browser: "
+                + ", ".join(left_out), style="dim", markup=False,
+                highlight=False, soft_wrap=True,
+            )
         return self._output()
 
     def submit(self, text: str) -> Reply:
@@ -463,7 +536,9 @@ class WebRepl:
         self.app.failed = False
         self._tables = []
         self._frames = []
+        self._graph = ""
         answered = self.app.assistant.last_run
+        query = self.app.last_query
         with _viewers_returned() as viewers:
             try:
                 self.app._run_line(text)
@@ -473,14 +548,32 @@ class WebRepl:
                     "start a new one.[/dim]"
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
-        self._rated = self._what_is_rated(
-            text, self.app.assistant.last_run is not answered
-        )
+        ran = self.app.last_query  # a new tuple for each query run
+        if not self._graph and ran is not None and ran is not query:
+            try:
+                self._graph = query_graph.last_query_page(self.app)
+            except Exception:  # a query that does not parse has no graph
+                pass
+        run = self.app.assistant.last_run
+        self._rated = self._what_is_rated(text, run is not answered)
+        tokens = {}
+        if run is not None and run is not answered:
+            _, result, provider, _ = run
+            tokens = {
+                "input": result.usage.get("input", 0),
+                "output": result.usage.get("output", 0),
+                "calls": result.calls, "provider": provider.name,
+                "model": provider.model or provider.api,
+            }
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
-            self.predicates(), self._rated is not None,
+            self.predicates(), self._rated is not None, self._graph, tokens,
         )
+
+    def _show_graph(self, page: str) -> None:
+        """Keep the *page* of the graph of a query for the reply."""
+        self._graph = page
 
     def _what_is_rated(self, text: str, answered: bool):
         """
@@ -530,7 +623,30 @@ class WebRepl:
 
     def examples(self) -> dict:
         """Return the example queries of the engine, by language."""
-        return engine_examples(self.app.settings.engine_name)
+        return engine_examples(
+            self.app.settings.engine_name, self.app.left_out_predicates
+        )
+
+    def assistant_ready(self) -> bool:
+        """
+        Return whether the AI assistant can answer: its provider has its
+        key, the page's or that of the environment, or needs none.
+        """
+        state = self.app.assistant
+        try:
+            state.config().provider(state.provider).api_key()
+        except Exception:
+            return False
+        return True
+
+    def questions(self) -> List[str]:
+        """Return the example questions in English of the engine, for the
+        query assistant."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        return list(config.get("questions") or [])
 
     def predicates(self) -> List[dict]:
         """
@@ -596,6 +712,15 @@ class WebRepl:
         except Exception as error:  # nothing that fails here may hide a result
             reason = str(error) or "no NIfTI image can be made of this result"
             return {"block": index, "nifti": None, "nifti_reason": reason}
+
+    def upload(self, name: str, data: bytes) -> dict:
+        """
+        Keep the file *name* of the bytes *data* the page uploaded, in the
+        memory of the session, and return the statement that loads it
+        (``.load NAME``): a ValueError tells why it is refused.
+        """
+        session.store_upload(self.app, name, data)
+        return {"name": name, "statement": f".load {shlex.quote(name)}"}
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
         """

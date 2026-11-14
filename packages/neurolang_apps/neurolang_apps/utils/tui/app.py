@@ -14,12 +14,17 @@ from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 
 from neurolang.frontend.show_ra import ShowRAOptions
+from neurolang.utils.euclidean_join_settings import (
+    use_profile as use_join_profile,
+)
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.cli import (
     _emit,
     _execute_program,
     _execute_squall_program,
     _known_symbol_names,
+    left_out_symbol,
+    not_available,
     warning_note,
     report_error,
     result_to_dataframe,
@@ -34,6 +39,7 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .constant_notes import constant_notes
 from .editing import session_options
 from .interrupt import call_interruptibly
 from .provenance import column_sorts
@@ -92,7 +98,10 @@ class TuiSettings:
     those the configuration gives. With *scope_queries* (``.scope``),
     the rules defined with a query are local to it. *program_file* is the
     file of the program run first, if any (``--file``): the modules it
-    imports are relative to its directory.
+    imports are relative to its directory. *join_profile* is the profile of
+    the settings of the Euclidean join (``euclidean_join.yaml``) the session
+    uses: ``memory`` by default, as a session holds its results and, in a
+    browser, has little memory.
     """
 
     engine_name: str = ""
@@ -112,6 +121,7 @@ class TuiSettings:
     llm_provider: Optional[str] = None
     scope_queries: bool = True
     program_file: Optional[str] = None
+    join_profile: str = "memory"
 
 
 class AgentRun(NamedTuple):
@@ -145,6 +155,10 @@ class InteractiveTuiApp:
         """
         self._nl = nl
         self.settings = settings or TuiSettings()
+        use_join_profile(
+            self.settings.join_profile,
+            overrides=self._engine_join_settings(),
+        )
         self.transcript = Transcript(self.settings)
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
@@ -153,11 +167,20 @@ class InteractiveTuiApp:
         self.session = None
         self.completer = None
         self.last_query = None
+        # What the last query that ran failed with, None if it did not,
+        # and the notes the last submission gave.
+        self.last_error = None
+        self.last_notes = []
+        # The query whose result is in results, for the graph of its rows.
+        self.results_query = None
         # The rules added by the submission of the last query, by symbol.
         self.last_added_rules: dict = {}
         self.failed = False
         # The input put in the next prompt, e.g. the query of .ask.
         self.pending_input = ""
+        # The predicates left out of the engine the warnings of the last
+        # query were on.
+        self._left_out_used: set = set()
         # Where the events of the assistant are sent as they happen (a
         # function of a dict, see assistant.AGENT_EVENTS), e.g. by a page.
         self.agent_events = None
@@ -169,12 +192,28 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
+        # The files the page uploaded, by name: their bytes (.load NAME).
+        self.uploads: dict = {}
         self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
             self._history = InMemoryHistory()
+
+    def _engine_join_settings(self) -> dict:
+        """
+        Return the settings of the Euclidean join the engine changes.
+
+        They are those of the ``euclidean_join`` key of the engine's
+        configuration, none for an engine that is not registered.
+        """
+        try:
+            return engine_registry.get_euclidean_join_settings(
+                self.settings.engine_name
+            )
+        except ValueError:
+            return {}
 
     def _tee_consoles(self, *consoles) -> None:
         """
@@ -202,9 +241,18 @@ class InteractiveTuiApp:
         )
 
     def _execute_noting_warnings(self, program: str):
-        """Run *program* and print the warnings it raises as short notes."""
+        """
+        Run *program* and print the warnings it raises as short notes,
+        with those on its constants (see
+        :func:`~neurolang_apps.utils.tui.constant_notes.constant_notes`).
+        """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
+            for note in constant_notes(
+                self._nl, self.settings.engine_name, program,
+                self.settings.squall,
+            ):
+                warnings.warn(note)
             try:
                 return call_interruptibly(
                     lambda: self._execute(program), self._print_stuck_hint
@@ -220,17 +268,51 @@ class InteractiveTuiApp:
         )
 
     def _print_notes(self, caught) -> None:
-        """Print one note per distinct warning in *caught*."""
+        """
+        Print one note per distinct warning in *caught*, but for those on
+        the predicates the engine leaves out, which are not available.
+        """
         known = _known_symbol_names(self._nl)
+        messages = [str(w.message) for w in caught]
+        self._left_out_used = {
+            left_out_symbol(self._nl, message) for message in messages
+        } - {""}
         notes = dict.fromkeys(
-            warning_note(str(w.message), known) for w in caught
+            warning_note(message, known) for message in messages
+            if not left_out_symbol(self._nl, message)
         )
+        self.last_notes = list(notes)
         for note in notes:
             self.err_console.print(note, style="yellow", markup=False)
+        for name in sorted(self._left_out_used):
+            self._print_not_available(name)
+
+    @property
+    def left_out_predicates(self) -> frozenset:
+        """The predicates the engine leaves out, as the analyses that need
+        gigabytes in the browser (see web.WebRepl)."""
+        return getattr(self._nl, "left_out_predicates", frozenset())
+
+    def _print_not_available(self, name: str) -> None:
+        """Print that the predicate *name* is left out of the engine."""
+        self.failed = True
+        self.err_console.print(
+            "Error: " + not_available(name, self.settings.command_line),
+            style="red", markup=False, highlight=False,
+        )
 
     def _report_error(self, exc: Exception, program: str) -> None:
-        """Print the error *exc* of *program* as the CLI does."""
+        """
+        Print the error *exc* of *program* as the CLI does, or that the
+        predicate it does not find is one the engine leaves out.
+        """
         self.failed = True
+        self.last_error = str(exc)
+        missing = left_out_symbol(self._nl, str(exc))
+        if missing:
+            if missing not in self._left_out_used:
+                self._print_not_available(missing)
+            return
         report_error(
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
@@ -297,7 +379,23 @@ class InteractiveTuiApp:
             return
         self.agent_run = AgentRun(program, self.settings.squall, frames)
         self.last_query = (program, self.settings.squall)
+        self.last_error = None
         self.last_added_rules = {}
+        self.results_query = self.last_query
+
+    def show_graph(self, page: str) -> None:
+        """
+        Show the HTML *page* of the graph of a query (``.graph``): save
+        it, print its path and open it in a browser on a terminal.
+        """
+        from .nifti import _html_file, _open_in_browser
+
+        path = _html_file(page)
+        self.console.print(
+            f"Saved the graph to: {path}", style="green", markup=False,
+            highlight=False,
+        )
+        _open_in_browser(self.console, path)
 
     def print_block(self, block: ResultBlock) -> None:
         """
@@ -477,6 +575,7 @@ class InteractiveTuiApp:
             self.last_query = (program, self.settings.squall)
             self.last_added_rules = {}
             self.show_frames(run.frames, program)
+            self.results_query = self.last_query
             self.err_console.print(
                 "[dim]The assistant ran this query: its result, not run "
                 "again.[/dim]"
@@ -484,10 +583,12 @@ class InteractiveTuiApp:
             return
         if query:
             self.last_query = (program, self.settings.squall)
+            self.last_error = None
             self.last_added_rules = {}
             self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         if self._run_submission(program, query, facts) and query:
+            self.results_query = self.last_query
             elapsed = time.perf_counter() - t0
             self.err_console.print(
                 f"[dim]Query completed in {elapsed:.2f} s[/dim]"
@@ -510,24 +611,44 @@ class InteractiveTuiApp:
             "[bold yellow]NeuroLang interactive query REPL[/bold yellow]"
         )
         if name:
-            description = " ".join(
-                engine_registry.get_engine_config(name)
-                .get("description", "").split()
-            )
+            config = engine_registry.get_engine_config(name)
+            description = " ".join(config.get("description", "").split())
             self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
+            self._print_kernel(config)
         self.console.print(
             f"Mode: {mode} · [green].help[/green] for help · "
             "[green]Tab[/green] completes · "
             "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
         )
-        relations = engine_relations(name)
+        relations = [
+            relation for relation in engine_relations(name)
+            if relation.split("(")[0] not in self.left_out_predicates
+        ]
         if relations:
             self.console.print("Relations:")
             for relation in relations:
                 self.console.print(f"  {relation}", markup=False)
-        examples = engine_examples(name).get(mode.lower())
+        examples = engine_examples(name, self.left_out_predicates).get(
+            mode.lower()
+        )
         if examples:
             self.console.print(f"Try: {examples[0]}", markup=False)
+
+    def _print_kernel(self, config: dict) -> None:
+        """
+        Print the size of the voxels of the engine's grid and the radius
+        around a peak that a study activates, ``kernel_radius_mm`` of the
+        engine *config*, if it has both.
+        """
+        grid = getattr(self._nl, "template", None)
+        if grid is None or "kernel_radius_mm" not in config:
+            return
+        radius = engine_registry.kernel_radius_voxels(config, grid)
+        self.console.print(
+            f"Grid: {abs(float(grid.affine[0, 0])):g} mm voxels · a study "
+            f"activates within {config['kernel_radius_mm']:g} mm "
+            f"({radius:g} voxels) of its peaks", highlight=False,
+        )
 
     def _make_session(self, **kwargs) -> PromptSession:
         """

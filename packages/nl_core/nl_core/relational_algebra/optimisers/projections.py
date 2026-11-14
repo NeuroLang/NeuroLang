@@ -105,11 +105,7 @@ class EliminateTrivialProjections(ew.PatternWalker):
 
     @ew.add_match(
         ExtendedProjection,
-        lambda e: all(
-            isinstance(p.fun_exp, Constant[ColumnStr]) and
-            (p.fun_exp == p.dst_column)
-            for p in e.projection_list
-        )
+        lambda e: all(p.keeps_its_column() for p in e.projection_list)
     )
     def convert_extended_projection_2_projection(self, expression):
         return self.walk(Projection(
@@ -270,7 +266,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         new_columns = {
             proj.dst_column: proj.dst_column
             for proj in left.projection_list
-            if proj.dst_column == proj.fun_exp
+            if proj.keeps_its_column()
         }
         for proj in left.projection_list:
             if (

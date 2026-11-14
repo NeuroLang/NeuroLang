@@ -660,6 +660,40 @@ def test_neurolang_dl_datalog_code_disjunction():
     assert neurolang.solve_all()["uncinate"].to_unnamed() == {(2,)}
 
 
+@pytest.mark.parametrize("body", [
+    "r(x, t), (t == 'a' | t == 'b')",
+    "r(x, t), ((t == 'a') | (t == 'b'))",
+    "r(x, t), (t == 'a' | t == 'b', x > 1 | t == 'a')",
+])
+def test_neurolang_dl_datalog_code_disjunction_of_comparisons(body):
+    """In parentheses a comparison is a disjunct of its own."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="r")
+    res = neurolang.execute_datalog_program(f"ans(x) :- {body}")
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
+@pytest.mark.parametrize("program", [
+    "ans(x) :- r(x, t), (startswith('a', t) | startswith('b', t))",
+    "ans(x) :- r(x, t), (startswith('a', t) | (t == 'b'))",
+    "q(x) :- r(x, t), (startswith('a', t) | startswith('b', t))\n"
+    "ans(x) :- q(x)",
+    "q(p, x) :- (r(x, t) | s(x, t)), startswith(p, t)\n"
+    "ans(x) :- q('a', x) | q('b', x)",
+])
+def test_neurolang_dl_datalog_code_disjunction_of_functions(program):
+    """The variables of a disjunct of functions are bound outside it, or
+    by the query (magic sets)."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="r")
+    neurolang.add_tuple_set([(1, "a")], name="s")
+    neurolang.add_symbol(
+        lambda prefix, s: s.startswith(prefix), name="startswith"
+    )
+    res = neurolang.execute_datalog_program(program)
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
 def test_neurolang_dl_datalog_code_disjunction_constant_query():
     neurolang = _tracts()
     res = neurolang.execute_datalog_program(
@@ -683,6 +717,38 @@ def test_neurolang_dl_datalog_code_disjunction_under_negation():
 
     assert set(res.to_unnamed()) == {(2,), (4,)}
 
+
+
+def test_neurolang_dl_datalog_code_anonymous_variable_negated():
+    """``~traverses(x, _)``: no label at all; ``_`` is quantified in the
+    negation (and in a disjunct), not a variable of the rule."""
+    neurolang = _tracts()
+    neurolang.add_tuple_set([(1,), (2,), (5,)], name="streamline")
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), ~traverses(x, _)
+    """
+    )
+    assert set(res.to_unnamed()) == {(5,)}
+    res = neurolang.execute_datalog_program(
+        """
+    ans(x) :- streamline(x), (temporal(x) | traverses(x, _))
+    """
+    )
+    assert set(res.to_unnamed()) == {(1,), (2,)}
+
+
+def test_neurolang_dl_datalog_code_many_negations():
+    """A rule with twenty negated atoms: the answer, in a time that grows
+    linearly with the negations (it doubled with each)."""
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(i, i % 25) for i in range(100)], name="r")
+    neurolang.add_tuple_set([(i, f"t{i}") for i in range(25)], name="s")
+    body = ", ".join(f'~s(l, "t{i}")' for i in range(20))
+    res = neurolang.execute_datalog_program(f"ans(x) :- r(x, l), {body}")
+    assert set(res.to_unnamed()) == {
+        (i,) for i in range(100) if i % 25 >= 20
+    }
 
 @pytest.mark.parametrize(
     "body", ['traverses(x, "orbital") | temporal(y)', 'temporal(x) | ~q(x)']
@@ -1237,6 +1303,36 @@ def test_equality_with_expression_on_bound_variable(
 @pytest.mark.parametrize(
     "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
 )
+@pytest.mark.parametrize(
+    "rule, expected",
+    [
+        ("ans(u) :- act(u, y) & (u == 'u')", {("u",)}),
+        ("ans(u) :- act(u, y) & ('u' == u)", {("u",)}),
+        ("ans(y) :- act(u, y) & (u == 'u')", {(1,)}),
+        ("ans(u, y) :- act(u, y) & (u == 'y')", {("y", 4)}),
+        ("ans(u) :- act(u, y) & other(u) & (u == 'u')", {("u",)}),
+        ("ans(u, x) :- pair(u, x) & (x == 'x')", {("u", "x")}),
+        ("ans(u, x) :- pair(u, x) & (u == 'x')", set()),
+        ("ans(u) :- act(u, y) & ~other(u) & (u == 'u')", set()),
+        ("ans(u) :- act(u, y) & ~other(u) & (u == 'y')", {("y",)}),
+        ("ans(u, z) :- other(u) & (z == 'z')", {("u", "z"), ("a", "z")}),
+    ],
+)
+def test_equality_to_a_string_constant_spelled_as_a_variable(
+    frontend_class, rule, expected
+):
+    """GH-1086: the constant 'u' is a value, not the column of `u`."""
+    nl = frontend_class()
+    nl.add_tuple_set([("u", 1), ("a", 2), ("b", 3), ("y", 4)], name="act")
+    nl.add_tuple_set([("u",), ("a",)], name="other")
+    nl.add_tuple_set([("u", "x"), ("a", "u"), ("y", "y")], name="pair")
+    res = nl.execute_datalog_program(rule)
+    assert set(res.to_unnamed()) == expected
+
+
+@pytest.mark.parametrize(
+    "frontend_class", [frontend.NeurolangDL, frontend.NeurolangPDL]
+)
 def test_equality_with_expression_3d_neighbourhood(frontend_class):
     nl = frontend_class()
     grid = [(i, j, k) for i in range(4) for j in range(4) for k in range(4)]
@@ -1709,3 +1805,23 @@ def test_aggregate_in_ans_query(frontend_class, query, expected):
     res = nl.execute_datalog_program(query)
     assert res is not None
     assert set(map(tuple, res.as_pandas_dataframe().values)) == expected
+
+
+@pytest.mark.parametrize("frontend_class", [
+    frontend.NeurolangDL, frontend.NeurolangPDL
+])
+def test_region_contains_constant_point(frontend_class):
+    """The labels of the regions with a voxel: an atlas lookup."""
+    neurolang = frontend_class()
+    neurolang.add_symbol(contains, name="contains")
+    region1 = ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
+    region2 = ExplicitVBR(np.array([[2, 0, 0]]), np.eye(4))
+    neurolang.add_tuple_set(
+        [("A", region1), ("B", region2)], name="atlas"
+    )
+
+    res = neurolang.execute_datalog_program(
+        "ans(l) :- atlas(l, r) & contains(r, (1, 1, 0))"
+    )
+
+    assert set(res.to_unnamed()) == {("A",)}

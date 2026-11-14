@@ -3,7 +3,8 @@
 //     neurolang-query -i --engine neurosynth --resolution 2
 //
 // It loads Pyodide, gets NeuroLang, installs the data of the engine the page
-// asks for (neurosynth or neurostore, see engines.js) that the bundle ships,
+// asks for (neurosynth, neurosynth_iit, neurostore or neurostore_iit, see
+// engines.js) that the bundle ships,
 // builds the engine, and answers the page's submissions with the HTML
 // that the REPL's output renders to (neurolang_apps.utils.tui.web.WebRepl).
 //
@@ -118,7 +119,7 @@ async function installSource(pyodide, repo, ref) {
 
 async function start({ repo, ref, full, engine }) {
   status("Loading Python…");
-  const pyodide = (runtime = await loadPyodide({ indexURL: PYODIDE_URL }));
+  const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
 
   status("Loading numpy, scipy, pandas, scikit-learn and pyarrow…");
   await pyodide.loadPackage(PYODIDE_PACKAGES);
@@ -157,6 +158,7 @@ async function start({ repo, ref, full, engine }) {
   await pyodide.runPythonAsync(`
 import inspect
 import json
+import os
 from pathlib import Path
 
 import js
@@ -185,6 +187,9 @@ if not ${full ? "True" : "False"}:
 tells = {}
 if "progress" in inspect.signature(engine_registry.build_engine).parameters:
     tells = {"progress": say}
+# The files an engine reads by a relative path (the atlas of tractography)
+# are in its data directory.
+os.chdir("/data")
 nl = engine_registry.build_engine(
     "${name}", Path("/data"), ${RESOLUTION}.0, yaml_path=yaml_path, **tells
 )
@@ -193,7 +198,7 @@ say("Starting the REPL")
 # studies of a result; a version that predates them does not take them. They
 # are those of the studies of Neurosynth, whose ids are PubMed's.
 options = {}
-if "${name}" == "neurosynth" and "study_metadata" in inspect.signature(WebRepl).parameters:
+if "${name}".startswith("neurosynth") and "study_metadata" in inspect.signature(WebRepl).parameters:
     try:
         from neurolang.frontend.neurosynth_utils import fetch_study_metadata
         options["study_metadata"] = fetch_study_metadata(Path("/data"), verbose=0)
@@ -253,7 +258,8 @@ def submit(text):
          "failed": reply.failed, "tables": reply.tables,
          "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
          "predicates": getattr(reply, "predicates", []),
-         "ratable": getattr(reply, "ratable", False)}
+         "ratable": getattr(reply, "ratable", False),
+         "graph": getattr(reply, "graph", "")}
     )
 
 # The providers of the AI assistant, for the page's form: none when this
@@ -275,12 +281,19 @@ def llm_providers():
 
 def rate(verdict, comment):
     return json.dumps(repl.rate_answer(verdict, comment))
+
+def upload(name, data):
+    if not hasattr(repl, "upload"):
+        raise ValueError("this version of NeuroLang cannot load an uploaded file")
+    return json.dumps(repl.upload(name, bytes(data.to_py())))
 `);
   const banner = pyodide.runPython("repl.banner()");
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
+  const questions = JSON.parse(pyodide.runPython("json.dumps(repl.questions() if hasattr(repl, 'questions') else [])"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
   const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
+  const assistant = pyodide.runPython("repl.assistant_ready() if hasattr(repl, 'assistant_ready') else False");
   // Where a rated answer goes (feedback.json next to the page); without a
   // document, or in a version without ratings, answers cannot be rated.
   let canRate = false;
@@ -292,19 +305,20 @@ def rate(verdict, comment):
   } catch {
     // the page works without ratings
   }
-  postMessage({ type: "ready", banner, source, providers, examples, predicates, commands, canRate });
+  postMessage({ type: "ready", banner, source, providers, examples, questions, predicates, commands, canRate, assistant });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   rateAnswer = pyodide.globals.get("rate");
+  uploadFile = pyodide.globals.get("upload");
   return pyodide.globals.get("submit");
 }
 
 // The page starts the worker with the version to run, then submits.
 let submit = null;
 let repl = null;
-let runtime = null; // Pyodide, whose file system gets the uploads
 let makeFile = null; // the file of a result, for a download
 let rateAnswer = null; // shares the last answer of the assistant with its rating
+let uploadFile = null; // keeps a file of the visitor's for .load, in this worker's memory
 
 // The visitor's key is given to the REPL, in this worker's memory: from
 // here it goes to the provider, and to no one else.
@@ -348,13 +362,10 @@ onmessage = async ({ data }) => {
   }
   if (data.type === "upload") {
     try {
-      // The name keeps no character a command line would split on.
-      const path = `/tmp/uploads/${data.name.replace(/[^\w.-]/g, "_")}`;
-      runtime.FS.mkdirTree("/tmp/uploads");
-      runtime.FS.writeFile(path, data.bytes);
-      postMessage({ type: "uploaded", path });
+      postMessage({ type: "uploaded", ...JSON.parse(uploadFile(data.name, data.bytes)) });
     } catch (error) {
-      postMessage({ type: "uploaded", error: String(error.message ?? error) });
+      const message = String(error.message ?? error).trim().split("\n").at(-1);
+      postMessage({ type: "uploaded", error: message.replace(/^[\w.]+Error: /, "") });
     }
     return;
   }

@@ -1400,6 +1400,29 @@ def test_underscore_wildcard():
     ))
 
 
+
+def test_underscore_in_a_negation_or_a_disjunct_is_quantified_there():
+    """``~B(x, _)`` is ``~∃y B(x, y)``, and a disjunct ``D(x, _)`` is
+    ``∃y D(x, y)``: the anonymous variable is not a variable of the rule,
+    which would make it unsafe."""
+    x = Symbol("x")
+    res = parser("A(x) :- C(x), ~B(x, _)").formulas[0].antecedent
+    negation = res.formulas[1]
+    assert isinstance(negation, Negation)
+    exists = negation.formula
+    assert isinstance(exists, ExistentialPredicate)
+    assert exists.body == Symbol("B")(x, exists.head)
+
+    res = parser("A(x) :- C(x), (B(x) | D(x, _))").formulas[0].antecedent
+    disjunction = res.formulas[1]
+    assert disjunction.formulas[0] == Symbol("B")(x)
+    exists = disjunction.formulas[1]
+    assert isinstance(exists, ExistentialPredicate)
+    assert exists.body == Symbol("D")(x, exists.head)
+
+    res = parser("A(x) :- B(x, _)").formulas[0].antecedent
+    assert not isinstance(res.formulas[0], ExistentialPredicate)
+
 # ── AGGREGATE body syntax ──────────────────────────────────────────────────────
 
 def test_agg_body_simple():

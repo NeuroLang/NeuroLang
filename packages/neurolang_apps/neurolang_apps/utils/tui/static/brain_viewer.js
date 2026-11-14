@@ -16,11 +16,18 @@
  * drawn in the 3D render and on the slices near them. The colormaps of the page are given to NiiVue so
  * that it colours a value as the colour bars do:
  *
- * - one-sided, the colormap spans the threshold to the maximum, and the
- *   values below the threshold are transparent;
- * - symmetric, it spans -max|v| to max|v|, its upper half for the
- *   positive values and its lower half for the negative ones, and the
- *   values of |v| below the threshold are transparent.
+ * - one-sided, the colormap spans the threshold to the high threshold
+ *   (the maximum by default), and the values out of that range are
+ *   transparent;
+ * - symmetric, it spans -h to h, h the high threshold of |v| (max|v| by
+ *   default), its upper half for the positive values and its lower half
+ *   for the negative ones, and the values of |v| out of the range are
+ *   transparent.
+ *
+ * NiiVue draws the values above its range with the colour of its top: the
+ * voxels above the high threshold are hidden by drawing a copy of the
+ * image with them set below the range (the image itself is kept, for the
+ * value under the cursor). A histogram of the values shows the range.
  */
 (function () {
   'use strict';
@@ -30,9 +37,11 @@
   // transparent below the minimum.
   var MIN_TO_MAX = 0, ZERO_TO_MAX_TRANSPARENT = 2;
 
-  // The display of NiiVue the page starts with, and Reset restores.
+  // The display of NiiVue the page starts with, and Reset restores: the 3
+  // slices in a row, or in a column on a screen as narrow as a phone's.
+  var NARROW = window.matchMedia && matchMedia('(max-width: 30rem)').matches;
   var DISPLAY = {
-    sliceType: 'multiplanar', layout: 'row', renderTile: false,
+    sliceType: 'multiplanar', layout: NARROW ? 'column' : 'row', renderTile: false,
     dragMode: 'contrast', crosshairColor: '#4fa1ff', crosshairWidth: 1,
     crosshair3D: false, gamma: 1, colorbar: false, orientationText: true,
     orientCube: false, ruler: false, radiological: false, smooth: true,
@@ -44,6 +53,32 @@
   // its values; the state holds the cursor, the active layer, the order
   // the layers are drawn in and the settings of each layer.
   var viewer = {layers: [], luts: {}, state: null, nv: null};
+
+  /* The theme: that the page showing this one sends (see frame_hooks.js),
+   * else the system's. The image is drawn on white in the light theme and
+   * on black in the dark one; the other colours are those of the page. */
+  function isLight() {
+    var chosen = document.documentElement.dataset.theme;
+    return chosen ? chosen === 'light' :
+      matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function backColor() {
+    var c = isLight() ? 1 : 0;
+    return [c, c, c, 1];
+  }
+
+  /* The empty voxels of the template are black: transparent on the white
+   * of the light theme. */
+  function setBackdrop(nv) {
+    nv.opts.backColor = backColor();
+    nv.opts.isAlphaClipDark = isLight();
+  }
+
+  function themeColour(name) {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(name).trim();
+  }
 
   function $(id) { return document.getElementById(id); }
 
@@ -125,18 +160,31 @@
     return layer;
   }
 
+  // Size NiiVue's canvas to the pixels of the screen again when the browser
+  // zoom changes them: NiiVue does so only when the canvas changes size,
+  // which in a frame of a fixed width the zoom does not change.
+  function followZoom(nv) {
+    if (!window.matchMedia) return;
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener(
+      'change', function () { nv.resizeListener(); followZoom(nv); },
+      { once: true });
+  }
+
   async function load() {
     for (var name in data.colormaps) {
       viewer.luts[name] = new Uint8Array(await inflate(data.colormaps[name]));
     }
     var nv = new niivue.Niivue({
-      backColor: [0, 0, 0, 1], crosshairColor: [0.31, 0.63, 1, 0.85],
+      isAlphaClipDark: isLight(), backColor: backColor(), crosshairColor: [0.31, 0.63, 1, 0.85],
       crosshairWidth: 1, isColorbar: false, isRadiologicalConvention: false,
       multiplanarShowRender: niivue.SHOW_RENDER.NEVER,
       multiplanarLayout: niivue.MULTIPLANAR_TYPE.ROW,
       show3Dcrosshair: false, dragAndDropEnabled: false
     });
     await nv.attachTo('gl');
+    followZoom(nv);
+    // On a phone the options of the display start folded, the views close to the main controls.
+    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';
@@ -148,6 +196,7 @@
       viewer.layers.push(summarise(data.overlays[l].name, volume));
     }
     background.colorbarVisible = false;
+    if (data.regions) await loadRegions(nv, data.regions);
     if (data.connectome) {
       // The network shows through the 3D render, and on a slice only
       // within a few millimetres of it.
@@ -165,17 +214,108 @@
       nv.setMeshThicknessOn2D(NETWORK_SLAB_MM);
       await loadStreamlines(nv, data.streamlines);
     }
+    if (data.regions || data.connectome) followMouse(nv);
     nv.setSliceType(nv.sliceTypeMultiplanar);
     nv.onLocationChange = function () { updateReadout(); };
     viewer.nv = nv;
+  }
+
+  // The regions of a result: the one under the cursor is named, from the
+  // image of their numbers (n + 1 at the voxels of the n-th region), and
+  // the control "atlas colours" draws them in the colours of their atlas,
+  // an RGBA image transparent elsewhere.
+  async function loadRegions(nv, regions) {
+    var numbers = await loadVolume(regions, 'regions.nii.gz');
+    var colours = await loadVolume({nifti: regions.colours}, 'regions-colours.nii.gz');
+    numbers.opacity = 0;
+    colours.opacity = regions.coloured ? 1 : 0;
+    nv.addVolume(numbers);
+    nv.addVolume(colours);
+    viewer.regions = {volume: numbers, names: regions.names};
+    var box = $('atlas-colours');
+    box.checked = regions.coloured;
+    $('atlas-colours-control').hidden = false;
+    $('region-readout').hidden = false;
+    box.addEventListener('change', function () {
+      colours.opacity = box.checked ? 1 : 0;
+      nv.updateGLVolume();
+    });
+  }
+
+  // The node or the edge of the network, else the region of the result,
+  // under the mouse on a slice, named beside it.
+  function followMouse(nv) {
+    var canvas = $('gl'), tip = $('region-tip');
+    canvas.addEventListener('mousemove', function (event) {
+      var rect = canvas.getBoundingClientRect();
+      var ratio = canvas.width / rect.width;
+      var frac = nv.canvasPos2frac([
+        (event.clientX - rect.left) * ratio, (event.clientY - rect.top) * ratio]);
+      var mm = Array.from(nv.frac2mm(frac)).slice(0, 3);
+      var name = frac[0] < 0 ? '–' : networkAt(mm) || (viewer.regions ? regionAt(mm) : '–');
+      tip.hidden = name === '–';
+      tip.textContent = name;
+      tip.style.left = event.clientX + 14 + 'px';
+      tip.style.top = event.clientY + 14 + 'px';
+    });
+    canvas.addEventListener('mouseleave', function () { tip.hidden = true; });
+  }
+
+  // The name of the region of the result under the cursor, at *mm*.
+  function regionAt(mm) {
+    var regions = viewer.regions, vox = regions.volume.mm2vox(mm);
+    var n = Math.round(regions.volume.getValue(vox[0], vox[1], vox[2]));
+    return n > 0 ? regions.names[n - 1] : '–';
+  }
+
+  // The name of the node of the network drawn at *mm*, else 'first —
+  // second: value' of its edge there, the nearest within HOVER_MM of its
+  // surface; '' when none is.
+  function networkAt(mm) {
+    var state = viewer.networkState, network = viewer.network;
+    if (!state) return '';
+    var best = '', nearest = Infinity;
+    var near = function (distance, radius, name) {
+      if (distance - radius <= HOVER_MM && distance - radius < nearest) {
+        nearest = distance - radius;
+        best = name;
+      }
+    };
+    state.nodes.forEach(function (n) {
+      near(Math.hypot(n.x - mm[0], n.y - mm[1], n.z - mm[2]),
+           n.sizeValue * network.nodeRadius, n.name);
+    });
+    if (best) return best;
+    state.edges.forEach(function (e) {
+      var a = state.nodes[e.first], b = state.nodes[e.second];
+      near(segmentDistance(mm, [a.x, a.y, a.z], [b.x, b.y, b.z]),
+           Math.abs(e.colorValue) * state.edgeScale,
+           a.name + ' — ' + b.name + ': ' + format(e.value));
+    });
+    return best;
+  }
+
+  // The distance from the point p to the segment from a to b.
+  function segmentDistance(p, a, b) {
+    var ab = [0, 1, 2].map(function (i) { return b[i] - a[i]; });
+    var length2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    var t = length2 > 0 ? ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] +
+      (p[2] - a[2]) * ab[2]) / length2 : 0;
+    t = Math.min(1, Math.max(0, t));
+    return Math.hypot(a[0] + t * ab[0] - p[0], a[1] + t * ab[1] - p[1],
+                      a[2] + t * ab[2] - p[2]);
   }
 
   // The strongest edges of the network, listed under the views, how
   // much the network shows through the 3D render, the thickness of the
   // slab of a slice it is drawn in, in millimetres, and the thickness of
   // the edge at the threshold, a share of that of the largest edge.
-  var LISTED_EDGES = 20, NETWORK_XRAY = 0.6, NETWORK_SLAB_MM = 6,
-    THINNEST_EDGE = 0.2;
+  var pageSettings = data.settings;  // of viewer.yaml
+  var LISTED_EDGES = pageSettings.listed_edges,
+    NETWORK_XRAY = pageSettings.network_xray,
+    NETWORK_SLAB_MM = pageSettings.network_slab_mm,
+    THINNEST_EDGE = pageSettings.thinnest_edge,
+    HOVER_MM = pageSettings.hover_mm;
 
   // The network as NiiVue draws it, of the edges of |value| at least
   // *threshold* and the nodes they join. The colour and the size of a
@@ -234,7 +374,7 @@
   // Draw the edges of the network of |value| at least *threshold*, and
   // list the strongest.
   function drawNetwork(nv, threshold) {
-    var state = networkState(viewer.network, threshold);
+    var state = viewer.networkState = networkState(viewer.network, threshold);
     nv.meshes.slice().forEach(function (mesh) { nv.removeMesh(mesh); });
     if (state.edges.length) nv.addMesh(nv.loadConnectomeAsMesh(state));
     nv.drawScene();
@@ -242,17 +382,27 @@
   }
 
   // The edge threshold, a value and a slider from the smallest |value|
-  // of the edges to the largest, which draws the network again.
-  function setUpEdgeThreshold(nv, network) {
+  // of the edges to the largest, which draws the network again; and, when
+  // the result has several value columns, the one the edges are of.
+  var edgeRange = {lo: 0, hi: 0};
+  function toSlider(v) {
+    var r = edgeRange;
+    return r.hi > r.lo ? Math.round(1000 * (v - r.lo) / (r.hi - r.lo)) : 0;
+  }
+
+  // Show the network of one value column: its range, threshold and edges.
+  function showNetwork(nv, network) {
+    viewer.network = network;
     var values = network.edges.map(function (e) { return Math.abs(e.value); });
-    var lo = values.length ? Math.min.apply(null, values) : 0;
-    var hi = values.length ? Math.max.apply(null, values) : 0;
+    edgeRange.lo = values.length ? Math.min.apply(null, values) : 0;
+    edgeRange.hi = values.length ? Math.max.apply(null, values) : 0;
+    $('edge-threshold').value = format(network.threshold);
+    $('edge-slider').value = toSlider(network.threshold);
+    drawNetwork(nv, network.threshold);
+  }
+
+  function setUpEdgeThreshold(nv, network) {
     var input = $('edge-threshold'), slider = $('edge-slider');
-    var toSlider = function (v) {
-      return hi > lo ? Math.round(1000 * (v - lo) / (hi - lo)) : 0;
-    };
-    input.value = format(network.threshold);
-    slider.value = toSlider(network.threshold);
     input.addEventListener('input', function () {
       var v = parseFloat(input.value);
       if (!isFinite(v)) return;
@@ -260,11 +410,20 @@
       drawNetwork(nv, v);
     });
     slider.addEventListener('input', function () {
-      var v = lo + (hi - lo) * slider.value / 1000;
+      var v = edgeRange.lo + (edgeRange.hi - edgeRange.lo) * slider.value / 1000;
       input.value = format(v);
       drawNetwork(nv, v);
     });
-    drawNetwork(nv, network.threshold);
+    var choices = network.values || [];
+    if (choices.length > 1) {
+      var select = $('edge-value');
+      choices.forEach(function (choice, i) { select.add(new Option(choice.value, String(i))); });
+      $('edge-value-control').hidden = false;
+      select.addEventListener('change', function () {
+        showNetwork(nv, choices[parseInt(select.value, 10)]);
+      });
+    }
+    showNetwork(nv, network);
   }
 
   function listEdges(state) {
@@ -446,17 +605,35 @@
     return s.threshold;
   }
 
+  // The largest value of the layer l the threshold applies to: of |v|
+  // when symmetric.
+  function topValue(l) {
+    var layer = viewer.layers[l];
+    return settings(l).symmetric ? layer.maxAbs : layer.max;
+  }
+
+  // The high threshold of the layer l, a value: its maximum when none is set.
+  function upperValue(l) {
+    var s = settings(l);
+    if (s.upper === null || s.upper === undefined) return topValue(l);
+    if (s.thresholdMode === 'percentile') {
+      return percentile(percentileSource(l), s.upper);
+    }
+    return s.upper;
+  }
+
   // The colour scale of the layer l: values from lo to hi span its
   // colormap, and only the voxels shown(v) are drawn.
   function scale(l) {
-    var t = thresholdValue(l), layer = viewer.layers[l];
+    var t = thresholdValue(l), u = upperValue(l), layer = viewer.layers[l];
     if (settings(l).symmetric) {
-      return {lo: -layer.maxAbs, hi: layer.maxAbs, threshold: t,
-              shown: function (v) { return Math.abs(v) >= t; }};
+      var top = Math.max(u, t);
+      return {lo: -top, hi: top, threshold: t, upper: u,
+              shown: function (v) { return Math.abs(v) >= t && Math.abs(v) <= u; }};
     }
     var lo = t > 0 ? t : Math.min(0, layer.min);
-    return {lo: lo, hi: Math.max(layer.max, lo), threshold: t,
-            shown: function (v) { return v >= t; }};
+    return {lo: lo, hi: Math.max(u, lo), threshold: t, upper: u,
+            shown: function (v) { return v >= t && v <= u; }};
   }
 
   // The index (0 to 255) of the colour of v in the scale.
@@ -486,6 +663,72 @@
     volume.cal_minNeg = NaN;
     volume.cal_maxNeg = NaN;
     volume.opacity = settingsOf.visible ? settingsOf.opacity : 0;
+    hideAbove(l, s);
+  }
+
+  // Draw the voxels of the layer l above the high threshold of its scale s
+  // out of the range, so transparent; the image is kept in layer.original.
+  function hideAbove(l, s) {
+    var layer = viewer.layers[l], symmetric = settings(l).symmetric;
+    var key = s.upper < topValue(l) ? [symmetric, s.upper, s.lo].join() : '';
+    if (key === (layer.hidden || '')) return;
+    layer.hidden = key;
+    var img = layer.volume.img;
+    if (!layer.original) layer.original = img.slice();
+    var original = layer.original, out = symmetric ? 0 : s.lo - 1;
+    for (var i = 0; i < img.length; i++) {
+      var v = original[i];
+      img[i] = key && (symmetric ? Math.abs(v) : v) > s.upper ? out : v;
+    }
+  }
+
+  // The value of the layer at the voxel vox, of its image, not of what is drawn.
+  function valueAt(layer, vox) {
+    var drawn = layer.volume.img;
+    if (layer.original) layer.volume.img = layer.original;
+    var value = layer.volume.getValue(vox[0], vox[1], vox[2]);
+    layer.volume.img = drawn;
+    return value;
+  }
+
+  // The histogram of the nonzero values of the layer l (|v| when
+  // symmetric), from 0 to the top of the sliders, log-scaled, the bins of
+  // the range shown in the colours they are drawn with.
+  var BINS = pageSettings.histogram_bins;
+  function drawHistogram(l, s) {
+    var canvas = $('threshold-histogram'), context = canvas.getContext('2d');
+    var layer = viewer.layers[l], symmetric = settings(l).symmetric;
+    var source = percentileSource(l), top = Math.max(layer.maxAbs, layer.max, 1e-12);
+    layer.histograms = layer.histograms || {};
+    var key = symmetric ? 'abs' : 'values', counts = layer.histograms[key];
+    if (!counts) {
+      counts = layer.histograms[key] = new Array(BINS).fill(0);
+      for (var i = 0; i < source.length; i++) {
+        if (source[i] < 0) continue;
+        counts[Math.min(BINS - 1, Math.floor(source[i] / top * BINS))] += 1;
+      }
+    }
+    var width = canvas.width, height = canvas.height, bar = width / BINS;
+    var most = Math.log1p(Math.max.apply(null, counts)) || 1;
+    var lut = viewer.luts[settings(l).cmap];
+    context.clearRect(0, 0, width, height);
+    counts.forEach(function (count, bin) {
+      if (!count) return;
+      var v = (bin + 0.5) / BINS * top, h = Math.max(1, Math.log1p(count) / most * (height - 4));
+      if (s.shown(v) || s.shown(-v)) {
+        var c = 3 * colourIndex(v, s);
+        context.fillStyle = 'rgb(' + lut[c] + ',' + lut[c + 1] + ',' + lut[c + 2] + ')';
+      } else {
+        context.fillStyle = themeColour('--line');
+      }
+      context.fillRect(bin * bar + 0.5, height - h, Math.max(1, bar - 1), h);
+    });
+    context.fillStyle = themeColour('--soft');
+    [s.threshold, s.upper].forEach(function (v) {
+      context.fillRect(Math.round(Math.min(width - 1, v / top * width)), 0, 1, height);
+    });
+    canvas.dataset.bins = counts.join(' ');
+    canvas.dataset.range = format(s.threshold) + ' ' + format(s.upper);
   }
 
   /* ---------------------------------------------------------------
@@ -522,12 +765,14 @@
       context.fillStyle = 'rgb(' + lut[c] + ',' + lut[c + 1] + ',' + lut[c + 2] + ')';
       context.fillRect(left + x, 2, 1, 16);
       if (!s.shown(v)) {  // hidden values are greyed out
-        context.fillStyle = 'rgba(17, 17, 17, 0.75)';
+        context.globalAlpha = 0.75;
+        context.fillStyle = themeColour('--bg');
         context.fillRect(left + x, 2, 1, 16);
+        context.globalAlpha = 1;
       }
     }
     var ticks = ticksOf(s, l).map(format);
-    context.fillStyle = '#ddd';
+    context.fillStyle = themeColour('--soft');
     context.font = '12px system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'top';
@@ -540,6 +785,7 @@
     });
     canvas.dataset.ticks = ticks.join(' ');
     canvas.style.opacity = settings(l).visible ? 1 : 0.4;
+    if (viewer.layers[l].shown) viewer.layers[l].shown.checked = settings(l).visible;
   }
 
   // The millimetres of the voxel ijk of the images, and its inverse.
@@ -582,29 +828,51 @@
     $('mm').textContent = '(' + mm.map(round).join(', ') + ')';
     $('voxel').textContent = '(' + toVoxel(mm).join(', ') + ')';
     $('value').textContent = viewer.layers.map(function (layer) {
-      var vox = layer.volume.mm2vox(mm);
-      var value = layer.volume.getValue(vox[0], vox[1], vox[2]);
+      var value = valueAt(layer, layer.volume.mm2vox(mm));
       value = String(Number(Number(value).toPrecision(6)));
       return several ? layer.name + ' ' + value : value;
     }).join(' · ');
+    if (viewer.regions) $('region').textContent = regionAt(mm);
   }
+
+  // The theme changed: the background of the image and the colour bars.
+  function applyTheme() {
+    if (!viewer.nv || !viewer.state) return;
+    setBackdrop(viewer.nv);
+    viewer.nv.updateGLVolume();
+    viewer.layers.forEach(function (layer, l) { drawColourBar(scale(l), l); });
+  }
+  window.addEventListener('neurolang-theme', applyTheme);
+  matchMedia('(prefers-color-scheme: light)').addEventListener(
+    'change', applyTheme);
 
   function redraw() {
     var scales = viewer.layers.map(function (layer, l) { return scale(l); });
     scales.forEach(function (s, l) { applyLayer(l, s); });
     viewer.nv.updateGLVolume();
     scales.forEach(drawColourBar);
+    drawHistogram(viewer.state.active, scales[viewer.state.active]);
     updateReadout();
     var mode = settings().thresholdMode;
     $('threshold-value').textContent =
-      mode === 'percentile' ? '= ' + format(scales[viewer.state.active].threshold) : '';
+      mode === 'percentile' ? '= ' + format(scales[viewer.state.active].threshold) +
+        ' to ' + format(scales[viewer.state.active].upper) : '';
   }
 
-  // The largest threshold of the slider, in the unit of the mode.
+  // The sliders lie over the histogram, so a position (0 to 1000) is a
+  // value on its axis, from 0 to its top, in either mode.
   function sliderTop() {
     var layer = viewer.layers[viewer.state.active];
+    return Math.max(layer.maxAbs, layer.max, 1e-12);
+  }
+
+  function positionOf(v) { return Math.round(1000 * v / sliderTop()); }
+
+  // The threshold, in the unit of the mode, at the slider position p.
+  function thresholdAt(p) {
+    var v = sliderTop() * p / 1000;
     return settings().thresholdMode === 'percentile'
-      ? 100 : Math.max(layer.maxAbs, layer.max, 1e-12);
+      ? rank(percentileSource(viewer.state.active), v) : v;
   }
 
   function syncControls() {
@@ -613,7 +881,11 @@
     $('visible').checked = s.visible;
     $('threshold').value = Number(s.threshold.toPrecision(6));
     $('threshold').max = s.thresholdMode === 'percentile' ? 100 : '';
-    $('threshold-slider').value = Math.round(1000 * s.threshold / sliderTop());
+    $('threshold-slider').value = positionOf(thresholdValue(viewer.state.active));
+    var upper = upperInMode();
+    $('threshold-high').value = Number(upper.toPrecision(6));
+    $('threshold-high').max = s.thresholdMode === 'percentile' ? 100 : '';
+    $('threshold-high-slider').value = positionOf(upperValue(viewer.state.active));
     $('threshold-mode').value = s.thresholdMode;
     $('cmap').value = s.cmap;
     $('symmetric').checked = s.symmetric;
@@ -623,10 +895,27 @@
     $('layer-down').disabled = position === 0;
   }
 
+  // The high threshold in the unit of the mode: the top when none is set.
+  function upperInMode() {
+    var s = settings();
+    if (s.upper !== null && s.upper !== undefined) return s.upper;
+    return s.thresholdMode === 'percentile' ? 100 : topValue(viewer.state.active);
+  }
+
   function setThreshold(value) {
     if (isNaN(value)) return;
     var top = settings().thresholdMode === 'percentile' ? 100 : Infinity;
-    settings().threshold = Math.min(Math.max(value, 0), top);
+    settings().threshold = Math.min(Math.max(value, 0), top, upperInMode());
+    syncControls();
+    redraw();
+  }
+
+  // The high threshold: none (the maximum) at the top or above it.
+  function setUpper(value) {
+    if (isNaN(value)) return;
+    var s = settings(), percent = s.thresholdMode === 'percentile';
+    var top = percent ? 100 : topValue(viewer.state.active);
+    s.upper = value >= top ? null : Math.max(value, s.threshold);
     syncControls();
     redraw();
   }
@@ -635,10 +924,14 @@
   function setThresholdMode(mode) {
     var s = settings(), active = viewer.state.active;
     if (mode === s.thresholdMode) return;
-    var value = thresholdValue(active);
+    var value = thresholdValue(active), upper = upperValue(active);
+    var hasUpper = s.upper !== null && s.upper !== undefined;
     s.thresholdMode = mode;
     s.threshold = mode === 'percentile'
       ? rank(percentileSource(active), value) : Math.max(0, value);
+    if (hasUpper) {
+      s.upper = mode === 'percentile' ? rank(percentileSource(active), upper) : upper;
+    }
     syncControls();
     redraw();
   }
@@ -699,8 +992,9 @@
     redraw();
   }
 
-  // A colour bar per layer, labelled with its name when there are
-  // several, and the list of the layers, shown with several.
+  // A colour bar per layer, labelled with its name and a box showing or
+  // hiding it when there are several, and the list of the layers, shown
+  // with several.
   function setUpLayers() {
     var several = viewer.layers.length > 1;
     $('layer-control').style.display = several ? '' : 'none';
@@ -712,9 +1006,18 @@
         canvas.height = $('colorbar').height;
       }
       layer.colorbar = canvas;
-      layer.label = document.createElement('div');
+      // The name of the layer, with whether it is shown: the answers of a
+      // program with several, each an overlay, are shown or hidden here.
+      layer.label = document.createElement('label');
       layer.label.className = 'colorbar-name';
-      layer.label.textContent = layer.name;
+      layer.shown = document.createElement('input');
+      layer.shown.type = 'checkbox';
+      layer.shown.addEventListener('change', function (e) {
+        settings(l).visible = e.target.checked;
+        syncControls();
+        redraw();
+      });
+      layer.label.append(layer.shown, ' ' + layer.name);
     });
   }
 
@@ -737,7 +1040,13 @@
     $('threshold').addEventListener('change', onThreshold);
     $('threshold').addEventListener('input', onThreshold);
     $('threshold-slider').addEventListener('input', function (e) {
-      setThreshold(sliderTop() * e.target.value / 1000);
+      setThreshold(thresholdAt(e.target.value));
+    });
+    var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
+    $('threshold-high').addEventListener('change', onUpper);
+    $('threshold-high').addEventListener('input', onUpper);
+    $('threshold-high-slider').addEventListener('input', function (e) {
+      setUpper(thresholdAt(e.target.value));
     });
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);

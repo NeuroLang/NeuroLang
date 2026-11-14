@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from . import abstract as abc
+from .abstract import count_distinct
 
 NA = None
 _SENTINEL = "__ras_dee__"
@@ -433,7 +434,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self)()
 
     def projection(self, *columns):
-        if self.is_empty():
+        if self.is_empty() and (self.arity == 0 or not columns):
             return self._empty_set_same_structure()
         if len(columns) == 0:
             return self.dee()
@@ -1435,7 +1436,13 @@ class NamedRelationalAlgebraFrozenSet(
                     values_dict = {col: eager_c[col].to_list() for col in all_cols}
                     for dst, fun in aggs_multi_column.items():
                         agg_val = fun(_AggRowProxy(values_dict))
-                        eager_result = eager_result.with_columns(pl.Series(name=dst, values=[agg_val]))
+                        column = pl.Series(name=dst, values=[agg_val])
+                        # Without other aggregations the result has no
+                        # columns and so no row: it is made of this one.
+                        eager_result = (
+                            eager_result.with_columns(column)
+                            if eager_result.width else column.to_frame()
+                        )
                 else:
                     for dst, fun in aggs_multi_column.items():
                         groups = eager_c.group_by(group_columns, maintain_order=True)
@@ -1525,6 +1532,9 @@ class NamedRelationalAlgebraFrozenSet(
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
         if self._container is None:
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
+        if any(callable(op) for op in eval_expressions.values()):
+            # Python callables run once per row: don't run them on duplicates
+            self._drop_duplicates_if_needed()
 
         # Keep the dee sentinel column while computing the new columns:
         # a frame with no columns has no rows in polars >= 2, so stripping
@@ -1577,13 +1587,14 @@ class NamedRelationalAlgebraFrozenSet(
             elif callable(operation):
                 # Need eager for callable
                 eager = new_container.collect()
-                col_names = data_names
-                Row = self._make_named_row_class(col_names)
+                # Read by label, as the pandas rows: a namedtuple renames
+                # the columns starting with an underscore.
+                row_of = abc.row_type(data_names)
                 values = [
-                    operation(Row(*(
+                    operation(row_of(
                         _DictWrapper(v) if isinstance(v, dict) else v
                         for v in row
-                    ))) for row in data_rows(eager)
+                    )) for row in data_rows(eager)
                 ]
                 eager = eager.with_columns(
                     pl.Series(name=dst_column, values=values)
@@ -1979,6 +1990,8 @@ def _map_agg_function(fun):
         return lambda col: pl.min(col)
     if fun is len:
         return lambda col: pl.len()
+    if fun is count_distinct:
+        return lambda col: pl.col(col).n_unique()
     # Check for numpy functions used in BuiltinAggregationMixin constants
     try:
         import numpy as np
@@ -1994,11 +2007,5 @@ def _map_agg_function(fun):
             return lambda col: pl.std(col)
     except ImportError:
         pass
-    # Check for bound methods from BuiltinAggregationMixin (e.g., function_count)
-    import types
-    if isinstance(fun, types.MethodType):
-        func_name = getattr(fun, '__name__', None)
-        if func_name == 'function_count':
-            return lambda col: pl.len()
     # For unknown functions, return None to signal eager fallback
     return None

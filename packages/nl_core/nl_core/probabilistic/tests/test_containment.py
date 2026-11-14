@@ -221,3 +221,16 @@ def test_containment_of_rules_with_negations():
     ]
     for q1, q2, expected in cases:
         assert is_contained_rule(q1, q2) == expected, (q1, q2)
+
+
+def test_negated_existentials_are_not_found_contained():
+    """
+    The terms of the inclusion–exclusion of ``¬∃x R(x) ∧ ¬∃y T(y)`` are
+    disjunctions of negated existentials, which are not tested (their
+    rules lose the existential within the negation): no containment is
+    found, which is sound.
+    """
+    R, T, x, y = Symbol('R'), Symbol('T'), Symbol('x'), Symbol('y')
+    not_r = Negation(ExistentialPredicate(x, R(x)))
+    not_t = Negation(ExistentialPredicate(y, T(y)))
+    assert not is_contained(not_r, Disjunction((not_r, not_t)))

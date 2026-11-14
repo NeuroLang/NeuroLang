@@ -337,19 +337,39 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         self, formula, classified_formulas
     ):
         if formula.functor == EQ:
-            if formula.args[0] == formula.args[1]:
+            if self.is_column_equal_to_itself(formula):
                 pass
             elif isinstance(formula.args[1], (Constant, Symbol)):
                 classified_formulas["eq_formulas"].append(formula)
             elif isinstance(formula.args[1], FunctionApplication):
                 classified_formulas["ext_proj_formulas"].append(formula)
-        elif formula.functor == CONTAINS and (
-            isinstance(formula.args[1], Constant[ColumnStr])
-            or isinstance(formula.args[1], Constant[Tuple])
+        elif formula.functor == CONTAINS and self.is_destroy_target(
+            formula.args[1]
         ):
             classified_formulas["destroy_formulas"].append(formula)
         else:
             classified_formulas["selection_formulas"].append(formula)
+
+    @staticmethod
+    def is_destroy_target(element):
+        """
+        Whether the *element* of a ``contains`` names the columns the set
+        is exploded into: a column, or a tuple of columns; a constant, or
+        a tuple of constants, is an element the set is filtered by.
+        """
+        return isinstance(element, Constant[ColumnStr]) or (
+            isinstance(element, Constant[Tuple])
+            and all(isinstance(column, ColumnStr) for column in element.value)
+        )
+
+    @staticmethod
+    def is_column_equal_to_itself(formula):
+        """`x = x`: a constant equal to the column, as in `x = 'x'`, is
+        not the column."""
+        return (
+            isinstance(formula.args[1], Constant[ColumnStr])
+            and formula.args[0] == formula.args[1]
+        )
 
     @staticmethod
     def process_positive_formulas(classified_formulas):
@@ -497,11 +517,23 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def process_negative_formulas(classified_formulas, output):
+        # Each negation subtracts the rows of the positive formulas, not of
+        # the previous difference, that match it: the result is the same,
+        # and the expression grows linearly with the negations instead of
+        # doubling with each (the previous difference was in both operands)
+        if classified_formulas["neg_formulas"] and not (
+            classified_formulas["pos_formulas"]
+        ):
+            # Without positive formulas, the negations restrict TRUE
+            output = Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet.dee()
+            )
+        positive = output
         named_columns = classified_formulas["named_columns"]
         for neg_formula in classified_formulas["neg_formulas"]:
             neg_cols = TranslateToNamedRA.obtain_negative_columns(neg_formula)
             if named_columns > neg_cols:
-                neg_formula = NaturalJoin(output, neg_formula)
+                neg_formula = NaturalJoin(positive, neg_formula)
             elif named_columns != neg_cols:
                 raise NegativeFormulaNotSafeRangeException(neg_formula)
             output = Difference(output, neg_formula)

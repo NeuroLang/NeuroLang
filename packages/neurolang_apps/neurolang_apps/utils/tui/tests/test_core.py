@@ -424,7 +424,7 @@ def vocabulary_engine():
         ].splitlines()
         if re.match(
             r"(term_in_study|activated|p_[a-z_]+|study_similarity|"
-            r"cutoff_similarity|similar_study|"
+            r"similar_study|"
             r"lift|relative_risk|uniformity|ratios)(_llm)?\(", line
         )
     ]
@@ -433,8 +433,15 @@ def vocabulary_engine():
         return {10: 0.9, 11: 0.5}[study]
 
     nl.add_symbol(query_similarity, name="query_similarity")
+
+    def query_similarity_cutoff(query: str) -> float:
+        return 0.9
+
+    nl.add_symbol(query_similarity_cutoff, name="query_similarity_cutoff")
     nl.execute_datalog_program(
         _vocabulary_rules() + "\n" + "\n".join(cogat_rules + analysis_rules)
+        # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
+        .replace("{kernel_radius_voxels}", "3")
     )
     return nl
 
@@ -450,7 +457,7 @@ def test_banner_lists_relations_and_example(vocabulary_engine):
     ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
     assert "weighted_mention(study_id, term, tfidf)" in out
-    example = "ans(s) :- mentions(s, 'pain')"
+    example = "ans(study) :- mentions(study, 'pain')"
     assert f"Try: {example}" in out
     app._execute_and_display(example)
     assert app.results[0].frame.iloc[:, 0].tolist() == [10]
@@ -859,3 +866,48 @@ def test_what_the_commands_of_a_query_load_stays(greeting_engine, tmp_path):
     app._execute_and_display("ans(x) :- pairs(x, y)")
     assert sorted(app.results[-1].frame.iloc[:, 0]) == [1, 2]
     assert "twice" not in {s.name for s in app._nl.symbol_table}
+
+
+class TestEuclideanJoinProfile:
+    """The REPL joins within a distance with the least memory."""
+
+    @pytest.fixture(autouse=True)
+    def restore_profile(self):
+        from neurolang.utils.euclidean_join_settings import profile
+
+        with profile("default"):
+            yield
+
+    def test_a_session_uses_the_memory_profile(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        assert not SETTINGS.stencil_count_first
+        InteractiveTuiApp(NeurolangDL(), console=_console())
+        assert SETTINGS.stencil_count_first
+
+    def test_a_session_applies_the_settings_of_its_engine(self, monkeypatch):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+        from neurolang_apps.utils import engine_registry
+
+        monkeypatch.setattr(
+            engine_registry, "get_euclidean_join_settings",
+            lambda name, yaml_path=None: {"kdtree_chunk_pairs": 77},
+        )
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(engine_name="neurosynth"),
+            console=_console(),
+        )
+        assert SETTINGS.kdtree_chunk_pairs == 77
+        assert SETTINGS.stencil_count_first
+
+    def test_the_profile_is_a_setting_of_the_session(self):
+        from neurolang.frontend import NeurolangDL
+        from neurolang.utils.euclidean_join_settings import SETTINGS
+
+        InteractiveTuiApp(
+            NeurolangDL(), TuiSettings(join_profile="default"),
+            console=_console(),
+        )
+        assert not SETTINGS.stencil_count_first

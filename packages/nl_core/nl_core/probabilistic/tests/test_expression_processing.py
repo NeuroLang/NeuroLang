@@ -11,6 +11,7 @@ from ...datalog.wrapped_collections import (
 from nl_expr.exceptions import UnexpectedExpressionError
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import (
+    FALSE,
     TRUE,
     Conjunction,
     Disjunction,
@@ -103,6 +104,38 @@ def test_get_probchoice_variable_equalities():
         {(x, y), (y, z)},
         {(x, z), (y, z)},
     ]
+
+
+def test_choice_atoms_with_constants():
+    """Two atoms of a choice are the same tuple: a variable made equal to
+    a constant is replaced by it, and atoms that cannot be the same tuple
+    make the conjunction false."""
+    C, R = Symbol("C"), Symbol("R")
+    w = Symbol("w")
+    program = CPLogicProgram()
+    program.add_probabilistic_choice_from_tuples(
+        C, [(0.25, i, j) for i in (a, b) for j in (a, b)]
+    )
+    assert get_probchoice_variable_equalities(
+        [C(x, y), C(a, a)], {C}
+    ) == {(x, a), (y, a)}
+    unified = lift_optimization_for_choice_predicates(
+        Conjunction((C(x, a), C(b, y), R(x))), program
+    )
+    assert [f for f in unified.formulas if f.functor == C] == [C(b, a)]
+    for conjunction in (
+        Conjunction((C(a, a), C(a, b), R(a))),
+        Conjunction((C(x, x), C(a, b), R(x))),
+        Conjunction((C(x, x), C(a, z), C(w, b), R(x))),
+    ):
+        assert (
+            lift_optimization_for_choice_predicates(conjunction, program)
+            == FALSE
+        )
+        union = Disjunction((conjunction, Conjunction((C(x, y), R(x)))))
+        assert lift_optimization_for_choice_predicates(
+            union, program
+        ) == Disjunction((Conjunction((C(x, y), R(x))),))
 
 
 def test_group_preds_by_pred_symb():
@@ -287,3 +320,20 @@ def test_negated_choice_atom_is_another_tuple_of_the_choice():
     assert choice == ExistentialPredicate(
         f, Conjunction((C(f), Constant(operator.ne)(f, x)))
     )
+
+
+def test_negated_choice_atom_of_several_columns_is_another_tuple():
+    """¬C(x, 1) ≡ ∃f ∃g (C(f, g) ∧ (f, g) ≠ (x, 1)), the comparison of
+    tuples being f ≠ x ∨ g ≠ 1."""
+    import operator
+    from ..expression_processing import _tuple
+    C = Symbol("C")
+    one, tuple_ = Constant(1), Constant(_tuple)
+    choice = NegatedChoicesAsOtherTuples({C}).walk(Negation(C(x, one)))
+    g = choice.head
+    f = choice.body.head
+    assert choice == ExistentialPredicate(g, ExistentialPredicate(
+        f, Conjunction((
+            C(f, g), Constant(operator.ne)(tuple_(f, g), tuple_(x, one))
+        ))
+    ))

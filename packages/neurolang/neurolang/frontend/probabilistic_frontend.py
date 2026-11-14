@@ -33,17 +33,27 @@ from nl_core.datalog.aggregation import (
 from nl_core.datalog.chase import Chase
 from nl_core.datalog.constraints_representation import (
     DatalogConstraintsProgram,
+    RightImplication,
+    iter_implications,
 )
 from nl_core.datalog.exceptions import InvalidMagicSetError
 from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
     InlineEqualityConstantsMixin,
+    extract_logic_atoms,
+    is_aggregation_rule,
 )
 from nl_core.datalog.magic_sets import magic_rewrite
 from nl_core.datalog.negation import DatalogProgramNegationMixin
 from nl_core.datalog.ontologies_parser import OntologyParser
-from nl_core.datalog.ontologies_rewriter import OntologyRewriter
+from nl_core.datalog.ontologies_rewriter import (
+    OntologyRewriter,
+    chase_rules,
+    constraints_that_can_hold,
+    projecting_rules,
+    valued_rules,
+)
 
 from nl_expr.exceptions import (
     UnsupportedQueryError,
@@ -260,6 +270,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.current_program_rewritten = None
+        # The names of the predicates the loaded ontologies define.
+        self.ontology_predicates = set()
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -315,6 +327,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             load_format=format, individuals=individuals, names=names,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
+        self.ontology_predicates.update(constraints)
+        self.ontology_predicates.update(s.name for s in est_knowledge)
+        self.ontology_predicates.update(s.name for s in entity_rules)
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
@@ -331,8 +346,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         if individuals:
             for name, rows in onto.parse_individuals().items():
                 self.add_tuple_set(rows, name=name)
+                self.ontology_predicates.add(name)
 
         self._rewrite_det_idb.cache_clear(self)
+        self._constraints_that_can_hold.cache_clear(self)
+        self._projecting_rewritings.cache_clear(self)
         return self.connector_symbol
 
     @property
@@ -487,7 +505,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         # them, which takes the probabilistic path. The other cases fall
         # through to the base QueryBuilderDatalog implementation, which
         # creates a fresh query rule and only runs the deterministic chase.
+        # A predicate the ontology constrains, as ``headOf`` by
+        # ``Dean(x) -> exists y. headOf(x, y)``, is queried as an EDB one:
+        # its constraints are not rules to solve, they rewrite the rule.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
+        if any(
+            isinstance(rule, RightImplication)
+            for rule in iter_implications(symbol_entry)
+        ):
+            symbol_entry = None
         if _solved_as_query_rule(head, symbol_entry):
             is_edb = symbol_entry is None or isinstance(
                 symbol_entry, ir.Constant
@@ -501,6 +527,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 # The deterministic chase of the base implementation
                 # neither solves the probabilistic queries a conjunction
                 # may depend on nor applies the ontology's constraints.
+                if _computes_terms(head):
+                    return self._execute_query_computing_terms(
+                        head, predicate, show_rewritten, dry_run, show_ra
+                    )
                 return self._execute_query_through_rule(
                     head, predicate, show_rewritten, dry_run, show_ra
                 )
@@ -633,6 +663,83 @@ class NeurolangPDL(QueryBuilderDatalog):
             {v.expression.name: name for v, name in zip(variables, names)}
         ), None
 
+    def _solve_queries(self, queries, show_rewritten=False, dry_run=False):
+        """
+        Solve the *queries* together, each rewritten with magic sets for
+        its own bindings: the program of all of them is stratified and
+        solved once, so that what they share is computed once.
+
+        Each query is the rule ``fresh(head) :- body`` of a fresh
+        predicate, as in :meth:`_execute_query_computing_terms`, so that
+        heads computing terms and probabilities are solved as any other.
+        See :meth:`QueryBuilderDatalog._solve_queries`.
+        """
+        with self.scope:
+            prepared = []
+            for head, body in queries:
+                if is_probabilistic_predicate_symbol(
+                    getattr(body.expression, "functor", None),
+                    self.program_ir
+                ):
+                    raise UnsupportedQueryError(
+                        "Queries on probabilistic predicates are not "
+                        "supported"
+                    )
+                fresh = self.new_symbol()
+                self._declare_query(fresh(*head), body)
+                variables = tuple(self.new_symbol() for _ in head)
+                rule = self.program_ir.symbol_table[
+                    fresh.expression
+                ].formulas[0]
+                prepared.append((head, variables, rule))
+            rewritten = [
+                self._rewrite_or_keep(rule) for _, _, rule in prepared
+            ]
+            with self.scope:
+                self.program_ir.walk(
+                    self._union_of_rules(rules for _, rules in rewritten)
+                )
+                goals = [goal for goal, _ in rewritten]
+                if self._handle_rewritten_output(
+                    goals, show_rewritten, dry_run
+                ):
+                    return None
+                solution = self._solve(goals)
+            return [
+                self._joint_answer(head, variables, rule, goal, solution)
+                for (head, variables, rule), (goal, _)
+                in zip(prepared, rewritten)
+            ]
+
+    def _rewrite_or_keep(self, query):
+        """
+        Return ``query`` rewritten with magic sets, and the magic rules it
+        needs, or ``query`` itself, without rules, if it cannot be.
+        """
+        try:
+            return self._magic_rewrite_query(query)
+        except (
+            InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
+        ):
+            return query, Union(())
+
+    def _joint_answer(self, head, variables, rule, goal, solution):
+        """
+        Return the answer of the query *head*, whose rule is *rule*,
+        rewritten as *goal*, from the *solution* of the queries.
+        """
+        symbols = tuple(v.expression for v in variables)
+        answer = self._restrict_to_query_solution(
+            symbols, goal.consequent.functor, symbols, solution
+        )
+        names = self._parameter_names(h.expression for h in head)
+        answer = answer.value.rename_columns(
+            dict(zip(answer.value.columns, names))
+        )
+        if len(head) == 0:
+            return len(answer) > 0
+        return answer
+
     def _depends_on_probabilistic_queries(self, predicate):
         """Whether the rules ``predicate`` depends on have probabilistic
         queries, which the deterministic chase does not solve."""
@@ -653,11 +760,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         Run the query of ``predicate`` through a fresh rule defining it.
 
         The rule ``fresh(x, ...) :- predicate``, over the free variables
-        of ``predicate``, lives in a scope closed on return; querying it
-        rewrites the program with the ontology's constraints.
+        of ``predicate`` in ``head``, lives in a scope closed on return;
+        querying it rewrites the program with the ontology's constraints,
+        whose existentials only rewrite atoms of variables not in its head.
         """
         with self.scope:
-            rule = self._declare_fresh_rule(predicate)
+            rule = self._declare_fresh_rule(predicate, head)
             return self._execute_query(
                 head, fe.Expression(self, rule.consequent),
                 show_rewritten=show_rewritten, dry_run=dry_run,
@@ -690,14 +798,16 @@ class NeurolangPDL(QueryBuilderDatalog):
             dict(zip(solution.columns, names))
         ), None
 
-    def _declare_fresh_rule(self, predicate):
+    def _declare_fresh_rule(self, predicate, head=None):
         """Declare, in the current scope, the rule ``fresh(x, ...) :-
-        predicate`` over the free variables of ``predicate``, and return
-        it as stored in the program."""
-        variables = tuple(sorted(
-            extract_logic_free_variables(predicate.expression),
-            key=lambda symbol: symbol.name,
-        ))
+        predicate`` over the free variables of ``predicate``, those in the
+        query's ``head`` if given, and return it as stored in the program."""
+        variables = extract_logic_free_variables(predicate.expression)
+        if head is not None:
+            variables &= set().union(*(
+                h._symbols for h in self._query_head_symbols(head)[0]
+            ))
+        variables = tuple(sorted(variables, key=lambda symbol: symbol.name))
         fresh = ir.Symbol.fresh()
         self.program_ir.walk(Union((
             Implication(fresh(*variables), predicate.expression),
@@ -877,8 +987,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         -------
         Result obtained after resolution of the deterministic stratum
         '''
+        added = set()
         if "__constraints__" in self.symbol_table:
-            det_idb = self._rewrite_det_idb(det_idb)
+            symbol_table = self.program_ir.symbol_table
+            holds = frozenset(
+                symbol for symbol in self.program_ir.constraints()._symbols
+                if not _only_constraints(symbol_table.get(symbol, Union(())))
+            )
+            heads = {rule.consequent.functor for rule in det_idb.formulas}
+            det_idb = self._rewrite_det_idb(det_idb, holds)
+            # The predicates of the chased constraints and their copies.
+            added = {
+                rule.consequent.functor for rule in det_idb.formulas
+            } - heads
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
@@ -889,6 +1010,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
+        for symbol in added & solution.keys():
+            del solution[symbol]
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
@@ -1020,27 +1143,59 @@ class NeurolangPDL(QueryBuilderDatalog):
         return ir.Constant[AbstractSet](query_solution)
 
     @instance_lru_cache(
-        key_fn=lambda det_idb: frozenset(str(r) for r in det_idb.formulas),
+        key_fn=lambda det_idb, holds: (
+            frozenset(str(r) for r in det_idb.formulas), holds
+        ),
         maxsize=32,
     )
-    def _rewrite_det_idb(self, det_idb):
+    def _rewrite_det_idb(self, det_idb, holds):
         """Xrewrite det_idb against ontology constraints, LRU-cached per instance.
+
+        Only the constraints whose antecedent can hold, from their
+        predicates ``holds`` with facts or rules, are used.
 
         Only the Xrewrite step is cached. The connector_rules scan that follows
         in _solve_deterministic_stratum accesses live program_ir and is NOT
         cached, so EDB added after load_ontology() remains visible.
         Cache is invalidated by load_ontology() on each call.
         """
-        return self._rewrite_program_with_ontology(det_idb)
+        return self._rewrite_program_with_ontology(det_idb, holds)
 
-    def _rewrite_program_with_ontology(self, deterministic_program):
-        orw = OntologyRewriter(
-            deterministic_program,
-            self.program_ir.get_constraints()
+    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    def _constraints_that_can_hold(self, holds):
+        return constraints_that_can_hold(
+            self.program_ir.get_constraints(), holds
         )
-        rewrite = orw.Xrewrite()
 
-        return Union(rewrite)
+    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    def _projecting_rewritings(self, holds):
+        """The rewritings of the projecting constraints that can hold, the
+        same for every query, which can have values, and the predicates
+        with values with them."""
+        constraints = self._constraints_that_can_hold(holds)
+        rules, valued, _ = valued_rules(constraints, holds, OntologyRewriter(
+            Union(projecting_rules(constraints)), constraints, chased=True
+        ).Xrewrite())
+        return tuple(rules), frozenset(valued)
+
+    def _rewrite_program_with_ontology(self, deterministic_program, holds):
+        """Xrewrite with the constraints that can hold, those without
+        existential variables only on values they introduce; the chase
+        applies the latter, as rules, to the named values, with the
+        rewritings of those that project a variable out."""
+        constraints = self._constraints_that_can_hold(holds)
+        rewrite = OntologyRewriter(
+            Union(sum((
+                _split_aggregation(rule, constraints)
+                for rule in deterministic_program.formulas
+            ), ())),
+            constraints, chased=True,
+        ).Xrewrite()
+        projecting, valued = self._projecting_rewritings(holds)
+        return Union(chase_rules(
+            constraints, valued, tuple(rewrite) + projecting,
+            self.program_ir.extensional_database(),
+        ))
 
     def add_probabilistic_facts_from_tuples(
         self,
@@ -1170,9 +1325,10 @@ class NeurolangPDL(QueryBuilderDatalog):
         self, iterable, type_, name, solver_add_method
     ):
         if isinstance(iterable, pd.DataFrame):
-            iterable = iterable.rename(
+            # a set, whose rows (not column names) give the type
+            iterable = self.program_ir.new_set(iterable.rename(
                 columns={n: i for i, n in enumerate(iterable.columns)}
-            )
+            ))
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):
@@ -1352,6 +1508,32 @@ def _has_probability(head) -> bool:
     )
 
 
+def _split_aggregation(rule, constraints):
+    """``H(count(x)) :- B`` as ``H(count(x)) :- b(x)`` and ``b(x) :- B``
+    when ``B`` has a predicate the ``constraints`` derive: the aggregate is
+    then over the union of the rewritings of ``B``."""
+    if not is_aggregation_rule(rule) or not any(
+        getattr(atom.functor, "name", None) in constraints
+        for atom in extract_logic_atoms(rule.antecedent)
+    ):
+        return (rule,)
+    body = ir.Symbol.fresh()(*sorted(
+        extract_logic_free_variables(rule.antecedent)
+        & rule.consequent._symbols, key=lambda symbol: symbol.name
+    ))
+    return (
+        Implication(rule.consequent, body),
+        Implication(body, rule.antecedent),
+    )
+
+
+def _only_constraints(entry):
+    """Whether the symbol-table ``entry`` is a union of constraints only."""
+    return isinstance(entry, Union) and all(
+        isinstance(rule, RightImplication) for rule in entry.formulas
+    )
+
+
 def _solved_as_query_rule(head, symbol_entry) -> bool:
     """
     Return whether a query is solved as a rule of its own.
@@ -1362,6 +1544,12 @@ def _solved_as_query_rule(head, symbol_entry) -> bool:
     """
     if not hasattr(symbol_entry, "formulas"):
         return True
+    return _computes_terms(head)
+
+
+def _computes_terms(head) -> bool:
+    """Whether the query's *head* computes a term other than a probability,
+    such as the aggregate ``count(s)``."""
     return isinstance(head, tuple) and any(
         isinstance(h.expression, ir.FunctionApplication)
         and h.expression.functor != PROB

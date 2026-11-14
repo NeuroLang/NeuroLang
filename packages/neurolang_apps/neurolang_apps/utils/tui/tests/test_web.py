@@ -69,6 +69,20 @@ def test_the_banner_names_the_engine_and_the_session_command_line():
     assert "neurolang-query -i --engine neurosynth --resolution 2" in banner
 
 
+def test_the_banner_gives_the_kernel_radius_and_the_voxel_size():
+    """The banner tells how far from a peak a study activates, in
+    millimetres and in voxels of the engine's grid."""
+    import nibabel as nib
+
+    nl = NeurolangPDL()
+    nl.template = nib.Nifti1Image(
+        np.ones((2, 2, 2), dtype=np.uint8), np.diag([2.0, 2.0, 2.0, 1.0])
+    )
+    banner = WebRepl(nl, engine_name="neurosynth", resolution=2).banner()
+    assert "Grid: 2 mm voxels" in banner
+    assert "within 6 mm (3 voxels) of its peaks" in banner
+
+
 def test_quit_does_not_end_the_page(repl):
     reply = repl.submit(".quit")
     assert "reload" in reply.html.lower()
@@ -78,7 +92,7 @@ def test_view_pages_are_returned_not_opened(repl, monkeypatch, tmp_path):
     monkeypatch.setattr(nifti.tempfile, "tempdir", str(tmp_path))
     repl.submit("ans(x) :- person(x, n)")
     monkeypatch.setattr(
-        nifti, "last_result_images", lambda app, save: [("layer", Path("a"))]
+        nifti, "last_result_images", lambda app, block, save: [("layer", Path("a"))]
     )
     monkeypatch.setattr(
         nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"
@@ -311,6 +325,21 @@ def test_ask_with_a_key_puts_the_query_in_the_input(repl):
     assert repl.submit("1").prompt == ""
 
 
+def test_the_query_the_assistant_wrote_comes_with_its_graph(repl):
+    from neurolang_apps.utils.llm.tests.fakes import ScriptedClient
+
+    repl.set_llm("anthropic", SECRET)
+    repl.app.assistant.client = ScriptedClient([
+        [("check_query", {"query": "ans(x) :- person(x, n)"})],
+        [("final_answer", {
+            "query": "ans(x) :- person(x, n)", "explanation": "Everyone.",
+        })],
+        "Everyone with a name.", "VERDICT: yes", COMMENTS,
+    ])
+    reply = repl.submit(".ask --react Who is there?")
+    assert ">person<" in reply.graph and ">ans<" in reply.graph
+
+
 def test_the_steps_of_the_assistant_are_sent_while_it_works(repl):
     import json
 
@@ -413,6 +442,11 @@ def test_the_key_goes_to_the_provider_and_nowhere_else(repl, monkeypatch):
         )
         assert b"claude-test" in request.content
     assert SECRET not in reply.html
+    # The tokens of the answer: of its two requests.
+    assert {k: reply.tokens[k] for k in ("input", "output", "calls",
+                                         "model")} == {
+        "input": 2, "output": 2, "calls": 2, "model": "claude-test"}
+    assert repl.submit("ans(x) :- person(x, 5)").tokens == {}
     assert SECRET not in repl.submit(".llm").html
     assert SECRET not in repr(repl.app.assistant.config().provider())
 
@@ -458,6 +492,84 @@ def test_the_lightweight_engines_leave_out_the_analyses_that_need_gigabytes(
     assert engine_registry.list_engine_names(
         path
     ) == engine_registry.list_engine_names()
+
+
+
+def _text(html):
+    """Return the text of the HTML *html*, without its tags."""
+    import re
+
+    return re.sub("<[^>]+>", "", html)
+
+
+def test_the_rules_defined_from_a_heavy_predicate_are_left_out():
+    from neurolang_apps.utils.tui.web import left_out
+
+    heavy = left_out(
+        "near(s) :- activated(i, j, k, s)\n"
+        "nearer(s) :- near(s), study(s)\n"
+        "mentioned(s) :- mentions(s, t)"
+    )
+    assert {"activated", "near", "nearer"} <= heavy
+    assert not {"mentioned", "mentions", "study"} & heavy
+
+
+def test_the_predicates_the_engine_leaves_out_are_named(repl):
+    """The browser engine (here: one defining none of them) lacks the
+    analyses that need gigabytes and what is defined from them."""
+    left_out = repl.app.left_out_predicates
+    assert repl.app._nl.left_out_predicates == left_out
+    assert {"activated", "uniformity", "uniformity_llm", "lift"} <= left_out
+    assert not {"mentions", "destrieux_activated", "person"} & left_out
+    full = NeurolangPDL()
+    for name in ("activated", "uniformity"):
+        full.add_tuple_set([(1,)], name=name)
+    defined = WebRepl(full, engine_name="neurosynth").app.left_out_predicates
+    assert not {"activated", "uniformity"} & defined
+
+
+def test_the_full_engine_leaves_out_nothing():
+    """The rules of the analyses define them in the engine of the
+    terminal, or of ``?engine=full``."""
+    from unittest.mock import patch
+
+    from neurolang_apps.utils.tests import test_engines
+
+    with patch(
+        f"{test_engines.NS_INIT}.fetch_study_metadata",
+        return_value=test_engines.FAKE_METADATA,
+    ):
+        nl = test_engines._build_small_neurosynth()
+    assert WebRepl(nl, "neurosynth").app.left_out_predicates == frozenset()
+
+
+def test_the_examples_leave_out_the_missing_predicates(repl):
+    examples = repl.examples()
+    assert examples["datalog"] and examples["squall"]
+    for query in examples["datalog"] + examples["squall"]:
+        assert "uniformity" not in query and "activated(" not in query
+    assert "ans(study) :- mentions(study, 'pain')" in examples["datalog"]
+
+
+def test_the_banner_says_what_the_engine_leaves_out(repl):
+    banner = _text(repl.banner())
+    missing = next(
+        line for line in banner.splitlines() if "not in the browser" in line
+    )
+    assert "activated" in missing and "uniformity_llm" in missing
+    assert "  uniformity(" not in banner and "  activated(" not in banner
+    assert "  mentions(" in banner
+
+
+def test_a_missing_predicate_is_not_available_rather_than_unknown(repl):
+    reply = repl.submit("ans(i, j, k, u) :- uniformity('pain', i, j, k, u)")
+    text = _text(reply.html)
+    assert reply.failed
+    assert "uniformity is not available in the browser" in text
+    assert "Undefined symbol" not in text
+    reply = repl.submit("ans(x) :- nobody(x)")
+    assert "predicate nobody has no facts or rules" in _text(reply.html)
+    assert "not available" not in _text(reply.html)
 
 
 STUDIES = [
@@ -684,3 +796,66 @@ def test_the_commands_are_json(repl):
     import json
 
     assert json.loads(json.dumps(repl.commands())) == repl.commands()
+
+
+def test_the_assistant_is_ready_with_a_key(repl):
+    pytest.importorskip("httpx")
+    assert not repl.assistant_ready()
+    repl.set_llm("anthropic", "a-key")
+    assert repl.assistant_ready()
+    repl.clear_llm()
+    assert not repl.assistant_ready()
+
+
+def test_a_confined_session_writes_and_reads_no_file_of_the_server(
+    repl, tmp_path, monkeypatch
+):
+    """On a server (neurolang.confine): .save, .transcript, .load and
+    .view of a path reach its data only, and write nothing."""
+    from neurolang.confine import CONFINE_ENV
+
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setenv(CONFINE_ENV, str(data))
+    (tmp_path / "secret.csv").write_text("a\n1\n")
+    repl.submit("ans(n, a) :- person(n, a)")
+    for statement, says in (
+        (f".save {tmp_path / 'out.csv'}", "writes no result"),
+        (f".transcript {tmp_path / 'session.md'}", "writes no transcript"),
+        (f".load {tmp_path / 'secret.csv'} stolen", "No file"),
+        (f".view {tmp_path / 'secret.nii.gz'}", "reads no image"),
+    ):
+        reply = repl.submit(statement)
+        assert says in reply.html, statement
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "data", "secret.csv"]
+
+
+def test_the_page_uploads_a_file_that_load_loads(repl, monkeypatch, tmp_path):
+    """A file the page uploads is kept in the session's memory, and loaded
+    by its name, also on a server which reads none of its files for a
+    statement (neurolang.confine)."""
+    import gzip
+    import re
+
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils.tui import session
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path))
+    answer = repl.upload("my scores.csv", b"study,score\ns1,0.5\ns2,0.7\n")
+    assert answer["statement"] == ".load 'my scores.csv'"
+    def text(reply):
+        return re.sub(r"<[^>]+>", "", reply.html)
+
+    reply = repl.submit(answer["statement"] + " scores")
+    assert "loaded scores(study, score): 2 rows" in text(reply)
+    repl.upload("t.tsv.gz", gzip.compress(b"a\tb\n1\t2\n"))
+    assert "loaded t(a, b): 1 row" in text(repl.submit(".load t.tsv.gz"))
+    reply = repl.submit(".load other.csv")
+    assert reply.failed and "No file other.csv was uploaded" in text(reply)
+    assert list(tmp_path.iterdir()) == []  # nothing written on a disk
+    for name, data in (("../x.csv", b"a\n1\n"), ("/etc/x.csv", b"a\n"),
+                       ("notes.txt", b"a\n"), (".csv", b"a\n"),
+                       ("big.csv", b"a" * (session.MOST_UPLOAD_BYTES + 1))):
+        with pytest.raises(ValueError):
+            repl.upload(name, data)

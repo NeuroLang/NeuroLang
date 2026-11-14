@@ -267,6 +267,26 @@ def test_equality():
     assert S_('a')(C_(1)) != S_('a')(C_(1), C_(2))
 
 
+def test_equality_of_an_expression_typed_two_ways():
+    """An application built without a type, one of type ``Unknown`` and
+    one of type ``bool`` are equal either way round, as a set sees them.
+    Of types ``int`` and ``str``, they differ."""
+    a, x = S_('a'), S_('x')
+    typed = (F_(a, (x,)), F_[Unknown](a, (x,)), F_[bool](a, (x,)))
+    for e in typed:
+        for f in typed:
+            assert e == f
+            s = {e}
+            s.remove(f)
+    assert F_[int](a, (x,)) != F_[str](a, (x,))
+    assert F_[str](a, (x,)) != F_[int](a, (x,))
+
+    changed = a(x)
+    changed.change_type(bool)
+    assert type(changed).__generic_class__ is F_
+    assert changed == F_[bool](a, (x,)) == changed
+
+
 def test_instance_check():
     c = C_[int](2)
     assert isinstance(c, expressions.Constant)

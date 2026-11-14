@@ -9,3 +9,9 @@ export function tabAfter(tabs, current, key) {
   if (step === undefined || index < 0) return null;
   return tabs[(index + step + tabs.length) % tabs.length];
 }
+
+// The tab of the answer *payload*, the *index*-th table of a program with
+// several queries (ans[name]): the query's name, or its number, and its rows.
+export function answerLabel(payload, index) {
+  return `${payload.title || `Answer ${index + 1}`} · ${payload.total}`;
+}

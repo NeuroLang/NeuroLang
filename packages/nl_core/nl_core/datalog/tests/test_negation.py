@@ -61,6 +61,30 @@ def test_non_recursive_negation():
     assert solution_instance['G'].value == {(2,), (3,)}
 
 
+def test_body_of_negated_ground_atoms():
+    """A conjunction without positive formulas is true when its negated
+    atoms are false."""
+    T = S_('T')
+    P = S_('P')
+    Q = S_('Q')
+
+    program = Eb_((
+        Fact(T(C_(1))),
+        Implication(P(), ~T(C_(2))),
+        Implication(Q(), ~T(C_(1))),
+    ))
+
+    dl = Datalog()
+    dl.walk(program)
+    solution_instance = Chase(dl).build_chase_solution()
+
+    assert solution_instance['P'].value == {()}
+    assert (
+        'Q' not in solution_instance
+        or solution_instance['Q'].value.is_empty()
+    )
+
+
 def test_stratified_and_chase():
     x = S_('x')
     y = S_('y')

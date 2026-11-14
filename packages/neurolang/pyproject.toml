@@ -39,6 +39,9 @@ dependencies = [
     "nilearn>=0.10.0",
     "lark>=1.1.2",
     "typing_inspect",
+    # The settings of the Euclidean join, utils/euclidean_join.yaml, are read
+    # as the engines' configuration is.
+    "omegaconf>=2.4",
 ]
 
 [project.optional-dependencies]

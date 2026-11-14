@@ -1,0 +1,25 @@
+# The defaults of the LLM configuration (llm.yaml, see llm.example.yaml):
+# the settings a configuration file does not give. They are read by
+# config.py, the one place they are written; llm.example.yaml and
+# doc/query_assistant.rst quote them, which the tests check.
+
+# Each provider of the file.
+provider:
+  tool_calling: text      # text (Thought/Action/Observation) or native
+  max_tokens: 2048        # the most tokens of a reply
+
+# The query assistant.
+assistant:
+  strategy: react         # react: agent exploring the engine; icl: few-shot
+  language: auto          # auto (the REPL's .mode), squall or datalog
+  max_steps: 16           # ReAct: most tool calls until its final answer
+  max_repairs: 3          # ICL: rounds of reprompting with the query error
+  few_shot_k: 6           # example questions in the prompt
+  samples: 1              # answers voted on (self-consistency)
+  temperature: 0.0
+  timeout: 60.0           # seconds per LLM request
+  preview_rows: 10        # rows of a result shown to the model
+  query_timeout: 30.0     # seconds a query the agent runs may take
+  query_memory_mb: 4096.0 # memory a query the agent runs may take
+  verify_rounds: 1        # ReAct: final answers its check may reject
+  comment_rules: true     # one more request: a comment line on each rule

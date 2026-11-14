@@ -223,3 +223,29 @@ ans(b, t, p) :- summed(b, t, p).
 """)
     assert {b for b, _ in got} == set(range(N))
     assert got == pytest.approx(expected)
+
+
+def test_a_rule_over_a_choice_rule_with_a_repeated_head_variable():
+    # mentioned(s, s) has its study twice in its head; the replicates of
+    # the rule over it must keep the activation of its body.
+    nl = engine(uniform)
+    nl.add_tuple_set([(s,) for s, t in MENTIONS if t == "t1"], name="t1")
+    nl.add_tuple_set([(s,) for s, r in ACTIVATES if r == "r1"], name="r1")
+    nl.add_resampling("boot", "selected_study", n=N)
+    nl.execute_datalog_program("""
+mentioned(s, s) :- t1(s), selected_study(s).
+nested(c, s) :- mentioned(c, s), r1(s).
+flat(s) :- t1(s), r1(s), selected_study(s).
+p_nested(PROB) :- nested(c, s).
+p_flat(PROB) :- flat(s).
+r_nested(b, p) :- RESAMPLE[boot](p_nested(p)) = b.
+r_flat(b, p) :- RESAMPLE[boot](p_flat(p)) = b.
+""")
+    point = rows(nl, "ans(n, f) :- p_nested(n), p_flat(f).")
+    assert [n for (n,), f in point.items()] == pytest.approx(
+        list(point.values())
+    )
+    reps = rows(nl, "ans(b, n, f) :- r_nested(b, n), r_flat(b, f).")
+    assert len(reps) == N
+    for (b, n), f in reps.items():
+        assert n == pytest.approx(f)

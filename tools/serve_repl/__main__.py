@@ -2,4 +2,7 @@
 
 from . import main
 
-main()
+# The builder of the sessions (--users) is a process started anew, which
+# imports this module again: it must not serve.
+if __name__ == "__main__":
+    main()

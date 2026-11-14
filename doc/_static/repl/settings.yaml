@@ -1,0 +1,29 @@
+# The settings of the REPL's page: the limits and sizes its scripts use, the
+# one place they are written. settings.js reads this file (fetched by the
+# page, read from the disk by the tests): a mapping of mappings of numbers,
+# booleans, words and lists, in the YAML the reader knows.
+
+table:
+  page_sizes: [20, 50, 100, 500]   # the rows a page of a table shows
+
+plot:
+  bars: 30              # the bars drawn at most, the rest counted
+  histogram_bins: 40    # the most bins of a histogram (Sturges' number below)
+  dense_points: 500     # more points than these: smaller and see-through
+  line_dots: 60         # a line marks its points when it has at most these
+
+layout:                 # long rules in the box, a line per atom of the body
+  head_share: 0.45      # a head longer than this share of the line...
+  short_indent: 4       # ...indents the body by this, not up to the head
+
+history:
+  queries: 500          # the queries of the History menu kept
+  questions: 100        # the past questions kept
+  questions_shown: 50   # those listed
+  question_width: 58    # characters of a past question's query on a line
+
+guide:
+  relations_shown: 200  # the relations listed, before the filter
+
+editor:
+  max_height_px: 384    # beyond, the code box scrolls

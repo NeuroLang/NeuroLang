@@ -92,7 +92,11 @@ class ParametricTypeClassMeta(type):
         d = dict(self.__dict__)
         d['_nl_class_type'] = type_
         d['type'] = type_
-        d['__generic_class__'] = self
+        # Of an already parametrised class, as change_type does, the
+        # generic class is that of the class.
+        d['__generic_class__'] = (
+            self.__generic_class__ if self.__parameterized__ else self
+        )
         d['__no_explicit_type__'] = False
         d['__parameterized__'] = True
         return self.__class__(
@@ -390,7 +394,16 @@ class Expression(metaclass=ExpressionMeta):
         if self.__is_pattern__ or not isinstance(other, Expression):
             return super().__eq__(other)
 
-        if not isinstance(other, type(self)):
+        # The types of the expressions, not of their classes: one without
+        # an explicit type is of type Unknown. As for constants, the more
+        # informative of two types refines the other.
+        generic_class = getattr(type(self), '__generic_class__', type(self))
+        if not (
+            isinstance(other, generic_class) and (
+                is_leq_informative(self.type, other.type) or
+                is_leq_informative(other.type, self.type)
+            )
+        ):
             return False
 
         return self.unapply() == other.unapply()

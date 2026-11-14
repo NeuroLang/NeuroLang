@@ -117,6 +117,45 @@ def test_union_with_a_choice_on_a_free_and_on_a_bound_variable(solvers):
     assert dict(result) == pytest.approx({1: 0.5, 2: 0.25, 3: 0.5, 4: 0.25})
 
 
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("rules, expected", [
+    # Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b)]
+    (
+        "h() :- C(x, y), R(x)\nh() :- C(y, x), T(x)",
+        0.5 * 0.4 + 0.3 * (1 - 0.3 * 0.4) + 0.2 * (1 - 0.6 * 0.4),
+    ),
+    # Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b) ∨ U(b)]
+    (
+        "h() :- C(x, y), R(x)\nh() :- C(y, x), T(x)\nh() :- C(x, y), U(y)",
+        0.5 * (1 - 0.6 * 0.9) + 0.3 * (1 - 0.3 * 0.4 * 0.5)
+        + 0.2 * (1 - 0.6 * 0.4 * 0.5),
+    ),
+])
+def test_union_with_the_arguments_of_a_choice_permuted(
+    solvers, rules, expected
+):
+    """
+    The second rule has the choice atom C(y, x): renamed, the rest of the
+    tuple (a, b) is R(a) ∨ T(b), whose disjuncts have different columns,
+    lifted joined with the tuples of C.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_choice_from_tuples(
+        [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")], name="C"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.4, "a"), (0.7, "b")], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples([(0.6, "a")], name="T")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.1, "b")], name="U"
+    )
+    result = nl.execute_datalog_program(rules + "\nans(PROB) :- h()")
+    assert [p for p, in result] == [pytest.approx(expected)]
+
+
 def _choice_union_engine():
     from .. import NeurolangPDL
 
@@ -597,6 +636,74 @@ def test_function_of_a_variable_separates_the_query(solvers):
 
 
 @pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("rules", [
+    "h(y) :- R(x), F(x, y), T(y)\nh(y) :- R(x), F(x, y), U(y)",
+    "h(y) :- R(x), F1(x, z), F2(z, y), T(y)\n"
+    "h(y) :- R(v), F1(v, w), F2(w, y), U(y)",
+])
+def test_function_through_the_same_path_in_several_rules(solvers, rules):
+    """
+    y is the same function of x in both rules, directly or through a
+    chain of functions: a tuple of R is in the subquery of one y only,
+    and y separates the union.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1), (0.4, 2), (0.3, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.9, "b")], name="U"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "a"), (3, "b")], name="F")
+    nl.add_tuple_set([(1, 10), (2, 10), (3, 30)], name="F1")
+    nl.add_tuple_set([(10, "a"), (30, "b")], name="F2")
+    nl.execute_datalog_program(rules + "\nq(PROB) :- h(y)")
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - (1 - 0.5 * 0.6) * (1 - 0.8 * 0.4)) *
+        (1 - 0.3 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_function_both_ways_in_several_rules(solvers):
+    """
+    G is a bijection, so that x and y determine each other: y, of every
+    probabilistic atom, separates the union first, and x then has T(y)
+    without it, which another rule lifts.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 1, "a"), (0.4, 2, "b")], name="S"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.6, "a"), (0.7, "b")], name="T"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.2, 1, "a"), (0.9, 2, "b")], name="V"
+    )
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="G")
+    nl.execute_datalog_program(
+        "h(y) :- S(x, y), G(x, y), T(y)\n"
+        "h(y) :- S(x, y), G(x, y), V(x, y)\n"
+        "q(PROB) :- h(y)"
+    )
+    result = nl.solve_all()["q"].as_pandas_dataframe()
+    assert len(result) == 1
+    assert result.iloc[0, 0] == pytest.approx(1 - (
+        (1 - 0.5 * (1 - 0.4 * 0.8)) * (1 - 0.4 * (1 - 0.3 * 0.1))
+    ))
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
 def test_function_of_a_deterministic_atom_inline_or_in_a_rule(solvers):
     """
     A function the engine knows by name, applied to the choice, and a
@@ -671,6 +778,13 @@ ORDER_AND_COUNT_QUERIES = [
     "q(x, PROB) :- S(x, y), S(x, z), (y != z)",
     "q(PROB) :- R(x), T(y), U(z), (x < y), (y < z)",
     "q(PROB) :- R(x), T(y), V(z, z), (x < y), (y < z)",
+    "q(PROB) :- R(x), T(y), (x + 1 < y)",
+    "q(PROB) :- R(x), T(y), (x < y + 1)",
+    "q(y, PROB) :- R(x), T(y), (x * 2 > y)",
+    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+    "q(w, PROB) :- R(x), S(x, y), V(w, z), (y <= z)",
+    "q(PROB) :- S(x, y), V(z, w), (y < w)",
+    "q(PROB) :- R(x), T(y), (x < y), ~U(y)",
 ]
 
 
@@ -708,6 +822,7 @@ def test_order_across_atoms_and_at_least_two(query, seed):
         1 - .5 * .6 * .7 - (.5 * .6 * .7 + .5 * .4 * .7 + .5 * .6 * .3)
     ),
     ("q(PROB) :- R(x), R(y), (x != y)", dict(R=[(.5, 1)]), None),
+    ("q(PROB) :- T(y), (y < y * 2)", dict(T=[(.5, -1), (.5, 2)]), .5),
 ])
 def test_order_across_atoms_and_at_least_two_formulas(
     query, facts, expected
@@ -717,7 +832,9 @@ def test_order_across_atoms_and_at_least_two_formulas(
     the sum, on the least value a of R, of p_R(a) ∏_{b<a} (1 - p_R(b))
     (1 - ∏_{c>a} (1 - p_T(c))), and for two values of R
     1 - ∏ (1 - p) - Σ_a p_a ∏_{b≠a} (1 - p_b).
-    Without the tuples needed, there is no answer.
+    Without the tuples needed, there is no answer. The least value of y,
+    -1, does not satisfy y < y * 2, which 2 does: y is not projected on
+    its least value.
     """
     result = _solve_random(query, 0, LIFTED_ONLY, facts)
     if expected is None:
@@ -726,14 +843,99 @@ def test_order_across_atoms_and_at_least_two_formulas(
         assert result == {(): pytest.approx(expected)}
 
 
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+        dict(R=[(.5, 1)], S=[(.6, 1, 1), (.7, 1, 3)], T=[(.8, 2), (.4, 4)]),
+        .5 * (.4 * (1 - .4 * .3) + .6 * .8 * .6)
+    ),
+    (
+        "q(PROB) :- S(x, y), V(z, w), (y < w)",
+        dict(S=[(.5, 1, 1), (.4, 2, 3)], V=[(.6, 1, 2), (.7, 2, 4)]),
+        .7 * (1 - .5 * .6) + .3 * .6 * .5
+    ),
+    (
+        "q(PROB) :- R(x), T(y), (x < y), ~U(y)",
+        dict(R=[(.5, 1)], T=[(.6, 2), (.7, 3)], U=[(.2, 3)]),
+        .5 * (1 - .4 * (1 - .7 * .8))
+    ),
+    (
+        "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+        dict(R=[(.5, 1)], S=[(.6, 1, 3)], T=[(.8, 2)]),
+        None
+    ),
+])
+def test_order_across_subqueries_formulas(query, facts, expected, solvers):
+    """
+    A side of the comparison can be a subquery independent for different
+    values of its variable: P[∃x ∃y ∃z R(x) ∧ S(x, y) ∧ T(z) ∧ y < z] is
+    the sum, on the greatest value m of T, of p_T(m) ∏_{c>m} (1 - p_T(c))
+    P[∃x R(x) ∧ ∃y (S(x, y) ∧ y < m)], ∃z V(z, w) and T(y) ∧ ¬U(y) being
+    such sides too.
+    """
+    result = _solve_random(query, 0, solvers, facts)
+    if expected is None:
+        assert result == {}
+    else:
+        assert result == {(): pytest.approx(expected)}
+
+
+AT_LEAST_THREE = "R(x), R(y), R(z), (x != y), (y != z), (x != z)"
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2 + .5 * .4 * .3 * .8 + .5 * .4 * .7 * .2 +
+         .5 * .6 * .3 * .2 + .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(PROB) :- R(x), R(y), R(z), (x < y), (y < z), (x != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1), (.4, 2)]), {}),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1)]), {}),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}, R(u), "
+        "(u != x), (u != y), (u != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(t, PROB) :- S(t, x), S(t, y), S(t, z), "
+        "(x != y), (y != z), (x != z)",
+        dict(S=[
+            (.5, 0, 1), (.4, 0, 2), (.3, 0, 3), (.9, 1, 1), (.8, 1, 2),
+            (.7, 2, 1)
+        ]),
+        {(0,): .5 * .4 * .3}
+    ),
+])
+def test_at_least_k(query, facts, expected, solvers):
+    """
+    At least three, or four, values of R: the sum, on the worlds with
+    that many tuples or more, of their probabilities; per answer t for
+    S(t, x). Without enough tuples, there is no answer.
+    """
+    result = _solve_random(query, 0, solvers, facts)
+    assert result == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("query", [
-    "q(PROB) :- R(x), S(x, y), T(z), (y < z)",
+    "q(PROB) :- R(x), S(x, y), T(y), U(z), (y < z)",
 ])
 def test_order_across_atoms_declined(query):
     """
-    The comparison of a variable of a join is declined: the plan of the
-    projection of the join would select on the value of z, which it does
-    not have.
+    A comparison with a #P-hard side, R(x) ∧ S(x, y) ∧ T(y), is declined.
     """
     from nl_expr.exceptions import NonLiftableException
 
@@ -801,3 +1003,64 @@ def test_union_of_rules_joining_a_choice_and_deterministic_atoms(
     ))
     assert expected
     assert solve(LIFTED_ONLY) == pytest.approx(expected)
+
+
+# P[∃x R(x) ∧ x ≠ a] for each a, and P[∃x R(x)]; the tuple (a, b) of the
+# choice C2 is (1, 1), (1, 2) or (2, 1) with probabilities .2, .3 and .5.
+R_NOT_1, R_NOT_2, R_ANY = 1 - .3 * .6, 1 - .4 * .6, 1 - .4 * .3 * .6
+
+
+@pytest.mark.parametrize("query, expected", [
+    (
+        "q(PROB) :- R(x), ~C2(x, 1)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_NOT_2},
+    ),
+    (
+        "q(PROB) :- R(x), ~C2(x, x)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_ANY},
+    ),
+    (
+        "q(PROB) :- R(x), C2(y, z), ~C2(x, 1)",
+        {(): .2 * R_NOT_1 + .3 * R_ANY + .5 * R_NOT_2},
+    ),
+    (
+        "q(PROB) :- R(x), T(y), ~C2(x, 1), ~C2(y, 2)",
+        {(): (
+            .2 * R_NOT_1 * (1 - .5 * .1) + .3 * R_ANY * .9 +
+            .5 * R_NOT_2 * (1 - .5 * .1)
+        )},
+    ),
+    (
+        "q(y, PROB) :- S(x, y), ~C2(x, y)",
+        {(1,): .2 * .6 + .3 * (1 - .5 * .4) + .5 * .5, (2,): .8},
+    ),
+])
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+def test_negated_choice_of_several_columns(solvers, query, expected):
+    """
+    ¬C2(ū) ≡ ∃f̄ (C2(f̄) ∧ f̄ ≠ ū), exactly one tuple of the choice being
+    true: the disjoint projection on f̄ of C2(f̄) ∧ ∃x (R(x) ∧ f̄ ≠ ū),
+    whose comparison of tuples selects the tuples of R, a disjunction
+    of comparisons of their columns.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_choice_from_tuples(
+        [(.2, 1, 1), (.3, 1, 2), (.5, 2, 1)], name="C2"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(.6, 1), (.7, 2), (.4, 3)], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples([(.5, 1), (.9, 2)], name="T")
+    nl.add_probabilistic_facts_from_tuples(
+        [(.5, 1, 1), (.6, 2, 1), (.8, 3, 2)], name="S"
+    )
+    nl.execute_datalog_program(query)
+    result = {
+        tuple(row[:-1]): row[-1]
+        for row in nl.solve_all()["q"].as_pandas_dataframe().itertuples(
+            index=False
+        )
+    }
+    assert result == pytest.approx(expected)

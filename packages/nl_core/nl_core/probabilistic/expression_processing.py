@@ -411,13 +411,15 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
                 y = predicates[pred_idx].args[var_idx]
                 if x == y:
                     continue
-                eq_set.add(
-                    (
-                        min(x, y, key=lambda symb: symb.name),
-                        max(x, y, key=lambda symb: symb.name),
-                    )
-                )
+                eq_set.add(tuple(sorted((x, y), key=_term_order)))
     return eq_set
+
+
+def _term_order(term):
+    """Variables by name, before constants."""
+    if isinstance(term, Constant):
+        return (True, repr(term.value))
+    return (False, term.name)
 
 
 def lift_optimization_for_choice_predicates(query, program):
@@ -446,18 +448,22 @@ def lift_optimization_for_choice_predicates(query, program):
     # optimised apart, and the atoms of a conjunction are not unified with
     # those within its disjunctions.
     if isinstance(query, Disjunction):
-        return Disjunction(tuple(
-            lift_optimization_for_choice_predicates(formula, program)
-            for formula in query.formulas
-        ))
+        formulas = tuple(
+            formula for formula in (
+                lift_optimization_for_choice_predicates(formula, program)
+                for formula in query.formulas
+            ) if formula != FALSE
+        )
+        return Disjunction(formulas) if formulas else FALSE
     if isinstance(query, Conjunction) and any(
         isinstance(formula, Disjunction) for formula in query.formulas
     ):
-        return Conjunction(tuple(
+        formulas = tuple(
             lift_optimization_for_choice_predicates(formula, program)
             if isinstance(formula, Disjunction) else formula
             for formula in query.formulas
-        ))
+        )
+        return FALSE if FALSE in formulas else Conjunction(formulas)
     positive_predicates = OrderedSet()
     negative_predicates = OrderedSet()
     for pred in extract_logic_predicates(query):
@@ -480,9 +486,16 @@ def lift_optimization_for_choice_predicates(query, program):
         else:
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
-            rule = Implication(Symbol.fresh()(tuple()), conj)
+            rule = Implication(Symbol.fresh()(), conj)
             unified_antecedent = unifier.walk(rule).antecedent
             unified_conj = GuaranteeConjunction().walk(unified_antecedent)
+            # The atoms of the choice not unified into one are different
+            # tuples, which are not true together
+            if sum(
+                getattr(formula, "functor", None) == functor
+                for formula in unified_conj.formulas
+            ) > 1:
+                return FALSE
             new_formulas |= OrderedSet(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
@@ -571,21 +584,33 @@ class UnifyChoicesInNegations(
 
 class NegatedChoicesAsOtherTuplesMixin(PatternWalker):
     """
-    Rewrite a negated atom ¬C(u) of a probabilistic choice of one column
-    of `choice_symbols` as ∃f (C(f) ∧ f ≠ u), f fresh: exactly one tuple
-    of C is true, and C(u) is false if and only if it is another one.
+    Rewrite a negated atom ¬C(ū) of a probabilistic choice of
+    `choice_symbols` as ∃f̄ (C(f̄) ∧ f̄ ≠ ū), f̄ fresh: exactly one tuple
+    of C is true, and C(ū) is false if and only if it is another one.
+    With several columns, f̄ ≠ ū, that is f₁ ≠ u₁ ∨ … ∨ fₙ ≠ uₙ, is a
+    single comparison of tuples, which the normal forms do not distribute.
     Other negated atoms are left as they are.
     """
 
-    @add_match(Negation(FunctionApplication(Symbol, (Expression,))))
+    @add_match(Negation(FunctionApplication(Symbol, ...)))
     def negated_atom(self, negation):
         atom = negation.formula
         if atom.functor not in self.choice_symbols:
             return negation
-        f = Symbol[atom.args[0].type].fresh()
-        return ExistentialPredicate(f, Conjunction((
-            atom.functor(f), Constant(operator.ne)(f, atom.args[0])
-        )))
+        fs = tuple(Symbol[u.type].fresh() for u in atom.args)
+        terms = (fs[0], atom.args[0]) if len(fs) == 1 else (
+            Constant(_tuple)(*fs), Constant(_tuple)(*atom.args)
+        )
+        formula = Conjunction((
+            atom.functor(*fs), Constant(operator.ne)(*terms)
+        ))
+        for f in fs:
+            formula = ExistentialPredicate(f, formula)
+        return formula
+
+
+def _tuple(*terms):
+    return terms
 
 
 class NegatedChoicesAsOtherTuples(

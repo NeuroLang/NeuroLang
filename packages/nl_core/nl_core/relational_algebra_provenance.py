@@ -608,7 +608,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
         relation = extended_proj.relation
         equality_columns = {
             c.dst_column for c in extended_proj.projection_list
-            if c.fun_exp == c.dst_column
+            if c.keeps_its_column()
         }
         if equality_columns != relation.non_provenance_columns:
             raise ValueError("Invalid provenance ExtendedProjection")

@@ -11,6 +11,7 @@ from nl_expr.logic import (
 from nl_expr.logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
+    extract_logic_predicates,
 )
 from nl_expr.logic.transformations import (
     MakeExistentialsImplicit,
@@ -78,7 +79,7 @@ def negation_as_atom(formula):
     `NegatedSymbol(R)`; any other formula is as it is.
     """
     if isinstance(formula, Negation) and isinstance(
-        formula.formula.functor, Symbol
+        getattr(formula.formula, "functor", None), Symbol
     ):
         atom = formula.formula
         return NegatedSymbol(atom.functor)(*atom.args)
@@ -118,6 +119,14 @@ def is_contained_rule(q1, q2):
     negated atom (see :func:`negations_as_atoms`).
     '''
     q1, q2 = negations_as_atoms(q1), negations_as_atoms(q2)
+    # A negation of a formula other than an atom, as that of an
+    # existential, is not tested: no containment is found.
+    if any(
+        isinstance(formula, Negation)
+        for q in (q1, q2)
+        for formula in extract_logic_predicates(q.antecedent)
+    ):
+        return False
     head = most_general_unifier_arguments(
         q1.consequent.args, freeze_atom(q2.consequent).args
     )

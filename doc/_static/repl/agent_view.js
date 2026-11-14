@@ -148,3 +148,17 @@ export function tickWaiting(list, now = Date.now()) {
     wait.textContent = seconds >= 3 ? `${wait.dataset.base} (${seconds} s)` : wait.dataset.base;
   }
 }
+
+// Why the assistant's answer *done* (its done event) has no query, in plain
+// words: the *reason*, what the model *said* when it wrote no query (often
+// what it found: that the engine lacks the data), and its last *query*, to
+// edit; null for an answer with a valid query.
+export function noAnswer(done) {
+  if (done.valid) return null;
+  const error = (done.error ?? "").trim();
+  const query = (done.query ?? "").trim();
+  const steps = /^No valid query after (\d+) steps/.exec(error);
+  if (steps) return { reason: `It tried for ${steps[1]} steps without writing a query that runs.`, said: "", query };
+  if (query) return { reason: `Its last query does not run: ${error}`, said: "", query };
+  return { reason: "It wrote no query.", said: error.slice(0, 600), query: "" };
+}

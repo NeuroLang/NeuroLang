@@ -103,6 +103,18 @@ and text-to-SPARQL systems.
     questions on its concepts, domains and abstracts. The guidance of the
     prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
 
+    The columns of an answer are named by the variables of its ``ans``:
+    the prompt asks for names that say what they hold,
+    ``ans(region, probability)`` rather than ``ans(l, p)``, and the
+    examples are written so (a test checks it). When the answer is
+    computed over entities the question names, such as the regions at the
+    ends of a tract, these are given too, as an answer of their own: one
+    named query ``ans[name](...)`` per kind of rows, as in the example of
+    the ``neurosynth_iit`` bank on the cognitive tasks of the studies
+    activating the regions at both ends of the left uncinate fasciculus,
+    which answers ``ans[uf_end_regions](region_1, region_2, streamlines)``
+    and ``ans[task_specificity](task, bayes_factor)``.
+
     The query the model writes is then validated on the engine. It is
     parsed, then dry-run; unknown predicates and wrong numbers of
     arguments are reported. When it fails, the formatted error is sent
@@ -171,27 +183,35 @@ shown with their comments and the query is kept without them.
     active(l, s) :- schaefer_activated(l, s), selected_study(s)
     % Finds pairs of regions activated within the same study.
     co_active(l1, l2, s) :- active(l1, s), active(l2, s)
-    % Links selected studies to the term 'reading'.
-    term_association(s, t) :- mentions(s, t), selected_study(s)
-    % Calculates the probability that co-activated regions are linked to reading.
-    ans(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
+    % Selects the studies closest to a text.
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    % The probability of co-activation given a study close to the text.
+    p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
+    % The pairs co-activated by the studies about reading, by its Cognitive Atlas definition.
+    ans(l1, l2, p) :- (l1 < l2), cogat_definition('reading', d), p_co_active_given_close(d, l1, l2, p)
 
-Questions given as a description or a Cognitive Atlas concept
--------------------------------------------------------------
+Questions given as a description or a cognitive concept
+-------------------------------------------------------
 
-On the ``neurosynth`` and ``neurostore`` engines, a topic the vocabulary
-has no term for, or a concept of the Cognitive Atlas, is matched to the
-studies by the similarity of their title and abstract to its text
+On the ``neurosynth`` and ``neurostore`` engines, a topic given as a
+description, or a cognitive process, task or concept, is matched to the
+studies by the similarity of their title and abstract to a text
 (:doc:`tutorial_text_embeddings`). ``similar_study(q, s)`` holds for the
 5% of the studies closest to the text ``q``, ``study_title(s, t)`` gives
 their titles, and ``cogat_definition(t, d)`` the definition ``d`` of a
-Cognitive Atlas concept by its lower-case label ``t``.  Both strategies
-know them from the engines' examples and guidance:
+Cognitive Atlas concept by its lower-case label ``t``.  A question naming
+a cognitive concept ("studies about working memory", "the n-back task")
+without saying mention, term or word is answered with the concept's
+Cognitive Atlas definition when ``cogat_term`` has its label, else with
+the question's own words; ``mentions(s, t)`` is kept for the questions
+about mentions, terms or words, and for the topics that are no cognitive
+concept (anatomy, disorders, populations, stimuli).  Both strategies
+know this from the engines' examples and guidance:
 
 .. code-block:: text
 
     $ neurolang-query --engine neurosynth --ask "Which studies are about the Cognitive Atlas concept response inhibition, with their titles?"
-    ans(s, title, v) :- cogat_definition('response inhibition', d), similar_study(d, s), study_similarity(d, s, v), study_title(s, title)
+    ans(s, title) :- cogat_definition('response inhibition', d), similar_study(d, s), study_title(s, title)
 
 The label must be the Cognitive Atlas one: ICL writes it from the
 question, and finds nothing for a concept the atlas does not have (it has
@@ -250,7 +270,7 @@ order:
     assistant:
       strategy: react        # or icl
       language: auto         # the REPL's .mode, or squall, or datalog
-      max_steps: 8
+      max_steps: 16
       max_repairs: 3
       few_shot_k: 6
       samples: 1
@@ -265,9 +285,16 @@ The ``api`` of a provider is one of:
 
 ``openai``
     The OpenAI chat completions API, spoken by OpenRouter, Albert, vLLM,
-    Ollama and most open services.
+    Ollama and most open services. OpenRouter caches the prompts of
+    DeepSeek and OpenAI models by itself, and those of Claude (``anthropic/``
+    models) because the assistant asks it to.
 ``anthropic``
-    The Anthropic messages API.
+    The Anthropic messages API, with prompt caching: each request of the
+    assistant repeats the system prompt and the conversation so far, which
+    the API then reads from its cache, for five minutes, at a tenth of the
+    price of input tokens or less. The line after the query counts the
+    tokens read from the cache (``5 LLM calls, 40213 tokens, 31876 read
+    from the cache``).
 ``command``
     A local command that reads the conversation on its standard input
     and writes the reply on its standard output. ``{system}`` in its
@@ -302,6 +329,24 @@ change the settings:
 .. code-block:: text
 
     nl(neurosynth:DL)> .llm --steps 12 Which pairs of Schaefer regions are co-activated by studies about reading?
+
+**Refining a query.** ``.ask --refine QUESTION`` (also ``.llm --refine
+QUESTION``) changes the last query for a new or extended question instead of
+starting afresh. The model is given the previous question, if the assistant
+was asked one, the previous query, and what happened to it: the error it
+failed with, the first rows it gave, or that it gave none, and the notes of the
+engine (such as a predicate with no facts or rules). It is asked to keep what is
+right, correct what the outcome shows is wrong, and start again only if the new
+question has nothing to do with the query. The query is the last that ran, if
+one ran after the assistant's last answer (the answer, or the visitor's
+correction of it); otherwise it is the assistant's last attempt, even one that
+failed. Without either, the command says that there is nothing to refine. In
+the browser, the *Refine* button next to *Ask* does the same. The technique is
+that of the multi-turn text-to-SQL and the execution-feedback literature: an
+edit of the previous query (Chain-of-Editions, CoE-SQL, arXiv 2405.02712) with
+the feedback of its execution (as the refiner of MAC-SQL), which are
+more reliable than a model re-reading its own answer without running it
+(Huang et al., arXiv 2310.01798).
 
 ``.explain`` reads the last query that ran, whoever wrote it, in English: the
 model is given the query, in its language, with the engine's predicates,

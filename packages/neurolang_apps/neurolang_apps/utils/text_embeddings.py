@@ -15,10 +15,10 @@ Nothing in this module is specific to a dataset.  Texts come from PubMed
 (:func:`fetch_pubmed_abstracts`) or from a CSV/TSV table
 (:func:`load_text_table`).  ``torch``, ``transformers`` and ``adapters``
 are only imported when the first document or query is embedded; install
-them with ``pip install "neurolang[embeddings]"``. Without them, as in a
-browser, queries are embedded by the numpy encoder of
-:mod:`.specter2_numpy` from the weights exported next to the model
-(:attr:`Specter2Encoder.numpy_path`), the documents having been embedded
+them with ``pip install "neurolang[embeddings]"``. Queries are embedded
+by the numpy encoder of :mod:`.specter2_numpy` when its weights are
+exported next to the model (:attr:`Specter2Encoder.numpy_path`), or
+without torch, as in a browser, the documents having been embedded
 beforehand; :data:`fetch_missing` can fetch both when first needed.
 
 Engines declared in ``engines.yaml`` can opt in through a
@@ -275,7 +275,8 @@ class Specter2Encoder:
     Embed documents and queries with SPECTER2.
 
     The base model and both adapters are loaded on the first call to
-    :meth:`encode_documents` or :meth:`encode_query`.  With a *model_dir*
+    :meth:`encode_documents` or :meth:`encode_query` (which embeds with
+    numpy instead when its weights are there, see :meth:`_uses_numpy`).  With a *model_dir*
     they are downloaded once into it (see :meth:`download`) and then
     loaded from there without network; otherwise they come from the
     Hugging Face hub and its cache.  A document is encoded as
@@ -361,6 +362,11 @@ class Specter2Encoder:
     def _load(self):
         if self._model is not None:
             return
+        if self.cache_key in _MODELS:  # an engine built again
+            loaded = _MODELS[self.cache_key]
+            self._torch, self._tokenizer, self._model = loaded
+            self.device = self._model.device.type
+            return
         try:
             import torch
             from adapters import AutoAdapterModel
@@ -380,6 +386,7 @@ class Specter2Encoder:
         model.load_adapter(str(document), source=source, load_as="document")
         model.load_adapter(str(query), source=source, load_as="query")
         self._model = model.to(self.device).eval()
+        _MODELS[self.cache_key] = (torch, self._tokenizer, self._model)
         LOG.info("Loaded %s on %s", self.model_name, self.device)
 
     def _has_local_copies(self):
@@ -392,16 +399,22 @@ class Specter2Encoder:
 
     def _fork_safe(self):
         """
-        Load the model, on the CPU, ahead of a fork.
+        Load the model, on the CPU, ahead of a fork: the numpy query
+        encoder if it embeds the queries (see :meth:`_uses_numpy`).
 
         On macOS a forked child, as the query assistant checks queries in,
-        is aborted when it loads a model with transformers or uses MPS;
-        it can run a model its parent loaded on the CPU.
+        is aborted when it loads a model with transformers or uses MPS
+        (nor can one use CUDA anywhere); it can run a model its parent
+        loaded on the CPU.
         """
+        if self._uses_numpy():
+            if self._numpy is None:
+                self._numpy_query("brain")  # loads its weights
+            return
         if self._model is None and not self._has_local_copies():
             return      # loading would download: leave it to the child
         self._load()
-        if self.device == "mps":
+        if self.device != "cpu":
             self._model = self._model.to("cpu")
             self.device = "cpu"
 
@@ -420,12 +433,20 @@ class Specter2Encoder:
         docs = [t + sep + (a or "") for t, a in zip(titles, texts)]
         return self._encode(docs, "document")
 
+    def _uses_numpy(self):
+        """Whether queries are embedded with numpy: when its weights are
+        at :attr:`numpy_path` (it loads faster and takes less memory than
+        torch, and starts no thread), or torch is not installed."""
+        path = self.numpy_path
+        return self._numpy is not None or (
+            path is not None and path.exists()) or not _torch_available()
+
     def encode_query(self, text):
         """
-        Embed a free-text query as a vector, with numpy when torch is not
-        installed (see :attr:`numpy_path`).
+        Embed a free-text query as a vector, with numpy if
+        :meth:`_uses_numpy`, otherwise with torch.
         """
-        if self._model is None and not _torch_available():
+        if self._uses_numpy():
             return self._numpy_query(text)
         self._load()
         return self._encode([text], "query")[0]
@@ -472,13 +493,17 @@ class Specter2Encoder:
             max_length=512,
             return_tensors="pt",
             return_token_type_ids=False,
-        ).to(self.device)
+        ).to(self._model.device)  # moved by another encoder sharing it
         hidden = self._model(**inputs).last_hidden_state
         return hidden[:, 0, :].float().cpu().numpy()
 
 
 # The SPECTER2 encoders of the process (see prepare_for_fork).
 _ENCODERS = weakref.WeakSet()
+
+# The models loaded, by cache_key: the encoders of an engine built again
+# share them.
+_MODELS = {}
 
 
 def prepare_for_fork():
@@ -497,6 +522,25 @@ def prepare_for_fork():
             encoder._fork_safe()
         except Exception:  # noqa: BLE001 -- a fork must not fail for it
             LOG.debug("Encoder not prepared for fork", exc_info=True)
+
+
+def preload(nl):
+    """
+    Load the document embeddings and the query model of the engine *nl*
+    (the numpy one if there, else torch's on the CPU), for the processes forked from this one to share them,
+    rather than each load them on its first query (the REPL server's
+    sessions). What cannot be loaded (torch is missing, the model is not
+    in ``model_dir``) is left to the first query, and logged.
+    """
+    for name, index in getattr(nl, "text_embedding_indexes", {}).items():
+        try:
+            index.build()
+            if not index.encoder._uses_numpy():
+                index.encoder.download()  # the copies _fork_safe loads
+            index.encoder._fork_safe()
+        except Exception as error:  # noqa: BLE001 -- loaded on first use
+            LOG.warning("The text embeddings %s are not preloaded: %s: %s",
+                        name, type(error).__name__, error)
 
 
 def _after_fork_in_child():
@@ -586,9 +630,13 @@ class EmbeddingIndex:
         self.encoder = encoder
         self.cache_path = None if cache_path is None else Path(cache_path)
         self._matrix = None
-        # Per-index cache of the similarities to the 16 most recent
-        # queries: it lives and dies with the index.
+        self._positions = None
+        # Per-index caches, which live and die with the index: the
+        # similarities to the 16 most recent queries, and the embeddings
+        # of the 4096 most recent query texts (3 kB each), so that a rule
+        # over many texts, whose rows come in any order, embeds each once.
         self.similarities = lru_cache(maxsize=16)(self._similarities)
+        self.query_vector = lru_cache(maxsize=4096)(self._query_vector)
 
     @property
     def cache_key(self):
@@ -641,10 +689,10 @@ class EmbeddingIndex:
             _ensure(self.cache_path)
         if self.cache_path is None or not self.cache_path.exists():
             return None
+        if cached_key(self.cache_path) != self.cache_key:
+            LOG.info("Embedding cache %s is stale", self.cache_path)
+            return None
         with np.load(self.cache_path) as data:
-            if str(data["key"]) != self.cache_key:
-                LOG.info("Embedding cache %s is stale", self.cache_path)
-                return None
             return data["matrix"]
 
     def _write_cache(self):
@@ -655,16 +703,34 @@ class EmbeddingIndex:
         np.savez(tmp, key=np.array(self.cache_key), matrix=self._matrix)
         os.replace(tmp, self.cache_path)
 
+    def _query_vector(self, query):
+        return _normalise(self.encoder.encode_query(query)[None])[0]
+
     def scores(self, query):
         """Cosine similarity of each document, in ``ids`` order, to a query."""
-        query_vector = _normalise(self.encoder.encode_query(query)[None])[0]
-        return self.matrix @ query_vector
+        return self.matrix @ self.query_vector(query)
+
+    def similarity(self, query, doc):
+        """Cosine similarity of the document *doc* to a query, ``nan`` if
+        *doc* is not in the index."""
+        if self._positions is None:
+            self._positions = {d: i for i, d in enumerate(self.ids)}
+        i = self._positions.get(doc)
+        if i is None:
+            return float("nan")
+        return float(self.matrix[i] @ self.query_vector(query))
 
     def _similarities(self, query):
         # Read-only mapping from document id to similarity, so that the
         # cached value cannot be modified by a caller.
         scores = self.scores(query).tolist()
         return MappingProxyType(dict(zip(self.ids, scores)))
+
+
+def cached_key(path):
+    """The :attr:`EmbeddingIndex.cache_key` of the embeddings in *path*."""
+    with np.load(path) as data:
+        return str(data["key"])
 
 
 def _normalise(matrix):
@@ -682,9 +748,8 @@ def make_similarity_function(index, id_type=None):
     """
     Build a NeuroLang function ``f(query, doc) -> similarity``.
 
-    The similarities of every document to a query text are computed once
-    and cached by :meth:`EmbeddingIndex.similarities` (the 16 most recent
-    queries per index), so each call is a dictionary lookup.
+    The embedding of a query text is computed once and cached by
+    :meth:`EmbeddingIndex.query_vector`, so each call is a dot product.
 
     Parameters
     ----------
@@ -712,12 +777,35 @@ def make_similarity_function(index, id_type=None):
                 f"query_similarity(query, doc) takes the query text first: "
                 f"got {query!r} as the query"
             )
-        return index.similarities(query).get(doc, float("nan"))
+        return index.similarity(query, doc)
 
     query_similarity.__annotations__ = {
         "query": str, "doc": id_type, "return": float
     }
     return query_similarity
+
+
+def make_cutoff_function(index, gate=0.75, percentile=95, top=20):
+    """
+    Build a NeuroLang function ``f(query) -> cutoff``: the *percentile* of
+    the positive similarities of the documents to the query text, or
+    ``inf`` if the mean of the *top* largest is below *gate*: a text no
+    document is about.  Cached per text, so that ``similar_study`` needs
+    no aggregation.
+    """
+    @lru_cache(maxsize=4096)
+    def cutoff(query):
+        scores = np.asarray(index.scores(query), dtype=float)
+        scores = scores[scores > 0]
+        if np.sort(scores)[-top:].mean() < gate:
+            return float("inf")
+        return float(np.percentile(scores, percentile))
+
+    # A plain function, as NeuroLang types it from its annotations.
+    def query_similarity_cutoff(query: str) -> float:
+        return cutoff(query)
+
+    return query_similarity_cutoff
 
 
 def main(argv=None):

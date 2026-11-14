@@ -918,6 +918,28 @@ def test_convert_srnf2horn_disjunction():
     assert program == expected
 
 
+def test_disjunct_of_functions_restricted_by_outer_atom():
+    """A function filters the variable of its disjunct, the atom outside
+    the disjunction restricts it in the auxiliary rules."""
+    x = Symbol("x")
+    P = Symbol("P")
+    f = Symbol("f")
+    g = Symbol("g")
+    Ans = Symbol("Ans")
+    exp = Conjunction((P(x), Disjunction((f(x), g(x)))))
+    program = fol_query_to_datalog_program(
+        Ans(x), exp,
+        {f: Constant(lambda v: v > 0), g: Constant(lambda v: v < -1)},
+    )
+    aux_rules = [
+        rule for rule in program.expressions
+        if rule.consequent.functor != Ans
+    ]
+    assert len(aux_rules) == 2
+    for rule in aux_rules:
+        assert P(x) in rule.antecedent.formulas
+
+
 def test_convert_srnf2horn_with_probabilistic_query_head():
     from nl_core.probabilistic.expressions import ProbabilisticQuery, PROB
     x = Symbol("x")

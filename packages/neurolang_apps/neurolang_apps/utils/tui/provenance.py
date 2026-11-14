@@ -21,6 +21,7 @@ from typing import NamedTuple, Optional
 
 from nl_core.datalog import Implication
 from nl_expr.expressions import Constant, FunctionApplication, Query, Symbol
+from neurolang.frontend.datalog.standard_syntax import query_name
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
@@ -163,15 +164,19 @@ def _query_sorts(head, body, known: dict) -> tuple:
 
 def _datalog_queries(nl, program: str) -> tuple:
     """
-    Return the rules of the Datalog *program* and its query, by key.
+    Return the rules of the Datalog *program* and its queries, by key.
 
-    The key of the query is ``""``, that of the one result of Datalog.
+    The key of the query is ``""``, that of the one result of Datalog; a
+    program with several queries has a result by the name of each, that
+    of ``ans[name](...)``, or ``ans``.
     """
     parsed = nl.datalog_parser(program)
     formulas = getattr(parsed, "formulas", (parsed,))
     rules = [f for f in formulas if isinstance(f, Implication)]
+    found = [f for f in formulas if isinstance(f, Query)]
     queries = {
-        "": (f.head, f.body) for f in formulas if isinstance(f, Query)
+        (query_name(f.head) if len(found) > 1 else ""): (f.head, f.body)
+        for f in found
     }
     return rules, queries
 

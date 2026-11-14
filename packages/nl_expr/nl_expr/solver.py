@@ -222,8 +222,9 @@ class BooleanRewriteSolver(PatternWalker):
         if walk_first_result is first_arg:
             new_args = (first_arg, self.walk(expression.args[1]))
 
-        # if the expression arguments did not change, we stop walking here
-        if new_args == expression.args:
+        # if the expression arguments did not change, not even in type,
+        # we stop walking here
+        if all(new is old for new, old in zip(new_args, expression.args)):
             return expression
         # otherwise, we keep walking
         else:

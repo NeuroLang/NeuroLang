@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, gt, lt
 from typing import AbstractSet
 
 import pytest
@@ -19,6 +19,10 @@ from nl_expr.logic import (
     Negation,
     Union,
     UniversalPredicate,
+)
+from nl_expr.logic.expression_processing import (
+    extract_logic_atoms,
+    extract_logic_free_variables,
 )
 from ...relational_algebra import (
     ColumnInt,
@@ -49,6 +53,8 @@ from .test_lifted_negation import check
 
 TNRA = TranslateToNamedRA()
 EQ = Constant(eq)
+GT = Constant(gt)
+LT = Constant(lt)
 
 
 def test_has_separator_variable_existential():
@@ -1083,6 +1089,73 @@ def test_disjoint_separator_lifts_queries_with_a_negation():
         assert isinstance(plan, DisjointProjection)
 
 
+@pytest.mark.parametrize("answer", (False, True))
+def test_disjoint_separator_with_a_rest_of_different_columns(answer):
+    """∃x, y C(x, y) ∧ (R(x) ∨ T(y)), the second rule having C(y, x):
+    the rest R(a) ∨ T(b) of the tuple (a, b) of C has disjuncts with
+    different columns, and is lifted joined with the tuples of C:
+    Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b)]."""
+    C, R, T, Z, ans = (Symbol(n) for n in ("C", "R", "T", "Z", "ans"))
+    x, y, z = (Symbol(n) for n in ("x", "y", "z"))
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.4, "a", 1), (0.7, "b", 1)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a", 1), (0.5, "b", 2)]
+    )
+    head = Z(z) if answer else Z()
+    cpl_program.walk(Union((
+        Implication(head, Conjunction((C(x, y), R(x, z)))),
+        Implication(head, Conjunction((C(y, x), T(x, z)))),
+    )))
+    if answer:
+        query = Implication(ans(z), Z(z))
+        expected = [(0.5 * 0.4 + 0.3 * 0.88 + 0.2 * 0.76, 1), (0.25, 2)]
+        columns = ("_p_", "z")
+    else:
+        query = Implication(ans(), Z())
+        expected = [(0.5 * 0.7 + 0.3 * 0.88 + 0.2 * 0.76,)]
+        columns = ("_p_",)
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set(expected, columns)
+    )
+
+
+@pytest.mark.parametrize("negated", (False, True))
+def test_disjoint_separator_rest_with_another_atom_of_the_choice(negated):
+    """The rest R(s) ∨ T(t) of C(s, t) is joined with the tuples of C
+    only when it has no other atom of C, here ¬C(t, s), which depends on
+    C(s, t)."""
+    C, R, T = Symbol("C"), Symbol("R"), Symbol("T")
+    s, t = Symbol("s"), Symbol("t")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(
+        C, [(0.5, "a", "b"), (0.5, "b", "a")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(R, [(0.4, "a")])
+    cpl_program.add_probabilistic_facts_from_tuples(T, [(0.6, "a")])
+    rest = (Negation(C(t, s)), R(s)) if negated else (R(s),)
+    query = Disjunction((
+        ExistentialPredicate(s, ExistentialPredicate(t, Conjunction(
+            (C(s, t),) + rest
+        ))),
+        ExistentialPredicate(s, ExistentialPredicate(t, Conjunction(
+            (C(t, s), T(s))
+        ))),
+    ))
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, query
+    )
+    applies, plan = dalvi_suciu_lift.disjoint_separator(query, symbol_table)
+    assert applies
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan) != negated
+
+
 def test_clauses_are_range_restricted():
     """
     A clause that is a disjunction with a negated atom whose variable no
@@ -1177,13 +1250,54 @@ def test_functional_dependency_in_one_disjunct_only():
     query = ExistentialPredicate(y, ExistentialPredicate(x, Disjunction((
         conjunction, Conjunction((R(x), G(x, y)))
     ))))
-    assert dalvi_suciu_lift.find_separator_variables(
+    assert y not in dalvi_suciu_lift.find_separator_variables(
         query, symbol_table
-    )[0] == set()
+    )[0]
     assert y in dalvi_suciu_lift.find_separator_variables(
         ExistentialPredicate(y, ExistentialPredicate(x, conjunction)),
         symbol_table
     )[0]
+
+
+@pytest.mark.parametrize("function", (True, False))
+def test_functional_dependency_through_the_same_path_in_disjuncts(function):
+    """∃y (∃x R(x) ∧ F(x, y) ∧ T(y)) ∨ (∃x R(x) ∧ F(x, y) ∧ U(y)): a tuple
+    of R is in the subqueries of f(x) only, through F in both disjuncts,
+    when F is a function of x, and y then separates the query."""
+    R, F, T, U, Z, ans = (
+        Symbol(n) for n in ("R", "F", "T", "U", "Z", "ans")
+    )
+    x, y = Symbol("x"), Symbol("y")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        R, [(0.5, 1), (0.4, 2), (0.3, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        T, [(0.6, "a"), (0.7, "b")]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        U, [(0.2, "a"), (0.9, "b")]
+    )
+    cpl_program.add_extensional_predicate_from_tuples(
+        F, [(1, "a"), (2, "a"), (3, "b")] + ([] if function else [(3, "a")])
+    )
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), F(x, y), T(y)))),
+        Implication(Z(), Conjunction((R(x), F(x, y), U(y)))),
+    )))
+    query = Implication(ans(), Z())
+    if not function:
+        with pytest.raises(NonLiftableException):
+            dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+        return
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = 1 - (
+        (1 - (1 - 0.5 * 0.6) * (1 - 0.8 * 0.4)) *
+        (1 - 0.3 * (1 - 0.3 * 0.1))
+    )
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
 
 
 def test_set_partitions():
@@ -1286,3 +1400,60 @@ def test_negated_component_without_the_unate_check(check_unate_off):
         }
 
     check(probabilistic_facts, {}, rules, Implication(ans(x), H(x)), oracle)
+
+
+def test_extremum_conjunct_of_a_subquery():
+    """In S(x, y) ∧ V(z, w) ∧ y < w, the greatest w of ∃z V(z, w), whose
+    events for different values of w have different tuples, implies the
+    query; y is no candidate in R(x) ∧ S(x, y) ∧ y < w, ∃x R(x) ∧ S(x, y)
+    sharing R(x) across the values of y, nor w with a comparison x < z of
+    a variable of its subquery, or within a term."""
+    R, S, V = (Symbol(n) for n in ("R", "S", "V"))
+    x, y, z, w = (Symbol(n) for n in ("x", "y", "z", "w"))
+    symbol_table = {
+        s: ProbabilisticFactSet(Symbol(s.name.lower()), Constant(0))
+        for s in (R, S, V)
+    }
+    variables = {x, y, z, w}
+    extremum = dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, w)), symbol_table
+    )
+    assert isinstance(extremum, Negation)
+    assert extract_logic_free_variables(extremum) == {w}
+    atoms = extract_logic_atoms(extremum)
+    assert {atom.functor for atom in atoms} == {V, GT}
+    assert next(a for a in atoms if a.functor == GT).args[1] == w
+    assert dalvi_suciu_lift._extremum_conjunct(
+        y, variables, (R(x), S(x, y), V(z, w), LT(y, w)), symbol_table
+    ) is None
+    assert dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, w), LT(x, z)), symbol_table
+    ) is None
+    assert dalvi_suciu_lift._extremum_conjunct(
+        w, variables, (S(x, y), V(z, w), LT(y, Constant(abs)(w))),
+        symbol_table
+    ) is None
+
+
+def test_order_across_subqueries():
+    """∃x ∃y ∃z R(x) ∧ S(x, y) ∧ T(z) ∧ y < z is projected on the greatest
+    value m of T, ∃x R(x) ∧ ∃y (S(x, y) ∧ y < m) being lifted with m bound
+    by the pairs of values of S and T in order."""
+    R, S, T, Z, ans = (Symbol(n) for n in ("R", "S", "T", "Z", "ans"))
+    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(R, [(0.5, 1)])
+    cpl_program.add_probabilistic_facts_from_tuples(
+        S, [(0.6, 1, 1), (0.7, 1, 3)]
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(T, [(0.8, 2), (0.4, 4)])
+    cpl_program.walk(Union((
+        Implication(Z(), Conjunction((R(x), S(x, y), T(z), LT(y, z)))),
+    )))
+    result = dalvi_suciu_lift.solve_succ_query(
+        Implication(ans(), Z()), cpl_program
+    )
+    expected = 0.5 * (0.4 * (1 - 0.4 * 0.3) + 0.6 * 0.8 * 0.6)
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )

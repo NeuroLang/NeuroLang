@@ -1,0 +1,572 @@
+% The bundles of tract_querier's freesurfer_queries_bsf2016.qry, with the
+%   terms of freesurfer_aseg_aparc, in the vocabulary of tractography
+% (the engine tracts, DESIGN.md, 17): written by its wmql_vocab, one
+% predicate per query of tract_querier's language, WMQL, with the
+% statement of WMQL over it. x is a streamline, h a hemisphere,
+% "left" or "right" (name.side is name(x, h)); a name of labels is a
+% term of the atlas's mapping ("frontal"). The semantics is the
+% vocabulary's (DESIGN.md, 16.5); superior_of and inferior_of are
+% anatomical (above, below the box of the term): the reverse of
+% tract_querier's (DESIGN.md, 15.20).
+%
+% The terms it uses: amygdala, bankssts, brain_stem, caudalmiddlefrontal,
+%   centrum_semiovale, cingular, ctx_parsopercularis, cuneus, entorhinal,
+%   frontal, frontalpole, fusiform, hippocampus, inferior_parietal_lobule,
+%   inferiorfrontalgyrus, inferiorparietal, inferiortemporal, insula,
+%   isthmuscingulate, lateraloccipital, lateralorbitofrontal, lingual,
+%   medialorbitofrontal, middlefrontalgyrus, middletemporal, occipital,
+%   orbitofrontalgyrus, paracentral, parahippocampal, parietal, parsorbitalis,
+%   parstriangularis, postcentral, posteriorcingulate, precentral, precuneus,
+%   rostralmiddlefrontal, striatum, superior_parietal_lobule, superiorfrontal,
+%   superiorparietal, superiortemporal, supramarginal, temporal,
+%   transversetemporal.
+%
+% Not translated (DESIGN.md, 17.2):
+%   thalamo_prefrontal.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+%   thalamo_premotor.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+%   thalamo_precentral.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+%   thalamo_postcentral.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+%   thalamo_parietal.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+%   thalamo_occipital.side: thalamus is not a term, and thalamus.left and
+%   thalamus.right are two definitions
+
+%% cb_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of cb: x goes through a label of hemisphere h that is of none of
+%% the terms of its only(...), "cingular", "middlefrontalgyrus", "cuneus",
+%% "entorhinal", "superiorfrontal", "inferiorparietal", "fusiform",
+%% "medialorbitofrontal", "lateralorbitofrontal", "parahippocampal",
+%% "precuneus", "lingual", "centrum_semiovale".
+cb_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "cingular", h),
+    ~term_label(a, l, "middlefrontalgyrus", h), ~term_label(a, l, "cuneus", h),
+    ~term_label(a, l, "entorhinal", h),
+    ~term_label(a, l, "superiorfrontal", h),
+    ~term_label(a, l, "inferiorparietal", h), ~term_label(a, l, "fusiform", h),
+    ~term_label(a, l, "medialorbitofrontal", h),
+    ~term_label(a, l, "lateralorbitofrontal", h),
+    ~term_label(a, l, "parahippocampal", h), ~term_label(a, l, "precuneus", h),
+    ~term_label(a, l, "lingual", h), ~term_label(a, l, "centrum_semiovale", h)
+%% cb(x: streamline, h: hemisphere)
+%% Cingulum bundle: streamlines that stay in the cingulate gyrus and the
+%% regions it joins (middle and superior frontal, orbitofrontal, inferior
+%% parietal, precuneus, cuneus, lingual, fusiform, parahippocampal and
+%% entorhinal cortices) and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CB.side = only(cingular.side
+%%     and (
+%%         middlefrontalgyrus.side or
+%%         cuneus.side or
+%%         entorhinal.side or
+%%         superiorfrontal.side or
+%%         inferiorparietal.side or
+%%         fusiform.side or
+%%         medialorbitofrontal.side or
+%%         lateralorbitofrontal.side or
+%%         parahippocampal.side or
+%%         precuneus.side or
+%%         lingual.side or
+%%         centrum_semiovale.side
+%%     )
+%% )
+cb(x, h) :-
+    traverses(x, "cingular", h),
+    (traverses(x, "middlefrontalgyrus", h) | traverses(x, "cuneus", h)
+     | traverses(x, "entorhinal", h) | traverses(x, "superiorfrontal", h)
+     | traverses(x, "inferiorparietal", h) | traverses(x, "fusiform", h)
+     | traverses(x, "medialorbitofrontal", h)
+     | traverses(x, "lateralorbitofrontal", h)
+     | traverses(x, "parahippocampal", h) | traverses(x, "precuneus", h)
+     | traverses(x, "lingual", h) | traverses(x, "centrum_semiovale", h)),
+    ~cb_leaves(x, h)
+
+%% emc(x: streamline, h: hemisphere)
+%% Extreme capsule: streamlines with an end in the inferior or middle frontal
+%% gyrus and the other in the inferior parietal lobule, through the temporal
+%% lobe and the insula of a hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% EmC.side = (
+%%     (endpoints_in(
+%%         inferiorfrontalgyrus.side or
+%%         middlefrontalgyrus.side
+%%         )
+%%     and endpoints_in(inferior_parietal_lobule.side)
+%%     and temporal.side
+%%     and insula.side
+%%     )
+%% not in hemisphere.opposite)
+emc(x, h) :-
+    (ends_in(x, "inferiorfrontalgyrus", h)
+     | ends_in(x, "middlefrontalgyrus", h)),
+    ends_in(x, "inferior_parietal_lobule", h), traverses(x, "temporal", h),
+    traverses(x, "insula", h), opposite_hemisphere(h, o), ~in_hemisphere(x, o)
+
+%% slf_i_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of slf_i: x goes through a label of hemisphere h that is of none
+%% of the terms of its only(...), "frontal", "parietal", "centrum_semiovale".
+slf_i_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "frontal", h), ~term_label(a, l, "parietal", h),
+    ~term_label(a, l, "centrum_semiovale", h)
+%% slf_i(x: streamline, h: hemisphere)
+%% Superior longitudinal fasciculus I: streamlines with an end in the superior
+%% parietal gyrus through the middle or superior frontal gyrus, staying in the
+%% frontal and parietal lobes and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% SLF_I.side = (
+%%     endpoints_in(superiorparietal.side)
+%%     and (
+%%         middlefrontalgyrus.side or
+%%         superiorfrontal.side
+%%     )
+%%     and only(
+%%         frontal.side or
+%%         parietal.side or
+%%         centrum_semiovale.side
+%%     )
+%% )
+slf_i(x, h) :-
+    ends_in(x, "superiorparietal", h),
+    (traverses(x, "middlefrontalgyrus", h)
+     | traverses(x, "superiorfrontal", h)),
+    (traverses(x, "frontal", h) | traverses(x, "parietal", h)
+     | traverses(x, "centrum_semiovale", h)),
+    ~slf_i_leaves(x, h)
+
+%% slf_ii_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of slf_ii: x goes through a label of hemisphere h that is of none
+%% of the terms of its only(...), "frontal", "parietal", "centrum_semiovale".
+slf_ii_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "frontal", h), ~term_label(a, l, "parietal", h),
+    ~term_label(a, l, "centrum_semiovale", h)
+%% slf_ii(x: streamline, h: hemisphere)
+%% Superior longitudinal fasciculus II: streamlines with an end in the inferior
+%% parietal or lateral occipital cortex through the middle or superior frontal
+%% gyrus, staying in the frontal and parietal lobes and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% SLF_II.side = (
+%%     endpoints_in(
+%%         inferiorparietal.side or
+%%         lateraloccipital.side
+%%     )
+%%     and (
+%%         middlefrontalgyrus.side or
+%%         superiorfrontal.side
+%%     )
+%%     and only(
+%%         frontal.side or
+%%         parietal.side or
+%%         centrum_semiovale.side
+%%     )
+%% )
+slf_ii(x, h) :-
+    (ends_in(x, "inferiorparietal", h) | ends_in(x, "lateraloccipital", h)),
+    (traverses(x, "middlefrontalgyrus", h)
+     | traverses(x, "superiorfrontal", h)),
+    (traverses(x, "frontal", h) | traverses(x, "parietal", h)
+     | traverses(x, "centrum_semiovale", h)),
+    ~slf_ii_leaves(x, h)
+
+%% slf_iii_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of slf_iii: x goes through a label of hemisphere h that is of none
+%% of the terms of its only(...), "frontal", "parietal", "centrum_semiovale".
+slf_iii_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "frontal", h), ~term_label(a, l, "parietal", h),
+    ~term_label(a, l, "centrum_semiovale", h)
+%% slf_iii(x: streamline, h: hemisphere)
+%% Superior longitudinal fasciculus III: streamlines with an end in the
+%% supramarginal gyrus and the other in the inferior frontal gyrus, staying in
+%% the frontal and parietal lobes and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% SLF_III.side = (
+%%     endpoints_in(supramarginal.side)
+%%     and endpoints_in(inferiorfrontalgyrus.side)
+%%     and only(
+%%         frontal.side or
+%%         parietal.side or
+%%         centrum_semiovale.side
+%%     )
+%% )
+slf_iii(x, h) :-
+    ends_in(x, "supramarginal", h), ends_in(x, "inferiorfrontalgyrus", h),
+    (traverses(x, "frontal", h) | traverses(x, "parietal", h)
+     | traverses(x, "centrum_semiovale", h)),
+    ~slf_iii_leaves(x, h)
+
+%% af_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of af: x goes through a label of hemisphere h that is of none of
+%% the terms of its only(...), "frontal", "temporal", "parietal",
+%% "centrum_semiovale".
+af_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "frontal", h), ~term_label(a, l, "temporal", h),
+    ~term_label(a, l, "parietal", h), ~term_label(a, l, "centrum_semiovale", h)
+%% af(x: streamline, h: hemisphere)
+%% Arcuate fasciculus: streamlines with an end in the inferior frontal, middle
+%% frontal or precentral gyrus and the other in the temporal lobe, not medial
+%% to the supramarginal gyrus, staying in the frontal, temporal and parietal
+%% lobes and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% AF.side = (
+%%     endpoints_in(
+%%         inferiorfrontalgyrus.side or
+%%         middlefrontalgyrus.side or
+%%         precentral.side
+%%     )
+%%     and endpoints_in(temporal.side)
+%%     not in medial_of(supramarginal.side)
+%%     and only(
+%%         frontal.side or
+%%         temporal.side or
+%%         parietal.side or
+%%         centrum_semiovale.side
+%%     )
+%% )
+af(x, h) :-
+    (ends_in(x, "inferiorfrontalgyrus", h)
+     | ends_in(x, "middlefrontalgyrus", h) | ends_in(x, "precentral", h)),
+    ends_in(x, "temporal", h),
+    (traverses(x, "frontal", h) | traverses(x, "temporal", h)
+     | traverses(x, "parietal", h) | traverses(x, "centrum_semiovale", h)),
+    ~medial_of(x, "supramarginal", h), ~af_leaves(x, h)
+
+%% ioff(x: streamline, h: hemisphere)
+%% Inferior occipito-frontal fasciculus: streamlines with an end in the
+%% orbitofrontal or inferior frontal gyrus and the other in the occipital lobe,
+%% through the temporal lobe and the insula.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% IOFF.side = (
+%%     endpoints_in(
+%%         orbitofrontalgyrus.side or
+%%         inferiorfrontalgyrus.side
+%%     )
+%%     and endpoints_in(occipital.side)
+%%     and temporal.side
+%%     and insula.side
+%% )
+ioff(x, h) :-
+    (ends_in(x, "orbitofrontalgyrus", h)
+     | ends_in(x, "inferiorfrontalgyrus", h)),
+    ends_in(x, "occipital", h), traverses(x, "temporal", h),
+    traverses(x, "insula", h)
+
+%% ilf_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of ilf: x goes through a label of hemisphere h that is of none of
+%% the terms of its only(...), "temporal", "occipital".
+ilf_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "temporal", h), ~term_label(a, l, "occipital", h)
+%% ilf(x: streamline, h: hemisphere)
+%% Inferior longitudinal fasciculus: streamlines that stay in the temporal and
+%% occipital lobes, reaching in front of the hippocampus and avoiding the
+%% parahippocampal gyrus.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% ILF.side = (
+%%     only(temporal.side and occipital.side)
+%%     and anterior_of(hippocampus.side)
+%%     not in parahippocampal.side
+%% )
+ilf(x, h) :-
+    traverses(x, "temporal", h), traverses(x, "occipital", h),
+    anterior_of(x, "hippocampus", h), ~ilf_leaves(x, h),
+    ~traverses(x, "parahippocampal", h)
+
+%% dlf_leaves(x: streamline, h: hemisphere)
+%% Auxiliary of dlf: x goes through a label of hemisphere h that is of none of
+%% the terms of its only(...), "temporal", "centrum_semiovale", "parietal".
+dlf_leaves(x, h) :-
+    in_hemisphere(x, h), streamline_label(a, x, l),
+    ~term_label(a, l, "temporal", h),
+    ~term_label(a, l, "centrum_semiovale", h), ~term_label(a, l, "parietal", h)
+%% dlf(x: streamline, h: hemisphere)
+%% Middle longitudinal fasciculus (tract_querier's dLF): streamlines from the
+%% temporal lobe in front of the amygdala or the superior temporal gyrus to the
+%% inferior or superior parietal lobule, staying in the temporal and parietal
+%% lobes and the centrum semiovale.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% dLF.side = (
+%%     (
+%%         (temporal.side and anterior_of(amygdala.side)) or
+%%         superiortemporal.side
+%%     )
+%%     and (inferior_parietal_lobule.side or superior_parietal_lobule.side)
+%%     and only(temporal.side or centrum_semiovale.side or parietal.side)
+%% )
+dlf(x, h) :-
+    ((traverses(x, "temporal", h), anterior_of(x, "amygdala", h))
+     | traverses(x, "superiortemporal", h)),
+    (traverses(x, "inferior_parietal_lobule", h)
+     | traverses(x, "superior_parietal_lobule", h)),
+    (traverses(x, "temporal", h) | traverses(x, "centrum_semiovale", h)
+     | traverses(x, "parietal", h)),
+    ~dlf_leaves(x, h)
+
+%% uf(x: streamline, h: hemisphere)
+%% Uncinate fasciculus: streamlines through the insula and the inferior
+%% frontal, middle frontal or orbitofrontal gyrus with an end in the temporal
+%% lobe in front of the amygdala.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% UF.side = (
+%%     insula.side
+%%     and (
+%%         inferiorfrontalgyrus.side or
+%%         middlefrontalgyrus.side or
+%%         orbitofrontalgyrus.side
+%%     )
+%%     and endpoints_in(temporal.side and anterior_of(amygdala.side))
+%% )
+uf(x, h) :-
+    traverses(x, "insula", h),
+    (traverses(x, "inferiorfrontalgyrus", h)
+     | traverses(x, "middlefrontalgyrus", h)
+     | traverses(x, "orbitofrontalgyrus", h)),
+    endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h)
+
+%% cc_1(x: streamline)
+%% Corpus callosum, rostrum: streamlines with an end in the orbitofrontal gyri
+%% of each hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_1 = (
+%%     endpoints_in(orbitofrontalgyrus.left)
+%%     and endpoints_in(orbitofrontalgyrus.right)
+%% )
+cc_1(x) :-
+    ends_in(x, "orbitofrontalgyrus", "left"),
+    ends_in(x, "orbitofrontalgyrus", "right")
+
+%% cc_2(x: streamline)
+%% Corpus callosum, genu: streamlines with an end in the prefrontal cortex
+%% (pars triangularis, pars orbitalis, superior frontal, rostral middle
+%% frontal, frontal pole and lateral orbitofrontal cortices) of each
+%% hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_2 = endpoints_in(prefrontal.left) and endpoints_in(prefrontal.right)
+cc_2(x) :-
+    (ends_in(x, "parstriangularis", "left")
+     | ends_in(x, "parsorbitalis", "left")
+     | ends_in(x, "superiorfrontal", "left")
+     | ends_in(x, "rostralmiddlefrontal", "left")
+     | ends_in(x, "frontalpole", "left")
+     | ends_in(x, "lateralorbitofrontal", "left")),
+    (ends_in(x, "parstriangularis", "right")
+     | ends_in(x, "parsorbitalis", "right")
+     | ends_in(x, "superiorfrontal", "right")
+     | ends_in(x, "rostralmiddlefrontal", "right")
+     | ends_in(x, "frontalpole", "right")
+     | ends_in(x, "lateralorbitofrontal", "right"))
+
+%% cc_3(x: streamline)
+%% Corpus callosum, rostral body: streamlines with an end in the premotor
+%% cortex (caudal middle frontal gyrus and pars opercularis) of each
+%% hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_3 = endpoints_in(premotor.left) and endpoints_in(premotor.right)
+cc_3(x) :-
+    (ends_in(x, "caudalmiddlefrontal", "left")
+     | ends_in(x, "ctx_parsopercularis", "left")),
+    (ends_in(x, "caudalmiddlefrontal", "right")
+     | ends_in(x, "ctx_parsopercularis", "right"))
+
+%% cc_4(x: streamline)
+%% Corpus callosum, anterior midbody: streamlines with an end in the motor
+%% cortex (precentral gyrus) of each hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_4 = endpoints_in(motor.left) and endpoints_in(motor.right)
+cc_4(x) :-
+    ends_in(x, "precentral", "left"), ends_in(x, "precentral", "right")
+
+%% cc_5(x: streamline)
+%% Corpus callosum, posterior midbody: streamlines with an end in the
+%% postcentral, posterior cingulate or paracentral cortex of each hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_5 = (
+%%     endpoints_in(
+%%         postcentral.left or
+%%         posteriorcingulate.left or
+%%         paracentral.left
+%%     )
+%%     and endpoints_in(
+%%         postcentral.right or
+%%         posteriorcingulate.right or
+%%         paracentral.right
+%%     )
+%% )
+cc_5(x) :-
+    (ends_in(x, "postcentral", "left")
+     | ends_in(x, "posteriorcingulate", "left")
+     | ends_in(x, "paracentral", "left")),
+    (ends_in(x, "postcentral", "right")
+     | ends_in(x, "posteriorcingulate", "right")
+     | ends_in(x, "paracentral", "right"))
+
+%% cc_6(x: streamline)
+%% Corpus callosum, isthmus: streamlines with an end in the superior temporal
+%% lobule, the posterior parietal lobule or the isthmus of the cingulate of
+%% each hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_6 = (
+%%     endpoints_in(
+%%         superior_temporal_lobule.left or
+%%         posterior_parietal_lobule.left or
+%%         isthmuscingulate.left
+%%     )
+%%     and endpoints_in(
+%%         superior_temporal_lobule.right or
+%%         posterior_parietal_lobule.right or
+%%         isthmuscingulate.right
+%%     )
+%% )
+cc_6(x) :-
+    (ends_in(x, "superiortemporal", "left")
+     | ends_in(x, "middletemporal", "left") | ends_in(x, "bankssts", "left")
+     | ends_in(x, "transversetemporal", "left")
+     | ends_in(x, "supramarginal", "left")
+     | ends_in(x, "inferiorparietal", "left")
+     | ends_in(x, "isthmuscingulate", "left")),
+    (ends_in(x, "superiortemporal", "right")
+     | ends_in(x, "middletemporal", "right") | ends_in(x, "bankssts", "right")
+     | ends_in(x, "transversetemporal", "right")
+     | ends_in(x, "supramarginal", "right")
+     | ends_in(x, "inferiorparietal", "right")
+     | ends_in(x, "isthmuscingulate", "right"))
+
+%% cc_7(x: streamline)
+%% Corpus callosum, splenium: streamlines with an end in the occipital lobe or
+%% the inferior temporal lobule (fusiform, lingual and inferior temporal gyri)
+%% of each hemisphere.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% CC_7 = (
+%%     endpoints_in(
+%%         occipital.left or
+%%         inferior_temporal_lobule.left
+%%     )
+%%     and endpoints_in(
+%%         occipital.right or
+%%         inferior_temporal_lobule.right
+%%     )
+%% )
+cc_7(x) :-
+    (ends_in(x, "occipital", "left") | ends_in(x, "fusiform", "left")
+     | ends_in(x, "lingual", "left") | ends_in(x, "inferiortemporal", "left")),
+    (ends_in(x, "occipital", "right") | ends_in(x, "fusiform", "right")
+     | ends_in(x, "lingual", "right")
+     | ends_in(x, "inferiortemporal", "right"))
+
+%% cortico_spinal(x: streamline, h: hemisphere)
+%% Corticospinal tract: streamlines with an end in the brain stem and the other
+%% in the precentral or postcentral gyrus.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% cortico_spinal.side = (
+%%     endpoints_in(brain_stem)
+%%     and endpoints_in(precentral.side or postcentral.side)
+%% )
+cortico_spinal(x, h) :-
+    ends_in(x, "brain_stem", _),
+    (ends_in(x, "precentral", h) | ends_in(x, "postcentral", h))
+
+%% striato_fronto_orbital(x: streamline, h: hemisphere)
+%% Striato-fronto-orbital projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the orbitofrontal gyrus.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_fronto_orbital.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(orbitofrontalgyrus.side)
+%% )
+striato_fronto_orbital(x, h) :-
+    ends_in(x, "striatum", h), ends_in(x, "orbitofrontalgyrus", h)
+
+%% striato_prefrontal(x: streamline, h: hemisphere)
+%% Striato-prefrontal projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the prefrontal cortex.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_prefrontal.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(prefrontal.side)
+%% )
+striato_prefrontal(x, h) :-
+    ends_in(x, "striatum", h),
+    (ends_in(x, "parstriangularis", h) | ends_in(x, "parsorbitalis", h)
+     | ends_in(x, "superiorfrontal", h) | ends_in(x, "rostralmiddlefrontal", h)
+     | ends_in(x, "frontalpole", h) | ends_in(x, "lateralorbitofrontal", h))
+
+%% striato_premotor(x: streamline, h: hemisphere)
+%% Striato-premotor projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the premotor cortex.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_premotor.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(premotor.side)
+%% )
+striato_premotor(x, h) :-
+    ends_in(x, "striatum", h),
+    (ends_in(x, "caudalmiddlefrontal", h)
+     | ends_in(x, "ctx_parsopercularis", h))
+
+%% striato_precentral(x: streamline, h: hemisphere)
+%% Striato-precentral projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the precentral gyrus.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_precentral.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(precentral.side)
+%% )
+striato_precentral(x, h) :-
+    ends_in(x, "striatum", h), ends_in(x, "precentral", h)
+
+%% striato_poscentral(x: streamline, h: hemisphere)
+%% Striato-postcentral projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the postcentral gyrus.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_poscentral.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(postcentral.side)
+%% )
+striato_poscentral(x, h) :-
+    ends_in(x, "striatum", h), ends_in(x, "postcentral", h)
+
+%% striato_parietal(x: streamline, h: hemisphere)
+%% Striato-parietal projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the parietal lobe.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_parietal.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(parietal.side)
+%% )
+striato_parietal(x, h) :-
+    ends_in(x, "striatum", h), ends_in(x, "parietal", h)
+
+%% striato_occipital(x: streamline, h: hemisphere)
+%% Striato-occipital projections: streamlines with an end in the striatum
+%% (putamen, pallidum and caudate) and the other in the occipital lobe.
+%%
+%% Translated from tract_querier's freesurfer_queries_bsf2016.qry:
+%% striato_occipital.side = (
+%%     endpoints_in(striatum.side) and endpoints_in(occipital.side)
+%% )
+striato_occipital(x, h) :-
+    ends_in(x, "striatum", h), ends_in(x, "occipital", h)

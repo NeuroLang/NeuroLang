@@ -7,18 +7,148 @@ engines:
   # concrete engines pull it in with ``extends`` (a name or a list of
   # names).  Mappings are merged key by key, ``datalog_init`` rules and
   # the ``builtins`` / ``downloads`` / ``ontologies`` /
-  # ``assistant_examples`` lists are concatenated, parent first, and any
-  # other value is overridden by the extending engine.  Set a mapping
-  # entry to ``null`` to drop it.
+  # ``assistant_examples`` / ``hidden_predicates`` / ``python_init`` lists
+  # are concatenated, parent first, and any other value is overridden by
+  # the extending engine.  Set a mapping entry to ``null`` to drop it.  A
+  # base reached twice is merged once.
+
+  # The atlases of the MNI152 brain: the classical (gyral and sulcal)
+  # anatomy of the cortex, Destrieux, and the functional anatomy, Schaefer
+  # (cortical networks) and Tian (subcortex), each a relation (label,
+  # region) of the engines that extend this one; their label images,
+  # resampled to the template of an engine that has one (nearest
+  # neighbour), are the grids of the engine (``grids``), so that a voxel
+  # (i, j, k) of an atlas is that of ``voxel``; each is recorded, by name, in
+  # its ``atlases`` (neurolang.atlases.Atlas), as .load_atlas records one.
+  mni_atlases:
+    abstract: true
+    description: >
+      The Destrieux, Schaefer and Tian atlases of the MNI152 brain, as
+      relations of a label and its region.
+    # ``points``: the centres of the voxels of each region, in millimetres,
+    # a stored relation that EUCLIDEAN(...) <= r joins with a tree.
+    atlases:
+      schaefer:
+        predicate_name: schaefer
+        n_rois: 100
+        resolution_mm: 2
+        yeo_networks: 17
+        points: {predicate_name: schaefer_points}
+      destrieux:
+        predicate_name: destrieux
+        points: {predicate_name: destrieux_points}
+      tian:
+        predicate_name: tian
+        scale: 2
+        points: {predicate_name: tian_points}
+    datalog_init: |
+      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
+      schaefer_label(l) :- schaefer(l, r)
+      labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+    hidden_predicates: [schaefer_voxels]
+    sorts:
+      mni:
+        columns: [x, y, z]
+        type: float
+        space: mm
+        description: "a point in MNI space, in millimetres, in 3D"
+      atlas_voxel:
+        columns: [i, j, k]
+        type: int
+        space: voxel
+        grid: schaefer
+        description: "a voxel of the Schaefer atlas grid, the template's, in 3D"
+      label:
+        columns: [label]
+        type: str
+        atlas: schaefer
+        description: "a Schaefer 2018 parcel label"
+      destrieux_label:
+        columns: [label]
+        type: str
+        atlas: destrieux
+        description: "a region of the Destrieux 2009 cortical atlas"
+      tian_label:
+        columns: [label]
+        type: str
+        atlas: tian
+        description: "a region of the Tian 2020 subcortical atlas"
+      region:
+        columns: [region]
+        type: ExplicitVBR
+        description: "a brain region"
+    predicates:
+      schaefer:
+        description: "Schaefer 2018 parcel label and its region"
+        arguments:
+          - label
+          - region
+      schaefer_label:
+        description: "Every Schaefer 2018 parcel label"
+        arguments:
+          - label
+      destrieux:
+        description: >-
+          Destrieux 2009 cortical atlas (gyri and sulci): region name and
+          region; names start with the hemisphere, L or R
+        arguments:
+          - destrieux_label
+          - region
+      tian:
+        description: >-
+          Tian 2020 subcortical atlas, scale 2 (32 regions): region name and
+          region; names end with the hemisphere, lh or rh
+        arguments:
+          - tian_label
+          - region
+      schaefer_voxels:
+        description: >-
+          Voxels (i, j, k) of the Schaefer atlas grid in each parcel
+        arguments:
+          - atlas_voxel
+          - label
+      labels:
+        description: >-
+          Schaefer parcel labelling each voxel (i, j, k) of the atlas grid,
+          that of voxel and reports
+        arguments:
+          - label
+          - atlas_voxel
+      schaefer_points:
+        description: >-
+          The centre of each voxel of the Schaefer atlas, in MNI
+          millimetres, and its parcel; EUCLIDEAN(x, y, z, x2, y2, z2) <= r
+          with the points of another stored relation finds those near
+          them
+        arguments:
+          - mni
+          - label
+      destrieux_points:
+        description: >-
+          The centre of each voxel of the Destrieux atlas, in MNI
+          millimetres, and its region (see schaefer_points)
+        arguments:
+          - mni
+          - destrieux_label
+      tian_points:
+        description: >-
+          The centre of each voxel of the Tian atlas, in MNI millimetres,
+          and its region (see schaefer_points)
+        arguments:
+          - mni
+          - tian_label
+
   coordinate_meta_analysis:
     abstract: true
+    extends: mni_atlases
     description: >
       Shared setup of the coordinate-based meta-analysis engines
       (neurosynth, neurostore): reported activation peaks, TF-IDF term
       frequencies, and a probabilistic choice over studies.  Voxels
       (i, j, k) index the 1 mm MNI152 grid (at the default resolution):
       the MNI point (x, y, z) in mm is the voxel (x + 98, y + 134,
-      z + 72), and distances between voxels are in mm.
+      z + 72), and distances between voxels are in voxels.  A study
+      activates the voxels within {kernel_radius_mm} mm of its peaks.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, lcase]
@@ -29,36 +159,38 @@ engines:
       # and NiMARE do; ``tal`` converts them as Talairach; ``drop`` leaves
       # them out. An engine extending this one can set its own value.
       unknown_space: mni
-    # Each atlas with ``activated`` also registers which studies activate
-    # its regions: ``{atlas}_activated(label, study)`` when a peak of the
-    # study (``peak_mni``, in millimetres) is within ``radius_mm`` of a
-    # voxel of the region.  Destrieux is the classical (gyral and sulcal)
-    # anatomy of the cortex; Schaefer (cortical networks) and Tian
-    # (subcortex) the functional anatomy.
+    # The radius of the sphere a peak activates, in millimetres, at every
+    # resolution: that of ``activated`` (``{kernel_radius_voxels}``, in
+    # voxels of the grid), of the activations of the atlases and of the
+    # texts saying ``{kernel_radius_mm}``.  6 mm is the radius of
+    # Neurosynth's activation maps (doc/tutorial_neurosynth_tests.rst).
+    kernel_radius_mm: 6
+    # Each atlas of mni_atlases, with ``activated``, also registers which
+    # studies activate its regions: ``{atlas}_activated(label, study)`` when
+    # a peak of the study (``peak_mni``, in millimetres) is within
+    # ``radius_mm``, by default ``kernel_radius_mm``, of a voxel of the
+    # region.  ``covered`` registers how much the studies cover its regions,
+    # probabilistic facts ``{atlas}_covered(label, study)``: the mean over
+    # the voxels of the region of the study's activation, the max over its
+    # peaks of a Gaussian kernel of ``fwhm_mm`` (10) truncated at 3 sigma;
+    # those below ``threshold`` (0.001) are left out.
     atlases:
       schaefer:
-        predicate_name: schaefer
-        n_rois: 100
-        resolution_mm: 2
-        yeo_networks: 17
-        activated: {predicate_name: schaefer_activated, radius_mm: 3}
+        activated: {predicate_name: schaefer_activated}
+        covered: {predicate_name: schaefer_covered}
       destrieux:
-        predicate_name: destrieux
-        activated: {predicate_name: destrieux_activated, radius_mm: 3}
+        activated: {predicate_name: destrieux_activated}
+        covered: {predicate_name: destrieux_covered}
       tian:
-        predicate_name: tian
-        scale: 2
-        activated: {predicate_name: tian_activated, radius_mm: 3}
+        activated: {predicate_name: tian_activated}
+        covered: {predicate_name: tian_covered}
     datalog_init: |
       study_with_peaks(s) :- peak_reported(i, j, k, s).
-      schaefer_voxels(i, j, k, l) :- schaefer(l, r), contains(r, (i, j, k)).
-      schaefer_label(l) :- schaefer(l, r)
-      labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
       mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
       weighted_mention(s, t, w) :- term_in_study_tfidf(s, t, w)
       term_in_study(s, t) :- term_in_study_tfidf(s, t, w) & (w > 0.001)
-      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= 3)
+      activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= {kernel_radius_voxels})
       p_a(i, j, k, PROB) :- activated(i, j, k, s) & selected_study(s)
       p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
       p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
@@ -68,8 +200,7 @@ engines:
       uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
       ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
       study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
-      cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
-      similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
+      similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c)
       p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)
       p_a_given_similar(q, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
       p_any_voxel_given_similar(q, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
@@ -103,15 +234,23 @@ engines:
     text_embeddings:
       study_abstracts:
         ids_from: study
-        source: pubmed
+        # The titles and abstracts of the engine (study_abstract).
+        source:
+          predicate: study_abstract
+          title_predicate: study_title
         model: allenai/specter2_base
         document_adapter: allenai/specter2
         query_adapter: allenai/specter2_adhoc_query
         function: query_similarity
+        # query_similarity_cutoff(q) is inf, and similar_study empty, for a
+        # text whose 20 closest studies have a mean similarity below the
+        # gate: see "Choosing the similarity threshold" in
+        # doc/tutorial_text_embeddings.rst.
+        similarity_gate: 0.75
         description: >-
           query_similarity(query, study) returns the cosine similarity
-          between a free-text query and the study's title and abstract
-          (PubMed), embedded with SPECTER2.
+          between a free-text query and the study's title and abstract,
+          embedded with SPECTER2.
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -134,8 +273,8 @@ engines:
     # millimetres, converted to the nearest voxel of the template with
     # the inverse of its affine.  A result's columns take the sort of the
     # argument of the predicate their variable comes from in the query,
-    # else of the sort they are named as.  ``atlas_voxel`` indexes the
-    # grid of the 2 mm Schaefer atlas, not the template's.
+    # else of the sort they are named as.  ``atlas_voxel`` (mni_atlases)
+    # indexes the grid of the Schaefer atlas, resampled to the template's.
     # A sort named ``streamline`` holds streamline ids, which ``.view``
     # draws with an engine giving their points (``streamline_points``).
     sorts:
@@ -164,36 +303,6 @@ engines:
         type: int
         space: voxel
         description: "a voxel of the MNI template grid, in 3D"
-      mni:
-        columns: [x, y, z]
-        type: float
-        space: mm
-        description: "a point in MNI space, in millimetres, in 3D"
-      atlas_voxel:
-        columns: [i, j, k]
-        type: int
-        space: voxel
-        grid: schaefer
-        description: "a voxel of the 2 mm Schaefer atlas grid, in 3D"
-      label:
-        columns: [label]
-        type: str
-        atlas: schaefer
-        description: "a Schaefer 2018 parcel label"
-      destrieux_label:
-        columns: [label]
-        type: str
-        atlas: destrieux
-        description: "a region of the Destrieux 2009 cortical atlas"
-      tian_label:
-        columns: [label]
-        type: str
-        atlas: tian
-        description: "a region of the Tian 2020 subcortical atlas"
-      region:
-        columns: [region]
-        type: ExplicitVBR
-        description: "a brain region"
       query:
         columns: [query]
         type: str
@@ -238,6 +347,22 @@ engines:
         columns: [description]
         type: str
         description: "the description of a task of the Cognitive Atlas"
+      year:
+        columns: [year]
+        type: int
+        description: "a year of publication"
+      journal:
+        columns: [journal]
+        type: str
+        description: "the name of a journal"
+      pmid:
+        columns: [pmid]
+        type: int
+        description: "a PubMed id"
+      doi:
+        columns: [doi]
+        type: str
+        description: "a DOI, in lower case, without https://doi.org/"
     # Each predicate declares its arguments, in column order: the entities
     # it relates, each a sort over the columns it spans, named alone or as
     # ``{sort: …, columns: […]}`` to rename the sort's columns.  A voxel
@@ -255,6 +380,28 @@ engines:
       study_title:
         description: "Title of a study"
         arguments: [study, text]
+      study_abstract:
+        description: "Abstract of a study"
+        arguments: [study, text]
+      study_year:
+        description: "The year a study was published"
+        arguments: [study, year]
+      study_journal:
+        description: >-
+          The journal a study was published in, named as the engine's
+          metadata names it: find it with search_values
+        arguments: [study, journal]
+      study_pmid:
+        description: >-
+          The PubMed id of a study, the same in every engine (a Neurosynth
+          study's id is its PubMed id): it matches the studies of two
+          engines
+        arguments: [study, pmid]
+      study_doi:
+        description: >-
+          The DOI of a study, as its database gives it: match the studies
+          of two engines on study_pmid
+        arguments: [study, doi]
       study:
         description: "All study identifiers"
         arguments:
@@ -337,7 +484,7 @@ engines:
       activated:
         description: >-
           Studies activating a voxel of the brain mask: one of their peaks is
-          within 3 voxels (3 mm at the default 1 mm resolution)
+          within {kernel_radius_mm} mm of it
         arguments:
           - voxel
           - study
@@ -392,7 +539,8 @@ engines:
       similar_study:
         description: >-
           The 5% of the studies closest to a free-text query by
-          study_similarity
+          study_similarity; none for a text whose 20 closest studies have
+          a mean similarity below 0.75
         arguments:
           - query
           - study
@@ -453,47 +601,49 @@ engines:
         arguments:
           - cogat_class
           - cogat_class
-      schaefer:
-        description: "Schaefer 2018 parcel label and its region"
-        arguments:
-          - label
-          - region
-      schaefer_label:
-        description: "Every Schaefer 2018 parcel label"
-        arguments:
-          - label
       schaefer_activated:
         description: >-
           Studies activating a Schaefer parcel (cortical networks): one of
-          their peaks is within 3 mm of a voxel of the parcel
+          their peaks is within {kernel_radius_mm} mm of a voxel of the parcel
         arguments:
           - label
           - study
-      destrieux:
-        description: >-
-          Destrieux 2009 cortical atlas (gyri and sulci): region name and
-          region; names start with the hemisphere, L or R
-        arguments:
-          - destrieux_label
-          - region
       destrieux_activated:
         description: >-
           Studies activating a Destrieux region: one of their peaks is within
-          3 mm of a voxel of the region
+          {kernel_radius_mm} mm of a voxel of the region
         arguments:
           - destrieux_label
           - study
-      tian:
-        description: >-
-          Tian 2020 subcortical atlas, scale 2 (32 regions): region name and
-          region; names end with the hemisphere, lh or rh
-        arguments:
-          - tian_label
-          - region
       tian_activated:
         description: >-
           Studies activating a Tian subcortical region: one of their peaks is
-          within 3 mm of a voxel of the region
+          within {kernel_radius_mm} mm of a voxel of the region
+        arguments:
+          - tian_label
+          - study
+      schaefer_covered:
+        description: >-
+          How much a study covers a Schaefer parcel, as a probability: the
+          mean over the parcel's voxels of the study's activation, a
+          Gaussian kernel of 10 mm FWHM around its nearest peak
+        probability: true
+        arguments:
+          - label
+          - study
+      destrieux_covered:
+        description: >-
+          How much a study covers a Destrieux region, as a probability (see
+          schaefer_covered)
+        probability: true
+        arguments:
+          - destrieux_label
+          - study
+      tian_covered:
+        description: >-
+          How much a study covers a Tian subcortical region, as a probability
+          (see schaefer_covered)
+        probability: true
         arguments:
           - tian_label
           - study
@@ -503,19 +653,6 @@ engines:
         arguments:
           - mni
           - study
-      schaefer_voxels:
-        description: >-
-          Voxels (i, j, k) of the 2 mm Schaefer atlas grid in each parcel
-        arguments:
-          - atlas_voxel
-          - label
-      labels:
-        description: >-
-          Schaefer parcel labelling each voxel (i, j, k) of the 2 mm atlas
-          grid (not the grid of voxel and reports)
-        arguments:
-          - label
-          - atlas_voxel
 
   neurosynth:
     extends: coordinate_meta_analysis
@@ -538,16 +675,10 @@ engines:
     # within the time and memory the query assistant gives it.
     resamplings:
       boot_studies: {n: 200}
+    # The 95th percentile of the null of doc/similarity_calibration.rst
+    # over NeuroStore's studies (0.75 lets 9% of it through).
     text_embeddings:
-      study_abstracts:
-        # The texts come with the release: no PubMed download.
-        source:
-          predicate: study_abstract
-          title_predicate: study_title
-        description: >-
-          query_similarity(query, study) returns the cosine similarity
-          between a free-text query and the study's title and abstract,
-          embedded with SPECTER2.
+      study_abstracts: {similarity_gate: 0.76}
     sorts:
       study:
         type: str
@@ -561,9 +692,6 @@ engines:
         type: str
         description: "a cognitive domain extracted from the tasks of a study"
     predicates:
-      study_abstract:
-        description: "Abstract of a study"
-        arguments: [study, text]
       study_concept:
         description: "Cognitive concepts extracted from the tasks of a study"
         arguments: [study, concept]
@@ -616,6 +744,222 @@ engines:
         arguments:
           - label
           - region
+
+  tracts:
+    extends: mni_atlases
+    description: >
+      Tractography (neurolang_apps.utils.engines.tracts):
+      the commands .load_tractogram and .index_tracts of a program build
+      the relations of a tractogram, in MNI152, indexed by the atlases of
+      the engine (.index_tracts(t, "destrieux"), "tian" or "schaefer") or
+      by one the program loads (.load_atlas), and the vocabulary of
+      tractography, rules over them, says where streamlines go:
+      traverses(x, term, h), endpoint_in(x, e, term, h), anterior_of(x,
+      term, h)... A label of an atlas of the engine, label("destrieux", l,
+      name, h), is the name of its relation, destrieux(name, region). A
+      result of streamline ids x is drawn by .view.
+      The white-matter bundles, tract_querier's queries translated to the
+      vocabulary and each described, are defined by importing a module of
+      the engine: .import('bundles/freesurfer_queries.dl')
+      defines uf(x, h) (the uncinate fasciculus), af, cst, ilf, ioff, cb,
+      slf_i, cc, cc_1 ... cc_7 and more; freesurfer_queries_bsf2016.dl and
+      freesurfer_queries_bsf2016_toad.dl revise them (uf, af, ilf, dlf,
+      emc, cortico_spinal...); mori_queries.dl gives those of the JHU
+      atlas (unc, ifo, cg, corpus_callosum...). The modules share names:
+      import one.
+    solver_mixins:
+      - "neurolang_apps.utils.engines.tracts.frontend:TractsCommandsMixin"
+    # the vocabulary (vocabulary.dl of the package), the functions
+    # of the ids x and the hooks of .view, over what the commands load;
+    # .index_tracts finds the atlases of the engine, loaded after it
+    python_init: "neurolang_apps.utils.engines.tracts.frontend"
+    # The sorts of the arguments of the vocabulary and of the bundles, as
+    # their %% documentation gives them (uncinate(x: streamline, h:
+    # hemisphere)); the query assistant is told their descriptions.
+    # ``streamline`` is the sort .view draws as streamlines.
+    sorts:
+      streamline:
+        columns: [x]
+        type: int
+        description: >-
+          a streamline, by its integer id; streamline(x, t, s) gives the
+          tractogram t it is of and its position s in the file
+      end:
+        columns: [e]
+        type: int
+        description: >-
+          an end of a streamline, 0 or 1: it only tells the two ends apart
+          (the same end), the order of the points being arbitrary
+      term:
+        columns: [term]
+        type: str
+        description: >-
+          a term of the term mapping of the atlas indexed, a string such as
+          "temporal", "insula" or "amygdala": label_term(a, l, term) lists
+          them, from the mappings of the engine (its mappings/*.tsv)
+          (freesurfer_aseg_aparc for a FreeSurfer atlas)
+      hemisphere:
+        columns: [h]
+        type: str
+        description: >-
+          a hemisphere: "left", "right" or "none" (a structure of no side,
+          such as the brain stem); opposite_hemisphere(h, o) gives the other
+      axis:
+        columns: [axis]
+        type: int
+        description: >-
+          an axis of RAS+ millimetres: 0 x (left to right), 1 y (posterior to
+          anterior), 2 z (inferior to superior)
+      atlas:
+        columns: [a]
+        type: str
+        description: "an atlas indexed with .index_tracts, by its name"
+      label_id:
+        columns: [l]
+        type: int
+        description: "the id of a label of an atlas indexed"
+      coordinate:
+        columns: [v]
+        type: float
+        description: "a coordinate in millimetres, RAS+, on an axis"
+    # The relations .load_tractogram and .index_tracts store (vocabulary.dl):
+    # their streamline x is of the sort streamline, so that .view draws a
+    # result of their streamlines as streamlines, even beside the regions
+    # they join, ans(s, l1, l2).
+    predicates:
+      streamline:
+        description: >-
+          Each streamline x, the tractogram t it is of and its position s in
+          the file
+        arguments:
+          - streamline
+          - {sort: tractogram, columns: [t], type: str}
+          - {sort: position, columns: [s], type: int}
+      streamline_label:
+        description: >-
+          The labels l of atlas a that streamline x goes through
+        arguments: [atlas, streamline, label_id]
+      endpoint_label:
+        description: "The label l of atlas a of the end e of streamline x"
+        arguments: [atlas, streamline, end, label_id]
+      streamline_extent:
+        description: >-
+          The bounds lo and hi of the points of streamline x on an axis, in
+          millimetres
+        arguments:
+          - streamline
+          - axis
+          - {sort: coordinate, columns: [lo]}
+          - {sort: coordinate, columns: [hi]}
+      endpoint_coord:
+        description: >-
+          The coordinate v, on an axis, of the end e of streamline x
+        arguments: [streamline, end, axis, coordinate]
+      endpoint_point:
+        description: >-
+          The point (px, py, pz), in MNI millimetres, of the end e of
+          streamline x; EUCLIDEAN(px, py, pz, x, y, z) <= r with the points
+          of another stored relation (schaefer_points) finds the ends near
+          them
+        arguments:
+          - streamline
+          - end
+          - {sort: mni, columns: [px, py, pz]}
+      streamline_length:
+        description: "The length mm of streamline x, in millimetres"
+        arguments:
+          - streamline
+          - {sort: length, columns: [mm], type: float}
+
+  # The engines of a meta-analysis with tractography: the vocabulary of
+  # tracts over the parcels whose studies a meta-analysis engine has
+  # (schaefer_activated...), and the questions on both.
+  meta_analysis_tracts:
+    abstract: true
+    extends: [coordinate_meta_analysis, tracts]
+
+  # The whole-brain tractogram of the IIT Human Brain Atlas v3, indexed by
+  # its wmparc, and tract_querier's bundles, at the prompt (see
+  # neurosynth_iit).
+  iit_tractogram:
+    abstract: true
+    extends: tracts
+    # The IIT Human Brain Atlas v3 (Qi, Arfanakis et al., IIT Human Brain
+    # Template License: non-commercial research, attribution): its
+    # whole-brain tractogram and its Desikan-Killiany wmparc, from the OSF
+    # project of tract_querier's test files (https://osf.io/ugyqa/), and
+    # FreeSurfer's colour LUT, at a commit.
+    downloads:
+      - url: https://osf.io/download/6af216907216d01bbe53b9f5/
+        name: IIT3mean.tck
+        md5: 6e9703e4e331cfb26f3eb2e29526e225
+        dest: tracts/iit
+      - url: https://osf.io/download/rk7a5/
+        name: IIT3mean_desikan_2009.nii.gz
+        md5: 767813ba451d5209cdc9454617a636b7
+        dest: tracts/fs
+      - url: https://raw.githubusercontent.com/freesurfer/freesurfer/18761d34d14d62216ec1ca3b0056fb9b04ea2f59/distribution/FreeSurferColorLUT.txt
+        md5: ce7f38b53a507ac1990e0795353417d7
+        dest: tracts/fs
+    # The tractogram of the bundle of the REPL: the file path is replaced in
+    # the bundle's data directory by subsample of its streamlines drawn at
+    # random (seed), each thinned to every step-th point
+    # (doc/make_repl_bundle.py)
+    tractogram: {path: tracts/iit/IIT3mean.tck, subsample: 15000, step: 3, seed: 0}
+    datalog_init: |
+      .load_tractogram("iit", "tracts/iit/IIT3mean.tck", space="MNI152")
+      .load_atlas("fs", "tracts/fs/IIT3mean_desikan_2009.nii.gz", "tracts/fs/FreeSurferColorLUT.txt", kind="freesurfer", space="MNI152")
+      .index_tracts("iit", "fs")
+      .import("bundles/freesurfer_queries.dl")
+
+  neurosynth_tracts:
+    extends: [neurosynth, meta_analysis_tracts]
+    description: >
+      Neurosynth with tractography: the studies, terms, peaks and Cognitive
+      Atlas of neurosynth, the studies that activate each parcel of its
+      atlases (schaefer_activated(label, study)...), and the commands and
+      vocabulary of tractography of tracts (extra tracts of
+      neurolang-apps), whose streamlines end near the points of a parcel
+      (endpoint_point, schaefer_points). similar_study, the studies about
+      a text, needs the extra embeddings (SPECTER2). The uncinate
+      fasciculus and the concepts of the studies that activate its parcels
+      are examples/uncinate_cogat.dl of the engine tracts.
+
+  neurosynth_iit:
+    extends: [neurosynth_tracts, iit_tractogram]
+    description: >
+      Neurosynth with a whole-brain tractogram and tract_querier's bundles:
+      neurosynth_tracts after the commands that load the whole-brain
+      tractogram of the IIT Human Brain Atlas v3 (IIT3mean.tck, 38,000
+      streamlines, RAS+ mm, 88 MB, downloaded into the data directory's
+      tracts/iit), load the atlas's Desikan-Killiany wmparc (downloaded, with
+      FreeSurfer's colour LUT, into tracts/fs; its labels are the codes of
+      FreeSurfer's, so the term mapping freesurfer_aseg_aparc applies; the
+      tractogram and the atlas are of the same atlas, so in the same space),
+      index the tractogram by it and import the bundles of tract_querier's
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view work
+      at the prompt. The files are read relative to the data directory,
+      from which datalog_init runs. The entry tractogram tells the bundle of
+      the REPL in the browser how to subsample the file it ships in its
+      place, so that this program is the same there.
+
+  neurostore_tracts:
+    extends: [neurostore, meta_analysis_tracts]
+    description: >
+      NeuroStore with tractography: neurostore (its studies, terms, peaks,
+      abstracts, concepts and domains) and the commands and vocabulary of
+      tractography of tracts, as neurosynth_tracts is for neurosynth.
+
+  neurostore_iit:
+    extends: [neurostore_tracts, iit_tractogram]
+    description: >
+      NeuroStore with a whole-brain tractogram and tract_querier's bundles:
+      neurostore_tracts after the commands of neurosynth_iit, which load the
+      whole-brain tractogram and the Desikan-Killiany wmparc of the IIT
+      Human Brain Atlas v3 (downloaded into the data directory's tracts),
+      index the one by the other and import the bundles of
+      freesurfer_queries.qry, so that ans(x) :- uf(x, "left") and .view
+      work at the prompt.
 
   # Example template usage (commented out — uncomment to enable):
   #

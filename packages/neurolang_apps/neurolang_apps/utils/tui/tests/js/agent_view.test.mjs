@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AgentLog, callText, oneLine } from "../../../../../../../doc/_static/repl/agent_view.js";
+import { AgentLog, callText, noAnswer, oneLine } from "../../../../../../../doc/_static/repl/agent_view.js";
 
 const ask = { event: "ask", question: "Who?", provider: "p", model: "m", strategy: "react" };
 const reply = (call, text, toolCalls = [], tokens = 15) => ({
@@ -79,4 +79,18 @@ test("a thought is on one line and cut; a call leaves its query out", () => {
   assert.equal(oneLine("x".repeat(300)).length, 201);
   assert.equal(callText("search_values", { query: "q", pattern: "pain" }), 'search_values(pattern="pain")');
   assert.equal(callText("list_predicates"), "list_predicates()");
+});
+
+test("an answer with no query says why, in plain words", () => {
+  const steps = noAnswer({ valid: false, query: "ans(x) :- p(x", error: "No valid query after 8 steps." });
+  assert.equal(steps.reason, "It tried for 8 steps without writing a query that runs.");
+  assert.equal(steps.query, "ans(x) :- p(x"); // its last try, to edit
+  const broken = noAnswer({ valid: false, query: "ans(x) :- q(x)", error: "Unknown relation q" });
+  assert.equal(broken.reason, "Its last query does not run: Unknown relation q");
+  // No query at all: the model's own words are what it found.
+  const words = noAnswer({ valid: false, query: "", error: "The engine has no data on dreams." });
+  assert.equal(words.reason, "It wrote no query.");
+  assert.equal(words.said, "The engine has no data on dreams.");
+  assert.equal(noAnswer({ valid: false }).reason, "It wrote no query.");
+  assert.equal(noAnswer({ valid: true, query: "ans(x) :- p(x)" }), null);
 });

@@ -22,7 +22,9 @@ class SquallLexer(RegexLexer):
 
     tokens = {
         "root": [
-            # Comments
+            # Comments: % lines in the REPL and %% documentation lines
+            (r"%.*$", Comment.Single),
+            # Directives (#set_backend(...)) and comments of old examples
             (r"#.*$", Comment.Single),
             # Keywords
             (words(_keywords, suffix=r"\b"), Keyword),

@@ -123,6 +123,10 @@ class Region(object):
             :class:`EmptyRegion` when the label has no voxels.
 
         """
+        # imported here: neurolang.atlases imports pandas, which the
+        # regions do not need otherwise
+        from .atlases import label_voxel_indices
+
         data = np.asanyarray(spatial_image.dataobj)
         if 'image_dim' not in kwargs:
             kwargs['image_dim'] = spatial_image.shape
@@ -134,39 +138,6 @@ class Region(object):
             )
             for label, voxels in voxels_by_label.items()
         }
-
-
-def label_voxel_indices(data, labels):
-    """
-    Voxel coordinates of each label of a labelled array, in one pass.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        labelled array.
-    labels : iterable
-        label values to look up.
-
-    Returns
-    -------
-    dict
-        mapping each label to an ``(n, data.ndim)`` integer array with the
-        coordinates of the voxels equal to it, in the same (C) order as
-        ``numpy.nonzero(data == label)``.
-
-    """
-    flat = data.ravel()
-    order = np.argsort(flat, kind='stable')
-    sorted_values = flat[order]
-    result = {}
-    for label in labels:
-        start = np.searchsorted(sorted_values, label, side='left')
-        end = np.searchsorted(sorted_values, label, side='right')
-        indices = order[start:end]
-        result[label] = np.column_stack(
-            np.unravel_index(indices, data.shape)
-        ).reshape(-1, data.ndim)
-    return result
 
 
 class EmptyRegion(Region):

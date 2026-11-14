@@ -80,6 +80,7 @@ providers:
     api_key_env: ANTHROPIC_API_KEY
     model: claude-sonnet-5-5
     tool_calling: native
+    max_tokens: 16000           # its thinking counts in max_tokens
 
   # Claude Code in print mode, using its own login: no API key here.
   claude-code:
@@ -100,7 +101,7 @@ providers:
 assistant:
   strategy: react      # react: agent exploring the engine; icl: few-shot
   language: auto       # auto (the REPL's .mode), squall or datalog
-  max_steps: 8         # ReAct: maximum number of tool calls
+  max_steps: 16        # ReAct: maximum number of tool calls
   max_repairs: 3       # ICL: rounds of reprompting with the query error
   few_shot_k: 6        # number of example questions in the prompt
   samples: 1           # answers voted on (self-consistency)

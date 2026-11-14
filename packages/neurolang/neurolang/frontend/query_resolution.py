@@ -27,6 +27,7 @@ import numpy as np
 from nibabel.dataobj_images import DataobjImage
 
 from nl_expr import expressions as ir
+from ..atlases import Atlas
 from ..region_solver import Region
 from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from nl_expr.type_system import Unknown, is_leq_informative
@@ -693,8 +694,8 @@ class RegionMixin:
     def add_atlas_set(
         self,
         name: str,
-        atlas_labels: Dict[int, str],
-        spatial_image: DataobjImage,
+        atlas_labels: Union[Dict[int, str], Atlas],
+        spatial_image: Optional[DataobjImage] = None,
     ) -> fe.Symbol:
         """
         Creates an atlas set:
@@ -703,35 +704,38 @@ class RegionMixin:
         Tuple[region_name: str, Region]
         2- groups regions in an AbstractSet[Tuple[str, Region]] symbol with
         specified name
+        3- records the atlas in ``atlases``, by name, as ``.load_atlas``
+        does
 
         Parameters
         ----------
         name : str
             name for the output atlas symbol
-        atlas_labels : Dict[int, str]
+        atlas_labels : Dict[int, str] or Atlas
             specifies which voxels to select in the spatial_image,
-            and the associated region name
+            and the associated region name (the label 0 is the background,
+            no region), or an :class:`~neurolang.atlases.Atlas`, e.g. of
+            ``Atlas.from_freesurfer``, recorded under its own name
         spatial_image : DataobjImage
-            contains the .dataobj array ofinterest
+            contains the .dataobj array of interest, if atlas_labels is a
+            dict
 
         Returns
         -------
         fe.Symbol
             see description
         """
-        atlas_set = list()
-        regions = ExplicitVBR.from_spatial_image_labels(
-            spatial_image, atlas_labels.keys()
-        )
-        for label_number, label_name in atlas_labels.items():
-            region = regions[label_number]
-            if not isinstance(region, ExplicitVBR):
-                continue
-            atlas_set.append((label_name, region))
-        return self.add_tuple_set(
-                atlas_set,
-                type_=Tuple[str, ExplicitVBR], name=name
-        )
+        atlas = atlas_labels
+        if not isinstance(atlas, Atlas):
+            atlas = Atlas.from_labels(name, spatial_image, atlas_labels)
+        self.program_ir.add_atlas(atlas, name)
+        return fe.Symbol(self, name)
+
+    @property
+    def atlases(self) -> Dict[str, Atlas]:
+        """The atlases of the engine (``.load_atlas``, ``add_atlas_set``),
+        by name."""
+        return self.program_ir.atlases
 
     def sphere(
         self,
