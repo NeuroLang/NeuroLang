@@ -337,7 +337,21 @@ relation (see :doc:`tutorial_text_embeddings`)::
         document_adapter: allenai/specter2
         query_adapter: allenai/specter2_adhoc_query
         function: query_similarity
+        similarity_floor: 0.75          # the default
         description: "Similarity between a query and a study abstract"
+
+It also registers ``function_cutoff(query)``, here
+``query_similarity_cutoff``, the 95th percentile of the positive
+similarities of the documents to the query text, computed once per text.
+``{similarity_floor}`` in ``datalog_init`` is the entry's
+``similarity_floor``.  The meta-analysis engines define with them the
+studies about a text::
+
+    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c) & (v >= {similarity_floor})
+
+the top 5% of the studies closest to the text, but none below the floor,
+which keeps a text that no study is about from getting its top 5% (see
+:ref:`similarity-threshold`).
 
 ``source`` is ``pubmed`` (titles and abstracts fetched from the NCBI
 E-utilities), a table of texts, local or remote::

@@ -193,8 +193,7 @@ engines:
       uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
       ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
       study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
-      cutoff_similarity(q, percentile(v, 95)) :- study_similarity(q, s, v)
-      similar_study(q, s) :- study_similarity(q, s, v) & cutoff_similarity(q, c) & (v >= c)
+      similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c) & (v >= {similarity_floor})
       p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)
       p_a_given_similar(q, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
       p_any_voxel_given_similar(q, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
@@ -236,6 +235,9 @@ engines:
         document_adapter: allenai/specter2
         query_adapter: allenai/specter2_adhoc_query
         function: query_similarity
+        # The least similarity of a study of similar_study: see "Choosing
+        # the similarity threshold" in doc/tutorial_text_embeddings.rst.
+        similarity_floor: 0.75
         description: >-
           query_similarity(query, study) returns the cosine similarity
           between a free-text query and the study's title and abstract,
@@ -509,7 +511,7 @@ engines:
       similar_study:
         description: >-
           The 5% of the studies closest to a free-text query by
-          study_similarity
+          study_similarity, of similarity at least 0.75
         arguments:
           - query
           - study

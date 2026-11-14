@@ -119,6 +119,72 @@ Each query text is embedded once and the similarities of all the studies
 to it are cached (the 16 most recent query texts), so each call is a
 lookup.
 
+.. _similarity-threshold:
+
+Choosing the similarity threshold
+---------------------------------
+
+The meta-analysis engines define the studies about a text, ``similar_study(q,
+s)``, with two thresholds: the studies in the top 5% closest to the text
+(``query_similarity_cutoff(q)``, the 95th percentile of the positive
+similarities, computed once per text), and of similarity at least an
+absolute floor, the ``similarity_floor`` of the engine's ``text_embeddings``
+entry (0.75 by default, see :ref:`text-embeddings-section`)::
+
+    similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c) & (v >= 0.75)
+
+The top 5% adapts to the narrow, text-dependent range of the SPECTER2
+similarities, but every text has a top 5%, even one that no study is
+about: 'stock market crash' gets 719 studies of NeuroSynth.  The floor
+removes them.  To calibrate it for an engine or an embedding model:
+
+1. List texts of the domain (definitions of the Cognitive Atlas, as
+   ``cogat_definition('working memory', d)`` gives, and free phrases such
+   as 'tapping fingers in sequence') and texts no study is about
+   ('chocolate cake recipe', 'medieval castle architecture').
+2. Score every study against each text with
+   :meth:`~neurolang_apps.utils.text_embeddings.EmbeddingIndex.scores`.
+3. For each text, report the largest score, the 95th percentile, and the
+   number of studies at or above each candidate floor, overall and within
+   its top 5%.
+4. A floor separates the two lists if every text of the domain keeps at
+   least 20 studies and every unrelated text keeps none.  The separating
+   floors are those above the largest score of the unrelated texts and at
+   most the smallest 20th-largest score of the texts of the domain.
+5. Set the floor as ``similarity_floor`` in the engine's
+   ``text_embeddings`` entry.
+
+In Python, for one text:
+
+.. code-block:: python
+
+    from pathlib import Path
+
+    import numpy as np
+    from neurolang_apps.utils.engine_registry import build_engine
+
+    nl = build_engine("neurosynth", Path("neurolang_data"))
+    index = nl.text_embedding_indexes["study_abstracts"]
+    scores = index.scores("medieval castle architecture")
+    top = scores[scores >= np.percentile(scores[scores > 0], 95)]
+    print(scores.max(), [(floor, (top >= floor).sum()) for floor in (0.7, 0.75, 0.8)])
+
+The script ``scripts/similarity_floor.py`` of
+`neurolang-text2query-bench <https://github.com/NeuroLang/neurolang-text2query-bench>`_
+(branch ``neurosynth-v2``) runs these steps over two lists of texts.  With
+SPECTER2 on NeuroSynth, no floor separates them:
+
+* at 0.7, unrelated texts keep up to 719 studies of their top 5%
+  ('stock market crash');
+* the largest score of an unrelated text is 0.750 ('medieval castle
+  architecture');
+* at 0.75, unrelated texts keep 0 or 1 studies, while short phrases of the
+  domain keep 5 to 16 ('tapping fingers in sequence', 'being socially
+  excluded in a ball-tossing game'), and definitions of the Cognitive
+  Atlas keep 74 ('working memory') to 719 ('memory') of their 719.
+
+0.75 is the default, as the best compromise between the two lists.
+
 Activations within a radius of the peaks
 ----------------------------------------
 

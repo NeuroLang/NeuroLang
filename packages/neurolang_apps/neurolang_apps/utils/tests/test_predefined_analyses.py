@@ -4,13 +4,14 @@ constant of the query, as in the tutorial: probabilistic queries without
 a constant do not go through the magic-sets rewriting."""
 import itertools
 import re
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from neurolang.frontend import NeurolangPDL
-from neurolang_apps.utils import engine_registry
+from neurolang_apps.utils import engine_registry, text_embeddings
 
 ANALYSIS_RULES = re.compile(
     r"(term_in_study|activated|p_[a-z_]+|lift|"
@@ -120,8 +121,8 @@ def test_selected_voxel_is_a_uniform_choice_over_the_brain(small_neurosynth):
 
 
 LLM_RULES = re.compile(
-    r"(term_in_study|activated|p_[a-z_]+|study_similarity|cutoff_similarity|"
-    r"similar_study|[a-z_]+_llm)\("
+    r"(term_in_study|activated|p_[a-z_]+|study_similarity|similar_study|"
+    r"[a-z_]+_llm)\("
 )
 SIMILARITY = {s: 0.2 + 0.04 * ((s * 7) % 20) for s in range(1, 21)}
 SIMILARITY[20] = 0.0  # a study without text: left out
@@ -129,8 +130,8 @@ SIMILARITY[20] = 0.0  # a study without text: left out
 
 @pytest.fixture(scope="module")
 def llm_engine():
-    """Twenty studies, a function standing for ``query_similarity``, and the
-    free-text rules of ``engines.yaml``."""
+    """Twenty studies, functions standing for ``query_similarity`` and
+    ``query_similarity_cutoff``, and the free-text rules of ``engines.yaml``."""
     nl = NeurolangPDL()
     studies = list(range(1, 21))
     nl.add_tuple_set([(s,) for s in studies], name="study")
@@ -152,6 +153,13 @@ def llm_engine():
         return SIMILARITY[study] if query == "a text" else 0.0
 
     nl.add_symbol(query_similarity, name="query_similarity")
+    index = SimpleNamespace(scores=lambda query: np.array(
+        [query_similarity(query, s) for s in studies]
+    ))
+    nl.add_symbol(
+        text_embeddings.make_cutoff_function(index),
+        name="query_similarity_cutoff",
+    )
     rules = [
         line for line in engine_registry.get_engine_config("neurosynth")[
             "datalog_init"
@@ -161,6 +169,7 @@ def llm_engine():
     # activated within 3 voxels, its kernel_radius_mm on the 2 mm grid
     nl.execute_datalog_program(
         "\n".join(rules).replace("{kernel_radius_voxels}", "3")
+        .replace("{similarity_floor}", "0.75")
     )
     return nl
 

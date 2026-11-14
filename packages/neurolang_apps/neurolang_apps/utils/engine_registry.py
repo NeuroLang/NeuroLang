@@ -59,7 +59,9 @@ define:
   adding Datalog commands ``.name(...)``; inherited parent first;
 * ``text_embeddings`` — semantic search over document texts (e.g. PubMed
   abstracts) with SPECTER2, registered as a function
-  ``f(query, doc) -> similarity``; see
+  ``f(query, doc) -> similarity``, with ``f_cutoff(query)`` the 95th
+  percentile of the similarities to the query; ``{similarity_floor}`` in
+  ``datalog_init`` is its ``similarity_floor`` (0.75 by default); see
   :mod:`neurolang_apps.utils.text_embeddings`::
 
       text_embeddings:
@@ -67,6 +69,7 @@ define:
           ids_from: study
           source: pubmed          # or {file: ...} or {predicate: ...}
           function: query_similarity
+          similarity_floor: 0.75
 
 Usage
 -----
@@ -454,6 +457,16 @@ def kernel_radius_voxels(cfg: Dict[str, Any], mask) -> float:
     voxels of the grid of *mask*, whose voxels are cubes.
     """
     return cfg["kernel_radius_mm"] / abs(float(mask.affine[0, 0]))
+
+
+def similarity_floor(cfg: Dict[str, Any]) -> float:
+    """
+    Return the ``similarity_floor`` of the ``text_embeddings`` entry of the
+    engine configuration *cfg*, 0.75 by default: the least similarity of a
+    study of ``similar_study`` (see doc/tutorial_text_embeddings.rst).
+    """
+    entry = next(iter(cfg.get("text_embeddings", {}).values()), {})
+    return entry.get("similarity_floor", 0.75)
 
 
 @functools.lru_cache(maxsize=None)
@@ -1595,12 +1608,17 @@ def _phase_datalog_init(nl, cfg, data_dir, mask=None):
     the paths of its commands (``.load_tractogram``, ``.load_atlas``...) are
     relative to it, where ``downloads`` puts the files. Its
     ``{kernel_radius_voxels}`` is the ``kernel_radius_mm`` of the engine in
-    voxels of the grid of *mask*, the distances between voxel indices.
+    voxels of the grid of *mask*, the distances between voxel indices, and
+    its ``{similarity_floor}`` that of :func:`similarity_floor`.
     """
     datalog_init = cfg.get("datalog_init")
     if datalog_init and "{kernel_radius_voxels}" in datalog_init:
         datalog_init = datalog_init.replace(
             "{kernel_radius_voxels}", f"{kernel_radius_voxels(cfg, mask):g}"
+        )
+    if datalog_init and "{similarity_floor}" in datalog_init:
+        datalog_init = datalog_init.replace(
+            "{similarity_floor}", f"{similarity_floor(cfg):g}"
         )
     if datalog_init:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
@@ -1759,6 +1777,10 @@ def _phase_text_embeddings(nl, cfg, data_dir, engine_name, rel_base_dir):
         nl.add_symbol(
             text_embeddings.make_similarity_function(index),
             name=emb_cfg["function"],
+        )
+        nl.add_symbol(
+            text_embeddings.make_cutoff_function(index),
+            name=emb_cfg["function"] + "_cutoff",
         )
 
 
