@@ -628,6 +628,51 @@ def _random_horn_ontology(rng, n_classes=4, props=("p", "r")):
     return classes, sorted(axioms, key=str)
 
 
+PROPERTY_TURTLE = {
+    "subp": ":{p} rdfs:subPropertyOf :{d} .",
+    "eqp": ":{p} owl:equivalentProperty :{d} .",
+    "inv": ":{p} owl:inverseOf :{d} .",
+    "dom": ":{p} rdfs:domain :{d} .",
+    "rng": ":{p} rdfs:range :{d} .",
+    "sym": ":{p} a owl:SymmetricProperty .",
+    "trans": ":{p} a owl:TransitiveProperty .",
+}
+
+
+def _random_property_axioms(rng, classes, props=("p", "r"), kinds=None):
+    """1 to 3 property axioms ``(kind, None, p, d)``, ``d`` a property or,
+    for ``dom`` and ``rng``, a class."""
+    axioms = set()
+    for _ in range(rng.randint(1, 3)):
+        kind = rng.choice(kinds or sorted(PROPERTY_TURTLE))
+        p, q = rng.sample(props, 2)
+        d = rng.choice(classes) if kind in ("dom", "rng") else q
+        axioms.add((kind, None, p, None if kind in ("sym", "trans") else d))
+    return axioms
+
+
+def _property_consequences(kind, p, d, facts):
+    """The facts a property axiom derives from the binary ``facts``."""
+    pairs = {f[1:] for f in facts if f[0] == p and len(f) == 3}
+    if kind == "subp":
+        return {(d, s, o) for s, o in pairs}
+    if kind == "eqp":
+        return {(d, s, o) for s, o in pairs} | {
+            (p,) + f[1:] for f in facts if f[0] == d and len(f) == 3
+        }
+    if kind == "inv":
+        return {(d, o, s) for s, o in pairs} | {
+            (p, f[2], f[1]) for f in facts if f[0] == d and len(f) == 3
+        }
+    if kind == "dom":
+        return {(d, s) for s, _ in pairs}
+    if kind == "rng":
+        return {(d, o) for _, o in pairs}
+    if kind == "sym":
+        return {(p, o, s) for s, o in pairs}
+    return {(p, s, u) for s, o in pairs for o2, u in pairs if o == o2}
+
+
 def _turtle(axioms):
     lines = [
         "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .",
@@ -635,6 +680,9 @@ def _turtle(axioms):
         "@prefix : <http://ex.org/> .",
     ]
     for kind, c, p, d in axioms:
+        if kind in PROPERTY_TURTLE:
+            lines.append(PROPERTY_TURTLE[kind].format(p=p, d=d))
+            continue
         if kind == "sub":
             sup = f":{d}"
         elif kind == "and":
@@ -661,6 +709,8 @@ def _certain_answers(axioms, facts, head, body, depth=6):
     while True:
         new = set()
         for kind, c, p, d in axioms:
+            if kind in PROPERTY_TURTLE:
+                new |= _property_consequences(kind, p, d, facts)
             for f in facts:
                 if f[0] != c:
                     continue
@@ -759,3 +809,83 @@ def test_has_value_binds_the_variable_in_all_the_query():
     assert not set(nl.execute_datalog_program(
         "ans(x) :- p(x, w), C0(w)"
     ))
+
+
+def _deans(axioms):
+    """(I) with the property ``axioms``, Juan a Dean, Ana head of Physics
+    and Physics head of Lab."""
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(DEAN_DEPT_UNIT + axioms), format="turtle"
+    )
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    nl.add_tuple_set([('Ana', 'Physics'), ('Physics', 'Lab')], name='headOf')
+    return nl
+
+
+def _answers(nl, query):
+    return {tuple(row) for row in nl.execute_datalog_program(query)}
+
+
+def test_sub_property_and_range_on_the_value_an_existential_introduces():
+    nl = _deans(":headOf rdfs:subPropertyOf :worksFor .\n"
+                ":worksFor rdfs:range :Org .")
+    assert _answers(nl, "ans(x) :- worksFor(x, y), Org(y)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+    assert _answers(nl, "ans(y) :- Org(y)") == {('Physics',), ('Lab',)}
+    assert _answers(nl, "ans(x, y) :- worksFor(x, y)") == {
+        ('Ana', 'Physics'), ('Physics', 'Lab')
+    }
+
+
+def test_domain_holds_of_a_named_value_through_an_unnamed_one():
+    """``headOf(x, y) → Manager(x)`` derives ``Manager('Juan')`` from the
+    unnamed department Juan heads: it rewrites ``Manager(x)`` although
+    ``x`` is in the head."""
+    nl = _deans(":headOf rdfs:domain :Manager .")
+    assert _answers(nl, "ans(x) :- Manager(x)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+
+
+def test_inverse_and_symmetric_properties_on_an_unnamed_value():
+    nl = _deans(":headedBy owl:inverseOf :headOf ; rdfs:range :Boss .")
+    assert _answers(nl, "ans(x) :- headedBy(y, x)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+    assert _answers(nl, "ans(x) :- Boss(x)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+    assert _answers(nl, "ans(x, y) :- headedBy(x, y)") == {
+        ('Physics', 'Ana'), ('Lab', 'Physics')
+    }
+    nl = _deans(":headOf a owl:SymmetricProperty ; rdfs:range :R .")
+    assert _answers(nl, "ans(x) :- headOf(y, x)") == {
+        ('Ana',), ('Juan',), ('Physics',), ('Lab',)
+    }
+    assert _answers(nl, "ans(x) :- R(x)") == {
+        ('Ana',), ('Juan',), ('Physics',), ('Lab',)
+    }
+    nl = _deans(":headOf owl:equivalentProperty :leads .")
+    assert _answers(nl, "ans(x) :- leads(x, y)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+
+
+def test_transitive_property_is_chased():
+    """Transitivity is a Datalog rule of the chase, never a rewriting
+    step, which would not end. It is not applied through unnamed values:
+    with symmetry, ``headOf('Juan', 'Juan')`` holds through Juan's unnamed
+    department, and is not found."""
+    nl = _deans(":headOf a owl:TransitiveProperty .")
+    assert _answers(nl, "ans(x, y) :- headOf(x, y)") == {
+        ('Ana', 'Physics'), ('Physics', 'Lab'), ('Ana', 'Lab')
+    }
+    assert _answers(nl, "ans(x) :- headOf(x, y)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+    nl = _deans(":headOf a owl:TransitiveProperty, owl:SymmetricProperty .")
+    assert _answers(nl, "ans(x) :- headOf(x, x)") == {
+        ('Ana',), ('Physics',), ('Lab',)
+    }

@@ -3,7 +3,7 @@ from nl_expr.expression_walker import (
     ReplaceSymbolWalker,
     add_match,
 )
-from nl_expr.expressions import Symbol
+from nl_expr.expressions import FunctionApplication, Symbol
 from nl_expr.logic import (
     Constant, Implication, NaryLogicOperator, Negation, Union
 )
@@ -102,6 +102,24 @@ def _existential_variables(sigma):
     return ExtractFreeVariablesRightImplicationWalker().walk(sigma)
 
 
+def _projects(sigma):
+    """Whether the body of ``sigma`` is one atom with a variable out of its
+    head, as ``p(x, y) → C(x)``: the head may hold of named values only
+    while the body holds of an unnamed one."""
+    return isinstance(sigma.antecedent, FunctionApplication) and bool(
+        set(sigma.antecedent.args) - set(sigma.consequent.args)
+    )
+
+
+def _chased_only(sigma):
+    """Whether the body of ``sigma`` has two atoms of its head's predicate,
+    as ``p(x, y) ∧ p(y, z) → p(x, z)``: a rewriting with it never ends."""
+    return sum(
+        atom.functor == sigma.consequent.functor
+        for atom in extract_logic_atoms(sigma.antecedent)
+    ) > 1
+
+
 class OntologyRewriter:
     """
     Rewrite ``query`` with ``union_of_constraints`` (Xrewrite).
@@ -109,7 +127,9 @@ class OntologyRewriter:
     With ``chased``, the constraints without existential variables hold
     on the named values, as the chase applied them as rules. They then
     rewrite only atoms with a variable not in the rule's head, the only
-    ones that can stand for a value an existential introduces.
+    ones that can stand for a value an existential introduces, unless
+    their body is one atom that can hold such a value while their head
+    does not (``_projects``). Transitivity is left to the chase.
     """
 
     def __init__(self, query, union_of_constraints, chased=False):
@@ -283,8 +303,10 @@ class OntologyRewriter:
     def _get_applicable(self, sigma, q):
         S = self._get_term(q.antecedent, sigma.consequent)
         if self.chased and not _existential_variables(sigma):
+            if _chased_only(sigma):
+                return []
             S = [
-                s for s in S if any(
+                s for s in S if _projects(sigma) or any(
                     isinstance(arg, Symbol)
                     and not self._is_distinguished(arg, q)
                     for arg in s.args
