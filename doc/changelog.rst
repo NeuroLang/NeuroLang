@@ -178,6 +178,12 @@ Unreleased
 
 **Bug fixes:**
 
+* The threshold sliders of the brain viewer sit over the values they set
+  on the histogram. In percentile mode a thumb was placed at its percentile
+  along the slider while the histogram's axis is the value, so for skewed
+  maps the low thumb could be far from its line (128 px of 360 at the 50th
+  percentile of cubed values); the thumbs are now placed by value, and the
+  histogram is inset by half a thumb so its ends meet the thumbs' travel.
 * Checking or running a query on an ontology's predicates, as
   ``ans(t) :- cogat_term(c, 'working memory'), ro:has_part(c, x),
   cogat_term(x, t)`` on the neurosynth engine, takes seconds: stratifying
