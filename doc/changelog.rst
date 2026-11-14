@@ -255,7 +255,11 @@ Unreleased
   predicate the IRI names, in heads and bodies.  ``load_ontology`` and the
   ``ontologies`` of ``engines.yaml`` take ``prefixes``, from prefix to
   namespace, and the ``neurosynth`` and ``neurostore`` engines name the
-  Cognitive Atlas's ``cogat:CAO_00587``, ``cogat:measures``.
+  Cognitive Atlas's ``cogat:CAO_00587``, ``cogat:measures``.  Their
+  ``cogat_subclass_of`` is now the closure of ``rdfs:subClassOf`` on
+  classes, whose values are IRIs, as ``rdfs:label``'s: that of
+  ``neurolang:subClassOf``, on the names of the classes, would join with
+  nothing, and gave the CogPO and SKOS classes by name.
 
 * The rewriting of a query over an ontology drops a rewriting as soon as
   one of its atoms, over a predicate without values, can never be

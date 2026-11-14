@@ -39,9 +39,10 @@ values.  The ones to know:
     (``'Digit_span_task-backward'``).
 ``skos:definition(class, text)``
     its definition.
-``neurolang:subClassOf(class, super_class)``
-    the class hierarchy.  ``rdfs:subClassOf`` also holds the axioms that
-    are not a class, such as the restrictions below.
+``rdfs:subClassOf(class, super_class)``
+    the class hierarchy, and the axioms that are not a class, such as the
+    restrictions below.  ``neurolang:subClassOf`` holds the hierarchy on
+    the names of the classes (``cogat:CAO_00587``), not on their IRIs.
 ``owl:onProperty(restriction, property)``, ``owl:someValuesFrom(restriction, class)``
     the existential restrictions.  A contrast that measures a concept is a
     subclass of the restriction ``measures some <concept>``.
@@ -49,7 +50,8 @@ values.  The ones to know:
 and, defined by the engine with rules over those:
 
 ``cogat_subclass_of(class, ancestor)``
-    the hierarchy at any depth: the closure of ``neurolang:subClassOf``.
+    the hierarchy at any depth: the closure of ``rdfs:subClassOf`` on
+    classes.
 ``cogat_measures(contrast, concept)``
     the contrasts (and tasks) that measure a concept.
 ``cogat_term(class, term)``
@@ -70,7 +72,7 @@ A concept is found by its label, and what is known of it by its IRI:
     ans(d) :- rdfs:label(c, 'Working memory'), skos:definition(c, d)
 
     ans(parent) :- rdfs:label(c, 'Working memory'),
-        neurolang:subClassOf(c, p), rdfs:label(p, parent)
+        rdfs:subClassOf(c, p), rdfs:label(p, parent)
 
 The first returns the definition of *working memory*, "active maintenance and
 flexible updating of goal-task relevant information…", the second its parent,

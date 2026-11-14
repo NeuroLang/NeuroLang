@@ -168,9 +168,9 @@ that page then run on any frontend:
         prefixes={"cogat": "http://www.cognitiveatlas.org/ontology/cogat.owl#"},
     )
     nl.execute_datalog_program("""
-        cogat_subclass_of(x, y) :- neurolang:subClassOf(x, y)
+        cogat_subclass_of(x, y) :- rdfs:subClassOf(x, y)
         cogat_subclass_of(x, z) :-
-            cogat_subclass_of(x, y), neurolang:subClassOf(y, z)
+            cogat_subclass_of(x, y), rdfs:subClassOf(y, z)
     """)
     below = nl.execute_datalog_program(
         "ans(l) :- rdfs:label(c, 'Working memory'),"
