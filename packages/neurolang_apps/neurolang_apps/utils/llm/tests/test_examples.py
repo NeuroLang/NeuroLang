@@ -58,12 +58,12 @@ def test_banks_load(engine):
 
 def test_banks_are_inherited():
     # Both engines extend coordinate_meta_analysis and share its bank;
-    # neurostore adds examples of its own after it.
+    # each adds examples of its own after it.
     shared = load_examples("coordinate_meta_analysis")
-    assert load_examples("neurosynth") == shared
-    neurostore = load_examples("neurostore")
-    assert neurostore[:len(shared)] == shared
-    assert len(neurostore) > len(shared)
+    for engine in BANK_ENGINES:
+        examples = load_examples(engine)
+        assert examples[:len(shared)] == shared
+        assert len(examples) > len(shared)
 
 
 def test_engines_without_bank():

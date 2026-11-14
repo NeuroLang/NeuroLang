@@ -99,7 +99,10 @@ and text-to-SPARQL systems.
     (see :ref:`neurolang-engine-registry`).
     An engine inherits the banks of the engines it ``extends``: the
     ``neurosynth`` and ``neurostore`` engines share that of
-    ``coordinate_meta_analysis``, and ``neurostore/examples.yaml`` adds
+    ``coordinate_meta_analysis``; ``neurosynth/examples.yaml`` adds 631
+    questions whose queries were written by Sonnet 5.5, kept when
+    DeepSeek returned the same rows or a judge accepted them, and checked
+    on the engine; ``neurostore/examples.yaml`` adds
     questions on its concepts, domains and abstracts. The guidance of the
     prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
 
