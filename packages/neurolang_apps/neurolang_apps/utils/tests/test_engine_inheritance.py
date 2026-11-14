@@ -232,6 +232,16 @@ def test_the_engines_acknowledge_the_hcp_and_their_atlases():
 
 
 @pytest.mark.parametrize("engine", list_engine_names())
+def test_every_engine_names_the_sources_of_its_data(engine):
+    """.credits and the REPL's credits page have something to say of every
+    engine: the template, atlases and databases it loads."""
+    from neurolang_apps.utils.engine_registry import get_acknowledgements
+
+    texts = get_acknowledgements(engine)
+    assert texts and len(texts) == len(set(texts))
+
+
+@pytest.mark.parametrize("engine", list_engine_names())
 def test_the_questions_shown_are_those_of_the_assistant(engine):
     """The questions the REPL lists first are in the assistant's bank,
     whose queries the tests check on the engines."""

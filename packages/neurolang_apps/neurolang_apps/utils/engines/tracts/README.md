@@ -168,7 +168,7 @@ others keep their positions in the file as ids `s`.
   ICBM 2009a. Licence **CC BY 4.0**; cite Garyfallidis et al.,
   "Recognition of white matter bundles using local and global
   streamline-based registration and clustering", *NeuroImage*
-  170:283-297 (2017), and Yeh et al. 2018.
+  170:283-295 (2018), and Yeh et al. 2018.
 * **`hcp1065`**: the HCP1065 atlas, Yeh, "Population-based tract-to-region
   connectome of the human brain and its hierarchical topology", *Nat
   Commun* 13:4933 (2022), from its
