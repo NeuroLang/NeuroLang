@@ -228,6 +228,14 @@ Unreleased
   ``p(x, y) :- rr(x, y)`` and ``rr(x, y) :- p(x, y)``, ``p`` lacked the
   first tuple of ``rr``.  In the first iteration a recursive atom now sees
   its whole relation.
+* An engine extending another with the same ``text_embeddings`` entry
+  (``neurosynth_iit``, ``neurostore_iit``, the ``_tracts`` ones) shares its
+  caches (document embeddings, PubMed texts, model copies) in the
+  ``embeddings`` directory of the most basic such engine
+  (``engine_registry.embeddings_owner``), instead of embedding all the
+  abstracts again under its own name, which took hours on NeuroStore.  An
+  engine whose documents differ from the shared embeddings, or whose own
+  directory alone has them, keeps its own.
 * Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
   taken for an aggregation, the operator applied to each group's values,
   and gave rows of missing values or failed in pandas; it is now refused
@@ -254,6 +262,12 @@ Unreleased
 * A disjunction of functions whose variables a positive atom outside it
   binds, as in ``ans(l) :- tian(l, r), (startswith('aHIP', l) |
   startswith('pHIP', l))``, runs: it failed with ``UnboundVariablesError``.
+* A probabilistic rule over another whose head repeats a variable, as
+  ``b(c, s) :- a(c, s), roi(s)`` with ``a(s, s) :- term(s),
+  selected_study(s)``, keeps all its body: the rule's variables were not
+  renamed apart from the query's when its head was unified, and ``roi(s)``
+  was dropped (the probability, and the replicates of ``RESAMPLE``, were
+  those of ``term`` alone).
 
 **Bug fixes:**
 

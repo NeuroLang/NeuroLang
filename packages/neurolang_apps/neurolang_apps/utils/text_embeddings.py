@@ -689,10 +689,10 @@ class EmbeddingIndex:
             _ensure(self.cache_path)
         if self.cache_path is None or not self.cache_path.exists():
             return None
+        if cached_key(self.cache_path) != self.cache_key:
+            LOG.info("Embedding cache %s is stale", self.cache_path)
+            return None
         with np.load(self.cache_path) as data:
-            if str(data["key"]) != self.cache_key:
-                LOG.info("Embedding cache %s is stale", self.cache_path)
-                return None
             return data["matrix"]
 
     def _write_cache(self):
@@ -725,6 +725,12 @@ class EmbeddingIndex:
         # cached value cannot be modified by a caller.
         scores = self.scores(query).tolist()
         return MappingProxyType(dict(zip(self.ids, scores)))
+
+
+def cached_key(path):
+    """The :attr:`EmbeddingIndex.cache_key` of the embeddings in *path*."""
+    with np.load(path) as data:
+        return str(data["key"])
 
 
 def _normalise(matrix):

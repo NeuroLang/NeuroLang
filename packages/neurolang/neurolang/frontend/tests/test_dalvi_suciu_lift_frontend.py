@@ -117,6 +117,45 @@ def test_union_with_a_choice_on_a_free_and_on_a_bound_variable(solvers):
     assert dict(result) == pytest.approx({1: 0.5, 2: 0.25, 3: 0.5, 4: 0.25})
 
 
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("rules, expected", [
+    # Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b)]
+    (
+        "h() :- C(x, y), R(x)\nh() :- C(y, x), T(x)",
+        0.5 * 0.4 + 0.3 * (1 - 0.3 * 0.4) + 0.2 * (1 - 0.6 * 0.4),
+    ),
+    # Σ_(a, b) P[C(a, b)] P[R(a) ∨ T(b) ∨ U(b)]
+    (
+        "h() :- C(x, y), R(x)\nh() :- C(y, x), T(x)\nh() :- C(x, y), U(y)",
+        0.5 * (1 - 0.6 * 0.9) + 0.3 * (1 - 0.3 * 0.4 * 0.5)
+        + 0.2 * (1 - 0.6 * 0.4 * 0.5),
+    ),
+])
+def test_union_with_the_arguments_of_a_choice_permuted(
+    solvers, rules, expected
+):
+    """
+    The second rule has the choice atom C(y, x): renamed, the rest of the
+    tuple (a, b) is R(a) ∨ T(b), whose disjuncts have different columns,
+    lifted joined with the tuples of C.
+    """
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    nl.add_probabilistic_choice_from_tuples(
+        [(0.5, "a", "b"), (0.3, "b", "a"), (0.2, "a", "a")], name="C"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.4, "a"), (0.7, "b")], name="R"
+    )
+    nl.add_probabilistic_facts_from_tuples([(0.6, "a")], name="T")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.1, "b")], name="U"
+    )
+    result = nl.execute_datalog_program(rules + "\nans(PROB) :- h()")
+    assert [p for p, in result] == [pytest.approx(expected)]
+
+
 def _choice_union_engine():
     from .. import NeurolangPDL
 
@@ -798,6 +837,55 @@ def test_order_across_atoms_and_at_least_two_formulas(
         assert result == {}
     else:
         assert result == {(): pytest.approx(expected)}
+
+
+AT_LEAST_THREE = "R(x), R(y), R(z), (x != y), (y != z), (x != z)"
+
+
+@pytest.mark.parametrize("solvers", [{}, LIFTED_ONLY])
+@pytest.mark.parametrize("query, facts, expected", [
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2 + .5 * .4 * .3 * .8 + .5 * .4 * .7 * .2 +
+         .5 * .6 * .3 * .2 + .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(PROB) :- R(x), R(y), R(z), (x < y), (y < z), (x != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3)]),
+        {(): .5 * .4 * .3}
+    ),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1), (.4, 2)]), {}),
+    (f"q(PROB) :- {AT_LEAST_THREE}", dict(R=[(.5, 1)]), {}),
+    (
+        f"q(PROB) :- {AT_LEAST_THREE}, R(u), "
+        "(u != x), (u != y), (u != z)",
+        dict(R=[(.5, 1), (.4, 2), (.3, 3), (.2, 4)]),
+        {(): .5 * .4 * .3 * .2}
+    ),
+    (
+        "q(t, PROB) :- S(t, x), S(t, y), S(t, z), "
+        "(x != y), (y != z), (x != z)",
+        dict(S=[
+            (.5, 0, 1), (.4, 0, 2), (.3, 0, 3), (.9, 1, 1), (.8, 1, 2),
+            (.7, 2, 1)
+        ]),
+        {(0,): .5 * .4 * .3}
+    ),
+])
+def test_at_least_k(query, facts, expected, solvers):
+    """
+    At least three, or four, values of R: the sum, on the worlds with
+    that many tuples or more, of their probabilities; per answer t for
+    S(t, x). Without enough tuples, there is no answer.
+    """
+    result = _solve_random(query, 0, solvers, facts)
+    assert result == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("query", [

@@ -1,7 +1,8 @@
 import logging
 import operator
 from functools import reduce
-from itertools import chain, combinations, product
+from itertools import chain, combinations, permutations, product
+from math import factorial
 from typing import AbstractSet
 
 import numpy as np
@@ -156,6 +157,11 @@ MQU = MoveQuantifiersUp()
 PQD = PushQuantifiersDown()
 RTO = RemoveTrivialOperations()
 RUP = RemoveUniversalPredicates()
+
+
+# The greatest number of values `k` of `_at_least_plan`, whose plan,
+# for a relation of `n` tuples, takes `O(n^k)` time.
+MAX_AT_LEAST = 4
 
 
 # For an order comparison, the comparison `w ⊲ v` of `_extremum_conjunct`
@@ -674,26 +680,40 @@ def projection_plan(rule, symbol_table):
     if plan is None:
         plan = _separator_projection_plan(rule, symbol_table)
     if plan is None:
-        plan = _at_least_two_plan(rule, symbol_table)
+        plan = _at_least_plan(rule, symbol_table)
     return plan
 
 
-def _at_least_two_plan(rule, symbol_table):
-    """Plan for `∃x ∃y (R(ū) ∧ R(ū[y/x]) ∧ x ≠ y)`, `x` being the only
-    quantified variable of `R(ū)`, or with `x < y` or `x > y`, equivalent
-    by the symmetry in `x` and `y`: there are two values of `x` for which
-    `R(ū)` holds, the complement, within `∃x R(ū)`, of there being one,
-    `∃x (R(ū) ∧ ¬∃w (R(ū[w/x]) ∧ w ≠ x))`, whose plan is subtracted."""
+def _at_least_plan(rule, symbol_table):
+    """Plan for `∃x_1 … ∃x_k (R(ū[x_1/x]) ∧ … ∧ R(ū[x_k/x]) ∧ c)`,
+    `x` being the only quantified variable of `R(ū)` and `c` one strict
+    comparison of each pair of variables, satisfied by some order of
+    them, for `2 ≤ k ≤ MAX_AT_LEAST`: there are `k` values of `x` for
+    which `R(ū)` holds, the complement, within there being `k - 1`, the
+    same query with `k - 1` copies and pairwise `≠`, of there being
+    exactly `k - 1`. The latter is `1 / (k - 1)!` of the sum, on the
+    values of `x_1, …, x_{k-1}`, of the probabilities of
+    `R(ū[x_1/x]) ∧ … ∧ x_i ≠ x_j ∧ … ∧ ¬∃w (R(ū[w/x]) ∧ w ≠ x_1 ∧ … ∧
+    w ≠ x_{k-1})`, which holds, in a world of exactly `k - 1` values, for
+    their `(k - 1)!` orders, and in no other world."""
     variables, body = _existential_variables_and_body(rule.antecedent, True)
     conjuncts = extract_conjuncts(body)
     comparisons = [f for f in conjuncts if is_comparison(f)]
+    xs = sorted(variables, key=lambda v: v.name)
     if not (
-        len(conjuncts) == 3 and len(comparisons) == 1 and
-        comparisons[0].functor.value in STRICT_COMPARISONS and
-        set(comparisons[0].args) == variables and len(variables) == 2
+        2 <= len(xs) <= MAX_AT_LEAST and
+        len(conjuncts) == len(xs) + len(comparisons) and
+        Counter(frozenset(c.args) for c in comparisons) ==
+        Counter(map(frozenset, combinations(xs, 2))) and
+        all(c.functor.value in STRICT_COMPARISONS for c in comparisons) and
+        any(
+            all(c.functor.value(*map(order.index, c.args))
+                for c in comparisons)
+            for order in permutations(xs)
+        )
     ):
         return None
-    x, y = comparisons[0].args
+    x, *ys = xs
     atom = next(
         (f for f in conjuncts if x in extract_logic_free_variables(f) and
          f not in comparisons), None
@@ -702,25 +722,34 @@ def _at_least_two_plan(rule, symbol_table):
         isinstance(atom, FunctionApplication) and
         isinstance(atom.functor, Symbol) and
         variables & set(atom.args) == {x} and
-        ReplaceExpressionWalker({x: y}).walk(atom) in conjuncts
+        all(ReplaceExpressionWalker({x: y}).walk(atom) in conjuncts
+            for y in ys)
     ):
         return None
+    xs = xs[:-1]
+    fewer = Conjunction(
+        tuple(ReplaceExpressionWalker({x: y}).walk(atom) for y in xs) +
+        tuple(NE(*p) for p in combinations(xs, 2))
+    )
     w = Symbol.fresh()
-    plans = _lift_pure(
-        (
-            Implication(rule.consequent, ExistentialPredicate(x, atom)),
-            Implication(rule.consequent, ExistentialPredicate(x, Conjunction((
-                atom,
-                Negation(ExistentialPredicate(w, Conjunction((
-                    ReplaceExpressionWalker({x: w}).walk(atom), NE(w, x)
-                ))))
-            )))),
-        ),
+    exactly = Conjunction(fewer.formulas + (
+        Negation(ExistentialPredicate(w, Conjunction(
+            (ReplaceExpressionWalker({x: w}).walk(atom),) +
+            tuple(NE(w, y) for y in xs)
+        ))),
+    ))
+    plans = _lift_pure((Implication(rule.consequent, add_existentials_except(
+        fewer, extract_logic_free_variables(fewer) - set(xs)
+    )),), symbol_table)
+    exactly_plan = _projected_plan(
+        rule.antecedent, exactly, set(xs), set(), rap.DisjointProjection,
         symbol_table
     )
-    if plans is None:
+    if plans is None or exactly_plan is None:
         return None
-    return rap.Subtraction(*plans)
+    return rap.Subtraction(plans[0], rap.WeightedNaturalJoin(
+        (exactly_plan,), (Constant[float](1 / factorial(len(xs))),)
+    ))
 
 
 def _projection_applies(antecedent, symbol_table):
@@ -1989,8 +2018,10 @@ def disjoint_separator(query, symbol_table):
     P[C(\\bar a)]\\,[D(\\bar a)]`, planned as the choice joined with the
     support of the deterministic union, whatever the number of
     disjuncts; otherwise the union is lifted for every :math:`\\bar a` by
-    the other rules. A conjunctive query is the union of a single
-    disjunct.
+    the other rules, or, if they decline it and the rest has no other
+    atom of the choices, as the choice atoms joined with the rest, in
+    which they are replaced by the deterministic relations of their
+    tuples. A conjunctive query is the union of a single disjunct.
 
     The rule declines a union with a disjunct without a free variable of
     the query, true for every value of it, which a plan cannot give. Its
@@ -2111,6 +2142,31 @@ def disjoint_separator(query, symbol_table):
         RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
     plan = dalvi_suciu_lift(body, symbol_table)
+    tuples = {atom.functor: _tuples_of(atom, symbol_table)
+              for atom in choice_atoms}
+    if not is_pure_lifted_plan(plan) and not any(
+        atom.functor in tuples for atom in remainder_atoms
+    ) and None not in tuples.values():
+        # The rest is independent of the choices: P[C(a) and R(a)] =
+        # P[C(a)] P[D_C(a) and R(a)], D_C the tuples of C, which give the
+        # rest of every disjunct the variables of C.
+        padding = {}
+        for atom in choice_atoms:
+            columns = [Symbol.fresh() for _ in atom.args]
+            relation, padding[atom.functor] = Symbol.fresh(), Symbol.fresh()
+            symbol_table[relation] = materialised_relation(
+                atom.functor(*columns), columns, tuples
+            )
+            symbol_table[padding[atom.functor]] = DeterministicFactSet(
+                relation
+            )
+        plan = reduce(
+            rap.NaturalJoin,
+            (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            dalvi_suciu_lift(
+                ReplaceExpressionWalker(padding).walk(body), symbol_table
+            ),
+        )
     return True, rap.DisjointProjection(plan, attributes)
 
 

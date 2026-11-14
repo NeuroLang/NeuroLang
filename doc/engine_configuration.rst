@@ -359,7 +359,14 @@ the studies*)::
 ``model``, ``document_adapter`` and ``query_adapter`` default to the values
 above.  The engine build only reads the ids.  Texts are fetched and
 embedded on the first query that uses the function, and cached under
-``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
+``{data_dir}/{engine}/embeddings/``.  An engine whose entry is that of an
+engine it extends shares its caches: ``{engine}`` is the most basic
+non-abstract engine of its ``extends`` chain with the same resolved entry
+(``neurosynth`` for ``neurosynth_iit``, ``neurostore`` for
+``neurostore_iit``; see ``engine_registry.embeddings_owner``).  The engine
+keeps embeddings in its own directory when the shared ones are of other
+documents (its study set differs), or when only its own directory has
+them.  The embeddings can be computed ahead
 of time with ``python -m neurolang.utils.text_embeddings --engine
 neurosynth --data-dir neurolang_data``.
 
