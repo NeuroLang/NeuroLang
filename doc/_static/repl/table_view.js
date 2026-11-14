@@ -5,6 +5,7 @@ import { SETTINGS } from "./settings.js";
 import { TableModel, cellText } from "./table_model.js";
 import { citation, doiUrl, pmcUrl, pubmedUrl, studyColumns } from "./study_links.js";
 import { plotView } from "./plot_view.js";
+import { answerLabel, tabAfter } from "./tabs.js";
 
 const PAGE_SIZES = SETTINGS.table.page_sizes;
 const NUMERIC = new Set(["int", "float"]);
@@ -238,4 +239,44 @@ export function renderTable(payload, { download = null, followUps = null, use = 
 
   render();
   return root;
+}
+
+// The tables of a program with several queries (ans[name]), a tab each:
+// *render*(payload) makes the table of one. The first is shown; the arrow
+// keys move between the tabs, as between those of the results.
+export function answerTabs(payloads, render) {
+  const list = element("div", { className: "answer-tabs" });
+  list.setAttribute("role", "tablist");
+  list.setAttribute("aria-label", "Answers");
+  const tabs = [];
+  const panels = payloads.map((payload, index) => {
+    const id = `answer-${index}`;
+    const tab = element("button", { type: "button", id: `${id}-tab`, textContent: answerLabel(payload, index) });
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", id);
+    tab.addEventListener("click", () => select(index));
+    tabs.push(tab);
+    const panel = element("div", { id, className: "answer" }, render(payload));
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", tab.id);
+    return panel;
+  });
+  function select(index) {
+    tabs.forEach((tab, i) => {
+      tab.setAttribute("aria-selected", String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
+      panels[i].hidden = i !== index;
+    });
+  }
+  list.append(...tabs);
+  list.addEventListener("keydown", (event) => {
+    const current = tabs.findIndex((tab) => tab.tabIndex === 0);
+    const next = tabAfter(tabs.map((_, i) => i), current, event.key);
+    if (next === null) return;
+    event.preventDefault();
+    select(next);
+    tabs[next].focus();
+  });
+  select(0);
+  return element("div", { className: "answers" }, list, ...panels);
 }

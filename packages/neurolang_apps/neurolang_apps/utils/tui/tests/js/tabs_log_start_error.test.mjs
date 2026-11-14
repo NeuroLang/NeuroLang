@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { tabAfter } from "../../../../../../../doc/_static/repl/tabs.js";
+import { answerLabel, tabAfter } from "../../../../../../../doc/_static/repl/tabs.js";
 import { logSummary } from "../../../../../../../doc/_static/repl/log_view.js";
 import { explainStartError } from "../../../../../../../doc/_static/repl/start_error.js";
 
@@ -13,6 +13,12 @@ test("the arrow keys move between the shown tabs, round", () => {
   assert.equal(tabAfter(tabs, "table", "End"), "brain");
   assert.equal(tabAfter(tabs, "table", "a"), null);
   assert.equal(tabAfter(["table"], "table", "ArrowRight"), "table");
+});
+
+test("an answer's tab is its query's name and its number of rows", () => {
+  assert.equal(answerLabel({ title: "terms", total: 12 }, 0), "terms · 12");
+  assert.equal(answerLabel({ title: "regions_front", total: 1 }, 1), "regions_front · 1");
+  assert.equal(answerLabel({ title: "", total: 0 }, 2), "Answer 3 · 0");
 });
 
 test("a folded log is its last line", () => {

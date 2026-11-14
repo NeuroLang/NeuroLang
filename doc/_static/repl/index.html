@@ -324,6 +324,11 @@
   #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
   #results:not([data-tab=table]) #table, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
   #table { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+  /* the answers of a program with several queries (ans[name]), a tab each */
+  .answer-tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .6rem; }
+  .answer-tabs button { min-height: 2rem; background: none; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: .2rem .8rem; font-size: .8125rem; font-weight: 500; }
+  .answer-tabs button:hover { color: var(--text); background: var(--sunken); }
+  .answer-tabs button[aria-selected=true] { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
   #graph > .note { margin-bottom: .5rem; font-size: .8125rem; }
   iframe { display: block; width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); } /* 34rem until the page in it says how tall it is */
   .brain-bar { margin-bottom: .6rem; }

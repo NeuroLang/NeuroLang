@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+* The page of the REPL shows the answers of a program with several queries
+  (``ans[name]``) in a tab each, named after its query, with its number of
+  rows.  ``.view`` (and the brain tab) draws all those it can and leaves
+  out, telling why, those with nothing to draw, such as a table of terms
+  and Bayes factors beside the regions of the same program: it failed as a
+  whole.
 * Ontologies: the constraints without existential variables (subclass,
   ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
   Datalog rules; XRewrite rewrites the query with the existential ones, the
