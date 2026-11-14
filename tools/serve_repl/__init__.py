@@ -261,12 +261,6 @@ def bundle_engines() -> tuple:
     return bundle_script().ENGINES
 
 
-def local_engines() -> tuple:
-    """Return the engines a server offers with --local: those of the
-    bundle, and those too large for a browser tab."""
-    return bundle_script().LOCAL_ENGINES
-
-
 def built_engines(repl: Path) -> set:
     """Return the engines of the bundle in *repl* (none if it is not there)."""
     try:
@@ -404,14 +398,16 @@ def prepare_local_site(site: Path, engines=None, users=False) -> Path:
     account page it links), and return the path of the page.
     """
     script = bundle_script()
-    engines = list(engines or script.LOCAL_ENGINES)
+    engines = list(engines or script.ENGINES)
     # The engine the page starts with: that of the bundle's, if offered.
     default = getattr(script, "DEFAULT_ENGINE", engines[0])
     page = copy_page(site)
     (page.parent / "bundle.json").write_text(json.dumps({
         "backend": "local",
         "engines": {
-            name: {"label": script.LABELS.get(name, name)}
+            name: {"label": script.LABELS.get(name, name),
+                   # what the page's credits list (credits.html)
+                   "acknowledgements": script.acknowledgements(name)}
             for name in engines
         },
         "default": default if default in engines else engines[0],
@@ -2776,10 +2772,9 @@ def parse_args(argv=None):
         "for the next build (default: %(default)s)",
     )
     parser.add_argument(
-        "--engine", action="append", choices=local_engines(), dest="engines",
-        help="an engine to put in the bundle, or with --local to offer "
-        "(repeat for several; default: all of them; those of 7 T tracts "
-        "with --local only)",
+        "--engine", action="append", choices=bundle_engines(), dest="engines",
+        help="an engine to put in the bundle (repeat for several; default: "
+        "all of them)",
     )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
@@ -3028,10 +3023,6 @@ def parse_args(argv=None):
     if (args.pr or args.run_id) and (args.rebuild or args.clear):
         parser.error("--pr and --run-id build nothing: no --rebuild nor "
                      "--clear")
-    if not args.local and not set(args.engines or ()) <= set(
-            bundle_engines()):
-        parser.error("the engines of 7 T tracts are too large for the "
-                     "page's bundle: --local only")
     if args.local and (args.pr or args.run_id or args.rebuild
                        or args.clear):
         parser.error("--local builds no bundle: no --pr, --run-id, "
@@ -3289,7 +3280,7 @@ def main(argv=None) -> None:
         if args.prepare:
             prepare_engines(
                 args.data_dir.resolve(),
-                list(args.engines or local_engines()),
+                list(args.engines or bundle_engines()),
                 args.resolution, args.light,
                 embeddings=args.preload_embeddings,
             )
