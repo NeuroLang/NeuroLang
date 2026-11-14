@@ -141,6 +141,13 @@ def _get_program_deterministic_symbols(program):
         det_symbs |= set(
             rule.functor for rule in program.existential_rules.keys()
         )
+        # A predicate only in constraint bodies is an empty relation.
+        det_symbs |= set(
+            atom.functor
+            for formula in program.constraints().formulas
+            for atom in extract_logic_atoms(formula.antecedent)
+            if atom.functor not in program.symbol_table
+        )
     return det_symbs
 
 

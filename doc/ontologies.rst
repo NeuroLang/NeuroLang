@@ -148,6 +148,9 @@ An ontology is read under the open-world assumption: the facts are a part of
 the world, and the constraints say what else the world must contain.  The
 answers a query owes are its *certain answers*, the tuples of named values
 true in every world that contains the facts and satisfies the constraints.
+A predicate of the ontology's signature of which no tuple is entailed, as
+one only in the bodies of constraints and without facts or rules, has the
+empty relation as its certain answers.
 
 The *chase* computes them [Fagin2005]_.  It applies each constraint whose
 body holds and whose head does not, and stands an unnamed value, a labelled

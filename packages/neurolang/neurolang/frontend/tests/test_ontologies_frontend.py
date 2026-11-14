@@ -651,14 +651,10 @@ def _random_property_axioms(rng, classes, props=("p", "r"), kinds=None):
     return axioms
 
 
-def _derived_predicates(axioms):
-    """The predicates the ``axioms`` derive."""
-    return {
-        q for k, _, p, d in axioms for q in (
-            (d,) if k in ("sub", "all", "subp", "dom", "rng") else
-            (p,) if k in ("sym", "trans") else
-            (p, "r", d) if k == "and" else (p, d)
-        )
+def _signature(axioms):
+    """The predicates of the ``axioms``, some with no entailed tuple."""
+    return {q for _, c, p, d in axioms for q in (c, p, d) if q} | {
+        "r" for k, *_ in axioms if k == "and"
     }
 
 
@@ -774,11 +770,7 @@ def test_certain_answers_on_random_horn_ontologies():
                  for _ in range(rng.randint(1, 3))}
         facts |= {(rng.choice(("p", "r")),) + tuple(rng.sample(constants, 2))
                   for _ in range(rng.randint(0, 3))}
-        # The predicates with facts or derived by a constraint.
-        predicates = {f[0] for f in facts} | {
-            q for k, _, p, d in axioms
-            for q in ((d,) if k in ("sub", "all") else (p, d))
-        } | {"r" for k, *_ in axioms if k == "and"}
+        predicates = {f[0] for f in facts} | _signature(axioms)
         nl = NeurolangPDL()
         nl.load_ontology(io.StringIO(_turtle(axioms)), format="turtle")
         for name in {f[0] for f in facts}:
@@ -817,7 +809,7 @@ def test_certain_answers_with_property_axioms():
                  for _ in range(rng.randint(1, 3))}
         facts |= {(rng.choice(("p", "r")),) + tuple(rng.sample(constants, 2))
                   for _ in range(rng.randint(0, 3))}
-        predicates = {f[0] for f in facts} | _derived_predicates(axioms)
+        predicates = {f[0] for f in facts} | _signature(axioms)
         nl = NeurolangPDL()
         nl.load_ontology(io.StringIO(_turtle(axioms)), format="turtle")
         for name in {f[0] for f in facts}:
@@ -878,6 +870,28 @@ def _deans(axioms):
 
 def _answers(nl, query):
     return {tuple(row) for row in nl.execute_datalog_program(query)}
+
+
+def test_predicate_only_in_constraint_bodies_answers_empty():
+    """``Dean`` and ``leads`` are in the signature but nothing entails a
+    tuple of theirs: their certain answers are empty. ``headOf``, derived
+    from ``leads``, has its answers once ``leads`` has facts."""
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(
+        DEAN_DEPT_UNIT + ":leads rdfs:subPropertyOf :headOf ."
+    ), format="turtle")
+    nl.add_tuple_set([('Ana', 'Physics')], name='headOf')
+    assert _answers(nl, "ans(x) :- Dean(x)") == set()
+    assert _answers(nl, "ans(x, y) :- leads(x, y), headOf(x, y)") == set()
+    assert _answers(nl, "ans(x) :- headOf(x, y)") == {('Ana',)}
+    nl.execute_datalog_program("lead(x) :- leads(x, y)")
+    assert 'lead' not in nl.solve_all()
+    nl.add_tuple_set([('Eva', 'Lab')], name='leads')
+    nl.add_tuple_set([('Juan',)], name='Dean')
+    assert _answers(nl, "ans(x) :- leads(x, y)") == {('Eva',)}
+    assert _answers(nl, "ans(x) :- headOf(x, y)") == {
+        ('Ana',), ('Eva',), ('Juan',)
+    }
 
 
 def test_sub_property_and_range_on_the_value_an_existential_introduces():

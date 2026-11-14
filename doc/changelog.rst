@@ -27,7 +27,8 @@ Unreleased
   ``Manager('Juan')`` holds when Juan heads an unnamed department of a
   ``headOf`` whose domain is ``Manager``.  Transitivity is never a rewriting
   step; its answers through unnamed values are outside the completeness
-  guarantee of :doc:`ontologies`.
+  guarantee of :doc:`ontologies`.  A predicate only in the bodies of
+  constraints, with no facts or rules, answers the empty relation.
 * Ontologies: the constraints without existential variables (subclass,
   ``allValuesFrom``, ``hasValue``, annotations) are applied by the chase, as
   Datalog rules; XRewrite rewrites the query with the existential ones, the
