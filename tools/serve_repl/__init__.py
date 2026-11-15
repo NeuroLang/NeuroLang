@@ -131,8 +131,24 @@ paths made absolute; the other variables of this shell (API keys...) it
 does not get. The service installed before is removed by ``reinstall``
 only once the new one's bundle is built and its Python can serve; if the
 service manager fails, the service is removed and the error told.
-``remove`` needs no other option. A port below 1024 needs a service of the
-system, which this does not install.
+``remove`` needs no other option.
+
+A port below 1024 (443) needs a service of the system. As root on Linux,
+``--service-user USER`` installs one (``/etc/systemd/system/``), running as
+USER rather than root: it may bind the port (``CAP_NET_BIND_SERVICE``) and
+gains no other privilege, nor do the sessions it forks, so that a statement
+escaping its confinement has USER's rights, not root's::
+
+    sudo -H XDG_RUNTIME_DIR=/run/user/0 .venv/bin/python -m serve_repl \\
+        --daemon reinstall --config server.yaml --service-user neurolang
+
+``reinstall`` removes the service of root's user manager too, if there is
+one (its ``XDG_RUNTIME_DIR`` lets it stop it). USER must be able to run the
+Python of the service, read the server's files (the configuration, the
+certificate and its key, the secrets, the users) and write in its folders
+(that of the users file, of the databases, the uploads, the data): the
+install checks it, as USER, and tells what is lacking. Its *Update and
+restart* then runs git and uv as USER, who should own the checkout.
 
 A connection that says nothing for a minute (its TLS handshake, its request)
 is closed, and the body of a request to ``/api/`` is a JSON object of 1 MB at
@@ -2777,13 +2793,17 @@ def default_assistant(quiet: bool = False) -> str:
 
 
 # The service running the server, of this user: a unit of systemd's user
-# manager, or a launchd agent on macOS.
+# manager, or a launchd agent on macOS; or, run as another user
+# (--service-user), a unit of the system.
 SERVICE = "neurolang-repl"
 LAUNCHD_LABEL = "org.neurolang.repl"
+SYSTEM_UNITS = Path("/etc/systemd/system")
 
 
-def service_file() -> Path:
-    """Return the file of the service of this user."""
+def service_file(system: bool = False) -> Path:
+    """Return the file of the service of this user, or of the *system*."""
+    if system:
+        return SYSTEM_UNITS / f"{SERVICE}.service"
     if sys.platform == "darwin":
         return (Path.home() / "Library" / "LaunchAgents"
                 / f"{LAUNCHD_LABEL}.plist")
@@ -2887,26 +2907,36 @@ def systemd_quote(word: str, dollar: str = "$$") -> str:
     return f'"{word}"'
 
 
-def systemd_unit(command: list, directory: Path) -> str:
-    """Return the systemd unit running *command* in *directory*."""
+def systemd_unit(command: list, directory: Path, user: str = None) -> str:
+    """Return the systemd unit running *command* in *directory*: of the
+    user manager, or, as *user*, of the system, which may bind a port
+    below 1024 (443) and nothing more of root's."""
     run = " ".join(map(systemd_quote, command))
     environment = "".join(
         f"Environment={systemd_quote(f'{name}={value}', '$')}\n"
         for name, value in service_environment(command[0]).items()
     )
     directory = str(directory).replace("%", "%%")
+    as_user = (
+        f"User={user}\n"
+        "AmbientCapabilities=CAP_NET_BIND_SERVICE\n"
+        "CapabilityBoundingSet=CAP_NET_BIND_SERVICE\n"
+        "NoNewPrivileges=yes\n"
+    ) if user else ""
     return (
         "[Unit]\n"
         "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
+        f"{'Wants=network-online.target' + chr(10) if user else ''}"
         "After=network-online.target\n\n"
         "[Service]\n"
         f"ExecStart={run}\n"
         f"WorkingDirectory={directory}\n"
+        f"{as_user}"
         f"{environment}"
         "Restart=on-failure\n"
         "RestartSec=5\n\n"
         "[Install]\n"
-        "WantedBy=default.target\n"
+        f"WantedBy={'multi-user' if user else 'default'}.target\n"
     )
 
 
@@ -2922,19 +2952,27 @@ def launchd_plist(command: list, directory: Path) -> bytes:
     })
 
 
-def manager() -> list:
-    """Return the command of the service manager, systemctl --user, or
-    launchctl on macOS; stop, telling why, if this machine lacks it."""
+def manager(system: bool = False) -> list:
+    """Return the command of the service manager, systemctl --user (of
+    the *system*: systemctl), or launchctl on macOS; stop, telling why,
+    if this machine lacks it."""
     command = (["launchctl"] if sys.platform == "darwin"
-               else ["systemctl", "--user"])
+               else ["systemctl"] if system else ["systemctl", "--user"])
     if shutil.which(command[0]) is None:
         sys.exit(f"--daemon needs {command[0]}, which this machine lacks")
     return command
 
 
-def service_manager(*args, check=True):
-    """Run the service manager with *args*."""
-    subprocess.run([*manager(), *args], check=check)
+def service_manager(*args, check=True, system: bool = False):
+    """Run the service manager (of the *system*) with *args*."""
+    subprocess.run([*manager(system), *args], check=check)
+
+
+def installed_services() -> list:
+    """Return which services of the REPL are installed: False for this
+    user's, True for the system's."""
+    return [system for system in (False, True)
+            if service_file(system).exists()]
 
 
 # What the service imports, by mode, and the extras of the workspace that
@@ -2946,35 +2984,88 @@ DASHBOARD_IMPORTS = "datasette, datasette_vega"
 
 
 def check_service_python(command: list, local: bool,
-                         dashboard: bool = False) -> None:
+                         dashboard: bool = False, user: str = None) -> None:
     """Stop, telling which extras to install with, if the Python of the
     service *command* cannot import what it serves with (its *dashboard*'s
-    too)."""
+    too), run as the service's *user* if given."""
     modules = SERVICE_IMPORTS + (f", {LOCAL_IMPORTS}" if local else "") + \
         (f", {DASHBOARD_IMPORTS}" if dashboard else "")
     extras = (LOCAL_EXTRAS if local else "--extra apps") + \
         (" --extra dashboard" if dashboard else "")
     result = subprocess.run(
         [command[0], "-c", f"import {modules}"], capture_output=True,
-        text=True, env=service_environment(command[0]), cwd="/",
+        text=True, env=service_environment(command[0]), cwd="/", user=user,
     )
     if result.returncode:
         error = (result.stderr.strip().splitlines() or ["?"])[-1]
         sys.exit(
-            f"The Python of the service, {command[0]}, cannot serve: "
+            f"The Python of the service, {command[0]}, cannot serve"
+            f"{f' as {user}' if user else ''}: "
             f"{error}. Install it from the environment that has what it "
             f"needs: uv run {extras} "
             "neurolang-repl-serve --daemon install ..."
         )
 
 
-def install_service(command: list) -> None:
-    """Install the service running *command*, start it and enable it at
-    login; if the service manager fails, remove it and stop, telling so."""
-    path = service_file()
+def service_paths(args) -> list:
+    """Return the files the server reads (``r``) and the folders it writes
+    in (``w``: the users file's, rewritten whole, and its requests; the
+    databases'; the uploads'; the data's), as (path, ``r`` or ``w``)."""
+    read = [args.config, args.cert, args.key, args.key_password_file,
+            args.password_file, args.env_file, args.orcid, args.secrets,
+            args.users]
+    written = [args.users, args.feedback_db, args.activity_db]
+    paths = [(Path(p).resolve(), "r") for p in read if p is not None]
+    paths += [(Path(p).resolve().parent, "w") for p in written
+              if p is not None]
+    for folder in (args.uploads_dir if args.users else None,
+                   args.data_dir if args.local else None):
+        if folder is not None:  # or the folder it will be made in
+            folder = Path(folder).resolve()
+            while not folder.exists() and folder != folder.parent:
+                folder = folder.parent
+            paths.append((folder, "w"))
+    return paths
+
+
+def check_service_files(python: str, args, user: str) -> None:
+    """Stop, telling which, if the service's *user* cannot read a file of
+    the server or write in one of its folders (:func:`service_paths`)."""
+    paths = [[str(path), mode] for path, mode in service_paths(args)]
+    script = (
+        "import json, os, sys\n"
+        "for path, mode in json.loads(sys.argv[1]):\n"
+        "    if not os.access(path, os.R_OK | (os.W_OK | os.X_OK"
+        " if mode == 'w' else 0)):\n"
+        "        print(f'{path} ({\"write in\" if mode == \"w\" else"
+        " \"read\"})')\n"
+    )
+    result = subprocess.run([python, "-I", "-c", script, json.dumps(paths)],
+                            capture_output=True, text=True, cwd="/",
+                            user=user)
+    lacking = result.stdout.split("\n")[:-1] or (
+        [result.stderr.strip()] if result.returncode else [])
+    if lacking:
+        sys.exit(f"The service's user {user} cannot: "
+                 + "; ".join(lacking) + ". Give them to it (chown, chmod) "
+                 "and install again")
+
+
+def install_service(command: list, user: str = None) -> None:
+    """Install the service running *command* (as *user*, a service of the
+    system), start it and enable it at login (at boot); if the service
+    manager fails, remove it and stop, telling so."""
+    system = user is not None
+    path = service_file(system)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if sys.platform == "darwin":
+        if system:
+            path.write_text(systemd_unit(command, Path.cwd(), user))
+            service_manager("daemon-reload", system=True)
+            service_manager("enable", "--now", SERVICE, system=True)
+            where = (f"journalctl -u {SERVICE} shows its log; it runs as "
+                     f"{user} from boot")
+        elif sys.platform == "darwin":
             path.write_bytes(launchd_plist(command, Path.cwd()))
             # The bootout of a reinstall ends after it returns: until then
             # the bootstrap fails (error 5).
@@ -2996,27 +3087,29 @@ def install_service(command: list) -> None:
                      "stops at logout unless: loginctl enable-linger "
                      f"{getpass.getuser()}")
     except subprocess.CalledProcessError as error:
-        remove_service()
+        remove_service(system)
         sys.exit(f"{shlex.join(error.cmd)} failed (exit status "
                  f"{error.returncode}): the service is not installed")
     print(f"Installed {path}, running {command[0]}: the REPL serves at "
           f"login; {where}", flush=True)
 
 
-def remove_service() -> None:
-    """Stop the service, disable it and remove its file, if installed."""
-    path = service_file()
+def remove_service(system: bool = False) -> None:
+    """Stop the service (of the *system*), disable it and remove its file,
+    if installed."""
+    path = service_file(system)
     if not path.exists():
         print("No service of the REPL is installed", flush=True)
         return
-    if sys.platform == "darwin":
+    if sys.platform == "darwin" and not system:
         service_manager("bootout", f"gui/{os.getuid()}/{LAUNCHD_LABEL}",
                         check=False)
         path.unlink()
     else:
-        service_manager("disable", "--now", SERVICE, check=False)
+        service_manager("disable", "--now", SERVICE, check=False,
+                        system=system)
         path.unlink()
-        service_manager("daemon-reload", check=False)
+        service_manager("daemon-reload", check=False, system=system)
     print(f"Removed {path}", flush=True)
 
 
@@ -3284,6 +3377,13 @@ def parse_args(argv=None):
         "whether it runs, since when and how often it restarted",
     )
     parser.add_argument(
+        "--service-user", metavar="USER",
+        help="with --daemon install or reinstall, as root on Linux: a "
+        "service of the system running as USER, not root, which may bind "
+        "a port below 1024 (443) and gains no other privilege; the "
+        "server's files and folders must be USER's to read and write",
+    )
+    parser.add_argument(
         "--local", action="store_true",
         help="run NeuroLang in the Python of this machine rather than in "
         "the browser: no bundle is built",
@@ -3354,6 +3454,11 @@ def parse_args(argv=None):
         parser.error("--key and --key-password-file are those of --cert")
     if args.python and not args.daemon:
         parser.error("--python is that of the service: with --daemon")
+    if args.service_user and args.daemon not in ("install", "reinstall"):
+        parser.error("--service-user is that of the service: with --daemon "
+                     "install or reinstall")
+    if args.service_user and sys.platform == "darwin":
+        parser.error("--service-user installs a unit of systemd: Linux only")
     if password and args.users:
         parser.error("--password-file or --users, not both")
     if args.max_sessions < 1 or not args.idle_minutes > 0:
@@ -3395,18 +3500,33 @@ def daemon(args) -> None:
     """Install or reinstall the service, as *args* say; the bundle of the
     page in the browser is built now, its errors told here, and the
     service installed before is removed only once all is ready."""
-    if args.daemon == "install" and service_file().exists():
-        sys.exit(f"A service of the REPL is installed ({service_file()}): "
+    user = args.service_user
+    if args.daemon == "install" and installed_services():
+        sys.exit("A service of the REPL is installed "
+                 f"({service_file(installed_services()[0])}): "
                  "--daemon reinstall replaces it")
-    manager()
+    if user is not None:
+        import pwd
+
+        if os.geteuid() != 0:
+            sys.exit("--service-user installs a service of the system: as "
+                     "root (sudo -H)")
+        try:
+            pwd.getpwnam(user)
+        except KeyError:
+            sys.exit(f"--service-user {user}: no such user")
+    manager(user is not None)
     command = service_command(args)
-    check_service_python(command, args.local, args.dashboard)
+    check_service_python(command, args.local, args.dashboard, user)
+    if user is not None:
+        check_service_files(command[0], args, user)
     if not (args.local or args.pr is not None or args.run_id is not None):
         prepare_site(args.site, args.rebuild, args.embeddings,
                      clear=args.clear, engines=args.engines)
-    if args.daemon == "reinstall":
-        remove_service()
-    install_service(command)
+    if args.daemon == "reinstall":  # either, as root's of its user manager
+        for system in installed_services():
+            remove_service(system)
+    install_service(command, user)
 
 
 def ask_password(prompt: str = "Password: ") -> str:
@@ -3545,7 +3665,9 @@ def main(argv=None) -> None:
     if args.hash_password:
         return ask_password_hash()
     if args.daemon == "remove":  # whatever the other options
-        return remove_service()
+        for system in installed_services() or [False]:
+            remove_service(system)
+        return
     if args.daemon == "status":
         return service_status()
     if (args.list_users or args.add_user or args.set_password
@@ -3744,10 +3866,12 @@ def start_dashboard(args):
 def service_status() -> None:
     """Tell whether the service runs, since when, how often it restarted
     and how its last run ended, as its service manager says."""
-    if not service_file().exists():
+    installed = installed_services()
+    if not installed:
         print("No service of the REPL is installed", flush=True)
         return
-    if sys.platform == "darwin":
+    system = installed[-1]  # the system's, if both
+    if sys.platform == "darwin" and not system:
         result = subprocess.run(
             [*manager(), "print", f"gui/{os.getuid()}/{LAUNCHD_LABEL}"],
             capture_output=True, text=True)
@@ -3757,12 +3881,12 @@ def service_status() -> None:
         log = f"~/Library/Logs/{SERVICE}.log"
     else:
         result = subprocess.run(
-            [*manager(), "show", SERVICE, "--property", "ActiveState,"
+            [*manager(system), "show", SERVICE, "--property", "ActiveState,"
              "SubState,ActiveEnterTimestamp,NRestarts,MainPID,"
-             "ExecMainStatus,Result"],
+             "ExecMainStatus,Result,User"],
             capture_output=True, text=True)
         lines = result.stdout.strip().splitlines()
-        log = f"journalctl --user -u {SERVICE} -n 80"
+        log = f"journalctl {'' if system else '--user '}-u {SERVICE} -n 80"
     for line in lines or [result.stderr.strip() or "no answer"]:
         print(line, flush=True)
     print(f"Its log: {log}; whether it serves: GET {HEALTH_PATH}",
