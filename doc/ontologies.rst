@@ -241,6 +241,17 @@ On (III) these are the rewritings ``aux_i(s, c), aux_j(z, c)`` of
 existential position of both, and neither atom can become the other.  The
 rewritings evaluated are the same with and without this step.
 
+The test needs only the atoms a step adds, so it is made before the step
+builds its query.  NeuroLang puts the terms of the rewritten atom in place
+of the variables of the constraint's head in its body, gives the body's
+other variables names no query has, and tests the query that results.  It
+is the query the step would build, up to the names renaming gives those
+variables, and the test looks only at which terms are equal, constant or
+in the head.  A step whose query is dead is not built.  When the head of
+the constraint has a constant or a repeated variable, its unifier binds
+terms of the query: that step is built and tested as before.  The
+rewritings are the same, their variable names included.
+
 The rules of the program that define a predicate in the body of a
 constraint are solved with the query, even when the query names only what
 the constraint derives: the code a query needs is followed through the

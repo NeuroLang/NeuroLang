@@ -5,7 +5,7 @@ from nl_expr.expression_walker import (
 )
 from nl_expr.expressions import FunctionApplication, Symbol
 from nl_expr.logic import (
-    Constant, Implication, NaryLogicOperator, Negation, Union
+    Conjunction, Constant, Implication, NaryLogicOperator, Negation, Union
 )
 from nl_expr.logic.expression_processing import ExtractFreeVariablesWalker
 from nl_expr.logic.transformations import CollapseConjunctions
@@ -265,6 +265,38 @@ class OntologyRewriter:
                     return True
         return False
 
+    def _builds_dead(self, q, S, sigma):
+        """
+        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` gives a
+        query that :meth:`_dead` drops, told before building it: the head
+        of ``sigma``, of distinct variables, maps them to the terms of
+        ``S``, and its other variables get names no query has, as
+        renaming makes them distinct.
+        Other heads, which bind the terms of ``q``, are built and tested.
+        """
+        head = sigma.consequent
+        body = extract_logic_atoms(sigma.antecedent)
+        if (
+            self.holds is None
+            or not all(isinstance(arg, Symbol) for arg in head.args)
+            or len(set(head.args)) != len(head.args)
+            or not all(isinstance(atom, FunctionApplication) for atom in body)
+        ):
+            return False
+        terms = dict(zip(head.args, S.args))
+        for atom in body:
+            for arg in atom.args:
+                if isinstance(arg, Symbol) and arg not in terms:
+                    terms[arg] = Symbol("\0" + arg.name)
+        formulas = tuple(
+            f for f in getattr(q.antecedent, "formulas", (q.antecedent,))
+            if f != S
+        ) + tuple(
+            atom.functor(*(terms.get(arg, arg) for arg in atom.args))
+            for atom in body
+        )
+        return self._dead(Implication(q.consequent, Conjunction(formulas)))
+
     def _null_positions(self, functor):
         """The positions of the existential of every constraint deriving
         ``functor``, none if one has none or ``functor`` has values."""
@@ -333,6 +365,8 @@ class OntologyRewriter:
             rename_count += 1
         for S in S_applicable:
             rename_count += 1
+            if self._builds_dead(q0, S, sigma):
+                continue
             sigma_i = self._rename(sigma, rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
