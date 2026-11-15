@@ -568,7 +568,8 @@ Unreleased
   read their notes and states at 4.5:1 in a dark system and have 44 px
   controls on a touch screen, as the activity page, which had them only on
   narrow ones. The menus close with Escape and with a click elsewhere; the
-  result card says "Running…" while a query runs, and shows a failed
+  result card says "Running…" while a query runs, telling that the answer
+  comes as a table that the Brain tab can then show on the brain, and shows a failed
   statement as one line with an icon above its log, which wraps; the steps
   of the assistant are open while it works; a disabled menu item says why in
   text; and, on a phone, the legend of the empty result still draws the
