@@ -68,6 +68,8 @@ in (I), a recursion in (II), and the size of a real ontology in (III).  A
 fourth, (IV), puts (III) to work on the studies of Neurosynth, in
 :ref:`ontologies-open-closed`.
 
+.. _ontologies-loading:
+
 Loading an ontology
 -------------------
 
@@ -142,6 +144,8 @@ an axiom removes answers, never adds one.  Hence the constraints NeuroLang
 uses are a subset of the ontology's, and every answer is entailed by the
 ontology.
 
+.. _ontologies-certain-answers:
+
 Open world and certain answers
 ------------------------------
 
@@ -173,6 +177,8 @@ Unit(y)`` has only ``('Ana', 'Physics')``, as Juan's department has no name.
 A constraint ``C ⊑ ∃p.C`` makes the chase infinite, so it is not run as such.
 NeuroLang runs the part of it that ends, and rewrites the query for the
 rest.
+
+.. _ontologies-two-mechanisms:
 
 Two mechanisms
 --------------
@@ -326,6 +332,8 @@ faster of two, the slower one under 4.3 s for each query.  Without the
 instance, the five queries keep their answers and their times, under 2 s.
 The chase takes the recursion and the hierarchy; the rewriting is left with
 the values the existential constraints create.
+
+.. _ontologies-complete:
 
 When the answers are complete
 -----------------------------
@@ -507,14 +515,14 @@ facts still yield answers.
 
 NeuroLang reads the predicates an ontology constrains in the open world.
 It returns their *certain answers*, those true in every completion of the
-data that agrees with the ontology (section *Open world and certain
-answers*).  Each axiom is a *constraint*, an implication ``body → head``
-kept apart from the rules of the program (section *Loading an ontology*).
-A constraint is *existential* when its head states that some value exists
-without naming it; such a value is an *unnamed value*.  The constraints
-are applied in two ways (section *Two mechanisms*): the *chase* adds, as
-rules would, the facts that the constraints without existentials imply, and
-the *rewriting* turns the query into a union of queries over the data that
+data that agrees with the ontology (:ref:`ontologies-certain-answers`).
+Each axiom is a *constraint*, an implication ``body → head`` kept apart
+from the rules of the program (:ref:`ontologies-loading`).  A constraint
+is *existential* when its head states that some value exists without
+naming it; such a value is an *unnamed value*.  The constraints are applied
+in two ways (:ref:`ontologies-two-mechanisms`): the *chase* adds, as rules
+would, the facts that the constraints without existentials imply, and the
+*rewriting* turns the query into a union of queries over the data that
 also finds the answers holding through unnamed values.
 
 (IV) *Stroop studies in the Cognitive Atlas*.  The ``neurosynth`` engine
@@ -566,8 +574,9 @@ The closed world is computed on the same engine with the constraints
 removed and ``cogpo:has_contrast``, ``cogat:measures`` and
 ``cogat:CAO_00487`` as empty relations: the plain Datalog reading of the
 same rules.  The results were computed on 14 November 2026 with NeuroLang
-master ``37acbf99`` merged with #1250 (``1d49ac93``), one query at a time;
-each time includes the compilation of the query.
+master ``c5d70fed`` and the changes of #1271 to #1273, one query at a time,
+each stopped after 1,500 s; each time includes the compilation of the
+query.
 
 **Which studies measure response inhibition?**  The question, as a query:
 
@@ -592,15 +601,15 @@ same rule for ``cogat:CAO_00872``:
      - Why
    * - ``has_contrast(s, x)``
      - 0 (no rows), 0.3 s
-     - 139 rows, 3.4 s
+     - 139 rows, 3.1 s
      - every Stroop task has some contrast
    * - ``has_contrast(s, x), CAO_01515(x)``
-     - not run
-     - 139 rows, 15.1 s
+     - 0 (no rows), 0.5 s
+     - 139 rows, 14.8 s
      - that contrast is an incongruent − congruent one
    * - ``inhibition_study(s)``
-     - 0 (no rows), 0.5 s
-     - did not end within 2,400 s
+     - 0 (no rows), 0.4 s
+     - did not end within 1,500 s
      - the rewriting of three atoms does not end in time
 
 .. list-table:: Open world, ``has_contrast(s, x)``: first rows (139 rows)
@@ -632,10 +641,9 @@ closed world cannot.  The curators stated one axiom; they did not enter 139
 contrasts.  By the two axioms, the same 139 studies are the certain answers
 of ``inhibition_study(s)``: the contrast of each measures some response
 inhibition.  This follows from the axioms, checked with rdflib; the engine
-did not compute it.  The rewriting of the three-atom query explores more
-rewritings than it can within the time, as the section *When the answers
-are complete* describes for the same query with one instance of a
-contrast.
+did not compute it.  The rewriting of the three-atom query builds more
+rewritings than it can within the time, most of them dropped as dead, as
+:ref:`ontologies-complete` describes for this same query.
 
 **Which form of response inhibition did each one measure?**  In the open
 world:
@@ -670,13 +678,13 @@ and, with the same first four rules, the studies that mention such a task,
      - Rows, time
      - Why
    * - open world, ``ans(s, c)``
-     - 0 (no rows), 181.7 s
+     - 0 (no rows), 172.7 s
      - each study's response inhibition is an unnamed value
    * - closed world, tasks ``ans(t, n, m)``
      - 7 rows, 5.8 s
      - the class axioms, read as facts, name the concept
    * - closed world, studies ``ans(s, n)``
-     - 139 rows, 6.4 s
+     - 139 rows, 6.3 s
      - of the 7 task names, only ``'stroop task'`` is a Neurosynth term
 
 .. list-table:: Closed world, ``ans(t, n, m)`` (7 rows)
@@ -714,7 +722,7 @@ the class axioms, read as facts, name it, and it reaches studies only
 through a second, textual step, the term of the task's name.
 
 **Why not** ``mentions(s, 'stroop task')``?  On Neurosynth it returns the
-same 139 studies in 2.2 s.  The question, however, is about a concept, and
+same 139 studies in 2.1 s.  The question, however, is about a concept, and
 the ontology decides which tasks count: a curator who gives another task a
 contrast that measures response inhibition changes the answer without
 changing the query.  Of the 7 task names above, only ``'stroop task'`` is
@@ -748,10 +756,10 @@ response inhibition, reports a peak within 6 mm of the voxel
      - Rows, time
      - Why
    * - closed world
-     - 0 (no rows), 5.1 s
+     - 0 (no rows), 4.8 s
      - the condition holds of no study
    * - open world
-     - did not end within 2,400 s
+     - did not end within 1,500 s
      - its condition is the three-atom query above
 
 The certain answers of the condition are the 139 Stroop studies.  Hence
@@ -759,7 +767,7 @@ the same conditional over ``mentions(s, 'stroop task')``,
 ``p_active_given_stroop(i, j, k, PROB) :- (activated(i, j, k, s) &
 selected_study(s)) // (mentions(s, 'stroop task') & selected_study(s))``,
 gives what the open-world query owes: 1,296,985 voxels with ``p > 0``, in
-14.2 s.  Its highest ``p`` in each region of the Destrieux atlas, with the
+16.2 s.  Its highest ``p`` in each region of the Destrieux atlas, with the
 MNI coordinates of the voxel that reaches it, are:
 
 .. list-table:: ``p_active_given_stroop``, the six Destrieux regions with the highest ``p``
@@ -807,12 +815,20 @@ The highest, 0.180, is 25 of the 139 studies.
    * - Query
      - Rows, time
      - Why
-   * - closed world, ``mentions(s, 'stop signal')``
-     - 99 rows, 2.3 s
+   * - the term alone, ``ans(s) :- mentions(s, 'stop signal')``
+     - 99 rows, 2.0 s
      - the term is in their abstracts
    * - open world, ``inhibition_study(s)``
-     - 0 (no rows), 1.8 s
+     - 0 (no rows), 2.8 s
      - no stop signal contrast measures anything in the Atlas
+
+The open-world query ends here in 2.8 s, where the same query on the
+Stroop studies does not end.  Only the stop signal task has instances, and
+no constraint gives any of its contrasts a ``measures``: every rewriting
+that replaces ``cogat:measures(x, c)`` through a contrast of a task with
+instances is dead, and the rewriting drops them as soon as it builds them
+(:ref:`ontologies-complete`).  The Stroop contrast does measure some
+response inhibition, so its rewritings stay alive and multiply.
 
 Non-exhaustiveness is allowed; missing knowledge is not filled in.  The
 open world completes the instances of what the curators stated, and it
@@ -823,20 +839,19 @@ Writing such queries
 ~~~~~~~~~~~~~~~~~~~~
 
 Keep a chain through unnamed values inside one rule.  The rewriting treats
-each rule on its own (section *When the answers are complete*), so
+each rule on its own (:ref:`ontologies-complete`), so
 ``inhibition_study(s)`` holds the whole chain and projects it onto ``s``; a
 rule with ``x`` or ``c`` in its head loses the answers reached through the
 unnamed contrast.  Define the instances of a class with a deterministic
 rule, as with ``mentions`` above, and bring ``PROB`` in afterwards: a class
 defined by a rule over a probabilistic predicate gives no instance to the
-constraints of a deterministic query (same section).
+constraints of a deterministic query (:ref:`ontologies-complete`).
 
 In short, the open world lets the curators of an ontology be
 non-exhaustive.  On (IV), one axiom stated once gave 139 studies a contrast
 that no one entered, and only what was never stated stayed out of reach.
 The three-atom chain is entailed but not yet computed: a rewriting that
-ends on it, as the section *When the answers are complete* calls for, would
-confirm it.
+ends on it, as :ref:`ontologies-complete` calls for, would confirm it.
 
 What would confirm and what limits this
 ---------------------------------------
