@@ -47,7 +47,7 @@
 </head>
 <body>
 <header>
-  <a href="https://neurolang.github.io/" aria-label="NeuroLang"><img class="logo-dark" src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"><img class="logo-light" src="../logo/svg/neurolang-lockup.svg" alt="NeuroLang"></a>
+  <a id="home" href="index.html" aria-label="NeuroLang REPL"><img class="logo-dark" src="../logo/svg/neurolang-lockup-dark.svg" alt="NeuroLang"><img class="logo-light" src="../logo/svg/neurolang-lockup.svg" alt="NeuroLang"></a>
   <a class="back" id="back" href="index.html">Back to the REPL</a>
 </header>
 <main id="credits">
@@ -58,7 +58,10 @@
 <script type="module">
   import { renderCredits } from "./credits.js";
   const engine = location.hash.slice(1);
-  if (engine) document.getElementById("back").href = `index.html?engine=${encodeURIComponent(engine)}`;
+  if (engine) {
+    const repl = `index.html?engine=${encodeURIComponent(engine)}`;
+    document.getElementById("back").href = document.getElementById("home").href = repl;
+  }
   const status = document.getElementById("status");
   try {
     const response = await fetch("bundle.json");

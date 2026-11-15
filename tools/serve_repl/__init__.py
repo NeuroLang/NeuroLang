@@ -405,7 +405,9 @@ def prepare_local_site(site: Path, engines=None, users=False) -> Path:
     (page.parent / "bundle.json").write_text(json.dumps({
         "backend": "local",
         "engines": {
-            name: {"label": script.LABELS.get(name, name)}
+            name: {"label": script.LABELS.get(name, name),
+                   # what the page's credits list (credits.html)
+                   "acknowledgements": script.acknowledgements(name)}
             for name in engines
         },
         "default": default if default in engines else engines[0],
