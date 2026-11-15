@@ -543,7 +543,7 @@
           <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>
           <button id="explain" type="button" class="ghost" hidden title="Read the last query in English, with the assistant">Explain</button>
           <button id="share" type="button" class="ghost" title="Copy a link to this query: it is in the address after the #, which the server never gets">Copy link</button>
-          <button id="upload" type="button" class="ghost" title="Upload a table (.csv, .tsv) or a NIfTI image (.nii, .nii.gz)">Upload data</button>
+          <button id="upload" type="button" class="ghost" title="Upload a table (.csv, .tsv), a NIfTI image (.nii, .nii.gz) or a tractogram (.trk, .tck)">Upload data</button>
           <details class="menu"><summary>More</summary>
             <div class="menu-items">
               <button id="format" type="button" title="Break the long rules of the box at the commas of their bodies (Alt+Shift+F)">Format the query</button>
@@ -555,14 +555,14 @@
             </div>
           </details>
           <input id="session-file" type="file" accept=".json,application/json" hidden>
-          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,.nii,.nii.gz,text/csv,text/tab-separated-values" hidden>
+          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,.nii,.nii.gz,.trk,.tck,text/csv,text/tab-separated-values" hidden>
           <span class="spacer"></span>
           <span id="run-help" class="note"><kbd class="mod">Ctrl</kbd> <kbd>Enter</kbd> runs</span>
         </div>
         <section id="decode-offer" role="group" aria-labelledby="decode-offer-text" aria-live="polite" hidden>
           <p id="decode-offer-text"></p>
           <label id="decode-offer-cortex-label" hidden><input id="decode-offer-cortex" type="checkbox"> Only the cortex</label>
-          <button id="decode-offer-yes" type="button" class="primary">Insert the decoding query</button>
+          <button id="decode-offer-yes" type="button" class="primary">Run the decoding query</button>
           <button id="decode-offer-mask" type="button" hidden>Decode as a mask</button>
           <button id="decode-offer-no" type="button">Not now</button>
           <button id="decode-offer-back" type="button" hidden>Bring back the query before</button>
@@ -574,7 +574,7 @@
             <tbody id="uploaded-list"></tbody>
           </table>
           <p id="uploads-status" class="note" role="status" hidden></p>
-          <p id="uploaded-note" class="note">These files go with the session: Download saves one, Remove deletes it, and the relations loaded from it stay until <code>.drop</code>. <code>.load NAME</code> loads a table again, <code>.image NAME</code> an image.</p>
+          <p id="uploaded-note" class="note">These files go with the session: Download saves one, Remove deletes it, and the relations loaded from it stay until <code>.drop</code>. <code>.load NAME</code> loads a table again, <code>.image NAME</code> an image or a tractogram.</p>
         </details>
       </form>
     </section>

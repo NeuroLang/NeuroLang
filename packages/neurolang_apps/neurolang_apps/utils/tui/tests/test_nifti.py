@@ -1670,6 +1670,119 @@ class TestImage:
         # P(hit | pain) = 1/3 over P(hit) = 2/9
         assert self._lifts(decoding, voxels="cortex") == {"pain": 1.5}
 
+    @staticmethod
+    def _tractogram(tmp_path, lines, name="tracts.tck"):
+        """Save the streamlines *lines*, in mm, in the tractogram *name*
+        (.tck or .trk, whose voxel grid is the tiny one)."""
+        tractogram = nib.streamlines.Tractogram(
+            [np.array(line, dtype=np.float32) for line in lines],
+            affine_to_rasmm=np.eye(4),
+        )
+        path = tmp_path / name
+        if name.endswith(".trk"):
+            header = {"voxel_to_rasmm": TINY_AFFINE,
+                      "voxel_sizes": (2.0, 2.0, 2.0),
+                      "dimensions": (4, 4, 4)}
+            nib.streamlines.TrkFile(tractogram, header).save(str(path))
+        else:
+            nib.streamlines.save(tractogram, str(path))
+        return path
+
+    @pytest.mark.parametrize("name", ["tracts.tck", "tracts.trk"])
+    def test_a_tractogram_is_the_voxels_near_the_ends_of_its_streamlines(
+        self, decoding, tmp_path, name
+    ):
+        """
+        The centre of voxel (1, 2, 3) of the tiny grid (2 mm, from (-3, -5,
+        -7)) is (-1, -1, -1): the ends of the first streamline are 0.5 and
+        0.2 mm from it, the first of the second 0.2 mm, the other ends are
+        out of the brain. Within 1 mm, it is the only voxel, of 3 ends, and
+        decoded as a mask: p = 1.
+        """
+        path = self._tractogram(tmp_path, [
+            [(-0.5, -1, -1), (2, 2, 2), (-1, -1, -1.2)],
+            [(-1.2, -1, -1), (20, 20, 20)],
+        ], name)
+        decoding._handle_dot_command(f".image {path} --radius 1")
+        out = " ".join(_output(decoding).split())
+        assert "loaded tracts(i, j, k, value): 1 voxels from" in out
+        assert "within 1 mm of the ends of its 2 streamlines" in out
+        assert "1 for each voxel within 1 mm of an end" in out
+        assert "Decode it with this query: % " in out
+        assert "Only " not in out  # 3 ends of 4 are in the brain
+        assert {tuple(row) for row in decoding._nl.symbols["tracts"].value} \
+            == {(1, 2, 3, 3)}
+        assert self._probabilities(decoding, "tracts_probability") == {
+            (1, 2, 3): 1.0}
+        assert self._lifts(decoding, "tracts") == {"pain": 1.5}
+
+    def test_the_default_radius_of_a_tractogram(self, tiny, tmp_path):
+        """By default the voxels within endpoint_radius (3) mm of an end:
+        those of the tiny grid whose centre is, measured here."""
+        ends = np.array([(-0.5, -1, -1), (1.4, 2.6, -6.1)])
+        path = self._tractogram(tmp_path, [ends])
+        tiny._handle_dot_command(f".image {path}")
+        voxels = np.argwhere(np.ones((4, 4, 4)))
+        centres = nib.affines.apply_affine(TINY_AFFINE, voxels)
+        distances = np.linalg.norm(centres[:, None] - ends[None], axis=2)
+        near = (distances <= 3).sum(axis=1)
+        expected = {(*map(int, v), int(n))
+                    for v, n in zip(voxels, near) if n}
+        assert nifti.IMAGE_DEFAULTS["endpoint_radius"] == 3
+        assert {tuple(row) for row in tiny._nl.symbols["tracts"].value} \
+            == expected
+        assert len(expected) > 2 and max(n for *_, n in expected) == 1
+
+    def test_the_streamlines_of_a_tractogram_are_shown(
+        self, tiny, tmp_path, monkeypatch
+    ):
+        """The viewer draws its streamlines, in MNI mm, over the voxels
+        near their ends: at most MAX_STREAMLINES, evenly subsampled."""
+        calls = []
+
+        def viewer_html(img, background, **kwargs):
+            calls.append(kwargs)
+            return "<html></html>"
+
+        monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        path = self._tractogram(tmp_path, [
+            [(-1, -1, -1), (-3, -5, -7)], [(-1, -1, -1), (1, -1, -1)],
+            [(-3, -5, -7), (-3, -3, -7)],
+        ])
+        tiny._handle_dot_command(f".image {path}")
+        (kwargs,) = calls
+        assert kwargs["space"] == "MNI"
+        assert kwargs["streamlines"]["shown"] == 2
+        assert kwargs["streamlines"]["total"] == 3
+
+    def test_a_tractogram_out_of_the_brain(self, tiny, tmp_path):
+        """Ends out of the brain but near it are loaded with a warning
+        (5.5 mm is 2.5 from the centre of voxel 3); none near, an error."""
+        near = self._tractogram(tmp_path, [[(5.5, -1, -1), (5.5, -1, 30)]],
+                                "near.tck")
+        tiny._handle_dot_command(f".image {near}")
+        out = " ".join(_output(tiny).split())
+        assert "Only 0% of the ends of the streamlines of" in out
+        assert "loaded near(i, j, k, value)" in out
+        far = self._tractogram(tmp_path, [[(50, 50, 50), (60, 60, 60)]],
+                               "far.tck")
+        tiny._handle_dot_command(f".image {far}")
+        assert "No end of the streamlines of" in " ".join(
+            _output(tiny).split())
+        assert "far" not in tiny.loaded_relations
+
+    def test_the_options_of_a_tractogram(self, tiny, zmap, tmp_path):
+        path = self._tractogram(tmp_path, [[(-1, -1, -1), (-3, -5, -7)]])
+        tiny._handle_dot_command(f".image {path} --zscore")
+        tiny._handle_dot_command(f".image {path} --radius 0")
+        tiny._handle_dot_command(f".image {zmap} --radius 2")
+        out = " ".join(_output(tiny).split())
+        assert "is a tractogram: it has no z-scores" in out
+        assert "--radius is a distance in mm, more than 0, not 0" in out
+        assert "--radius is for a tractogram" in out
+        assert not tiny.loaded_relations
+
     def test_a_zscore_map_is_decoded_by_the_probabilities_of_its_voxels(
         self, decoding, tmp_path
     ):

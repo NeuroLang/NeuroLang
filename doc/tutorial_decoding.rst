@@ -9,7 +9,8 @@ or NeuroStore's, with the probabilistic model those engines already use
 for their maps (:doc:`tutorial_neurosynth_tests`), in a query of plain
 Datalog over the image as a relation of voxels and values.  This page
 loads an image, explains the query, and decodes two images, a mask of the
-amygdala and a statistical map of a motor task.
+amygdala and a statistical map of a motor task, and three bundles of white
+matter by the ends of their streamlines.
 
 Loading an image
 ----------------
@@ -47,12 +48,13 @@ image`` replaces the image loaded first.
 
 In the browser, and on a server, *Upload data* (in the toolbar) takes the
 ``.nii`` or ``.nii.gz`` file: the page keeps it with the session, runs
-``.image`` on it, and asks whether the decoding query, a comment explaining
-each of its lines, goes in the box (*Insert the decoding query*, or
-*Not now*): it replaces what is there, which *Bring back the query before*
-puts back until the next run.  For a map of values, the page offers the
-two decodings, *Decode as z-scores* and *Decode as a mask (from 3.1)*, and
-loads it again with ``--zscore`` or ``--mask``.  *Only the cortex*, checked,
+``.image`` on it, and asks whether to decode it (*Run the decoding query*,
+or *Not now*): the decoding query, a comment explaining each of its lines,
+goes in the box and runs.  It replaces what is there, which *Bring back
+the query before* puts back until the next run.  For a map of values, the
+page offers the two decodings, *Decode as z-scores* and *Decode as a mask
+(from 3.1)*, loads it again with ``--zscore`` or ``--mask``, then runs the
+query.  *Only the cortex*, checked,
 decodes the cortex of the image alone (``--cortex``, below).  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
@@ -311,6 +313,66 @@ activate:
 .. image:: _static/decoding/motor_decoding_dark.png
    :class: only-dark
    :alt: The ten concepts of the largest lift for the motor map
+
+A tractogram: the ends of its streamlines
+-----------------------------------------
+
+A tractogram (``.trk`` or ``.tck``, in mm in the space of the engine,
+MNI152) is decoded where its streamlines end: ``.image`` loads it as the
+voxels of the brain whose centre is within 3 mm (``image.endpoint_radius``,
+``--radius MM`` for another distance) of the first or the last point of
+one of its streamlines, the value of each the number of ends near it, and
+each of probability 1, as a mask; the brain viewer shows them, its
+streamlines drawn over them (evenly subsampled, as ``.view`` draws a
+bundle).  The decoding query is the same, and
+*Upload data* takes the file and offers it as for an image.  The voxels
+near the ends are found when the file is loaded, with a k-d tree of the
+ends, not by a rule: in Datalog, it would be a join of every voxel of the
+brain with every end, compared by their distance.
+
+The left arcuate fasciculus of the HCP842 atlas of Yeh (``AF_L.trk``, which
+``.load_tractogram("af", kind="hcp842", bundle="AF_L")`` of the engines of
+tracts downloads):
+
+.. code-block:: text
+
+    nl(neurosynth:datalog)> .image AF_L.trk
+    loaded af_l(i, j, k, value): 2104 voxels from AF_L.trk, the voxels within
+    3 mm of the ends of its 2010 streamlines, value the number of ends near
+    each
+    loaded af_l_probability(i, j, k, p): 2104 voxels, the probability that
+    each is active: 1 for each voxel within 3 mm of an end of a streamline
+    Decode it with this query:
+    ...
+
+Three bundles of the atlas, each loaded in half a second and decoded in
+about 10 s (5 GB), give terms of their function, the five of the largest
+lift:
+
+.. list-table::
+   :header-rows: 1
+
+   * - bundle
+     - voxels near its ends
+     - the concepts of the largest lift
+   * - left arcuate fasciculus (``AF_L``)
+     - 2,104
+     - sentence comprehension 2.09, rehearsal 2.05, language comprehension
+       1.98, reading 1.97, meaning 1.95
+   * - left corticospinal tract (``CST_L``)
+     - 1,895
+     - imagery 2.25, movement 2.20, rhythm 2.18, rehearsal 2.10,
+       coordination 1.99
+   * - left uncinate fasciculus (``UF_L``)
+     - 587
+     - semantic memory 2.68, autobiographical memory 2.45, morphology
+       2.22, passive viewing 2.08, empathy 1.95
+
+A whole-brain tractogram ends nearly everywhere: the 300,000 streamlines
+of the Disconnectome7T tractogram end near 230,120 voxels, the whole brain,
+and its lifts are those of the brain, the largest 1.48; decode a bundle.
+``.image`` warns when fewer than half of the ends (``image.endpoint_share``)
+are in the brain: the tractogram is likely in another space.
 
 What the decoding does not say
 ------------------------------

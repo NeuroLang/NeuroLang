@@ -874,7 +874,21 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
         "statement": ".image 'my map.nii.gz' --name my_map",
         "query": "", "kind": "", "cortex_query": "",
         "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+        "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
     }
+
+
+def test_the_page_uploads_a_tractogram_that_image_loads(repl, monkeypatch):
+    """A tractogram the page uploads is loaded by .image, named after its
+    file, and comes with the queries decoding it: of kind tractogram, the
+    voxels within radius mm of the ends of its streamlines."""
+    monkeypatch.setattr(nifti, "decoding_query",
+                        lambda app, name, voxels="brain": (f"{voxels}", []))
+    answer = repl.upload("my uf.tck", b"mrtrix tracks")
+    assert answer["statement"] == ".image 'my uf.tck' --name my_uf"
+    assert answer["kind"] == "tractogram"
+    assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
+    assert answer["radius"] == nifti.IMAGE_DEFAULTS["endpoint_radius"]
 
 
 def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):

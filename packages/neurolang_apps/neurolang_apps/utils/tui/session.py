@@ -354,12 +354,13 @@ def default_relation_name(path) -> str:
     """
     Return the default name of the relation loaded from *path*.
 
-    It is the file name without its ``.csv``/``.tsv``/``.nii`` and ``.gz``
-    extensions, in lower case, with the characters other than letters
-    and digits replaced by ``_`` and ``rel_`` prepended if it would start
-    with a digit.
+    It is the file name without its ``.csv``/``.tsv``/``.nii``/``.trk``/
+    ``.tck`` and ``.gz`` extensions, in lower case, with the characters
+    other than letters and digits replaced by ``_`` and ``rel_`` prepended
+    if it would start with a digit.
     """
-    stem = re.sub(r"(\.(csv|tsv|nii))?(\.gz)?$", "", Path(path).name.lower())
+    stem = re.sub(r"(\.(csv|tsv|nii|trk|tck))?(\.gz)?$", "",
+                  Path(path).name.lower())
     name = re.sub(r"[^a-z0-9]", "_", stem)
     return f"rel_{name}" if not name or name[0].isdigit() else name
 
@@ -457,13 +458,21 @@ def _load_arguments(arg: str):
 UPLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\Z")
 MOST_UPLOAD_BYTES = 50 << 20
 MOST_UPLOADS_BYTES = 200 << 20
-# Those of an image, which .image loads (nifti.py), not .load.
-IMAGE_SUFFIXES = (".nii", ".nii.gz")
+# Those of an image or a tractogram, which .image loads (nifti.py), not
+# .load: a tractogram as the voxels near the ends of its streamlines.
+TRACTOGRAM_SUFFIXES = (".trk", ".tck")
+IMAGE_SUFFIXES = (".nii", ".nii.gz") + TRACTOGRAM_SUFFIXES
 
 
 def is_image(name: str) -> bool:
-    """Whether the file *name* is a NIfTI image."""
+    """Whether the file *name* is a NIfTI image or a tractogram, which
+    ``.image`` loads."""
     return name.lower().endswith(IMAGE_SUFFIXES)
+
+
+def is_tractogram(name: str) -> bool:
+    """Whether the file *name* is a tractogram (``.trk``, ``.tck``)."""
+    return name.lower().endswith(TRACTOGRAM_SUFFIXES)
 
 
 class Uploads:
@@ -611,7 +620,8 @@ class Uploads:
 def store_upload(app, name: str, data: bytes) -> None:
     """
     Keep the file *name*, of the bytes *data*, that the page uploaded, for
-    ``.load NAME`` (``.image NAME`` for a NIfTI image), in the uploads of
+    ``.load NAME`` (``.image NAME`` for a NIfTI image or a tractogram), in
+    the uploads of
     the session (:class:`Uploads`), gone with it. A ValueError tells why it
     is refused (its name, its format, its size).
     """
@@ -710,7 +720,9 @@ def cmd_uploads(app, arg: str) -> None:
                          else "left")
     for upload in listing:
         table.add_row(
-            upload["name"], "image" if is_image(upload["name"]) else "table",
+            upload["name"],
+            "tractogram" if is_tractogram(upload["name"])
+            else "image" if is_image(upload["name"]) else "table",
             _megabytes(upload["size"]), _ago(upload["age"]),
             ", ".join(upload["loaded"]) or "not loaded",
         )

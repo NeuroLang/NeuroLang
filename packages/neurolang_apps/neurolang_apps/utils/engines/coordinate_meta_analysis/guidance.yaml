@@ -138,6 +138,9 @@ assistant_guidance: >
   (its description says which file), and NAME_probability(i, j, k, p)
   the probability that each voxel is active; the examples call it
   image: use its NAME, and NAME_active, NAME_hit for their rules.
+  A tractogram (.trk, .tck) loaded with .image is the same: NAME the
+  voxels within 3 mm of the ends of its streamlines (value the number of
+  ends), NAME_probability 1 for each.
   Decode it, or any such relation of probabilities, as the examples do: each voxel a probabilistic fact of its probability
   (image_active(i, j, k) :: p :- ...), a voxel of the brain chosen at
   random (selected_voxel), a study hitting the image when it activates

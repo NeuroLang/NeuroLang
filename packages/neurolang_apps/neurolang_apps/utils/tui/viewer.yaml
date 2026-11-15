@@ -31,6 +31,13 @@ image:
   # min_probability are left out.
   min_probability: 0.01
   kde_sample: 50000
+  # A tractogram (.trk, .tck): the voxels of the brain whose centre is
+  # within endpoint_radius mm of an end of one of its streamlines, the
+  # probability of each 1 (--radius changes it). When fewer than
+  # endpoint_share of its ends are in the brain, .image warns that it may
+  # not be in the engine's space.
+  endpoint_radius: 3
+  endpoint_share: 0.5
 
 # The largest background embedded, in voxels: the 1 mm MNI grid fits.
 background_max_voxels: 16777216

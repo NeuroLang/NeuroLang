@@ -22,7 +22,8 @@ export function uploadsSummary(uploads) {
 export function uploadRows(uploads) {
   return (uploads?.files ?? []).map((file) => [
     file.name,
-    /\.nii(\.gz)?$/i.test(file.name) ? "image" : "table",
+    /\.(trk|tck)$/i.test(file.name) ? "tractogram"
+      : /\.nii(\.gz)?$/i.test(file.name) ? "image" : "table",
     bytes(file.size),
     file.loaded.length ? file.loaded.join(", ") : "not loaded",
   ]);

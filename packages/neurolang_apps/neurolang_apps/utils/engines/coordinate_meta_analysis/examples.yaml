@@ -806,8 +806,18 @@ assistant_examples:
   # probability of a hit for the studies of the term over the same for all
   # the studies. A map of
   # values without image_probability is decoded once loaded again with
-  # .image NAME --zscore, if its values are z-scores.
+  # .image NAME --zscore, if its values are z-scores. A tractogram (.trk,
+  # .tck) loaded with .image has NAME_probability 1 for each voxel within
+  # 3 mm of an end of its streamlines, and is decoded the same way.
   - question: Decode the z-score map I loaded towards the concepts of the Cognitive Atlas. Which terms have the largest lift?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+  - question: Decode the tractogram I uploaded from where its streamlines end. Which concepts of the Cognitive Atlas are most associated with the regions near the ends of its streamlines?
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)
       image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
