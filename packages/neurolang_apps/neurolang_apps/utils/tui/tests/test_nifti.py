@@ -1568,7 +1568,8 @@ class TestImage:
     def decoding(self, tiny, monkeypatch):
         """The tiny engine with what the query of the meta-analysis
         engines decodes an image with: studies 10 and 11, of pain, activate
-        the voxel (1, 2, 3), and 12, of vision, (0, 0, 0)."""
+        the voxel (1, 2, 3), and 12, of vision, (0, 0, 0); a voxel of the
+        brain, of three, is chosen at random."""
         import yaml
 
         from neurolang_apps.utils import engine_registry
@@ -1591,6 +1592,9 @@ class TestImage:
         )
         nl.add_uniform_probabilistic_choice_over_set(
             [(10,), (11,), (12,)], name="selected_study"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(0, 0, 0), (1, 2, 3), (4, 5, 6)], name="selected_voxel"
         )
         nl.add_tuple_set([("c1", "pain"), ("c2", "vision")], name="cogat_term")
         return tiny
@@ -1623,7 +1627,7 @@ class TestImage:
         lines = query.splitlines()
         rules = [n for n, line in enumerate(lines)
                  if not line.startswith("%")]
-        assert len(rules) == 8
+        assert len(rules) == 6
         for n in rules:
             assert n > 0 and lines[n - 1].startswith("% "), lines[n]
         assert not any(line.startswith("%%") for line in lines)

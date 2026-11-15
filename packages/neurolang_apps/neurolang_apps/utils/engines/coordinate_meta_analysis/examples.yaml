@@ -798,8 +798,10 @@ assistant_examples:
   # and image_probability(i, j, k, p) the probability that each is active:
   # 1 for a mask, 1 - the local false discovery rate of a z-score. Decoding
   # it: each voxel is a probabilistic fact, active with its probability, and
-  # one is chosen at random; a study hits the image when it activates the
-  # chosen voxel and the voxel is active; the lift of a term is the
+  # a voxel of the brain is chosen at random (selected_voxel); a study hits
+  # the image when it activates the chosen voxel and the voxel is active
+  # (cortical_mask(i, j, k) in the rule decodes the cortex of the image
+  # only); the lift of a term is the
   # probability of a hit for the studies of the term over the same for all
   # the studies. A map of
   # values without image_probability is decoded once loaded again with
@@ -807,9 +809,7 @@ assistant_examples:
   - question: Decode the z-score map I loaded towards the concepts of the Cognitive Atlas. Which terms have the largest lift?
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)
-      image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
-      image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
-      image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
       term_studies(t, count(s)) :- term_in_study(s, t)
@@ -817,18 +817,14 @@ assistant_examples:
   - question: Which is the lift of working memory in the mask I uploaded?
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)
-      image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
-      image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
-      image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
       ans(lift) :- p_image_given_term('working memory', a), p_image(b), (lift == a / b)
   - question: Which terms of the studies, all of them and not only the concepts of the Cognitive Atlas, decode the image I uploaded?
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)
-      image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
-      image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
-      image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
       term_studies(t, count(s)) :- term_in_study(s, t)
@@ -836,9 +832,7 @@ assistant_examples:
   - question: Is fear more associated than pain with the image I uploaded? Give a 95% confidence interval of the difference of their lifts.
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)
-      image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
-      image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
-      image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
       decoding(t, lift) :- p_image_given_term(t, a), p_image(b), (lift == a / b)
@@ -852,7 +846,7 @@ assistant_examples:
   # it activates). For a mask or a small region (an ROI): how much more
   # often the studies of a term report a peak in it; on a large map of
   # z-scores nearly every study hits it, and the lifts are all near 1:
-  # decode those with one voxel chosen, as above.
+  # decode those with a voxel chosen, as above.
   - question: How much more often do the studies of each concept of the Cognitive Atlas report a peak in the region of interest I uploaded, a mask?
     datalog: |-
       image_active(i, j, k) :: p :- image_probability(i, j, k, p)

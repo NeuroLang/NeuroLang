@@ -138,9 +138,10 @@ assistant_guidance: >
   image_probability(i, j, k, p) the probability that each voxel is
   active: decode it, or any such relation of probabilities, as the
   examples do: each voxel a probabilistic fact of its probability
-  (image_active(i, j, k) :: p :- ...), one voxel chosen at random
-  (image_voxel(i, j, k) ^ q :- ..., q == 1.0 / n), a study hitting the
-  image when it activates the chosen voxel and the voxel is active; the
+  (image_active(i, j, k) :: p :- ...), a voxel of the brain chosen at
+  random (selected_voxel), a study hitting the image when it activates
+  the chosen voxel and the voxel is active (with cortical_mask(i, j, k)
+  for the cortex of the image only); the
   probability of a hit conditioned on the studies of each term, divided
   by its probability over all the studies, is the lift of the term.  A map of values without image_probability is decoded once
   loaded again with .image NAME --zscore, if its values are z-scores,

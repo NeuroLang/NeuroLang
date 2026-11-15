@@ -123,8 +123,10 @@ The query: the voxels as facts, one of them chosen
 The decoding query of the engines (``image_decoding_query`` in
 ``engines.yaml``, ``{image}`` being the name of the image) says this as a
 probabilistic program: each voxel of the image is a fact, active with its
-probability, one voxel is chosen uniformly, and a study hits the image
-when it activates the chosen voxel and that voxel is active:
+probability, a voxel of the brain is chosen uniformly, the engine's
+``selected_voxel`` (that of ``uniformity``, :doc:`tutorial_neurosynth_tests`),
+and a study hits the image when it activates the chosen voxel and that
+voxel is active:
 
 .. literalinclude:: ../packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml
    :language: text
@@ -133,8 +135,8 @@ when it activates the chosen voxel and that voxel is active:
    :dedent: 6
 
 - ``image_active(i, j, k)`` is a probabilistic fact of each voxel, of its
-  probability :math:`p_v`; ``image_voxel(i, j, k)`` a choice of one of the
-  :math:`n` voxels, ``image_size(n)``, each of probability :math:`1/n`;
+  probability :math:`p_v`; ``selected_voxel(i, j, k)`` a choice of one of
+  the :math:`N` voxels of the brain mask, each of probability :math:`1/N`;
 - ``image_hit(s)`` holds when the study ``s`` activates the chosen voxel,
   which is active;
 - ``p_image_given_term(t, p)`` conditions it on the studies of each term,
@@ -151,13 +153,28 @@ voxels are independent of it too, so that
 
 .. math::
 
-    P(\mathrm{hit} \mid s) = \frac{1}{n} \sum_{v \,:\, A_v(s)} p_v,
+    P(\mathrm{hit} \mid s) = \frac{1}{N} \sum_{v \,:\, A_v(s)} p_v,
 
-and averaged over the studies of :math:`T`, or over all of them,
-:math:`\frac{1}{n} \sum_v p_v P(A_v \mid T)` and :math:`\frac{1}{n}
-\sum_v p_v P(A_v)`.  These are :math:`P(A_V \mid T)` and :math:`P(A_V)`
-above times the same constant :math:`\sum_u p_u / n`, so their ratio,
-``lift``, is the lift of the term.
+the voxels of the image outside the brain mask, which no study activates
+(``activated`` is in the mask), adding nothing; averaged over the studies
+of :math:`T`, or over all of them, :math:`\frac{1}{N} \sum_v p_v P(A_v
+\mid T)` and :math:`\frac{1}{N} \sum_v p_v P(A_v)`.  These are
+:math:`P(A_V \mid T)` and :math:`P(A_V)` above times the same constant
+:math:`\sum_u p_u / N`, so their ratio, ``lift``, is the lift of the term:
+the voxel chosen in the image alone, uniformly
+(``image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p),
+image_size(n), (q == 1.0 / n)``), gives the same lifts.
+
+Choosing the voxel in the cortex instead decodes the cortical part of the
+image only, its subcortical and cerebellar voxels left out:
+
+.. code-block:: text
+
+    image_hit(s) :- selected_voxel(i, j, k), cortical_mask(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+
+``cortical_mask`` being the voxels of the Harvard–Oxford cortical atlas.
+For the motor map below the lifts move by 0.08 at most (*planning* enters
+the first six); a map with subcortical activations changes more.
 
 The engine solves the program exactly (:doc:`probabilistic_lifting`): the
 choice of the voxel makes the probability a sum over the voxels, which it
